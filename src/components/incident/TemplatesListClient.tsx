@@ -222,12 +222,11 @@ export default function TemplatesListClient({
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           {/* Search Input */}
           <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search templates by name, service, or title..."
-              className="pl-9 pr-9 h-9 bg-background/80 border-border/70 text-sm focus-visible:ring-primary/20"
+              className="pr-9 h-9 bg-background/80 border-border/70 text-sm focus-visible:ring-primary/20"
             />
             {searchQuery && (
               <button

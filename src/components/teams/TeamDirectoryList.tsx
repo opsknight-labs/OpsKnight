@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
-import { Search, X, Filter, Users } from 'lucide-react';
+import { X, Filter, Users } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import TeamDirectoryCard from './TeamDirectoryCard';
 
@@ -97,13 +97,12 @@ export default function TeamDirectoryList({ teams }: TeamDirectoryListProps) {
       <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
         {/* Search input */}
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search teams by name, member, or service..."
-            className="pl-8 pr-8 h-8.5 text-xs placeholder:text-muted-foreground/60"
-            style={{ paddingLeft: '2.25rem', paddingRight: '2rem' }}
+            className="pr-8 h-8.5 text-xs placeholder:text-muted-foreground/60"
+            style={{ paddingRight: '2rem' }}
           />
           {searchQuery && (
             <button

@@ -10,10 +10,7 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { CheckSquare, Circle, Clock, CheckCircle2, AlertOctagon } from 'lucide-react';
 import { resolveStoredActionItems, type ActionItem } from '@/lib/action-items';
 import { getJiraCapabilitiesByServiceIds } from '@/lib/jira-capabilities';
-import {
-  serializeJiraIssueReference,
-  type JiraIssueReference,
-} from '@/lib/jira-references';
+import { serializeJiraIssueReference, type JiraIssueReference } from '@/lib/jira-references';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,10 +42,7 @@ export default async function ActionItemsPage({
       AND: [
         postmortemReadWhere(actor),
         {
-          OR: [
-            { actionItems: { not: Prisma.JsonNull } },
-            { actionItemRecords: { some: {} } },
-          ],
+          OR: [{ actionItems: { not: Prisma.JsonNull } }, { actionItemRecords: { some: {} } }],
         },
       ],
     },
@@ -161,7 +155,8 @@ export default async function ActionItemsPage({
     else if (item.status === 'COMPLETED') stats.completed++;
     else if (item.status === 'BLOCKED') stats.blocked++;
 
-    if (item.dueDate && item.status !== 'COMPLETED' && new Date(item.dueDate) < now) stats.overdue++;
+    if (item.dueDate && item.status !== 'COMPLETED' && new Date(item.dueDate) < now)
+      stats.overdue++;
     if (item.priority === 'HIGH' && item.status !== 'COMPLETED') stats.highPriority++;
 
     if (status && item.status !== status) continue;
@@ -178,9 +173,19 @@ export default async function ActionItemsPage({
 
   const canManage = permissions.isResponderOrAbove;
   const jiraCapabilitiesByServiceId = await getJiraCapabilitiesByServiceIds(
-    filteredItems.map(item => item.serviceId),
+    allActionItems.map(item => item.serviceId),
     canManage
   );
+
+  const buildStatUrl = (targetStatus?: string) => {
+    const p = new URLSearchParams();
+    if (targetStatus && targetStatus !== status) p.set('status', targetStatus);
+    if (owner) p.set('owner', owner);
+    if (priority) p.set('priority', priority);
+    if (view && view !== 'board') p.set('view', view);
+    const qs = p.toString();
+    return qs ? `/action-items?${qs}` : '/action-items';
+  };
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
@@ -204,7 +209,7 @@ export default async function ActionItemsPage({
             label: 'Total',
             value: stats.total,
             icon: <CheckSquare className="h-3.5 w-3.5" />,
-            href: '/action-items',
+            href: buildStatUrl(undefined),
             active: !status && !priority && !owner,
           },
           {
@@ -212,7 +217,7 @@ export default async function ActionItemsPage({
             value: stats.open,
             icon: <Circle className="h-3.5 w-3.5 text-blue-200" />,
             valueClassName: stats.open > 0 ? 'text-blue-200' : undefined,
-            href: '/action-items?status=OPEN',
+            href: buildStatUrl('OPEN'),
             active: status === 'OPEN',
           },
           {
@@ -220,7 +225,7 @@ export default async function ActionItemsPage({
             value: stats.inProgress,
             icon: <Clock className="h-3.5 w-3.5 text-amber-200" />,
             valueClassName: stats.inProgress > 0 ? 'text-amber-200' : undefined,
-            href: '/action-items?status=IN_PROGRESS',
+            href: buildStatUrl('IN_PROGRESS'),
             active: status === 'IN_PROGRESS',
           },
           {
@@ -228,7 +233,7 @@ export default async function ActionItemsPage({
             value: stats.completed,
             icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-200" />,
             valueClassName: stats.completed > 0 ? 'text-emerald-200' : undefined,
-            href: '/action-items?status=COMPLETED',
+            href: buildStatUrl('COMPLETED'),
             active: status === 'COMPLETED',
           },
           {
@@ -236,13 +241,14 @@ export default async function ActionItemsPage({
             value: stats.blocked,
             icon: <AlertOctagon className="h-3.5 w-3.5 text-rose-200" />,
             valueClassName: stats.blocked > 0 ? 'text-rose-200' : undefined,
-            href: '/action-items?status=BLOCKED',
+            href: buildStatUrl('BLOCKED'),
             active: status === 'BLOCKED',
           },
         ]}
       />
 
       <ActionItemsBoard
+        key={`${status || 'all'}-${owner || 'all'}-${priority || 'all'}-${view}`}
         actionItems={filteredItems}
         users={users}
         canManage={canManage}

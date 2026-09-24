@@ -54,6 +54,23 @@ describe('IncidentsFilters', () => {
     expect(push).toHaveBeenCalledWith('/incidents');
   });
 
+  it('navigates to active incidents when Active chip is clicked', () => {
+    render(
+      <IncidentsFilters
+        currentFilter="all"
+        currentPriority="all"
+        currentUrgency="all"
+        currentSort="newest"
+        currentSearch=""
+      />
+    );
+
+    const activeChip = screen.getByRole('button', { name: 'Active' });
+    fireEvent.click(activeChip);
+
+    expect(push).toHaveBeenCalledWith('/incidents?priority=P1&filter=all_open');
+  });
+
   it('renders service combobox with selected service or All services', () => {
     const services = [
       { id: 'svc-1', name: 'Auth Service' },

@@ -27,7 +27,6 @@ import {
   UserPlus,
   UserX,
   Users,
-  Search,
   Shield,
   Activity,
   Briefcase,
@@ -158,12 +157,10 @@ export default function UserFilters({ teams }: UserFiltersProps) {
               Search
             </Label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 id="q"
                 placeholder="Name or email..."
-                className="h-10 pl-10 bg-muted/30 focus:bg-background transition-colors"
-                style={{ paddingLeft: '2.5rem' }}
+                className="h-10 bg-muted/30 focus:bg-background transition-colors"
                 value={query}
                 onChange={e => handleFilterChange('q', e.target.value)}
               />

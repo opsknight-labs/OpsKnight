@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useId } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, ArrowRight, X, Sparkles, Command } from 'lucide-react';
+import { ArrowRight, X, Sparkles, Command } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
 import type { SettingsNavItem } from '@/components/settings/navConfig';
@@ -110,7 +110,6 @@ export default function SettingsSearch({
   return (
     <div ref={containerRef} className={cn('relative w-full', className)}>
       <div className="relative flex items-center">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
         <input
           ref={inputRef}
           type="search"
@@ -127,7 +126,7 @@ export default function SettingsSearch({
           }
           aria-autocomplete="list"
           role="combobox"
-          className="w-full h-11 pl-10 pr-20 bg-white border border-slate-200 rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-2xs transition-all"
+          className="w-full h-11 px-4 pr-20 bg-white border border-slate-200 rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary shadow-2xs transition-all"
         />
 
         <div className="absolute right-3 flex items-center gap-1.5 pointer-events-none">
