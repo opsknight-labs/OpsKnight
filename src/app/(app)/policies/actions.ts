@@ -233,9 +233,9 @@ export async function deletePolicy(policyId: string) {
   try {
     currentUser = await assertAdmin();
   } catch (error) {
-    throw new Error(
-      error instanceof Error ? error.message : 'Unauthorized. Admin access required.'
-    );
+    return {
+      error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
+    };
   }
 
   // Check if policy is used by any services
@@ -246,25 +246,31 @@ export async function deletePolicy(policyId: string) {
 
   if (servicesUsingPolicy.length > 0) {
     const serviceNames = servicesUsingPolicy.map(s => s.name).join(', ');
-    throw new Error(
-      `Cannot delete policy: ${servicesUsingPolicy.length} service(s) are using this policy (${serviceNames}). Please reassign or remove the policy from those services first.`
-    );
+    return {
+      error: `Cannot delete policy: ${servicesUsingPolicy.length} service(s) are using this policy (${serviceNames}). Please reassign or remove the policy from those services first.`,
+    };
   }
 
-  await prisma.$transaction(async tx => {
-    await tx.escalationRule.deleteMany({ where: { policyId } });
-    await tx.escalationPolicy.delete({ where: { id: policyId } });
-  });
+  try {
+    await prisma.$transaction(async tx => {
+      await tx.escalationRule.deleteMany({ where: { policyId } });
+      await tx.escalationPolicy.delete({ where: { id: policyId } });
+    });
 
-  await logAudit({
-    action: 'escalation_policy.deleted',
-    entityType: 'ESCALATION_POLICY',
-    entityId: policyId,
-    actorId: currentUser.id,
-  });
+    await logAudit({
+      action: 'escalation_policy.deleted',
+      entityType: 'ESCALATION_POLICY',
+      entityId: policyId,
+      actorId: currentUser.id,
+    });
 
-  revalidatePath('/policies');
-  redirect('/policies');
+    revalidatePath('/policies');
+    return { success: true };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Failed to delete escalation policy.',
+    };
+  }
 }
 
 export async function addPolicyStep(

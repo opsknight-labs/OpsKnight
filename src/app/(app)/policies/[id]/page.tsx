@@ -6,11 +6,12 @@ import { getAuthOptions } from '@/lib/auth';
 import Link from 'next/link';
 import StepsList from '@/components/policies/StepsList';
 import type { EditableEscalationCondition } from '@/components/policies/EscalationConditionsEditor';
-import PolicyDeleteButton from '@/components/PolicyDeleteButton';
+import DeletePolicyCard from './DeletePolicyCard';
 import PolicyActivityTimeline from '@/components/policies/PolicyActivityTimeline';
 import PolicyDetailTabs from '@/components/policies/PolicyDetailTabs';
 import {
   updatePolicy,
+  deletePolicy,
   addPolicyStep,
   updatePolicyStep,
   deletePolicyStep,
@@ -241,19 +242,23 @@ export default async function PolicyDetailPage({
 
   // Tab 4: Policy Settings & Danger Zone Content
   const settingsContent = (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-      {/* General Settings */}
-      <Card className="border-slate-200/80 bg-white shadow-2xs">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-sm font-bold flex items-center gap-2">
-            <Settings className="h-4 w-4 text-primary" />
-            General Information
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Update the escalation policy name and description.
-          </CardDescription>
+    <div className="space-y-6">
+      {/* General Information Card */}
+      <Card className="overflow-hidden border-border/70 shadow-xs">
+        <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+              <Settings className="h-4 w-4" />
+            </div>
+            <div>
+              <CardTitle className="text-sm font-semibold">General Information</CardTitle>
+              <CardDescription className="text-xs">
+                Update the escalation policy name and description
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-5">
           {canManagePolicies ? (
             <form action={updatePolicy.bind(null, policy.id)} className="space-y-4">
               <div className="space-y-1.5">
@@ -272,52 +277,44 @@ export default async function PolicyDetailPage({
                   placeholder="Describe the operational purpose of this escalation policy..."
                 />
               </div>
-              <Button type="submit" size="sm" className="w-full text-xs font-medium">
-                Save Policy Changes
-              </Button>
+              <div className="flex justify-end pt-2">
+                <Button type="submit" size="sm" className="text-xs font-medium shadow-xs">
+                  Save Policy Changes
+                </Button>
+              </div>
             </form>
           ) : (
-            <div className="bg-slate-50 p-4 rounded-xl text-xs text-muted-foreground italic border border-slate-200/60">
+            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl text-xs text-muted-foreground italic border border-border/60">
               You do not have permission to edit this policy. Admin role required.
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Danger Zone */}
+      {/* Danger Zone Card */}
       {canManagePolicies ? (
-        <Card className="border-red-200 bg-red-50/20 shadow-2xs">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold text-red-900 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-red-600" />
-              Danger Zone
-            </CardTitle>
-            <CardDescription className="text-xs text-red-700/80">
-              Destructive actions for this escalation policy.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Deleting this policy will permanently remove all configured notification steps. Any
-              services currently routing through this policy will become unassigned.
-            </p>
-            <div className="pt-2">
-              <PolicyDeleteButton
-                policyId={policy.id}
-                servicesUsingPolicy={services.map(s => ({ id: s.id, name: s.name }))}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <DeletePolicyCard
+          policyId={policy.id}
+          policyName={policy.name}
+          servicesUsingPolicy={services.map(s => ({ id: s.id, name: s.name }))}
+          deletePolicyAction={deletePolicy}
+        />
       ) : (
-        <Card className="border-slate-200/80 bg-slate-50/40 shadow-2xs">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold text-muted-foreground flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-slate-400" />
-              Access Control
-            </CardTitle>
+        <Card className="overflow-hidden border-border/70 shadow-xs">
+          <CardHeader className="border-b bg-muted/20 px-4 py-3 sm:px-5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-muted-foreground ring-1 ring-inset ring-border/40">
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+              <div>
+                <CardTitle className="text-sm font-semibold">Access Control</CardTitle>
+                <CardDescription className="text-xs">
+                  Policy modification permissions
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-5">
             <p className="text-xs text-muted-foreground leading-relaxed">
               Escalation policy configuration and deletion are restricted to team administrators.
             </p>
