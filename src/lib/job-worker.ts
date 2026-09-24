@@ -1,4 +1,9 @@
-import { processPendingJobs, processPendingJobsByType, runQueueMaintenance } from './jobs/queue';
+import {
+  processPendingGeneralJobs,
+  processPendingJobs,
+  processPendingJobsByType,
+  runQueueMaintenance,
+} from './jobs/queue';
 import { logger } from './logger';
 import {
   consumeEscalationWakeRequest,
@@ -28,7 +33,7 @@ export interface JobWorkerConfig {
   busyPollMs: number;
 }
 
-export type JobWorkerLane = 'all' | 'critical' | 'bulk' | 'projector';
+export type JobWorkerLane = 'all' | 'general' | 'critical' | 'bulk' | 'projector';
 
 interface JobWorkerSharedState {
   timer: NodeJS.Timeout | null;
@@ -299,6 +304,26 @@ async function runOnce(): Promise<void> {
         criticalNotificationCycleWasBusy(notifications);
       scheduleNextRun(
         busy
+          ? workerState.workerConfig.busyPollMs
+          : withIdleJitter(workerState.workerConfig.idlePollMs)
+      );
+      return;
+    }
+
+    if (workerState.workerLane === 'general') {
+      const result = await processPendingGeneralJobs(
+        workerState.workerConfig.batchSize,
+        workerState.workerConfig.concurrency
+      );
+      if (result.failed > 0) {
+        workerState.lastError = `${result.failed} general job(s) failed`;
+        logger.warn('[JobWorker] General lane degraded', { failed: result.failed });
+      } else {
+        workerState.lastSuccessAt = new Date();
+        workerState.lastError = null;
+      }
+      scheduleNextRun(
+        result.total > 0
           ? workerState.workerConfig.busyPollMs
           : withIdleJitter(workerState.workerConfig.idlePollMs)
       );

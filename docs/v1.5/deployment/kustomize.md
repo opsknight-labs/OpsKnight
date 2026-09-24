@@ -1,12 +1,22 @@
 ---
 order: 4
 title: Kustomize
-description: Render, customize, validate, and apply the Kubernetes manifests shipped with OpsKnight v1.4.
+description: Render, customize, validate, and apply the integrated or split OpsKnight Kubernetes runtime.
 ---
 
 # Kustomize
 
 `k8s/kustomization.yaml` is the entry point for the raw Kubernetes base. It composes the namespace, application, PostgreSQL StatefulSet and governing Service, application Service, ingress, HPA, NetworkPolicy, ServiceAccount, ConfigMap, Secret, and PodDisruptionBudget. PostgreSQL storage is created by the StatefulSet volume claim template; the base no longer allocates an unused standalone PVC. The existing ClusterIP mode of the PostgreSQL Service is preserved so upgrades do not attempt an immutable Service conversion.
+
+The root remains the integrated compatibility entrypoint. Three profiles make the runtime contract explicit:
+
+- `k8s/profiles/integrated` renders the same integrated application topology from the shared base;
+- `k8s/profiles/split` renders web, maintenance scheduler, general worker, critical worker, bulk worker, and status projector roles;
+- `k8s/profiles/split-pgbouncer` adds a two-replica transaction-pooling tier used only by web pods.
+
+The checked-in `k8s/base` contains the common resources shared by those profiles. Do not omit the general worker: the specialized lanes intentionally do not claim ordinary operational background jobs.
+
+Moving an existing installation from the root integrated entrypoint to a split profile changes the Service selector to `opsknight-role: web`. Existing integrated pods lack that label. Plan this as a controlled one-time endpoint cutover or pre-stage a compatible serving label; a Deployment `maxUnavailable: 0` setting does not by itself make a Service-selector migration interruption-free.
 
 ## Do not apply the base unchanged in production
 
@@ -46,13 +56,22 @@ kubectl kustomize deploy/overlays/production > /tmp/opsknight-rendered.yaml
 kubectl apply --server-side --dry-run=server -f /tmp/opsknight-rendered.yaml
 ```
 
+Before creating a production overlay, render the shipped contracts directly:
+
+```bash
+kubectl kustomize k8s
+kubectl kustomize k8s/profiles/integrated
+kubectl kustomize k8s/profiles/split
+kubectl kustomize k8s/profiles/split-pgbouncer
+```
+
 Review the rendered image, Secrets, `DATABASE_URL`, public URLs, ingress, NetworkPolicy, storage, and health probes before applying.
 
 ## External database overlays
 
 The base application constructs a URI for its bundled PostgreSQL. For managed PostgreSQL, patch the `DATABASE_URL` environment entry to read a complete URI from your secret system. This supports TLS parameters, PgBouncer, provider options, and percent-encoded credentials without reconstructing the URI from separate fields.
 
-The raw NetworkPolicy allows TCP/5432 to external destinations so an external database is not accidentally blocked. Narrow that rule to your known database CIDR/namespace in the production overlay.
+The raw NetworkPolicy allows TCP/5432 to external destinations so an external database is not accidentally blocked. Narrow that rule to your known database CIDR/namespace in the production overlay. When adapting the PgBouncer profile to an external database, mount the trusted CA into PgBouncer and every direct worker/scheduler pod and use `sslmode=verify-full`.
 
 ## Apply and observe
 

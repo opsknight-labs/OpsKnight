@@ -1,0 +1,28 @@
+runtime:
+  mode: split
+
+web:
+  replicaCount: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 12
+
+scheduler:
+  replicaCount: 2
+  profile: maintenance
+
+generalWorker:
+  replicaCount: 2
+
+criticalWorker:
+  replicaCount: 2
+
+bulkWorker:
+  replicaCount: 2
+
+statusProjector:
+  replicaCount: 2
+
+networkPolicy:
+  enabled: true

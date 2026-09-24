@@ -120,6 +120,60 @@ describe('deployment configuration invariants', () => {
     );
   });
 
+  it('models every split-runtime ownership lane in Helm and Kustomize', () => {
+    const values = read('helm/opsknight/values.yaml');
+    const helmDeployments = read('helm/opsknight/templates/split-deployments.yaml');
+    const rawDeployments = read('k8s/profiles/split/runtime-deployments.yaml');
+    for (const role of [
+      'web',
+      'scheduler',
+      'general-worker',
+      'critical-worker',
+      'bulk-worker',
+      'status-projector',
+    ]) {
+      expect(helmDeployments).toContain(`"${role}"`);
+      expect(rawDeployments).toContain(`opsknight-${role}`);
+    }
+    expect(values).toContain('profile: maintenance');
+    expect(rawDeployments).toContain('OPSKNIGHT_SCHEDULER_PROFILE, value: maintenance');
+    expect(read('helm/opsknight/templates/service.yaml')).toContain(
+      'app.kubernetes.io/component: web'
+    );
+    expect(read('k8s/profiles/split/web-service.yaml')).toContain('opsknight-role: web');
+  });
+
+  it('keeps Kustomize shared-base copies aligned with the compatibility root', () => {
+    for (const file of [
+      'namespace.yaml',
+      'secret.yaml',
+      'configmap.yaml',
+      'service-account.yaml',
+      'postgres-service.yaml',
+      'postgres-statefulset.yaml',
+      'service.yaml',
+      'ingress.yaml',
+      'network-policy.yaml',
+      'pod-disruption-budget.yaml',
+    ]) {
+      expect(read(`k8s/base/${file}`)).toBe(read(`k8s/${file}`));
+    }
+    expect(read('k8s/profiles/integrated/deployment.yaml')).toBe(read('k8s/deployment.yaml'));
+    expect(read('k8s/profiles/integrated/hpa.yaml')).toBe(read('k8s/hpa.yaml'));
+  });
+
+  it('keeps PgBouncer optional and routes only the split web tier through it', () => {
+    const values = read('helm/opsknight/values.yaml');
+    const helmPgBouncer = read('helm/opsknight/templates/pgbouncer-configmap.yaml');
+    const rawWebPatch = read('k8s/profiles/split-pgbouncer/web-database-patch.yaml');
+    expect(values).toContain('pgbouncer:\n  enabled: false');
+    expect(helmPgBouncer).toContain('pool_mode = {{ .Values.pgbouncer.poolMode }}');
+    expect(rawWebPatch).toContain('@opsknight-pgbouncer:6432');
+    expect(read('k8s/profiles/split/runtime-deployments.yaml')).not.toContain(
+      '@opsknight-pgbouncer:6432'
+    );
+  });
+
   it('supports digest-pinned images, external Secrets, and configuration rollouts in Helm', () => {
     const values = read('helm/opsknight/values.yaml');
     const helpers = read('helm/opsknight/templates/_helpers.tpl');

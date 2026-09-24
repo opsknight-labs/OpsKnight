@@ -10,7 +10,17 @@ The chart is shipped at `helm/opsknight`. The chart version and default applicat
 
 The `1.4.0` stable image includes the fail-closed migration entrypoint and is published for amd64 and arm64. The continuously updated test image from `main` remains amd64-only.
 
-The chart creates the application Deployment, Service, ConfigMap, Secret, optional Ingress, optional HPA, PodDisruptionBudget, optional NetworkPolicy, and optionally a single PostgreSQL StatefulSet.
+The chart defaults to the backward-compatible integrated Deployment. Set `runtime.mode: split` to render independent web, maintenance scheduler, general worker, critical worker, bulk worker, and status-projector Deployments. The application Service selects only the web tier.
+
+## Runtime modes
+
+Integrated mode preserves the historical single-process behavior. The scheduler uses its `full` profile and the in-process worker drains all durable lanes.
+
+For production split mode, start from `helm/opsknight/examples/values-split-runtime.yaml`. Its scheduler uses the `maintenance` profile and cannot claim background jobs, escalations, notifications, or status snapshots. Those responsibilities are assigned to dedicated workers. The `general-worker` is required: it drains operational jobs such as war-room, external-operation, encryption, and compliance work that do not belong to the critical, bulk, or projector lanes.
+
+Every split role has its own replica count, database pool size, resources, PDB, and topology-spread selector. Only the web tier has an HPA by default. Size fixed worker fleets together with PostgreSQL connection capacity and notification-provider admission limits.
+
+Treat the first integrated-to-split change as a controlled topology migration. The Service gains a web-role selector that old integrated pods do not have, so ordinary Deployment rolling-update settings alone cannot guarantee uninterrupted endpoint overlap. Render the change, pre-scale capacity, choose a maintenance window or pre-stage a compatible serving label in your environment, and verify Service endpoints before removing the integrated pods.
 
 ## Prerequisites
 
@@ -38,7 +48,7 @@ config:
 
 secrets:
   # Recommended: pre-create this Secret with DATABASE_URL,
-  # NEXTAUTH_SECRET, and ENCRYPTION_KEY keys.
+  # WEB_DATABASE_URL, NEXTAUTH_SECRET, and ENCRYPTION_KEY keys.
   existingSecret: opsknight-runtime
 
 database:
@@ -63,7 +73,13 @@ ingress:
         - ops.example.com
 ```
 
-Create the external Secret before the release, for example through External Secrets, a CSI driver, Sealed Secrets, or your platform's approved controller. With `postgresql.enabled: false`, it must contain `DATABASE_URL`, `NEXTAUTH_SECRET`, and `ENCRYPTION_KEY`. The URL should be the complete percent-encoded PostgreSQL URI, including TLS, PgBouncer, and provider options. With bundled PostgreSQL, also provide `POSTGRES_USER` and `POSTGRES_PASSWORD`. Key names can be changed under `secrets.keys`.
+Create the external Secret before the release, for example through External Secrets, a CSI driver, Sealed Secrets, or your platform's approved controller. Split mode expects `DATABASE_URL` for direct worker/scheduler connections and `WEB_DATABASE_URL` for the web tier, plus `NEXTAUTH_SECRET` and `ENCRYPTION_KEY`. The two database values may be identical when PgBouncer is disabled. With bundled PostgreSQL, also provide `POSTGRES_USER` and `POSTGRES_PASSWORD`. Key names can be changed under `secrets.keys`.
+
+## Optional PgBouncer
+
+`pgbouncer.enabled: true` is available only in split mode. It renders two PgBouncer replicas by default in transaction-pooling mode, a Service, PDB, topology spreading, and a policy that accepts traffic only from web pods. Scheduler and worker roles continue to connect directly to PostgreSQL.
+
+Use `pgbouncer.existingAuthSecret` in production. For an external PostgreSQL backend, structured `postgresql.*` settings, `postgresql.tls.enabled: true`, and a CA Secret are required; PgBouncer and every direct role verify the backend certificate. The bundled PgBouncer cannot be combined with an opaque `database.url`, because it must know the backend host and TLS material itself.
 
 If `secrets.existingSecret` is empty, the chart renders those values into its own Kubernetes Secret. Helm release data can then contain supplied secret values, so protect the values file and Helm storage backend and avoid secrets in shared command history. Changes to a chart-generated Secret or ConfigMap update pod-template checksums and roll the Deployment. External Secret content changes cannot be checksummed by Helm; configure the secret controller to restart/reload the Deployment, or perform an explicit rollout restart after rotation.
 
@@ -141,7 +157,7 @@ The chart currently performs migrations in the application startup path rather t
 
 ## Scaling
 
-The chart defaults to two fixed replicas (`replicaCount: 2`) so a basic install does not depend on metrics-server. HPA is disabled by default. Enable `autoscaling.enabled` only when the cluster exposes the required resource metrics (or adapt the chart for your autoscaler); its configured range is two to ten replicas.
+Integrated mode defaults to two fixed replicas (`replicaCount: 2`) so a basic install does not depend on metrics-server. Its HPA is disabled by default. Split mode enables the web HPA from two to twelve replicas and keeps worker fleets fixed by default.
 
 Connection limits are per application process. Size PostgreSQL capacity for the aggregate number of replicas, and validate scheduled/background work under the chosen topology.
 

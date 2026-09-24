@@ -1,0 +1,147 @@
+{{- if eq .Values.runtime.mode "split" }}
+{{- $root := . }}
+{{- $roles := list
+  (dict "name" "web" "processRole" "web" "values" .Values.web "poolEnv" "DATABASE_POOL_SIZE_WEB")
+  (dict "name" "scheduler" "processRole" "scheduler" "values" .Values.scheduler "poolEnv" "DATABASE_POOL_SIZE_SCHEDULER")
+  (dict "name" "general-worker" "processRole" "general-worker" "values" .Values.generalWorker "poolEnv" "DATABASE_POOL_SIZE_GENERAL_WORKER")
+  (dict "name" "critical-worker" "processRole" "critical-worker" "values" .Values.criticalWorker "poolEnv" "DATABASE_POOL_SIZE_CRITICAL_WORKER")
+  (dict "name" "bulk-worker" "processRole" "bulk-worker" "values" .Values.bulkWorker "poolEnv" "DATABASE_POOL_SIZE_BULK_WORKER")
+  (dict "name" "status-projector" "processRole" "status-projector" "values" .Values.statusProjector "poolEnv" "DATABASE_POOL_SIZE_STATUS_PROJECTOR")
+}}
+{{- range $index, $role := $roles }}
+{{- if gt $index 0 }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opsknight.fullname" $root }}-{{ $role.name }}
+  labels:
+    {{- include "opsknight.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $role.name }}
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  {{- if not (and (eq $role.name "web") $role.values.autoscaling.enabled) }}
+  replicas: {{ $role.values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "opsknight.roleSelectorLabels" (dict "root" $root "role" $role.name) | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $root.Template.BasePath "/configmap.yaml") $root | sha256sum }}
+        {{- if not $root.Values.secrets.existingSecret }}
+        checksum/secret: {{ include (print $root.Template.BasePath "/secret.yaml") $root | sha256sum }}
+        {{- end }}
+      labels:
+        {{- include "opsknight.roleSelectorLabels" (dict "root" $root "role" $role.name) | nindent 8 }}
+    spec:
+      terminationGracePeriodSeconds: {{ $role.values.terminationGracePeriodSeconds }}
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "opsknight.serviceAccountName" $root }}
+      automountServiceAccountToken: {{ $root.Values.serviceAccount.automount }}
+      securityContext:
+        {{- toYaml $root.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $root.Chart.Name }}
+          securityContext:
+            {{- toYaml $root.Values.securityContext | nindent 12 }}
+          image: {{ include "opsknight.image" $root | quote }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $root.Values.service.targetPort }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "opsknight.fullname" $root }}-config
+          env:
+            - name: OPSKNIGHT_PROCESS_ROLE
+              value: {{ $role.processRole | quote }}
+            {{- if eq $role.name "scheduler" }}
+            - name: OPSKNIGHT_SCHEDULER_PROFILE
+              value: {{ $role.values.profile | quote }}
+            {{- end }}
+            - name: {{ $role.poolEnv }}
+              value: {{ $role.values.database.poolSize | quote }}
+            {{- if $role.values.worker }}
+            - name: OPSKNIGHT_WORKER_BATCH_SIZE
+              value: {{ $role.values.worker.batchSize | quote }}
+            - name: OPSKNIGHT_WORKER_CONCURRENCY
+              value: {{ $role.values.worker.concurrency | quote }}
+            - name: OPSKNIGHT_WORKER_IDLE_POLL_MS
+              value: {{ $role.values.worker.idlePollMs | quote }}
+            - name: OPSKNIGHT_WORKER_BUSY_POLL_MS
+              value: {{ $role.values.worker.busyPollMs | quote }}
+            {{- end }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" $root }}
+                  key: {{ if eq $role.name "web" }}{{ $root.Values.secrets.keys.webDatabaseUrl }}{{ else }}{{ $root.Values.secrets.keys.databaseUrl }}{{ end }}
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" $root }}
+                  key: {{ $root.Values.secrets.keys.nextauthSecret }}
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" $root }}
+                  key: {{ $root.Values.secrets.keys.encryptionKey }}
+          startupProbe:
+            {{- toYaml $root.Values.startupProbe | nindent 12 }}
+          livenessProbe:
+            {{- toYaml $root.Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml $root.Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml $role.values.resources | nindent 12 }}
+          {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled (or (ne $role.name "web") (not $root.Values.pgbouncer.enabled)) }}
+          volumeMounts:
+            - name: database-tls
+              mountPath: /etc/opsknight-db-tls
+              readOnly: true
+          {{- end }}
+      {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled (or (ne $role.name "web") (not $root.Values.pgbouncer.enabled)) }}
+      volumes:
+        - name: database-tls
+          secret:
+            secretName: {{ required "postgresql.tls.existingSecret is required when external PostgreSQL TLS is enabled" $root.Values.postgresql.tls.existingSecret }}
+            items:
+              - key: {{ $root.Values.postgresql.tls.caKey }}
+                path: ca.crt
+      {{- end }}
+      {{- with $root.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- range . }}
+        - maxSkew: {{ .maxSkew }}
+          topologyKey: {{ .topologyKey }}
+          whenUnsatisfiable: {{ .whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              {{- include "opsknight.roleSelectorLabels" (dict "root" $root "role" $role.name) | nindent 14 }}
+        {{- end }}
+      {{- end }}
+      {{- with $root.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- end }}

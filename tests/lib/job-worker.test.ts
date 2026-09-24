@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/jobs/queue', () => ({
+  processPendingGeneralJobs: vi.fn(),
   processPendingJobs: vi.fn(),
+  processPendingJobsByType: vi.fn(),
   runQueueMaintenance: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -31,7 +33,7 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-import { processPendingJobs } from '@/lib/jobs/queue';
+import { processPendingGeneralJobs, processPendingJobs } from '@/lib/jobs/queue';
 import {
   consumeEscalationWakeRequest,
   criticalEscalationCycleWasBusy,
@@ -60,6 +62,11 @@ describe('dedicated job worker', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     vi.mocked(processPendingJobs).mockResolvedValue({ processed: 0, failed: 0, total: 0 });
+    vi.mocked(processPendingGeneralJobs).mockResolvedValue({
+      processed: 0,
+      failed: 0,
+      total: 0,
+    });
     vi.mocked(runCriticalEscalationCycle).mockResolvedValue({
       jobsClaimed: 0,
       jobsProcessed: 0,
@@ -126,6 +133,16 @@ describe('dedicated job worker', () => {
     expect(processPendingJobs).toHaveBeenCalledTimes(1);
     expect(processPendingJobs).toHaveBeenCalledWith(100, 15);
     expect(getJobWorkerStatus().running).toBe(true);
+  });
+
+  it('isolates ordinary operational jobs in the general worker lane', async () => {
+    startJobWorker('general');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(processPendingGeneralJobs).toHaveBeenCalledWith(100, 15);
+    expect(processPendingJobs).not.toHaveBeenCalled();
+    expect(runCriticalEscalationCycle).not.toHaveBeenCalled();
+    expect(runCriticalNotificationCycle).not.toHaveBeenCalled();
   });
 
   it('runs both critical lanes on every replica, ahead of the general queue', async () => {

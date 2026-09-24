@@ -1,6 +1,11 @@
 # Default values for opsknight
 # This is a YAML-formatted file.
 
+# integrated preserves the historical all-in-one process. split renders a web
+# tier plus maintenance, general, critical, bulk, and projection workers.
+runtime:
+  mode: integrated
+
 replicaCount: 2
 
 image:
@@ -123,12 +128,82 @@ readinessProbe:
   successThreshold: 1
   failureThreshold: 3
 
+# Split-runtime settings. Fixed worker replica counts are intentional: worker
+# count affects database and provider concurrency, so only the web tier has an
+# HPA by default.
+web:
+  replicaCount: 2
+  database:
+    poolSize: 20
+  resources:
+    requests: { cpu: 250m, memory: 256Mi }
+    limits: { cpu: 1000m, memory: 1Gi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: null
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 30
+
+scheduler:
+  replicaCount: 2
+  profile: maintenance
+  database: { poolSize: 5 }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 30
+
+generalWorker:
+  replicaCount: 2
+  database: { poolSize: 10 }
+  worker: { batchSize: 100, concurrency: 15, idlePollMs: 1000, busyPollMs: 100 }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 60
+
+criticalWorker:
+  replicaCount: 2
+  database: { poolSize: 10 }
+  worker: { batchSize: 50, concurrency: 10, idlePollMs: 1000, busyPollMs: 100 }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 60
+
+bulkWorker:
+  replicaCount: 2
+  database: { poolSize: 5 }
+  worker: { batchSize: 100, concurrency: 15, idlePollMs: 1000, busyPollMs: 100 }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 60
+
+statusProjector:
+  replicaCount: 2
+  database: { poolSize: 5 }
+  worker: { batchSize: 100, concurrency: 15, idlePollMs: 1000, busyPollMs: 100 }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 60
+
 secrets:
   # Use a pre-created Secret instead of rendering secret values into the Helm release.
   # External Secrets/CSI operators should keep the required keys synchronized.
   existingSecret: ''
   keys:
     databaseUrl: DATABASE_URL
+    webDatabaseUrl: WEB_DATABASE_URL
     nextauthSecret: NEXTAUTH_SECRET
     encryptionKey: ENCRYPTION_KEY
     postgresUser: POSTGRES_USER
@@ -165,6 +240,10 @@ postgresql:
   port: '5432'
   username: opsknight
   password: 'opsknight_secure_password_change_me'
+  tls:
+    enabled: false
+    existingSecret: ''
+    caKey: ca.crt
   connectionLimit: 40
   poolTimeout: 30
   storage: 10Gi
@@ -197,3 +276,31 @@ postgresql:
     limits:
       memory: 2Gi
       cpu: 2000m
+
+pgbouncer:
+  enabled: false
+  replicas: 2
+  image:
+    repository: ghcr.io/icoretech/pgbouncer-docker
+    tag: '1.25.1'
+    digest: 'sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd'
+    pullPolicy: IfNotPresent
+  port: 6432
+  poolMode: transaction
+  maxClientConnections: 1000
+  defaultPoolSize: 40
+  reservePoolSize: 10
+  maxPreparedStatements: 100
+  existingAuthSecret: ''
+  authFileKey: userlist.txt
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities: { drop: [ALL] }
+    runAsNonRoot: true
+    runAsUser: 70
+    runAsGroup: 70
+    readOnlyRootFilesystem: true

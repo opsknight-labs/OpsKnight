@@ -12,6 +12,7 @@ import { cleanupExpiredRateLimits } from '@/lib/rate-limit';
 import { checkSLABreaches } from './sla-breach-monitor';
 import crypto from 'crypto';
 import { getNextIncidentSlaTransitionAt } from './incident-sla/next-transition';
+import { getSchedulerOwnership, type SchedulerProfile } from './runtime-role';
 
 /**
  * Production-Grade Cron Scheduler
@@ -36,6 +37,11 @@ let timer: NodeJS.Timeout | null = null;
 let activeRun: Promise<void> | null = null;
 let initialized = false;
 let lastJobCleanup = 0;
+let schedulerProfile: SchedulerProfile = 'full';
+
+export interface CronSchedulerOptions {
+  profile?: SchedulerProfile;
+}
 
 async function notifyOverdueActionItems(now: Date): Promise<number> {
   const { default: prisma } = await import('./prisma');
@@ -221,9 +227,10 @@ export async function updateState(data: {
 /**
  * Calculate next scheduled time based on pending work
  */
-async function getNextScheduledTime(): Promise<Date> {
+async function getNextScheduledTime(profile: SchedulerProfile): Promise<Date> {
   try {
     const prisma = (await import('./prisma')).default;
+    const ownership = getSchedulerOwnership(profile);
     const [
       nextIncident,
       nextJob,
@@ -232,19 +239,23 @@ async function getNextScheduledTime(): Promise<Date> {
       nextNotificationRetry,
       nextCentralNotification,
     ] = await Promise.all([
-      prisma.incident.findFirst({
-        where: {
-          escalationStatus: 'ESCALATING',
-          nextEscalationAt: { not: null },
-        },
-        orderBy: { nextEscalationAt: 'asc' },
-        select: { nextEscalationAt: true },
-      }),
-      prisma.backgroundJob.findFirst({
-        where: { status: 'PENDING' },
-        orderBy: { scheduledAt: 'asc' },
-        select: { scheduledAt: true },
-      }),
+      ownership.escalations
+        ? prisma.incident.findFirst({
+            where: {
+              escalationStatus: 'ESCALATING',
+              nextEscalationAt: { not: null },
+            },
+            orderBy: { nextEscalationAt: 'asc' },
+            select: { nextEscalationAt: true },
+          })
+        : Promise.resolve(null),
+      ownership.backgroundJobs
+        ? prisma.backgroundJob.findFirst({
+            where: { status: 'PENDING' },
+            orderBy: { scheduledAt: 'asc' },
+            select: { scheduledAt: true },
+          })
+        : Promise.resolve(null),
       getNextIncidentSlaTransitionAt(),
       prisma.incident.findFirst({
         where: {
@@ -254,8 +265,8 @@ async function getNextScheduledTime(): Promise<Date> {
         orderBy: { snoozedUntil: 'asc' },
         select: { snoozedUntil: true },
       }),
-      getNextNotificationRetryAt(),
-      getNextCentralNotificationAt(),
+      ownership.notifications ? getNextNotificationRetryAt() : Promise.resolve(null),
+      ownership.notifications ? getNextCentralNotificationAt() : Promise.resolve(null),
     ]);
 
     const times: (number | null)[] = [
@@ -356,26 +367,38 @@ async function runOnce() {
 
   try {
     // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
-    const jobResult = await processPendingJobs(100, 15);
-    const escalationResult = await processPendingEscalations();
+    const ownership = getSchedulerOwnership(schedulerProfile);
+    const jobResult = ownership.backgroundJobs
+      ? await processPendingJobs(100, 15)
+      : { processed: 0, failed: 0, total: 0 };
+    const escalationResult = ownership.escalations
+      ? await processPendingEscalations()
+      : { processed: 0, total: 0 };
 
-    // Reconciliation also runs here so a deployment with no job-worker process
-    // (OPSKNIGHT_PROCESS_ROLE=scheduler) still repairs escalations and maintains queues. Every repair
-    // is idempotent, so both callers running is harmless.
-    try {
-      await runQueueMaintenance();
-    } catch (queueMaintErr) {
-      logger.warn('[Cron] Periodic queue maintenance sweep failed', {
-        error: queueMaintErr instanceof Error ? queueMaintErr.message : String(queueMaintErr),
-      });
+    // Full-profile schedulers preserve the historical recovery fallback.
+    // Maintenance-profile schedulers leave queue ownership to dedicated lanes.
+    if (ownership.backgroundJobs) {
+      try {
+        await runQueueMaintenance();
+      } catch (queueMaintErr) {
+        logger.warn('[Cron] Periodic queue maintenance sweep failed', {
+          error: queueMaintErr instanceof Error ? queueMaintErr.message : String(queueMaintErr),
+        });
+      }
     }
 
-    const { reconcileEscalations } = await import('./escalation/recovery');
-    const reconciliation = await reconcileEscalations();
+    const reconciliation = ownership.escalations
+      ? await import('./escalation/recovery').then(({ reconcileEscalations }) =>
+          reconcileEscalations()
+        )
+      : null;
     const { reconcileIntegrationControlPlane } = await import('./integrations/reconciliation');
     const integrationReconciliation = await reconcileIntegrationControlPlane();
-    const { reconcileStatusPageSnapshots } = await import('./status-pages/snapshot');
-    const statusPageReconciliation = await reconcileStatusPageSnapshots();
+    const statusPageReconciliation = ownership.statusProjection
+      ? await import('./status-pages/snapshot').then(({ reconcileStatusPageSnapshots }) =>
+          reconcileStatusPageSnapshots()
+        )
+      : null;
     const { reconcileStatusPageRouteOperations } = await import('./status-pages/route-operations');
     const statusPageRouteReconciliation = await reconcileStatusPageRouteOperations();
     const { reconcileWarRoomHealth } = await import('./war-room/reconcile');
@@ -421,8 +444,11 @@ async function runOnce() {
     // Group 2: Secondary tasks (can run in parallel)
     const { processShiftRotations, processUpcomingShiftReminders } =
       await import('./oncall-handoff');
-    const { isBulkNotificationDeliveryPaused } = await import('./notification-capacity-control');
-    const bulkPaused = await isBulkNotificationDeliveryPaused();
+    const bulkPaused = ownership.notifications
+      ? await import('./notification-capacity-control').then(
+          ({ isBulkNotificationDeliveryPaused }) => isBulkNotificationDeliveryPaused()
+        )
+      : true;
     const [
       retryResult,
       criticalNotificationResult,
@@ -432,14 +458,17 @@ async function runOnce() {
       handoffResult,
       reminderCount,
     ] = await Promise.all([
-      // Also on the per-replica critical notification lane. Kept here so a
-      // scheduler-only deployment with no job-worker process still recovers;
-      // both paths claim before delivering, so running both is safe.
-      retryFailedNotifications(),
-      processCentralNotificationQueue({ trafficClasses: ['CRITICAL', 'TRANSACTIONAL'] }),
-      bulkPaused
-        ? Promise.resolve({ processed: 0, failed: 0, pending: 0, skipped: 0 })
-        : processCentralNotificationQueue({ trafficClasses: ['PUBLIC_INCIDENT', 'BULK'] }),
+      // Full-profile schedulers retain the legacy notification recovery path;
+      // maintenance schedulers never compete with dedicated notification lanes.
+      ownership.notifications
+        ? retryFailedNotifications()
+        : Promise.resolve({ retried: 0, succeeded: 0, failed: 0 }),
+      ownership.notifications
+        ? processCentralNotificationQueue({ trafficClasses: ['CRITICAL', 'TRANSACTIONAL'] })
+        : Promise.resolve({ processed: 0, failed: 0, pending: 0, skipped: 0 }),
+      ownership.notifications && !bulkPaused
+        ? processCentralNotificationQueue({ trafficClasses: ['PUBLIC_INCIDENT', 'BULK'] })
+        : Promise.resolve({ processed: 0, failed: 0, pending: 0, skipped: 0 }),
       processAutoUnsnoozeInternal(),
       checkSLABreaches(),
       processShiftRotations(new Date()),
@@ -685,7 +714,7 @@ async function runOnce() {
     // window where a standby could acquire an unlocked row and run early.
     let nextTime: Date;
     try {
-      nextTime = await getNextScheduledTime();
+      nextTime = await getNextScheduledTime(schedulerProfile);
     } catch (error) {
       logger.error('[Cron] Failed to schedule next tick, retrying in MAX_DELAY', { error });
       nextTime = new Date(Date.now() + MAX_DELAY_MS);
@@ -698,7 +727,7 @@ async function runOnce() {
 /**
  * Start the cron scheduler
  */
-export function startCronScheduler() {
+export function startCronScheduler(options: CronSchedulerOptions = {}) {
   if (initialized) {
     logger.debug('[Cron] Already initialized, skipping');
     return;
@@ -718,8 +747,9 @@ export function startCronScheduler() {
     return;
   }
 
+  schedulerProfile = options.profile ?? 'full';
   initialized = true;
-  logger.info('[Cron] Starting scheduler', { workerId: WORKER_ID });
+  logger.info('[Cron] Starting scheduler', { workerId: WORKER_ID, profile: schedulerProfile });
 
   // Schedule first run immediately
   scheduleNextRun(new Date());

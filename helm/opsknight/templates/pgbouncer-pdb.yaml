@@ -1,0 +1,12 @@
+{{- if and .Values.pgbouncer.enabled .Values.pgbouncer.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "opsknight.pgbouncer.fullname" . }}
+spec:
+  minAvailable: {{ .Values.pgbouncer.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+      app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

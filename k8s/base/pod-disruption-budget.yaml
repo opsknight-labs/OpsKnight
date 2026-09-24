@@ -1,0 +1,25 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: opsknight-app-pdb
+  namespace: opsknight
+  labels:
+    app: opsknight-app
+spec:
+  minAvailable: 1 # Ensure at least 1 pod is available during disruptions
+  selector:
+    matchLabels:
+      app: opsknight-app
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: opsknight-postgres-pdb
+  namespace: opsknight
+  labels:
+    app: opsknight-postgres
+spec:
+  minAvailable: 1 # For single replica PostgreSQL
+  selector:
+    matchLabels:
+      app: opsknight-postgres

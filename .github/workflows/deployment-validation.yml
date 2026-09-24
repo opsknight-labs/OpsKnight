@@ -72,6 +72,23 @@ jobs:
       - name: Render Helm defaults
         run: helm template opsknight helm/opsknight --namespace opsknight > /tmp/opsknight-helm.yaml
 
+      - name: Render Helm split runtime matrix
+        run: |
+          helm template opsknight helm/opsknight \
+            --namespace opsknight \
+            -f helm/opsknight/examples/values-split-runtime.yaml \
+            > /tmp/opsknight-helm-split.yaml
+          helm template opsknight helm/opsknight \
+            --namespace opsknight \
+            -f helm/opsknight/examples/values-split-runtime.yaml \
+            --set pgbouncer.enabled=true \
+            --set-string postgresql.password=ci-non-default-password \
+            > /tmp/opsknight-helm-split-pgbouncer.yaml
+          if helm template opsknight helm/opsknight --set runtime.mode=invalid >/dev/null 2>&1; then
+            echo 'invalid runtime.mode unexpectedly rendered'
+            exit 1
+          fi
+
       - name: Render Helm external database configuration
         run: |
           helm template opsknight helm/opsknight \
@@ -92,7 +109,11 @@ jobs:
             > /tmp/opsknight-helm-external-secret.yaml
 
       - name: Render Kustomize base
-        run: kubectl kustomize k8s > /tmp/opsknight-kustomize.yaml
+        run: |
+          kubectl kustomize k8s > /tmp/opsknight-kustomize.yaml
+          kubectl kustomize k8s/profiles/integrated > /tmp/opsknight-kustomize-integrated.yaml
+          kubectl kustomize k8s/profiles/split > /tmp/opsknight-kustomize-split.yaml
+          kubectl kustomize k8s/profiles/split-pgbouncer > /tmp/opsknight-kustomize-split-pgbouncer.yaml
 
       - name: Validate rendered invariants
         shell: bash
@@ -106,6 +127,16 @@ jobs:
           grep -q 'checksum/secret:' /tmp/opsknight-helm.yaml
           grep -q 'NEXT_PUBLIC_APP_URL' /tmp/opsknight-helm.yaml
           grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
+          grep -q 'startupProbe:' /tmp/opsknight-kustomize-integrated.yaml
+          for role in web scheduler general-worker critical-worker bulk-worker status-projector; do
+            grep -q "name: opsknight-$role" /tmp/opsknight-helm-split.yaml
+            grep -q "name: opsknight-$role" /tmp/opsknight-kustomize-split.yaml
+          done
+          grep -q 'value: maintenance' /tmp/opsknight-helm-split.yaml
+          grep -q 'value: maintenance' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-helm-split-pgbouncer.yaml
+          grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          grep -q 'pgbouncer=true' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'kubernetes.io/metadata.name: ingress-nginx' /tmp/opsknight-kustomize.yaml
           grep -q '127.0.0.1' /tmp/opsknight-compose.yaml
           grep -q 'db.example.com:6432' /tmp/opsknight-compose-external-db.yaml

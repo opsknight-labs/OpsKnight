@@ -35,6 +35,11 @@ app.kubernetes.io/name: {{ include "opsknight.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
+{{- define "opsknight.roleSelectorLabels" -}}
+{{ include "opsknight.selectorLabels" .root }}
+app.kubernetes.io/component: {{ .role }}
+{{- end }}
+
 {{- define "opsknight.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
 {{- default (include "opsknight.fullname" .) .Values.serviceAccount.name }}
@@ -52,6 +57,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 {{- end }}
 
+{{- define "opsknight.pgbouncer.image" -}}
+{{- if .Values.pgbouncer.image.digest -}}
+{{- printf "%s@%s" .Values.pgbouncer.image.repository (.Values.pgbouncer.image.digest | trimPrefix "@") -}}
+{{- else -}}
+{{- printf "%s:%s" .Values.pgbouncer.image.repository .Values.pgbouncer.image.tag -}}
+{{- end -}}
+{{- end }}
+
 {{/* Use an externally managed Secret when configured. */}}
 {{- define "opsknight.secretName" -}}
 {{- default (printf "%s-secrets" (include "opsknight.fullname" .)) .Values.secrets.existingSecret | trunc 63 | trimSuffix "-" -}}
@@ -63,6 +76,30 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{- define "opsknight.postgresql.serviceName" -}}
 {{- printf "%s-postgresql" (include "opsknight.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{- define "opsknight.pgbouncer.fullname" -}}
+{{- printf "%s-pgbouncer" (include "opsknight.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{- define "opsknight.pgbouncer.authSecretName" -}}
+{{- default (printf "%s-auth" (include "opsknight.pgbouncer.fullname" .)) .Values.pgbouncer.existingAuthSecret | trunc 63 | trimSuffix "-" -}}
+{{- end }}
+
+{{- define "opsknight.directHost" -}}
+{{- if .Values.postgresql.enabled -}}
+{{- include "opsknight.postgresql.serviceName" . -}}
+{{- else -}}
+{{- required "postgresql.host is required when postgresql.enabled=false" .Values.postgresql.host -}}
+{{- end -}}
+{{- end }}
+
+{{- define "opsknight.webDatabaseUrl" -}}
+{{- if .Values.pgbouncer.enabled -}}
+{{- printf "postgresql://%s:%s@%s:%d/%s?schema=public&pgbouncer=true" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) (include "opsknight.pgbouncer.fullname" .) (int .Values.pgbouncer.port) .Values.postgresql.database -}}
+{{- else -}}
+{{- include "opsknight.databaseUrl" . -}}
+{{- end -}}
 {{- end }}
 
 {{/*
@@ -79,6 +116,10 @@ TLS options, PgBouncer, and URI-encoded credentials can be supplied safely.
 {{- if .Values.postgresql.enabled }}
 {{- $host = include "opsknight.postgresql.serviceName" . }}
 {{- end }}
-{{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) $host .Values.postgresql.port .Values.postgresql.database (int $connLimit) (int $poolTimeout) }}
+{{- $tlsQuery := "" }}
+{{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled }}
+{{- $tlsQuery = "&sslmode=verify-full&sslrootcert=/etc/opsknight-db-tls/ca.crt" }}
+{{- end }}
+{{- printf "postgresql://%s:%s@%s:%s/%s?schema=public&connection_limit=%d&pool_timeout=%d%s" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) $host .Values.postgresql.port .Values.postgresql.database (int $connLimit) (int $poolTimeout) $tlsQuery }}
 {{- end }}
 {{- end }}

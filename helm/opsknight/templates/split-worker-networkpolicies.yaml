@@ -1,0 +1,46 @@
+{{- if and .Values.networkPolicy.enabled (eq .Values.runtime.mode "split") }}
+{{- $root := . }}
+{{- range $role := list "scheduler" "general-worker" "critical-worker" "bulk-worker" "status-projector" }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "opsknight.fullname" $root }}-{{ $role }}
+  labels:
+    {{- include "opsknight.labels" $root | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "opsknight.roleSelectorLabels" (dict "root" $root "role" $role) | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    {{- if $root.Values.postgresql.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "opsknight.name" $root }}-postgresql
+      ports:
+        - protocol: TCP
+          port: 5432
+    {{- else }}
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ $root.Values.database.port | int }}
+    {{- end }}
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+---
+{{- end }}
+{{- end }}

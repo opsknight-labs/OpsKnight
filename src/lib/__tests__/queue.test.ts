@@ -488,3 +488,14 @@ describe('queue bulk backpressure crash semantics', () => {
     expect(block).toContain('rescheduleBulkBackpressuredJob');
   });
 });
+
+describe('general worker ownership', () => {
+  it('excludes every job type owned by a dedicated critical or bulk lane', () => {
+    expect(queue.GENERAL_WORKER_EXCLUDED_JOB_TYPES).toEqual([
+      'ESCALATION',
+      'STATUS_PAGE_NOTIFICATION',
+      'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
+      'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2',
+    ]);
+  });
+});
