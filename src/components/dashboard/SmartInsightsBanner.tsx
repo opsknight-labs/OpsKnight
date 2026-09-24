@@ -246,10 +246,11 @@ export default function SmartInsightsBanner({
                 variant="ghost"
                 size="sm"
                 aria-label="Dismiss insight"
-                className="h-7 w-7 p-0 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                title="Dismiss insight"
+                className="h-7 w-7 p-0 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 border border-slate-200/80 transition-all duration-150 active:scale-95 cursor-pointer dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-slate-100 dark:border-slate-700 shrink-0"
                 onClick={() => dismissInsight(insight.id)}
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-3.5 w-3.5 stroke-[2.25]" />
               </Button>
             </div>
           </div>

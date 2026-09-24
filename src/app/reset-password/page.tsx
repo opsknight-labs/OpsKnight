@@ -110,9 +110,10 @@ function ResetPasswordForm() {
             type="button"
             onClick={() => setError('')}
             aria-label="Dismiss error"
-            className="rounded text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+            title="Dismiss"
+            className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-300 transition-colors cursor-pointer"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5 stroke-[2.25]" />
           </button>
         </div>
       )}

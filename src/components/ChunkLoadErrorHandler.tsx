@@ -240,9 +240,10 @@ export default function ChunkLoadErrorHandler() {
               type="button"
               onClick={() => setRecoveryRequired(null)}
               aria-label="Dismiss"
-              className="text-zinc-400 hover:text-white p-1 rounded transition-colors"
+              title="Dismiss"
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white border border-zinc-700/80 transition-all cursor-pointer"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5 stroke-[2.25]" />
             </button>
           </div>
           <p className="text-xs text-zinc-400 leading-relaxed">

@@ -142,10 +142,11 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
           <button
             type="button"
             onClick={() => setDismissedError(state.error ?? null)}
-            className="text-red-400 hover:text-red-600 dark:hover:text-red-300 p-0.5"
+            className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-300 transition-colors cursor-pointer"
             aria-label="Dismiss error"
+            title="Dismiss"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-3.5 h-3.5 stroke-[2.25]" />
           </button>
         </div>
       )}

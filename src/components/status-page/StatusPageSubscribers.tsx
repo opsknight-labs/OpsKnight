@@ -257,9 +257,11 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
           <button
             type="button"
             onClick={() => setActionError(null)}
-            className="ml-auto text-muted-foreground hover:text-foreground"
+            className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 transition-all cursor-pointer"
+            aria-label="Dismiss error"
+            title="Dismiss"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-3.5 h-3.5 stroke-[2.25]" />
           </button>
         </div>
       )}
@@ -271,9 +273,11 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
           <button
             type="button"
             onClick={() => setActionSuccess(null)}
-            className="ml-auto text-muted-foreground hover:text-foreground"
+            className="ml-auto flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 transition-all cursor-pointer"
+            aria-label="Dismiss message"
+            title="Dismiss"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-3.5 h-3.5 stroke-[2.25]" />
           </button>
         </div>
       )}
