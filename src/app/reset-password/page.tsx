@@ -21,12 +21,25 @@ function ResetPasswordForm() {
   const [success, setSuccess] = useState(false);
   const passwordsMatch = Object.is(password, confirmPassword);
 
-  if (!tokenReady) return <div className="flex justify-center p-8"><Spinner /></div>;
+  if (!tokenReady)
+    return (
+      <div className="flex justify-center p-8">
+        <Spinner />
+      </div>
+    );
   if (!token && !success) {
     return (
-      <div role="alert" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm dark:border-red-500/20 dark:bg-red-500/10">
+      <div
+        role="alert"
+        className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm dark:border-red-500/20 dark:bg-red-500/10"
+      >
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
-        <div><p className="font-medium text-red-700 dark:text-red-300">Invalid reset link</p><p className="mt-1 text-xs text-red-600 dark:text-red-300/80">Request a new password reset link and try again.</p></div>
+        <div>
+          <p className="font-medium text-red-700 dark:text-red-300">Invalid reset link</p>
+          <p className="mt-1 text-xs text-red-600 dark:text-red-300/80">
+            Request a new password reset link and try again.
+          </p>
+        </div>
       </div>
     );
   }
@@ -36,7 +49,8 @@ function ResetPasswordForm() {
     setError('');
     if (!token) return setError('Invalid or expired reset link.');
     if (!passwordsMatch) return setError('Passwords do not match.');
-    if (!isPasswordStrong(password)) return setError('Password does not meet the security requirements.');
+    if (!isPasswordStrong(password))
+      return setError('Password does not meet the security requirements.');
     setIsSubmitting(true);
     try {
       const response = await fetch('/api/auth/reset-password', {
@@ -65,10 +79,19 @@ function ResetPasswordForm() {
       <div className="space-y-4" role="status" aria-live="polite">
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center dark:border-emerald-500/20 dark:bg-emerald-500/10">
           <ShieldCheck className="mx-auto h-8 w-8 text-emerald-600 dark:text-emerald-400" />
-          <h3 className="mt-3 font-['Space_Grotesk',sans-serif] font-semibold text-emerald-800 dark:text-emerald-300">Password updated</h3>
-          <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-200/80">All previously issued sessions have been revoked.</p>
+          <h3 className="mt-3 font-['Space_Grotesk',sans-serif] font-semibold text-emerald-800 dark:text-emerald-300">
+            Password updated
+          </h3>
+          <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-200/80">
+            All previously issued sessions have been revoked.
+          </p>
         </div>
-        <Link href="/login?passwordReset=1" className="flex w-full items-center justify-center rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2">Continue to sign in</Link>
+        <Link
+          href="/login?passwordReset=1"
+          className="flex w-full items-center justify-center rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2"
+        >
+          Continue to sign in
+        </Link>
       </div>
     );
   }
@@ -76,31 +99,126 @@ function ResetPasswordForm() {
   return (
     <>
       {error && (
-        <div role="alert" aria-live="assertive" className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm dark:border-red-500/20 dark:bg-red-500/10">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" /><p className="flex-1 text-red-700 dark:text-red-300">{error}</p><button type="button" onClick={() => setError('')} aria-label="Dismiss error" className="rounded text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"><X className="h-4 w-4" /></button>
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm dark:border-red-500/20 dark:bg-red-500/10"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+          <p className="flex-1 text-red-700 dark:text-red-300">{error}</p>
+          <button
+            type="button"
+            onClick={() => setError('')}
+            aria-label="Dismiss error"
+            className="rounded text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-1.5">
-          <label htmlFor="password" className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">New password</label>
-          <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
-            <Lock className="ml-3.5 h-4 w-4 text-slate-400" aria-hidden="true" />
-            <input id="password" type={showPassword ? 'text' : 'password'} required value={password} maxLength={PASSWORD_TRANSPORT_MAX_CODE_UNITS} onChange={e => { setPassword(e.target.value); setError(''); }} autoComplete="new-password" disabled={isSubmitting} className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white" autoFocus />
-            <button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="mr-3 rounded p-1 text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:hover:text-slate-300 dark:focus-visible:ring-white">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+          <label
+            htmlFor="password"
+            className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+          >
+            New password
+          </label>
+          <div className="group relative flex items-center">
+            <div className="absolute left-3.5 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+              <Lock className="h-4 w-4" aria-hidden="true" />
+            </div>
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              required
+              value={password}
+              maxLength={PASSWORD_TRANSPORT_MAX_CODE_UNITS}
+              onChange={e => {
+                setPassword(e.target.value);
+                setError('');
+              }}
+              autoComplete="new-password"
+              disabled={isSubmitting}
+              placeholder="Enter new password"
+              className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-10 pr-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(value => !value)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="absolute right-2.5 z-10 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
           </div>
           <PasswordStrengthMeter password={password} />
-          <p className="text-[11px] text-slate-400">Additional account-specific password checks are enforced securely on submit.</p>
+          <p className="text-[11px] text-slate-400">
+            Additional account-specific password checks are enforced securely on submit.
+          </p>
         </div>
         <div className="space-y-1.5">
-          <label htmlFor="confirm-password" className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Confirm password</label>
-          <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
-            <Lock className="ml-3.5 h-4 w-4 text-slate-400" aria-hidden="true" />
-            <input id="confirm-password" type={showConfirmPassword ? 'text' : 'password'} required value={confirmPassword} maxLength={PASSWORD_TRANSPORT_MAX_CODE_UNITS} onChange={e => { setConfirmPassword(e.target.value); setError(''); }} autoComplete="new-password" disabled={isSubmitting} className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white" />
-            <button type="button" onClick={() => setShowConfirmPassword(value => !value)} aria-label={showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'} className="mr-3 rounded p-1 text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:hover:text-slate-300 dark:focus-visible:ring-white">{showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+          <label
+            htmlFor="confirm-password"
+            className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+          >
+            Confirm password
+          </label>
+          <div className="group relative flex items-center">
+            <div className="absolute left-3.5 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+              <Lock className="h-4 w-4" aria-hidden="true" />
+            </div>
+            <input
+              id="confirm-password"
+              type={showConfirmPassword ? 'text' : 'password'}
+              required
+              value={confirmPassword}
+              maxLength={PASSWORD_TRANSPORT_MAX_CODE_UNITS}
+              onChange={e => {
+                setConfirmPassword(e.target.value);
+                setError('');
+              }}
+              autoComplete="new-password"
+              disabled={isSubmitting}
+              placeholder="Confirm new password"
+              className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-10 pr-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(value => !value)}
+              aria-label={
+                showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'
+              }
+              className="absolute right-2.5 z-10 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white"
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
           </div>
-          {confirmPassword && <p className={`flex items-center gap-1 text-xs ${passwordsMatch ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>{passwordsMatch ? <CheckCircle2 className="h-3 w-3" /> : <X className="h-3 w-3" />}{passwordsMatch ? 'Passwords match' : 'Passwords do not match'}</p>}
+          {confirmPassword && (
+            <p
+              className={`flex items-center gap-1 text-xs ${passwordsMatch ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}
+            >
+              {passwordsMatch ? <CheckCircle2 className="h-3 w-3" /> : <X className="h-3 w-3" />}
+              {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
+            </p>
+          )}
         </div>
-        <button type="submit" disabled={isSubmitting || !isPasswordStrong(password) || !passwordsMatch} className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2">{isSubmitting ? <><Spinner size="sm" variant="current" /> Updating…</> : <><ShieldCheck className="h-4 w-4" /> Set new password</>}</button>
+        <button
+          type="submit"
+          disabled={isSubmitting || !isPasswordStrong(password) || !passwordsMatch}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2"
+        >
+          {isSubmitting ? (
+            <>
+              <Spinner size="sm" variant="current" /> Updating…
+            </>
+          ) : (
+            <>
+              <ShieldCheck className="h-4 w-4" /> Set new password
+            </>
+          )}
+        </button>
       </form>
     </>
   );
@@ -110,7 +228,15 @@ export default function ResetPasswordPage() {
   return (
     <AuthLayout>
       <AuthCard>
-        <div className="mb-8 text-center"><AuthBrand className="mb-6" /><h1 className="font-['Space_Grotesk',sans-serif] text-2xl font-bold text-slate-950 dark:text-white">Reset password</h1><p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Secure your account with a new passphrase.</p></div>
+        <div className="mb-8 text-center">
+          <AuthBrand className="mb-6" />
+          <h1 className="font-['Space_Grotesk',sans-serif] text-2xl font-bold text-slate-950 dark:text-white">
+            Reset password
+          </h1>
+          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+            Secure your account with a new passphrase.
+          </p>
+        </div>
         <ResetPasswordForm />
       </AuthCard>
     </AuthLayout>

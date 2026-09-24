@@ -76,9 +76,12 @@ textarea::placeholder {
     -webkit-text-fill-color: currentColor;
 }
 
-.auth-input:focus {
+.auth-input:focus,
+.auth-input:focus-visible {
     color: inherit;
     -webkit-text-fill-color: currentColor;
+    outline: none !important;
+    outline-offset: 0 !important;
 }
 
 .auth-input:-webkit-autofill,

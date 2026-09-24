@@ -107,8 +107,10 @@ export default function ForgotPasswordPage() {
                 >
                   Email address
                 </label>
-                <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
-                  <Mail className="ml-3.5 h-4 w-4 text-slate-400" aria-hidden="true" />
+                <div className="group relative flex items-center">
+                  <div className="absolute left-3.5 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+                    <Mail className="h-4 w-4" aria-hidden="true" />
+                  </div>
                   <input
                     id="email"
                     type="email"
@@ -121,8 +123,9 @@ export default function ForgotPasswordPage() {
                     autoComplete="email"
                     required
                     disabled={isSubmitting}
+                    placeholder="you@company.com"
+                    className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-10 pr-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
                     autoFocus
-                    className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white"
                   />
                 </div>
               </div>
