@@ -389,7 +389,11 @@ export async function updateUserRole(userId: string, formData: FormData) {
     }
   }
 
-  await updateUserSecurityState(userId, { role }, { tokenVersion: { increment: 1 } });
+  await updateUserSecurityState(
+    userId,
+    { role, roleSource: 'MANUAL' },
+    { tokenVersion: { increment: 1 } }
+  );
 
   await logAudit({
     action: 'user.role.updated',
@@ -839,7 +843,11 @@ export async function bulkUpdateUsers(
       }
     }
 
-    await bulkUpdateUserSecurityState(userIds, { role }, { tokenVersion: { increment: 1 } });
+    await bulkUpdateUserSecurityState(
+      userIds,
+      { role, roleSource: 'MANUAL' },
+      { tokenVersion: { increment: 1 } }
+    );
 
     await logAudit({
       action: 'user.role.updated.bulk',
@@ -973,7 +981,12 @@ export async function updateUserProfile(
       }
     };
     const updated = roleChanged
-      ? await updateUserSecurityState(userId, { role: targetRole }, profileData, revokeInviteTokens)
+      ? await updateUserSecurityState(
+          userId,
+          { role: targetRole, roleSource: 'MANUAL' },
+          profileData,
+          revokeInviteTokens
+        )
       : await prisma.$transaction(async tx => {
           const result = await tx.user.update({ where: { id: userId }, data: profileData });
           await revokeInviteTokens(tx);

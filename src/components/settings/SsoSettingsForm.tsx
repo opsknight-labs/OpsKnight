@@ -36,6 +36,7 @@ import {
 } from '@/app/(app)/settings/security/actions';
 import { normalizeOidcProviderType } from '@/lib/oidc-provider';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
+import { isOidcCustomScopeAllowed, oidcScopeSuggestions } from '@/lib/oidc/scopes';
 import type { SettingsActionState } from '@/lib/settings-result';
 
 type ProfileMapping = {
@@ -404,6 +405,12 @@ export default function SsoSettingsForm({
 
   const handlePresetSelect = (preset: Preset) => {
     setSelectedPreset(preset.id);
+    setCustomScopesValue(current =>
+      current
+        .split(/\s+/)
+        .filter(scope => scope && isOidcCustomScopeAllowed(scope, preset.id))
+        .join(' ')
+    );
     if (preset.issuer) {
       setIssuerUrl(preset.issuer);
     } else {
@@ -995,14 +1002,14 @@ export default function SsoSettingsForm({
             id="custom-scopes"
             type="text"
             name="customScopes"
-            placeholder="e.g. groups department offline_access"
+            placeholder={selectedPreset === 'okta' ? 'e.g. groups' : 'Optional provider scopes'}
             value={customScopesValue}
             onChange={event => setCustomScopesValue(event.target.value)}
             className="font-mono text-sm h-10"
           />
           <div className="flex items-center gap-1.5 flex-wrap pt-1">
             <span className="text-[11px] text-muted-foreground mr-1">Quick add:</span>
-            {['groups', 'offline_access', 'roles'].map(scope => {
+            {oidcScopeSuggestions(selectedPreset).map(scope => {
               const currentScopes = customScopesValue.split(/\s+/).filter(Boolean);
               const isIncluded = currentScopes.includes(scope);
               return (
@@ -1027,6 +1034,18 @@ export default function SsoSettingsForm({
               );
             })}
           </div>
+          {oidcScopeSuggestions(selectedPreset).length === 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              No additional OAuth scopes are recommended for this provider.
+            </p>
+          )}
+          {selectedPreset === 'azure' && (
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Tip for Microsoft Entra ID: Configure group claims in Azure Portal under App
+              registrations → Token configuration → Add groups claim. Do not request{' '}
+              <code className="font-mono">groups</code> as an OAuth scope.
+            </p>
+          )}
         </div>
 
         <div className="space-y-3 pt-2">

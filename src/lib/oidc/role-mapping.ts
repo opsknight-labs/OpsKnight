@@ -3,8 +3,8 @@ import type { OidcClaims } from '@/lib/oidc/provider-policy';
 export type OidcRole = 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
 export type OidcRoleRule = { claim: string; value: string; role: OidcRole };
 export type OidcRoleEvaluation =
-  | { ok: true; role: OidcRole; matched: boolean }
-  | { ok: false; reason: 'OIDC_ROLE_CLAIM_MISSING' | 'OIDC_GROUPS_OVERAGE' };
+  | { ok: true; role: OidcRole; matched: boolean; groupsOverage?: boolean }
+  | { ok: false; reason: 'OIDC_GROUPS_OVERAGE' };
 
 function hasGroupOverage(claims: OidcClaims): boolean {
   const names = claims._claim_names;
@@ -23,10 +23,7 @@ export function evaluateOidcRoleClaims(
   if (rules.length === 0) return { ok: true, role: defaultRole, matched: false };
   const names = new Set(rules.map(rule => rule.claim));
   if (names.has('groups') && hasGroupOverage(claims)) {
-    return { ok: false, reason: 'OIDC_GROUPS_OVERAGE' };
-  }
-  if (![...names].some(name => Object.prototype.hasOwnProperty.call(claims, name))) {
-    return { ok: false, reason: 'OIDC_ROLE_CLAIM_MISSING' };
+    return { ok: true, role: defaultRole, matched: false, groupsOverage: true };
   }
   for (const rule of rules) {
     const value = claims[rule.claim];

@@ -19,6 +19,7 @@ import {
   normalizeOidcIssuer,
 } from '@/lib/oidc/issuer-migration';
 import { normalizeOidcProviderType } from '@/lib/oidc-provider';
+import { validateOidcCustomScopes } from '@/lib/oidc/scopes';
 import { getEnterpriseSessionPolicy } from '@/lib/local-auth-policy';
 
 function normalizeDomains(value: string) {
@@ -116,7 +117,7 @@ export async function saveOidcConfig(
     const allowedDomains = normalizeDomains(
       (formData.get('allowedDomains') as string | null) ?? ''
     );
-    const customScopes = (formData.get('customScopes') as string | null)?.trim() ?? null;
+    const rawCustomScopes = (formData.get('customScopes') as string | null)?.trim() ?? null;
     const providerLabel = (formData.get('providerLabel') as string | null)?.trim() ?? null;
     const organizationId = (formData.get('organizationId') as string | null)?.trim() ?? null;
     const rawTokenEndpointAuthMethod = (
@@ -194,6 +195,17 @@ export async function saveOidcConfig(
 
     const issuer = (rawIssuer || existing?.issuer || '').trim();
     const clientId = (rawClientId || existing?.clientId || '').trim();
+    const providerType = normalizeOidcProviderType(requestedProviderType, issuer);
+    const scopeValidation = validateOidcCustomScopes(rawCustomScopes, providerType);
+    if (!scopeValidation.ok) {
+      return {
+        success: false,
+        code: 'VALIDATION_ERROR',
+        error: scopeValidation.error,
+        updatedAt: expectedUpdatedAt,
+      };
+    }
+    const customScopes = scopeValidation.scopes;
 
     if (enabled) {
       if (!issuer || !isValidIssuer(issuer)) {
@@ -286,7 +298,6 @@ export async function saveOidcConfig(
       };
     }
 
-    const providerType = normalizeOidcProviderType(requestedProviderType, issuer);
     let migratedUserIds: string[] = [];
     const updatedAt = await prisma.$transaction(async tx => {
       const id = existing?.id ?? 'default';

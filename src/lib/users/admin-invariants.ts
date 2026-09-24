@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { Prisma, Role, UserStatus } from '@prisma/client';
+import type { Prisma, Role, RoleSource, UserStatus } from '@prisma/client';
 import { acquireAdvisoryLock, LOCK_KEYS } from '@/lib/db-locks';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import {
@@ -10,6 +10,7 @@ import {
 
 type UserSecurityMutation = {
   role?: Role;
+  roleSource?: RoleSource;
   status?: UserStatus;
   tokenVersion?: Prisma.IntFieldUpdateOperationsInput | number;
 };

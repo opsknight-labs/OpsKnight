@@ -258,6 +258,74 @@ describe('Auth JWT + OIDC callback contract', () => {
     );
   });
 
+  it('preserves a manually assigned role when the mapped claim is missing', async () => {
+    vi.mocked(getOidcConfig).mockResolvedValue({
+      enabled: true,
+      configVersion: 1,
+      issuer: 'https://login.example.com/',
+      clientId: 'client-id',
+      clientSecret: 'secret',
+      autoProvision: true,
+      allowedDomains: [],
+      roleMapping: [{ claim: 'groups', value: 'responders', role: 'RESPONDER' }],
+      customScopes: null,
+      providerType: 'custom',
+      profileMapping: null,
+    });
+    vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue(
+      successfulResolution({ role: 'RESPONDER', roleSource: 'MANUAL' })
+    );
+    resetAuthOptionsCache();
+    const signIn = await getSignInCallback();
+
+    const result = await signIn({
+      user: { email: 'user@example.com', name: 'User', id: 'oidc-sub' },
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub', type: 'oauth' },
+      profile: { email_verified: true, sub: 'oidc-sub' } as never,
+      email: undefined,
+      credentials: undefined,
+    });
+
+    expect(result).toBe(true);
+    expect(updateUserSecurityState).not.toHaveBeenCalled();
+  });
+
+  it('gives a matching IdP rule authority over a manually assigned role', async () => {
+    vi.mocked(getOidcConfig).mockResolvedValue({
+      enabled: true,
+      configVersion: 1,
+      issuer: 'https://login.example.com/',
+      clientId: 'client-id',
+      clientSecret: 'secret',
+      autoProvision: true,
+      allowedDomains: [],
+      roleMapping: [{ claim: 'groups', value: 'responders', role: 'RESPONDER' }],
+      customScopes: null,
+      providerType: 'custom',
+      profileMapping: null,
+    });
+    vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue(
+      successfulResolution({ role: 'USER', roleSource: 'MANUAL' })
+    );
+    resetAuthOptionsCache();
+    const signIn = await getSignInCallback();
+
+    const result = await signIn({
+      user: { email: 'user@example.com', name: 'User', id: 'oidc-sub' },
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub', type: 'oauth' },
+      profile: { email_verified: true, sub: 'oidc-sub', groups: ['responders'] } as never,
+      email: undefined,
+      credentials: undefined,
+    });
+
+    expect(result).toBe(true);
+    expect(updateUserSecurityState).toHaveBeenCalledWith(
+      'u1',
+      { role: 'RESPONDER', roleSource: 'OIDC' },
+      expect.objectContaining({ tokenVersion: { increment: 1 } })
+    );
+  });
+
   it('jwt callback resolves OIDC sessions only through issuer+subject identity', async () => {
     const jwt = await getJwtCallback();
     vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue({ userId: 'u1' } as never);
@@ -602,7 +670,11 @@ describe('Auth JWT + OIDC callback contract', () => {
     // 1. Prior session state (expires in 5m)
     const oldSession = await sessionCallback({
       session: { user: { name: 'Stay User' } },
-      token: { sub: 'u-stay', sessionExpiresAt: oldExpiresSec, absoluteExpiresAt: absoluteExpiresSec },
+      token: {
+        sub: 'u-stay',
+        sessionExpiresAt: oldExpiresSec,
+        absoluteExpiresAt: absoluteExpiresSec,
+      },
     });
     const oldExpiresMs = new Date(oldSession.expires).getTime();
 

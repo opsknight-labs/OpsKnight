@@ -46,8 +46,7 @@ describe('SSO provider template persistence', () => {
         initialConfig={{
           ...commonConfig,
           providerType: 'azure',
-          issuer:
-            'https://login.microsoftonline.com/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/v2.0',
+          issuer: 'https://login.microsoftonline.com/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/v2.0',
         }}
         callbackUrl="https://app.example.com/api/auth/callback/oidc"
         hasEncryptionKey
@@ -75,5 +74,57 @@ describe('SSO provider template persistence', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Okta' }).className).toContain('bg-primary');
+  });
+
+  it('does not offer groups as an OAuth scope for Microsoft Entra ID', () => {
+    render(
+      <SsoSettingsForm
+        initialConfig={{
+          ...commonConfig,
+          providerType: 'azure',
+          issuer: 'https://login.microsoftonline.com/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/v2.0',
+        }}
+        callbackUrl="https://app.example.com/api/auth/callback/oidc"
+        hasEncryptionKey
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: '+ groups' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Do not request/)).toBeInTheDocument();
+  });
+
+  it('offers groups as an OAuth scope for Okta', () => {
+    render(
+      <SsoSettingsForm
+        initialConfig={{
+          ...commonConfig,
+          providerType: 'okta',
+          issuer: 'https://acme.okta.com/oauth2/default',
+        }}
+        callbackUrl="https://app.example.com/api/auth/callback/oidc"
+        hasEncryptionKey
+      />
+    );
+
+    expect(screen.getByRole('button', { name: '+ groups' })).toBeInTheDocument();
+  });
+
+  it('does not suggest unsupported custom scopes for Google', () => {
+    render(
+      <SsoSettingsForm
+        initialConfig={{
+          ...commonConfig,
+          providerType: 'google',
+          issuer: 'https://accounts.google.com',
+        }}
+        callbackUrl="https://app.example.com/api/auth/callback/oidc"
+        hasEncryptionKey
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: '+ groups' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '+ roles' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '+ offline_access' })).not.toBeInTheDocument();
+    expect(screen.getByText(/No additional OAuth scopes are recommended/)).toBeInTheDocument();
   });
 });

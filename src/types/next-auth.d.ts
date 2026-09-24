@@ -27,5 +27,6 @@ declare module 'next-auth/jwt' {
     tokenVersion?: number;
     avatarUrl?: string | null;
     gender?: string | null;
+    authProvider?: 'oidc' | 'credentials';
   }
 }

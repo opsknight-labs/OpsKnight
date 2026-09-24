@@ -4,10 +4,11 @@ import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
 const rules = [{ claim: 'groups', value: 'OpsKnight-Admins', role: 'ADMIN' as const }];
 
 describe('OIDC role mapping policy', () => {
-  it('distinguishes missing claims from a present claim with no match', () => {
+  it('treats missing and unmatched claims as a safe default-role fallback', () => {
     expect(evaluateOidcRoleClaims({}, rules)).toEqual({
-      ok: false,
-      reason: 'OIDC_ROLE_CLAIM_MISSING',
+      ok: true,
+      role: 'USER',
+      matched: false,
     });
     expect(evaluateOidcRoleClaims({ groups: ['other'] }, rules)).toEqual({
       ok: true,
@@ -16,14 +17,18 @@ describe('OIDC role mapping policy', () => {
     });
   });
 
-  it('fails closed for Entra group overage', () => {
+  it('denies mapped elevation without denying authentication on group overage', () => {
     expect(evaluateOidcRoleClaims({ _claim_names: { groups: 'src1' } }, rules)).toEqual({
-      ok: false,
-      reason: 'OIDC_GROUPS_OVERAGE',
+      ok: true,
+      role: 'USER',
+      matched: false,
+      groupsOverage: true,
     });
     expect(evaluateOidcRoleClaims({ hasgroups: true }, rules)).toEqual({
-      ok: false,
-      reason: 'OIDC_GROUPS_OVERAGE',
+      ok: true,
+      role: 'USER',
+      matched: false,
+      groupsOverage: true,
     });
   });
 

@@ -167,7 +167,6 @@ describe('Auth session lifecycle and hardening', () => {
     });
   });
 
-
   describe('Finding 2: Idle timeout and user activity tracking', () => {
     it('does not bump lastActivityAt on passive reads', async () => {
       vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
@@ -411,7 +410,9 @@ describe('Auth session lifecycle and hardening', () => {
 
       // Request fails closed in session callback
       const sessionCallback = options.callbacks?.session;
-      const sessionResult = await (sessionCallback as unknown as (params: unknown) => Promise<{ user?: unknown }>)({
+      const sessionResult = await (
+        sessionCallback as unknown as (params: unknown) => Promise<{ user?: unknown }>
+      )({
         session: { user: { id: 'active-user', name: 'Active User' }, expires: '' },
         token: result,
       });
@@ -436,7 +437,8 @@ describe('Auth session lifecycle and hardening', () => {
       expect(policy.breakGlassEmail).toBe('emergency@example.com');
 
       const credentialEntryEnabled = policy.enabled;
-      const breakGlassOnly = !policy.localLoginEnabled && policy.breakGlassEnabled && Boolean(policy.breakGlassEmail);
+      const breakGlassOnly =
+        !policy.localLoginEnabled && policy.breakGlassEnabled && Boolean(policy.breakGlassEmail);
 
       expect(credentialEntryEnabled).toBe(true);
       expect(breakGlassOnly).toBe(true);
@@ -822,9 +824,7 @@ describe('Auth session lifecycle and hardening', () => {
     });
 
     it('DOES increment configVersion when roleMapping changes', async () => {
-      const newRoleMapping = JSON.stringify([
-        { claim: 'groups', value: 'admins', role: 'ADMIN' },
-      ]);
+      const newRoleMapping = JSON.stringify([{ claim: 'groups', value: 'admins', role: 'ADMIN' }]);
       const formData = createOidcFormData({ roleMapping: newRoleMapping });
       const result = await saveOidcConfig(prevState, formData);
 
@@ -832,9 +832,7 @@ describe('Auth session lifecycle and hardening', () => {
       expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
       const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
       expect(updateData.configVersion).toEqual({ increment: 1 });
-      expect(updateData.roleMapping).toEqual([
-        { claim: 'groups', value: 'admins', role: 'ADMIN' },
-      ]);
+      expect(updateData.roleMapping).toEqual([{ claim: 'groups', value: 'admins', role: 'ADMIN' }]);
     });
 
     it('DOES increment configVersion when roleMapping rule order changes', async () => {
@@ -892,7 +890,7 @@ describe('Auth session lifecycle and hardening', () => {
       expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
       const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
       expect(updateData.configVersion).toEqual({ increment: 1 });
-      expect(updateData.customScopes).toBe('openid profile email groups');
+      expect(updateData.customScopes).toBe('groups');
     });
   });
 
