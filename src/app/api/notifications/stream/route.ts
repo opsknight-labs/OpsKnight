@@ -5,210 +5,265 @@ import prisma from '@/lib/prisma';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 import { getNotificationUserChangeVersion } from '@/lib/notification-change-clock';
+import { isAppError } from '@/lib/errors';
 
 /**
  * Server-Sent Events endpoint for real-time notification updates
  */
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(await getAuthOptions());
-  if (!session?.user?.email) {
-    return new Response('Unauthorized', { status: 401 });
-  }
+  try {
+    const session = await getServerSession(await getAuthOptions());
+    if (!session?.user?.email && !session?.user?.id) {
+      return new Response('Unauthorized', { status: 401 });
+    }
 
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: { id: true, timeZone: true, status: true },
-  });
+    const user = await prisma.user.findUnique({
+      where: session.user.id ? { id: session.user.id } : { email: session.user.email! },
+      select: { id: true, timeZone: true, status: true, tokenVersion: true },
+    });
 
-  if (!user) {
-    return new Response('User not found', { status: 404 });
-  }
+    if (!user) {
+      return new Response('Unauthorized', { status: 401 });
+    }
 
-  if (user.status === 'DISABLED') {
-    return new Response('Forbidden', { status: 403 });
-  }
+    if (user.status === 'DISABLED') {
+      return new Response('Forbidden', { status: 403 });
+    }
 
-  const userTimeZone = getUserTimeZone(user ?? undefined);
+    const sessionTokenVersion = session.user.tokenVersion ?? 0;
+    const expectedTokenVersion = user.tokenVersion ?? 0;
+    if (sessionTokenVersion !== expectedTokenVersion) {
+      return new Response('Unauthorized', { status: 401 });
+    }
 
-  let cleanup: () => void = () => {};
+    const userTimeZone = getUserTimeZone(user ?? undefined);
 
-  // Create a readable stream for SSE
-  const stream = new ReadableStream({
-    async start(controller) {
-      const encoder = new TextEncoder();
-      let isClosed = false;
+    let cleanup: () => void = () => {};
 
-      let pollInterval: NodeJS.Timeout | null = null;
-      let isPolling = false;
+    // Create a readable stream for SSE
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        let isClosed = false;
 
-      cleanup = () => {
-        isClosed = true;
-        if (pollInterval) {
-          clearInterval(pollInterval);
-          pollInterval = null;
-        }
-        try {
-          controller.close();
-        } catch (_error) {
-          // Controller already closed, ignore
-        }
-      };
+        let pollInterval: NodeJS.Timeout | null = null;
+        let isPolling = false;
 
-      // Send initial connection message
-      const send = (data: string) => {
-        if (!isClosed) {
+        cleanup = () => {
+          isClosed = true;
+          if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+          }
           try {
-            controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-          } catch (error) {
-            logger.error('Error sending SSE data', {
-              component: 'api-notifications-stream',
-              error,
-            });
-            cleanup();
+            controller.close();
+          } catch (_error) {
+            // Controller already closed, ignore
           }
-        }
-      };
+        };
 
-      send(JSON.stringify({ type: 'connected', message: 'Notification stream connected' }));
+        // Send initial connection message
+        const send = (data: string) => {
+          if (!isClosed) {
+            try {
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+            } catch (error) {
+              logger.error('Error sending SSE data', {
+                component: 'api-notifications-stream',
+                error,
+              });
+              cleanup();
+            }
+          }
+        };
 
-      // Poll for new notifications every 5 seconds (reduced from 2s to save DB)
-      let lastCheck = new Date();
-      let lastCheckId = '';
-      let pollCount = 0;
-      let notificationVersion = await getNotificationUserChangeVersion(user.id);
+        send(JSON.stringify({ type: 'connected', message: 'Notification stream connected' }));
 
-      pollInterval = setInterval(async () => {
-        if (isClosed || isPolling) return;
-        isPolling = true;
-        pollCount++;
+        // Provide immediate unread count upon handshake so UI badge is accurate without loading 50 records
         try {
-          const nextVersion = await getNotificationUserChangeVersion(user.id);
-          const userChanged = nextVersion !== notificationVersion;
-          notificationVersion = nextVersion;
-          if (!userChanged && pollCount % 6 !== 0) {
-            return;
-          }
-          // Optimized query: purely time-based, uses index [userId, createdAt]
-          // We check for ANY new notification regardless of read status to notify the user
-          const newNotifications = await prisma.inAppNotification.findMany({
+          const initialUnreadCount = await prisma.inAppNotification.count({
             where: {
               userId: user.id,
-              OR: [
-                { createdAt: { gt: lastCheck } },
-                { createdAt: lastCheck, id: { gt: lastCheckId || '' } },
-              ],
-            },
-            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-            take: 8,
-            select: {
-              id: true,
-              title: true,
-              message: true,
-              type: true,
-              entityType: true,
-              entityId: true,
-              readAt: true,
-              createdAt: true,
+              readAt: null,
             },
           });
+          send(JSON.stringify({ type: 'unread_count', count: initialUnreadCount }));
+        } catch (err) {
+          logger.warn('Failed to fetch initial unread count for notification stream', {
+            component: 'api-notifications-stream',
+            error: err,
+          });
+        }
 
-          let shouldUpdateUnreadCount = false;
+        // Poll for new notifications every 5 seconds (reduced from 2s to save DB)
+        let lastCheck = new Date();
+        let lastCheckId = '';
+        let pollCount = 0;
+        let notificationVersion = await getNotificationUserChangeVersion(user.id);
 
-          if (newNotifications.length > 0) {
-            const formattedNotifications = newNotifications.map(notification => {
-              const timeAgo = formatDateTime(notification.createdAt, userTimeZone, {
-                format: 'relative',
-              });
-              const typeKey = notification.type.toLowerCase();
-              let type: 'incident' | 'service' | 'schedule' = 'incident';
-              if (typeKey === 'schedule') {
-                type = 'schedule';
-              } else if (typeKey === 'service' || typeKey === 'team') {
-                type = 'service';
-              }
-              const incidentId =
-                notification.entityType === 'INCIDENT' ? notification.entityId : null;
-
-              return {
-                id: notification.id,
-                title: notification.title,
-                message: notification.message,
-                time: timeAgo,
-                unread: !notification.readAt,
-                type,
-                incidentId,
-                createdAt: notification.createdAt.toISOString(),
-              };
-            });
-
-            send(
-              JSON.stringify({
-                type: 'notifications',
-                notifications: formattedNotifications,
-                count: formattedNotifications.length,
-              })
-            );
-
-            // Update last check time
-            const lastNotification = newNotifications[newNotifications.length - 1];
-            lastCheck = lastNotification.createdAt;
-            lastCheckId = lastNotification.id;
-            shouldUpdateUnreadCount = true;
-          }
-
-          // Optimized Unread Count:
-          // Only check unread count if:
-          // 1. We found new notifications (count definitely changed)
-          // 2. OR: Every 5th poll (every 25s) to catch up on "mark as read" from other tabs/devices
-          if (shouldUpdateUnreadCount || pollCount % 6 === 0) {
-            const unreadCount = await prisma.inAppNotification.count({
+        pollInterval = setInterval(async () => {
+          if (isClosed || isPolling) return;
+          isPolling = true;
+          pollCount++;
+          try {
+            const nextVersion = await getNotificationUserChangeVersion(user.id);
+            const userChanged = nextVersion !== notificationVersion;
+            notificationVersion = nextVersion;
+            if (!userChanged && pollCount % 6 !== 0) {
+              return;
+            }
+            // Optimized query: purely time-based, uses index [userId, createdAt]
+            // We check for ANY new notification regardless of read status to notify the user
+            const newNotifications = await prisma.inAppNotification.findMany({
               where: {
                 userId: user.id,
-                readAt: null,
+                OR: [
+                  { createdAt: { gt: lastCheck } },
+                  { createdAt: lastCheck, id: { gt: lastCheckId || '' } },
+                ],
+              },
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              take: 8,
+              select: {
+                id: true,
+                title: true,
+                message: true,
+                type: true,
+                entityType: true,
+                entityId: true,
+                readAt: true,
+                createdAt: true,
               },
             });
 
+            let shouldUpdateUnreadCount = false;
+
+            if (newNotifications.length > 0) {
+              const formattedNotifications = newNotifications.map(notification => {
+                const timeAgo = formatDateTime(notification.createdAt, userTimeZone, {
+                  format: 'relative',
+                });
+                const typeKey = notification.type.toLowerCase();
+                let type: 'incident' | 'service' | 'schedule' = 'incident';
+                if (typeKey === 'schedule') {
+                  type = 'schedule';
+                } else if (typeKey === 'service' || typeKey === 'team') {
+                  type = 'service';
+                }
+                const incidentId =
+                  notification.entityType === 'INCIDENT' ? notification.entityId : null;
+
+                return {
+                  id: notification.id,
+                  title: notification.title,
+                  message: notification.message,
+                  time: timeAgo,
+                  unread: !notification.readAt,
+                  type,
+                  incidentId,
+                  createdAt: notification.createdAt.toISOString(),
+                };
+              });
+
+              send(
+                JSON.stringify({
+                  type: 'notifications',
+                  notifications: formattedNotifications,
+                  count: formattedNotifications.length,
+                })
+              );
+
+              // Update last check time
+              const lastNotification = newNotifications[newNotifications.length - 1];
+              lastCheck = lastNotification.createdAt;
+              lastCheckId = lastNotification.id;
+              shouldUpdateUnreadCount = true;
+            }
+
+            // Optimized Unread Count:
+            // Only check unread count if:
+            // 1. We found new notifications (count definitely changed)
+            // 2. OR: Every 5th poll (every 25s) to catch up on "mark as read" from other tabs/devices
+            if (shouldUpdateUnreadCount || pollCount % 6 === 0) {
+              const unreadCount = await prisma.inAppNotification.count({
+                where: {
+                  userId: user.id,
+                  readAt: null,
+                },
+              });
+
+              send(
+                JSON.stringify({
+                  type: 'unread_count',
+                  count: unreadCount,
+                })
+              );
+            }
+
+            if (pollCount % 6 === 0) {
+              const freshUser = await prisma.user.findUnique({
+                where: { id: user.id },
+                select: { status: true, tokenVersion: true },
+              });
+              if (
+                !freshUser ||
+                freshUser.status === 'DISABLED' ||
+                (freshUser.tokenVersion ?? 0) !== expectedTokenVersion
+              ) {
+                send(JSON.stringify({ type: 'authorization_revoked' }));
+                cleanup();
+                return;
+              }
+            }
+
+            send(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }));
+          } catch (error) {
+            logger.error('Error polling notifications', {
+              component: 'api-notifications-stream',
+              error,
+            });
             send(
               JSON.stringify({
-                type: 'unread_count',
-                count: unreadCount,
+                type: 'error',
+                message: 'Error fetching notifications',
               })
             );
+          } finally {
+            isPolling = false;
           }
+        }, 5000);
 
-          send(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }));
-        } catch (error) {
-          logger.error('Error polling notifications', {
-            component: 'api-notifications-stream',
-            error,
-          });
-          send(
-            JSON.stringify({
-              type: 'error',
-              message: 'Error fetching notifications',
-            })
-          );
-        } finally {
-          isPolling = false;
-        }
-      }, 5000);
-
-      // Cleanup on client disconnect
-      req.signal.addEventListener('abort', () => {
+        // Cleanup on client disconnect
+        req.signal.addEventListener('abort', () => {
+          cleanup();
+        });
+      },
+      cancel() {
         cleanup();
-      });
-    },
-    cancel() {
-      cleanup();
-    },
-  });
+      },
+    });
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-store',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    },
-  });
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-store',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
+    });
+  } catch (error) {
+    if (isAppError(error)) {
+      if (error.code === 'AUTHENTICATION_REQUIRED' || error.code === 'SESSION_REVOKED') {
+        return new Response(error.userMessage, { status: 401 });
+      }
+      if (error.code === 'USER_DISABLED') {
+        return new Response(error.userMessage, { status: 403 });
+      }
+    }
+    logger.error('Error in notification stream endpoint', {
+      component: 'api-notifications-stream',
+      error,
+    });
+    return new Response('Internal Server Error', { status: 500 });
+  }
 }

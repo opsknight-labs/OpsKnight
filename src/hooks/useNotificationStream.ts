@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { logger } from '@/lib/logger';
+import { redirectToSessionExpired, verifyClientSession } from '@/lib/client-auth-recovery';
 
 type NotificationStreamHandlers<T = unknown> = {
   enabled?: boolean;
@@ -24,9 +25,12 @@ let eventSource: EventSource | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempt = 0;
 let browserListenersInstalled = false;
+let isAuthTerminated = false;
 
-const supportsEventSource = () => typeof window !== 'undefined' && typeof EventSource !== 'undefined';
+const supportsEventSource = () =>
+  typeof window !== 'undefined' && typeof EventSource !== 'undefined';
 const canConnect = () =>
+  !isAuthTerminated &&
   supportsEventSource() &&
   subscribers.size > 0 &&
   !document.hidden &&
@@ -67,6 +71,13 @@ function scheduleReconnect() {
 function dispatchPayload(payload: unknown) {
   if (!payload || typeof payload !== 'object') return;
   const data = payload as { type?: unknown; notifications?: unknown; count?: unknown };
+  if (data.type === 'authorization_revoked') {
+    isAuthTerminated = true;
+    clearReconnectTimer();
+    closeConnection();
+    redirectToSessionExpired();
+    return;
+  }
   for (const subscriber of subscribers.values()) {
     if (!subscriber.enabled()) continue;
     if (data.type === 'notifications' && Array.isArray(data.notifications)) {
@@ -100,13 +111,23 @@ function connect() {
     }
   };
   source.onerror = () => {
-    if (eventSource !== source) return;
+    if (eventSource !== source || isAuthTerminated) return;
     const error = new Error('Notification stream temporarily unavailable');
     closeConnection();
     for (const subscriber of subscribers.values()) {
       if (subscriber.enabled()) subscriber.error(error);
     }
-    scheduleReconnect();
+    void verifyClientSession().then(isValid => {
+      if (isAuthTerminated) return;
+      if (!isValid) {
+        isAuthTerminated = true;
+        clearReconnectTimer();
+        closeConnection();
+        redirectToSessionExpired();
+        return;
+      }
+      scheduleReconnect();
+    });
   };
 }
 
@@ -180,4 +201,13 @@ export function useNotificationStream<T = unknown>({
   }, []);
 
   return { isConnected, supported: supportsEventSource() };
+}
+
+export function resetNotificationStreamForTesting() {
+  clearReconnectTimer();
+  closeConnection();
+  subscribers.clear();
+  reconnectAttempt = 0;
+  isAuthTerminated = false;
+  browserListenersInstalled = false;
 }

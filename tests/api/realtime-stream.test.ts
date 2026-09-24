@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { GET } from '@/app/api/realtime/stream/route';
 import prisma from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/rbac';
+import { AppError } from '@/lib/errors';
 
 const { recentIncidentsMock, dashboardMetricsMock, changeListeners } = vi.hoisted(() => ({
   recentIncidentsMock: vi.fn(),
@@ -144,5 +145,49 @@ describe('API Route - Realtime Stream', () => {
 
     expect(recentIncidentsMock).toHaveBeenNthCalledWith(2, 'user-1', 'ADMIN', [], '[]', '11');
     controller.abort();
+  });
+
+  it('returns 401 when unauthenticated (AUTHENTICATION_REQUIRED)', async () => {
+    vi.mocked(getCurrentUser).mockRejectedValue(
+      new AppError({ code: 'AUTHENTICATION_REQUIRED', userMessage: 'Authentication required' })
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/realtime/stream');
+    const res = await GET(req);
+
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 401 when session is revoked (SESSION_REVOKED)', async () => {
+    vi.mocked(getCurrentUser).mockRejectedValue(
+      new AppError({ code: 'SESSION_REVOKED', userMessage: 'Session revoked' })
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/realtime/stream');
+    const res = await GET(req);
+
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 403 when user is disabled (USER_DISABLED)', async () => {
+    vi.mocked(getCurrentUser).mockRejectedValue(
+      new AppError({ code: 'USER_DISABLED', userMessage: 'User disabled' })
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/realtime/stream');
+    const res = await GET(req);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 500 when an unexpected exception is thrown', async () => {
+    vi.mocked(getCurrentUser).mockRejectedValue(
+      new Error('Database connection failed unexpectedly')
+    );
+
+    const req = new NextRequest('http://localhost:3000/api/realtime/stream');
+    const res = await GET(req);
+
+    expect(res.status).toBe(500);
   });
 });

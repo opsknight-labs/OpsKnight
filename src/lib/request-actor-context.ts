@@ -5,10 +5,7 @@ import { getServerSession, type Session } from 'next-auth';
 
 import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import {
-  authorizationActorFromUser,
-  type UserActorSource,
-} from '@/lib/authorization-actors';
+import { authorizationActorFromUser, type UserActorSource } from '@/lib/authorization-actors';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 
 export type AuthenticatedRequestActorContext = {
@@ -37,10 +34,11 @@ export const getRequestActorContext = cache(
   async (): Promise<AuthenticatedRequestActorContext | null> => {
     const session = await getServerSession(await getAuthOptions());
     const sessionUserId = session?.user?.id;
-    if (!session || !sessionUserId) return null;
+    const sessionUserEmail = session?.user?.email;
+    if (!session || (!sessionUserId && !sessionUserEmail)) return null;
 
     const user = await prisma.user.findUnique({
-      where: { id: sessionUserId },
+      where: sessionUserId ? { id: sessionUserId } : { email: sessionUserEmail! },
       select: {
         id: true,
         email: true,
@@ -55,6 +53,16 @@ export const getRequestActorContext = cache(
       },
     });
     if (!user) return null;
+
+    if (user.status !== 'ACTIVE') return null;
+
+    const sessionTokenVersion = session?.user?.tokenVersion;
+    if (
+      typeof sessionTokenVersion === 'number' &&
+      (user.tokenVersion ?? 0) !== sessionTokenVersion
+    ) {
+      return null;
+    }
 
     const actor = authorizationActorFromUser(user satisfies UserActorSource);
     if (!actor || actor.status !== 'ACTIVE') return null;

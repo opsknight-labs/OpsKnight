@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { RealtimeProvider, useRealtime, useOptionalRealtime } from '@/hooks/useRealtime';
+import { resetSessionRecoveryState } from '@/lib/client-auth-recovery';
 import { createElement, type ReactNode } from 'react';
 
 type MockEventSource = {
@@ -36,8 +37,27 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe('useRealtime', () => {
+  const originalLocation = window.location;
+  const assignMock = vi.fn();
+
   beforeEach(() => {
     vi.clearAllMocks();
+    resetSessionRecoveryState();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        assign: assignMock,
+        pathname: '/',
+      },
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    });
   });
 
   it('should initialize with disconnected state', () => {
@@ -155,6 +175,77 @@ describe('useRealtime', () => {
     unmount();
 
     expect(eventSourceInstance.close).toHaveBeenCalled();
+  });
+
+  it('should handle authorization_revoked by closing stream and redirecting to login', async () => {
+    const { result } = renderHook(() => useRealtime(), { wrapper });
+    const eventSourceInstance = getMockEventSourceInstance();
+
+    act(() => {
+      eventSourceInstance.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'authorization_revoked' }),
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(result.current.isConnected).toBe(false);
+      expect(result.current.error).toBe(
+        'Real-time authorization was revoked. Sign in again to reconnect.'
+      );
+    });
+
+    expect(eventSourceInstance.close).toHaveBeenCalled();
+    expect(assignMock).toHaveBeenCalledWith('/login?error=SessionExpired');
+  });
+
+  it('should redirect to login if session validation fails after connection error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+      })
+    );
+
+    const { result } = renderHook(() => useRealtime(), { wrapper });
+    const eventSourceInstance = getMockEventSourceInstance();
+
+    act(() => {
+      eventSourceInstance.onerror?.(new Event('error'));
+    });
+
+    await waitFor(() => {
+      expect(assignMock).toHaveBeenCalledWith('/login?error=SessionExpired');
+      expect(result.current.error).toBe(
+        'Real-time authorization was revoked. Sign in again to reconnect.'
+      );
+    });
+  });
+
+  it('should schedule retry when session validation succeeds after connection error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ user: { id: 'user-1', email: 'test@example.com' } }),
+      })
+    );
+
+    const { result } = renderHook(() => useRealtime(), { wrapper });
+    const eventSourceInstance = getMockEventSourceInstance();
+
+    act(() => {
+      eventSourceInstance.onerror?.(new Event('error'));
+    });
+
+    await waitFor(() => {
+      expect(result.current.isConnected).toBe(false);
+    });
+
+    expect(assignMock).not.toHaveBeenCalled();
   });
 
   describe('useOptionalRealtime', () => {

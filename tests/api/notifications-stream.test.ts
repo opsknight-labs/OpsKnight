@@ -101,13 +101,46 @@ describe('API Route - Notifications Stream', () => {
     );
     await vi.advanceTimersByTimeAsync(25_000);
     expect(prisma.inAppNotification.findMany).not.toHaveBeenCalled();
-    expect(prisma.inAppNotification.count).not.toHaveBeenCalled();
+    // Initial count is sent immediately upon connection for badge freshness
+    expect(prisma.inAppNotification.count).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(5_000);
     expect(prisma.inAppNotification.findMany).toHaveBeenCalledTimes(1);
-    expect(prisma.inAppNotification.count).toHaveBeenCalledTimes(1);
+    expect(prisma.inAppNotification.count).toHaveBeenCalledTimes(2);
     response.body?.cancel();
     controller.abort();
     vi.useRealTimers();
+  });
+
+  it('returns 401 when tokenVersion mismatches session', async () => {
+    vi.mocked(getServerSession).mockResolvedValue({
+      user: { email: 'user@example.com', tokenVersion: 1 },
+    });
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'user-1',
+      timeZone: 'UTC',
+      status: 'ACTIVE',
+      tokenVersion: 2,
+    } as never);
+
+    const req = new NextRequest(new URL('http://localhost:3000/api/notifications/stream'));
+    const res = await GET(req);
+
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 403 when user is disabled', async () => {
+    vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'user@example.com' } });
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'user-1',
+      timeZone: 'UTC',
+      status: 'DISABLED',
+      tokenVersion: 0,
+    } as never);
+
+    const req = new NextRequest(new URL('http://localhost:3000/api/notifications/stream'));
+    const res = await GET(req);
+
+    expect(res.status).toBe(403);
   });
 });
