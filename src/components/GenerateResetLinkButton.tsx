@@ -42,9 +42,7 @@ export default function GenerateResetLinkButton({
       });
 
       if (!res.ok) {
-        const friendly = toUserFacingError(
-          await errorFromResponse(res, 'Failed to generate link')
-        );
+        const friendly = toUserFacingError(await errorFromResponse(res, 'Failed to generate link'));
         setError(friendly.description || friendly.title);
         setConfirming(false);
         return;
@@ -101,10 +99,10 @@ export default function GenerateResetLinkButton({
           }}
           variant="ghost"
           size="sm"
-          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+          className="h-7 w-7 p-0 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200/80 cursor-pointer"
           title="Close"
         >
-          <X className="h-3 w-3" />
+          <X className="h-3.5 w-3.5 stroke-[2.25]" />
         </Button>
       </div>
     );
@@ -128,9 +126,10 @@ export default function GenerateResetLinkButton({
           disabled={isLoading}
           variant="ghost"
           size="sm"
-          className="h-7 w-7 p-0"
+          className="h-7 w-7 p-0 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 border border-slate-200/80 cursor-pointer"
+          title="Cancel"
         >
-          <X className="h-3 w-3" />
+          <X className="h-3.5 w-3.5 stroke-[2.25]" />
         </Button>
         {error && (
           <span className="text-xs text-red-500 ml-1" title={error}>
