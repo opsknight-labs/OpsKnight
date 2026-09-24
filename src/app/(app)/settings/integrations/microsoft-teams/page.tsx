@@ -58,16 +58,18 @@ export default async function MicrosoftTeamsIntegrationRoute() {
     microsoftTeamsInstallation: { count: (a: unknown) => Promise<number> };
   };
 
-  const config = await prismaAny.microsoftTeamsConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
-  // Only routable destinations — tombstoned rows (enabled=false) are preserved for ledger/AMBIGUOUS reconciliation but not shown as active routing
-  const destinations = await prismaAny.microsoftTeamsDestination.findMany({
-    where: { enabled: true },
-    orderBy: { updatedAt: 'desc' },
-    include: { service: { select: { name: true } } },
-  });
-  const installationCount = await prismaAny.microsoftTeamsInstallation.count({
-    where: { enabled: true },
-  });
+  // Run initial configuration and routing queries concurrently
+  const [config, destinations, installationCount] = await Promise.all([
+    prismaAny.microsoftTeamsConfig.findFirst({ orderBy: { updatedAt: 'desc' } }),
+    prismaAny.microsoftTeamsDestination.findMany({
+      where: { enabled: true },
+      orderBy: { updatedAt: 'desc' },
+      include: { service: { select: { name: true } } },
+    }),
+    prismaAny.microsoftTeamsInstallation.count({
+      where: { enabled: true },
+    }),
+  ]);
 
   const isConnected = Boolean(config?.enabled && config?.clientId);
 
