@@ -1,10 +1,8 @@
 name: Auth Browser E2E
 
+# Canonical PR browser E2E runs inside tests.yml under the single shared build artifact.
+# This workflow is preserved for isolated manual debugging and dispatch.
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

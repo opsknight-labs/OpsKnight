@@ -1,4 +1,4 @@
-name: Tests (lint + unit + build + integration)
+name: Tests
 
 on:
   pull_request:
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   fast-validation:
-    name: Fast validation (L0 static + L1 unit)
+    name: Fast validation (L0 lint/typecheck + L1 unit)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -30,6 +30,9 @@ jobs:
         with:
           node-version: 20
           generate-prisma: 'true'
+
+      - name: Source ESLint check
+        run: npm run lint:check
 
       - name: TypeScript typecheck
         run: npx tsc --noEmit
@@ -48,9 +51,15 @@ jobs:
           if-no-files-found: ignore
 
   build:
-    name: Application build & budgets
+    name: Application build & budgets (canonical E2E artifact)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      NEXTAUTH_URL: http://127.0.0.1:3100
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+      NEXTAUTH_SECRET: opsknight-e2e-nextauth-secret-change-me
+      ENCRYPTION_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      NODE_ENV: production
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -99,29 +108,16 @@ jobs:
           node-version: 20
           generate-prisma: 'true'
 
-      - name: Prepare test database schema
-        # Match pre-prod behavior by applying migrations in order.
-        run: npx prisma migrate deploy
+      # Match deployment contract: prisma migrate deploy && npm run prisma:indexes:status-platform
+      - name: Prepare test database
+        uses: ./.github/actions/setup-test-db
+        with:
+          run-indexes: 'true'
+          run-smoke: 'true'
+          run-validation: 'true'
 
-      - name: Enforce idempotent status platform indexes
-        run: |
-          npm run prisma:indexes:status-platform
-          npm run prisma:indexes:status-platform
-
-      - name: DB smoke test (post-migrations)
-        run: |
-          mkdir -p reports
-          node scripts/ci-db-smoke.cjs
-
-      - name: Migration validation
-        run: |
-          mkdir -p reports
-          npm run prisma:validate
-
-      - name: Migration health
-        run: |
-          mkdir -p reports
-          npm run prisma:health
+      - name: Verify idempotent index installation contract
+        run: npm run prisma:indexes:status-platform
 
       - name: Database integration tests
         # Enable real database for integration and resilience tests
@@ -139,10 +135,148 @@ jobs:
             reports/ci-db-smoke.xml
           if-no-files-found: ignore
 
-  summary:
-    name: Test summary & checks
+  auth-e2e:
+    name: Auth browser E2E (L3)
+    needs: [build]
     runs-on: ubuntu-latest
-    needs: [fast-validation, build, db-integration]
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opsknight_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/opsknight_e2e?schema=public
+      HUSKY: '0'
+      PLAYWRIGHT_PRODUCTION_SERVER: 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node & dependencies
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+
+      - name: Restore application build artifact
+        uses: ./.github/actions/restore-build
+        with:
+          artifact-name: next-build-artifact
+
+      - name: Prepare browser-test database
+        uses: ./.github/actions/setup-test-db
+        with:
+          run-smoke: 'false'
+          run-validation: 'false'
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run authentication browser contracts (direct origin)
+        run: npx playwright test --project=chromium
+
+      - name: Run trusted-proxy host routing browser contracts (reverse proxy)
+        run: TRUST_PROXY_HEADERS=true npx playwright test tests/e2e/host-bootstrap-routing.spec.ts --project=chromium
+
+      - name: Upload Auth Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+
+  mobile-e2e:
+    name: Mobile & PWA browser E2E (L3)
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opsknight_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/opsknight_e2e?schema=public
+      NEXTAUTH_URL: http://127.0.0.1:3100
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+      NEXTAUTH_SECRET: opsknight-e2e-nextauth-secret-change-me
+      ENCRYPTION_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      AUTH_TRUST_HOST: 'true'
+      HUSKY: '0'
+      PLAYWRIGHT_PRODUCTION_SERVER: 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node & dependencies
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+
+      - name: Restore application build artifact
+        uses: ./.github/actions/restore-build
+        with:
+          artifact-name: next-build-artifact
+
+      - name: Prepare mobile-test database
+        uses: ./.github/actions/setup-test-db
+        with:
+          run-smoke: 'false'
+          run-validation: 'false'
+
+      - name: Install mobile browser engines
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run Android and iPhone browser contracts + responsive matrix
+        run: >-
+          npx playwright test
+          tests/e2e/mobile-pwa.spec.ts
+          tests/e2e/mobile-responsive-matrix.spec.ts
+          --project=mobile-chromium
+          --project=mobile-webkit
+
+      - name: Run production PWA service-worker contract
+        run: >-
+          npx playwright test
+          -c playwright.pwa.config.ts
+          --project=pwa-production-chromium
+
+      - name: Upload Mobile Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [fast-validation, build, db-integration, auth-e2e, mobile-e2e]
     if: always()
     steps:
       - name: Checkout
@@ -170,12 +304,14 @@ jobs:
           reporter: java-junit
         continue-on-error: true
 
-      - name: Summarize JUnit results for PR comment
+      - name: Summarize test results & evaluate gate status
         id: junit_summary
         env:
           FAST_STATUS: ${{ needs.fast-validation.result }}
           BUILD_STATUS: ${{ needs.build.result }}
           DB_STATUS: ${{ needs.db-integration.result }}
+          AUTH_STATUS: ${{ needs.auth-e2e.result }}
+          MOBILE_STATUS: ${{ needs.mobile-e2e.result }}
         run: |
           node - <<'NODE'
           const fs = require('fs');
@@ -187,7 +323,6 @@ jobs:
           };
 
           const parseXml = (content) => {
-            // Check for root <testsuites>
             const suitesMatch = content.match(/<testsuites[^>]*>/);
             if (suitesMatch) {
               return {
@@ -198,7 +333,6 @@ jobs:
               };
             }
             
-            // Fallback: Check for root <testsuite> (common in single-suite runs)
             const suiteMatch = content.match(/<testsuite[^>]*>/);
             if (suiteMatch) {
               return {
@@ -211,6 +345,8 @@ jobs:
             
             return { tests: 0, failures: 0, errors: 0, skipped: 0 };
           };
+
+          let gateStatus = 'failure';
 
           try {
             if (!fs.existsSync('reports')) {
@@ -237,15 +373,22 @@ jobs:
             const passed = Math.max(0, totals.tests - totals.failures - totals.errors - totals.skipped);
             const prereqsOk = process.env.FAST_STATUS === 'success' &&
                               process.env.BUILD_STATUS === 'success' &&
-                              process.env.DB_STATUS === 'success';
+                              process.env.DB_STATUS === 'success' &&
+                              process.env.AUTH_STATUS === 'success' &&
+                              process.env.MOBILE_STATUS === 'success';
 
-            const status = (!prereqsOk || totals.failures > 0 || totals.errors > 0) ? '❌ Failed' : '✅ Passed';
+            const suiteOk = (totals.failures === 0 && totals.errors === 0);
+            gateStatus = (prereqsOk && suiteOk) ? 'success' : 'failure';
+
+            const status = (gateStatus === 'success') ? '✅ Passed' : '❌ Failed';
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 
             const prereqLines = [
-              `- **Fast validation (typecheck & unit)**: ${process.env.FAST_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
+              `- **Fast validation (lint, typecheck & unit)**: ${process.env.FAST_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
               `- **Application build & budgets**: ${process.env.BUILD_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
               `- **Database integration**: ${process.env.DB_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
+              `- **Auth browser E2E**: ${process.env.AUTH_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
+              `- **Mobile & PWA browser E2E**: ${process.env.MOBILE_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
             ];
 
             const smokePath = 'reports/ci-db-smoke.xml';
@@ -257,7 +400,7 @@ jobs:
             }
 
             const md = [
-              `## ${status} Vitest Results`,
+              `## ${status} Vitest & Pipeline Results`,
               '',
               '| Metric | Count |',
               '| :--- | :---: |',
@@ -276,7 +419,10 @@ jobs:
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `markdown<<EOF\n${md}\nEOF\n`);
           } catch (error) {
             console.error('Error summarizing results:', error);
+            gateStatus = 'failure';
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `markdown<<EOF\n## ⚠️ Test Summary generation failed\nCheck job logs for details.\nEOF\n`);
+          } finally {
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `gate_status=${gateStatus}\n`);
           }
           NODE
 
@@ -288,15 +434,10 @@ jobs:
           message: ${{ steps.junit_summary.outputs.markdown }}
         continue-on-error: true
 
-      - name: Gate check
+      - name: Enforce aggregate test gate
         run: |
-          if [ "${{ needs.fast-validation.result }}" != "success" ] || \
-             [ "${{ needs.build.result }}" != "success" ] || \
-             [ "${{ needs.db-integration.result }}" != "success" ]; then
-            echo "One or more prerequisite test jobs failed"
+          if [ "${{ steps.junit_summary.outputs.gate_status }}" != "success" ]; then
+            echo "CI Test Gate Failed: One or more test suites or prerequisites failed."
             exit 1
           fi
-          if echo "${{ steps.junit_summary.outputs.markdown }}" | grep -q "❌ Failed"; then
-            echo "Test suite failed"
-            exit 1
-          fi
+          echo "All pipeline test jobs and test suites passed successfully."

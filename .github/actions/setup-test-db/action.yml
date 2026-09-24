@@ -22,12 +22,10 @@ runs:
       shell: bash
       run: npx prisma migrate deploy
 
-    - name: Enforce idempotent status platform indexes
+    - name: Enforce status platform indexes
       if: inputs.run-indexes == 'true'
       shell: bash
-      run: |
-        npm run prisma:indexes:status-platform
-        npm run prisma:indexes:status-platform
+      run: npm run prisma:indexes:status-platform
 
     - name: DB smoke test (post-migrations)
       if: inputs.run-smoke == 'true'
