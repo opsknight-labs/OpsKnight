@@ -1662,14 +1662,17 @@ ${R} .status-v3-hero__stats {
 }
 ${R} .status-v3-hero__stats .status-stat {
   display: flex; flex-direction: column; gap: .25rem; min-inline-size: 6.5rem;
-  padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  padding: 0 1.25rem 0 0; border: 0; border-radius: 0; background: transparent; box-shadow: none;
+}
+${R} .status-v3-hero__stats .status-stat:last-child {
+  padding-inline-end: 0;
 }
 ${R} .status-v3-hero__stats .status-stat + .status-stat {
   padding-inline-start: 1.25rem; border-inline-start: 1px solid var(--status-panel-border);
 }
 ${R} .status-v3-hero__stats .status-stat__label {
   font-size: .62rem; font-weight: 650; letter-spacing: .07em; text-transform: uppercase;
-  color: var(--status-text-subtle); line-height: 1.2; margin: 0;
+  color: var(--status-text-subtle); line-height: 1.2; margin: 0; white-space: nowrap;
 }
 ${R} .status-v3-hero__stats .status-stat__value {
   font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
@@ -1698,7 +1701,9 @@ ${R} .status-v3-hero__stats .status-stat__hint { font-size: .72rem; color: var(-
 }
 @media (max-width: 40rem) {
   ${R} .status-v3-hero__stats { width: 100%; }
-  ${R} .status-v3-hero__stats .status-stat { flex: 1 1 0; min-inline-size: 0; }
+  ${R} .status-v3-hero__stats .status-stat { flex: 1 1 0; min-inline-size: 0; padding: 0 .75rem 0 0; }
+  ${R} .status-v3-hero__stats .status-stat:last-child { padding-inline-end: 0; }
+  ${R} .status-v3-hero__stats .status-stat + .status-stat { padding-inline-start: .75rem; }
 }
 
 ${R} .status-v3-service, ${R} .status-v3-region, ${R} .status-v3-maintenance__item,
