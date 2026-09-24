@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import ScheduleCard from '@/components/ScheduleCard';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
-import { X, Filter, Calendar } from 'lucide-react';
+import { X, Calendar } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 
 type ScheduleItem = {

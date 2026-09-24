@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
-import { X, Filter, Users } from 'lucide-react';
+import { X, Users } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import TeamDirectoryCard from './TeamDirectoryCard';
 
