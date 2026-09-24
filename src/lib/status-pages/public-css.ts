@@ -1704,6 +1704,7 @@ ${R} .status-v3-hero__stats .status-stat__hint { font-size: .72rem; color: var(-
   ${R} .status-v3-hero__stats .status-stat { flex: 1 1 0; min-inline-size: 0; padding: 0 .75rem 0 0; }
   ${R} .status-v3-hero__stats .status-stat:last-child { padding-inline-end: 0; }
   ${R} .status-v3-hero__stats .status-stat + .status-stat { padding-inline-start: .75rem; }
+  ${R} .status-v3-hero__stats .status-stat__label { white-space: normal; }
 }
 
 ${R} .status-v3-service, ${R} .status-v3-region, ${R} .status-v3-maintenance__item,
