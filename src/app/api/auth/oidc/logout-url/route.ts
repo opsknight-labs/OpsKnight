@@ -8,6 +8,7 @@ import { getOidcConfig } from '@/lib/oidc-config';
 import { getValidatedOidcRuntimeMetadata } from '@/lib/oidc-validation';
 import { getNextAuthSecret } from '@/lib/secret-manager';
 import { jsonError, jsonOk } from '@/lib/api-response';
+import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
 
 const QuerySchema = z.object({ callbackUrl: z.string().max(2048).optional() });
 const noStoreHeaders = { 'Cache-Control': 'private, no-store, max-age=0' };
@@ -41,11 +42,12 @@ export async function GET(request: NextRequest) {
   if (!endpoint) return jsonOk({ url: null }, 200, noStoreHeaders);
 
   const callbackPath = safeInternalCallbackUrl(query.data.callbackUrl, '/login');
+  const publicOrigin = resolveAuthPublicOrigin().origin;
   const logoutUrl = new URL(endpoint);
   logoutUrl.searchParams.set('client_id', config.clientId);
   logoutUrl.searchParams.set(
     'post_logout_redirect_uri',
-    new URL(callbackPath, request.nextUrl.origin).toString()
+    new URL(callbackPath, publicOrigin).toString()
   );
 
   return jsonOk({ url: logoutUrl.toString() }, 200, noStoreHeaders);

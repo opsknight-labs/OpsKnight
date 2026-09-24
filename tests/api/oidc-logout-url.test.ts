@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 vi.mock('next-auth/jwt', () => ({ getToken: vi.fn() }));
@@ -14,6 +14,7 @@ import { GET } from '@/app/api/auth/oidc/logout-url/route';
 describe('OIDC RP-initiated logout URL', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('NEXTAUTH_URL', 'https://app.example.com');
     vi.mocked(getToken).mockResolvedValue({ authProvider: 'oidc' });
     vi.mocked(getOidcConfig).mockResolvedValue({
       enabled: true,
@@ -37,6 +38,10 @@ describe('OIDC RP-initiated logout URL', () => {
     });
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('returns a provider logout URL with client and allowlisted local return URI', async () => {
     const response = await GET(
       new NextRequest('https://app.example.com/api/auth/oidc/logout-url?callbackUrl=%2Flogin')
@@ -48,6 +53,17 @@ describe('OIDC RP-initiated logout URL', () => {
     expect(url.searchParams.get('client_id')).toBe('client-id');
     expect(url.searchParams.get('post_logout_redirect_uri')).toBe('https://app.example.com/login');
     expect(response.headers.get('cache-control')).toContain('no-store');
+  });
+
+  it('uses the configured public auth origin behind a reverse proxy', async () => {
+    const response = await GET(
+      new NextRequest('http://internal-service:3000/api/auth/oidc/logout-url?callbackUrl=%2Flogin')
+    );
+    const payload = (await response.json()) as { url: string };
+
+    expect(new URL(payload.url).searchParams.get('post_logout_redirect_uri')).toBe(
+      'https://app.example.com/login'
+    );
   });
 
   it('does not initiate provider logout for a credential session', async () => {

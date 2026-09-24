@@ -352,21 +352,20 @@ export async function validateOidcConnection(
       }
     }
 
-    if (config.end_session_endpoint !== undefined) {
-      if (typeof config.end_session_endpoint !== 'string' || !config.end_session_endpoint) {
-        return {
-          isValid: false,
-          error: 'Identity Provider metadata contains a malformed end_session_endpoint.',
-        };
-      }
+    let endSessionEndpoint: string | undefined;
+    if (typeof config.end_session_endpoint === 'string' && config.end_session_endpoint) {
       try {
         await assertSafeOutboundUrl(config.end_session_endpoint, { requireHttps: true });
+        endSessionEndpoint = config.end_session_endpoint;
       } catch {
-        return {
-          isValid: false,
-          error: 'Identity Provider metadata contains an unsafe or non-HTTPS logout endpoint.',
-        };
+        logger.warn('[OIDC Validation] Ignoring unsafe optional logout endpoint', {
+          component: 'oidc-validation',
+        });
       }
+    } else if (config.end_session_endpoint !== undefined) {
+      logger.warn('[OIDC Validation] Ignoring malformed optional logout endpoint', {
+        component: 'oidc-validation',
+      });
     }
 
     // Permit asymmetric enterprise-safe algorithms only when the provider
@@ -527,9 +526,7 @@ export async function validateOidcConnection(
         authorizationEndpoint: config.authorization_endpoint as string,
         tokenEndpoint: config.token_endpoint as string,
         jwksUri,
-        ...(typeof config.end_session_endpoint === 'string'
-          ? { endSessionEndpoint: config.end_session_endpoint }
-          : {}),
+        ...(endSessionEndpoint ? { endSessionEndpoint } : {}),
         tokenEndpointAuthMethodsSupported: effectiveMethods,
       },
     };
