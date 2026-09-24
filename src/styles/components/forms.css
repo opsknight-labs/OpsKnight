@@ -80,8 +80,16 @@ textarea::placeholder {
 .auth-input:focus-visible {
     color: inherit;
     -webkit-text-fill-color: currentColor;
-    outline: none !important;
+    outline: 2px solid transparent !important;
     outline-offset: 0 !important;
+}
+
+@media (forced-colors: active) {
+    .auth-input:focus,
+    .auth-input:focus-visible {
+        outline: 2px solid Highlight !important;
+        outline-offset: 2px !important;
+    }
 }
 
 .auth-input:-webkit-autofill,
