@@ -31,5 +31,6 @@ runs:
           .next/
           public/
           package.json
+        include-hidden-files: true
         if-no-files-found: error
         retention-days: 1

@@ -172,6 +172,10 @@ jobs:
 
       - name: Summarize JUnit results for PR comment
         id: junit_summary
+        env:
+          FAST_STATUS: ${{ needs.fast-validation.result }}
+          BUILD_STATUS: ${{ needs.build.result }}
+          DB_STATUS: ${{ needs.db-integration.result }}
         run: |
           node - <<'NODE'
           const fs = require('fs');
@@ -231,16 +235,25 @@ jobs:
             console.log('Parsed Totals:', totals);
 
             const passed = Math.max(0, totals.tests - totals.failures - totals.errors - totals.skipped);
-            const status = (totals.failures > 0 || totals.errors > 0) ? '❌ Failed' : '✅ Passed';
+            const prereqsOk = process.env.FAST_STATUS === 'success' &&
+                              process.env.BUILD_STATUS === 'success' &&
+                              process.env.DB_STATUS === 'success';
+
+            const status = (!prereqsOk || totals.failures > 0 || totals.errors > 0) ? '❌ Failed' : '✅ Passed';
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 
+            const prereqLines = [
+              `- **Fast validation (typecheck & unit)**: ${process.env.FAST_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
+              `- **Application build & budgets**: ${process.env.BUILD_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
+              `- **Database integration**: ${process.env.DB_STATUS === 'success' ? '✅ Passed' : '❌ Failed'}`,
+            ];
+
             const smokePath = 'reports/ci-db-smoke.xml';
-            let smokeLine = '';
             if (fs.existsSync(smokePath)) {
               const smokeXml = fs.readFileSync(smokePath, 'utf8');
               const smokeCounts = parseXml(smokeXml);
               const ok = (smokeCounts.failures + smokeCounts.errors) === 0;
-              smokeLine = `- **DB smoke test**: ${ok ? '✅ Passed' : '❌ Failed'}`;
+              prereqLines.push(`- **DB smoke test**: ${ok ? '✅ Passed' : '❌ Failed'}`);
             }
 
             const md = [
@@ -253,7 +266,8 @@ jobs:
               `| **Failed** | ${totals.failures + totals.errors} |`,
               `| **Skipped** | ${totals.skipped} |`,
               '',
-              smokeLine,
+              '### Pipeline Jobs',
+              ...prereqLines,
               '',
               `[View Full Test Report](${runUrl})`,
               '',
@@ -275,7 +289,14 @@ jobs:
         continue-on-error: true
 
       - name: Gate check
-        if: steps.junit_summary.outputs.markdown && contains(steps.junit_summary.outputs.markdown, '❌ Failed')
         run: |
-          echo "Test suite failed"
-          exit 1
+          if [ "${{ needs.fast-validation.result }}" != "success" ] || \
+             [ "${{ needs.build.result }}" != "success" ] || \
+             [ "${{ needs.db-integration.result }}" != "success" ]; then
+            echo "One or more prerequisite test jobs failed"
+            exit 1
+          fi
+          if echo "${{ steps.junit_summary.outputs.markdown }}" | grep -q "❌ Failed"; then
+            echo "Test suite failed"
+            exit 1
+          fi
