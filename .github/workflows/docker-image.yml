@@ -363,12 +363,7 @@ jobs:
           EXT_DB_CONTAINER="ci-ext-postgres-${GITHUB_SHA:0:8}"
           EXT_NETWORK="ci-ext-net-${GITHUB_SHA:0:8}"
 
-          cat <<EOF > /tmp/ci-ext-net.yml
-networks:
-  opsknight-network:
-    external: true
-    name: ${EXT_NETWORK}
-EOF
+          printf 'networks:\n  opsknight-network:\n    external: true\n    name: %s\n' "$EXT_NETWORK" > /tmp/ci-ext-net.yml
 
           docker network create "$EXT_NETWORK"
 
