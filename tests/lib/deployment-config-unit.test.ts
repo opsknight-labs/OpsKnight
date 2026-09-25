@@ -208,6 +208,14 @@ describe('deployment configuration invariants', () => {
     expect(read('k8s/profiles/split/runtime-deployments.yaml')).not.toContain(
       '@opsknight-pgbouncer:6432'
     );
+    expect(read('helm/opsknight/templates/pgbouncer-deployment.yaml')).toContain(
+      '/usr/bin/pg_isready'
+    );
+    expect(read('k8s/profiles/split-pgbouncer/pgbouncer-deployment.yaml')).toContain(
+      '/usr/bin/pg_isready'
+    );
+    expect(read('docker-entrypoint.sh')).toContain('OPSKNIGHT_SKIP_MIGRATIONS');
+    expect(read('helm/opsknight/templates/migration-job.yaml')).toContain('helm.sh/hook');
   });
 
   it('ships bounded split-runtime database pools and a strict Helm schema', () => {

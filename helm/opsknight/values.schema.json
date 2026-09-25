@@ -15,6 +15,19 @@
     "bulkWorker": { "$ref": "#/definitions/workerRole" },
     "statusProjector": { "$ref": "#/definitions/workerRole" },
     "pgbouncer": { "$ref": "#/definitions/pgbouncer" },
+    "migrations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "job": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" }
+          }
+        }
+      }
+    },
     "networkPolicy": {
       "type": "object",
       "additionalProperties": false,

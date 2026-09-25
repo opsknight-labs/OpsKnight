@@ -29,7 +29,7 @@ spec:
             - { name: auth, mountPath: /etc/pgbouncer-auth, readOnly: true }
             - { name: run, mountPath: /var/run/pgbouncer }
             - { name: tmp, mountPath: /tmp }
-          readinessProbe: { tcpSocket: { port: pgbouncer }, periodSeconds: 5, failureThreshold: 3 }
+          readinessProbe: { exec: { command: ["/usr/bin/pg_isready", "-h", "127.0.0.1", "-p", "6432"] }, periodSeconds: 5, failureThreshold: 3 }
           livenessProbe: { tcpSocket: { port: pgbouncer }, periodSeconds: 10, failureThreshold: 3 }
           resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 500m, memory: 256Mi } }
       volumes:

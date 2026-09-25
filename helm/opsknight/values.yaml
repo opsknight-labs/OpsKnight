@@ -211,6 +211,12 @@ secrets:
   nextauthSecret: 'change_this_to_a_random_secret_in_production'
   encryptionKey: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
 
+# Pre-deploy migration Job. When enabled, migrations run once via a Helm
+# pre-install/pre-upgrade hook Job rather than inside each application pod.
+migrations:
+  job:
+    enabled: false
+
 networkPolicy:
   enabled: false
   ingressNamespaceLabels:

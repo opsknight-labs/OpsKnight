@@ -94,6 +94,10 @@ jobs:
             --set pgbouncer.enabled=true \
             --set-string postgresql.password=ci-non-default-password \
             > /tmp/opsknight-helm-split-pgbouncer.yaml
+          helm template opsknight helm/opsknight \
+            --namespace opsknight \
+            --set migrations.job.enabled=true \
+            > /tmp/opsknight-helm-migration-job.yaml
           if helm template opsknight helm/opsknight --set runtime.mode=invalid >/dev/null 2>&1; then
             echo 'invalid runtime.mode unexpectedly rendered'
             exit 1
@@ -199,6 +203,11 @@ jobs:
           fi
           grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-helm-split-pgbouncer.yaml
           grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          grep -q '/usr/bin/pg_isready' /tmp/opsknight-helm-split-pgbouncer.yaml
+          grep -q '/usr/bin/pg_isready' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          grep -q 'kind: Job' /tmp/opsknight-helm-migration-job.yaml
+          grep -q 'name: opsknight-migration' /tmp/opsknight-helm-migration-job.yaml
+          grep -q 'helm.sh/hook: pre-install,pre-upgrade' /tmp/opsknight-helm-migration-job.yaml
           grep -q 'pgbouncer=true' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'name: DIRECT_DATABASE_URL' /tmp/opsknight-helm-split-pgbouncer.yaml
           grep -q 'name: DIRECT_DATABASE_URL' /tmp/opsknight-kustomize-split-pgbouncer.yaml
@@ -219,6 +228,7 @@ jobs:
             > /tmp/opsknight-helm-enterprise.yaml
           grep -q 'minReplicas: 3' /tmp/opsknight-helm-enterprise.yaml
           grep -q 'minAvailable: 2' /tmp/opsknight-helm-enterprise.yaml
+          grep -q 'topology.kubernetes.io/zone' /tmp/opsknight-helm-enterprise.yaml
           if grep -q '^kind: Secret$' /tmp/opsknight-helm-external-secret.yaml; then
             echo 'chart rendered a Secret even though secrets.existingSecret is configured'
             exit 1

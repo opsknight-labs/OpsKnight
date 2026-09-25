@@ -14,6 +14,8 @@ import {
   getCronSchedulerStatus,
   startCronScheduler,
   stopCronScheduler,
+  updateSchedulerHint,
+  updateSchedulerState,
   updateState,
 } from '@/lib/cron-scheduler';
 import prisma from '@/lib/prisma';
@@ -101,6 +103,44 @@ describe('Cron Scheduler - Lock Management', () => {
           id: 'singleton',
           lastRunAt: new Date('2026-01-01T12:00:00.000Z'),
         }),
+      })
+    );
+  });
+
+  it('enforces lease epoch fencing in updateSchedulerState', async () => {
+    vi.mocked(prisma.cronSchedulerState.updateMany).mockResolvedValueOnce({ count: 1 } as any);
+
+    await updateSchedulerState({ lastRunAt: new Date('2026-01-01T12:00:00.000Z') }, 10);
+
+    expect(prisma.cronSchedulerState.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'singleton',
+          leaseEpoch: 10,
+        }),
+        data: expect.objectContaining({
+          lastRunAt: new Date('2026-01-01T12:00:00.000Z'),
+        }),
+      })
+    );
+  });
+
+  it('rejects updateSchedulerState when lease epoch is no longer authoritative', async () => {
+    vi.mocked(prisma.cronSchedulerState.updateMany).mockResolvedValueOnce({ count: 0 } as any);
+
+    await expect(
+      updateSchedulerState({ lastRunAt: new Date('2026-01-01T12:00:00.000Z') }, 9)
+    ).rejects.toThrow('Scheduler lease epoch 9 is no longer authoritative');
+  });
+
+  it('allows non-authoritative nextRunAt hints via updateSchedulerHint', async () => {
+    const nextRun = new Date('2026-01-01T12:01:00.000Z');
+    await updateSchedulerHint({ nextRunAt: nextRun });
+
+    expect(prisma.cronSchedulerState.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'singleton' },
+        data: { nextRunAt: nextRun },
       })
     );
   });

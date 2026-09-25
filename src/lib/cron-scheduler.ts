@@ -191,7 +191,7 @@ async function releaseLock(nextRunAt: Date, epoch: number | null = activeLeaseEp
  * reconstructed database. The scheduler should self-heal by recreating the
  * row instead of logging a record-not-found failure and continuing forever.
  */
-export async function updateState(data: {
+export type SchedulerStateData = {
   lastRunAt?: Date;
   lastSuccessAt?: Date;
   lastError?: string | null;
@@ -202,20 +202,74 @@ export async function updateState(data: {
   lastObjectiveSnapshotSuccessAt?: Date | null;
   lastObjectiveSnapshotDurationMs?: number | null;
   lastObjectiveSnapshotFailed?: number;
-}, leaseEpoch?: number): Promise<void> {
+};
+
+/**
+ * Fenced update of authoritative scheduler state.
+ * Strictly requires the authoritative leaseEpoch. Rejects mutations if the
+ * epoch or worker ownership has changed.
+ */
+export async function updateSchedulerState(
+  data: SchedulerStateData,
+  leaseEpoch: number
+): Promise<void> {
+  const { default: prisma } = await import('./prisma');
+  const updated = await prisma.cronSchedulerState.updateMany({
+    where: { id: SINGLETON_ID, lockedBy: WORKER_ID, leaseEpoch },
+    data,
+  });
+  if (updated.count !== 1) {
+    throw new Error(`Scheduler lease epoch ${leaseEpoch} is no longer authoritative`);
+  }
+}
+
+/**
+ * Non-authoritative scheduling hint update.
+ * Used only for informational scheduling hints like nextRunAt.
+ */
+export async function updateSchedulerHint(data: {
+  nextRunAt?: Date | null;
+}): Promise<void> {
+  const { default: prisma } = await import('./prisma');
+  try {
+    await prisma.cronSchedulerState.update({
+      where: { id: SINGLETON_ID },
+      data,
+    });
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error && 'code' in error
+        ? String((error as { code?: string }).code)
+        : '';
+    if (
+      code === 'P2025' ||
+      (error instanceof Error && /Record to update not found/.test(error.message))
+    ) {
+      try {
+        await prisma.cronSchedulerState.upsert({
+          where: { id: SINGLETON_ID },
+          update: data,
+          create: { id: SINGLETON_ID, ...data },
+        });
+      } catch (upsertError) {
+        logger.error('[Cron] Failed to recreate missing scheduler state row for hint', {
+          error: upsertError,
+        });
+      }
+    }
+  }
+}
+
+export async function updateState(
+  data: SchedulerStateData,
+  leaseEpoch?: number
+): Promise<void> {
+  if (leaseEpoch !== undefined) {
+    return updateSchedulerState(data, leaseEpoch);
+  }
   const { default: prisma } = await import('./prisma');
 
   try {
-    if (leaseEpoch !== undefined) {
-      const updated = await prisma.cronSchedulerState.updateMany({
-        where: { id: SINGLETON_ID, lockedBy: WORKER_ID, leaseEpoch },
-        data,
-      });
-      if (updated.count !== 1) {
-        throw new Error(`Scheduler lease epoch ${leaseEpoch} is no longer authoritative`);
-      }
-      return;
-    }
     await prisma.cronSchedulerState.update({
       where: { id: SINGLETON_ID },
       data,
@@ -346,7 +400,7 @@ function scheduleNextRun(targetTime: Date, persistToDb: boolean = true) {
 
   // Update DB with next run time only if leader / active scheduler
   if (persistToDb) {
-    updateState({ nextRunAt }).catch(() => {});
+    updateSchedulerHint({ nextRunAt }).catch(() => {});
   }
 
   logger.debug('[Cron] Next run scheduled', {
@@ -371,28 +425,30 @@ async function runOnce() {
   activeLeaseEpoch = leaseEpoch;
 
   const startTime = Date.now();
-  await updateState({ lastRunAt: new Date() }, leaseEpoch);
-
-  logger.info('[Cron] Worker tick started', {
-    workerId: WORKER_ID,
-    timestamp: new Date().toISOString(),
-  });
-
-  // Heartbeat to prevent lock expiration during long-running tasks
-  let heartbeat: NodeJS.Timeout | null = setInterval(async () => {
-    try {
-      const { default: prisma } = await import('./prisma');
-      await prisma.$executeRaw`
-        UPDATE "cron_scheduler_state"
-        SET "lockedAt" = NOW()
-        WHERE "id" = ${SINGLETON_ID}
-          AND "lockedBy" = ${WORKER_ID}
-          AND "leaseEpoch" = ${leaseEpoch}
-      `;
-    } catch (_) {}
-  }, HEARTBEAT_INTERVAL_MS);
+  let heartbeat: NodeJS.Timeout | null = null;
 
   try {
+    await updateSchedulerState({ lastRunAt: new Date() }, leaseEpoch);
+
+    logger.info('[Cron] Worker tick started', {
+      workerId: WORKER_ID,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Heartbeat to prevent lock expiration during long-running tasks
+    heartbeat = setInterval(async () => {
+      try {
+        const { default: prisma } = await import('./prisma');
+        await prisma.$executeRaw`
+          UPDATE "cron_scheduler_state"
+          SET "lockedAt" = NOW()
+          WHERE "id" = ${SINGLETON_ID}
+            AND "lockedBy" = ${WORKER_ID}
+            AND "leaseEpoch" = ${leaseEpoch}
+        `;
+      } catch (_) {}
+    }, HEARTBEAT_INTERVAL_MS);
+
     // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
     const ownership = getSchedulerOwnership(schedulerProfile);
     const jobResult = ownership.backgroundJobs
@@ -679,7 +735,7 @@ async function runOnce() {
           const { processServiceObjectiveSnapshots } =
             await import('@/jobs/service-objective-scheduler');
           serviceObjectiveSnapshots = await processServiceObjectiveSnapshots(now);
-          await updateState({
+          await updateSchedulerState({
             lastObjectiveSnapshotAt: now,
             lastObjectiveSnapshotSuccessAt:
               serviceObjectiveSnapshots.failed === 0 ? now : undefined,
@@ -696,9 +752,9 @@ async function runOnce() {
         // Only advance lastRollupDate when the backlog is fully
         // drained. Otherwise the next tick will pick up the rest.
         if (missingDays.length <= MAX_BACKFILL_PER_RUN) {
-          await updateState({ lastRollupDate: todayKey, lastRollupRefreshAt: now }, leaseEpoch);
+          await updateSchedulerState({ lastRollupDate: todayKey, lastRollupRefreshAt: now }, leaseEpoch);
         } else {
-          await updateState({ lastRollupRefreshAt: now }, leaseEpoch);
+          await updateSchedulerState({ lastRollupRefreshAt: now }, leaseEpoch);
         }
         logger.info('[Cron] Daily rollup maintenance complete', {
           generated: toGenerate.length,
@@ -719,7 +775,7 @@ async function runOnce() {
 
     const duration = Date.now() - startTime;
     await assertLease(leaseEpoch);
-    await updateState({
+    await updateSchedulerState({
       lastSuccessAt: new Date(),
       lastError: null,
     }, leaseEpoch);
@@ -730,7 +786,9 @@ async function runOnce() {
     });
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    await updateState({ lastError: errorMsg }, leaseEpoch);
+    try {
+      await updateSchedulerState({ lastError: errorMsg }, leaseEpoch);
+    } catch (_) {}
     logger.error('[Cron] Worker tick failed', {
       workerId: WORKER_ID,
       error: errorMsg,

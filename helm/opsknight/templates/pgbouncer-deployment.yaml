@@ -54,8 +54,13 @@ spec:
               readOnly: true
             {{- end }}
           readinessProbe:
-            tcpSocket:
-              port: pgbouncer
+            exec:
+              command:
+                - /usr/bin/pg_isready
+                - -h
+                - 127.0.0.1
+                - -p
+                - "6432"
             periodSeconds: 5
             failureThreshold: 3
           livenessProbe:
