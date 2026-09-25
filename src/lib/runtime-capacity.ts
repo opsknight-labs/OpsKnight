@@ -145,7 +145,10 @@ export function calculateRuntimeCapacity(
     );
   }
   const mode = rawMode as 'integrated' | 'split';
-  const pgbouncer = parseStrictBoolean('PGBOUNCER_ENABLED', env.PGBOUNCER_ENABLED, false);
+  let pgbouncer = parseStrictBoolean('PGBOUNCER_ENABLED', env.PGBOUNCER_ENABLED, false);
+  if (!pgbouncer && env.WEB_DATABASE_URL && env.WEB_DATABASE_URL.includes('pgbouncer=true')) {
+    pgbouncer = true;
+  }
 
   if (mode === 'integrated' && pgbouncer) {
     throw new Error(

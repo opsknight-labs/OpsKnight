@@ -89,7 +89,7 @@ Adds a dedicated PgBouncer connection pooler container (`opsknight-pgbouncer`) o
 - `opsknight-web` routes through PgBouncer for high-concurrency HTTP traffic (`pgbouncer=true`).
 - `opsknight-migration` and `opsknight-web` preserve direct connections (`DIRECT_DATABASE_URL`) for schema commands and migrations.
 - `opsknight-scheduler` and all worker containers connect directly to PostgreSQL.
-- Database passwords and userlists are dynamically generated at container startup from `POSTGRES_PASSWORD` or `OPSKNIGHT_DATABASE_URL`; credentials are never committed in plaintext.
+- Dynamic authentication: for bundled PostgreSQL, PgBouncer credentials and userlist are generated automatically from POSTGRES_USER / POSTGRES_PASSWORD at container startup; for external PostgreSQL, explicit structured PGBOUNCER_DB_* parameters are required and validated fail-closed. If passwords contain special URI characters, WEB_DATABASE_URL can be supplied with percent-encoding. Plaintext credentials are never committed.
 - Least privilege: application database users are never assigned administrative PgBouncer control plane privileges (`admin_users`).
 - External PostgreSQL connections support encrypted TLS verification (`PGBOUNCER_SERVER_TLS_SSLMODE=verify-full`).
 ```bash

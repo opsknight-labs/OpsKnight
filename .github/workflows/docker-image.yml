@@ -303,7 +303,7 @@ jobs:
             -f docker-compose.yml \
             -f docker-compose.split.yml \
             -f docker-compose.pgbouncer.yml \
-            up -d
+            up -d --pull never
 
           echo "Waiting for opsknight-migration container to complete..."
           mig_status=""
@@ -361,9 +361,16 @@ jobs:
 
           COMPOSE_PROJECT="ci-ext-${GITHUB_SHA:0:8}"
           EXT_DB_CONTAINER="ci-ext-postgres-${GITHUB_SHA:0:8}"
-          EXT_NETWORK="${COMPOSE_PROJECT}_opsknight-network"
+          EXT_NETWORK="ci-ext-net-${GITHUB_SHA:0:8}"
 
-          docker network create "$EXT_NETWORK" || true
+          cat <<EOF > /tmp/ci-ext-net.yml
+networks:
+  opsknight-network:
+    external: true
+    name: ${EXT_NETWORK}
+EOF
+
+          docker network create "$EXT_NETWORK"
 
           docker run -d \
             --name "$EXT_DB_CONTAINER" \
@@ -379,9 +386,11 @@ jobs:
               -f docker-compose.split.yml \
               -f docker-compose.pgbouncer.yml \
               -f docker-compose.external-db.yml \
+              -f /tmp/ci-ext-net.yml \
               down -v || true
             docker rm -f "$EXT_DB_CONTAINER" 2>/dev/null || true
             docker network rm "$EXT_NETWORK" 2>/dev/null || true
+            rm -f /tmp/ci-ext-net.yml 2>/dev/null || true
           }
           trap cleanup EXIT
 
@@ -409,7 +418,8 @@ jobs:
             -f docker-compose.split.yml \
             -f docker-compose.pgbouncer.yml \
             -f docker-compose.external-db.yml \
-            up -d
+            -f /tmp/ci-ext-net.yml \
+            up -d --pull never
 
           echo "Waiting for opsknight-migration container to complete against external DB..."
           mig_status=""
