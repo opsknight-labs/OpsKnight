@@ -20,6 +20,8 @@ For production split mode, start from `helm/opsknight/examples/values-split-runt
 
 Every split role has its own replica count, database pool size, resources, PDB, and topology-spread selector. Only the web tier has an HPA by default. Size fixed worker fleets together with PostgreSQL connection capacity and notification-provider admission limits.
 
+The checked-in split defaults bound the initial database demand. At two replicas per role, the direct Prisma limits total 58 possible connections: web 20, scheduler 6, general 10, critical 10, bulk 6, and projector 6. When PgBouncer is enabled, web's direct 20 is replaced by up to 20 normal pooled backend connections, while workers retain 38 direct connections. Treat 58 as a ceiling to budget for, not a steady-state prediction, and reserve additional capacity for migrations, administration, monitoring, and failover overlap. Increasing replicas or any per-role pool requires recalculating this total. Prefer managed PostgreSQL for sustained production split deployments; if you retain the bundled instance, set and monitor an explicit PostgreSQL connection envelope with operational headroom.
+
 Treat the first integrated-to-split change as a controlled topology migration. The Service gains a web-role selector that old integrated pods do not have, so ordinary Deployment rolling-update settings alone cannot guarantee uninterrupted endpoint overlap. Render the change, pre-scale capacity, choose a maintenance window or pre-stage a compatible serving label in your environment, and verify Service endpoints before removing the integrated pods.
 
 ## Prerequisites
@@ -78,6 +80,8 @@ Create the external Secret before the release, for example through External Secr
 ## Optional PgBouncer
 
 `pgbouncer.enabled: true` is available only in split mode. It renders two PgBouncer replicas by default in transaction-pooling mode, a Service, PDB, topology spreading, and a policy that accepts traffic only from web pods. Scheduler and worker roles continue to connect directly to PostgreSQL.
+
+PgBouncer's backend capacity is also per replica: `replicaCount × defaultPoolSize` is the normal backend budget, with `reservePoolSize` available during pressure. Budget that together with all direct scheduler/worker pools; PgBouncer does not increase PostgreSQL's safe connection limit.
 
 Use `pgbouncer.existingAuthSecret` in production. For an external PostgreSQL backend, structured `postgresql.*` settings, `postgresql.tls.enabled: true`, and a CA Secret are required; PgBouncer and every direct role verify the backend certificate. The bundled PgBouncer cannot be combined with an opaque `database.url`, because it must know the backend host and TLS material itself.
 
@@ -159,7 +163,7 @@ The chart currently performs migrations in the application startup path rather t
 
 Integrated mode defaults to two fixed replicas (`replicaCount: 2`) so a basic install does not depend on metrics-server. Its HPA is disabled by default. Split mode enables the web HPA from two to twelve replicas and keeps worker fleets fixed by default.
 
-Connection limits are per application process. Size PostgreSQL capacity for the aggregate number of replicas, and validate scheduled/background work under the chosen topology.
+Connection limits are per application process. Calculate each role as `replicaCount × database.poolSize`, add PgBouncer's backend budget when enabled, then leave explicit headroom for migrations and operators. Validate scheduled/background work under the chosen topology.
 
 The application ServiceAccount token is not mounted by default because OpsKnight does not require Kubernetes API access. Set `serviceAccount.automount: true` only for a deliberate extension that needs it.
 

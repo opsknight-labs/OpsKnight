@@ -9,7 +9,22 @@ resources:
   - pgbouncer-service.yaml
   - pgbouncer-pdb.yaml
   - pgbouncer-network-policy.yaml
-  - web-pgbouncer-egress.yaml
 
 patches:
   - path: web-database-patch.yaml
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
+      name: opsknight-app-netpol
+    patch: |-
+      - op: replace
+        path: /spec/egress/0
+        value:
+          to:
+            - podSelector:
+                matchLabels:
+                  app: opsknight-pgbouncer
+          ports:
+            - protocol: TCP
+              port: 6432

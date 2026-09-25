@@ -14,6 +14,8 @@ The root remains the integrated compatibility entrypoint. Three profiles make th
 - `k8s/profiles/split` renders web, maintenance scheduler, general worker, critical worker, bulk worker, and status projector roles;
 - `k8s/profiles/split-pgbouncer` adds a two-replica transaction-pooling tier used only by web pods.
 
+The PgBouncer profile replaces the web tier's direct PostgreSQL egress with web-to-PgBouncer TCP/6432. PgBouncer alone receives PostgreSQL TCP/5432 egress, plus DNS for resolving the Service hostname. Kubernetes NetworkPolicies are additive, so production overlays must preserve that replacement rather than add a second web policy that leaves direct database access available.
+
 The checked-in `k8s/base` contains the common resources shared by those profiles. Do not omit the general worker: the specialized lanes intentionally do not claim ordinary operational background jobs.
 
 Moving an existing installation from the root integrated entrypoint to a split profile changes the Service selector to `opsknight-role: web`. Existing integrated pods lack that label. Plan this as a controlled one-time endpoint cutover or pre-stage a compatible serving label; a Deployment `maxUnavailable: 0` setting does not by itself make a Service-selector migration interruption-free.
@@ -66,6 +68,8 @@ kubectl kustomize k8s/profiles/split-pgbouncer
 ```
 
 Review the rendered image, Secrets, `DATABASE_URL`, public URLs, ingress, NetworkPolicy, storage, and health probes before applying.
+
+The shipped split pools are bounded to a potential 58 database connections at two replicas per role. This includes either 20 direct web connections or PgBouncer's 20 normal backend connections, plus 38 direct scheduler/worker connections. Recalculate `replicas × pool size` for every customization and retain separate PostgreSQL headroom for migrations and operations. A managed PostgreSQL service is recommended for sustained production split deployments.
 
 ## External database overlays
 

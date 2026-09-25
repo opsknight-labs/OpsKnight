@@ -39,3 +39,6 @@ framework:
 skip-path:
   - eslint_output.json
   - reports/security.sarif
+  # Strategic-merge fragment is intentionally incomplete; the rendered
+  # split-PgBouncer Deployment is covered by the full runtime manifest scan.
+  - k8s/profiles/split-pgbouncer/web-database-patch.yaml

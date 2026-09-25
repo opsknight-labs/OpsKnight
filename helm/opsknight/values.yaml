@@ -134,7 +134,7 @@ readinessProbe:
 web:
   replicaCount: 2
   database:
-    poolSize: 20
+    poolSize: 10
   resources:
     requests: { cpu: 250m, memory: 256Mi }
     limits: { cpu: 1000m, memory: 1Gi }
@@ -150,7 +150,7 @@ web:
 scheduler:
   replicaCount: 2
   profile: maintenance
-  database: { poolSize: 5 }
+  database: { poolSize: 3 }
   resources:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { cpu: 500m, memory: 1Gi }
@@ -159,7 +159,7 @@ scheduler:
 
 generalWorker:
   replicaCount: 2
-  database: { poolSize: 10 }
+  database: { poolSize: 5 }
   worker: { batchSize: 100, concurrency: 15, idlePollMs: 1000, busyPollMs: 100 }
   resources:
     requests: { cpu: 100m, memory: 256Mi }
@@ -169,7 +169,7 @@ generalWorker:
 
 criticalWorker:
   replicaCount: 2
-  database: { poolSize: 10 }
+  database: { poolSize: 5 }
   worker: { batchSize: 50, concurrency: 10, idlePollMs: 1000, busyPollMs: 100 }
   resources:
     requests: { cpu: 100m, memory: 256Mi }
@@ -179,7 +179,7 @@ criticalWorker:
 
 bulkWorker:
   replicaCount: 2
-  database: { poolSize: 5 }
+  database: { poolSize: 3 }
   worker: { batchSize: 100, concurrency: 15, idlePollMs: 1000, busyPollMs: 100 }
   resources:
     requests: { cpu: 100m, memory: 256Mi }
@@ -189,7 +189,7 @@ bulkWorker:
 
 statusProjector:
   replicaCount: 2
-  database: { poolSize: 5 }
+  database: { poolSize: 3 }
   worker: { batchSize: 100, concurrency: 15, idlePollMs: 1000, busyPollMs: 100 }
   resources:
     requests: { cpu: 100m, memory: 256Mi }
@@ -288,8 +288,8 @@ pgbouncer:
   port: 6432
   poolMode: transaction
   maxClientConnections: 1000
-  defaultPoolSize: 40
-  reservePoolSize: 10
+  defaultPoolSize: 10
+  reservePoolSize: 5
   maxPreparedStatements: 100
   existingAuthSecret: ''
   authFileKey: userlist.txt

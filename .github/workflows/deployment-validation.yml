@@ -88,6 +88,10 @@ jobs:
             echo 'invalid runtime.mode unexpectedly rendered'
             exit 1
           fi
+          if helm template opsknight helm/opsknight --set criticalWorker.databse.poolSize=10 >/dev/null 2>&1; then
+            echo 'unknown criticalWorker property unexpectedly rendered'
+            exit 1
+          fi
 
       - name: Render Helm external database configuration
         run: |
@@ -132,11 +136,15 @@ jobs:
             grep -q "name: opsknight-$role" /tmp/opsknight-helm-split.yaml
             grep -q "name: opsknight-$role" /tmp/opsknight-kustomize-split.yaml
           done
-          grep -q 'value: maintenance' /tmp/opsknight-helm-split.yaml
+          grep -Eq 'value: "?maintenance"?' /tmp/opsknight-helm-split.yaml
           grep -q 'value: maintenance' /tmp/opsknight-kustomize-split.yaml
           grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-helm-split-pgbouncer.yaml
           grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'pgbouncer=true' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          if awk '/^---$/{found=0} /name: opsknight-app-netpol/{found=1} found && /port: 5432/{bad=1} END{exit bad ? 0 : 1}' /tmp/opsknight-kustomize-split-pgbouncer.yaml; then
+            echo 'split PgBouncer web policy still permits direct PostgreSQL access'
+            exit 1
+          fi
           grep -q 'kubernetes.io/metadata.name: ingress-nginx' /tmp/opsknight-kustomize.yaml
           grep -q '127.0.0.1' /tmp/opsknight-compose.yaml
           grep -q 'db.example.com:6432' /tmp/opsknight-compose-external-db.yaml

@@ -3,6 +3,8 @@ runtime:
 
 web:
   replicaCount: 2
+  database:
+    poolSize: 10
   autoscaling:
     enabled: true
     minReplicas: 2
@@ -11,18 +13,35 @@ web:
 scheduler:
   replicaCount: 2
   profile: maintenance
+  database:
+    poolSize: 3
 
 generalWorker:
   replicaCount: 2
+  database:
+    poolSize: 5
 
 criticalWorker:
   replicaCount: 2
+  database:
+    poolSize: 5
 
 bulkWorker:
   replicaCount: 2
+  database:
+    poolSize: 3
 
 statusProjector:
   replicaCount: 2
+  database:
+    poolSize: 3
+
+# When enabled, two replicas with defaultPoolSize 10 replace the web tier's
+# 20 direct connections. Budget those backends together with 38 direct
+# scheduler/worker connections and leave PostgreSQL operational headroom.
+pgbouncer:
+  defaultPoolSize: 10
+  reservePoolSize: 5
 
 networkPolicy:
   enabled: true

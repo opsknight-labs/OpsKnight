@@ -166,12 +166,45 @@ describe('deployment configuration invariants', () => {
     const values = read('helm/opsknight/values.yaml');
     const helmPgBouncer = read('helm/opsknight/templates/pgbouncer-configmap.yaml');
     const rawWebPatch = read('k8s/profiles/split-pgbouncer/web-database-patch.yaml');
+    const overlay = read('k8s/profiles/split-pgbouncer/kustomization.yaml');
+    const rawNetworkPolicy = read(
+      'k8s/profiles/split-pgbouncer/pgbouncer-network-policy.yaml'
+    );
     expect(values).toContain('pgbouncer:\n  enabled: false');
     expect(helmPgBouncer).toContain('pool_mode = {{ .Values.pgbouncer.poolMode }}');
     expect(rawWebPatch).toContain('@opsknight-pgbouncer:6432');
+    expect(overlay).toContain('path: /spec/egress/0');
+    expect(overlay).toContain('app: opsknight-pgbouncer');
+    expect(overlay).toContain('port: 6432');
+    expect(overlay).not.toContain('web-pgbouncer-egress.yaml');
+    expect(rawNetworkPolicy).toContain('port: 53');
+    expect(rawNetworkPolicy).toContain('port: 5432');
     expect(read('k8s/profiles/split/runtime-deployments.yaml')).not.toContain(
       '@opsknight-pgbouncer:6432'
     );
+  });
+
+  it('ships bounded split-runtime database pools and a strict Helm schema', () => {
+    const values = read('helm/opsknight/values.yaml');
+    const schema = JSON.parse(read('helm/opsknight/values.schema.json')) as {
+      properties: Record<string, { $ref?: string }>;
+      definitions: Record<string, { additionalProperties?: boolean }>;
+    };
+    for (const role of [
+      'web',
+      'scheduler',
+      'generalWorker',
+      'criticalWorker',
+      'bulkWorker',
+      'statusProjector',
+      'pgbouncer',
+    ]) {
+      const definition = schema.properties[role]?.$ref?.replace('#/definitions/', '');
+      expect(definition).toBeTruthy();
+      expect(schema.definitions[definition!]?.additionalProperties).toBe(false);
+    }
+    expect(values).toContain('defaultPoolSize: 10');
+    expect(values).toContain('reservePoolSize: 5');
   });
 
   it('supports digest-pinned images, external Secrets, and configuration rollouts in Helm', () => {

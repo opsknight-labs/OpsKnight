@@ -33,7 +33,11 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-import { processPendingGeneralJobs, processPendingJobs } from '@/lib/jobs/queue';
+import {
+  processPendingGeneralJobs,
+  processPendingJobs,
+  runQueueMaintenance,
+} from '@/lib/jobs/queue';
 import {
   consumeEscalationWakeRequest,
   criticalEscalationCycleWasBusy,
@@ -143,6 +147,14 @@ describe('dedicated job worker', () => {
     expect(processPendingJobs).not.toHaveBeenCalled();
     expect(runCriticalEscalationCycle).not.toHaveBeenCalled();
     expect(runCriticalNotificationCycle).not.toHaveBeenCalled();
+    expect(runQueueMaintenance).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not duplicate queue maintenance on specialized worker lanes', async () => {
+    startJobWorker('critical');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runQueueMaintenance).not.toHaveBeenCalled();
   });
 
   it('runs both critical lanes on every replica, ahead of the general queue', async () => {

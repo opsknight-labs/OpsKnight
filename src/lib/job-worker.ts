@@ -189,7 +189,10 @@ async function runOnce(): Promise<void> {
 
   try {
     const now = Date.now();
+    const ownsQueueMaintenance =
+      workerState.workerLane === 'all' || workerState.workerLane === 'general';
     if (
+      ownsQueueMaintenance &&
       !workerState.queueMaintenanceInFlight &&
       now - workerState.lastQueueMaintenanceAt >= QUEUE_MAINTENANCE_INTERVAL_MS
     ) {
@@ -415,6 +418,7 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
   workerState.lastError = null;
   workerState.controlPlaneState = 'UNINITIALIZED';
   workerState.lastControlPlaneProbeAt = Date.now();
+  workerState.lastQueueMaintenanceAt = 0;
 
   logger.info('[JobWorker] Starting', {
     batchSize: workerState.workerConfig.batchSize,
