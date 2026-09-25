@@ -83,6 +83,12 @@ jobs:
             > /tmp/opsknight-helm-split.yaml
           helm template opsknight helm/opsknight \
             --namespace opsknight \
+            --set runtime.mode=split \
+            --set-string image.tag=ci-split-runtime \
+            --set scheduler.profile=maintenance \
+            > /tmp/opsknight-helm-split-generic.yaml
+          helm template opsknight helm/opsknight \
+            --namespace opsknight \
             -f helm/opsknight/examples/values-split-runtime.yaml \
             --set-string image.tag=ci-split-runtime \
             --set pgbouncer.enabled=true \
@@ -159,8 +165,18 @@ jobs:
           grep -q 'startupProbe:' /tmp/opsknight-kustomize-integrated.yaml
           for role in web scheduler general-worker critical-worker bulk-worker status-projector; do
             grep -q "name: opsknight-$role" /tmp/opsknight-helm-split.yaml
+            grep -q "name: opsknight-$role" /tmp/opsknight-helm-split-generic.yaml
             grep -q "name: opsknight-$role" /tmp/opsknight-kustomize-split.yaml
           done
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split.yaml)" -eq 6
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-generic.yaml)" -eq 6
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-pgbouncer.yaml)" -eq 7
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split.yaml)" -eq 6
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split-pgbouncer.yaml)" -eq 7
+          if grep -q 'whenUnsatisfiable: ScheduleAnyway' /tmp/opsknight-helm-split.yaml /tmp/opsknight-helm-split-generic.yaml /tmp/opsknight-helm-split-pgbouncer.yaml /tmp/opsknight-kustomize-split.yaml /tmp/opsknight-kustomize-split-pgbouncer.yaml; then
+            echo 'split runtime unexpectedly allowed soft topology spreading'
+            exit 1
+          fi
           grep -Eq 'value: "?maintenance"?' /tmp/opsknight-helm-split.yaml
           grep -q 'value: maintenance' /tmp/opsknight-kustomize-split.yaml
           grep -q 'key: DATABASE_URL' /tmp/opsknight-helm-split.yaml

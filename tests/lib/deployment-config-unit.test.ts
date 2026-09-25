@@ -153,6 +153,10 @@ describe('deployment configuration invariants', () => {
     expect(helmDeployments).toContain('$root.Values.podAnnotations');
     expect(helmDeployments).toContain('PROMETHEUS_SCRAPE_TOKEN');
     expect(helmDeployments).toContain('$root.Values.metrics.scrapeTokenSecret.existingSecret');
+    expect(helmDeployments).toContain('whenUnsatisfiable: DoNotSchedule');
+    expect(read('helm/opsknight/templates/pgbouncer-deployment.yaml')).toContain(
+      'whenUnsatisfiable: DoNotSchedule'
+    );
   });
 
   it('keeps Kustomize shared-base copies aligned with the compatibility root', () => {
