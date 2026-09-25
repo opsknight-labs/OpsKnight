@@ -145,6 +145,18 @@ spec:
             {{- toYaml $root.Values.readinessProbe | nindent 12 }}
           resources:
             {{- toYaml $role.values.resources | nindent 12 }}
+          {{- if or (eq $role.name "web") $role.values.lifecycle }}
+          lifecycle:
+            {{- if $role.values.lifecycle }}
+            {{- toYaml $role.values.lifecycle | nindent 12 }}
+            {{- else }}
+            preStop:
+              exec:
+                command:
+                  - /bin/sleep
+                  - "3"
+            {{- end }}
+          {{- end }}
           {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled (or (ne $role.name "web") (not $root.Values.pgbouncer.enabled)) }}
           volumeMounts:
             - name: database-tls

@@ -32,6 +32,10 @@ spec:
           readinessProbe: { exec: { command: ["/usr/bin/pg_isready", "-h", "127.0.0.1", "-p", "6432"] }, periodSeconds: 5, failureThreshold: 3 }
           livenessProbe: { tcpSocket: { port: pgbouncer }, periodSeconds: 10, failureThreshold: 3 }
           resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 500m, memory: 256Mi } }
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sleep", "3"]
       volumes:
         - { name: config, configMap: { name: opsknight-pgbouncer } }
         - name: auth

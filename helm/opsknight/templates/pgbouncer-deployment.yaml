@@ -70,6 +70,12 @@ spec:
             failureThreshold: 3
           resources:
             {{- toYaml .Values.pgbouncer.resources | nindent 12 }}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sleep
+                  - "3"
       volumes:
         - name: config
           configMap:

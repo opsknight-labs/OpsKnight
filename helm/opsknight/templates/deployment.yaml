@@ -83,6 +83,12 @@ spec:
             {{- toYaml .Values.readinessProbe | nindent 12 }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sleep
+                  - "3"
           {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled }}
           volumeMounts:
             - name: database-tls

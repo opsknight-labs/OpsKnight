@@ -91,3 +91,7 @@ spec:
             timeoutSeconds: 5
             successThreshold: 1
             failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sleep", "3"]
