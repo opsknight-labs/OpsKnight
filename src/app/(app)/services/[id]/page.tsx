@@ -145,6 +145,8 @@ function getWebhookUrl(
       return `${baseUrl}/api/integrations/icinga?integrationId=${integrationId}${keyParam}`;
     case 'ZABBIX':
       return `${baseUrl}/api/integrations/zabbix?integrationId=${integrationId}${keyParam}`;
+    case 'MANAGEENGINE':
+      return `${baseUrl}/api/integrations/manageengine?integrationId=${integrationId}${keyParam}`;
     case 'PAGERDUTY':
       return `${baseUrl}/api/integrations/pagerduty/v2/enqueue?integrationId=${integrationId}${keyParam}`;
     case 'GITLAB':

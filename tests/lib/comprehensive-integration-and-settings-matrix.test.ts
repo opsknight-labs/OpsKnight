@@ -28,6 +28,7 @@ import { transformZabbixToEvent } from '@/lib/integrations/zabbix';
 import { transformPagerDutyToEvent } from '@/lib/integrations/pagerduty';
 import { transformGitLabToEvent } from '@/lib/integrations/gitlab';
 import { transformVercelToEvent } from '@/lib/integrations/vercel';
+import { transformManageEngineToEvent } from '@/lib/integrations/manageengine';
 
 // Schemas & Validation
 import {
@@ -38,6 +39,7 @@ import {
   PagerDutyEventSchema,
   GitLabPayloadSchema,
   VercelPayloadSchema,
+  ManageEnginePayloadSchema,
   validatePayload,
 } from '@/lib/integrations/schemas';
 
@@ -675,6 +677,39 @@ describe('🚀 Comprehensive 28-Integration & Settings Matrix Verification', () 
       const body = JSON.stringify(vError);
       const sig = crypto.createHmac('sha1', secret).update(body).digest('hex');
       expect(verifyVercelSignature(body, sig, secret)).toBe(true);
+    });
+
+    it('22b. ManageEngine: Handles OpManager Critical/Clear alarms and Applications Manager dual-state monitors', () => {
+      const opmCritical = {
+        alarmId: '98241',
+        deviceName: 'prod-core-router-01',
+        entity: 'prod-core-router-01_CPUUtilization',
+        severity: '1',
+        stringseverity: 'Critical',
+        message: 'CPU Utilization exceeded threshold (96%)',
+        category: 'Router',
+      };
+
+      const opmClear = {
+        alarmId: '98241',
+        deviceName: 'prod-core-router-01',
+        entity: 'prod-core-router-01_CPUUtilization',
+        severity: '5',
+        stringseverity: 'Clear',
+        message: 'CPU Utilization back to normal (31%)',
+        category: 'Router',
+      };
+
+      expect(validatePayload(ManageEnginePayloadSchema, opmCritical).success).toBe(true);
+      const critEvent = transformManageEngineToEvent(opmCritical);
+      const clearEvent = transformManageEngineToEvent(opmClear);
+
+      expect(critEvent.event_action).toBe('trigger');
+      expect(critEvent.payload.severity).toBe('critical');
+      expect(critEvent.dedup_key).toBe('manageengine-prod-core-router-01_cpuutilization');
+
+      expect(clearEvent.event_action).toBe('resolve');
+      expect(clearEvent.dedup_key).toBe(critEvent.dedup_key);
     });
   });
 

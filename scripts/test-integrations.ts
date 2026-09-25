@@ -194,6 +194,20 @@ const SAMPLE_PAYLOADS = {
     },
   },
 
+  manageengine: {
+    alarmid: `me-${Date.now()}`,
+    entity: 'core-router-01_CPU_Utilization',
+    displayName: 'core-router-01',
+    ipAddress: '10.20.1.1',
+    vendor: 'Cisco',
+    stringseverity: 'Critical',
+    severity: 1,
+    category: 'Routers',
+    eventType: 'Threshold Violation',
+    message: 'CPU Utilization is 98% (Threshold: 90%)',
+    strModTime: new Date().toISOString(),
+  },
+
   webhook: {
     summary: 'Custom Alert: Service Health Check Failed',
     title: 'Health Check Failure',

@@ -19,6 +19,7 @@ describe('Service Integration Types UI Registry', () => {
     expect(values).toContain('GITLAB');
     expect(values).toContain('VERCEL');
     expect(values).toContain('ZABBIX');
+    expect(values).toContain('MANAGEENGINE');
     expect(values).toContain('PAGERDUTY');
     expect(values).toContain('NAGIOS');
     expect(values).toContain('ICINGA');

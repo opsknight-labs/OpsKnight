@@ -16,6 +16,7 @@ Send metric-based alerts and daemon status checks into OpsKnight using native we
 - [Zabbix](./zabbix) — Connect Zabbix triggers, problems, and recoveries with dynamic severity mapping (`Disaster`, `High`, `Average`, `Warning`, `Information`).
 - [Nagios Core & XI](./nagios) — Process Nagios host and service state transitions (`CRITICAL`, `WARNING`, `DOWN`, `RECOVERY`) with macro variable support.
 - [Icinga 2](./icinga) — Ingest check results and notifications from Icinga 2 monitoring daemons.
+- [ManageEngine](./manageengine) — Connect ManageEngine OpManager and Applications Manager alarms, severities (`Critical`, `Trouble`, `Attention`, `Service Down`, `Clear`), and recoveries.
 
 <!-- integrations-list:end -->
 
@@ -29,3 +30,4 @@ Send metric-based alerts and daemon status checks into OpsKnight using native we
 | **Zabbix**           | JSON webhook | `PROBLEM`, `RESOLVED`, `OK`, acknowledgment variants | Event ID, then trigger/host fallback                |
 | **Nagios Core / XI** | JSON POST    | Problems, recovery, ack, downtime, flapping, custom  | `nagios-{host}` or `nagios-{host}-{service}`        |
 | **Icinga 2**         | JSON webhook | Problems, recovery, ack, downtime, flapping, custom  | `icinga-{host}` or `icinga-{host}-{service}`        |
+| **ManageEngine**     | JSON webhook | `Critical`, `Trouble`, `Attention`, `Clear`, ack     | `manageengine-{entity}` or `{device}-{alarmId}`     |
