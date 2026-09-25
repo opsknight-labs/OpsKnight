@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import {
   Card,
   CardContent,
@@ -225,75 +226,113 @@ export default function HelpPage() {
 
   return (
     <main className="mx-auto w-full max-w-[1600px] space-y-8 px-4 py-6 md:px-6 md:py-8">
-      {/* Top Header matching product styling */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs">
-              <HelpCircle className="h-5 w-5" />
-            </div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                Help & Resources
-              </h1>
-              <Badge variant="outline" className="text-xs font-mono font-medium">
-                {APP_VERSION}
-              </Badge>
-            </div>
+      {/* Top Centralized Hero Banner matching Users/Action-Items/Incidents pages */}
+      <DetailHeroBanner
+        tag="Documentation & Resources"
+        title="Help Center"
+        icon={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 text-primary-foreground ring-1 ring-inset ring-primary-foreground/20">
+            <HelpCircle className="h-6 w-6" aria-hidden="true" />
           </div>
-          <p className="text-muted-foreground text-sm max-w-2xl">
-            Official documentation, self-hosting guides, diagnostics, FAQs, and open-source
-            maintainer support.
+        }
+        badges={
+          <Badge
+            variant="outline"
+            className="text-[10px] font-mono font-medium border-white/20 text-white/90 bg-white/10"
+          >
+            {APP_VERSION}
+          </Badge>
+        }
+        subtitle={
+          <p className="text-xs text-primary-foreground/85 leading-relaxed">
+            Official documentation, self-hosting guides, system health diagnostics, FAQs, and
+            open-source maintainer support.
           </p>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            asChild
-            className="gap-2 h-9 border-pink-500/30 hover:border-pink-500/50 hover:bg-pink-500/10 text-foreground transition-all shadow-2xs"
-          >
-            <a
-              href="https://github.com/sponsors/Dushyant-rahangdale"
-              target="_blank"
-              rel="noopener noreferrer"
+        }
+        actions={
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="gap-2 h-9 border-pink-500/40 hover:border-pink-500/60 bg-pink-500/10 hover:bg-pink-500/20 text-pink-200 transition-all shadow-2xs cursor-pointer"
             >
-              <Heart className="h-4 w-4 text-pink-500 fill-pink-500" />
-              <span className="font-semibold">Sponsor</span>
-            </a>
-          </Button>
+              <a
+                href="https://github.com/sponsors/Dushyant-rahangdale"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Heart className="h-4 w-4 text-pink-400 fill-pink-400" />
+                <span className="font-semibold text-white">Sponsor</span>
+              </a>
+            </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))}
-            className="gap-1.5 text-xs h-9 shadow-2xs"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            <span>Hotkeys</span>
-            <kbd className="font-mono text-[10px] bg-muted px-1 rounded border">?</kbd>
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))}
+              className="gap-1.5 text-xs h-9 border-white/20 bg-white/10 hover:bg-white/15 text-white shadow-2xs cursor-pointer"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-blue-300" />
+              <span>Hotkeys</span>
+              <kbd className="font-mono text-[10px] bg-white/15 px-1 rounded border border-white/20 text-white">
+                ?
+              </kbd>
+            </Button>
 
-          <Button size="sm" asChild className="gap-2 h-9 shadow-2xs">
-            <a href="https://opsknight.com/docs" target="_blank" rel="noopener noreferrer">
-              <Book className="h-4 w-4" />
-              <span>Docs</span>
-              <ExternalLink className="h-3 w-3 opacity-60" />
-            </a>
-          </Button>
-        </div>
-      </div>
+            <Button
+              size="sm"
+              asChild
+              className="gap-2 h-9 shadow-2xs bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer"
+            >
+              <a href="https://opsknight.com/docs" target="_blank" rel="noopener noreferrer">
+                <Book className="h-4 w-4" />
+                <span>Docs</span>
+                <ExternalLink className="h-3 w-3 opacity-70" />
+              </a>
+            </Button>
+          </div>
+        }
+        statsPlacement="bottom"
+        stats={[
+          {
+            label: 'Documentation',
+            value: `${DOC_TOPICS.length} Guides`,
+            icon: <Book className="h-3.5 w-3.5 text-blue-200" />,
+            href: 'https://opsknight.com/docs',
+          },
+          {
+            label: 'Status',
+            value: 'Operational',
+            icon: <Activity className="h-3.5 w-3.5 text-emerald-200" />,
+            valueClassName: 'text-emerald-200',
+            href: '/status',
+          },
+          {
+            label: 'Curated FAQs',
+            value: `${FAQS.length} Answers`,
+            icon: <HelpCircle className="h-3.5 w-3.5 text-amber-200" />,
+            valueClassName: 'text-amber-200',
+          },
+          {
+            label: 'Release',
+            value: APP_VERSION,
+            icon: <Radio className="h-3.5 w-3.5 text-purple-200" />,
+            valueClassName: 'text-purple-200',
+          },
+        ]}
+      />
 
-      {/* Documentation & Diagnostics Section */}
-      <section className="mb-10 space-y-4">
+      {/* Main Grid: Documentation Guides (Left 8 cols) + System Diagnostics (Right 4 cols) */}
+      <section className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
             <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
-              Documentation & Diagnostics
+              Documentation & Platform Diagnostics
             </h2>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Official technical references for self-hosting, alert ingestion, chatops, and APIs.
+              Official technical documentation, deployment guides, and live operational diagnostic
+              tools.
             </p>
           </div>
           <Button
@@ -309,162 +348,188 @@ export default function HelpPage() {
           </Button>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {/* Diagnostics Card */}
-          <Card className="flex flex-col border-border/80 bg-card/80 backdrop-blur-xs hover:border-border transition-all duration-150 shadow-2xs">
-            <CardHeader className="p-4 pb-2">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs">
-                  <Activity className="h-4.5 w-4.5" />
-                </div>
-                <Badge variant="outline" className="text-2xs font-mono text-muted-foreground">
-                  {APP_VERSION}
-                </Badge>
-              </div>
-              <CardTitle className="text-sm font-semibold text-foreground">
-                System & Diagnostics
-              </CardTitle>
-              <CardDescription className="text-xs leading-relaxed">
-                Live operational health checks, system logs, and public status monitor.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 pt-1 mt-auto">
-              <div className="space-y-2 pt-2 border-t border-border/50 text-xs">
-                <div className="flex items-center justify-between text-muted-foreground">
-                  <span>Public Status</span>
-                  <Link
-                    href="/status"
-                    className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
-                  >
-                    Status Page
-                    <ExternalLink className="h-3 w-3" />
-                  </Link>
-                </div>
-                {isAdmin ? (
-                  <>
-                    <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Instance Health</span>
-                      <Link
-                        href="/settings/system/health"
-                        className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+          {/* Documentation Cards Grid (8 cols) */}
+          <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {DOC_TOPICS.map(topic => {
+              const Icon = topic.icon;
+              return (
+                <Card
+                  key={topic.id}
+                  className="flex flex-col border-border/80 bg-card/80 backdrop-blur-xs hover:border-border transition-all duration-150 shadow-2xs group"
+                >
+                  <CardHeader className="p-4 pb-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <div
+                        className={cn(
+                          'flex h-9 w-9 items-center justify-center rounded-xl border border-border/40 shadow-2xs',
+                          topic.iconBg,
+                          topic.iconColor
+                        )}
                       >
-                        Health Checks
-                        <ArrowRight className="h-3 w-3" />
-                      </Link>
-                    </div>
-                    <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Platform Logs</span>
-                      <Link
-                        href="/system-logs"
-                        className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
-                      >
-                        System Logs
-                        <ArrowRight className="h-3 w-3" />
-                      </Link>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Keyboard Hotkeys</span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))
-                        }
-                        className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1 cursor-pointer"
-                      >
-                        View Overlay
-                        <kbd className="font-mono text-[10px] bg-muted px-1 rounded border">?</kbd>
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Online Docs</span>
+                        <Icon className="h-4.5 w-4.5" />
+                      </div>
                       <a
-                        href="https://opsknight.com/docs"
+                        href={topic.href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                        className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 transition-colors"
                       >
-                        opsknight.com/docs
+                        <span>Docs</span>
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     </div>
-                  </>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* 4 Documentation Cards */}
-          {DOC_TOPICS.map(topic => {
-            const Icon = topic.icon;
-            return (
-              <Card
-                key={topic.id}
-                className="flex flex-col border-border/80 bg-card/80 backdrop-blur-xs hover:border-border transition-all duration-150 shadow-2xs group"
-              >
-                <CardHeader className="p-4 pb-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <div
-                      className={cn(
-                        'flex h-9 w-9 items-center justify-center rounded-xl border border-border/40 shadow-2xs',
-                        topic.iconBg,
-                        topic.iconColor
-                      )}
-                    >
-                      <Icon className="h-4.5 w-4.5" />
+                    <CardTitle className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                      {topic.title}
+                    </CardTitle>
+                    <CardDescription className="text-xs leading-relaxed line-clamp-2">
+                      {topic.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-4 pt-1 mt-auto">
+                    <div className="space-y-1.5 pt-2 border-t border-border/50">
+                      {topic.details.map((detail, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-2 text-xs text-muted-foreground"
+                        >
+                          <CheckCircle2 className="h-3 w-3 text-primary/70 shrink-0" />
+                          <span className="truncate">{detail}</span>
+                        </div>
+                      ))}
                     </div>
-                    <a
-                      href={topic.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 transition-colors"
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* System & Diagnostics Card (4 cols, full height match) */}
+          <Card className="lg:col-span-4 flex flex-col justify-between border-border/80 bg-card/80 backdrop-blur-xs hover:border-border transition-all duration-150 shadow-2xs">
+            <div>
+              <CardHeader className="p-5 pb-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs">
+                    <Activity className="h-5 w-5" />
+                  </div>
+                  <Badge variant="outline" className="text-2xs font-mono text-muted-foreground">
+                    {APP_VERSION}
+                  </Badge>
+                </div>
+                <CardTitle className="text-base font-semibold text-foreground">
+                  System & Diagnostics
+                </CardTitle>
+                <CardDescription className="text-xs leading-relaxed">
+                  Real-time infrastructure health checks, system event logs, and public status
+                  monitor.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="p-5 pt-0">
+                <div className="space-y-3 pt-2 border-t border-border/60 text-xs">
+                  <div className="flex items-center justify-between text-muted-foreground py-1">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Public Status</span>
+                    </div>
+                    <Link
+                      href="/status"
+                      className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
                     >
-                      <span>Docs</span>
+                      Status Page
                       <ExternalLink className="h-3 w-3" />
-                    </a>
+                    </Link>
                   </div>
-                  <CardTitle className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-                    {topic.title}
-                  </CardTitle>
-                  <CardDescription className="text-xs leading-relaxed line-clamp-2">
-                    {topic.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-4 pt-1 mt-auto">
-                  <div className="space-y-1.5 pt-2 border-t border-border/50">
-                    {topic.details.map((detail, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-2 text-xs text-muted-foreground"
-                      >
-                        <CheckCircle2 className="h-3 w-3 text-primary/70 shrink-0" />
-                        <span className="truncate">{detail}</span>
+
+                  {isAdmin ? (
+                    <>
+                      <div className="flex items-center justify-between text-muted-foreground py-1 border-t border-border/40">
+                        <span>Instance Health</span>
+                        <Link
+                          href="/settings/system/health"
+                          className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                        >
+                          Health Checks
+                          <ArrowRight className="h-3 w-3" />
+                        </Link>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                      <div className="flex items-center justify-between text-muted-foreground py-1 border-t border-border/40">
+                        <span>Platform Logs</span>
+                        <Link
+                          href="/system-logs"
+                          className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                        >
+                          System Logs
+                          <ArrowRight className="h-3 w-3" />
+                        </Link>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between text-muted-foreground py-1 border-t border-border/40">
+                        <span>Keyboard Hotkeys</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))
+                          }
+                          className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          View Overlay
+                          <kbd className="font-mono text-[10px] bg-muted px-1 rounded border">
+                            ?
+                          </kbd>
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between text-muted-foreground py-1 border-t border-border/40">
+                        <span>Documentation</span>
+                        <a
+                          href="https://opsknight.com/docs"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                        >
+                          Online Docs
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </div>
+
+            <div className="p-5 pt-0">
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="w-full justify-between text-xs h-9"
+              >
+                <Link href="/status">
+                  <span>View public status dashboard</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            </div>
+          </Card>
         </div>
       </section>
 
-      {/* Frequently Asked Questions with Sidebar Layout */}
-      <section className="mb-10 space-y-4">
+      {/* Frequently Asked Questions with Clean Sidebar Layout */}
+      <section className="space-y-4">
         <div>
           <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
             Frequently Asked Questions
           </h2>
           <p className="text-xs sm:text-sm text-muted-foreground">
-            Find answers by category or search through common troubleshooting solutions.
+            Curated answers organized by category, with search and troubleshooting guides.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-          {/* FAQ Sidebar */}
-          <div className="md:col-span-4 lg:col-span-3.5 xl:col-span-3 space-y-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* FAQ Sidebar (3 cols on large screens) */}
+          <div className="lg:col-span-3.5 xl:col-span-3 space-y-4">
             {/* Search Box */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -479,7 +544,7 @@ export default function HelpPage() {
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs p-0.5 rounded"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs p-0.5 rounded cursor-pointer"
                   aria-label="Clear search"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -545,7 +610,7 @@ export default function HelpPage() {
             </div>
 
             {/* Sidebar Support Callout */}
-            <div className="rounded-xl border border-border/80 bg-muted/30 p-3.5 space-y-2 shadow-2xs">
+            <div className="rounded-xl border border-border/80 bg-muted/30 p-4 space-y-2 shadow-2xs">
               <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
                 <MessageCircle className="h-4 w-4 text-primary" />
                 <span>Can&apos;t find an answer?</span>
@@ -566,8 +631,8 @@ export default function HelpPage() {
             </div>
           </div>
 
-          {/* FAQ Content Area */}
-          <div className="md:col-span-8 lg:col-span-8.5 xl:col-span-9 space-y-3">
+          {/* FAQ Content Area (9 cols on large screens) */}
+          <div className="lg:col-span-8.5 xl:col-span-9 space-y-3">
             {/* Header info bar */}
             <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
               <span>
@@ -622,7 +687,7 @@ export default function HelpPage() {
                     setSelectedCategory('all');
                     setSearchQuery('');
                   }}
-                  className="mt-3 text-xs h-8"
+                  className="mt-3 text-xs h-8 cursor-pointer"
                 >
                   Clear search &amp; filters
                 </Button>
@@ -721,7 +786,7 @@ export default function HelpPage() {
               variant="outline"
               size="sm"
               asChild
-              className="gap-2 text-xs h-9 border-pink-500/30 hover:border-pink-500/50 hover:bg-pink-500/10 text-foreground transition-all shadow-2xs"
+              className="gap-2 text-xs h-9 border-pink-500/30 hover:border-pink-500/50 hover:bg-pink-500/10 text-foreground transition-all shadow-2xs cursor-pointer"
             >
               <a
                 href="https://github.com/sponsors/Dushyant-rahangdale"
@@ -732,7 +797,12 @@ export default function HelpPage() {
                 <span>Sponsor</span>
               </a>
             </Button>
-            <Button variant="outline" size="sm" asChild className="gap-2 text-xs h-9 shadow-2xs">
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              className="gap-2 text-xs h-9 shadow-2xs cursor-pointer"
+            >
               <a
                 href="https://github.com/opsknight-labs/OpsKnight/discussions"
                 target="_blank"
@@ -742,7 +812,7 @@ export default function HelpPage() {
                 <span>Ask Maintainers</span>
               </a>
             </Button>
-            <Button size="sm" asChild className="gap-2 text-xs h-9 shadow-2xs">
+            <Button size="sm" asChild className="gap-2 text-xs h-9 shadow-2xs cursor-pointer">
               <a
                 href="https://github.com/opsknight-labs/OpsKnight/issues"
                 target="_blank"
