@@ -1,0 +1,16 @@
+name: 'Restore Build Artifact'
+description: 'Restores compiled Next.js build artifacts for downstream E2E and deployment tests'
+
+inputs:
+  artifact-name:
+    description: 'Artifact name to download'
+    required: false
+    default: 'next-build-artifact'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Download application build artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}

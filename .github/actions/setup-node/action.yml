@@ -1,0 +1,48 @@
+name: 'Setup Node & Dependencies'
+description: 'Standardizes Node.js setup, npm cache, dependency installation, and optional Prisma client generation'
+
+inputs:
+  node-version:
+    description: 'Node.js version to set up'
+    required: false
+    default: '20'
+  install-deps:
+    description: 'Whether to execute npm ci'
+    required: false
+    default: 'true'
+  ignore-scripts:
+    description: 'Whether to pass --ignore-scripts to npm ci'
+    required: false
+    default: 'false'
+  generate-prisma:
+    description: 'Whether to generate the Prisma client'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Node.js ${{ inputs.node-version }}
+      uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies (with scripts)
+      if: inputs.install-deps == 'true' && inputs.ignore-scripts != 'true'
+      shell: bash
+      env:
+        HUSKY: '0'
+      run: npm ci --legacy-peer-deps
+
+    - name: Install dependencies (without lifecycle scripts)
+      if: inputs.install-deps == 'true' && inputs.ignore-scripts == 'true'
+      shell: bash
+      env:
+        HUSKY: '0'
+      run: npm ci --legacy-peer-deps --ignore-scripts
+
+    - name: Generate Prisma client
+      if: inputs.generate-prisma == 'true'
+      shell: bash
+      run: npx prisma generate
