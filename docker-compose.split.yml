@@ -7,7 +7,7 @@ services:
       - integrated-runtime
 
   opsknight-migration:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
     pull_policy: always
     restart: "no"
     environment:
@@ -29,7 +29,7 @@ services:
       - opsknight-network
 
   opsknight-web:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
     pull_policy: always
     restart: unless-stopped
     ports:
@@ -71,7 +71,7 @@ services:
       - opsknight-network
 
   opsknight-scheduler:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -110,7 +110,7 @@ services:
       - opsknight-network
 
   opsknight-general-worker:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -152,7 +152,7 @@ services:
       - opsknight-network
 
   opsknight-critical-worker:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -194,7 +194,7 @@ services:
       - opsknight-network
 
   opsknight-bulk-worker:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -236,7 +236,7 @@ services:
       - opsknight-network
 
   opsknight-status-projector:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
     pull_policy: always
     restart: unless-stopped
     environment:

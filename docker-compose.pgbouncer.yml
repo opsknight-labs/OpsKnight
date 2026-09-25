@@ -4,18 +4,37 @@
 # External DB: docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.external-db.yml -f docker-compose.pgbouncer.yml up -d
 services:
   opsknight-pgbouncer:
-    image: ${PGBOUNCER_IMAGE:-ghcr.io/icoretech/pgbouncer-docker@sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd}
+    image: ${PGBOUNCER_IMAGE:-ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75}
     pull_policy: if_not_present
     restart: unless-stopped
+    entrypoint: ["/docker-entrypoint.sh"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-opsknight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-opsknight_db}
+      PGBOUNCER_DB_HOST: ${PGBOUNCER_DB_HOST:-${POSTGRES_HOST:-opsknight-db}}
+      PGBOUNCER_DB_PORT: ${PGBOUNCER_DB_PORT:-${POSTGRES_PORT:-5432}}
+      PGBOUNCER_DB_NAME: ${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}
+      PGBOUNCER_DB_USER: ${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}
+      PGBOUNCER_DB_PASSWORD: ${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}
+      PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-10}
+      PGBOUNCER_RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-5}
+      PGBOUNCER_MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-1000}
+      PGBOUNCER_SERVER_TLS_SSLMODE: ${PGBOUNCER_SERVER_TLS_SSLMODE:-}
+      PGBOUNCER_SERVER_TLS_CA_FILE: ${PGBOUNCER_SERVER_TLS_CA_FILE:-}
+      OPSKNIGHT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-}
     volumes:
-      - ./docker/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
-      - ${PGBOUNCER_AUTH_FILE:-./docker/pgbouncer/userlist.txt}:/etc/pgbouncer/userlist.txt:ro
+      - ./docker/pgbouncer/entrypoint.sh:/docker-entrypoint.sh:ro
     depends_on:
       opsknight-db:
         condition: service_healthy
         required: false
     healthcheck:
-      test: ["CMD-SHELL", "/usr/bin/pg_isready -h 127.0.0.1 -p 6432 || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "PGPASSWORD=\"$${PGBOUNCER_DB_PASSWORD:-$${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}\" /usr/bin/psql -h 127.0.0.1 -p 6432 -U \"$${PGBOUNCER_DB_USER:-$${POSTGRES_USER:-opsknight}}\" -d \"$${PGBOUNCER_DB_NAME:-$${POSTGRES_DB:-opsknight_db}}\" -c \"SELECT 1\" -t -A -q || exit 1"
+        ]
       interval: 10s
       timeout: 5s
       retries: 3

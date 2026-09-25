@@ -276,6 +276,81 @@ jobs:
             exit 1
           fi
 
+      - name: Verify Compose split runtime and PgBouncer live stack
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="opsknight-pr-validation:${GITHUB_SHA}"
+          echo "Verifying live Docker Compose split runtime with image: $IMAGE"
+
+          COMPOSE_PROJECT="ci-split-${GITHUB_SHA:0:8}"
+          export OPSKNIGHT_IMAGE="$IMAGE"
+          export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
+          export APP_PORT=33000
+          export POSTGRES_PORT=35432
+
+          cleanup() {
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.split.yml \
+              -f docker-compose.pgbouncer.yml \
+              down -v || true
+          }
+          trap cleanup EXIT
+
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.split.yml \
+            -f docker-compose.pgbouncer.yml \
+            up -d
+
+          echo "Waiting for opsknight-migration container to complete..."
+          mig_status=""
+          mig_exit=""
+          for i in $(seq 1 30); do
+            mig_status=$(docker compose -f docker-compose.yml -f docker-compose.split.yml ps -a opsknight-migration --format '{{.State}}' 2>/dev/null || true)
+            mig_exit=$(docker compose -f docker-compose.yml -f docker-compose.split.yml ps -a opsknight-migration --format '{{.ExitCode}}' 2>/dev/null || true)
+            if [ "$mig_status" = "exited" ] && [ "$mig_exit" = "0" ]; then
+              echo "opsknight-migration successfully completed (exit 0)!"
+              break
+            fi
+            sleep 2
+          done
+          test "$mig_status" = "exited"
+          test "$mig_exit" = "0"
+
+          echo "Waiting for opsknight-pgbouncer health..."
+          pgb_health=""
+          for i in $(seq 1 30); do
+            pgb_health=$(docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml ps opsknight-pgbouncer --format '{{.Health}}' 2>/dev/null || true)
+            if [ "$pgb_health" = "healthy" ]; then
+              echo "opsknight-pgbouncer is healthy with authenticated backend query!"
+              break
+            fi
+            sleep 2
+          done
+          test "$pgb_health" = "healthy"
+
+          echo "Waiting for opsknight-web readiness..."
+          for i in $(seq 1 45); do
+            if curl -s -f "http://127.0.0.1:33000/api/health?mode=readiness" 2>/dev/null | grep -q 'healthy'; then
+              echo "opsknight-web is healthy and serving HTTP readiness!"
+              break
+            fi
+            sleep 2
+          done
+          curl -s -f "http://127.0.0.1:33000/api/health?mode=readiness" | grep -q 'healthy'
+
+          echo "Verifying split background workers are running..."
+          for role in opsknight-scheduler opsknight-general-worker opsknight-critical-worker opsknight-bulk-worker opsknight-status-projector; do
+            role_state=$(docker compose -f docker-compose.yml -f docker-compose.split.yml ps "$role" --format '{{.State}}' 2>/dev/null || true)
+            echo "Role $role state: $role_state"
+            test "$role_state" = "running"
+          done
+
+          echo "Live Docker Compose split runtime + PgBouncer validation passed successfully!"
+
       - name: Build + push (test channel - main)
         if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v7

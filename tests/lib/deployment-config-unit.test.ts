@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
-import { calculateRuntimeCapacity } from '../../scripts/validate-runtime-capacity';
+import { calculateRuntimeCapacity } from '../../src/lib/runtime-capacity';
 
 /* eslint-disable security/detect-non-literal-fs-filename, security/detect-non-literal-regexp -- Deployment contract tests inspect a fixed repository-local file set. */
 
@@ -395,12 +395,22 @@ describe('deployment configuration invariants', () => {
     expect(split).toContain('cap_drop:\n      - ALL');
     expect(pgbouncer).toContain('no-new-privileges:true');
 
-    // PgBouncer configuration and URL routing
-    expect(pgbouncer).toContain('opsknight-pgbouncer:');
-    expect(pgbouncer).toContain('/usr/bin/pg_isready -h 127.0.0.1 -p 6432');
+    // Split Compose requires explicit compatible release image
+    expect(split).toContain('${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support');
+
+    // PgBouncer 1.26.0 security update and dynamic entrypoint
+    expect(pgbouncer).toContain('ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75');
+    expect(pgbouncer).toContain('./docker/pgbouncer/entrypoint.sh:/docker-entrypoint.sh:ro');
+    expect(pgbouncer).toContain('/usr/bin/psql -h 127.0.0.1 -p 6432');
+    expect(pgbouncer).toContain('SELECT 1');
     expect(pgbouncer).toContain('@opsknight-pgbouncer:6432/${POSTGRES_DB:-opsknight_db}?sslmode=disable&pgbouncer=true');
     expect(pgbouncer).toContain('DIRECT_DATABASE_URL:');
     expect(split).toContain('DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://');
+
+    // Helm PgBouncer aligns on 1.26.0 security update
+    const helm = read('helm/opsknight/values.yaml');
+    expect(helm).toContain("tag: '1.26.0'");
+    expect(helm).toContain("digest: 'sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75'");
 
     // Dedicated one-shot migration contract
     expect(entrypoint).toContain('OPSKNIGHT_MIGRATION_ONLY');
@@ -417,6 +427,21 @@ describe('deployment configuration invariants', () => {
     expect(defaultSplit.safe).toBe(true);
     expect(defaultSplit.totalDemand).toBe(29);
     expect(defaultSplit.headroom).toBe(51);
+
+    // Integrated mode accounts for webReplicas * webPool
+    const singleIntegrated = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'integrated' });
+    expect(singleIntegrated.safe).toBe(true);
+    expect(singleIntegrated.totalDemand).toBe(10);
+    expect(singleIntegrated.headroom).toBe(70);
+
+    const multiIntegrated = calculateRuntimeCapacity({
+      OPSKNIGHT_RUNTIME_MODE: 'integrated',
+      WEB_REPLICAS: '3',
+      DATABASE_POOL_SIZE_WEB: '10',
+    });
+    expect(multiIntegrated.safe).toBe(true);
+    expect(multiIntegrated.totalDemand).toBe(30);
+    expect(multiIntegrated.headroom).toBe(50);
 
     // Overflow budget triggers failure
     const overflow = calculateRuntimeCapacity({
@@ -438,5 +463,14 @@ describe('deployment configuration invariants', () => {
     expect(pgbouncerBounded.safe).toBe(true);
     expect(pgbouncerBounded.webConnections).toBe(15);
     expect(pgbouncerBounded.totalDemand).toBe(34);
+
+    // Fail-closed input handling: reject malformed numbers, booleans, negative counts
+    expect(() => calculateRuntimeCapacity({ WEB_REPLICAS: '100foo' })).toThrow(
+      /not a valid non-negative integer/
+    );
+    expect(() => calculateRuntimeCapacity({ PGBOUNCER_ENABLED: 'invalid_bool' })).toThrow(
+      /not a recognized boolean/
+    );
+    expect(() => calculateRuntimeCapacity({ DATABASE_POOL_SIZE_WEB: '-5' })).toThrow();
   });
 });

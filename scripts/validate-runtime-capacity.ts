@@ -1,143 +1,63 @@
-export interface CapacityEnv {
-  OPSKNIGHT_RUNTIME_MODE?: string;
-  PGBOUNCER_ENABLED?: string;
-  WEB_REPLICAS?: string;
-  DATABASE_POOL_SIZE_WEB?: string;
-  PGBOUNCER_REPLICAS?: string;
-  PGBOUNCER_DEFAULT_POOL_SIZE?: string;
-  PGBOUNCER_RESERVE_POOL_SIZE?: string;
-  SCHEDULER_REPLICAS?: string;
-  DATABASE_POOL_SIZE_SCHEDULER?: string;
-  GENERAL_WORKER_REPLICAS?: string;
-  GENERAL_REPLICAS?: string;
-  DATABASE_POOL_SIZE_GENERAL_WORKER?: string;
-  CRITICAL_WORKER_REPLICAS?: string;
-  CRITICAL_REPLICAS?: string;
-  DATABASE_POOL_SIZE_CRITICAL_WORKER?: string;
-  BULK_WORKER_REPLICAS?: string;
-  BULK_REPLICAS?: string;
-  DATABASE_POOL_SIZE_BULK_WORKER?: string;
-  STATUS_PROJECTOR_REPLICAS?: string;
-  PROJECTOR_REPLICAS?: string;
-  DATABASE_POOL_SIZE_STATUS_PROJECTOR?: string;
-  DATABASE_MAX_CONNECTIONS?: string;
-  DATABASE_MAX_APPLICATION_CONNECTIONS?: string;
-}
+#!/usr/bin/env node
+import { calculateRuntimeCapacity } from '../src/lib/runtime-capacity';
 
-export interface CapacityAnalysisResult {
-  mode: string;
-  pgbouncer: boolean;
-  webConnections: number;
-  directWorkerConnections: number;
-  totalDemand: number;
-  maxConnections: number;
-  safe: boolean;
-  headroom: number;
-  breakdown: Record<string, unknown>;
-}
+export { calculateRuntimeCapacity };
 
-function parseNum(val: string | undefined | null, fallback: number): number {
-  if (val === undefined || val === null || val === '') return fallback;
-  const n = parseInt(val, 10);
-  return isNaN(n) ? fallback : n;
-}
+function main(): void {
+  try {
+    const analysis = calculateRuntimeCapacity(process.env);
+    // eslint-disable-next-line no-console
+    console.log(`\n=== OpsKnight Database Connection Budget Preflight ===`);
+    // eslint-disable-next-line no-console
+    console.log(`Topology Mode: ${analysis.mode} | PgBouncer: ${analysis.pgbouncer ? 'ENABLED' : 'DISABLED'}`);
+    // eslint-disable-next-line no-console
+    console.log(`Total Database Demand:      ${analysis.totalDemand} connections`);
+    // eslint-disable-next-line no-console
+    console.log(`Maximum Permitted Capacity: ${analysis.maxConnections} connections`);
+    // eslint-disable-next-line no-console
+    console.log(`Headroom / Safety Margin:   ${analysis.headroom} connections`);
+    // eslint-disable-next-line no-console
+    console.log(`\nBreakdown:`);
+    // eslint-disable-next-line no-console
+    console.log(`- Web Tier: ${JSON.stringify(analysis.breakdown.web)}`);
+    if (analysis.breakdown.pgbouncer) {
+      // eslint-disable-next-line no-console
+      console.log(`- PgBouncer: ${JSON.stringify(analysis.breakdown.pgbouncer)}`);
+    }
+    if (analysis.mode === 'split') {
+      // eslint-disable-next-line no-console
+      console.log(`- Scheduler: ${JSON.stringify(analysis.breakdown.scheduler)}`);
+      // eslint-disable-next-line no-console
+      console.log(`- General Worker: ${JSON.stringify(analysis.breakdown.generalWorker)}`);
+      // eslint-disable-next-line no-console
+      console.log(`- Critical Worker: ${JSON.stringify(analysis.breakdown.criticalWorker)}`);
+      // eslint-disable-next-line no-console
+      console.log(`- Bulk Worker: ${JSON.stringify(analysis.breakdown.bulkWorker)}`);
+      // eslint-disable-next-line no-console
+      console.log(`- Status Projector: ${JSON.stringify(analysis.breakdown.statusProjector)}`);
+      // eslint-disable-next-line no-console
+      console.log(`- Direct Worker Total: ${analysis.directWorkerConnections} connections`);
+    }
 
-function parseBool(val: string | undefined | null, fallback = false): boolean {
-  if (val === undefined || val === null || val === '') return fallback;
-  const str = String(val).trim().toLowerCase();
-  return str === 'true' || str === '1' || str === 'yes';
-}
+    if (!analysis.safe) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `\n[FATAL CAPACITY MISMATCH] Demand (${analysis.totalDemand}) exceeds capacity (${analysis.maxConnections}) by ${Math.abs(analysis.headroom)} connections!`
+      );
+      process.exit(1);
+    }
 
-export function calculateRuntimeCapacity(
-  env: CapacityEnv | Record<string, string | undefined> = process.env
-): CapacityAnalysisResult {
-  const mode = env.OPSKNIGHT_RUNTIME_MODE || 'split';
-  const pgbouncer = parseBool(env.PGBOUNCER_ENABLED, false);
-
-  const webReplicas = parseNum(env.WEB_REPLICAS, 1);
-  const webPool = parseNum(env.DATABASE_POOL_SIZE_WEB, 10);
-
-  const pgbouncerReplicas = parseNum(env.PGBOUNCER_REPLICAS, 1);
-  const pgbouncerPool = parseNum(env.PGBOUNCER_DEFAULT_POOL_SIZE, 10);
-  const pgbouncerReserve = parseNum(env.PGBOUNCER_RESERVE_POOL_SIZE, 5);
-
-  const schedulerReplicas = parseNum(env.SCHEDULER_REPLICAS, 1);
-  const schedulerPool = parseNum(env.DATABASE_POOL_SIZE_SCHEDULER, 3);
-
-  const generalReplicas = parseNum(env.GENERAL_WORKER_REPLICAS || env.GENERAL_REPLICAS, 1);
-  const generalPool = parseNum(env.DATABASE_POOL_SIZE_GENERAL_WORKER, 5);
-
-  const criticalReplicas = parseNum(env.CRITICAL_WORKER_REPLICAS || env.CRITICAL_REPLICAS, 1);
-  const criticalPool = parseNum(env.DATABASE_POOL_SIZE_CRITICAL_WORKER, 5);
-
-  const bulkReplicas = parseNum(env.BULK_WORKER_REPLICAS || env.BULK_REPLICAS, 1);
-  const bulkPool = parseNum(env.DATABASE_POOL_SIZE_BULK_WORKER, 3);
-
-  const projectorReplicas = parseNum(env.STATUS_PROJECTOR_REPLICAS || env.PROJECTOR_REPLICAS, 1);
-  const projectorPool = parseNum(env.DATABASE_POOL_SIZE_STATUS_PROJECTOR, 3);
-
-  const maxConnections = parseNum(
-    env.DATABASE_MAX_CONNECTIONS || env.DATABASE_MAX_APPLICATION_CONNECTIONS,
-    80
-  );
-
-  let webConnections = 0;
-  if (pgbouncer) {
-    webConnections = pgbouncerReplicas * (pgbouncerPool + pgbouncerReserve);
-  } else {
-    webConnections = webReplicas * webPool;
+    // eslint-disable-next-line no-console
+    console.log(`\n[OK] Database connection capacity budget validated successfully.\n`);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`\n[FATAL CAPACITY ERROR] ${(err as Error).message}\n`);
+    process.exit(1);
   }
+}
 
-  const directWorkerConnections =
-    schedulerReplicas * schedulerPool +
-    generalReplicas * generalPool +
-    criticalReplicas * criticalPool +
-    bulkReplicas * bulkPool +
-    projectorReplicas * projectorPool;
-
-  const totalDemand = mode === 'integrated' ? webPool : webConnections + directWorkerConnections;
-  const safe = totalDemand <= maxConnections;
-  const headroom = maxConnections - totalDemand;
-
-  return {
-    mode,
-    pgbouncer,
-    webConnections,
-    directWorkerConnections,
-    totalDemand,
-    maxConnections,
-    safe,
-    headroom,
-    breakdown: {
-      web: { replicas: webReplicas, pool: webPool, effective: webConnections },
-      pgbouncer: pgbouncer
-        ? { replicas: pgbouncerReplicas, defaultPool: pgbouncerPool, reserve: pgbouncerReserve }
-        : null,
-      scheduler: {
-        replicas: schedulerReplicas,
-        pool: schedulerPool,
-        total: schedulerReplicas * schedulerPool,
-      },
-      generalWorker: {
-        replicas: generalReplicas,
-        pool: generalPool,
-        total: generalReplicas * generalPool,
-      },
-      criticalWorker: {
-        replicas: criticalReplicas,
-        pool: criticalPool,
-        total: criticalReplicas * criticalPool,
-      },
-      bulkWorker: {
-        replicas: bulkReplicas,
-        pool: bulkPool,
-        total: bulkReplicas * bulkPool,
-      },
-      statusProjector: {
-        replicas: projectorReplicas,
-        pool: projectorPool,
-        total: projectorReplicas * projectorPool,
-      },
-    },
-  };
+if (typeof require !== 'undefined' && require.main === module) {
+  main();
+} else if (process.argv[1] && process.argv[1].endsWith('validate-runtime-capacity.ts')) {
+  main();
 }

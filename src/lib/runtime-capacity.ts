@@ -1,10 +1,58 @@
-#!/usr/bin/env node
-'use strict';
+export interface CapacityEnv {
+  OPSKNIGHT_RUNTIME_MODE?: string;
+  PGBOUNCER_ENABLED?: string;
+  WEB_REPLICAS?: string;
+  DATABASE_POOL_SIZE_WEB?: string;
+  PGBOUNCER_REPLICAS?: string;
+  PGBOUNCER_DEFAULT_POOL_SIZE?: string;
+  PGBOUNCER_RESERVE_POOL_SIZE?: string;
+  SCHEDULER_REPLICAS?: string;
+  DATABASE_POOL_SIZE_SCHEDULER?: string;
+  GENERAL_WORKER_REPLICAS?: string;
+  GENERAL_REPLICAS?: string;
+  DATABASE_POOL_SIZE_GENERAL_WORKER?: string;
+  CRITICAL_WORKER_REPLICAS?: string;
+  CRITICAL_REPLICAS?: string;
+  DATABASE_POOL_SIZE_CRITICAL_WORKER?: string;
+  BULK_WORKER_REPLICAS?: string;
+  BULK_REPLICAS?: string;
+  DATABASE_POOL_SIZE_BULK_WORKER?: string;
+  STATUS_PROJECTOR_REPLICAS?: string;
+  PROJECTOR_REPLICAS?: string;
+  DATABASE_POOL_SIZE_STATUS_PROJECTOR?: string;
+  DATABASE_MAX_CONNECTIONS?: string;
+  DATABASE_MAX_APPLICATION_CONNECTIONS?: string;
+}
+
+export interface CapacityAnalysisResult {
+  mode: 'integrated' | 'split';
+  pgbouncer: boolean;
+  webConnections: number;
+  directWorkerConnections: number;
+  totalDemand: number;
+  maxConnections: number;
+  safe: boolean;
+  headroom: number;
+  breakdown: {
+    web: { replicas: number; pool: number; effective: number };
+    pgbouncer: { replicas: number; defaultPool: number; reserve: number } | null;
+    scheduler: { replicas: number; pool: number; total: number } | null;
+    generalWorker: { replicas: number; pool: number; total: number } | null;
+    criticalWorker: { replicas: number; pool: number; total: number } | null;
+    bulkWorker: { replicas: number; pool: number; total: number } | null;
+    statusProjector: { replicas: number; pool: number; total: number } | null;
+  };
+}
 
 /**
  * Fail-closed parser for positive integer configuration values.
+ * Rejects whitespace-padded garbage (e.g. '100foo'), negative numbers, or non-numeric tokens.
  */
-function parseStrictPositiveInt(key, val, fallback) {
+export function parseStrictPositiveInt(
+  key: string,
+  val: string | undefined | null,
+  fallback: number
+): number {
   if (val === undefined || val === null || val === '') {
     return fallback;
   }
@@ -25,8 +73,13 @@ function parseStrictPositiveInt(key, val, fallback) {
 
 /**
  * Fail-closed boolean parser.
+ * Requires explicit boolean strings ('true', 'false', '1', '0').
  */
-function parseStrictBoolean(key, val, fallback = false) {
+export function parseStrictBoolean(
+  key: string,
+  val: string | undefined | null,
+  fallback = false
+): boolean {
   if (val === undefined || val === null || val === '') {
     return fallback;
   }
@@ -42,14 +95,16 @@ function parseStrictBoolean(key, val, fallback = false) {
   );
 }
 
-function calculateRuntimeCapacity(env = process.env) {
+export function calculateRuntimeCapacity(
+  env: CapacityEnv | Record<string, string | undefined> = process.env
+): CapacityAnalysisResult {
   const rawMode = (env.OPSKNIGHT_RUNTIME_MODE || 'split').trim().toLowerCase();
   if (rawMode !== 'integrated' && rawMode !== 'split') {
     throw new Error(
       `Invalid OPSKNIGHT_RUNTIME_MODE: "${env.OPSKNIGHT_RUNTIME_MODE}". Must be "integrated" or "split".`
     );
   }
-  const mode = rawMode;
+  const mode = rawMode as 'integrated' | 'split';
   const pgbouncer = parseStrictBoolean('PGBOUNCER_ENABLED', env.PGBOUNCER_ENABLED, false);
 
   if (mode === 'integrated' && pgbouncer) {
@@ -140,10 +195,13 @@ function calculateRuntimeCapacity(env = process.env) {
 
   let webConnections = 0;
   if (mode === 'integrated') {
+    // In integrated mode, each app replica runs web + background workers sharing its web connection pool
     webConnections = webReplicas * webPool;
   } else if (pgbouncer) {
+    // In split mode with PgBouncer, web connects through PgBouncer pool
     webConnections = pgbouncerReplicas * (pgbouncerPool + pgbouncerReserve);
   } else {
+    // In split mode without PgBouncer, web connects directly with its dedicated pool
     webConnections = webReplicas * webPool;
   }
 
@@ -218,49 +276,3 @@ function calculateRuntimeCapacity(env = process.env) {
     },
   };
 }
-
-function main() {
-  try {
-    const analysis = calculateRuntimeCapacity(process.env);
-    console.log(`\n=== OpsKnight Database Connection Budget Preflight ===`);
-    console.log(`Topology Mode: ${analysis.mode} | PgBouncer: ${analysis.pgbouncer ? 'ENABLED' : 'DISABLED'}`);
-    console.log(`Total Database Demand:      ${analysis.totalDemand} connections`);
-    console.log(`Maximum Permitted Capacity: ${analysis.maxConnections} connections`);
-    console.log(`Headroom / Safety Margin:   ${analysis.headroom} connections`);
-    console.log(`\nBreakdown:`);
-    console.log(`- Web Tier: ${JSON.stringify(analysis.breakdown.web)}`);
-    if (analysis.breakdown.pgbouncer) {
-      console.log(`- PgBouncer: ${JSON.stringify(analysis.breakdown.pgbouncer)}`);
-    }
-    if (analysis.mode === 'split') {
-      console.log(`- Scheduler: ${JSON.stringify(analysis.breakdown.scheduler)}`);
-      console.log(`- General Worker: ${JSON.stringify(analysis.breakdown.generalWorker)}`);
-      console.log(`- Critical Worker: ${JSON.stringify(analysis.breakdown.criticalWorker)}`);
-      console.log(`- Bulk Worker: ${JSON.stringify(analysis.breakdown.bulkWorker)}`);
-      console.log(`- Status Projector: ${JSON.stringify(analysis.breakdown.statusProjector)}`);
-      console.log(`- Direct Worker Total: ${analysis.directWorkerConnections} connections`);
-    }
-
-    if (!analysis.safe) {
-      console.error(
-        `\n[FATAL CAPACITY MISMATCH] Demand (${analysis.totalDemand}) exceeds capacity (${analysis.maxConnections}) by ${Math.abs(analysis.headroom)} connections!`
-      );
-      process.exit(1);
-    }
-
-    console.log(`\n[OK] Database connection capacity budget validated successfully.\n`);
-  } catch (err) {
-    console.error(`\n[FATAL CAPACITY ERROR] ${err.message}\n`);
-    process.exit(1);
-  }
-}
-
-if (require.main === module) {
-  main();
-}
-
-module.exports = {
-  calculateRuntimeCapacity,
-  parseStrictPositiveInt,
-  parseStrictBoolean,
-};

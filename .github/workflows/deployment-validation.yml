@@ -11,7 +11,13 @@ on:
       - 'scripts/verify-k8s-failover.sh'
       - 'scripts/validate-release-tag.cjs'
       - 'docker-compose.yml'
+      - 'docker-compose.split.yml'
+      - 'docker-compose.pgbouncer.yml'
       - 'docker-compose.external-db.yml'
+      - 'docker/pgbouncer/**'
+      - 'src/lib/runtime-capacity.ts'
+      - 'scripts/validate-runtime-capacity.ts'
+      - 'scripts/validate-runtime-capacity.cjs'
       - 'env.example'
       - 'helm/**'
       - 'k8s/**'
@@ -29,7 +35,13 @@ on:
       - 'scripts/verify-k8s-failover.sh'
       - 'scripts/validate-release-tag.cjs'
       - 'docker-compose.yml'
+      - 'docker-compose.split.yml'
+      - 'docker-compose.pgbouncer.yml'
       - 'docker-compose.external-db.yml'
+      - 'docker/pgbouncer/**'
+      - 'src/lib/runtime-capacity.ts'
+      - 'scripts/validate-runtime-capacity.ts'
+      - 'scripts/validate-runtime-capacity.cjs'
       - 'env.example'
       - 'helm/**'
       - 'k8s/**'
@@ -49,6 +61,7 @@ jobs:
       - name: Validate entrypoint shell syntax
         run: |
           sh -n docker-entrypoint.sh
+          sh -n docker/pgbouncer/entrypoint.sh
           bash -n scripts/verify-backup-restore.sh
           bash -n scripts/verify-k8s-failover.sh
 
@@ -59,13 +72,17 @@ jobs:
           OPSKNIGHT_DATABASE_URL='postgresql://user:encoded%40password@db.example.com:6432/opsknight_db?sslmode=require' \
             docker compose -f docker-compose.yml -f docker-compose.external-db.yml \
             config > /tmp/opsknight-compose-external-db.yaml
-          docker compose -f docker-compose.yml -f docker-compose.split.yml \
+          OPSKNIGHT_IMAGE='ghcr.io/opsknight-labs/opsknight:ci-test' \
+            docker compose -f docker-compose.yml -f docker-compose.split.yml \
             config > /tmp/opsknight-compose-split.yaml
+          OPSKNIGHT_IMAGE='ghcr.io/opsknight-labs/opsknight:ci-test' \
           OPSKNIGHT_DATABASE_URL='postgresql://user:encoded%40password@db.example.com:6432/opsknight_db?sslmode=require' \
             docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.external-db.yml \
             config > /tmp/opsknight-compose-split-external-db.yaml
-          docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml \
+          OPSKNIGHT_IMAGE='ghcr.io/opsknight-labs/opsknight:ci-test' \
+            docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml \
             config > /tmp/opsknight-compose-split-pgbouncer.yaml
+          OPSKNIGHT_IMAGE='ghcr.io/opsknight-labs/opsknight:ci-test' \
           OPSKNIGHT_DATABASE_URL='postgresql://user:encoded%40password@db.example.com:6432/opsknight_db?sslmode=require' \
             docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml -f docker-compose.external-db.yml \
             config > /tmp/opsknight-compose-split-pgbouncer-external-db.yaml

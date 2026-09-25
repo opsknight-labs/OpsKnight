@@ -1,0 +1,9 @@
+# OpsKnight PgBouncer Userlist Template
+# Format: "username" "password" (plain text or SCRAM/MD5 hash)
+#
+# By default, OpsKnight's PgBouncer entrypoint dynamically populates this file
+# from POSTGRES_USER / POSTGRES_PASSWORD at container startup.
+#
+# Mount a custom userlist at /etc/pgbouncer/userlist.txt only if you require
+# manual credential management or multiple application users:
+# "opsknight" "your_strong_production_password"
