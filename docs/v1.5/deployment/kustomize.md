@@ -14,7 +14,9 @@ The root remains the integrated compatibility entrypoint. Three profiles make th
 - `k8s/profiles/split` renders web, maintenance scheduler, general worker, critical worker, bulk worker, and status projector roles;
 - `k8s/profiles/split-pgbouncer` adds a two-replica transaction-pooling tier used only by web pods.
 
-The PgBouncer profile replaces the web tier's direct PostgreSQL egress with web-to-PgBouncer TCP/6432. PgBouncer alone receives PostgreSQL TCP/5432 egress, plus DNS for resolving the Service hostname. Kubernetes NetworkPolicies are additive, so production overlays must preserve that replacement rather than add a second web policy that leaves direct database access available.
+The PgBouncer profile routes web runtime traffic to PgBouncer TCP/6432. A narrowly selected web-to-PostgreSQL TCP/5432 rule remains for startup schema management through `DIRECT_DATABASE_URL`; PgBouncer also receives PostgreSQL TCP/5432 egress, plus DNS for resolving the Service hostname. Kubernetes NetworkPolicies are additive, so production overlays should preserve these selected pod destinations rather than add broad database egress.
+
+The web pod still receives `DIRECT_DATABASE_URL` for startup schema management. The entrypoint uses that direct PostgreSQL path for Prisma migrations and index installation, then restores the pooled `DATABASE_URL` before starting the web runtime. Preserve both environment entries when customizing the PgBouncer overlay.
 
 The checked-in `k8s/base` contains the common resources shared by those profiles. Do not omit the general worker: the specialized lanes intentionally do not claim ordinary operational background jobs. The split manifests intentionally use the non-published marker tag `split-runtime-image-required`; a production overlay must replace it with a tested tag or digest containing the split roles. This prevents the older integrated compatibility image from being started with unsupported role names.
 

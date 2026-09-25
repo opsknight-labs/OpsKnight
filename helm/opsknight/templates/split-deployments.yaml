@@ -96,6 +96,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" $root }}
                   key: {{ if and (eq $role.name "web") $root.Values.pgbouncer.enabled }}{{ $root.Values.secrets.keys.webDatabaseUrl }}{{ else }}{{ $root.Values.secrets.keys.databaseUrl }}{{ end }}
+            - name: DIRECT_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" $root }}
+                  key: {{ $root.Values.secrets.keys.databaseUrl }}
             - name: NEXTAUTH_SECRET
               valueFrom:
                 secretKeyRef:

@@ -44,6 +44,24 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.pgbouncer.port }}
+    # Schema management uses DIRECT_DATABASE_URL and must bypass PgBouncer.
+    - {{- if .Values.postgresql.enabled }}
+      to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "opsknight.name" . }}-postgresql
+      {{- else if .Values.networkPolicy.externalDatabaseCIDRs }}
+      to:
+        {{- range .Values.networkPolicy.externalDatabaseCIDRs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      {{- else }}
+      to: []
+      {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.postgresql.port }}
     {{- else if .Values.postgresql.enabled }}
     - to:
         - podSelector:

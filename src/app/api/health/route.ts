@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
         withinStartupGrace;
       const healthy = worker.running && recentSuccess;
       checks.worker = {
-        status: healthy ? 'healthy' : 'degraded',
+        status: healthy ? 'healthy' : 'unhealthy',
         latency: secondsSinceSuccess ?? undefined,
         ...(healthy
           ? {}
@@ -173,7 +173,7 @@ export async function GET(request: NextRequest) {
 
   const criticalFailure =
     mode === 'readiness'
-      ? checks.database?.status === 'unhealthy'
+      ? checks.database?.status === 'unhealthy' || checks.worker?.status === 'unhealthy'
       : readinessChecks.some(check => check.status === 'unhealthy');
 
   const anyDegraded =

@@ -50,14 +50,15 @@ describe('public readiness response', () => {
     expect(response.status).toBe(503);
   });
 
-  it('keeps readiness 200 when background worker is degraded', async () => {
+  it('fails readiness when a required background worker is unhealthy', async () => {
     process.env.OPSKNIGHT_PROCESS_ROLE = 'worker';
     schedulerFindUnique.mockResolvedValue({ lastRunAt: new Date(), lastError: null });
 
     const response = await GET(new NextRequest('http://localhost/api/health?mode=readiness'));
     const body = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(body.status).toBe('degraded');
+    expect(response.status).toBe(503);
+    expect(body.status).toBe('unhealthy');
+    expect(body.checks.worker.status).toBe('unhealthy');
   });
 });

@@ -77,11 +77,13 @@ ingress:
         - ops.example.com
 ```
 
-Create the external Secret before the release, for example through External Secrets, a CSI driver, Sealed Secrets, or your platform's approved controller. Split mode uses `DATABASE_URL` for every role when PgBouncer is disabled, preserving compatibility with existing Secrets. When PgBouncer is enabled, direct worker/scheduler connections use `DATABASE_URL` and web requires `WEB_DATABASE_URL`. All modes also require `NEXTAUTH_SECRET` and `ENCRYPTION_KEY`. With bundled PostgreSQL, also provide `POSTGRES_USER` and `POSTGRES_PASSWORD`. Key names can be changed under `secrets.keys`.
+Create the external Secret before the release, for example through External Secrets, a CSI driver, Sealed Secrets, or your platform's approved controller. Split mode uses `DATABASE_URL` for every role when PgBouncer is disabled, preserving compatibility with existing Secrets. When PgBouncer is enabled, direct worker/scheduler and web migration connections use `DATABASE_URL`, while web runtime traffic uses `WEB_DATABASE_URL`. All modes also require `NEXTAUTH_SECRET` and `ENCRYPTION_KEY`. With bundled PostgreSQL, also provide `POSTGRES_USER` and `POSTGRES_PASSWORD`. Key names can be changed under `secrets.keys`.
 
 ## Optional PgBouncer
 
 `pgbouncer.enabled: true` is available only in split mode. It renders two PgBouncer replicas by default in transaction-pooling mode, a Service, PDB, topology spreading, and a policy that accepts traffic only from web pods. Scheduler and worker roles continue to connect directly to PostgreSQL.
+
+The web container receives two connection paths when PgBouncer is enabled: `DATABASE_URL` is the pooled runtime URL, while `DIRECT_DATABASE_URL` is sourced from the ordinary `DATABASE_URL` Secret key and points directly to PostgreSQL. The startup entrypoint temporarily uses the direct URL for Prisma migrations, recovery, and index installation, then restores the pooled URL before starting the application. Existing externally managed Secrets therefore do not need an additional key.
 
 PgBouncer's backend capacity is also per replica: `replicaCount × defaultPoolSize` is the normal backend budget, with `reservePoolSize` available during pressure. Budget that together with all direct scheduler/worker pools; PgBouncer does not increase PostgreSQL's safe connection limit.
 

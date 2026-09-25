@@ -77,6 +77,10 @@ describe('deployment configuration invariants', () => {
     expect(entrypoint).toContain('Refusing to start against an unknown database schema');
     expect(entrypoint).toMatch(/MIGRATION_SUCCESS=0[\s\S]*exit 1/);
     expect(entrypoint).toContain('scripts/dist/scripts/auto-recover-migrations.js');
+    expect(entrypoint).toContain('DIRECT_DATABASE_URL');
+    expect(entrypoint).toMatch(
+      /export DATABASE_URL="\$DIRECT_DATABASE_URL"[\s\S]*install_status_platform_indexes[\s\S]*export DATABASE_URL="\$RUNTIME_DATABASE_URL"/
+    );
     expect(entrypoint).toMatch(
       /MIGRATION_SUCCESS[\s\S]*install_status_platform_indexes[\s\S]*Starting application/
     );
@@ -170,7 +174,7 @@ describe('deployment configuration invariants', () => {
     expect(read('k8s/profiles/integrated/hpa.yaml')).toBe(read('k8s/hpa.yaml'));
   });
 
-  it('keeps PgBouncer optional and routes only the split web tier through it', () => {
+  it('keeps PgBouncer optional and separates web runtime from migration traffic', () => {
     const values = read('helm/opsknight/values.yaml');
     const helmPgBouncer = read('helm/opsknight/templates/pgbouncer-configmap.yaml');
     const rawWebPatch = read('k8s/profiles/split-pgbouncer/web-database-patch.yaml');
@@ -184,9 +188,16 @@ describe('deployment configuration invariants', () => {
       '(eq $role.name "web") $root.Values.pgbouncer.enabled'
     );
     expect(rawWebPatch).toContain('@opsknight-pgbouncer:6432');
+    expect(rawWebPatch).toContain('DIRECT_DATABASE_URL');
+    expect(rawWebPatch).toContain('@$(POSTGRES_HOST):$(POSTGRES_PORT)');
+    expect(read('helm/opsknight/templates/split-deployments.yaml')).toContain(
+      'name: DIRECT_DATABASE_URL'
+    );
     expect(overlay).toContain('path: /spec/egress/0');
     expect(overlay).toContain('app: opsknight-pgbouncer');
     expect(overlay).toContain('port: 6432');
+    expect(overlay).toContain('path: /spec/egress/1');
+    expect(overlay).toContain('port: 5432');
     expect(overlay).not.toContain('web-pgbouncer-egress.yaml');
     expect(rawNetworkPolicy).toContain('port: 53');
     expect(rawNetworkPolicy).toContain('port: 5432');
