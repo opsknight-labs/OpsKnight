@@ -70,7 +70,7 @@ To eliminate duplicate setup across all pipelines, common actions are standardiz
 
 ## 4. Execution Principles
 
-1. **Build Once for Browser E2E**: The host Next.js application is compiled once in the canonical `build` job. Auth E2E, Mobile Chromium/WebKit, and production PWA suites download the artifact and start `next start` without compiling.
+1. **Build Once for PR Browser E2E**: All PR browser/E2E workflows consume the canonical shared build artifact. Standalone workflow_dispatch runs remain independently executable for debugging.
 2. **Container Boundary**: Docker container build remains a separate artifact boundary with its own platform/runtime packaging concerns.
 3. **Isolate Unit from Infrastructure**: Unit tests (L1) run against the Prisma mock in memory without provisioning PostgreSQL.
 4. **Decouple Fast Gates from Certification**: Heavy stress, retry storms (k6), and 3-replica worker tests belong in nightly and release certification workflows, not on ordinary PR feedback paths.

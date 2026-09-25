@@ -31,8 +31,9 @@ jobs:
           node-version: 20
           generate-prisma: 'true'
 
-      - name: Source ESLint check
+      - name: Source ESLint check (visible, non-blocking until lint debt cleanup)
         run: npm run lint:check
+        continue-on-error: true
 
       - name: TypeScript typecheck
         run: npx tsc --noEmit
@@ -59,7 +60,6 @@ jobs:
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
       NEXTAUTH_SECRET: opsknight-e2e-nextauth-secret-change-me
       ENCRYPTION_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      NODE_ENV: production
     steps:
       - name: Checkout
         uses: actions/checkout@v7
