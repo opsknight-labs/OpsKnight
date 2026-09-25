@@ -82,6 +82,8 @@ Review the rendered image, Secrets, `DATABASE_URL`, public URLs, ingress, Networ
 
 The shipped split pools are bounded to a potential 58 database connections at two replicas per role. This includes either 20 direct web connections or PgBouncer's 20 normal backend connections, plus 38 direct scheduler/worker connections. The generic split profile does not include `web-hpa.yaml`; add it through a capacity-planned production overlay if required. Recalculate `maxReplicas × pool size` for autoscaled roles and `replicas × pool size` for fixed roles, and retain separate PostgreSQL headroom for migrations and operations. A managed PostgreSQL service is recommended for sustained production split deployments.
 
+Split role replicas use a hard `kubernetes.io/hostname` spread constraint and therefore require at least two schedulable nodes. PDBs govern voluntary disruption only; node/zone survival depends on actual failure-domain placement. Add a `topology.kubernetes.io/zone` constraint in multi-zone production overlays.
+
 ## External database overlays
 
 The base application constructs a URI for its bundled PostgreSQL. For managed PostgreSQL, patch the `DATABASE_URL` environment entry to read a complete URI from your secret system. This supports TLS parameters, PgBouncer, provider options, and percent-encoded credentials without reconstructing the URI from separate fields.

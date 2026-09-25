@@ -32,7 +32,7 @@ spec:
           livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
           readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
       topologySpreadConstraints:
-        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: web } } }
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: web } } }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -69,7 +69,7 @@ spec:
           livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
           readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
       topologySpreadConstraints:
-        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: scheduler } } }
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: scheduler } } }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -109,7 +109,7 @@ spec:
           livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
           readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
       topologySpreadConstraints:
-        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: general-worker } } }
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: general-worker } } }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -149,7 +149,7 @@ spec:
           livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
           readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
       topologySpreadConstraints:
-        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: critical-worker } } }
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: critical-worker } } }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -189,7 +189,7 @@ spec:
           livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
           readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
       topologySpreadConstraints:
-        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: bulk-worker } } }
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: bulk-worker } } }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -229,4 +229,4 @@ spec:
           livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
           readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
       topologySpreadConstraints:
-        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: status-projector } } }
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: status-projector } } }

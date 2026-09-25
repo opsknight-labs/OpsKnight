@@ -103,6 +103,15 @@ jobs:
             echo 'split runtime unexpectedly accepted scheduler.profile=full'
             exit 1
           fi
+          if helm template opsknight helm/opsknight \
+            --set runtime.mode=split \
+            --set-string image.tag=ci-split-runtime \
+            --set web.autoscaling.enabled=true \
+            --set web.autoscaling.maxReplicas=12 \
+            --set web.database.poolSize=20 >/dev/null 2>&1; then
+            echo 'unsafe split database connection budget unexpectedly rendered'
+            exit 1
+          fi
           if helm template opsknight helm/opsknight --set criticalWorker.databse.poolSize=10 >/dev/null 2>&1; then
             echo 'unknown criticalWorker property unexpectedly rendered'
             exit 1

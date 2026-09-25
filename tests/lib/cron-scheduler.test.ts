@@ -15,6 +15,7 @@ const tasks = vi.hoisted(() => ({
   reconcileWarRoomHealth: vi.fn(),
   processShiftRotations: vi.fn(),
   processUpcomingShiftReminders: vi.fn(),
+  schedulerQueryRaw: vi.fn(),
 }));
 
 vi.mock('@/lib/escalation', () => ({
@@ -98,6 +99,7 @@ vi.mock('@/lib/prisma', () => ({
     incident: { findFirst: vi.fn().mockResolvedValue(null) },
     backgroundJob: { findFirst: vi.fn().mockResolvedValue(null) },
     $executeRaw: vi.fn().mockResolvedValue(1),
+    $queryRaw: tasks.schedulerQueryRaw,
   },
 }));
 
@@ -119,6 +121,12 @@ describe('cron-scheduler lifecycle', () => {
     tasks.reconcileWarRoomHealth.mockResolvedValue({});
     tasks.processShiftRotations.mockResolvedValue({});
     tasks.processUpcomingShiftReminders.mockResolvedValue(0);
+    tasks.schedulerQueryRaw.mockImplementation((strings: TemplateStringsArray) => {
+      const sql = strings.join(' ');
+      if (sql.includes('RETURNING "leaseEpoch"')) return Promise.resolve([{ leaseEpoch: 1 }]);
+      if (sql.includes('SELECT EXISTS')) return Promise.resolve([{ held: true }]);
+      return Promise.resolve([]);
+    });
   });
 
   afterEach(async () => {
@@ -172,5 +180,18 @@ describe('cron-scheduler lifecycle', () => {
     expect(tasks.reconcileIntegrationControlPlane).toHaveBeenCalledTimes(1);
     expect(tasks.reconcileStatusPageRouteOperations).toHaveBeenCalledTimes(1);
     expect(tasks.reconcileWarRoomHealth).toHaveBeenCalledTimes(1);
+  });
+
+  it('fences a stale scheduler before it enters the next operation group', async () => {
+    tasks.schedulerQueryRaw
+      .mockResolvedValueOnce([{ leaseEpoch: 41 }])
+      .mockResolvedValueOnce([{ held: false }]);
+
+    startCronScheduler({ profile: 'maintenance' });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(tasks.reconcileIntegrationControlPlane).toHaveBeenCalledTimes(1);
+    expect(tasks.processAutoUnsnoozeInternal).not.toHaveBeenCalled();
+    expect(tasks.checkSLABreaches).not.toHaveBeenCalled();
   });
 });

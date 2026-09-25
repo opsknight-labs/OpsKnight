@@ -2651,6 +2651,7 @@ model CronSchedulerState {
   lastObjectiveSnapshotFailed     Int       @default(0)
   lockedBy                        String?
   lockedAt                        DateTime?
+  leaseEpoch                      Int       @default(0)
   updatedAt                       DateTime  @updatedAt
 
   @@map("cron_scheduler_state")

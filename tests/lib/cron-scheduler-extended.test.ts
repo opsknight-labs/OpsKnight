@@ -34,6 +34,8 @@ vi.mock('@/lib/prisma', () => ({
     backgroundJob: {
       findFirst: vi.fn().mockResolvedValue(null),
     },
+    $executeRaw: vi.fn().mockResolvedValue(1),
+    $queryRaw: vi.fn(),
   },
 }));
 
@@ -109,6 +111,14 @@ describe('Cron Scheduler - Lock Management', () => {
     vi.mocked(prisma.cronSchedulerState.upsert).mockResolvedValue(defaultState as any);
     vi.mocked(prisma.cronSchedulerState.update).mockResolvedValue(defaultState as any);
     vi.mocked(prisma.cronSchedulerState.updateMany).mockResolvedValue({ count: 1 } as any);
+    vi.mocked(prisma.$queryRaw).mockImplementation((strings: unknown) => {
+      const sql = Array.isArray(strings) ? strings.join(' ') : String(strings);
+      if (sql.includes('RETURNING "leaseEpoch"')) {
+        return Promise.resolve([{ leaseEpoch: 1 }]) as never;
+      }
+      if (sql.includes('SELECT EXISTS')) return Promise.resolve([{ held: true }]) as never;
+      return Promise.resolve([]) as never;
+    });
   });
 
   afterEach(async () => {
@@ -218,19 +228,13 @@ describe('Cron Scheduler - Lock Management', () => {
 
   describe('Lock Release', () => {
     it('releases lock on stop', async () => {
-      vi.mocked(prisma.cronSchedulerState.updateMany)
-        .mockResolvedValueOnce({ count: 1 } as any) // acquire
-        .mockResolvedValueOnce({ count: 1 } as any); // release
-
       startCronScheduler();
       await vi.advanceTimersByTimeAsync(100);
 
       await stopCronScheduler();
 
-      // Verify release was called with correct parameters
-      const releaseCalls = vi.mocked(prisma.cronSchedulerState.updateMany).mock.calls;
-      const releaseCall = releaseCalls.find(call => call[0].data?.lockedBy === null);
-      expect(releaseCall).toBeDefined();
+      const sqlCalls = vi.mocked(prisma.$executeRaw).mock.calls;
+      expect(sqlCalls.some(call => String(call[0]).includes('"leaseEpoch"'))).toBe(true);
     });
 
     it('only releases lock if we hold it', async () => {

@@ -35,6 +35,16 @@
         }
       }
     },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "port", "maxApplicationConnections"],
+      "properties": {
+        "url": { "type": "string" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "maxApplicationConnections": { "type": "integer", "minimum": 1, "maximum": 10000 }
+      }
+    },
     "postgresql": {
       "type": "object",
       "properties": {

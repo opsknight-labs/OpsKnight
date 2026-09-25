@@ -236,6 +236,9 @@ database:
   # NetworkPolicy cannot infer a port reliably from a URL. Keep this aligned
   # with database.url when using an external database on a non-default port.
   port: 5432
+  # Render-time ceiling for aggregate split-role pools at maximum web scale.
+  # Leave operational, migration, monitoring, and failover headroom above it.
+  maxApplicationConnections: 80
 
 postgresql:
   enabled: true

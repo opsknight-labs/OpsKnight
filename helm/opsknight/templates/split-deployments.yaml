@@ -6,6 +6,25 @@
 {{- if ne .Values.scheduler.profile "maintenance" }}
 {{- fail "runtime.mode=split requires scheduler.profile=maintenance to preserve exclusive worker-lane ownership" }}
 {{- end }}
+{{- $webReplicas := .Values.web.replicaCount -}}
+{{- if .Values.web.autoscaling.enabled -}}
+{{- $webReplicas = .Values.web.autoscaling.maxReplicas -}}
+{{- end -}}
+{{- $webConnections := mul $webReplicas .Values.web.database.poolSize -}}
+{{- if .Values.pgbouncer.enabled -}}
+{{- $webConnections = mul .Values.pgbouncer.replicas .Values.pgbouncer.defaultPoolSize -}}
+{{- end -}}
+{{- $estimatedConnections := add
+  $webConnections
+  (mul .Values.scheduler.replicaCount .Values.scheduler.database.poolSize)
+  (mul .Values.generalWorker.replicaCount .Values.generalWorker.database.poolSize)
+  (mul .Values.criticalWorker.replicaCount .Values.criticalWorker.database.poolSize)
+  (mul .Values.bulkWorker.replicaCount .Values.bulkWorker.database.poolSize)
+  (mul .Values.statusProjector.replicaCount .Values.statusProjector.database.poolSize)
+-}}
+{{- if gt (int $estimatedConnections) (int .Values.database.maxApplicationConnections) }}
+{{- fail (printf "split runtime estimated database connections (%d) exceed database.maxApplicationConnections (%d)" (int $estimatedConnections) (int .Values.database.maxApplicationConnections)) }}
+{{- end }}
 {{- $roles := list
   (dict "name" "web" "processRole" "web" "values" .Values.web "poolEnv" "DATABASE_POOL_SIZE_WEB")
   (dict "name" "scheduler" "processRole" "scheduler" "values" .Values.scheduler "poolEnv" "DATABASE_POOL_SIZE_SCHEDULER")

@@ -1,6 +1,13 @@
 runtime:
   mode: split
 
+# Requires at least two schedulable nodes. Add a zone-level constraint in a
+# production values file when the cluster spans multiple zones.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+
 # Required: set a tag or digest for an image built with split-runtime support.
 # image:
 #   digest: sha256:<tested-split-runtime-manifest-digest>

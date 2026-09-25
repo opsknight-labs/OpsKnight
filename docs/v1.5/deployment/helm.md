@@ -22,7 +22,7 @@ Every split role has its own replica count, database pool size, resources, PDB, 
 
 Queue maintenance is executed only by the scheduler replica holding the distributed scheduler lock. General-worker replicas claim ordinary jobs but do not duplicate encryption/compliance reconciliation, stale-job sweeps, or schedule ensuring.
 
-The checked-in split defaults bound the initial database demand and leave the web HPA disabled until capacity is planned. At two replicas per role, the direct Prisma limits total 58 possible connections: web 20, scheduler 6, general 10, critical 10, bulk 6, and projector 6. When PgBouncer is enabled, web's direct 20 is replaced by up to 20 normal pooled backend connections, while workers retain 38 direct connections. Treat 58 as a ceiling to budget for, not a steady-state prediction, and reserve additional capacity for migrations, administration, monitoring, and failover overlap. If web autoscaling is enabled, budget `maxReplicas × web.database.poolSize`, not the initial replica count; the shipped maximum of 12 with pool size 10 would permit 120 web connections without PgBouncer. Increasing replicas or any per-role pool requires recalculating this total. Prefer managed PostgreSQL for sustained production split deployments; if you retain the bundled instance, set and monitor an explicit PostgreSQL connection envelope with operational headroom.
+The checked-in split defaults bound the initial database demand and leave the web HPA disabled until capacity is planned. At two replicas per role, the direct Prisma limits total 58 possible connections: web 20, scheduler 6, general 10, critical 10, bulk 6, and projector 6. When PgBouncer is enabled, web's direct 20 is replaced by up to 20 normal pooled backend connections, while workers retain 38 direct connections. Helm calculates the maximum configured demand and rejects values above `database.maxApplicationConnections` (80 by default). Autoscaled web uses `maxReplicas × poolSize`; PgBouncer uses `replicas × defaultPoolSize`. Set the ceiling from the database's tested capacity while retaining separate headroom for migrations, administration, monitoring, and failover overlap. Prefer managed PostgreSQL for sustained production split deployments.
 
 Treat the first integrated-to-split change as a controlled topology migration. The Service gains a web-role selector that old integrated pods do not have, so ordinary Deployment rolling-update settings alone cannot guarantee uninterrupted endpoint overlap. Render the change, pre-scale capacity, choose a maintenance window or pre-stage a compatible serving label in your environment, and verify Service endpoints before removing the integrated pods.
 
@@ -32,6 +32,7 @@ Treat the first integrated-to-split change as a controlled topology migration. T
 - An ingress/TLS strategy if the service is public.
 - metrics-server if you enable the chart HPA.
 - A PostgreSQL plan: bundled single-instance PostgreSQL or an external/managed service.
+- At least two schedulable nodes for the split example's hard hostname-spread constraint; add zone spread for multi-zone production clusters.
 - Stable, backed-up `NEXTAUTH_SECRET` and 64-hex-character `ENCRYPTION_KEY` values.
 
 Default values are usable for evaluation only. The checked-in passwords/secrets and localhost URLs must be replaced before production use.

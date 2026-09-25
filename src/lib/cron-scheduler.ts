@@ -27,7 +27,8 @@ import { getSchedulerOwnership, type SchedulerProfile } from './runtime-role';
 
 // Generate unique worker ID for this process instance
 const WORKER_ID = `worker-${process.pid}-${crypto.randomUUID().slice(0, 8)}`;
-const LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes - consider lock stale after this
+const LOCK_TIMEOUT_MS = 90_000;
+const HEARTBEAT_INTERVAL_MS = 15_000;
 const MIN_DELAY_MS = 15_000;
 const MAX_DELAY_MS = 2 * 60_000;
 const SINGLETON_ID = 'singleton';
@@ -38,6 +39,7 @@ let activeRun: Promise<void> | null = null;
 let initialized = false;
 let lastJobCleanup = 0;
 let schedulerProfile: SchedulerProfile = 'full';
+let activeLeaseEpoch: number | null = null;
 
 export interface CronSchedulerOptions {
   profile?: SchedulerProfile;
@@ -107,18 +109,18 @@ async function getState() {
 
 /**
  * Attempt to acquire distributed lock
- * Returns true if lock acquired, false if another worker holds it
+ * Returns the monotonically increasing fencing epoch when acquired.
  */
-async function acquireLock(): Promise<boolean> {
+async function acquireLock(): Promise<number | null> {
   const { default: prisma } = await import('./prisma');
 
   try {
     // PostgreSQL is the sole clock authority for lease expiry. Gating on
     // nextRunAt also prevents standby replicas from immediately acquiring a
     // deliberately released lock before the next scheduler cycle is due.
-    const result = await prisma.$executeRaw`
+    const rows = await prisma.$queryRaw<Array<{ leaseEpoch: number }>>`
       UPDATE "cron_scheduler_state"
-      SET "lockedBy" = ${WORKER_ID}, "lockedAt" = NOW()
+      SET "lockedBy" = ${WORKER_ID}, "lockedAt" = NOW(), "leaseEpoch" = "leaseEpoch" + 1
       WHERE "id" = ${SINGLETON_ID}
         AND ("nextRunAt" IS NULL OR "nextRunAt" <= NOW())
         AND (
@@ -126,11 +128,13 @@ async function acquireLock(): Promise<boolean> {
           OR "lockedBy" = ${WORKER_ID}
           OR "lockedAt" < NOW() - (${LOCK_TIMEOUT_MS} * INTERVAL '1 millisecond')
         )
+      RETURNING "leaseEpoch"
     `;
 
-    if (result > 0) {
-      logger.debug('[Cron] Lock acquired', { workerId: WORKER_ID });
-      return true;
+    const epoch = rows[0]?.leaseEpoch;
+    if (epoch !== undefined) {
+      logger.debug('[Cron] Lock acquired', { workerId: WORKER_ID, leaseEpoch: epoch });
+      return epoch;
     }
 
     // Lock held by another worker
@@ -139,31 +143,41 @@ async function acquireLock(): Promise<boolean> {
       holder: state.lockedBy,
       since: state.lockedAt?.toISOString(),
     });
-    return false;
+    return null;
   } catch (error) {
     logger.error('[Cron] Failed to acquire lock', { error });
-    return false;
+    return null;
   }
+}
+
+async function assertLease(epoch: number): Promise<void> {
+  const { default: prisma } = await import('./prisma');
+  const rows = await prisma.$queryRaw<Array<{ held: boolean }>>`
+    SELECT EXISTS(
+      SELECT 1 FROM "cron_scheduler_state"
+      WHERE "id" = ${SINGLETON_ID}
+        AND "lockedBy" = ${WORKER_ID}
+        AND "leaseEpoch" = ${epoch}
+        AND "lockedAt" >= NOW() - (${LOCK_TIMEOUT_MS} * INTERVAL '1 millisecond')
+    ) AS "held"
+  `;
+  if (!rows[0]?.held) throw new Error(`Scheduler lease epoch ${epoch} is no longer authoritative`);
 }
 
 /**
  * Release the distributed lock
  */
-async function releaseLock(nextRunAt: Date): Promise<void> {
+async function releaseLock(nextRunAt: Date, epoch: number | null = activeLeaseEpoch): Promise<void> {
   const { default: prisma } = await import('./prisma');
 
   try {
-    await prisma.cronSchedulerState.updateMany({
-      where: {
-        id: SINGLETON_ID,
-        lockedBy: WORKER_ID, // Only release if we hold it
-      },
-      data: {
-        lockedBy: null,
-        lockedAt: null,
-        nextRunAt,
-      },
-    });
+    if (epoch === null) return;
+    await prisma.$executeRaw`
+      UPDATE "cron_scheduler_state"
+      SET "lockedBy" = NULL, "lockedAt" = NULL, "nextRunAt" = ${nextRunAt}
+      WHERE "id" = ${SINGLETON_ID} AND "lockedBy" = ${WORKER_ID} AND "leaseEpoch" = ${epoch}
+    `;
+    if (activeLeaseEpoch === epoch) activeLeaseEpoch = null;
     logger.debug('[Cron] Lock released', { workerId: WORKER_ID });
   } catch (error) {
     logger.error('[Cron] Failed to release lock', { error });
@@ -336,14 +350,15 @@ function scheduleNextRun(targetTime: Date, persistToDb: boolean = true) {
  * Execute one cron cycle
  */
 async function runOnce() {
-  const isLeader = await acquireLock();
-  if (!isLeader) {
+  const leaseEpoch = await acquireLock();
+  if (leaseEpoch === null) {
     logger.debug('[Cron] Not the leader, scheduling standby check');
     // Standby replicas must schedule next tick with randomized jitter (15s - 30s) to monitor leader health
     const standbyDelay = MIN_DELAY_MS + Math.floor(Math.random() * 15000);
     scheduleNextRun(new Date(Date.now() + standbyDelay), false);
     return;
   }
+  activeLeaseEpoch = leaseEpoch;
 
   const startTime = Date.now();
   await updateState({ lastRunAt: new Date() });
@@ -360,10 +375,12 @@ async function runOnce() {
       await prisma.$executeRaw`
         UPDATE "cron_scheduler_state"
         SET "lockedAt" = NOW()
-        WHERE "id" = ${SINGLETON_ID} AND "lockedBy" = ${WORKER_ID}
+        WHERE "id" = ${SINGLETON_ID}
+          AND "lockedBy" = ${WORKER_ID}
+          AND "leaseEpoch" = ${leaseEpoch}
       `;
     } catch (_) {}
-  }, 30_000);
+  }, HEARTBEAT_INTERVAL_MS);
 
   try {
     // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
@@ -440,6 +457,8 @@ async function runOnce() {
       warRoomClosingRepair,
     });
 
+    await assertLease(leaseEpoch);
+
     // Group 2: Secondary tasks (can run in parallel)
     const { processShiftRotations, processUpcomingShiftReminders } =
       await import('./oncall-handoff');
@@ -489,6 +508,8 @@ async function runOnce() {
       shiftReminders: reminderCount,
     });
 
+    await assertLease(leaseEpoch);
+
     // Group 3: Maintenance tasks (low priority, run last)
     const tokenCleanup = await cleanupUserTokens();
     const rateLimitCleanup = await cleanupExpiredRateLimits();
@@ -522,6 +543,7 @@ async function runOnce() {
     // Cost cap: at most `MAX_BACKFILL_PER_RUN` days are generated per
     // tick to bound the lock-holding time. The next tick picks up
     // where this one left off.
+    await assertLease(leaseEpoch);
     const state = await getState();
     const now = new Date();
     const todayKey = now.toISOString().split('T')[0];
@@ -686,6 +708,7 @@ async function runOnce() {
     }
 
     const duration = Date.now() - startTime;
+    await assertLease(leaseEpoch);
     await updateState({
       lastSuccessAt: new Date(),
       lastError: null,
@@ -718,7 +741,7 @@ async function runOnce() {
       logger.error('[Cron] Failed to schedule next tick, retrying in MAX_DELAY', { error });
       nextTime = new Date(Date.now() + MAX_DELAY_MS);
     }
-    await releaseLock(nextTime);
+    await releaseLock(nextTime, leaseEpoch);
     scheduleNextRun(nextTime, false);
   }
 }
