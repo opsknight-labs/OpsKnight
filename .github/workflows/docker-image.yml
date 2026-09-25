@@ -431,13 +431,14 @@ jobs:
           export PGBOUNCER_DB_PASSWORD="ext_strong_secret_password"
           export PGBOUNCER_SERVER_TLS_SSLMODE="verify-full"
           export PGBOUNCER_TLS_CA_CERT="/tmp/ci-tls/ca.crt"
-          export PGBOUNCER_SERVER_TLS_CA_FILE="/etc/ssl/certs/ca-certificates.crt"
+          export PGBOUNCER_SERVER_TLS_CA_FILE="/etc/ssl/certs/custom-ca.crt"
 
           docker compose \
             -f docker-compose.yml \
             -f docker-compose.split.yml \
             -f docker-compose.pgbouncer.yml \
             -f docker-compose.external-db.yml \
+            -f docker-compose.pgbouncer-ca.yml \
             -f /tmp/ci-ext-net.yml \
             up -d
 

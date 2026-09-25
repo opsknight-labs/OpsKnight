@@ -14,6 +14,19 @@ if [ "${PGBOUNCER_ENABLED:-}" = "true" ] && [ -n "${PGBOUNCER_DB_PASSWORD:-}" ] 
     DATABASE_URL="$WEB_DATABASE_URL"
 fi
 
+# Safely URL-encode credentials for direct bundled opsknight-db connections across all roles
+if [ -n "${POSTGRES_PASSWORD:-}" ] && [ -z "${OPSKNIGHT_DATABASE_URL:-}" ]; then
+    ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "${POSTGRES_USER:-opsknight}")
+    ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$POSTGRES_PASSWORD")
+    DB_NAME="${POSTGRES_DB:-opsknight_db}"
+    if [ -z "${DIRECT_DATABASE_URL:-}" ] || echo "${DIRECT_DATABASE_URL:-}" | grep -q "@opsknight-db:5432/"; then
+        export DIRECT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-db:5432/${DB_NAME}?sslmode=prefer&connection_limit=40&pool_timeout=30"
+    fi
+    if [ "${PGBOUNCER_ENABLED:-}" != "true" ] && ([ -z "${DATABASE_URL:-}" ] || echo "${DATABASE_URL:-}" | grep -q "@opsknight-db:5432/"); then
+        export DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-db:5432/${DB_NAME}?sslmode=prefer&connection_limit=40&pool_timeout=30"
+    fi
+fi
+
 # Prisma Migrate and the packaged index installers must bypass transaction
 # poolers such as PgBouncer. Preserve the runtime URL and temporarily promote
 # the direct URL for every schema-management command.

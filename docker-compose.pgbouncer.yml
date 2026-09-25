@@ -28,7 +28,6 @@ services:
       OPSKNIGHT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-}
     volumes:
       - ./docker/pgbouncer/entrypoint.sh:/docker-entrypoint.sh:ro
-      - ${PGBOUNCER_TLS_CA_CERT:-./docker/pgbouncer/ca-certificates.crt}:/etc/ssl/certs/ca-certificates.crt:ro
     depends_on:
       opsknight-db:
         condition: service_healthy
