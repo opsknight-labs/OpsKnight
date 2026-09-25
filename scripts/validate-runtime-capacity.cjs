@@ -96,6 +96,9 @@ function calculateRuntimeCapacity(customEnv) {
   if (!pgbouncer && env.WEB_DATABASE_URL && env.WEB_DATABASE_URL.includes('pgbouncer=true')) {
     pgbouncer = true;
   }
+  if (!pgbouncer && env.COMPOSE_FILE && env.COMPOSE_FILE.includes('docker-compose.pgbouncer.yml')) {
+    pgbouncer = true;
+  }
 
   if (mode === 'integrated' && pgbouncer) {
     throw new Error(
@@ -260,6 +263,17 @@ function calculateRuntimeCapacity(customEnv) {
 
 function main() {
   try {
+    for (let i = 2; i < process.argv.length; i++) {
+      if ((process.argv[i] === '--compose' || process.argv[i] === '-f') && process.argv[i + 1]) {
+        const composePath = process.argv[i + 1];
+        if (fs.existsSync(composePath)) {
+          const content = fs.readFileSync(composePath, 'utf8');
+          if (content.includes('opsknight-pgbouncer:')) {
+            process.env.PGBOUNCER_ENABLED = 'true';
+          }
+        }
+      }
+    }
     const analysis = calculateRuntimeCapacity(process.env);
     console.log(`\n=== OpsKnight Database Connection Budget Preflight ===`);
     console.log(`Topology Mode: ${analysis.mode} | PgBouncer: ${analysis.pgbouncer ? 'ENABLED' : 'DISABLED'}`);

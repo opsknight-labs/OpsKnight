@@ -89,9 +89,9 @@ Adds a dedicated PgBouncer connection pooler container (`opsknight-pgbouncer`) o
 - `opsknight-web` routes through PgBouncer for high-concurrency HTTP traffic (`pgbouncer=true`).
 - `opsknight-migration` and `opsknight-web` preserve direct connections (`DIRECT_DATABASE_URL`) for schema commands and migrations.
 - `opsknight-scheduler` and all worker containers connect directly to PostgreSQL.
-- Dynamic authentication: for bundled PostgreSQL, PgBouncer credentials and userlist are generated automatically from POSTGRES_USER / POSTGRES_PASSWORD at container startup; for external PostgreSQL, explicit structured PGBOUNCER_DB_* parameters are required and validated fail-closed. If passwords contain special URI characters, WEB_DATABASE_URL can be supplied with percent-encoding. Plaintext credentials are never committed.
+- Dynamic authentication: for bundled PostgreSQL, PgBouncer credentials and userlist are generated automatically from POSTGRES_USER / POSTGRES_PASSWORD at container startup; for external PostgreSQL, explicit structured PGBOUNCER_DB_* parameters are required and validated fail-closed. If passwords contain special URI characters, they are automatically percent-encoded or WEB_DATABASE_URL can be supplied directly. Plaintext credentials are never committed.
 - Least privilege: application database users are never assigned administrative PgBouncer control plane privileges (`admin_users`).
-- External PostgreSQL connections support encrypted TLS verification (`PGBOUNCER_SERVER_TLS_SSLMODE=verify-full`).
+- External PostgreSQL connections support encrypted TLS verification (`PGBOUNCER_SERVER_TLS_SSLMODE=verify-full`). A standard root CA bundle is mounted into `/etc/ssl/certs/ca-certificates.crt`, and custom enterprise CA bundles can be mounted via `PGBOUNCER_TLS_CA_CERT=/path/to/custom-ca.crt`.
 ```bash
 # With bundled PostgreSQL:
 OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight:2.0.0" \
@@ -106,6 +106,7 @@ PGBOUNCER_DB_NAME="opsknight_db" \
 PGBOUNCER_DB_USER="enterprise_user" \
 PGBOUNCER_DB_PASSWORD="enterprise_password" \
 PGBOUNCER_SERVER_TLS_SSLMODE="verify-full" \
+PGBOUNCER_TLS_CA_CERT="/path/to/enterprise-ca.crt" \
   docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml -f docker-compose.external-db.yml up -d
 ```
 

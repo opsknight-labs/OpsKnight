@@ -8,7 +8,7 @@ services:
 
   opsknight-migration:
     image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
-    pull_policy: always
+    pull_policy: ${OPSKNIGHT_PULL_POLICY:-always}
     restart: "no"
     environment:
       NODE_ENV: production
@@ -30,7 +30,7 @@ services:
 
   opsknight-web:
     image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
-    pull_policy: always
+    pull_policy: ${OPSKNIGHT_PULL_POLICY:-always}
     restart: unless-stopped
     ports:
       - '${APP_PORT:-3000}:3000'
@@ -72,7 +72,7 @@ services:
 
   opsknight-scheduler:
     image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
-    pull_policy: always
+    pull_policy: ${OPSKNIGHT_PULL_POLICY:-always}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -111,7 +111,7 @@ services:
 
   opsknight-general-worker:
     image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
-    pull_policy: always
+    pull_policy: ${OPSKNIGHT_PULL_POLICY:-always}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -153,7 +153,7 @@ services:
 
   opsknight-critical-worker:
     image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
-    pull_policy: always
+    pull_policy: ${OPSKNIGHT_PULL_POLICY:-always}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -195,7 +195,7 @@ services:
 
   opsknight-bulk-worker:
     image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
-    pull_policy: always
+    pull_policy: ${OPSKNIGHT_PULL_POLICY:-always}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -237,7 +237,7 @@ services:
 
   opsknight-status-projector:
     image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support (e.g. ghcr.io/opsknight-labs/opsknight:2.0.0)}
-    pull_policy: always
+    pull_policy: ${OPSKNIGHT_PULL_POLICY:-always}
     restart: unless-stopped
     environment:
       NODE_ENV: production

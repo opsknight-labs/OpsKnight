@@ -4,6 +4,16 @@ set -e
 echo "🚀 OpsKnight Startup"
 echo "======================"
 
+# If PgBouncer is enabled and raw credentials are provided without an encoded WEB_DATABASE_URL,
+# safely construct an encoded WEB_DATABASE_URL to protect against passwords with special characters (@, :, /, ?, #, %).
+if [ "${PGBOUNCER_ENABLED:-}" = "true" ] && [ -n "${PGBOUNCER_DB_PASSWORD:-}" ] && [ -z "${WEB_DATABASE_URL:-}" ]; then
+    ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}")
+    ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$PGBOUNCER_DB_PASSWORD")
+    DB_NAME="${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}"
+    export WEB_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-pgbouncer:6432/${DB_NAME}?sslmode=disable&pgbouncer=true"
+    DATABASE_URL="$WEB_DATABASE_URL"
+fi
+
 # Prisma Migrate and the packaged index installers must bypass transaction
 # poolers such as PgBouncer. Preserve the runtime URL and temporarily promote
 # the direct URL for every schema-management command.
@@ -16,7 +26,7 @@ fi
 if [ "${OPSKNIGHT_SKIP_MIGRATIONS:-}" = "true" ] || [ "${SKIP_MIGRATIONS:-}" = "true" ]; then
     echo "⏭️  Skipping in-pod migrations (OPSKNIGHT_SKIP_MIGRATIONS=true)"
     if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
-        export DATABASE_URL="$RUNTIME_DATABASE_URL"
+        export DATABASE_URL="${WEB_DATABASE_URL:-$RUNTIME_DATABASE_URL}"
     fi
     echo "🚀 Starting application..."
     export NEXT_RUNTIME=nodejs

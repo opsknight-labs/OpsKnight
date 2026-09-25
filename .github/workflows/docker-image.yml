@@ -286,9 +286,13 @@ jobs:
 
           COMPOSE_PROJECT="ci-split-${GITHUB_SHA:0:8}"
           export OPSKNIGHT_IMAGE="$IMAGE"
+          export OPSKNIGHT_PULL_POLICY="if_not_present"
           export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
           export APP_PORT=33000
           export POSTGRES_PORT=35432
+
+          docker pull postgres:15-alpine
+          docker pull ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75
 
           cleanup() {
             docker compose \
@@ -303,7 +307,7 @@ jobs:
             -f docker-compose.yml \
             -f docker-compose.split.yml \
             -f docker-compose.pgbouncer.yml \
-            up -d --pull never
+            up -d
 
           echo "Waiting for opsknight-migration container to complete..."
           mig_status=""
@@ -367,13 +371,29 @@ jobs:
 
           docker network create "$EXT_NETWORK"
 
+          mkdir -p /tmp/ci-tls
+          openssl req -new -x509 -days 1 -nodes -out /tmp/ci-tls/ca.crt \
+            -keyout /tmp/ci-tls/ca.key -subj "/CN=ci-ca" 2>/dev/null
+          openssl req -new -nodes -out /tmp/ci-tls/server.csr \
+            -keyout /tmp/ci-tls/server.key -subj "/CN=${EXT_DB_CONTAINER}" 2>/dev/null
+          openssl x509 -req -in /tmp/ci-tls/server.csr -days 1 \
+            -CA /tmp/ci-tls/ca.crt -CAkey /tmp/ci-tls/ca.key -CAcreateserial \
+            -out /tmp/ci-tls/server.crt 2>/dev/null
+          chmod 600 /tmp/ci-tls/server.key /tmp/ci-tls/ca.key
+          chmod 644 /tmp/ci-tls/ca.crt /tmp/ci-tls/server.crt
+
           docker run -d \
             --name "$EXT_DB_CONTAINER" \
             --network "$EXT_NETWORK" \
+            -v /tmp/ci-tls/server.crt:/var/lib/postgresql/server.crt:ro \
+            -v /tmp/ci-tls/server.key:/var/lib/postgresql/server.key:ro \
             -e POSTGRES_USER=ext_opsknight_user \
             -e POSTGRES_PASSWORD=ext_strong_secret_password \
             -e POSTGRES_DB=ext_opsknight_db \
-            postgres:16-alpine
+            postgres:16-alpine \
+            -c ssl=on \
+            -c ssl_cert_file=/var/lib/postgresql/server.crt \
+            -c ssl_key_file=/var/lib/postgresql/server.key
 
           cleanup() {
             docker compose \
@@ -385,7 +405,7 @@ jobs:
               down -v || true
             docker rm -f "$EXT_DB_CONTAINER" 2>/dev/null || true
             docker network rm "$EXT_NETWORK" 2>/dev/null || true
-            rm -f /tmp/ci-ext-net.yml 2>/dev/null || true
+            rm -rf /tmp/ci-ext-net.yml /tmp/ci-tls 2>/dev/null || true
           }
           trap cleanup EXIT
 
@@ -399,14 +419,17 @@ jobs:
 
           export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
           export OPSKNIGHT_IMAGE="$IMAGE"
+          export OPSKNIGHT_PULL_POLICY="if_not_present"
           export APP_PORT=33001
-          export OPSKNIGHT_DATABASE_URL="postgresql://ext_opsknight_user:ext_strong_secret_password@${EXT_DB_CONTAINER}:5432/ext_opsknight_db?sslmode=disable"
+          export OPSKNIGHT_DATABASE_URL="postgresql://ext_opsknight_user:ext_strong_secret_password@${EXT_DB_CONTAINER}:5432/ext_opsknight_db?sslmode=require"
           export PGBOUNCER_DB_HOST="$EXT_DB_CONTAINER"
           export PGBOUNCER_DB_PORT="5432"
           export PGBOUNCER_DB_NAME="ext_opsknight_db"
           export PGBOUNCER_DB_USER="ext_opsknight_user"
           export PGBOUNCER_DB_PASSWORD="ext_strong_secret_password"
-          export PGBOUNCER_SERVER_TLS_SSLMODE="disable"
+          export PGBOUNCER_SERVER_TLS_SSLMODE="verify-full"
+          export PGBOUNCER_TLS_CA_CERT="/tmp/ci-tls/ca.crt"
+          export PGBOUNCER_SERVER_TLS_CA_FILE="/etc/ssl/certs/ca-certificates.crt"
 
           docker compose \
             -f docker-compose.yml \
@@ -414,7 +437,7 @@ jobs:
             -f docker-compose.pgbouncer.yml \
             -f docker-compose.external-db.yml \
             -f /tmp/ci-ext-net.yml \
-            up -d --pull never
+            up -d
 
           echo "Waiting for opsknight-migration container to complete against external DB..."
           mig_status=""
