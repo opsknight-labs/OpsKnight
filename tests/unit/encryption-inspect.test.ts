@@ -133,8 +133,9 @@ describe('Encryption Inspector Unit Tests', () => {
   it('classifies corrupted/tampered v3 ciphertext as UNREADABLE (cryptographic authentication)', async () => {
     const validCiphertext = await encryptWithKey('sensitive-payload', key1, 'k1');
     const parts = validCiphertext.split(':');
-    // Corrupt the payload ciphertext
-    parts[6] = 'ff' + parts[6].slice(2);
+    // Corrupt the payload ciphertext by inverting the first byte to guarantee tampering
+    const firstByte = parseInt(parts[6].slice(0, 2), 16);
+    parts[6] = (firstByte ^ 0xff).toString(16).padStart(2, '0') + parts[6].slice(2);
     const tampered = parts.join(':');
 
     const result = await inspectValue(tampered, false, keyring, activeKeyId);
