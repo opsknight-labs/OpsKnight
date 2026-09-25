@@ -52,23 +52,28 @@ export const CloudWatchAlarmSchema = z.object({
 });
 
 // SNS wrapper for CloudWatch
-export const SNSNotificationSchema = z.object({
-  Type: z.enum(['Notification', 'SubscriptionConfirmation', 'UnsubscribeConfirmation']),
-  Message: z.string().min(1),
-  MessageId: z.string().min(1),
-  TopicArn: z.string().startsWith('arn:'),
-  Timestamp: z.string().datetime(),
-  SignatureVersion: z.enum(['1', '2']),
-  Signature: z.string().min(1),
-  SigningCertURL: z.string().url(),
-  Subject: z.string().optional(),
-  SubscribeURL: z.string().url().optional(),
-  Token: z.string().optional(),
-}).superRefine((value, ctx) => {
-  if (value.Type !== 'Notification' && (!value.SubscribeURL || !value.Token)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Confirmation messages require SubscribeURL and Token' });
-  }
-});
+export const SNSNotificationSchema = z
+  .object({
+    Type: z.enum(['Notification', 'SubscriptionConfirmation', 'UnsubscribeConfirmation']),
+    Message: z.string().min(1),
+    MessageId: z.string().min(1),
+    TopicArn: z.string().startsWith('arn:'),
+    Timestamp: z.string().datetime(),
+    SignatureVersion: z.enum(['1', '2']),
+    Signature: z.string().min(1),
+    SigningCertURL: z.string().url(),
+    Subject: z.string().optional(),
+    SubscribeURL: z.string().url().optional(),
+    Token: z.string().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.Type !== 'Notification' && (!value.SubscribeURL || !value.Token)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Confirmation messages require SubscribeURL and Token',
+      });
+    }
+  });
 
 export type CloudWatchAlarmMessage = z.infer<typeof CloudWatchAlarmSchema>;
 
@@ -1093,6 +1098,186 @@ export const VercelPayloadSchema = z
 export type VercelPayload = z.infer<typeof VercelPayloadSchema>;
 
 // ============================================
+// ManageEngine (OpManager, Applications Manager, Site24x7, ServiceDesk Plus, Log360)
+// ============================================
+
+const ManageEngineNamedObjectSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).optional(),
+    name: z.string().optional(),
+    label: z.string().optional(),
+    value: z.union([z.string(), z.number()]).optional(),
+  })
+  .passthrough();
+
+const ManageEngineScalarOrObjectSchema = z.union([
+  z.string(),
+  z.number(),
+  ManageEngineNamedObjectSchema,
+]);
+
+export const ManageEnginePayloadSchema = z
+  .object({
+    // Alarm / Alert / Request IDs
+    alarmid: z.union([z.string(), z.number()]).optional(),
+    alarmId: z.union([z.string(), z.number()]).optional(),
+    alarm_id: z.union([z.string(), z.number()]).optional(),
+    Alarm_ID: z.union([z.string(), z.number()]).optional(),
+    Alert_ID: z.union([z.string(), z.number()]).optional(),
+    alert_id: z.union([z.string(), z.number()]).optional(),
+    alertId: z.union([z.string(), z.number()]).optional(),
+    id: z.union([z.string(), z.number()]).optional(),
+    eventId: z.union([z.string(), z.number()]).optional(),
+    event_id: z.union([z.string(), z.number()]).optional(),
+    resourceid: z.union([z.string(), z.number()]).optional(),
+    resourceId: z.union([z.string(), z.number()]).optional(),
+    monitorid: z.union([z.string(), z.number()]).optional(),
+    monitorId: z.union([z.string(), z.number()]).optional(),
+    MONITOR_ID: z.union([z.string(), z.number()]).optional(),
+    MONITORID: z.union([z.string(), z.number()]).optional(),
+
+    // Entity / Device / Resource / Host names
+    entity: z.string().optional(),
+    Entity: z.string().optional(),
+    source: z.string().optional(),
+    Source: z.string().optional(),
+    displayName: z.string().optional(),
+    display_name: z.string().optional(),
+    deviceName: z.string().optional(),
+    device_name: z.string().optional(),
+    Device_Name: z.string().optional(),
+    host: z.string().optional(),
+    hostName: z.string().optional(),
+    host_name: z.string().optional(),
+    resourcename: z.string().optional(),
+    resourceName: z.string().optional(),
+
+    // Severity / Urgency / Priority / Level
+    stringseverity: z.string().optional(),
+    stringSeverity: z.string().optional(),
+    string_severity: z.string().optional(),
+    String_Severity: z.string().optional(),
+    severity: ManageEngineScalarOrObjectSchema.optional(),
+    Severity: ManageEngineScalarOrObjectSchema.optional(),
+    severity_id: z.union([z.string(), z.number()]).optional(),
+    severityId: z.union([z.string(), z.number()]).optional(),
+    urgency: ManageEngineScalarOrObjectSchema.optional(),
+    Urgency: ManageEngineScalarOrObjectSchema.optional(),
+    priority: ManageEngineScalarOrObjectSchema.optional(),
+    Priority: ManageEngineScalarOrObjectSchema.optional(),
+    level: ManageEngineScalarOrObjectSchema.optional(),
+    Level: ManageEngineScalarOrObjectSchema.optional(),
+
+    // Status / Health / Availability / Action
+    status: ManageEngineScalarOrObjectSchema.optional(),
+    Status: ManageEngineScalarOrObjectSchema.optional(),
+    STATUS: ManageEngineScalarOrObjectSchema.optional(),
+    event_status: z.string().optional(),
+    eventStatus: z.string().optional(),
+    availability: z.string().optional(),
+    availabilityStatus: z.string().optional(),
+    health: z.string().optional(),
+    healthStatus: z.string().optional(),
+    state: z.string().optional(),
+    action: z.string().optional(),
+    Action: z.string().optional(),
+    operation: z.string().optional(),
+    acknowledged: z.union([z.boolean(), z.string(), z.number()]).optional(),
+    isAcknowledged: z.union([z.boolean(), z.string(), z.number()]).optional(),
+
+    // Message / Summary / Description
+    message: z.string().optional(),
+    Message: z.string().optional(),
+    alarmMessage: z.string().optional(),
+    alarm_message: z.string().optional(),
+    logMessage: z.string().optional(),
+    log_message: z.string().optional(),
+    INCIDENT_REASON: z.string().optional(),
+    reason: z.string().optional(),
+    description: z.string().optional(),
+    Description: z.string().optional(),
+    subject: z.string().optional(),
+    summary: z.string().optional(),
+
+    // Monitor / Event Type / Attribute / Category
+    eventType: z.string().optional(),
+    event_type: z.string().optional(),
+    Event_Type: z.string().optional(),
+    monitorname: z.string().optional(),
+    monitorName: z.string().optional(),
+    monitor_name: z.string().optional(),
+    Monitor_Name: z.string().optional(),
+    MONITOR_NAME: z.string().optional(),
+    MONITORNAME: z.string().optional(),
+    monitortype: z.string().optional(),
+    monitorType: z.string().optional(),
+    attribute: z.string().optional(),
+    attributeName: z.string().optional(),
+    alertName: z.string().optional(),
+    alert_name: z.string().optional(),
+    profileName: z.string().optional(),
+    profile_name: z.string().optional(),
+    category: ManageEngineScalarOrObjectSchema.optional(),
+    Category: ManageEngineScalarOrObjectSchema.optional(),
+    group: ManageEngineScalarOrObjectSchema.optional(),
+    Group: ManageEngineScalarOrObjectSchema.optional(),
+    groupname: z.string().optional(),
+    groupName: z.string().optional(),
+    MONITOR_GROUPNAME: z.string().optional(),
+
+    // Network / Device Metadata
+    ipAddress: z.string().optional(),
+    ip_address: z.string().optional(),
+    Device_IP: z.string().optional(),
+    deviceIp: z.string().optional(),
+    device_ip: z.string().optional(),
+    hostIp: z.string().optional(),
+    host_ip: z.string().optional(),
+    vendor: z.string().optional(),
+    Vendor: z.string().optional(),
+    ifName: z.string().optional(),
+    interfaceName: z.string().optional(),
+    interface_name: z.string().optional(),
+
+    // Timestamps
+    strModTime: z.union([z.string(), z.number()]).optional(),
+    modTime: z.union([z.string(), z.number()]).optional(),
+    mod_time: z.union([z.string(), z.number()]).optional(),
+    timestamp: z.union([z.string(), z.number()]).optional(),
+    Timestamp: z.union([z.string(), z.number()]).optional(),
+    INCIDENT_TIME: z.union([z.string(), z.number()]).optional(),
+    INCIDENT_TIME_ISO: z.string().optional(),
+    createdAt: z.union([z.string(), z.number()]).optional(),
+    time: z.union([z.string(), z.number()]).optional(),
+
+    // Links
+    url: z.string().optional(),
+    URL: z.string().optional(),
+    alarmUrl: z.string().optional(),
+    alarm_url: z.string().optional(),
+    eventUrl: z.string().optional(),
+    event_url: z.string().optional(),
+    webUrl: z.string().optional(),
+    MONITOR_URL: z.string().optional(),
+    RCA_LINK: z.string().optional(),
+    rcaUrl: z.string().optional(),
+    detailsUrl: z.string().optional(),
+
+    // Operator / Acknowledgment Metadata
+    ackUser: ManageEngineScalarOrObjectSchema.optional(),
+    ack_user: ManageEngineScalarOrObjectSchema.optional(),
+    acknowledgedBy: ManageEngineScalarOrObjectSchema.optional(),
+    owner: ManageEngineScalarOrObjectSchema.optional(),
+    technician: ManageEngineScalarOrObjectSchema.optional(),
+    notes: z.string().optional(),
+    ackMessage: z.string().optional(),
+    ack_message: z.string().optional(),
+  })
+  .passthrough();
+
+export type ManageEnginePayload = z.infer<typeof ManageEnginePayloadSchema>;
+
+// ============================================
 // Schema Validation Helper
 // ============================================
 
@@ -1146,6 +1331,7 @@ export const IntegrationSchemas = {
   NAGIOS: NagiosPayloadSchema,
   ICINGA: IcingaPayloadSchema,
   ZABBIX: ZabbixPayloadSchema,
+  MANAGEENGINE: ManageEnginePayloadSchema,
   PAGERDUTY: PagerDutyEventSchema,
   GITLAB: GitLabPayloadSchema,
   VERCEL: VercelPayloadSchema,

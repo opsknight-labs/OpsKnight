@@ -43,6 +43,7 @@ These entries are backed by v1.5 route handlers. The provider guide is authorita
 | Cloud                 | Azure Monitor           | `/api/integrations/azure`                                                  | [Azure Monitor](cloud/azure-monitor.md)                        |
 | Cloud                 | Google Cloud Monitoring | `/api/integrations/google-cloud-monitoring`                                | [Google Cloud Monitoring](cloud/google-cloud-monitoring.md)    |
 | Metrics and alerting  | Icinga 2                | `/api/integrations/icinga`                                                 | [Icinga](metrics-alerting/icinga.md)                           |
+| Metrics and alerting  | ManageEngine            | `/api/integrations/manageengine`                                           | [ManageEngine](metrics-alerting/manageengine.md)               |
 | Metrics and alerting  | Nagios                  | `/api/integrations/nagios`                                                 | [Nagios](metrics-alerting/nagios.md)                           |
 | Metrics and alerting  | Prometheus Alertmanager | `/api/integrations/prometheus`                                             | [Prometheus](metrics-alerting/prometheus.md)                   |
 | Metrics and alerting  | Zabbix                  | `/api/integrations/zabbix`                                                 | [Zabbix](metrics-alerting/zabbix.md)                           |
