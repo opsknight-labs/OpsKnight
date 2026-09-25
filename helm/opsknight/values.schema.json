@@ -15,6 +15,26 @@
     "bulkWorker": { "$ref": "#/definitions/workerRole" },
     "statusProjector": { "$ref": "#/definitions/workerRole" },
     "pgbouncer": { "$ref": "#/definitions/pgbouncer" },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "ingressNamespaceLabels", "externalDatabaseCIDRs"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "ingressNamespaceLabels": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "externalDatabaseCIDRs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9A-Fa-f:.]+/[0-9]{1,3}$"
+          }
+        }
+      }
+    },
     "postgresql": {
       "type": "object",
       "properties": {
@@ -31,6 +51,25 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "runtime": {
+            "properties": { "mode": { "const": "split" } },
+            "required": ["mode"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "scheduler": {
+            "properties": { "profile": { "const": "maintenance" } }
+          }
+        }
+      }
+    }
+  ],
   "definitions": {
     "replicaCount": { "type": "integer", "minimum": 1, "maximum": 100 },
     "poolSize": {

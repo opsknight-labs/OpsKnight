@@ -144,6 +144,7 @@ describe('deployment configuration invariants', () => {
     expect(rawDeployments).toContain('opsknight:split-runtime-image-required');
     expect(rawDeployments).not.toContain('opsknight:1.4.0-hotfix');
     expect(helmDeployments).toContain('requires an explicit image.tag or image.digest');
+    expect(helmDeployments).toContain('requires scheduler.profile=maintenance');
     expect(read('k8s/profiles/split/kustomization.yaml')).not.toContain('web-hpa.yaml');
     expect(helmDeployments).toContain('$root.Values.podAnnotations');
     expect(helmDeployments).toContain('PROMETHEUS_SCRAPE_TOKEN');
@@ -213,6 +214,7 @@ describe('deployment configuration invariants', () => {
     expect(schema.definitions.pgbouncer?.additionalProperties).toBe(false);
     expect(values).toContain('defaultPoolSize: 10');
     expect(values).toContain('reservePoolSize: 5');
+    expect(values).toContain('externalDatabaseCIDRs: []');
   });
 
   it('supports digest-pinned images, external Secrets, and configuration rollouts in Helm', () => {

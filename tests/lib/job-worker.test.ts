@@ -142,13 +142,21 @@ describe('dedicated job worker', () => {
     ).toThrow(/cannot exceed/);
   });
 
-  it('starts immediately and processes the durable queue with existing queue defaults', async () => {
-    startJobWorker();
+  it('lets an integrated worker defer queue maintenance to its full scheduler', async () => {
+    startJobWorker('all', { ownsQueueMaintenance: false });
     await vi.advanceTimersByTimeAsync(0);
 
     expect(processPendingJobs).toHaveBeenCalledTimes(1);
     expect(processPendingJobs).toHaveBeenCalledWith(100, 15);
+    expect(runQueueMaintenance).not.toHaveBeenCalled();
     expect(getJobWorkerStatus().running).toBe(true);
+  });
+
+  it('keeps queue maintenance in a standalone legacy all-lane worker', async () => {
+    startJobWorker();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runQueueMaintenance).toHaveBeenCalledTimes(1);
   });
 
   it('isolates ordinary operational jobs in the general worker lane', async () => {

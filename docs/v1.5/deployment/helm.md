@@ -16,7 +16,7 @@ The chart defaults to the backward-compatible integrated Deployment. Set `runtim
 
 Integrated mode preserves the historical single-process behavior. The scheduler uses its `full` profile and the in-process worker drains all durable lanes.
 
-For production split mode, start from `helm/opsknight/examples/values-split-runtime.yaml`. Split rendering requires an explicit `image.tag` or `image.digest`, because the chart's backward-compatible integrated default image predates the split roles. Use only an image built from a release containing split-runtime support. Its scheduler uses the `maintenance` profile and cannot claim background jobs, escalations, notifications, or status snapshots. Those responsibilities are assigned to dedicated workers. The `general-worker` is required: it drains operational jobs such as war-room, external-operation, encryption, and compliance work that do not belong to the critical, bulk, or projector lanes.
+For production split mode, start from `helm/opsknight/examples/values-split-runtime.yaml`. Split rendering requires an explicit `image.tag` or `image.digest`, because the chart's backward-compatible integrated default image predates the split roles. Use only an image built from a release containing split-runtime support. Split mode also requires `scheduler.profile: maintenance`; `full` is rejected because it would compete with the dedicated worker lanes. The maintenance scheduler cannot claim background jobs, escalations, notifications, or status snapshots. Those responsibilities are assigned to dedicated workers. The `general-worker` is required: it drains operational jobs such as war-room, external-operation, encryption, and compliance work that do not belong to the critical, bulk, or projector lanes.
 
 Every split role has its own replica count, database pool size, resources, PDB, and topology-spread selector. Only the web tier has an HPA by default. Size fixed worker fleets together with PostgreSQL connection capacity and notification-provider admission limits.
 
@@ -144,7 +144,14 @@ networkPolicy:
 
 Change those labels to match your ingress controller.
 
-For bundled PostgreSQL, application DB egress is restricted to the PostgreSQL pod and the PostgreSQL pod cannot initiate outbound connections. When `postgresql.enabled: false`, TCP egress on `database.port` is permitted to external destinations so managed DB connectivity is not accidentally blocked. Keep that value aligned with the port in `DATABASE_URL`, and tighten destinations through your platform policy/CIDR controls when the target is known.
+For bundled PostgreSQL, application DB egress is restricted to the PostgreSQL pod and the PostgreSQL pod cannot initiate outbound connections. When `postgresql.enabled: false`, keep `database.port` aligned with `DATABASE_URL` and set `networkPolicy.externalDatabaseCIDRs` to the managed provider's documented destination ranges. Those CIDRs constrain web, worker, scheduler, and bundled PgBouncer database egress. An empty list retains broad external compatibility for upgrades, but is not the recommended production setting.
+
+```yaml
+networkPolicy:
+  enabled: true
+  externalDatabaseCIDRs:
+    - 10.24.0.0/16
+```
 
 DNS permits UDP and TCP 53; HTTPS egress is required by common OIDC, webhook, notification, and integration flows.
 

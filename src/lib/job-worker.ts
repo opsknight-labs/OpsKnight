@@ -35,6 +35,10 @@ export interface JobWorkerConfig {
 
 export type JobWorkerLane = 'all' | 'general' | 'critical' | 'bulk' | 'projector';
 
+export interface JobWorkerOptions {
+  ownsQueueMaintenance?: boolean;
+}
+
 interface JobWorkerSharedState {
   timer: NodeJS.Timeout | null;
   initialized: boolean;
@@ -45,6 +49,7 @@ interface JobWorkerSharedState {
   startedAt: Date | null;
   lastError: string | null;
   workerLane: JobWorkerLane;
+  ownsQueueMaintenance: boolean;
   controlPlaneState: 'UNINITIALIZED' | 'HEALTHY' | 'EMERGENCY_LOCAL';
   lastControlPlaneProbeAt: number;
   lastQueueMaintenanceAt: number;
@@ -65,6 +70,7 @@ const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
   startedAt: null,
   lastError: null,
   workerLane: 'all',
+  ownsQueueMaintenance: true,
   controlPlaneState: 'UNINITIALIZED',
   lastControlPlaneProbeAt: 0,
   lastQueueMaintenanceAt: 0,
@@ -189,10 +195,8 @@ async function runOnce(): Promise<void> {
 
   try {
     const now = Date.now();
-    const ownsQueueMaintenance =
-      workerState.workerLane === 'all' || workerState.workerLane === 'general';
     if (
-      ownsQueueMaintenance &&
+      workerState.ownsQueueMaintenance &&
       !workerState.queueMaintenanceInFlight &&
       now - workerState.lastQueueMaintenanceAt >= QUEUE_MAINTENANCE_INTERVAL_MS
     ) {
@@ -417,7 +421,10 @@ async function runOnce(): Promise<void> {
  * claim is the concurrency boundary, so multiple worker processes can safely
  * call this loop against the same database.
  */
-export function startJobWorker(lane: JobWorkerLane = 'all'): void {
+export function startJobWorker(
+  lane: JobWorkerLane = 'all',
+  options: JobWorkerOptions = {}
+): void {
   if (workerState.initialized) {
     logger.debug('[JobWorker] Already initialized, skipping');
     return;
@@ -425,6 +432,8 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
 
   workerState.workerConfig = getJobWorkerConfig();
   workerState.workerLane = lane;
+  workerState.ownsQueueMaintenance =
+    options.ownsQueueMaintenance ?? (lane === 'all' || lane === 'general');
   workerState.initialized = true;
   workerState.lastRunAt = null;
   workerState.lastSuccessAt = null;
@@ -440,6 +449,7 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
     idlePollMs: workerState.workerConfig.idlePollMs,
     busyPollMs: workerState.workerConfig.busyPollMs,
     lane: workerState.workerLane,
+    ownsQueueMaintenance: workerState.ownsQueueMaintenance,
   });
 
   // Certify notification control-plane tables at worker boot.

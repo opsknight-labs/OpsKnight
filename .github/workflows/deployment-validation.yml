@@ -96,6 +96,13 @@ jobs:
             echo 'split runtime unexpectedly rendered without an explicit compatible image'
             exit 1
           fi
+          if helm template opsknight helm/opsknight \
+            --set runtime.mode=split \
+            --set-string image.tag=ci-split-runtime \
+            --set scheduler.profile=full >/dev/null 2>&1; then
+            echo 'split runtime unexpectedly accepted scheduler.profile=full'
+            exit 1
+          fi
           if helm template opsknight helm/opsknight --set criticalWorker.databse.poolSize=10 >/dev/null 2>&1; then
             echo 'unknown criticalWorker property unexpectedly rendered'
             exit 1
@@ -109,6 +116,7 @@ jobs:
             --set-string database.url='postgresql://user:encoded%40password@db.example.com:6432/opsknight_db?sslmode=require' \
             --set database.port=6432 \
             --set networkPolicy.enabled=true \
+            --set-string networkPolicy.externalDatabaseCIDRs[0]=10.24.0.0/16 \
             > /tmp/opsknight-helm-external-db.yaml
 
       - name: Render Helm digest and external Secret configuration
@@ -175,6 +183,7 @@ jobs:
           grep -q '127.0.0.1' /tmp/opsknight-compose.yaml
           grep -q 'db.example.com:6432' /tmp/opsknight-compose-external-db.yaml
           grep -q 'port: 6432' /tmp/opsknight-helm-external-db.yaml
+          grep -q 'cidr: "10.24.0.0/16"' /tmp/opsknight-helm-external-db.yaml
           grep -q 'ghcr.io/opsknight-labs/opsknight@sha256:0000000000000000000000000000000000000000000000000000000000000000' /tmp/opsknight-helm-external-secret.yaml
           grep -q 'name: opsknight-runtime' /tmp/opsknight-helm-external-secret.yaml
           helm template opsknight helm/opsknight \

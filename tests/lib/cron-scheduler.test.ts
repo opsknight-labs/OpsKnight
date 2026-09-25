@@ -145,6 +145,14 @@ describe('cron-scheduler lifecycle', () => {
     expect(status.running).toBe(false);
   });
 
+  it('keeps queue maintenance under the full scheduler in integrated mode', async () => {
+    startCronScheduler({ profile: 'full' });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(tasks.processPendingJobs).toHaveBeenCalledTimes(1);
+    expect(tasks.runQueueMaintenance).toHaveBeenCalledTimes(1);
+  });
+
   it('runs maintenance work without claiming dedicated worker lanes', async () => {
     startCronScheduler({ profile: 'maintenance' });
     await vi.advanceTimersByTimeAsync(0);

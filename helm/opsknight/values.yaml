@@ -215,6 +215,10 @@ networkPolicy:
   enabled: false
   ingressNamespaceLabels:
     kubernetes.io/metadata.name: ingress-nginx
+  # When postgresql.enabled=false, restrict database egress to these provider
+  # CIDRs. An empty list preserves broad compatibility; production should set
+  # the documented provider ranges.
+  externalDatabaseCIDRs: []
 
 config:
   nodeEnv: production

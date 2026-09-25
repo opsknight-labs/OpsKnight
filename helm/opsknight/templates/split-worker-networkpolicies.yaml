@@ -25,7 +25,15 @@ spec:
         - protocol: TCP
           port: 5432
     {{- else }}
-    - to: []
+    - {{- if $root.Values.networkPolicy.externalDatabaseCIDRs }}
+      to:
+        {{- range $root.Values.networkPolicy.externalDatabaseCIDRs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      {{- else }}
+      to: []
+      {{- end }}
       ports:
         - protocol: TCP
           port: {{ $root.Values.database.port | int }}

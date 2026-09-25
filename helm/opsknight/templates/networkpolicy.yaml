@@ -54,7 +54,15 @@ spec:
           port: 5432
     {{- else }}
     # External/managed PostgreSQL may live outside this namespace or cluster.
-    - to: []
+    - {{- if .Values.networkPolicy.externalDatabaseCIDRs }}
+      to:
+        {{- range .Values.networkPolicy.externalDatabaseCIDRs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      {{- else }}
+      to: []
+      {{- end }}
       ports:
         - protocol: TCP
           port: {{ .Values.database.port | int }}
@@ -125,7 +133,13 @@ spec:
             matchLabels:
               app.kubernetes.io/name: {{ include "opsknight.name" . }}-postgresql
         {{- else }}
+          {{- if .Values.networkPolicy.externalDatabaseCIDRs }}
+          {{- range .Values.networkPolicy.externalDatabaseCIDRs }}
+        - ipBlock: { cidr: {{ . | quote }} }
+          {{- end }}
+          {{- else }}
         - ipBlock: { cidr: 0.0.0.0/0 }
+          {{- end }}
         {{- end }}
       ports:
         - { protocol: TCP, port: {{ .Values.postgresql.port }} }

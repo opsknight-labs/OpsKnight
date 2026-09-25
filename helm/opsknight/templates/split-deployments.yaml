@@ -3,6 +3,9 @@
 {{- if and (not .Values.image.tag) (not .Values.image.digest) }}
 {{- fail "runtime.mode=split requires an explicit image.tag or image.digest built with split-runtime support" }}
 {{- end }}
+{{- if ne .Values.scheduler.profile "maintenance" }}
+{{- fail "runtime.mode=split requires scheduler.profile=maintenance to preserve exclusive worker-lane ownership" }}
+{{- end }}
 {{- $roles := list
   (dict "name" "web" "processRole" "web" "values" .Values.web "poolEnv" "DATABASE_POOL_SIZE_WEB")
   (dict "name" "scheduler" "processRole" "scheduler" "values" .Values.scheduler "poolEnv" "DATABASE_POOL_SIZE_SCHEDULER")
