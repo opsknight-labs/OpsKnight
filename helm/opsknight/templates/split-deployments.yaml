@@ -12,7 +12,7 @@
 {{- end -}}
 {{- $webConnections := mul $webReplicas .Values.web.database.poolSize -}}
 {{- if .Values.pgbouncer.enabled -}}
-{{- $webConnections = mul .Values.pgbouncer.replicas .Values.pgbouncer.defaultPoolSize -}}
+{{- $webConnections = mul .Values.pgbouncer.replicas (add .Values.pgbouncer.defaultPoolSize .Values.pgbouncer.reservePoolSize) -}}
 {{- end -}}
 {{- $estimatedConnections := add
   $webConnections
@@ -173,7 +173,7 @@ spec:
         {{- range . }}
         - maxSkew: {{ .maxSkew }}
           topologyKey: {{ .topologyKey }}
-          whenUnsatisfiable: {{ .whenUnsatisfiable }}
+          whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
               {{- include "opsknight.roleSelectorLabels" (dict "root" $root "role" $role.name) | nindent 14 }}

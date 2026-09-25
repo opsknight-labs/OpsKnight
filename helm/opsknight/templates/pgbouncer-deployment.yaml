@@ -92,7 +92,7 @@ spec:
         {{- range . }}
         - maxSkew: {{ .maxSkew }}
           topologyKey: {{ .topologyKey }}
-          whenUnsatisfiable: {{ .whenUnsatisfiable }}
+          whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: {{ include "opsknight.name" $ }}-pgbouncer

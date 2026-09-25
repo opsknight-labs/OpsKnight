@@ -202,10 +202,20 @@ export async function updateState(data: {
   lastObjectiveSnapshotSuccessAt?: Date | null;
   lastObjectiveSnapshotDurationMs?: number | null;
   lastObjectiveSnapshotFailed?: number;
-}): Promise<void> {
+}, leaseEpoch?: number): Promise<void> {
   const { default: prisma } = await import('./prisma');
 
   try {
+    if (leaseEpoch !== undefined) {
+      const updated = await prisma.cronSchedulerState.updateMany({
+        where: { id: SINGLETON_ID, lockedBy: WORKER_ID, leaseEpoch },
+        data,
+      });
+      if (updated.count !== 1) {
+        throw new Error(`Scheduler lease epoch ${leaseEpoch} is no longer authoritative`);
+      }
+      return;
+    }
     await prisma.cronSchedulerState.update({
       where: { id: SINGLETON_ID },
       data,
@@ -361,7 +371,7 @@ async function runOnce() {
   activeLeaseEpoch = leaseEpoch;
 
   const startTime = Date.now();
-  await updateState({ lastRunAt: new Date() });
+  await updateState({ lastRunAt: new Date() }, leaseEpoch);
 
   logger.info('[Cron] Worker tick started', {
     workerId: WORKER_ID,
@@ -675,7 +685,7 @@ async function runOnce() {
               serviceObjectiveSnapshots.failed === 0 ? now : undefined,
             lastObjectiveSnapshotDurationMs: serviceObjectiveSnapshots.durationMs,
             lastObjectiveSnapshotFailed: serviceObjectiveSnapshots.failed,
-          });
+          }, leaseEpoch);
           if (serviceObjectiveSnapshots.failed > 0) {
             throw new Error(
               `${serviceObjectiveSnapshots.failed} service objective snapshot(s) failed; retrying the daily run`
@@ -686,9 +696,9 @@ async function runOnce() {
         // Only advance lastRollupDate when the backlog is fully
         // drained. Otherwise the next tick will pick up the rest.
         if (missingDays.length <= MAX_BACKFILL_PER_RUN) {
-          await updateState({ lastRollupDate: todayKey, lastRollupRefreshAt: now });
+          await updateState({ lastRollupDate: todayKey, lastRollupRefreshAt: now }, leaseEpoch);
         } else {
-          await updateState({ lastRollupRefreshAt: now });
+          await updateState({ lastRollupRefreshAt: now }, leaseEpoch);
         }
         logger.info('[Cron] Daily rollup maintenance complete', {
           generated: toGenerate.length,
@@ -712,7 +722,7 @@ async function runOnce() {
     await updateState({
       lastSuccessAt: new Date(),
       lastError: null,
-    });
+    }, leaseEpoch);
 
     logger.info('[Cron] Worker tick completed', {
       workerId: WORKER_ID,
@@ -720,7 +730,7 @@ async function runOnce() {
     });
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    await updateState({ lastError: errorMsg });
+    await updateState({ lastError: errorMsg }, leaseEpoch);
     logger.error('[Cron] Worker tick failed', {
       workerId: WORKER_ID,
       error: errorMsg,
