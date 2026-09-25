@@ -78,6 +78,8 @@ jobs:
             --namespace opsknight \
             -f helm/opsknight/examples/values-split-runtime.yaml \
             --set-string image.tag=ci-split-runtime \
+            --set-string podAnnotations.ci\\.opsknight\\.io/split-runtime=true \
+            --set-string metrics.scrapeTokenSecret.existingSecret=metrics-auth \
             > /tmp/opsknight-helm-split.yaml
           helm template opsknight helm/opsknight \
             --namespace opsknight \
@@ -145,6 +147,9 @@ jobs:
           grep -Eq 'value: "?maintenance"?' /tmp/opsknight-helm-split.yaml
           grep -q 'value: maintenance' /tmp/opsknight-kustomize-split.yaml
           grep -q 'key: DATABASE_URL' /tmp/opsknight-helm-split.yaml
+          grep -q 'ci.opsknight.io/split-runtime: "true"' /tmp/opsknight-helm-split.yaml
+          grep -q 'name: PROMETHEUS_SCRAPE_TOKEN' /tmp/opsknight-helm-split.yaml
+          grep -q 'name: metrics-auth' /tmp/opsknight-helm-split.yaml
           if grep -q 'key: WEB_DATABASE_URL' /tmp/opsknight-helm-split.yaml; then
             echo 'split runtime without PgBouncer unexpectedly requires WEB_DATABASE_URL'
             exit 1
@@ -153,6 +158,10 @@ jobs:
           grep -q 'split-runtime-image-required' /tmp/opsknight-kustomize-split.yaml
           if grep -q '^kind: HorizontalPodAutoscaler$' /tmp/opsknight-helm-split.yaml; then
             echo 'generic split example unexpectedly enables the web HPA'
+            exit 1
+          fi
+          if grep -q '^kind: HorizontalPodAutoscaler$' /tmp/opsknight-kustomize-split.yaml; then
+            echo 'generic Kustomize split profile unexpectedly enables the web HPA'
             exit 1
           fi
           grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-helm-split-pgbouncer.yaml

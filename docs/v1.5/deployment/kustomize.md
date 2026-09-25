@@ -78,7 +78,7 @@ kubectl kustomize k8s/profiles/split-pgbouncer
 
 Review the rendered image, Secrets, `DATABASE_URL`, public URLs, ingress, NetworkPolicy, storage, and health probes before applying.
 
-The shipped split pools are bounded to a potential 58 database connections at two replicas per role. This includes either 20 direct web connections or PgBouncer's 20 normal backend connections, plus 38 direct scheduler/worker connections. Recalculate `replicas × pool size` for every customization and retain separate PostgreSQL headroom for migrations and operations. A managed PostgreSQL service is recommended for sustained production split deployments.
+The shipped split pools are bounded to a potential 58 database connections at two replicas per role. This includes either 20 direct web connections or PgBouncer's 20 normal backend connections, plus 38 direct scheduler/worker connections. The generic split profile does not include `web-hpa.yaml`; add it through a capacity-planned production overlay if required. Recalculate `maxReplicas × pool size` for autoscaled roles and `replicas × pool size` for fixed roles, and retain separate PostgreSQL headroom for migrations and operations. A managed PostgreSQL service is recommended for sustained production split deployments.
 
 ## External database overlays
 

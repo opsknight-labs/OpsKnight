@@ -41,6 +41,9 @@ spec:
         {{- if not $root.Values.secrets.existingSecret }}
         checksum/secret: {{ include (print $root.Template.BasePath "/secret.yaml") $root | sha256sum }}
         {{- end }}
+      {{- with $root.Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       labels:
         {{- include "opsknight.roleSelectorLabels" (dict "root" $root "role" $role.name) | nindent 8 }}
     spec:
@@ -100,6 +103,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" $root }}
                   key: {{ $root.Values.secrets.keys.encryptionKey }}
+            {{- if $root.Values.metrics.scrapeTokenSecret.existingSecret }}
+            - name: PROMETHEUS_SCRAPE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $root.Values.metrics.scrapeTokenSecret.existingSecret }}
+                  key: {{ $root.Values.metrics.scrapeTokenSecret.key }}
+            {{- end }}
           startupProbe:
             {{- toYaml $root.Values.startupProbe | nindent 12 }}
           livenessProbe:

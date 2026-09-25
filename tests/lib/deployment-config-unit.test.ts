@@ -144,6 +144,10 @@ describe('deployment configuration invariants', () => {
     expect(rawDeployments).toContain('opsknight:split-runtime-image-required');
     expect(rawDeployments).not.toContain('opsknight:1.4.0-hotfix');
     expect(helmDeployments).toContain('requires an explicit image.tag or image.digest');
+    expect(read('k8s/profiles/split/kustomization.yaml')).not.toContain('web-hpa.yaml');
+    expect(helmDeployments).toContain('$root.Values.podAnnotations');
+    expect(helmDeployments).toContain('PROMETHEUS_SCRAPE_TOKEN');
+    expect(helmDeployments).toContain('$root.Values.metrics.scrapeTokenSecret.existingSecret');
   });
 
   it('keeps Kustomize shared-base copies aligned with the compatibility root', () => {
