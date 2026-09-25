@@ -854,6 +854,7 @@ model MicrosoftTeamsDestination {
 
   @@unique([serviceId, tenantId, teamId, channelId])
   @@index([serviceId])
+  @@index([serviceId, enabled])
   @@index([tenantId, teamId])
   @@index([channelId])
   @@index([installationId])
