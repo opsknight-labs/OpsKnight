@@ -178,7 +178,7 @@ jobs:
           grep -q 'name: DIRECT_DATABASE_URL' /tmp/opsknight-helm-split-pgbouncer.yaml
           grep -q 'name: DIRECT_DATABASE_URL' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q '@opsknight-pgbouncer:6432' /tmp/opsknight-kustomize-split-pgbouncer.yaml
-          grep -q '@opsknight-postgres:5432' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          grep -q '@$(POSTGRES_HOST):$(POSTGRES_PORT)' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'port: 6432' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'port: 5432' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'kubernetes.io/metadata.name: ingress-nginx' /tmp/opsknight-kustomize.yaml
