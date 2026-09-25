@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import {
   Card,
   CardContent,
@@ -82,7 +83,7 @@ const DOC_TOPICS: DocTopic[] = [
     iconColor: 'text-purple-600 dark:text-purple-400',
     href: 'https://opsknight.com/docs',
     details: [
-      'Slack App manifest & Socket Mode setup',
+      'Slack App manifest & Event Subscriptions setup',
       'Microsoft Teams application package upload',
       'Bidirectional card actions (Ack & Resolve)',
     ],
@@ -157,6 +158,8 @@ const FAQS: FAQItem[] = [
 ];
 
 export default function HelpPage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === 'ADMIN';
   const [searchQuery, setSearchQuery] = useState('');
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
 
@@ -172,7 +175,7 @@ export default function HelpPage() {
   }, [searchQuery]);
 
   return (
-    <main className="max-w-[1100px] mx-auto py-8 px-4 sm:px-6 container">
+    <main className="w-full max-w-[1200px] min-[1440px]:max-w-[1080px] min-[1920px]:max-w-[1180px] mx-auto py-8 px-4 sm:px-6 min-[1440px]:px-[54px] min-[1920px]:px-[60px] container">
       {/* Hero Header */}
       <div className="relative mb-8 overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-b from-card via-card to-muted/20 p-6 sm:p-8 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
@@ -182,7 +185,7 @@ export default function HelpPage() {
                 <HelpCircle className="h-4.5 w-4.5" />
               </div>
               <Badge variant="outline" className="text-xs font-mono font-medium">
-                Help & Resources · v{APP_VERSION}
+                Help & Resources · {APP_VERSION}
               </Badge>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
@@ -231,7 +234,7 @@ export default function HelpPage() {
                 System & Diagnostics
               </span>
               <Badge variant="outline" className="text-2xs font-mono text-muted-foreground">
-                v{APP_VERSION}
+                {APP_VERSION}
               </Badge>
             </div>
 
@@ -246,26 +249,58 @@ export default function HelpPage() {
                   <ExternalLink className="h-3 w-3" />
                 </Link>
               </div>
-              <div className="flex items-center justify-between text-muted-foreground">
-                <span>Instance Health</span>
-                <Link
-                  href="/settings/system/health"
-                  className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
-                >
-                  Health Checks
-                  <ArrowRight className="h-3 w-3" />
-                </Link>
-              </div>
-              <div className="flex items-center justify-between text-muted-foreground">
-                <span>Platform Logs</span>
-                <Link
-                  href="/system-logs"
-                  className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
-                >
-                  System Logs
-                  <ArrowRight className="h-3 w-3" />
-                </Link>
-              </div>
+              {isAdmin ? (
+                <>
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Instance Health</span>
+                    <Link
+                      href="/settings/system/health"
+                      className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                    >
+                      Health Checks
+                      <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Platform Logs</span>
+                    <Link
+                      href="/system-logs"
+                      className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                    >
+                      System Logs
+                      <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Keyboard Hotkeys</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))
+                      }
+                      className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      View Overlay
+                      <kbd className="font-mono text-[10px] bg-muted px-1 rounded border">?</kbd>
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Documentation</span>
+                    <a
+                      href="https://opsknight.com/docs"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                    >
+                      Online Docs
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                </>
+              )}
             </div>
 
             <Button
