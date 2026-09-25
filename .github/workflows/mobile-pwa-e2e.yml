@@ -1,46 +1,8 @@
 name: Mobile PWA Browser E2E
 
+# Canonical PR mobile and PWA E2E runs inside tests.yml under the single shared build artifact.
+# This workflow is preserved for isolated manual debugging and dispatch.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'src/app/(mobile)/**'
-      - 'src/app/(public)/m/**'
-      - 'src/app/login/**'
-      - 'src/components/mobile/**'
-      - 'src/components/DashboardNotifications.tsx'
-      - 'src/lib/offline-queue.ts'
-      - 'src/lib/pwa-session-policy.ts'
-      - 'src/lib/incidents/status-client.ts'
-      - 'src/lib/incidents/status-http.ts'
-      - 'src/lib/incident-push-delivery.ts'
-      - 'public/custom-sw.js'
-      - 'next.config.ts'
-      - 'playwright.pwa.config.ts'
-      - 'tests/e2e/mobile-pwa.spec.ts'
-      - 'tests/e2e/mobile-pwa-production.spec.ts'
-      - 'tests/e2e/mobile-responsive-matrix.spec.ts'
-      - '.github/workflows/mobile-pwa-e2e.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/app/(mobile)/**'
-      - 'src/app/(public)/m/**'
-      - 'src/app/login/**'
-      - 'src/components/mobile/**'
-      - 'src/components/DashboardNotifications.tsx'
-      - 'src/lib/offline-queue.ts'
-      - 'src/lib/pwa-session-policy.ts'
-      - 'src/lib/incidents/status-client.ts'
-      - 'src/lib/incidents/status-http.ts'
-      - 'src/lib/incident-push-delivery.ts'
-      - 'public/custom-sw.js'
-      - 'next.config.ts'
-      - 'playwright.pwa.config.ts'
-      - 'tests/e2e/mobile-pwa.spec.ts'
-      - 'tests/e2e/mobile-pwa-production.spec.ts'
-      - 'tests/e2e/mobile-responsive-matrix.spec.ts'
-      - '.github/workflows/mobile-pwa-e2e.yml'
   workflow_dispatch:
 
 permissions:
@@ -51,7 +13,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    name: Build mobile application
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXTAUTH_URL: http://127.0.0.1:3100
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+      NEXTAUTH_SECRET: opsknight-e2e-nextauth-secret-change-me
+      ENCRYPTION_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node & dependencies
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+
+      - name: Build application & verify budgets
+        uses: ./.github/actions/build-app
+        with:
+          upload-artifact: 'true'
+          artifact-name: mobile-next-build
+
   mobile-browser:
+    name: Mobile browser matrix
+    needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
@@ -76,26 +65,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Set up Node
-        uses: actions/setup-node@v7
+      - name: Set up Node & dependencies
+        uses: ./.github/actions/setup-node
         with:
           node-version: 20
-          cache: npm
+          generate-prisma: 'true'
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+      - name: Restore mobile build artifact
+        uses: ./.github/actions/restore-build
+        with:
+          artifact-name: mobile-next-build
 
       - name: Prepare browser-test database
-        run: |
-          npx prisma migrate deploy
-          npx prisma generate
-          npm run prisma:indexes:status-platform
+        uses: ./.github/actions/setup-test-db
+        with:
+          run-smoke: 'false'
+          run-validation: 'false'
 
       - name: Install mobile browser engines
         run: npx playwright install --with-deps chromium webkit
-
-      - name: Build mobile browser application
-        run: npm run build
 
       - name: Run Android and iPhone browser contracts + responsive matrix
         run: >-
@@ -116,8 +104,10 @@ jobs:
           if-no-files-found: ignore
 
   pwa-production:
+    name: Production PWA contract
+    needs: [build]
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -146,26 +136,25 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Node
-        uses: actions/setup-node@v7
+      - name: Set up Node & dependencies
+        uses: ./.github/actions/setup-node
         with:
           node-version: 20
-          cache: npm
+          generate-prisma: 'true'
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+      - name: Restore mobile build artifact
+        uses: ./.github/actions/restore-build
+        with:
+          artifact-name: mobile-next-build
 
       - name: Prepare PWA-test database
-        run: |
-          npx prisma migrate deploy
-          npx prisma generate
-          npm run prisma:indexes:status-platform
+        uses: ./.github/actions/setup-test-db
+        with:
+          run-smoke: 'false'
+          run-validation: 'false'
 
       - name: Install production PWA browser engine
         run: npx playwright install --with-deps chromium
-
-      - name: Build production application and generated service worker
-        run: npm run build
 
       - name: Run generated service-worker contract
         run: >-

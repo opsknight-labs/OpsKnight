@@ -1,0 +1,49 @@
+name: 'Setup Test Database'
+description: 'Applies Prisma migrations, enforces status-platform indexes, and validates DB health'
+
+inputs:
+  run-indexes:
+    description: 'Whether to enforce idempotent status platform indexes'
+    required: false
+    default: 'true'
+  run-smoke:
+    description: 'Whether to run the DB smoke check'
+    required: false
+    default: 'true'
+  run-validation:
+    description: 'Whether to run Prisma migration validation and health checks'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Prepare test database schema
+      shell: bash
+      run: npx prisma migrate deploy
+
+    - name: Enforce status platform indexes
+      if: inputs.run-indexes == 'true'
+      shell: bash
+      run: npm run prisma:indexes:status-platform
+
+    - name: DB smoke test (post-migrations)
+      if: inputs.run-smoke == 'true'
+      shell: bash
+      run: |
+        mkdir -p reports
+        node scripts/ci-db-smoke.cjs
+
+    - name: Migration validation
+      if: inputs.run-validation == 'true'
+      shell: bash
+      run: |
+        mkdir -p reports
+        npm run prisma:validate
+
+    - name: Migration health
+      if: inputs.run-validation == 'true'
+      shell: bash
+      run: |
+        mkdir -p reports
+        npm run prisma:health
