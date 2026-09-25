@@ -116,14 +116,17 @@ export default function ServiceNotificationSettings({
     status: 'success' | 'error';
     message: string;
   } | null>(null);
-  const [existingTeamsDest, setExistingTeamsDest] = useState<null | {
-    id: string;
-    teamName: string | null;
-    channelName: string | null;
-    tenantId: string;
-    teamId: string;
-    channelId: string;
-  }>(null);
+  const [existingTeamsDests, setExistingTeamsDests] = useState<
+    Array<{
+      id: string;
+      teamName: string | null;
+      channelName: string | null;
+      tenantId: string;
+      teamId: string;
+      channelId: string;
+      warRoomEnabled?: boolean;
+    }>
+  >([]);
 
   // Ref for native validation (if using hidden native select for form submission)
   const selectRef = useRef<HTMLInputElement>(null);
@@ -212,17 +215,23 @@ export default function ServiceNotificationSettings({
     }
   }, [slackIntegration, serviceId]);
 
-  // Fetch existing Microsoft Teams destination + discovery when channel is toggled
+  // Fetch existing Microsoft Teams destinations + discovery when channel is toggled
   useEffect(() => {
     if (!channels.includes('MICROSOFT_TEAMS')) return;
     fetch(`/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`)
       .then(r => r.json())
       .then(d => {
-        if (d?.data?.destination || d?.destination) {
-          const dest = (d.data?.destination ?? d.destination) as typeof existingTeamsDest;
-          if (dest) {
-            setExistingTeamsDest(dest);
-            if (dest.teamId) setSelectedTeamId(dest.teamId);
+        const dests = (d?.data?.destinations ??
+          d?.destinations ??
+          (d?.data?.destination
+            ? [d.data.destination]
+            : d?.destination
+              ? [d.destination]
+              : [])) as typeof existingTeamsDests;
+        if (Array.isArray(dests)) {
+          setExistingTeamsDests(dests);
+          if (dests.length > 0 && dests[0].teamId) {
+            setSelectedTeamId(current => current || dests[0].teamId);
           }
         }
       })
@@ -866,9 +875,9 @@ export default function ServiceNotificationSettings({
                       Microsoft Teams Destination
                     </span>
                   </div>
-                  {existingTeamsDest ? (
+                  {existingTeamsDests.length > 0 ? (
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
-                      <Check className="h-3 w-3" /> Linked
+                      <Check className="h-3 w-3" /> Linked ({existingTeamsDests.length}/3)
                     </span>
                   ) : (
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
@@ -878,207 +887,258 @@ export default function ServiceNotificationSettings({
                 </div>
 
                 <div className="text-xs text-muted-foreground leading-relaxed">
-                  Teams is managed centrally for your tenant. Configure Azure credentials in{' '}
+                  Teams is managed centrally for your tenant. Link up to 3 channels to receive
+                  incident notification cards simultaneously. Incident War Rooms are hosted in the
+                  primary channel. Configure Azure credentials in{' '}
                   <Link
                     href="/settings/integrations/microsoft-teams"
                     className="text-primary font-semibold hover:underline"
                   >
                     Settings → Integrations → Microsoft Teams
                   </Link>
-                  . After installing the bot to a Team/Channel, select the destination below.
+                  .
                 </div>
 
-                {existingTeamsDest && (
-                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 font-medium text-emerald-800 dark:text-emerald-300">
-                      <Check className="h-4 w-4 shrink-0" />
-                      <span>
-                        Linked:{' '}
-                        <strong>{existingTeamsDest.teamName ?? existingTeamsDest.teamId}</strong>{' '}
-                        &rarr;{' '}
-                        <strong>
-                          {existingTeamsDest.channelName ?? existingTeamsDest.channelId}
-                        </strong>
-                      </span>
+                {existingTeamsDests.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-foreground">
+                      Linked Channels ({existingTeamsDests.length}/3)
+                    </Label>
+                    <div className="space-y-2">
+                      {existingTeamsDests.map(dest => (
+                        <div
+                          key={dest.id}
+                          className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs flex items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-2 font-medium text-emerald-800 dark:text-emerald-300 min-w-0">
+                            <Check className="h-4 w-4 shrink-0" />
+                            <span className="truncate">
+                              <strong>{dest.teamName ?? dest.teamId}</strong> &rarr;{' '}
+                              <strong>{dest.channelName ?? dest.channelId}</strong>
+                            </span>
+                            {dest.warRoomEnabled && (
+                              <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25">
+                                War Room Primary
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              disabled={teamsLinking}
+                              onClick={async () => {
+                                setTeamsLinking(true);
+                                try {
+                                  const res = await fetch('/api/microsoft-teams/test', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ destinationId: dest.id }),
+                                  });
+                                  const data = await res.json().catch(() => ({}));
+                                  if (!res.ok) throw new Error(data?.error || 'Test failed');
+                                  setTeamsLinkResult({
+                                    status: 'success',
+                                    message: `Test Adaptive Card sent to ${dest.channelName ?? 'channel'}.`,
+                                  });
+                                } catch (e) {
+                                  setTeamsLinkResult({
+                                    status: 'error',
+                                    message: e instanceof Error ? e.message : String(e),
+                                  });
+                                } finally {
+                                  setTeamsLinking(false);
+                                  setTimeout(() => setTeamsLinkResult(null), 3500);
+                                }
+                              }}
+                            >
+                              <Send className="mr-1 h-3 w-3" /> Test
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs text-destructive hover:bg-destructive/10"
+                              disabled={teamsLinking}
+                              onClick={async () => {
+                                setTeamsLinking(true);
+                                try {
+                                  await fetch(
+                                    `/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}&destinationId=${encodeURIComponent(dest.id)}`,
+                                    { method: 'DELETE' }
+                                  );
+                                  const getRes = await fetch(
+                                    `/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`
+                                  );
+                                  const getData = await getRes.json().catch(() => ({}));
+                                  const nextDests = (getData?.data?.destinations ??
+                                    getData?.destinations ??
+                                    []) as typeof existingTeamsDests;
+                                  setExistingTeamsDests(nextDests);
+                                  setTeamsLinkResult({
+                                    status: 'success',
+                                    message: 'Teams channel unlinked.',
+                                  });
+                                } catch (e) {
+                                  setTeamsLinkResult({
+                                    status: 'error',
+                                    message: e instanceof Error ? e.message : String(e),
+                                  });
+                                } finally {
+                                  setTeamsLinking(false);
+                                  setTimeout(() => setTeamsLinkResult(null), 3000);
+                                }
+                              }}
+                            >
+                              Unlink
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={async () => {
-                        await fetch(
-                          `/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`,
-                          { method: 'DELETE' }
-                        );
-                        setExistingTeamsDest(null);
-                        setSelectedTeamId('');
-                        setSelectedTeamsChannelId('');
-                        setTeamsLinkResult({
-                          status: 'success',
-                          message: 'Teams destination unlinked.',
-                        });
-                        setTimeout(() => setTeamsLinkResult(null), 3000);
-                      }}
-                    >
-                      Unlink
-                    </Button>
                   </div>
                 )}
 
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Select Team</Label>
-                    {teamsLoading ? (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading Teams…
-                      </div>
-                    ) : teamsError ? (
-                      <div className="text-xs text-destructive flex items-center gap-2">
-                        <XCircle className="h-3.5 w-3.5" /> {teamsError}
-                      </div>
-                    ) : teams.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        No Teams found. Ensure the app is installed to a Team.
-                      </p>
-                    ) : (
-                      <Select
-                        value={selectedTeamId}
-                        onValueChange={v => {
-                          setSelectedTeamId(v);
-                          setSelectedTeamsChannelId('');
-                        }}
-                      >
-                        <SelectTrigger className="text-xs h-9">
-                          <SelectValue placeholder="Select a Team…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {teams.map(t => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.displayName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
+                {existingTeamsDests.length >= 3 ? (
+                  <div className="rounded-lg border border-border/80 bg-muted/20 p-3 text-xs text-muted-foreground flex items-center gap-2">
+                    <Check className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <span>
+                      Maximum limit reached (3 channels linked). Unlink a channel to connect
+                      another.
+                    </span>
                   </div>
-
-                  {selectedTeamId && (
+                ) : (
+                  <div className="space-y-3 pt-2">
+                    <div className="text-xs font-semibold text-foreground">
+                      {existingTeamsDests.length > 0
+                        ? 'Link Another Channel'
+                        : 'Link Teams Channel'}
+                    </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">Select Channel</Label>
-                      {teamsChannelsLoading ? (
+                      <Label className="text-xs font-semibold">Select Team</Label>
+                      {teamsLoading ? (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading channels…
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading Teams…
                         </div>
-                      ) : teamsChannelsError ? (
+                      ) : teamsError ? (
                         <div className="text-xs text-destructive flex items-center gap-2">
-                          <XCircle className="h-3.5 w-3.5" /> {teamsChannelsError}
+                          <XCircle className="h-3.5 w-3.5" /> {teamsError}
                         </div>
-                      ) : teamsChannels.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">No channels in this Team.</p>
+                      ) : teams.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No Teams found. Ensure the app is installed to a Team.
+                        </p>
                       ) : (
                         <Select
-                          value={selectedTeamsChannelId}
-                          onValueChange={setSelectedTeamsChannelId}
+                          value={selectedTeamId}
+                          onValueChange={v => {
+                            setSelectedTeamId(v);
+                            setSelectedTeamsChannelId('');
+                          }}
                         >
                           <SelectTrigger className="text-xs h-9">
-                            <SelectValue placeholder="Select a channel…" />
+                            <SelectValue placeholder="Select a Team…" />
                           </SelectTrigger>
                           <SelectContent>
-                            {teamsChannels.map(c => (
-                              <SelectItem key={c.id} value={c.id}>
-                                {c.displayName ? `${c.displayName} — ${c.id.slice(0, 8)}…` : c.id}
+                            {teams.map(t => (
+                              <SelectItem key={t.id} value={t.id}>
+                                {t.displayName}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       )}
                     </div>
-                  )}
 
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="text-xs h-8"
-                      disabled={!selectedTeamId || !selectedTeamsChannelId || teamsLinking}
-                      onClick={async () => {
-                        setTeamsLinking(true);
-                        setTeamsLinkResult(null);
-                        try {
-                          const teamName =
-                            teams.find(t => t.id === selectedTeamId)?.displayName ?? null;
-                          const channelName =
-                            teamsChannels.find(c => c.id === selectedTeamsChannelId)?.displayName ??
-                            null;
-                          const inferredTenantId = existingTeamsDest?.tenantId?.trim();
-                          const channelObj = teamsChannels.find(
-                            c => c.id === selectedTeamsChannelId
-                          );
-                          const resolvedChannelId = channelObj?.id ?? selectedTeamsChannelId;
-                          const payload: Record<string, unknown> = {
-                            serviceId,
-                            teamId: selectedTeamId,
-                            channelId: resolvedChannelId,
-                            channelName,
-                            teamName,
-                            warRoomEnabled: true,
-                          };
-                          if (inferredTenantId) payload.tenantId = inferredTenantId;
-                          const res = await fetch('/api/microsoft-teams/destinations', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload),
-                          });
-                          const data = await res.json().catch(() => ({}));
-                          if (!res.ok) {
-                            const msg =
-                              data?.error ||
-                              data?.data?.error ||
-                              'Failed to link Teams destination';
-                            throw new Error(msg);
-                          }
-                          const dest = (data.destination ??
-                            data.data?.destination) as typeof existingTeamsDest;
-                          if (dest) setExistingTeamsDest(dest);
-                          setTeamsLinkResult({
-                            status: 'success',
-                            message: 'Linked service to Teams channel.',
-                          });
-                        } catch (e) {
-                          setTeamsLinkResult({
-                            status: 'error',
-                            message: e instanceof Error ? e.message : String(e),
-                          });
-                        } finally {
-                          setTeamsLinking(false);
-                          setTimeout(() => setTeamsLinkResult(null), 4000);
-                        }
-                      }}
-                    >
-                      {teamsLinking && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-                      Link to Teams channel
-                    </Button>
-                    {existingTeamsDest && selectedTeamsChannelId && (
+                    {selectedTeamId && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Select Channel</Label>
+                        {teamsChannelsLoading ? (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading channels…
+                          </div>
+                        ) : teamsChannelsError ? (
+                          <div className="text-xs text-destructive flex items-center gap-2">
+                            <XCircle className="h-3.5 w-3.5" /> {teamsChannelsError}
+                          </div>
+                        ) : teamsChannels.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No channels in this Team.</p>
+                        ) : (
+                          <Select
+                            value={selectedTeamsChannelId}
+                            onValueChange={setSelectedTeamsChannelId}
+                          >
+                            <SelectTrigger className="text-xs h-9">
+                              <SelectValue placeholder="Select a channel…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {teamsChannels.map(c => (
+                                <SelectItem key={c.id} value={c.id}>
+                                  {c.displayName ? `${c.displayName} — ${c.id.slice(0, 8)}…` : c.id}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-1">
                       <Button
                         type="button"
-                        variant="outline"
                         size="sm"
                         className="text-xs h-8"
-                        disabled={teamsLinking}
+                        disabled={!selectedTeamId || !selectedTeamsChannelId || teamsLinking}
                         onClick={async () => {
                           setTeamsLinking(true);
+                          setTeamsLinkResult(null);
                           try {
-                            const res = await fetch('/api/microsoft-teams/test', {
+                            const teamName =
+                              teams.find(t => t.id === selectedTeamId)?.displayName ?? null;
+                            const channelName =
+                              teamsChannels.find(c => c.id === selectedTeamsChannelId)
+                                ?.displayName ?? null;
+                            const inferredTenantId = existingTeamsDests[0]?.tenantId?.trim();
+                            const channelObj = teamsChannels.find(
+                              c => c.id === selectedTeamsChannelId
+                            );
+                            const resolvedChannelId = channelObj?.id ?? selectedTeamsChannelId;
+                            const payload: Record<string, unknown> = {
+                              serviceId,
+                              teamId: selectedTeamId,
+                              channelId: resolvedChannelId,
+                              channelName,
+                              teamName,
+                              warRoomEnabled: existingTeamsDests.length === 0,
+                            };
+                            if (inferredTenantId) payload.tenantId = inferredTenantId;
+                            const res = await fetch('/api/microsoft-teams/destinations', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ serviceId }),
+                              body: JSON.stringify(payload),
                             });
                             const data = await res.json().catch(() => ({}));
-                            if (!res.ok) throw new Error(data?.error || 'Test failed');
+                            if (!res.ok) {
+                              const msg =
+                                data?.error ||
+                                data?.data?.error ||
+                                'Failed to link Teams destination';
+                              throw new Error(msg);
+                            }
+                            const getRes = await fetch(
+                              `/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`
+                            );
+                            const getData = await getRes.json().catch(() => ({}));
+                            const nextDests = (getData?.data?.destinations ??
+                              getData?.destinations ??
+                              []) as typeof existingTeamsDests;
+                            setExistingTeamsDests(nextDests);
+                            setSelectedTeamsChannelId('');
                             setTeamsLinkResult({
                               status: 'success',
-                              message: 'Test Adaptive Card enqueued — check Teams.',
+                              message: 'Linked service to Teams channel.',
                             });
                           } catch (e) {
                             setTeamsLinkResult({
@@ -1087,33 +1147,34 @@ export default function ServiceNotificationSettings({
                             });
                           } finally {
                             setTeamsLinking(false);
-                            setTimeout(() => setTeamsLinkResult(null), 3500);
+                            setTimeout(() => setTeamsLinkResult(null), 4000);
                           }
                         }}
                       >
-                        <Send className="mr-1.5 h-3.5 w-3.5" /> Send Test
+                        {teamsLinking && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                        Link Channel
                       </Button>
-                    )}
+                    </div>
                   </div>
+                )}
 
-                  {teamsLinkResult && (
-                    <Alert
-                      className={cn(
-                        'text-xs py-2',
-                        teamsLinkResult.status === 'success'
-                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
-                          : 'border-destructive/30 bg-destructive/10 text-destructive'
-                      )}
-                    >
-                      {teamsLinkResult.status === 'success' ? (
-                        <Check className="h-3.5 w-3.5" />
-                      ) : (
-                        <XCircle className="h-3.5 w-3.5" />
-                      )}
-                      <AlertDescription>{teamsLinkResult.message}</AlertDescription>
-                    </Alert>
-                  )}
-                </div>
+                {teamsLinkResult && (
+                  <Alert
+                    className={cn(
+                      'text-xs py-2',
+                      teamsLinkResult.status === 'success'
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                        : 'border-destructive/30 bg-destructive/10 text-destructive'
+                    )}
+                  >
+                    {teamsLinkResult.status === 'success' ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <XCircle className="h-3.5 w-3.5" />
+                    )}
+                    <AlertDescription>{teamsLinkResult.message}</AlertDescription>
+                  </Alert>
+                )}
               </div>
             )}
 
