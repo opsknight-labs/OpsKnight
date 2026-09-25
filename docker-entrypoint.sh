@@ -4,6 +4,29 @@ set -e
 echo "🚀 OpsKnight Startup"
 echo "======================"
 
+# If PgBouncer is enabled and raw credentials are provided without an encoded WEB_DATABASE_URL,
+# safely construct an encoded WEB_DATABASE_URL to protect against passwords with special characters (@, :, /, ?, #, %).
+if [ "${PGBOUNCER_ENABLED:-}" = "true" ] && [ -n "${PGBOUNCER_DB_PASSWORD:-}" ] && [ -z "${WEB_DATABASE_URL:-}" ]; then
+    ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}")
+    ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$PGBOUNCER_DB_PASSWORD")
+    DB_NAME="${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}"
+    export WEB_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-pgbouncer:6432/${DB_NAME}?sslmode=disable&pgbouncer=true"
+    DATABASE_URL="$WEB_DATABASE_URL"
+fi
+
+# Safely URL-encode credentials for direct bundled opsknight-db connections across all roles
+if [ -n "${POSTGRES_PASSWORD:-}" ] && [ -z "${OPSKNIGHT_DATABASE_URL:-}" ]; then
+    ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "${POSTGRES_USER:-opsknight}")
+    ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$POSTGRES_PASSWORD")
+    DB_NAME="${POSTGRES_DB:-opsknight_db}"
+    if [ -z "${DIRECT_DATABASE_URL:-}" ] || echo "${DIRECT_DATABASE_URL:-}" | grep -q "@opsknight-db:5432/"; then
+        export DIRECT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-db:5432/${DB_NAME}?sslmode=prefer&connection_limit=40&pool_timeout=30"
+    fi
+    if [ "${PGBOUNCER_ENABLED:-}" != "true" ] && ([ -z "${DATABASE_URL:-}" ] || echo "${DATABASE_URL:-}" | grep -q "@opsknight-db:5432/"); then
+        export DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-db:5432/${DB_NAME}?sslmode=prefer&connection_limit=40&pool_timeout=30"
+    fi
+fi
+
 # Prisma Migrate and the packaged index installers must bypass transaction
 # poolers such as PgBouncer. Preserve the runtime URL and temporarily promote
 # the direct URL for every schema-management command.
@@ -16,7 +39,7 @@ fi
 if [ "${OPSKNIGHT_SKIP_MIGRATIONS:-}" = "true" ] || [ "${SKIP_MIGRATIONS:-}" = "true" ]; then
     echo "⏭️  Skipping in-pod migrations (OPSKNIGHT_SKIP_MIGRATIONS=true)"
     if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
-        export DATABASE_URL="$RUNTIME_DATABASE_URL"
+        export DATABASE_URL="${WEB_DATABASE_URL:-$RUNTIME_DATABASE_URL}"
     fi
     echo "🚀 Starting application..."
     export NEXT_RUNTIME=nodejs
@@ -96,6 +119,11 @@ echo "✅ Database is ready."
 
 if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
     export DATABASE_URL="$RUNTIME_DATABASE_URL"
+fi
+
+if [ "${OPSKNIGHT_MIGRATION_ONLY:-}" = "true" ]; then
+    echo "🏁 Migrations and online indexes completed successfully (OPSKNIGHT_MIGRATION_ONLY=true)."
+    exit 0
 fi
 
 echo "🚀 Starting application..."

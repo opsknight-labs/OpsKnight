@@ -53,6 +53,7 @@ services:
     depends_on:
       opsknight-db:
         condition: service_healthy
+        required: false
     healthcheck:
       test:
         [
@@ -63,6 +64,10 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks:
       - opsknight-network
 

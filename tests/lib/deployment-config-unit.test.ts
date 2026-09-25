@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
+import { calculateRuntimeCapacity } from '../../src/lib/runtime-capacity';
 
 /* eslint-disable security/detect-non-literal-fs-filename, security/detect-non-literal-regexp -- Deployment contract tests inspect a fixed repository-local file set. */
 
@@ -363,5 +364,137 @@ describe('deployment configuration invariants', () => {
     const content = files.map(read).join('\n');
     expect(content).not.toMatch(/ghcr\.io\/opsknight-labs\/OpsKnight/);
     expect(content).not.toMatch(/(?:^|\s)opsknight\/opsknight:/);
+  });
+
+  it('ships complete split-runtime and PgBouncer Docker Compose overlays', () => {
+    const split = read('docker-compose.split.yml');
+    const pgbouncer = read('docker-compose.pgbouncer.yml');
+    const external = read('docker-compose.external-db.yml');
+    const entrypoint = read('docker-entrypoint.sh');
+
+    // Split services and profile isolation
+    expect(split).toContain('opsknight-app:\n    profiles:\n      - integrated-runtime');
+    expect(split).toContain('opsknight-migration:');
+    expect(split).toContain('opsknight-web:');
+    expect(split).toContain('opsknight-scheduler:');
+    expect(split).toContain('opsknight-general-worker:');
+    expect(split).toContain('opsknight-critical-worker:');
+    expect(split).toContain('opsknight-bulk-worker:');
+    expect(split).toContain('opsknight-status-projector:');
+
+    // Host port isolation: ONLY web publishes port 3000
+    expect(split).toMatch(/opsknight-web:[\s\S]*?ports:\s*-\s*'\$\{APP_PORT:-3000\}:3000'/);
+    expect(split).not.toMatch(/opsknight-scheduler:[\s\S]*?ports:/);
+    expect(split).not.toMatch(/opsknight-general-worker:[\s\S]*?ports:/);
+    expect(split).not.toMatch(/opsknight-critical-worker:[\s\S]*?ports:/);
+    expect(split).not.toMatch(/opsknight-bulk-worker:[\s\S]*?ports:/);
+    expect(split).not.toMatch(/opsknight-status-projector:[\s\S]*?ports:/);
+
+    // Security hardening
+    expect(split).toContain('no-new-privileges:true');
+    expect(split).toContain('cap_drop:\n      - ALL');
+    expect(pgbouncer).toContain('no-new-privileges:true');
+
+    // Split Compose requires explicit compatible release image
+    expect(split).toContain('${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to a tested release image with split-runtime support');
+
+    // PgBouncer 1.26.0 security update and dynamic entrypoint
+    expect(pgbouncer).toContain('ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75');
+    expect(pgbouncer).toContain('./docker/pgbouncer/entrypoint.sh:/docker-entrypoint.sh:ro');
+    expect(pgbouncer).toContain('/usr/bin/psql -h 127.0.0.1 -p 6432');
+    expect(pgbouncer).toContain('SELECT 1');
+    expect(pgbouncer).toContain('@opsknight-pgbouncer:6432/${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}?sslmode=disable&pgbouncer=true');
+    expect(pgbouncer).toContain('DIRECT_DATABASE_URL:');
+    expect(split).toContain('DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://');
+
+    // Helm PgBouncer aligns on 1.26.0 security update
+    const helm = read('helm/opsknight/values.yaml');
+    expect(helm).toContain("tag: '1.26.0'");
+    expect(helm).toContain("digest: 'sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75'");
+
+    // Dedicated one-shot migration contract
+    expect(entrypoint).toContain('OPSKNIGHT_MIGRATION_ONLY');
+    expect(split).toContain('OPSKNIGHT_MIGRATION_ONLY: "true"');
+    expect(split).toContain('condition: service_completed_successfully');
+
+    // External DB overlay disables bundled database cleanly
+    expect(external).toContain('profiles:\n      - bundled-database');
+  });
+
+  it('validates runtime database connection capacity budgets across topologies', () => {
+    // Default split capacity within budget
+    const defaultSplit = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'split' });
+    expect(defaultSplit.safe).toBe(true);
+    expect(defaultSplit.totalDemand).toBe(29);
+    expect(defaultSplit.headroom).toBe(51);
+
+    // Integrated mode accounts for webReplicas * webPool
+    const singleIntegrated = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'integrated' });
+    expect(singleIntegrated.safe).toBe(true);
+    expect(singleIntegrated.totalDemand).toBe(10);
+    expect(singleIntegrated.headroom).toBe(70);
+
+    const multiIntegrated = calculateRuntimeCapacity({
+      OPSKNIGHT_RUNTIME_MODE: 'integrated',
+      WEB_REPLICAS: '3',
+      DATABASE_POOL_SIZE_WEB: '10',
+    });
+    expect(multiIntegrated.safe).toBe(true);
+    expect(multiIntegrated.totalDemand).toBe(30);
+    expect(multiIntegrated.headroom).toBe(50);
+
+    // Overflow budget triggers failure
+    const overflow = calculateRuntimeCapacity({
+      OPSKNIGHT_RUNTIME_MODE: 'split',
+      DATABASE_MAX_CONNECTIONS: '25',
+    });
+    expect(overflow.safe).toBe(false);
+    expect(overflow.headroom).toBe(-4);
+
+    // PgBouncer bounds web connection demand
+    const pgbouncerBounded = calculateRuntimeCapacity({
+      OPSKNIGHT_RUNTIME_MODE: 'split',
+      PGBOUNCER_ENABLED: 'true',
+      WEB_REPLICAS: '12',
+      PGBOUNCER_DEFAULT_POOL_SIZE: '10',
+      PGBOUNCER_RESERVE_POOL_SIZE: '5',
+      DATABASE_MAX_CONNECTIONS: '80',
+    });
+    expect(pgbouncerBounded.safe).toBe(true);
+    expect(pgbouncerBounded.webConnections).toBe(15);
+    expect(pgbouncerBounded.totalDemand).toBe(34);
+
+    // Fail-closed input handling: reject malformed numbers, booleans, negative counts
+    expect(() => calculateRuntimeCapacity({ WEB_REPLICAS: '100foo' })).toThrow(
+      /not a valid non-negative integer/
+    );
+    expect(() => calculateRuntimeCapacity({ PGBOUNCER_ENABLED: 'invalid_bool' })).toThrow(
+      /not a recognized boolean/
+    );
+    expect(() => calculateRuntimeCapacity({ DATABASE_POOL_SIZE_WEB: '-5' })).toThrow();
+
+    // Consumes actual .env configuration via loadDotenvIfPresent and CLI
+    const tempEnv = path.join(root, 'node_modules/.tmp-test.env');
+    fs.mkdirSync(path.dirname(tempEnv), { recursive: true });
+    fs.writeFileSync(tempEnv, 'DATABASE_MAX_CONNECTIONS=20\nOPSKNIGHT_RUNTIME_MODE=split\n');
+    try {
+      const cliScript = path.join(root, 'scripts/validate-runtime-capacity.cjs');
+      const cliResult = spawnSync(process.execPath, [cliScript], {
+        cwd: root,
+        env: {
+          ...process.env,
+          DOTENV_CONFIG_PATH: tempEnv,
+          DATABASE_MAX_CONNECTIONS: undefined,
+          OPSKNIGHT_RUNTIME_MODE: undefined,
+        },
+        encoding: 'utf8',
+      });
+      expect(cliResult.status).toBe(1);
+      expect(cliResult.stderr).toContain('FATAL CAPACITY MISMATCH');
+    } finally {
+      if (fs.existsSync(tempEnv)) {
+        fs.unlinkSync(tempEnv);
+      }
+    }
   });
 });

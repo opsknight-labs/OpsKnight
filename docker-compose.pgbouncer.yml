@@ -1,0 +1,65 @@
+# Overlay for split runtime with PgBouncer connection pooling.
+# Apply after docker-compose.yml and docker-compose.split.yml:
+# Bundled DB:  docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml up -d
+# External DB: docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.external-db.yml -f docker-compose.pgbouncer.yml up -d
+services:
+  opsknight-pgbouncer:
+    build:
+      context: ./docker/pgbouncer
+      dockerfile: Dockerfile
+    image: ${PGBOUNCER_IMAGE:-ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75}
+    pull_policy: if_not_present
+    restart: unless-stopped
+    entrypoint: ["/docker-entrypoint.sh"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-opsknight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-opsknight_db}
+      PGBOUNCER_DB_HOST: ${PGBOUNCER_DB_HOST:-${POSTGRES_HOST:-opsknight-db}}
+      PGBOUNCER_DB_PORT: ${PGBOUNCER_DB_PORT:-5432}
+      PGBOUNCER_DB_NAME: ${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}
+      PGBOUNCER_DB_USER: ${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}
+      PGBOUNCER_DB_PASSWORD: ${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}
+      PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-10}
+      PGBOUNCER_RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-5}
+      PGBOUNCER_MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-1000}
+      PGBOUNCER_SERVER_TLS_SSLMODE: ${PGBOUNCER_SERVER_TLS_SSLMODE:-}
+      PGBOUNCER_SERVER_TLS_CA_FILE: ${PGBOUNCER_SERVER_TLS_CA_FILE:-}
+      OPSKNIGHT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-}
+    volumes:
+      - ./docker/pgbouncer/entrypoint.sh:/docker-entrypoint.sh:ro
+    depends_on:
+      opsknight-db:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "PGPASSWORD=\"$${PGBOUNCER_DB_PASSWORD:-$${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}\" /usr/bin/psql -h 127.0.0.1 -p 6432 -U \"$${PGBOUNCER_DB_USER:-$${POSTGRES_USER:-opsknight}}\" -d \"$${PGBOUNCER_DB_NAME:-$${POSTGRES_DB:-opsknight_db}}\" -c \"SELECT 1\" -t -A -q || exit 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - opsknight-network
+
+  opsknight-web:
+    environment:
+      PGBOUNCER_ENABLED: "true"
+      PGBOUNCER_DB_USER: ${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}
+      PGBOUNCER_DB_PASSWORD: ${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}
+      PGBOUNCER_DB_NAME: ${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}
+      WEB_DATABASE_URL: ${WEB_DATABASE_URL:-}
+      DATABASE_URL: ${WEB_DATABASE_URL:-postgresql://${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}:${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}@opsknight-pgbouncer:6432/${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}?sslmode=disable&pgbouncer=true}
+      DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=40&pool_timeout=30}
+    depends_on:
+      opsknight-migration:
+        condition: service_completed_successfully
+      opsknight-pgbouncer:
+        condition: service_healthy
