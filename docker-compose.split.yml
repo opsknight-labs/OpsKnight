@@ -15,6 +15,8 @@ services:
       OPSKNIGHT_MIGRATION_ONLY: "true"
       DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=10&pool_timeout=30}
       DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=10&pool_timeout=30}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
     depends_on:
