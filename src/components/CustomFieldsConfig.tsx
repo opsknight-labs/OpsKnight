@@ -48,7 +48,6 @@ import {
   Mail,
   ToggleLeft,
   Eye,
-  Search,
   CheckCircle2,
   Sparkles,
   Database,
@@ -398,12 +397,11 @@ export default function CustomFieldsConfig({
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
           {/* Search Bar */}
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search by label or key..."
-              className="pl-9 h-9 text-xs bg-background"
+              className="h-9 text-xs bg-background"
             />
             {searchQuery && (
               <button

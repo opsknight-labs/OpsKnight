@@ -10,7 +10,6 @@ import {
   Loader2,
   RefreshCw,
   RotateCcw,
-  Search,
   Radio,
   SlidersHorizontal,
   ExternalLink,
@@ -444,10 +443,9 @@ export default function NotificationOperations({
           {/* Filter Toolbar */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 pt-3">
             <div className="relative sm:col-span-2">
-              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 aria-label="Search delivery operations"
-                className="pl-8 text-xs h-8 bg-background border-border/80"
+                className="text-xs h-8 bg-background border-border/80"
                 placeholder="Search source, incident, or recipient..."
                 value={query}
                 onChange={event => setQuery(event.target.value)}

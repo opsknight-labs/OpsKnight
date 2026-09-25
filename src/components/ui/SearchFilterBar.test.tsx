@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import SearchFilterBar from './SearchFilterBar';
 
 describe('SearchFilterBar', () => {
-  it('renders search input with proper left padding to avoid icon overlap', () => {
+  it('renders search input cleanly without icon overlap', () => {
     const onSearchChange = vi.fn();
     render(
       <SearchFilterBar
@@ -15,8 +15,7 @@ describe('SearchFilterBar', () => {
 
     const input = screen.getByPlaceholderText('Search postmortems, incidents, services...');
     expect(input).toBeInTheDocument();
-    expect(input).toHaveClass('pl-10');
-    expect(input).not.toHaveClass('px-3');
+    expect(input).toHaveClass('pr-8');
   });
 
   it('handles search input and clear button', () => {

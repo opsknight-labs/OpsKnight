@@ -1,17 +1,28 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { Keyboard, X, Sparkles, Command as CommandIcon, ArrowRight } from 'lucide-react';
+import { Badge } from '@/components/ui/shadcn/badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
+import Link from 'next/link';
 
 type Shortcut = {
   keys: string[];
   description: string;
-  category: string;
-  action?: () => void;
+  category: 'Incident Triage' | 'Navigation' | 'Actions';
 };
 
-const shortcuts: Shortcut[] = [
-  { keys: ['?'], description: 'Show keyboard shortcuts', category: 'Navigation' },
-  { keys: ['⌘', '/'], description: 'Show keyboard shortcuts', category: 'Navigation' },
+const SHORTCUTS: Shortcut[] = [
+  // Incident Triage
+  { keys: ['J'], description: 'Next incident in list', category: 'Incident Triage' },
+  { keys: ['K'], description: 'Previous incident in list', category: 'Incident Triage' },
+  { keys: ['X'], description: 'Select / deselect incident', category: 'Incident Triage' },
+  { keys: ['A'], description: 'Acknowledge focused incident', category: 'Incident Triage' },
+  { keys: ['R'], description: 'Resolve focused incident (with note)', category: 'Incident Triage' },
+  { keys: ['/'], description: 'Focus search bar', category: 'Incident Triage' },
+
+  // Navigation
   { keys: ['G', 'D'], description: 'Go to Dashboard', category: 'Navigation' },
   { keys: ['G', 'I'], description: 'Go to Incidents', category: 'Navigation' },
   { keys: ['G', 'S'], description: 'Go to Services', category: 'Navigation' },
@@ -20,16 +31,21 @@ const shortcuts: Shortcut[] = [
   { keys: ['G', 'C'], description: 'Go to Schedules', category: 'Navigation' },
   { keys: ['G', 'P'], description: 'Go to Policies', category: 'Navigation' },
   { keys: ['G', 'A'], description: 'Go to Analytics', category: 'Navigation' },
-  { keys: ['⌘', 'N'], description: 'New Incident', category: 'Actions' },
-  { keys: ['⌘', 'R'], description: 'Refresh Dashboard', category: 'Actions' },
-  { keys: ['⌘', 'E'], description: 'Export CSV', category: 'Actions' },
-  { keys: ['Esc'], description: 'Close modal/dialog', category: 'Actions' },
-  { keys: ['J'], description: 'Next incident in list', category: 'Incident Triage' },
-  { keys: ['K'], description: 'Previous incident in list', category: 'Incident Triage' },
-  { keys: ['X'], description: 'Select / deselect incident', category: 'Incident Triage' },
-  { keys: ['A'], description: 'Acknowledge focused incident', category: 'Incident Triage' },
-  { keys: ['R'], description: 'Resolve focused incident (with note)', category: 'Incident Triage' },
-  { keys: ['/'], description: 'Focus search bar', category: 'Incident Triage' },
+
+  // Actions
+  { keys: ['⌘', 'K'], description: 'Open command search', category: 'Actions' },
+  { keys: ['⌘', 'N'], description: 'Create new incident', category: 'Actions' },
+  { keys: ['⌘', 'R'], description: 'Refresh view data', category: 'Actions' },
+  { keys: ['⌘', 'E'], description: 'Export CSV report', category: 'Actions' },
+  { keys: ['?'], description: 'Toggle keyboard shortcuts', category: 'Actions' },
+  { keys: ['Esc'], description: 'Close modal or overlay', category: 'Actions' },
+];
+
+const CATEGORIES: ('All' | Shortcut['category'])[] = [
+  'All',
+  'Incident Triage',
+  'Navigation',
+  'Actions',
 ];
 
 export default function KeyboardShortcuts({
@@ -40,6 +56,8 @@ export default function KeyboardShortcuts({
   onClose: () => void;
 }) {
   const modalRef = useRef<HTMLDivElement>(null);
+  const [filterCategory, setFilterCategory] = useState<'All' | Shortcut['category']>('All');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -48,7 +66,7 @@ export default function KeyboardShortcuts({
       if (e.key === 'Escape') {
         onClose();
       }
-      // Prevent shortcuts from triggering when modal is open
+      // Prevent shortcut recursion while modal is open
       if (e.key === '?' || ((e.metaKey || e.ctrlKey) && e.key === '/')) {
         e.preventDefault();
       }
@@ -58,11 +76,13 @@ export default function KeyboardShortcuts({
     const handleTab = (e: KeyboardEvent) => {
       if (!modalRef.current) return;
 
-      const focusableElements = modalRef.current.querySelectorAll(
+      const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
       );
-      const firstElement = focusableElements[0] as HTMLElement;
-      const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
+      if (!focusableElements.length) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
 
       if (e.shiftKey) {
         if (document.activeElement === firstElement) {
@@ -80,47 +100,54 @@ export default function KeyboardShortcuts({
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keydown', handleTab);
 
-    // Focus the close button when modal opens
-    const closeButton = modalRef.current?.querySelector(
-      'button[aria-label="Close"]'
-    ) as HTMLElement;
-    setTimeout(() => closeButton?.focus(), 0);
+    // Auto-focus the close button or first element
+    const timer = setTimeout(() => {
+      const closeBtn = modalRef.current?.querySelector<HTMLElement>(
+        'button[aria-label="Close dialog"]'
+      );
+      closeBtn?.focus();
+    }, 50);
 
     return () => {
+      clearTimeout(timer);
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('keydown', handleTab);
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  const filteredShortcuts = useMemo(() => {
+    return SHORTCUTS.filter(shortcut => {
+      const matchesCategory = filterCategory === 'All' || shortcut.category === filterCategory;
+      if (!matchesCategory) return false;
 
-  const grouped = shortcuts.reduce(
-    (acc, shortcut) => {
-      if (!acc[shortcut.category]) {
-        acc[shortcut.category] = [];
-      }
-      acc[shortcut.category].push(shortcut);
-      return acc;
-    },
-    {} as Record<string, Shortcut[]>
-  );
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        shortcut.description.toLowerCase().includes(q) ||
+        shortcut.category.toLowerCase().includes(q) ||
+        shortcut.keys.some(k => k.toLowerCase().includes(q))
+      );
+    });
+  }, [filterCategory, searchQuery]);
+
+  const grouped = useMemo(() => {
+    return filteredShortcuts.reduce(
+      (acc, shortcut) => {
+        if (!acc[shortcut.category]) {
+          acc[shortcut.category] = [];
+        }
+        acc[shortcut.category].push(shortcut);
+        return acc;
+      },
+      {} as Record<string, Shortcut[]>
+    );
+  }, [filteredShortcuts]);
+
+  if (!isOpen) return null;
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0, 0, 0, 0.6)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 999999,
-        padding: '2rem',
-        backdropFilter: 'blur(4px)',
-      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in-0 duration-200"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -128,245 +155,155 @@ export default function KeyboardShortcuts({
     >
       <div
         ref={modalRef}
-        style={{
-          background: 'white',
-          borderRadius: '0px',
-          maxWidth: '700px',
-          width: '100%',
-          maxHeight: '85vh',
-          overflowY: 'auto',
-          boxShadow: '0 20px 60px rgba(211, 47, 47, 0.3), 0 0 0 1px rgba(211, 47, 47, 0.1)',
-          border: '2px solid var(--primary-color)',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
         onClick={e => e.stopPropagation()}
+        className="relative w-full max-w-2xl bg-card border border-border/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-150"
       >
-        {/* Header with red accent */}
-        <div
-          style={{
-            padding: '1.75rem 2rem',
-            borderBottom: '2px solid var(--primary-color)',
-            background: 'linear-gradient(135deg, #fee2e2 0%, #ffffff 100%)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                background: 'var(--primary-color)',
-                borderRadius: '0px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <svg viewBox="0 0 24 24" width="24" height="24" fill="white">
-                <rect x="4" y="2" width="16" height="20" rx="2" />
-                <path d="M9 6h6m-6 4h6m-2 4h2" fill="white" />
-              </svg>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-border/70 bg-muted/20">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs">
+              <Keyboard className="h-5 w-5" />
             </div>
             <div>
-              <h2
-                id="keyboard-shortcuts-title"
-                style={{
-                  fontSize: '1.5rem',
-                  fontWeight: '800',
-                  margin: 0,
-                  color: 'var(--text-primary)',
-                  letterSpacing: '-0.5px',
-                }}
-              >
-                Keyboard Shortcuts
-              </h2>
-              <p
-                style={{
-                  fontSize: '0.85rem',
-                  color: 'var(--text-muted)',
-                  margin: '0.25rem 0 0 0',
-                }}
-              >
-                Press{' '}
-                <kbd
-                  style={{
-                    padding: '2px 6px',
-                    background: '#f3f4f6',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '0px',
-                    fontSize: '0.75rem',
-                    fontFamily: 'monospace',
-                    fontWeight: '600',
-                  }}
+              <div className="flex items-center gap-2">
+                <h2
+                  id="keyboard-shortcuts-title"
+                  className="text-lg font-semibold tracking-tight text-foreground"
                 >
+                  Keyboard Shortcuts
+                </h2>
+                <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
+                  {SHORTCUTS.length} keys
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Press{' '}
+                <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-semibold bg-muted border border-border rounded">
                   Esc
                 </kbd>{' '}
-                to close
+                anytime to dismiss
               </p>
             </div>
           </div>
+
           <button
+            type="button"
             onClick={onClose}
-            aria-label="Close"
-            style={{
-              background: 'transparent',
-              border: '2px solid var(--primary-color)',
-              borderRadius: '0px',
-              fontSize: '1.5rem',
-              cursor: 'pointer',
-              color: 'var(--primary-color)',
-              padding: '0.5rem 0.75rem',
-              lineHeight: 1,
-              fontWeight: '600',
-              transition: 'all 0.2s',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '40px',
-              height: '40px',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = 'var(--primary-color)';
-              e.currentTarget.style.color = 'white';
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = 'var(--primary-color)';
-            }}
+            aria-label="Close dialog"
+            title="Close (Esc)"
+            className="flex h-8.5 w-8.5 items-center justify-center rounded-lg bg-zinc-100 hover:bg-zinc-200 active:bg-zinc-300 text-zinc-700 hover:text-zinc-950 border border-zinc-300/80 shadow-2xs transition-all duration-150 active:scale-95 cursor-pointer dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 dark:hover:text-white dark:border-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            ×
+            <X className="h-5 w-5 shrink-0" strokeWidth={2.5} />
+            <span className="sr-only">Close</span>
           </button>
         </div>
 
-        {/* Content */}
-        <div
-          style={{
-            padding: '2rem',
-            overflowY: 'auto',
-            flex: 1,
-          }}
-        >
-          {Object.entries(grouped).map(([category, items], categoryIndex) => (
-            <div
-              key={category}
-              style={{
-                marginBottom: categoryIndex < Object.keys(grouped).length - 1 ? '2.5rem' : '0',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  marginBottom: '1.25rem',
-                  paddingBottom: '0.75rem',
-                  borderBottom: '2px solid var(--primary-color)',
-                }}
-              >
-                <div
-                  style={{
-                    width: '4px',
-                    height: '20px',
-                    background: 'var(--primary-color)',
-                    borderRadius: '0px',
-                  }}
-                />
-                <h3
-                  style={{
-                    fontSize: '0.8rem',
-                    fontWeight: '800',
-                    textTransform: 'uppercase',
-                    letterSpacing: '1.5px',
-                    color: 'var(--primary-color)',
-                    margin: 0,
-                  }}
+        {/* Toolbar: Search & Category Filter Pills */}
+        <div className="px-6 py-3.5 border-b border-border/60 bg-card/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="flex-1 max-w-sm">
+            <Input
+              type="text"
+              placeholder="Filter shortcuts by key or action…"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="h-9 px-3 text-xs bg-background"
+            />
+          </div>
+
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
+            {CATEGORIES.map(category => {
+              const active = filterCategory === category;
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => setFilterCategory(category)}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-all ${
+                    active
+                      ? 'bg-primary text-primary-foreground shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/70'
+                  }`}
                 >
                   {category}
-                </h3>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {items.map((shortcut, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '1rem 1.25rem',
-                      background: index % 2 === 0 ? '#fef2f2' : 'white',
-                      border: '1px solid #fee2e2',
-                      borderRadius: '0px',
-                      transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.background = '#fee2e2';
-                      e.currentTarget.style.borderColor = 'var(--primary-color)';
-                      e.currentTarget.style.transform = 'translateX(4px)';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.background = index % 2 === 0 ? '#fef2f2' : 'white';
-                      e.currentTarget.style.borderColor = '#fee2e2';
-                      e.currentTarget.style.transform = 'translateX(0)';
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: '0.95rem',
-                        fontWeight: '500',
-                        color: 'var(--text-primary)',
-                      }}
-                    >
-                      {shortcut.description}
-                    </span>
-                    <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
-                      {shortcut.keys.map((key, keyIndex) => (
-                        <kbd
-                          key={keyIndex}
-                          style={{
-                            padding: '0.375rem 0.625rem',
-                            background:
-                              key === '⌘' || key === 'Ctrl' ? 'var(--primary-color)' : '#f3f4f6',
-                            border: `2px solid ${key === '⌘' || key === 'Ctrl' ? 'var(--primary-color)' : '#d1d5db'}`,
-                            borderRadius: '0px',
-                            fontSize: '0.8rem',
-                            fontFamily: 'monospace',
-                            fontWeight: '700',
-                            color: key === '⌘' || key === 'Ctrl' ? 'white' : 'var(--text-primary)',
-                            minWidth: '32px',
-                            textAlign: 'center',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                          }}
-                        >
-                          {key}
-                        </kbd>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Content list */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
+          {Object.keys(grouped).length === 0 ? (
+            <div className="py-12 text-center text-muted-foreground">
+              <Keyboard className="h-10 w-10 mx-auto mb-2 opacity-30" />
+              <p className="text-sm font-medium">No shortcuts found</p>
+              <p className="text-xs text-muted-foreground/80 mt-1">
+                Try searching for a different action or clearing filters
+              </p>
             </div>
-          ))}
+          ) : (
+            Object.entries(grouped).map(([category, items]) => (
+              <div key={category} className="space-y-2">
+                <div className="flex items-center justify-between pb-1.5 border-b border-border/50">
+                  <div className="flex items-center gap-2">
+                    <CommandIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {category}
+                    </h3>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground/70 font-mono">
+                    {items.length} {items.length === 1 ? 'shortcut' : 'shortcuts'}
+                  </span>
+                </div>
+
+                <div className="grid gap-1.5 sm:grid-cols-1">
+                  {items.map((shortcut, idx) => (
+                    <div
+                      key={idx}
+                      className="group flex items-center justify-between px-3 py-2 rounded-xl border border-transparent hover:border-border/60 hover:bg-muted/40 transition-colors"
+                    >
+                      <span className="text-xs sm:text-sm font-medium text-foreground/90">
+                        {shortcut.description}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {shortcut.keys.map((key, keyIndex) => (
+                          <kbd
+                            key={keyIndex}
+                            className="flex items-center justify-center min-w-[26px] h-6 px-1.5 text-xs font-mono font-semibold rounded-md border border-border/80 bg-muted text-foreground shadow-2xs group-hover:border-border"
+                          >
+                            {key}
+                          </kbd>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* Footer */}
-        <div
-          style={{
-            padding: '1.25rem 2rem',
-            borderTop: '2px solid var(--primary-color)',
-            background: '#fef2f2',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontSize: '0.85rem',
-            color: 'var(--text-muted)',
-          }}
-        >
-          <span>Use these shortcuts to navigate faster</span>
-          <span style={{ fontWeight: '600', color: 'var(--primary-color)' }}>OpsKnight</span>
+        <div className="px-6 py-3.5 border-t border-border/70 bg-muted/20 flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            <span className="hidden sm:inline">Shortcuts are disabled when typing in inputs</span>
+            <span className="sm:hidden">Disabled in input fields</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Link
+              href="/shortcuts"
+              onClick={onClose}
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
+              Full guide
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+            <Button variant="outline" size="sm" onClick={onClose} className="h-7 text-xs px-2.5">
+              Close
+            </Button>
+          </div>
         </div>
       </div>
     </div>
