@@ -7,9 +7,7 @@ services:
     build:
       context: ./docker/pgbouncer
       dockerfile: Dockerfile
-      args:
-        BASE_IMAGE: ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75
-    image: ${PGBOUNCER_IMAGE:-opsknight-pgbouncer:1.26.0}
+    image: ${PGBOUNCER_IMAGE:-ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75}
     pull_policy: if_not_present
     restart: unless-stopped
     entrypoint: ["/docker-entrypoint.sh"]
@@ -18,7 +16,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}
       POSTGRES_DB: ${POSTGRES_DB:-opsknight_db}
       PGBOUNCER_DB_HOST: ${PGBOUNCER_DB_HOST:-${POSTGRES_HOST:-opsknight-db}}
-      PGBOUNCER_DB_PORT: ${PGBOUNCER_DB_PORT:-${POSTGRES_PORT:-5432}}
+      PGBOUNCER_DB_PORT: ${PGBOUNCER_DB_PORT:-5432}
       PGBOUNCER_DB_NAME: ${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}
       PGBOUNCER_DB_USER: ${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}
       PGBOUNCER_DB_PASSWORD: ${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}

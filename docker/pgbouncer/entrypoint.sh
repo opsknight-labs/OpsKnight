@@ -26,14 +26,14 @@ if [ -z "$DB_HOST" ]; then
 
   # Automatic fallback for bundled PostgreSQL container
   DB_HOST="${POSTGRES_HOST:-opsknight-db}"
-  DB_PORT="${POSTGRES_PORT:-5432}"
+  DB_PORT="${PGBOUNCER_DB_PORT:-5432}"
   DB_NAME="${POSTGRES_DB:-opsknight_db}"
   DB_USER="${POSTGRES_USER:-opsknight}"
   DB_PASS="${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}"
   TLS_SSLMODE="disable"
 else
   # Explicit DB_HOST configured
-  DB_PORT="${PGBOUNCER_DB_PORT:-${POSTGRES_PORT:-5432}}"
+  DB_PORT="${PGBOUNCER_DB_PORT:-5432}"
   DB_NAME="${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}"
   DB_USER="${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}"
   DB_PASS="${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-}}"
