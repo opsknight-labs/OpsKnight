@@ -70,13 +70,17 @@ export async function register() {
     // an incompatible bundle.
     if (responsibilities.startScheduler) {
       const { startCronScheduler, stopCronScheduler } = await import('./lib/cron-scheduler');
-      startCronScheduler();
+      startCronScheduler({ profile: responsibilities.schedulerProfile ?? 'full' });
       stopScheduler = stopCronScheduler;
     }
 
     if (responsibilities.startJobWorker) {
       const { startJobWorker, stopJobWorker } = await import('./lib/job-worker');
-      startJobWorker(responsibilities.workerLane ?? 'all');
+      startJobWorker(responsibilities.workerLane ?? 'all', {
+        // Elected schedulers own maintenance in integrated and split modes.
+        // Preserve it only for the legacy standalone all-lane worker role.
+        ownsQueueMaintenance: role === 'worker',
+      });
       stopJobWorkerService = stopJobWorker;
     }
 
@@ -84,6 +88,7 @@ export async function register() {
     logger.info('[Runtime] Process role initialized', {
       role,
       scheduler: responsibilities.startScheduler,
+      schedulerProfile: responsibilities.schedulerProfile,
       jobWorker: responsibilities.startJobWorker,
     });
 

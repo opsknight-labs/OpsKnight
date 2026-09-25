@@ -1,0 +1,74 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: opsknight-scheduler-network-policy, namespace: opsknight }
+spec:
+  podSelector: { matchLabels: { app: opsknight-app, opsknight-role: scheduler } }
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: opsknight-postgres } } }]
+      ports: [{ protocol: TCP, port: 5432 }]
+    - to: [{ namespaceSelector: {} }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+    - to: []
+      ports: [{ protocol: TCP, port: 443 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: opsknight-general-worker-network-policy, namespace: opsknight }
+spec:
+  podSelector: { matchLabels: { app: opsknight-app, opsknight-role: general-worker } }
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: opsknight-postgres } } }]
+      ports: [{ protocol: TCP, port: 5432 }]
+    - to: [{ namespaceSelector: {} }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+    - to: []
+      ports: [{ protocol: TCP, port: 443 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: opsknight-critical-worker-network-policy, namespace: opsknight }
+spec:
+  podSelector: { matchLabels: { app: opsknight-app, opsknight-role: critical-worker } }
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: opsknight-postgres } } }]
+      ports: [{ protocol: TCP, port: 5432 }]
+    - to: [{ namespaceSelector: {} }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+    - to: []
+      ports: [{ protocol: TCP, port: 443 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: opsknight-bulk-worker-network-policy, namespace: opsknight }
+spec:
+  podSelector: { matchLabels: { app: opsknight-app, opsknight-role: bulk-worker } }
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: opsknight-postgres } } }]
+      ports: [{ protocol: TCP, port: 5432 }]
+    - to: [{ namespaceSelector: {} }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+    - to: []
+      ports: [{ protocol: TCP, port: 443 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: opsknight-status-projector-network-policy, namespace: opsknight }
+spec:
+  podSelector: { matchLabels: { app: opsknight-app, opsknight-role: status-projector } }
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: opsknight-postgres } } }]
+      ports: [{ protocol: TCP, port: 5432 }]
+    - to: [{ namespaceSelector: {} }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+    - to: []
+      ports: [{ protocol: TCP, port: 443 }]

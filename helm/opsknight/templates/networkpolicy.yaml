@@ -10,6 +10,9 @@ spec:
   podSelector:
     matchLabels:
       {{- include "opsknight.selectorLabels" . | nindent 6 }}
+      {{- if eq .Values.runtime.mode "split" }}
+      app.kubernetes.io/component: web
+      {{- end }}
   policyTypes:
     - Ingress
     - Egress
@@ -25,11 +28,41 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "opsknight.selectorLabels" . | nindent 14 }}
+              {{- if eq .Values.runtime.mode "split" }}
+              app.kubernetes.io/component: web
+              {{- end }}
       ports:
         - protocol: TCP
           port: {{ .Values.service.targetPort }}
   egress:
-    {{- if .Values.postgresql.enabled }}
+    {{- if and (eq .Values.runtime.mode "split") .Values.pgbouncer.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.pgbouncer.port }}
+    # Schema management uses DIRECT_DATABASE_URL and must bypass PgBouncer.
+    - {{- if .Values.postgresql.enabled }}
+      to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "opsknight.name" . }}-postgresql
+      {{- else if .Values.networkPolicy.externalDatabaseCIDRs }}
+      to:
+        {{- range .Values.networkPolicy.externalDatabaseCIDRs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      {{- else }}
+      to: []
+      {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.postgresql.port }}
+    {{- else if .Values.postgresql.enabled }}
     - to:
         - podSelector:
             matchLabels:
@@ -39,7 +72,15 @@ spec:
           port: 5432
     {{- else }}
     # External/managed PostgreSQL may live outside this namespace or cluster.
-    - to: []
+    - {{- if .Values.networkPolicy.externalDatabaseCIDRs }}
+      to:
+        {{- range .Values.networkPolicy.externalDatabaseCIDRs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      {{- else }}
+      to: []
+      {{- end }}
       ports:
         - protocol: TCP
           port: {{ .Values.database.port | int }}
@@ -81,5 +122,49 @@ spec:
           port: 5432
   # PostgreSQL does not initiate network connections in the bundled topology.
   egress: []
+{{- end }}
+{{- if and (eq .Values.runtime.mode "split") .Values.pgbouncer.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "opsknight.fullname" . }}-pgbouncer
+  labels:
+    {{- include "opsknight.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "opsknight.roleSelectorLabels" (dict "root" . "role" "web") | nindent 14 }}
+      ports:
+        - { protocol: TCP, port: {{ .Values.pgbouncer.port }} }
+  egress:
+    - to:
+        {{- if .Values.postgresql.enabled }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "opsknight.name" . }}-postgresql
+        {{- else }}
+          {{- if .Values.networkPolicy.externalDatabaseCIDRs }}
+          {{- range .Values.networkPolicy.externalDatabaseCIDRs }}
+        - ipBlock: { cidr: {{ . | quote }} }
+          {{- end }}
+          {{- else }}
+        - ipBlock: { cidr: 0.0.0.0/0 }
+          {{- end }}
+        {{- end }}
+      ports:
+        - { protocol: TCP, port: {{ .Values.postgresql.port }} }
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
 {{- end }}
 {{- end }}

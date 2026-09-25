@@ -1,32 +1,33 @@
-{{- if .Values.autoscaling.enabled }}
+{{- if or (and (eq .Values.runtime.mode "integrated") .Values.autoscaling.enabled) (and (eq .Values.runtime.mode "split") .Values.web.autoscaling.enabled) }}
+{{- $autoscaling := ternary .Values.web.autoscaling .Values.autoscaling (eq .Values.runtime.mode "split") }}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ include "opsknight.fullname" . }}
+  name: {{ include "opsknight.fullname" . }}{{ if eq .Values.runtime.mode "split" }}-web{{ end }}
   labels:
     {{- include "opsknight.labels" . | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ include "opsknight.fullname" . }}
-  minReplicas: {{ .Values.autoscaling.minReplicas }}
-  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+    name: {{ include "opsknight.fullname" . }}{{ if eq .Values.runtime.mode "split" }}-web{{ end }}
+  minReplicas: {{ $autoscaling.minReplicas }}
+  maxReplicas: {{ $autoscaling.maxReplicas }}
   metrics:
-    {{- if .Values.autoscaling.targetCPUUtilizationPercentage }}
+    {{- if $autoscaling.targetCPUUtilizationPercentage }}
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}
+          averageUtilization: {{ $autoscaling.targetCPUUtilizationPercentage }}
     {{- end }}
-    {{- if .Values.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- if $autoscaling.targetMemoryUtilizationPercentage }}
     - type: Resource
       resource:
         name: memory
         target:
           type: Utilization
-          averageUtilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}
+          averageUtilization: {{ $autoscaling.targetMemoryUtilizationPercentage }}
     {{- end }}
 {{- end }}

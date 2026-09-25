@@ -84,6 +84,7 @@ ENV NEXT_PUBLIC_SOURCE_CODE_URL=$SOURCE_CODE_URL
 
 # Build Next.js application with production optimizations
 # Pages that need database access are marked as dynamic, so build works without DB
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm run build
 # Compile helper scripts for production (where ts-node is not available)
 RUN npm run build:scripts

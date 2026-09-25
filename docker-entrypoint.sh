@@ -4,6 +4,25 @@ set -e
 echo "🚀 OpsKnight Startup"
 echo "======================"
 
+# Prisma Migrate and the packaged index installers must bypass transaction
+# poolers such as PgBouncer. Preserve the runtime URL and temporarily promote
+# the direct URL for every schema-management command.
+RUNTIME_DATABASE_URL=${DATABASE_URL:-}
+if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
+    export DATABASE_URL="$DIRECT_DATABASE_URL"
+    echo "🔐 Using direct database connection for schema management"
+fi
+
+if [ "${OPSKNIGHT_SKIP_MIGRATIONS:-}" = "true" ] || [ "${SKIP_MIGRATIONS:-}" = "true" ]; then
+    echo "⏭️  Skipping in-pod migrations (OPSKNIGHT_SKIP_MIGRATIONS=true)"
+    if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
+        export DATABASE_URL="$RUNTIME_DATABASE_URL"
+    fi
+    echo "🚀 Starting application..."
+    export NEXT_RUNTIME=nodejs
+    exec node server.js
+fi
+
 echo "🔄 Running database migrations..."
 
 run_migrations() {
@@ -74,6 +93,11 @@ fi
 
 echo "✅ Status platform indexes are ready."
 echo "✅ Database is ready."
+
+if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
+    export DATABASE_URL="$RUNTIME_DATABASE_URL"
+fi
+
 echo "🚀 Starting application..."
 export NEXT_RUNTIME=nodejs
 exec node server.js

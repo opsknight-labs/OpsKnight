@@ -65,6 +65,13 @@ export type JobStatus =
   | 'COMPLETED'
   | 'FAILED'
   | 'CANCELLED';
+
+export const GENERAL_WORKER_EXCLUDED_JOB_TYPES: readonly JobType[] = [
+  'ESCALATION',
+  'STATUS_PAGE_NOTIFICATION',
+  STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1,
+  STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2,
+];
 interface JobPayload {
   incidentId?: string;
   stepIndex?: number;
@@ -1334,6 +1341,32 @@ export async function processPendingJobs(
       ]
     : [];
   const pendingJobs = await claimPendingJobs(limit, undefined, excludeTypes);
+  let processed = 0;
+  let failed = 0;
+  for (let i = 0; i < pendingJobs.length; i += concurrency) {
+    const results = await Promise.allSettled(
+      pendingJobs.slice(i, i + concurrency).map(job => processJob(job))
+    );
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value) processed++;
+      else failed++;
+    }
+  }
+  return { processed, failed, total: pendingJobs.length };
+}
+
+/**
+ * Drain operational jobs that do not belong to one of the dedicated split
+ * runtime lanes. Keeping this exclusion list at the queue boundary prevents a
+ * general worker from competing with escalation and bulk-delivery workers.
+ */
+export async function processPendingGeneralJobs(
+  limit: number = 50,
+  concurrency: number = 10
+): Promise<{ processed: number; failed: number; total: number }> {
+  const pendingJobs = await claimPendingJobs(limit, undefined, [
+    ...GENERAL_WORKER_EXCLUDED_JOB_TYPES,
+  ]);
   let processed = 0;
   let failed = 0;
   for (let i = 0; i < pendingJobs.length; i += concurrency) {

@@ -1,12 +1,26 @@
 ---
 order: 4
 title: Kustomize
-description: Render, customize, validate, and apply the Kubernetes manifests shipped with OpsKnight v1.4.
+description: Render, customize, validate, and apply the integrated or split OpsKnight Kubernetes runtime.
 ---
 
 # Kustomize
 
 `k8s/kustomization.yaml` is the entry point for the raw Kubernetes base. It composes the namespace, application, PostgreSQL StatefulSet and governing Service, application Service, ingress, HPA, NetworkPolicy, ServiceAccount, ConfigMap, Secret, and PodDisruptionBudget. PostgreSQL storage is created by the StatefulSet volume claim template; the base no longer allocates an unused standalone PVC. The existing ClusterIP mode of the PostgreSQL Service is preserved so upgrades do not attempt an immutable Service conversion.
+
+The root remains the integrated compatibility entrypoint. Three profiles make the runtime contract explicit:
+
+- `k8s/profiles/integrated` renders the same integrated application topology from the shared base;
+- `k8s/profiles/split` renders web, maintenance scheduler, general worker, critical worker, bulk worker, and status projector roles;
+- `k8s/profiles/split-pgbouncer` adds a two-replica transaction-pooling tier used only by web pods.
+
+The PgBouncer profile routes web runtime traffic to PgBouncer TCP/6432. A narrowly selected web-to-PostgreSQL TCP/5432 rule remains for startup schema management through `DIRECT_DATABASE_URL`; PgBouncer also receives PostgreSQL TCP/5432 egress, plus DNS for resolving the Service hostname. Kubernetes NetworkPolicies are additive, so production overlays should preserve these selected pod destinations rather than add broad database egress.
+
+The web pod still receives `DIRECT_DATABASE_URL` for startup schema management. The entrypoint uses that direct PostgreSQL path for Prisma migrations and index installation, then restores the pooled `DATABASE_URL` before starting the web runtime. Preserve both environment entries when customizing the PgBouncer overlay.
+
+The checked-in `k8s/base` contains the common resources shared by those profiles. Do not omit the general worker: the specialized lanes intentionally do not claim ordinary operational background jobs. The split manifests intentionally use the non-published marker tag `split-runtime-image-required`; a production overlay must replace it with a tested tag or digest containing the split roles. This prevents the older integrated compatibility image from being started with unsupported role names.
+
+Moving an existing installation from the root integrated entrypoint to a split profile changes the Service selector to `opsknight-role: web`. Existing integrated pods lack that label. Plan this as a controlled one-time endpoint cutover or pre-stage a compatible serving label; a Deployment `maxUnavailable: 0` setting does not by itself make a Service-selector migration interruption-free.
 
 ## Do not apply the base unchanged in production
 
@@ -32,6 +46,15 @@ At minimum customize:
 - resource requests/limits, replicas, HPA and PDB;
 - NetworkPolicy ingress namespace labels and database destinations.
 
+For example, pin the split-compatible image in the overlay:
+
+```yaml
+images:
+  - name: ghcr.io/opsknight-labs/opsknight
+    newName: ghcr.io/opsknight-labs/opsknight
+    digest: sha256:<tested-split-runtime-manifest-digest>
+```
+
 For Prometheus Operator, add the optional `k8s/monitoring/servicemonitor.yaml` from the production
 overlay, inject `PROMETHEUS_SCRAPE_TOKEN` into the application from a dedicated Secret, and allow the
 monitoring source through NetworkPolicy. The monitor is intentionally excluded from the base so
@@ -46,13 +69,26 @@ kubectl kustomize deploy/overlays/production > /tmp/opsknight-rendered.yaml
 kubectl apply --server-side --dry-run=server -f /tmp/opsknight-rendered.yaml
 ```
 
+Before creating a production overlay, render the shipped contracts directly:
+
+```bash
+kubectl kustomize k8s
+kubectl kustomize k8s/profiles/integrated
+kubectl kustomize k8s/profiles/split
+kubectl kustomize k8s/profiles/split-pgbouncer
+```
+
 Review the rendered image, Secrets, `DATABASE_URL`, public URLs, ingress, NetworkPolicy, storage, and health probes before applying.
+
+The shipped split pools are bounded to a potential 58 database connections at two replicas per role. This includes either 20 direct web connections or PgBouncer's 20 normal backend connections, plus 38 direct scheduler/worker connections. The generic split profile does not include `web-hpa.yaml`; add it through a capacity-planned production overlay if required. Recalculate `maxReplicas × pool size` for autoscaled roles and `replicas × pool size` for fixed roles, and retain separate PostgreSQL headroom for migrations and operations. A managed PostgreSQL service is recommended for sustained production split deployments.
+
+Split role replicas use a hard `kubernetes.io/hostname` spread constraint and therefore require at least two schedulable nodes. PDBs govern voluntary disruption only; node/zone survival depends on actual failure-domain placement. Add a `topology.kubernetes.io/zone` constraint in multi-zone production overlays.
 
 ## External database overlays
 
 The base application constructs a URI for its bundled PostgreSQL. For managed PostgreSQL, patch the `DATABASE_URL` environment entry to read a complete URI from your secret system. This supports TLS parameters, PgBouncer, provider options, and percent-encoded credentials without reconstructing the URI from separate fields.
 
-The raw NetworkPolicy allows TCP/5432 to external destinations so an external database is not accidentally blocked. Narrow that rule to your known database CIDR/namespace in the production overlay.
+The raw NetworkPolicy allows TCP/5432 to external destinations so an external database is not accidentally blocked. Narrow that rule to your known database CIDR/namespace in the production overlay. When adapting the PgBouncer profile to an external database, mount the trusted CA into PgBouncer and every direct worker/scheduler pod and use `sslmode=verify-full`.
 
 ## Apply and observe
 

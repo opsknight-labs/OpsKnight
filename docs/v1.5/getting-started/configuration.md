@@ -126,10 +126,12 @@ Do not reuse the OIDC client secret as the SCIM token. See [SCIM Provisioning](.
 | Variable | Required | Description | Default |
 | --- | :---: | --- | --- |
 | `DATABASE_URL` | Yes | PostgreSQL connection string | — |
+| `WEB_DATABASE_URL` | No | Web-only endpoint, typically PgBouncer; falls back to `DATABASE_URL` | — |
 | `POSTGRES_USER` | No | Database username for bundled Compose PostgreSQL | `opsknight` |
 | `POSTGRES_PASSWORD` | No | Bundled Compose PostgreSQL password | — |
 | `POSTGRES_DB` | No | Bundled Compose database name | `opsknight_db` |
-| `DATABASE_POOL_SIZE` | No | Adds a Prisma connection limit when `DATABASE_URL` has no `connection_limit` | `40` |
+| `DATABASE_POOL_SIZE` | No | Default per-process Prisma connection limit | `10` |
+| `DATABASE_POOL_SIZE_<ROLE>` | No | Explicit role pool override; replaces a URL `connection_limit` | — |
 
 For Kubernetes or Helm deployments, configure the database independently and set `DATABASE_URL` directly.
 
@@ -140,6 +142,8 @@ DATABASE_URL=postgresql://opsknight:password@host:5432/opsknight_db?sslmode=requ
 ```
 
 Budget per-process pools across all application replicas plus migration, backup, monitoring, and administrative reserve. See [Scalability and capacity planning](../core-concepts/scalability.md).
+
+Split processes set `OPSKNIGHT_PROCESS_ROLE` to `web`, `scheduler`, `general-worker`, `critical-worker`, `bulk-worker`, or `status-projector`. A dedicated scheduler remains on the backward-compatible `full` profile unless `OPSKNIGHT_SCHEDULER_PROFILE=maintenance` is explicitly set.
 
 ## Application URL
 

@@ -1,0 +1,10 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opsknight-app-netpol
+  namespace: opsknight
+spec:
+  podSelector:
+    matchLabels:
+      app: opsknight-app
+      opsknight-role: web

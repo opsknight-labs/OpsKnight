@@ -14,6 +14,8 @@ import {
   getCronSchedulerStatus,
   startCronScheduler,
   stopCronScheduler,
+  updateSchedulerHint,
+  updateSchedulerState,
   updateState,
 } from '@/lib/cron-scheduler';
 import prisma from '@/lib/prisma';
@@ -34,6 +36,8 @@ vi.mock('@/lib/prisma', () => ({
     backgroundJob: {
       findFirst: vi.fn().mockResolvedValue(null),
     },
+    $executeRaw: vi.fn().mockResolvedValue(1),
+    $queryRaw: vi.fn(),
   },
 }));
 
@@ -103,12 +107,58 @@ describe('Cron Scheduler - Lock Management', () => {
     );
   });
 
+  it('enforces lease epoch fencing in updateSchedulerState', async () => {
+    vi.mocked(prisma.cronSchedulerState.updateMany).mockResolvedValueOnce({ count: 1 });
+
+    await updateSchedulerState({ lastRunAt: new Date('2026-01-01T12:00:00.000Z') }, 10);
+
+    expect(prisma.cronSchedulerState.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'singleton',
+          leaseEpoch: 10,
+        }),
+        data: expect.objectContaining({
+          lastRunAt: new Date('2026-01-01T12:00:00.000Z'),
+        }),
+      })
+    );
+  });
+
+  it('rejects updateSchedulerState when lease epoch is no longer authoritative', async () => {
+    vi.mocked(prisma.cronSchedulerState.updateMany).mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      updateSchedulerState({ lastRunAt: new Date('2026-01-01T12:00:00.000Z') }, 9)
+    ).rejects.toThrow('Scheduler lease epoch 9 is no longer authoritative');
+  });
+
+  it('allows non-authoritative nextRunAt hints via updateSchedulerHint', async () => {
+    const nextRun = new Date('2026-01-01T12:01:00.000Z');
+    await updateSchedulerHint({ nextRunAt: nextRun });
+
+    expect(prisma.cronSchedulerState.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'singleton' },
+        data: { nextRunAt: nextRun },
+      })
+    );
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-01T12:00:00.000Z'));
     vi.mocked(prisma.cronSchedulerState.upsert).mockResolvedValue(defaultState as any);
     vi.mocked(prisma.cronSchedulerState.update).mockResolvedValue(defaultState as any);
     vi.mocked(prisma.cronSchedulerState.updateMany).mockResolvedValue({ count: 1 } as any);
+    vi.mocked(prisma.$queryRaw).mockImplementation((strings: unknown) => {
+      const sql = Array.isArray(strings) ? strings.join(' ') : String(strings);
+      if (sql.includes('RETURNING "leaseEpoch"')) {
+        return Promise.resolve([{ leaseEpoch: 1 }]) as never;
+      }
+      if (sql.includes('SELECT EXISTS')) return Promise.resolve([{ held: true }]) as never;
+      return Promise.resolve([]) as never;
+    });
   });
 
   afterEach(async () => {
@@ -218,19 +268,13 @@ describe('Cron Scheduler - Lock Management', () => {
 
   describe('Lock Release', () => {
     it('releases lock on stop', async () => {
-      vi.mocked(prisma.cronSchedulerState.updateMany)
-        .mockResolvedValueOnce({ count: 1 } as any) // acquire
-        .mockResolvedValueOnce({ count: 1 } as any); // release
-
       startCronScheduler();
       await vi.advanceTimersByTimeAsync(100);
 
       await stopCronScheduler();
 
-      // Verify release was called with correct parameters
-      const releaseCalls = vi.mocked(prisma.cronSchedulerState.updateMany).mock.calls;
-      const releaseCall = releaseCalls.find(call => call[0].data?.lockedBy === null);
-      expect(releaseCall).toBeDefined();
+      const sqlCalls = vi.mocked(prisma.$executeRaw).mock.calls;
+      expect(sqlCalls.some(call => String(call[0]).includes('"leaseEpoch"'))).toBe(true);
     });
 
     it('only releases lock if we hold it', async () => {

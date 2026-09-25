@@ -77,6 +77,10 @@ describe('deployment configuration invariants', () => {
     expect(entrypoint).toContain('Refusing to start against an unknown database schema');
     expect(entrypoint).toMatch(/MIGRATION_SUCCESS=0[\s\S]*exit 1/);
     expect(entrypoint).toContain('scripts/dist/scripts/auto-recover-migrations.js');
+    expect(entrypoint).toContain('DIRECT_DATABASE_URL');
+    expect(entrypoint).toMatch(
+      /export DATABASE_URL="\$DIRECT_DATABASE_URL"[\s\S]*install_status_platform_indexes[\s\S]*export DATABASE_URL="\$RUNTIME_DATABASE_URL"/
+    );
     expect(entrypoint).toMatch(
       /MIGRATION_SUCCESS[\s\S]*install_status_platform_indexes[\s\S]*Starting application/
     );
@@ -118,6 +122,122 @@ describe('deployment configuration invariants', () => {
     expect(read('helm/opsknight/templates/secret.yaml')).toContain(
       '.Values.secrets.keys.databaseUrl'
     );
+  });
+
+  it('models every split-runtime ownership lane in Helm and Kustomize', () => {
+    const values = read('helm/opsknight/values.yaml');
+    const helmDeployments = read('helm/opsknight/templates/split-deployments.yaml');
+    const rawDeployments = read('k8s/profiles/split/runtime-deployments.yaml');
+    for (const role of [
+      'web',
+      'scheduler',
+      'general-worker',
+      'critical-worker',
+      'bulk-worker',
+      'status-projector',
+    ]) {
+      expect(helmDeployments).toContain(`"${role}"`);
+      expect(rawDeployments).toContain(`opsknight-${role}`);
+    }
+    expect(values).toContain('profile: maintenance');
+    expect(rawDeployments).toContain('OPSKNIGHT_SCHEDULER_PROFILE, value: maintenance');
+    expect(read('helm/opsknight/templates/service.yaml')).toContain(
+      'app.kubernetes.io/component: web'
+    );
+    expect(read('k8s/profiles/split/web-service.yaml')).toContain('opsknight-role: web');
+    expect(rawDeployments).toContain('opsknight:split-runtime-image-required');
+    expect(rawDeployments).not.toContain('opsknight:1.4.0-hotfix');
+    expect(helmDeployments).toContain('requires an explicit image.tag or image.digest');
+    expect(helmDeployments).toContain('requires scheduler.profile=maintenance');
+    expect(read('k8s/profiles/split/kustomization.yaml')).not.toContain('web-hpa.yaml');
+    expect(helmDeployments).toContain('$root.Values.podAnnotations');
+    expect(helmDeployments).toContain('PROMETHEUS_SCRAPE_TOKEN');
+    expect(helmDeployments).toContain('$root.Values.metrics.scrapeTokenSecret.existingSecret');
+    expect(helmDeployments).toContain('whenUnsatisfiable: DoNotSchedule');
+    expect(read('helm/opsknight/templates/pgbouncer-deployment.yaml')).toContain(
+      'whenUnsatisfiable: DoNotSchedule'
+    );
+  });
+
+  it('keeps Kustomize shared-base copies aligned with the compatibility root', () => {
+    for (const file of [
+      'namespace.yaml',
+      'secret.yaml',
+      'configmap.yaml',
+      'service-account.yaml',
+      'postgres-service.yaml',
+      'postgres-statefulset.yaml',
+      'service.yaml',
+      'ingress.yaml',
+      'network-policy.yaml',
+      'pod-disruption-budget.yaml',
+    ]) {
+      expect(read(`k8s/base/${file}`)).toBe(read(`k8s/${file}`));
+    }
+    expect(read('k8s/profiles/integrated/deployment.yaml')).toBe(read('k8s/deployment.yaml'));
+    expect(read('k8s/profiles/integrated/hpa.yaml')).toBe(read('k8s/hpa.yaml'));
+  });
+
+  it('keeps PgBouncer optional and separates web runtime from migration traffic', () => {
+    const values = read('helm/opsknight/values.yaml');
+    const helmPgBouncer = read('helm/opsknight/templates/pgbouncer-configmap.yaml');
+    const rawWebPatch = read('k8s/profiles/split-pgbouncer/web-database-patch.yaml');
+    const overlay = read('k8s/profiles/split-pgbouncer/kustomization.yaml');
+    const rawNetworkPolicy = read(
+      'k8s/profiles/split-pgbouncer/pgbouncer-network-policy.yaml'
+    );
+    expect(values).toContain('pgbouncer:\n  enabled: false');
+    expect(helmPgBouncer).toContain('pool_mode = {{ .Values.pgbouncer.poolMode }}');
+    expect(read('helm/opsknight/templates/split-deployments.yaml')).toContain(
+      '(eq $role.name "web") $root.Values.pgbouncer.enabled'
+    );
+    expect(rawWebPatch).toContain('@opsknight-pgbouncer:6432');
+    expect(rawWebPatch).toContain('DIRECT_DATABASE_URL');
+    expect(rawWebPatch).toContain('@$(POSTGRES_HOST):$(POSTGRES_PORT)');
+    expect(read('helm/opsknight/templates/split-deployments.yaml')).toContain(
+      'name: DIRECT_DATABASE_URL'
+    );
+    expect(overlay).toContain('path: /spec/egress/0');
+    expect(overlay).toContain('app: opsknight-pgbouncer');
+    expect(overlay).toContain('port: 6432');
+    expect(overlay).toContain('path: /spec/egress/1');
+    expect(overlay).toContain('port: 5432');
+    expect(overlay).not.toContain('web-pgbouncer-egress.yaml');
+    expect(rawNetworkPolicy).toContain('port: 53');
+    expect(rawNetworkPolicy).toContain('port: 5432');
+    expect(read('k8s/profiles/split/runtime-deployments.yaml')).not.toContain(
+      '@opsknight-pgbouncer:6432'
+    );
+    expect(read('helm/opsknight/templates/pgbouncer-deployment.yaml')).toContain(
+      '/usr/bin/pg_isready'
+    );
+    expect(read('k8s/profiles/split-pgbouncer/pgbouncer-deployment.yaml')).toContain(
+      '/usr/bin/pg_isready'
+    );
+    expect(read('docker-entrypoint.sh')).toContain('OPSKNIGHT_SKIP_MIGRATIONS');
+    expect(read('helm/opsknight/templates/migration-job.yaml')).toContain('helm.sh/hook');
+  });
+
+  it('ships bounded split-runtime database pools and a strict Helm schema', () => {
+    const values = read('helm/opsknight/values.yaml');
+    const schema = JSON.parse(read('helm/opsknight/values.schema.json')) as {
+      properties: Record<string, { $ref?: string }>;
+      definitions: Record<string, { additionalProperties?: boolean }>;
+    };
+    expect(schema.properties.web?.$ref).toBe('#/definitions/webRole');
+    expect(schema.properties.scheduler?.$ref).toBe('#/definitions/schedulerRole');
+    expect(schema.properties.generalWorker?.$ref).toBe('#/definitions/workerRole');
+    expect(schema.properties.criticalWorker?.$ref).toBe('#/definitions/workerRole');
+    expect(schema.properties.bulkWorker?.$ref).toBe('#/definitions/workerRole');
+    expect(schema.properties.statusProjector?.$ref).toBe('#/definitions/workerRole');
+    expect(schema.properties.pgbouncer?.$ref).toBe('#/definitions/pgbouncer');
+    expect(schema.definitions.webRole?.additionalProperties).toBe(false);
+    expect(schema.definitions.schedulerRole?.additionalProperties).toBe(false);
+    expect(schema.definitions.workerRole?.additionalProperties).toBe(false);
+    expect(schema.definitions.pgbouncer?.additionalProperties).toBe(false);
+    expect(values).toContain('defaultPoolSize: 10');
+    expect(values).toContain('reservePoolSize: 5');
+    expect(values).toContain('externalDatabaseCIDRs: []');
   });
 
   it('supports digest-pinned images, external Secrets, and configuration rollouts in Helm', () => {

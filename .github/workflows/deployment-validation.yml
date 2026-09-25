@@ -72,6 +72,61 @@ jobs:
       - name: Render Helm defaults
         run: helm template opsknight helm/opsknight --namespace opsknight > /tmp/opsknight-helm.yaml
 
+      - name: Render Helm split runtime matrix
+        run: |
+          helm template opsknight helm/opsknight \
+            --namespace opsknight \
+            -f helm/opsknight/examples/values-split-runtime.yaml \
+            --set-string image.tag=ci-split-runtime \
+            --set-string podAnnotations.ci\\.opsknight\\.io/split-runtime=true \
+            --set-string metrics.scrapeTokenSecret.existingSecret=metrics-auth \
+            > /tmp/opsknight-helm-split.yaml
+          helm template opsknight helm/opsknight \
+            --namespace opsknight \
+            --set runtime.mode=split \
+            --set-string image.tag=ci-split-runtime \
+            --set scheduler.profile=maintenance \
+            > /tmp/opsknight-helm-split-generic.yaml
+          helm template opsknight helm/opsknight \
+            --namespace opsknight \
+            -f helm/opsknight/examples/values-split-runtime.yaml \
+            --set-string image.tag=ci-split-runtime \
+            --set pgbouncer.enabled=true \
+            --set-string postgresql.password=ci-non-default-password \
+            > /tmp/opsknight-helm-split-pgbouncer.yaml
+          helm template opsknight helm/opsknight \
+            --namespace opsknight \
+            --set migrations.job.enabled=true \
+            > /tmp/opsknight-helm-migration-job.yaml
+          if helm template opsknight helm/opsknight --set runtime.mode=invalid >/dev/null 2>&1; then
+            echo 'invalid runtime.mode unexpectedly rendered'
+            exit 1
+          fi
+          if helm template opsknight helm/opsknight --set runtime.mode=split >/dev/null 2>&1; then
+            echo 'split runtime unexpectedly rendered without an explicit compatible image'
+            exit 1
+          fi
+          if helm template opsknight helm/opsknight \
+            --set runtime.mode=split \
+            --set-string image.tag=ci-split-runtime \
+            --set scheduler.profile=full >/dev/null 2>&1; then
+            echo 'split runtime unexpectedly accepted scheduler.profile=full'
+            exit 1
+          fi
+          if helm template opsknight helm/opsknight \
+            --set runtime.mode=split \
+            --set-string image.tag=ci-split-runtime \
+            --set web.autoscaling.enabled=true \
+            --set web.autoscaling.maxReplicas=12 \
+            --set web.database.poolSize=20 >/dev/null 2>&1; then
+            echo 'unsafe split database connection budget unexpectedly rendered'
+            exit 1
+          fi
+          if helm template opsknight helm/opsknight --set criticalWorker.database.nonexistent=10 >/dev/null 2>&1; then
+            echo 'unknown criticalWorker.database property unexpectedly rendered'
+            exit 1
+          fi
+
       - name: Render Helm external database configuration
         run: |
           helm template opsknight helm/opsknight \
@@ -80,6 +135,7 @@ jobs:
             --set-string database.url='postgresql://user:encoded%40password@db.example.com:6432/opsknight_db?sslmode=require' \
             --set database.port=6432 \
             --set networkPolicy.enabled=true \
+            --set-string networkPolicy.externalDatabaseCIDRs[0]=10.24.0.0/16 \
             > /tmp/opsknight-helm-external-db.yaml
 
       - name: Render Helm digest and external Secret configuration
@@ -92,7 +148,11 @@ jobs:
             > /tmp/opsknight-helm-external-secret.yaml
 
       - name: Render Kustomize base
-        run: kubectl kustomize k8s > /tmp/opsknight-kustomize.yaml
+        run: |
+          kubectl kustomize k8s > /tmp/opsknight-kustomize.yaml
+          kubectl kustomize k8s/profiles/integrated > /tmp/opsknight-kustomize-integrated.yaml
+          kubectl kustomize k8s/profiles/split > /tmp/opsknight-kustomize-split.yaml
+          kubectl kustomize k8s/profiles/split-pgbouncer > /tmp/opsknight-kustomize-split-pgbouncer.yaml
 
       - name: Validate rendered invariants
         shell: bash
@@ -106,10 +166,60 @@ jobs:
           grep -q 'checksum/secret:' /tmp/opsknight-helm.yaml
           grep -q 'NEXT_PUBLIC_APP_URL' /tmp/opsknight-helm.yaml
           grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
+          grep -q 'startupProbe:' /tmp/opsknight-kustomize-integrated.yaml
+          for role in web scheduler general-worker critical-worker bulk-worker status-projector; do
+            grep -q "name: opsknight-$role" /tmp/opsknight-helm-split.yaml
+            grep -q "name: opsknight-$role" /tmp/opsknight-helm-split-generic.yaml
+            grep -q "name: opsknight-$role" /tmp/opsknight-kustomize-split.yaml
+          done
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split.yaml)" -eq 6
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-generic.yaml)" -eq 6
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-pgbouncer.yaml)" -eq 7
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split.yaml)" -eq 6
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split-pgbouncer.yaml)" -eq 7
+          if grep -q 'whenUnsatisfiable: ScheduleAnyway' /tmp/opsknight-helm-split.yaml /tmp/opsknight-helm-split-generic.yaml /tmp/opsknight-helm-split-pgbouncer.yaml /tmp/opsknight-kustomize-split.yaml /tmp/opsknight-kustomize-split-pgbouncer.yaml; then
+            echo 'split runtime unexpectedly allowed soft topology spreading'
+            exit 1
+          fi
+          grep -Eq 'value: "?maintenance"?' /tmp/opsknight-helm-split.yaml
+          grep -q 'value: maintenance' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'key: DATABASE_URL' /tmp/opsknight-helm-split.yaml
+          grep -q 'ci.opsknight.io/split-runtime: "true"' /tmp/opsknight-helm-split.yaml
+          grep -q 'name: PROMETHEUS_SCRAPE_TOKEN' /tmp/opsknight-helm-split.yaml
+          grep -q 'name: metrics-auth' /tmp/opsknight-helm-split.yaml
+          if grep -q 'key: WEB_DATABASE_URL' /tmp/opsknight-helm-split.yaml; then
+            echo 'split runtime without PgBouncer unexpectedly requires WEB_DATABASE_URL'
+            exit 1
+          fi
+          grep -q 'key: WEB_DATABASE_URL' /tmp/opsknight-helm-split-pgbouncer.yaml
+          grep -q 'split-runtime-image-required' /tmp/opsknight-kustomize-split.yaml
+          if grep -q '^kind: HorizontalPodAutoscaler$' /tmp/opsknight-helm-split.yaml; then
+            echo 'generic split example unexpectedly enables the web HPA'
+            exit 1
+          fi
+          if grep -q '^kind: HorizontalPodAutoscaler$' /tmp/opsknight-kustomize-split.yaml; then
+            echo 'generic Kustomize split profile unexpectedly enables the web HPA'
+            exit 1
+          fi
+          grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-helm-split-pgbouncer.yaml
+          grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          grep -q '/usr/bin/pg_isready' /tmp/opsknight-helm-split-pgbouncer.yaml
+          grep -q '/usr/bin/pg_isready' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          grep -q 'kind: Job' /tmp/opsknight-helm-migration-job.yaml
+          grep -q 'name: opsknight-migration' /tmp/opsknight-helm-migration-job.yaml
+          grep -Eq '("helm\.sh/hook"|helm\.sh/hook): pre-install,pre-upgrade' /tmp/opsknight-helm-migration-job.yaml
+          grep -q 'pgbouncer=true' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          grep -q 'name: DIRECT_DATABASE_URL' /tmp/opsknight-helm-split-pgbouncer.yaml
+          grep -q 'name: DIRECT_DATABASE_URL' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          grep -q '@opsknight-pgbouncer:6432' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          grep -q '@$(POSTGRES_HOST):$(POSTGRES_PORT)' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          grep -q 'port: 6432' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          grep -q 'port: 5432' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'kubernetes.io/metadata.name: ingress-nginx' /tmp/opsknight-kustomize.yaml
           grep -q '127.0.0.1' /tmp/opsknight-compose.yaml
           grep -q 'db.example.com:6432' /tmp/opsknight-compose-external-db.yaml
           grep -q 'port: 6432' /tmp/opsknight-helm-external-db.yaml
+          grep -q 'cidr: "10.24.0.0/16"' /tmp/opsknight-helm-external-db.yaml
           grep -q 'ghcr.io/opsknight-labs/opsknight@sha256:0000000000000000000000000000000000000000000000000000000000000000' /tmp/opsknight-helm-external-secret.yaml
           grep -q 'name: opsknight-runtime' /tmp/opsknight-helm-external-secret.yaml
           helm template opsknight helm/opsknight \
@@ -118,6 +228,7 @@ jobs:
             > /tmp/opsknight-helm-enterprise.yaml
           grep -q 'minReplicas: 3' /tmp/opsknight-helm-enterprise.yaml
           grep -q 'minAvailable: 2' /tmp/opsknight-helm-enterprise.yaml
+          grep -q 'topology.kubernetes.io/zone' /tmp/opsknight-helm-enterprise.yaml
           if grep -q '^kind: Secret$' /tmp/opsknight-helm-external-secret.yaml; then
             echo 'chart rendered a Secret even though secrets.existingSecret is configured'
             exit 1

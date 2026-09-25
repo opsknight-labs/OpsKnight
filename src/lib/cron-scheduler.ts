@@ -12,6 +12,7 @@ import { cleanupExpiredRateLimits } from '@/lib/rate-limit';
 import { checkSLABreaches } from './sla-breach-monitor';
 import crypto from 'crypto';
 import { getNextIncidentSlaTransitionAt } from './incident-sla/next-transition';
+import { getSchedulerOwnership, type SchedulerProfile } from './runtime-role';
 
 /**
  * Production-Grade Cron Scheduler
@@ -26,7 +27,8 @@ import { getNextIncidentSlaTransitionAt } from './incident-sla/next-transition';
 
 // Generate unique worker ID for this process instance
 const WORKER_ID = `worker-${process.pid}-${crypto.randomUUID().slice(0, 8)}`;
-const LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes - consider lock stale after this
+const LOCK_TIMEOUT_MS = 90_000;
+const HEARTBEAT_INTERVAL_MS = 15_000;
 const MIN_DELAY_MS = 15_000;
 const MAX_DELAY_MS = 2 * 60_000;
 const SINGLETON_ID = 'singleton';
@@ -36,6 +38,12 @@ let timer: NodeJS.Timeout | null = null;
 let activeRun: Promise<void> | null = null;
 let initialized = false;
 let lastJobCleanup = 0;
+let schedulerProfile: SchedulerProfile = 'full';
+let activeLeaseEpoch: number | null = null;
+
+export interface CronSchedulerOptions {
+  profile?: SchedulerProfile;
+}
 
 async function notifyOverdueActionItems(now: Date): Promise<number> {
   const { default: prisma } = await import('./prisma');
@@ -101,18 +109,18 @@ async function getState() {
 
 /**
  * Attempt to acquire distributed lock
- * Returns true if lock acquired, false if another worker holds it
+ * Returns the monotonically increasing fencing epoch when acquired.
  */
-async function acquireLock(): Promise<boolean> {
+async function acquireLock(): Promise<number | null> {
   const { default: prisma } = await import('./prisma');
 
   try {
     // PostgreSQL is the sole clock authority for lease expiry. Gating on
     // nextRunAt also prevents standby replicas from immediately acquiring a
     // deliberately released lock before the next scheduler cycle is due.
-    const result = await prisma.$executeRaw`
+    const rows = await prisma.$queryRaw<Array<{ leaseEpoch: number }>>`
       UPDATE "cron_scheduler_state"
-      SET "lockedBy" = ${WORKER_ID}, "lockedAt" = NOW()
+      SET "lockedBy" = ${WORKER_ID}, "lockedAt" = NOW(), "leaseEpoch" = "leaseEpoch" + 1
       WHERE "id" = ${SINGLETON_ID}
         AND ("nextRunAt" IS NULL OR "nextRunAt" <= NOW())
         AND (
@@ -120,11 +128,13 @@ async function acquireLock(): Promise<boolean> {
           OR "lockedBy" = ${WORKER_ID}
           OR "lockedAt" < NOW() - (${LOCK_TIMEOUT_MS} * INTERVAL '1 millisecond')
         )
+      RETURNING "leaseEpoch"
     `;
 
-    if (result > 0) {
-      logger.debug('[Cron] Lock acquired', { workerId: WORKER_ID });
-      return true;
+    const epoch = rows[0]?.leaseEpoch;
+    if (epoch !== undefined) {
+      logger.debug('[Cron] Lock acquired', { workerId: WORKER_ID, leaseEpoch: epoch });
+      return epoch;
     }
 
     // Lock held by another worker
@@ -133,31 +143,41 @@ async function acquireLock(): Promise<boolean> {
       holder: state.lockedBy,
       since: state.lockedAt?.toISOString(),
     });
-    return false;
+    return null;
   } catch (error) {
     logger.error('[Cron] Failed to acquire lock', { error });
-    return false;
+    return null;
   }
+}
+
+async function assertLease(epoch: number): Promise<void> {
+  const { default: prisma } = await import('./prisma');
+  const rows = await prisma.$queryRaw<Array<{ held: boolean }>>`
+    SELECT EXISTS(
+      SELECT 1 FROM "cron_scheduler_state"
+      WHERE "id" = ${SINGLETON_ID}
+        AND "lockedBy" = ${WORKER_ID}
+        AND "leaseEpoch" = ${epoch}
+        AND "lockedAt" >= NOW() - (${LOCK_TIMEOUT_MS} * INTERVAL '1 millisecond')
+    ) AS "held"
+  `;
+  if (!rows[0]?.held) throw new Error(`Scheduler lease epoch ${epoch} is no longer authoritative`);
 }
 
 /**
  * Release the distributed lock
  */
-async function releaseLock(nextRunAt: Date): Promise<void> {
+async function releaseLock(nextRunAt: Date, epoch: number | null = activeLeaseEpoch): Promise<void> {
   const { default: prisma } = await import('./prisma');
 
   try {
-    await prisma.cronSchedulerState.updateMany({
-      where: {
-        id: SINGLETON_ID,
-        lockedBy: WORKER_ID, // Only release if we hold it
-      },
-      data: {
-        lockedBy: null,
-        lockedAt: null,
-        nextRunAt,
-      },
-    });
+    if (epoch === null) return;
+    await prisma.$executeRaw`
+      UPDATE "cron_scheduler_state"
+      SET "lockedBy" = NULL, "lockedAt" = NULL, "nextRunAt" = ${nextRunAt}
+      WHERE "id" = ${SINGLETON_ID} AND "lockedBy" = ${WORKER_ID} AND "leaseEpoch" = ${epoch}
+    `;
+    if (activeLeaseEpoch === epoch) activeLeaseEpoch = null;
     logger.debug('[Cron] Lock released', { workerId: WORKER_ID });
   } catch (error) {
     logger.error('[Cron] Failed to release lock', { error });
@@ -171,7 +191,7 @@ async function releaseLock(nextRunAt: Date): Promise<void> {
  * reconstructed database. The scheduler should self-heal by recreating the
  * row instead of logging a record-not-found failure and continuing forever.
  */
-export async function updateState(data: {
+export type SchedulerStateData = {
   lastRunAt?: Date;
   lastSuccessAt?: Date;
   lastError?: string | null;
@@ -182,7 +202,71 @@ export async function updateState(data: {
   lastObjectiveSnapshotSuccessAt?: Date | null;
   lastObjectiveSnapshotDurationMs?: number | null;
   lastObjectiveSnapshotFailed?: number;
+};
+
+/**
+ * Fenced update of authoritative scheduler state.
+ * Strictly requires the authoritative leaseEpoch. Rejects mutations if the
+ * epoch or worker ownership has changed.
+ */
+export async function updateSchedulerState(
+  data: SchedulerStateData,
+  leaseEpoch: number
+): Promise<void> {
+  const { default: prisma } = await import('./prisma');
+  const updated = await prisma.cronSchedulerState.updateMany({
+    where: { id: SINGLETON_ID, lockedBy: WORKER_ID, leaseEpoch },
+    data,
+  });
+  if (updated.count !== 1) {
+    throw new Error(`Scheduler lease epoch ${leaseEpoch} is no longer authoritative`);
+  }
+}
+
+/**
+ * Non-authoritative scheduling hint update.
+ * Used only for informational scheduling hints like nextRunAt.
+ */
+export async function updateSchedulerHint(data: {
+  nextRunAt?: Date | null;
 }): Promise<void> {
+  const { default: prisma } = await import('./prisma');
+  try {
+    await prisma.cronSchedulerState.update({
+      where: { id: SINGLETON_ID },
+      data,
+    });
+  } catch (error) {
+    const code =
+      typeof error === 'object' && error && 'code' in error
+        ? String((error as { code?: string }).code)
+        : '';
+    if (
+      code === 'P2025' ||
+      (error instanceof Error && /Record to update not found/.test(error.message))
+    ) {
+      try {
+        await prisma.cronSchedulerState.upsert({
+          where: { id: SINGLETON_ID },
+          update: data,
+          create: { id: SINGLETON_ID, ...data },
+        });
+      } catch (upsertError) {
+        logger.error('[Cron] Failed to recreate missing scheduler state row for hint', {
+          error: upsertError,
+        });
+      }
+    }
+  }
+}
+
+export async function updateState(
+  data: SchedulerStateData,
+  leaseEpoch?: number
+): Promise<void> {
+  if (leaseEpoch !== undefined) {
+    return updateSchedulerState(data, leaseEpoch);
+  }
   const { default: prisma } = await import('./prisma');
 
   try {
@@ -221,9 +305,10 @@ export async function updateState(data: {
 /**
  * Calculate next scheduled time based on pending work
  */
-async function getNextScheduledTime(): Promise<Date> {
+async function getNextScheduledTime(profile: SchedulerProfile): Promise<Date> {
   try {
     const prisma = (await import('./prisma')).default;
+    const ownership = getSchedulerOwnership(profile);
     const [
       nextIncident,
       nextJob,
@@ -232,19 +317,23 @@ async function getNextScheduledTime(): Promise<Date> {
       nextNotificationRetry,
       nextCentralNotification,
     ] = await Promise.all([
-      prisma.incident.findFirst({
-        where: {
-          escalationStatus: 'ESCALATING',
-          nextEscalationAt: { not: null },
-        },
-        orderBy: { nextEscalationAt: 'asc' },
-        select: { nextEscalationAt: true },
-      }),
-      prisma.backgroundJob.findFirst({
-        where: { status: 'PENDING' },
-        orderBy: { scheduledAt: 'asc' },
-        select: { scheduledAt: true },
-      }),
+      ownership.escalations
+        ? prisma.incident.findFirst({
+            where: {
+              escalationStatus: 'ESCALATING',
+              nextEscalationAt: { not: null },
+            },
+            orderBy: { nextEscalationAt: 'asc' },
+            select: { nextEscalationAt: true },
+          })
+        : Promise.resolve(null),
+      ownership.backgroundJobs
+        ? prisma.backgroundJob.findFirst({
+            where: { status: 'PENDING' },
+            orderBy: { scheduledAt: 'asc' },
+            select: { scheduledAt: true },
+          })
+        : Promise.resolve(null),
       getNextIncidentSlaTransitionAt(),
       prisma.incident.findFirst({
         where: {
@@ -254,8 +343,8 @@ async function getNextScheduledTime(): Promise<Date> {
         orderBy: { snoozedUntil: 'asc' },
         select: { snoozedUntil: true },
       }),
-      getNextNotificationRetryAt(),
-      getNextCentralNotificationAt(),
+      ownership.notifications ? getNextNotificationRetryAt() : Promise.resolve(null),
+      ownership.notifications ? getNextCentralNotificationAt() : Promise.resolve(null),
     ]);
 
     const times: (number | null)[] = [
@@ -311,7 +400,7 @@ function scheduleNextRun(targetTime: Date, persistToDb: boolean = true) {
 
   // Update DB with next run time only if leader / active scheduler
   if (persistToDb) {
-    updateState({ nextRunAt }).catch(() => {});
+    updateSchedulerHint({ nextRunAt }).catch(() => {});
   }
 
   logger.debug('[Cron] Next run scheduled', {
@@ -325,43 +414,53 @@ function scheduleNextRun(targetTime: Date, persistToDb: boolean = true) {
  * Execute one cron cycle
  */
 async function runOnce() {
-  const isLeader = await acquireLock();
-  if (!isLeader) {
+  const leaseEpoch = await acquireLock();
+  if (leaseEpoch === null) {
     logger.debug('[Cron] Not the leader, scheduling standby check');
     // Standby replicas must schedule next tick with randomized jitter (15s - 30s) to monitor leader health
     const standbyDelay = MIN_DELAY_MS + Math.floor(Math.random() * 15000);
     scheduleNextRun(new Date(Date.now() + standbyDelay), false);
     return;
   }
+  activeLeaseEpoch = leaseEpoch;
 
   const startTime = Date.now();
-  await updateState({ lastRunAt: new Date() });
-
-  logger.info('[Cron] Worker tick started', {
-    workerId: WORKER_ID,
-    timestamp: new Date().toISOString(),
-  });
-
-  // Heartbeat to prevent lock expiration during long-running tasks
-  let heartbeat: NodeJS.Timeout | null = setInterval(async () => {
-    try {
-      const { default: prisma } = await import('./prisma');
-      await prisma.$executeRaw`
-        UPDATE "cron_scheduler_state"
-        SET "lockedAt" = NOW()
-        WHERE "id" = ${SINGLETON_ID} AND "lockedBy" = ${WORKER_ID}
-      `;
-    } catch (_) {}
-  }, 30_000);
+  let heartbeat: NodeJS.Timeout | null = null;
 
   try {
-    // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
-    const jobResult = await processPendingJobs(100, 15);
-    const escalationResult = await processPendingEscalations();
+    await updateSchedulerState({ lastRunAt: new Date() }, leaseEpoch);
 
-    // Reconciliation also runs here so a deployment with no job-worker process
-    // (OPSKNIGHT_PROCESS_ROLE=scheduler) still repairs escalations and maintains queues. Every repair
-    // is idempotent, so both callers running is harmless.
+    logger.info('[Cron] Worker tick started', {
+      workerId: WORKER_ID,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Heartbeat to prevent lock expiration during long-running tasks
+    heartbeat = setInterval(async () => {
+      try {
+        const { default: prisma } = await import('./prisma');
+        await prisma.$executeRaw`
+          UPDATE "cron_scheduler_state"
+          SET "lockedAt" = NOW()
+          WHERE "id" = ${SINGLETON_ID}
+            AND "lockedBy" = ${WORKER_ID}
+            AND "leaseEpoch" = ${leaseEpoch}
+        `;
+      } catch (_) {}
+    }, HEARTBEAT_INTERVAL_MS);
+
+    // Process background jobs first (using SKIP LOCKED concurrency), then catch any orphaned escalations
+    const ownership = getSchedulerOwnership(schedulerProfile);
+    const jobResult = ownership.backgroundJobs
+      ? await processPendingJobs(100, 15)
+      : { processed: 0, failed: 0, total: 0 };
+    const escalationResult = ownership.escalations
+      ? await processPendingEscalations()
+      : { processed: 0, total: 0 };
+
+    // Queue maintenance belongs to the elected scheduler leader in every
+    // topology. The scheduler's distributed lock ensures that multiple
+    // scheduler replicas do not duplicate reconciliation and stale-job sweeps.
     try {
       await runQueueMaintenance();
     } catch (queueMaintErr) {
@@ -370,12 +469,18 @@ async function runOnce() {
       });
     }
 
-    const { reconcileEscalations } = await import('./escalation/recovery');
-    const reconciliation = await reconcileEscalations();
+    const reconciliation = ownership.escalations
+      ? await import('./escalation/recovery').then(({ reconcileEscalations }) =>
+          reconcileEscalations()
+        )
+      : null;
     const { reconcileIntegrationControlPlane } = await import('./integrations/reconciliation');
     const integrationReconciliation = await reconcileIntegrationControlPlane();
-    const { reconcileStatusPageSnapshots } = await import('./status-pages/snapshot');
-    const statusPageReconciliation = await reconcileStatusPageSnapshots();
+    const statusPageReconciliation = ownership.statusProjection
+      ? await import('./status-pages/snapshot').then(({ reconcileStatusPageSnapshots }) =>
+          reconcileStatusPageSnapshots()
+        )
+      : null;
     const { reconcileStatusPageRouteOperations } = await import('./status-pages/route-operations');
     const statusPageRouteReconciliation = await reconcileStatusPageRouteOperations();
     const { reconcileWarRoomHealth } = await import('./war-room/reconcile');
@@ -418,11 +523,16 @@ async function runOnce() {
       warRoomClosingRepair,
     });
 
+    await assertLease(leaseEpoch);
+
     // Group 2: Secondary tasks (can run in parallel)
     const { processShiftRotations, processUpcomingShiftReminders } =
       await import('./oncall-handoff');
-    const { isBulkNotificationDeliveryPaused } = await import('./notification-capacity-control');
-    const bulkPaused = await isBulkNotificationDeliveryPaused();
+    const bulkPaused = ownership.notifications
+      ? await import('./notification-capacity-control').then(
+          ({ isBulkNotificationDeliveryPaused }) => isBulkNotificationDeliveryPaused()
+        )
+      : true;
     const [
       retryResult,
       criticalNotificationResult,
@@ -432,14 +542,17 @@ async function runOnce() {
       handoffResult,
       reminderCount,
     ] = await Promise.all([
-      // Also on the per-replica critical notification lane. Kept here so a
-      // scheduler-only deployment with no job-worker process still recovers;
-      // both paths claim before delivering, so running both is safe.
-      retryFailedNotifications(),
-      processCentralNotificationQueue({ trafficClasses: ['CRITICAL', 'TRANSACTIONAL'] }),
-      bulkPaused
-        ? Promise.resolve({ processed: 0, failed: 0, pending: 0, skipped: 0 })
-        : processCentralNotificationQueue({ trafficClasses: ['PUBLIC_INCIDENT', 'BULK'] }),
+      // Full-profile schedulers retain the legacy notification recovery path;
+      // maintenance schedulers never compete with dedicated notification lanes.
+      ownership.notifications
+        ? retryFailedNotifications()
+        : Promise.resolve({ retried: 0, succeeded: 0, failed: 0 }),
+      ownership.notifications
+        ? processCentralNotificationQueue({ trafficClasses: ['CRITICAL', 'TRANSACTIONAL'] })
+        : Promise.resolve({ processed: 0, failed: 0, pending: 0, skipped: 0 }),
+      ownership.notifications && !bulkPaused
+        ? processCentralNotificationQueue({ trafficClasses: ['PUBLIC_INCIDENT', 'BULK'] })
+        : Promise.resolve({ processed: 0, failed: 0, pending: 0, skipped: 0 }),
       processAutoUnsnoozeInternal(),
       checkSLABreaches(),
       processShiftRotations(new Date()),
@@ -460,6 +573,8 @@ async function runOnce() {
       shiftHandoff: handoffResult,
       shiftReminders: reminderCount,
     });
+
+    await assertLease(leaseEpoch);
 
     // Group 3: Maintenance tasks (low priority, run last)
     const tokenCleanup = await cleanupUserTokens();
@@ -494,6 +609,7 @@ async function runOnce() {
     // Cost cap: at most `MAX_BACKFILL_PER_RUN` days are generated per
     // tick to bound the lock-holding time. The next tick picks up
     // where this one left off.
+    await assertLease(leaseEpoch);
     const state = await getState();
     const now = new Date();
     const todayKey = now.toISOString().split('T')[0];
@@ -619,13 +735,13 @@ async function runOnce() {
           const { processServiceObjectiveSnapshots } =
             await import('@/jobs/service-objective-scheduler');
           serviceObjectiveSnapshots = await processServiceObjectiveSnapshots(now);
-          await updateState({
+          await updateSchedulerState({
             lastObjectiveSnapshotAt: now,
             lastObjectiveSnapshotSuccessAt:
               serviceObjectiveSnapshots.failed === 0 ? now : undefined,
             lastObjectiveSnapshotDurationMs: serviceObjectiveSnapshots.durationMs,
             lastObjectiveSnapshotFailed: serviceObjectiveSnapshots.failed,
-          });
+          }, leaseEpoch);
           if (serviceObjectiveSnapshots.failed > 0) {
             throw new Error(
               `${serviceObjectiveSnapshots.failed} service objective snapshot(s) failed; retrying the daily run`
@@ -636,9 +752,9 @@ async function runOnce() {
         // Only advance lastRollupDate when the backlog is fully
         // drained. Otherwise the next tick will pick up the rest.
         if (missingDays.length <= MAX_BACKFILL_PER_RUN) {
-          await updateState({ lastRollupDate: todayKey, lastRollupRefreshAt: now });
+          await updateSchedulerState({ lastRollupDate: todayKey, lastRollupRefreshAt: now }, leaseEpoch);
         } else {
-          await updateState({ lastRollupRefreshAt: now });
+          await updateSchedulerState({ lastRollupRefreshAt: now }, leaseEpoch);
         }
         logger.info('[Cron] Daily rollup maintenance complete', {
           generated: toGenerate.length,
@@ -658,10 +774,11 @@ async function runOnce() {
     }
 
     const duration = Date.now() - startTime;
-    await updateState({
+    await assertLease(leaseEpoch);
+    await updateSchedulerState({
       lastSuccessAt: new Date(),
       lastError: null,
-    });
+    }, leaseEpoch);
 
     logger.info('[Cron] Worker tick completed', {
       workerId: WORKER_ID,
@@ -669,7 +786,9 @@ async function runOnce() {
     });
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    await updateState({ lastError: errorMsg });
+    try {
+      await updateSchedulerState({ lastError: errorMsg }, leaseEpoch);
+    } catch (_) {}
     logger.error('[Cron] Worker tick failed', {
       workerId: WORKER_ID,
       error: errorMsg,
@@ -685,12 +804,12 @@ async function runOnce() {
     // window where a standby could acquire an unlocked row and run early.
     let nextTime: Date;
     try {
-      nextTime = await getNextScheduledTime();
+      nextTime = await getNextScheduledTime(schedulerProfile);
     } catch (error) {
       logger.error('[Cron] Failed to schedule next tick, retrying in MAX_DELAY', { error });
       nextTime = new Date(Date.now() + MAX_DELAY_MS);
     }
-    await releaseLock(nextTime);
+    await releaseLock(nextTime, leaseEpoch);
     scheduleNextRun(nextTime, false);
   }
 }
@@ -698,7 +817,7 @@ async function runOnce() {
 /**
  * Start the cron scheduler
  */
-export function startCronScheduler() {
+export function startCronScheduler(options: CronSchedulerOptions = {}) {
   if (initialized) {
     logger.debug('[Cron] Already initialized, skipping');
     return;
@@ -718,8 +837,9 @@ export function startCronScheduler() {
     return;
   }
 
+  schedulerProfile = options.profile ?? 'full';
   initialized = true;
-  logger.info('[Cron] Starting scheduler', { workerId: WORKER_ID });
+  logger.info('[Cron] Starting scheduler', { workerId: WORKER_ID, profile: schedulerProfile });
 
   // Schedule first run immediately
   scheduleNextRun(new Date());

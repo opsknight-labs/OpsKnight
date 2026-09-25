@@ -1,6 +1,11 @@
 # Default values for opsknight
 # This is a YAML-formatted file.
 
+# integrated preserves the historical all-in-one process. split renders a web
+# tier plus maintenance, general, critical, bulk, and projection workers.
+runtime:
+  mode: integrated
+
 replicaCount: 2
 
 image:
@@ -102,6 +107,9 @@ startupProbe:
   httpGet:
     path: /api/health?mode=readiness
     port: http
+    httpHeaders:
+      - name: Host
+        value: localhost
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 30
@@ -110,6 +118,9 @@ livenessProbe:
   httpGet:
     path: /api/health
     port: http
+    httpHeaders:
+      - name: Host
+        value: localhost
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
@@ -118,10 +129,82 @@ readinessProbe:
   httpGet:
     path: /api/health?mode=readiness
     port: http
+    httpHeaders:
+      - name: Host
+        value: localhost
   periodSeconds: 10
   timeoutSeconds: 5
   successThreshold: 1
   failureThreshold: 3
+
+# Split-runtime settings. Fixed worker replica counts are intentional: worker
+# count affects database and provider concurrency, so only the web tier has an
+# HPA only when explicitly capacity-planned.
+web:
+  replicaCount: 2
+  database:
+    poolSize: 10
+  resources:
+    requests: { cpu: 250m, memory: 256Mi }
+    limits: { cpu: 1000m, memory: 1Gi }
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: null
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 30
+
+scheduler:
+  replicaCount: 2
+  profile: maintenance
+  database: { poolSize: 3 }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 30
+
+generalWorker:
+  replicaCount: 2
+  database: { poolSize: 5 }
+  worker: { batchSize: 100, concurrency: 15, idlePollMs: 1000, busyPollMs: 100 }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 60
+
+criticalWorker:
+  replicaCount: 2
+  database: { poolSize: 5 }
+  worker: { batchSize: 50, concurrency: 10, idlePollMs: 1000, busyPollMs: 100 }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 60
+
+bulkWorker:
+  replicaCount: 2
+  database: { poolSize: 3 }
+  worker: { batchSize: 100, concurrency: 15, idlePollMs: 1000, busyPollMs: 100 }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 60
+
+statusProjector:
+  replicaCount: 2
+  database: { poolSize: 3 }
+  worker: { batchSize: 100, concurrency: 15, idlePollMs: 1000, busyPollMs: 100 }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 60
 
 secrets:
   # Use a pre-created Secret instead of rendering secret values into the Helm release.
@@ -129,6 +212,7 @@ secrets:
   existingSecret: ''
   keys:
     databaseUrl: DATABASE_URL
+    webDatabaseUrl: WEB_DATABASE_URL
     nextauthSecret: NEXTAUTH_SECRET
     encryptionKey: ENCRYPTION_KEY
     postgresUser: POSTGRES_USER
@@ -136,10 +220,20 @@ secrets:
   nextauthSecret: 'change_this_to_a_random_secret_in_production'
   encryptionKey: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
 
+# Pre-deploy migration Job. When enabled, migrations run once via a Helm
+# pre-install/pre-upgrade hook Job rather than inside each application pod.
+migrations:
+  job:
+    enabled: false
+
 networkPolicy:
   enabled: false
   ingressNamespaceLabels:
     kubernetes.io/metadata.name: ingress-nginx
+  # When postgresql.enabled=false, restrict database egress to these provider
+  # CIDRs. An empty list preserves broad compatibility; production should set
+  # the documented provider ranges.
+  externalDatabaseCIDRs: []
 
 config:
   nodeEnv: production
@@ -157,6 +251,9 @@ database:
   # NetworkPolicy cannot infer a port reliably from a URL. Keep this aligned
   # with database.url when using an external database on a non-default port.
   port: 5432
+  # Render-time ceiling for aggregate split-role pools at maximum web scale.
+  # Leave operational, migration, monitoring, and failover headroom above it.
+  maxApplicationConnections: 80
 
 postgresql:
   enabled: true
@@ -165,6 +262,10 @@ postgresql:
   port: '5432'
   username: opsknight
   password: 'opsknight_secure_password_change_me'
+  tls:
+    enabled: false
+    existingSecret: ''
+    caKey: ca.crt
   connectionLimit: 40
   poolTimeout: 30
   storage: 10Gi
@@ -197,3 +298,31 @@ postgresql:
     limits:
       memory: 2Gi
       cpu: 2000m
+
+pgbouncer:
+  enabled: false
+  replicas: 2
+  image:
+    repository: ghcr.io/icoretech/pgbouncer-docker
+    tag: '1.25.1'
+    digest: 'sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd'
+    pullPolicy: IfNotPresent
+  port: 6432
+  poolMode: transaction
+  maxClientConnections: 1000
+  defaultPoolSize: 10
+  reservePoolSize: 5
+  maxPreparedStatements: 100
+  existingAuthSecret: ''
+  authFileKey: userlist.txt
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities: { drop: [ALL] }
+    runAsNonRoot: true
+    runAsUser: 70
+    runAsGroup: 70
+    readOnlyRootFilesystem: true

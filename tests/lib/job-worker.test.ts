@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/jobs/queue', () => ({
+  processPendingGeneralJobs: vi.fn(),
   processPendingJobs: vi.fn(),
+  processPendingJobsByType: vi.fn(),
   runQueueMaintenance: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -22,6 +24,16 @@ vi.mock('@/lib/provider-admission', () => ({
   certifyNotificationControlPlane: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('@/lib/notification-capacity-control', () => ({
+  isBulkNotificationDeliveryPaused: vi.fn().mockResolvedValue(false),
+}));
+
+vi.mock('@/lib/notification-control-plane', () => ({
+  processCentralNotificationQueue: vi
+    .fn()
+    .mockResolvedValue({ processed: 0, failed: 0, total: 0 }),
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: {
     debug: vi.fn(),
@@ -31,7 +43,12 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-import { processPendingJobs } from '@/lib/jobs/queue';
+import {
+  processPendingGeneralJobs,
+  processPendingJobs,
+  processPendingJobsByType,
+  runQueueMaintenance,
+} from '@/lib/jobs/queue';
 import {
   consumeEscalationWakeRequest,
   criticalEscalationCycleWasBusy,
@@ -60,6 +77,12 @@ describe('dedicated job worker', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     vi.mocked(processPendingJobs).mockResolvedValue({ processed: 0, failed: 0, total: 0 });
+    vi.mocked(processPendingGeneralJobs).mockResolvedValue({
+      processed: 0,
+      failed: 0,
+      total: 0,
+    });
+    vi.mocked(processPendingJobsByType).mockResolvedValue({ processed: 0, failed: 0, total: 0 });
     vi.mocked(runCriticalEscalationCycle).mockResolvedValue({
       jobsClaimed: 0,
       jobsProcessed: 0,
@@ -119,13 +142,58 @@ describe('dedicated job worker', () => {
     ).toThrow(/cannot exceed/);
   });
 
-  it('starts immediately and processes the durable queue with existing queue defaults', async () => {
-    startJobWorker();
+  it('lets an integrated worker defer queue maintenance to its full scheduler', async () => {
+    startJobWorker('all', { ownsQueueMaintenance: false });
     await vi.advanceTimersByTimeAsync(0);
 
     expect(processPendingJobs).toHaveBeenCalledTimes(1);
     expect(processPendingJobs).toHaveBeenCalledWith(100, 15);
+    expect(runQueueMaintenance).not.toHaveBeenCalled();
     expect(getJobWorkerStatus().running).toBe(true);
+  });
+
+  it('keeps queue maintenance in a standalone legacy all-lane worker', async () => {
+    startJobWorker();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runQueueMaintenance).toHaveBeenCalledTimes(1);
+  });
+
+  it('isolates ordinary operational jobs in the general worker lane', async () => {
+    startJobWorker('general');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(processPendingGeneralJobs).toHaveBeenCalledWith(100, 15);
+    expect(processPendingJobs).not.toHaveBeenCalled();
+    expect(runCriticalEscalationCycle).not.toHaveBeenCalled();
+    expect(runCriticalNotificationCycle).not.toHaveBeenCalled();
+    expect(runQueueMaintenance).not.toHaveBeenCalled();
+  });
+
+  it('does not duplicate queue maintenance on specialized worker lanes', async () => {
+    startJobWorker('critical');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(runQueueMaintenance).not.toHaveBeenCalled();
+  });
+
+  it('assigns both V1 and V2 announcement fan-out jobs to the bulk lane', async () => {
+    startJobWorker('bulk');
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(processPendingJobsByType).toHaveBeenCalledWith('STATUS_PAGE_NOTIFICATION', 100, 15);
+    expect(processPendingJobsByType).toHaveBeenCalledWith(
+      'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
+      100,
+      15
+    );
+    expect(processPendingJobsByType).toHaveBeenCalledWith(
+      'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2',
+      100,
+      15
+    );
   });
 
   it('runs both critical lanes on every replica, ahead of the general queue', async () => {

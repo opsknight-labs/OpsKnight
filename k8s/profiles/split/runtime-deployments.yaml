@@ -1,0 +1,232 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: opsknight-web, namespace: opsknight }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: web } }
+  template:
+    metadata: { labels: { app: opsknight-app, opsknight-role: web } }
+    spec:
+      serviceAccountName: opsknight-app
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: opsknight-app
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
+          imagePullPolicy: Always
+          ports: [{ name: http, containerPort: 3000 }]
+          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          env:
+            - { name: OPSKNIGHT_PROCESS_ROLE, value: web }
+            - { name: DATABASE_POOL_SIZE_WEB, value: '10' }
+            - { name: DATABASE_URL, value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30' }
+          resources: { requests: { cpu: 250m, memory: 256Mi }, limits: { cpu: '1', memory: 1Gi } }
+          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
+          livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: web } } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: opsknight-scheduler, namespace: opsknight }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: scheduler } }
+  template:
+    metadata: { labels: { app: opsknight-app, opsknight-role: scheduler } }
+    spec:
+      serviceAccountName: opsknight-app
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: opsknight-app
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
+          imagePullPolicy: Always
+          ports: [{ name: http, containerPort: 3000 }]
+          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          env:
+            - { name: OPSKNIGHT_PROCESS_ROLE, value: scheduler }
+            - { name: OPSKNIGHT_SCHEDULER_PROFILE, value: maintenance }
+            - { name: DATABASE_POOL_SIZE_SCHEDULER, value: '3' }
+            - { name: DATABASE_URL, value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30' }
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
+          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
+          livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: scheduler } } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: opsknight-general-worker, namespace: opsknight }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: general-worker } }
+  template:
+    metadata: { labels: { app: opsknight-app, opsknight-role: general-worker } }
+    spec:
+      serviceAccountName: opsknight-app
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: opsknight-app
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
+          imagePullPolicy: Always
+          ports: [{ name: http, containerPort: 3000 }]
+          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          env:
+            - { name: OPSKNIGHT_PROCESS_ROLE, value: general-worker }
+            - { name: DATABASE_POOL_SIZE_GENERAL_WORKER, value: '5' }
+            - { name: OPSKNIGHT_WORKER_BATCH_SIZE, value: '100' }
+            - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '15' }
+            - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
+            - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
+            - { name: DATABASE_URL, value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30' }
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
+          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
+          livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: general-worker } } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: opsknight-critical-worker, namespace: opsknight }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: critical-worker } }
+  template:
+    metadata: { labels: { app: opsknight-app, opsknight-role: critical-worker } }
+    spec:
+      serviceAccountName: opsknight-app
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: opsknight-app
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
+          imagePullPolicy: Always
+          ports: [{ name: http, containerPort: 3000 }]
+          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          env:
+            - { name: OPSKNIGHT_PROCESS_ROLE, value: critical-worker }
+            - { name: DATABASE_POOL_SIZE_CRITICAL_WORKER, value: '5' }
+            - { name: OPSKNIGHT_WORKER_BATCH_SIZE, value: '50' }
+            - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '10' }
+            - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
+            - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
+            - { name: DATABASE_URL, value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30' }
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
+          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
+          livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: critical-worker } } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: opsknight-bulk-worker, namespace: opsknight }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: bulk-worker } }
+  template:
+    metadata: { labels: { app: opsknight-app, opsknight-role: bulk-worker } }
+    spec:
+      serviceAccountName: opsknight-app
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: opsknight-app
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
+          imagePullPolicy: Always
+          ports: [{ name: http, containerPort: 3000 }]
+          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          env:
+            - { name: OPSKNIGHT_PROCESS_ROLE, value: bulk-worker }
+            - { name: DATABASE_POOL_SIZE_BULK_WORKER, value: '3' }
+            - { name: OPSKNIGHT_WORKER_BATCH_SIZE, value: '100' }
+            - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '15' }
+            - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
+            - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
+            - { name: DATABASE_URL, value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30' }
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
+          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
+          livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: bulk-worker } } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: opsknight-status-projector, namespace: opsknight }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: status-projector } }
+  template:
+    metadata: { labels: { app: opsknight-app, opsknight-role: status-projector } }
+    spec:
+      serviceAccountName: opsknight-app
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: opsknight-app
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
+          imagePullPolicy: Always
+          ports: [{ name: http, containerPort: 3000 }]
+          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          env:
+            - { name: OPSKNIGHT_PROCESS_ROLE, value: status-projector }
+            - { name: DATABASE_POOL_SIZE_STATUS_PROJECTOR, value: '3' }
+            - { name: OPSKNIGHT_WORKER_BATCH_SIZE, value: '100' }
+            - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '15' }
+            - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
+            - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
+            - { name: DATABASE_URL, value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30' }
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
+          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
+          livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: status-projector } } }
