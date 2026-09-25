@@ -341,12 +341,12 @@ describe('ManageEngine Integration — Comprehensive Real-World Suite', () => {
         enabled: true,
         signatureSecret: null,
         key: 'secret_me_key_123',
-      } as any);
+      } as never);
 
       vi.mocked(processEvent).mockResolvedValue({
         action: 'triggered',
         incident: { id: 'inc_9001', status: 'OPEN', urgency: 'HIGH' },
-      } as any);
+      } as never);
 
       const rawBody = JSON.stringify({
         alarmid: 9001,
@@ -401,12 +401,12 @@ describe('ManageEngine Integration — Comprehensive Real-World Suite', () => {
         enabled: true,
         signatureSecret: hmacSecret,
         key: 'valid_me_key',
-      } as any);
+      } as never);
 
       vi.mocked(processEvent).mockResolvedValue({
         action: 'triggered',
         incident: { id: 'inc_9002', status: 'OPEN', urgency: 'HIGH' },
-      } as any);
+      } as never);
 
       const rawBody = JSON.stringify({
         alarmid: 9002,

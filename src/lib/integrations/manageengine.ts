@@ -88,17 +88,34 @@ function repairMalformedManageEngineJson(raw: string): string {
   return out.replace(/,(\s*[}\]])/g, '$1');
 }
 
+function isRecord(val: unknown): val is Record<string, unknown> {
+  return Boolean(val && typeof val === 'object' && !Array.isArray(val));
+}
+
 function unwrapEnvelope(obj: Record<string, unknown>): Record<string, unknown> {
-  const envelopeKeys = ['alarm', 'alert', 'request', 'event', 'data', 'incident'];
-  for (const key of envelopeKeys) {
-    // eslint-disable-next-line security/detect-object-injection
-    const nested = obj[key];
-    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-      const rest = { ...obj };
-      // eslint-disable-next-line security/detect-object-injection
-      delete rest[key];
-      return { ...(nested as Record<string, unknown>), ...rest };
-    }
+  if (isRecord(obj.alarm)) {
+    const { alarm, ...rest } = obj;
+    return { ...alarm, ...rest };
+  }
+  if (isRecord(obj.alert)) {
+    const { alert, ...rest } = obj;
+    return { ...alert, ...rest };
+  }
+  if (isRecord(obj.request)) {
+    const { request, ...rest } = obj;
+    return { ...request, ...rest };
+  }
+  if (isRecord(obj.event)) {
+    const { event, ...rest } = obj;
+    return { ...event, ...rest };
+  }
+  if (isRecord(obj.data)) {
+    const { data, ...rest } = obj;
+    return { ...data, ...rest };
+  }
+  if (isRecord(obj.incident)) {
+    const { incident, ...rest } = obj;
+    return { ...incident, ...rest };
   }
   return obj;
 }
@@ -141,9 +158,8 @@ export function parseManageEnginePayload(rawBody: string): ManageEnginePayload {
     const params = new URLSearchParams(trimmed);
     const entries: Record<string, unknown> = Object.fromEntries(params.entries());
 
-    for (const jsonField of ['input_data', 'payload', 'data']) {
-      // eslint-disable-next-line security/detect-object-injection
-      const rawJsonField = entries[jsonField];
+    const jsonCandidates = [entries.input_data, entries.payload, entries.data];
+    for (const rawJsonField of jsonCandidates) {
       if (typeof rawJsonField === 'string' && rawJsonField.trim().startsWith('{')) {
         try {
           const inner = JSON.parse(repairMalformedManageEngineJson(rawJsonField.trim()));
