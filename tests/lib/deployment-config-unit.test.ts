@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
+import { calculateRuntimeCapacity } from '../../scripts/validate-runtime-capacity';
 
 /* eslint-disable security/detect-non-literal-fs-filename, security/detect-non-literal-regexp -- Deployment contract tests inspect a fixed repository-local file set. */
 
@@ -411,10 +412,6 @@ describe('deployment configuration invariants', () => {
   });
 
   it('validates runtime database connection capacity budgets across topologies', () => {
-    const script = path.join(root, 'scripts/validate-runtime-capacity.cjs');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { calculateRuntimeCapacity } = require(script);
-
     // Default split capacity within budget
     const defaultSplit = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'split' });
     expect(defaultSplit.safe).toBe(true);
