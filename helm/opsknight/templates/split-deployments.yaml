@@ -1,5 +1,8 @@
 {{- if eq .Values.runtime.mode "split" }}
 {{- $root := . }}
+{{- if and (not .Values.image.tag) (not .Values.image.digest) }}
+{{- fail "runtime.mode=split requires an explicit image.tag or image.digest built with split-runtime support" }}
+{{- end }}
 {{- $roles := list
   (dict "name" "web" "processRole" "web" "values" .Values.web "poolEnv" "DATABASE_POOL_SIZE_WEB")
   (dict "name" "scheduler" "processRole" "scheduler" "values" .Values.scheduler "poolEnv" "DATABASE_POOL_SIZE_SCHEDULER")
@@ -86,7 +89,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" $root }}
-                  key: {{ if eq $role.name "web" }}{{ $root.Values.secrets.keys.webDatabaseUrl }}{{ else }}{{ $root.Values.secrets.keys.databaseUrl }}{{ end }}
+                  key: {{ if and (eq $role.name "web") $root.Values.pgbouncer.enabled }}{{ $root.Values.secrets.keys.webDatabaseUrl }}{{ else }}{{ $root.Values.secrets.keys.databaseUrl }}{{ end }}
             - name: NEXTAUTH_SECRET
               valueFrom:
                 secretKeyRef:

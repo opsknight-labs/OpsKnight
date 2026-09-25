@@ -16,7 +16,7 @@ The root remains the integrated compatibility entrypoint. Three profiles make th
 
 The PgBouncer profile replaces the web tier's direct PostgreSQL egress with web-to-PgBouncer TCP/6432. PgBouncer alone receives PostgreSQL TCP/5432 egress, plus DNS for resolving the Service hostname. Kubernetes NetworkPolicies are additive, so production overlays must preserve that replacement rather than add a second web policy that leaves direct database access available.
 
-The checked-in `k8s/base` contains the common resources shared by those profiles. Do not omit the general worker: the specialized lanes intentionally do not claim ordinary operational background jobs.
+The checked-in `k8s/base` contains the common resources shared by those profiles. Do not omit the general worker: the specialized lanes intentionally do not claim ordinary operational background jobs. The split manifests intentionally use the non-published marker tag `split-runtime-image-required`; a production overlay must replace it with a tested tag or digest containing the split roles. This prevents the older integrated compatibility image from being started with unsupported role names.
 
 Moving an existing installation from the root integrated entrypoint to a split profile changes the Service selector to `opsknight-role: web`. Existing integrated pods lack that label. Plan this as a controlled one-time endpoint cutover or pre-stage a compatible serving label; a Deployment `maxUnavailable: 0` setting does not by itself make a Service-selector migration interruption-free.
 
@@ -43,6 +43,15 @@ At minimum customize:
 - storage class/capacity/backup policy;
 - resource requests/limits, replicas, HPA and PDB;
 - NetworkPolicy ingress namespace labels and database destinations.
+
+For example, pin the split-compatible image in the overlay:
+
+```yaml
+images:
+  - name: ghcr.io/opsknight-labs/opsknight
+    newName: ghcr.io/opsknight-labs/opsknight
+    digest: sha256:<tested-split-runtime-manifest-digest>
+```
 
 For Prometheus Operator, add the optional `k8s/monitoring/servicemonitor.yaml` from the production
 overlay, inject `PROMETHEUS_SCRAPE_TOKEN` into the application from a dedicated Secret, and allow the

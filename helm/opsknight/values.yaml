@@ -130,7 +130,7 @@ readinessProbe:
 
 # Split-runtime settings. Fixed worker replica counts are intentional: worker
 # count affects database and provider concurrency, so only the web tier has an
-# HPA by default.
+# HPA only when explicitly capacity-planned.
 web:
   replicaCount: 2
   database:
@@ -139,7 +139,7 @@ web:
     requests: { cpu: 250m, memory: 256Mi }
     limits: { cpu: 1000m, memory: 1Gi }
   autoscaling:
-    enabled: true
+    enabled: false
     minReplicas: 2
     maxReplicas: 12
     targetCPUUtilizationPercentage: 70

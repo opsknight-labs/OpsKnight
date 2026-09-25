@@ -77,15 +77,21 @@ jobs:
           helm template opsknight helm/opsknight \
             --namespace opsknight \
             -f helm/opsknight/examples/values-split-runtime.yaml \
+            --set-string image.tag=ci-split-runtime \
             > /tmp/opsknight-helm-split.yaml
           helm template opsknight helm/opsknight \
             --namespace opsknight \
             -f helm/opsknight/examples/values-split-runtime.yaml \
+            --set-string image.tag=ci-split-runtime \
             --set pgbouncer.enabled=true \
             --set-string postgresql.password=ci-non-default-password \
             > /tmp/opsknight-helm-split-pgbouncer.yaml
           if helm template opsknight helm/opsknight --set runtime.mode=invalid >/dev/null 2>&1; then
             echo 'invalid runtime.mode unexpectedly rendered'
+            exit 1
+          fi
+          if helm template opsknight helm/opsknight --set runtime.mode=split >/dev/null 2>&1; then
+            echo 'split runtime unexpectedly rendered without an explicit compatible image'
             exit 1
           fi
           if helm template opsknight helm/opsknight --set criticalWorker.databse.poolSize=10 >/dev/null 2>&1; then
@@ -138,6 +144,17 @@ jobs:
           done
           grep -Eq 'value: "?maintenance"?' /tmp/opsknight-helm-split.yaml
           grep -q 'value: maintenance' /tmp/opsknight-kustomize-split.yaml
+          grep -q 'key: DATABASE_URL' /tmp/opsknight-helm-split.yaml
+          if grep -q 'key: WEB_DATABASE_URL' /tmp/opsknight-helm-split.yaml; then
+            echo 'split runtime without PgBouncer unexpectedly requires WEB_DATABASE_URL'
+            exit 1
+          fi
+          grep -q 'key: WEB_DATABASE_URL' /tmp/opsknight-helm-split-pgbouncer.yaml
+          grep -q 'split-runtime-image-required' /tmp/opsknight-kustomize-split.yaml
+          if grep -q '^kind: HorizontalPodAutoscaler$' /tmp/opsknight-helm-split.yaml; then
+            echo 'generic split example unexpectedly enables the web HPA'
+            exit 1
+          fi
           grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-helm-split-pgbouncer.yaml
           grep -q 'name: opsknight-pgbouncer' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'pgbouncer=true' /tmp/opsknight-kustomize-split-pgbouncer.yaml

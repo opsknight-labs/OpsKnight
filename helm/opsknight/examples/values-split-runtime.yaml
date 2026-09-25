@@ -1,12 +1,16 @@
 runtime:
   mode: split
 
+# Required: set a tag or digest for an image built with split-runtime support.
+# image:
+#   digest: sha256:<tested-split-runtime-manifest-digest>
+
 web:
   replicaCount: 2
   database:
     poolSize: 10
   autoscaling:
-    enabled: true
+    enabled: false
     minReplicas: 2
     maxReplicas: 12
 

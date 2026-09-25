@@ -267,7 +267,16 @@ async function runOnce(): Promise<void> {
         workerState.workerConfig.batchSize,
         workerState.workerConfig.concurrency
       );
-      const failed = notifications.failed + incidentFanout.failed + announcementFanout.failed;
+      const announcementFanoutV2 = await processPendingJobsByType(
+        'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2',
+        workerState.workerConfig.batchSize,
+        workerState.workerConfig.concurrency
+      );
+      const failed =
+        notifications.failed +
+        incidentFanout.failed +
+        announcementFanout.failed +
+        announcementFanoutV2.failed;
       if (failed > 0) {
         workerState.lastError = `${failed} bulk delivery job(s) failed`;
         logger.warn('[JobWorker] Bulk lane degraded', { failed });
@@ -275,7 +284,12 @@ async function runOnce(): Promise<void> {
         workerState.lastSuccessAt = new Date();
         workerState.lastError = null;
       }
-      const busy = notifications.processed + incidentFanout.total + announcementFanout.total > 0;
+      const busy =
+        notifications.processed +
+          incidentFanout.total +
+          announcementFanout.total +
+          announcementFanoutV2.total >
+        0;
       scheduleNextRun(
         busy
           ? workerState.workerConfig.busyPollMs

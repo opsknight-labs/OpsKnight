@@ -141,6 +141,9 @@ describe('deployment configuration invariants', () => {
       'app.kubernetes.io/component: web'
     );
     expect(read('k8s/profiles/split/web-service.yaml')).toContain('opsknight-role: web');
+    expect(rawDeployments).toContain('opsknight:split-runtime-image-required');
+    expect(rawDeployments).not.toContain('opsknight:1.4.0-hotfix');
+    expect(helmDeployments).toContain('requires an explicit image.tag or image.digest');
   });
 
   it('keeps Kustomize shared-base copies aligned with the compatibility root', () => {
@@ -172,6 +175,9 @@ describe('deployment configuration invariants', () => {
     );
     expect(values).toContain('pgbouncer:\n  enabled: false');
     expect(helmPgBouncer).toContain('pool_mode = {{ .Values.pgbouncer.poolMode }}');
+    expect(read('helm/opsknight/templates/split-deployments.yaml')).toContain(
+      '(eq $role.name "web") $root.Values.pgbouncer.enabled'
+    );
     expect(rawWebPatch).toContain('@opsknight-pgbouncer:6432');
     expect(overlay).toContain('path: /spec/egress/0');
     expect(overlay).toContain('app: opsknight-pgbouncer');
@@ -190,19 +196,17 @@ describe('deployment configuration invariants', () => {
       properties: Record<string, { $ref?: string }>;
       definitions: Record<string, { additionalProperties?: boolean }>;
     };
-    for (const role of [
-      'web',
-      'scheduler',
-      'generalWorker',
-      'criticalWorker',
-      'bulkWorker',
-      'statusProjector',
-      'pgbouncer',
-    ]) {
-      const definition = schema.properties[role]?.$ref?.replace('#/definitions/', '');
-      expect(definition).toBeTruthy();
-      expect(schema.definitions[definition!]?.additionalProperties).toBe(false);
-    }
+    expect(schema.properties.web?.$ref).toBe('#/definitions/webRole');
+    expect(schema.properties.scheduler?.$ref).toBe('#/definitions/schedulerRole');
+    expect(schema.properties.generalWorker?.$ref).toBe('#/definitions/workerRole');
+    expect(schema.properties.criticalWorker?.$ref).toBe('#/definitions/workerRole');
+    expect(schema.properties.bulkWorker?.$ref).toBe('#/definitions/workerRole');
+    expect(schema.properties.statusProjector?.$ref).toBe('#/definitions/workerRole');
+    expect(schema.properties.pgbouncer?.$ref).toBe('#/definitions/pgbouncer');
+    expect(schema.definitions.webRole?.additionalProperties).toBe(false);
+    expect(schema.definitions.schedulerRole?.additionalProperties).toBe(false);
+    expect(schema.definitions.workerRole?.additionalProperties).toBe(false);
+    expect(schema.definitions.pgbouncer?.additionalProperties).toBe(false);
     expect(values).toContain('defaultPoolSize: 10');
     expect(values).toContain('reservePoolSize: 5');
   });

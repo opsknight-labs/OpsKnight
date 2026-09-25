@@ -19,7 +19,7 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             runAsUser: 1001
-          image: ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
           imagePullPolicy: Always
           ports: [{ name: http, containerPort: 3000 }]
           envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
@@ -55,7 +55,7 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             runAsUser: 1001
-          image: ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
           imagePullPolicy: Always
           ports: [{ name: http, containerPort: 3000 }]
           envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
@@ -92,7 +92,7 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             runAsUser: 1001
-          image: ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
           imagePullPolicy: Always
           ports: [{ name: http, containerPort: 3000 }]
           envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
@@ -132,7 +132,7 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             runAsUser: 1001
-          image: ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
           imagePullPolicy: Always
           ports: [{ name: http, containerPort: 3000 }]
           envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
@@ -172,7 +172,7 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             runAsUser: 1001
-          image: ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
           imagePullPolicy: Always
           ports: [{ name: http, containerPort: 3000 }]
           envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
@@ -212,7 +212,7 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             runAsUser: 1001
-          image: ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
           imagePullPolicy: Always
           ports: [{ name: http, containerPort: 3000 }]
           envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
