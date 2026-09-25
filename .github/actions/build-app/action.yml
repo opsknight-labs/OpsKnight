@@ -22,6 +22,10 @@ runs:
       shell: bash
       run: npm run perf:budgets
 
+    - name: Prune Next.js build cache from artifact payload
+      shell: bash
+      run: rm -rf .next/cache
+
     - name: Upload build artifact
       if: inputs.upload-artifact == 'true'
       uses: actions/upload-artifact@v4

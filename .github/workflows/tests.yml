@@ -357,6 +357,25 @@ jobs:
               throw new Error('No JUnit XML files found in reports directory');
             }
 
+            const unitPath = 'reports/junit-unit.xml';
+            const dbPath = 'reports/junit-db.xml';
+            if (!fs.existsSync(unitPath)) {
+              throw new Error(`${unitPath} is missing; unit test report artifact was not produced`);
+            }
+            if (!fs.existsSync(dbPath)) {
+              throw new Error(`${dbPath} is missing; database integration test report artifact was not produced`);
+            }
+
+            const unitCounts = parseXml(fs.readFileSync(unitPath, 'utf8'));
+            const dbCounts = parseXml(fs.readFileSync(dbPath, 'utf8'));
+
+            if (unitCounts.tests === 0) {
+              throw new Error(`${unitPath} reports 0 tests; unit suite was empty or failed silently`);
+            }
+            if (dbCounts.tests === 0) {
+              throw new Error(`${dbPath} reports 0 tests; database integration suite was empty or failed silently`);
+            }
+
             const totals = xmlFiles.reduce(
               (acc, f) => {
                 const xml = fs.readFileSync(`reports/${f}`, 'utf8');
