@@ -213,17 +213,17 @@ export async function sendServiceNotifications(
     }
 
     if (serviceChannels.includes('MICROSOFT_TEAMS' as never)) {
-      const teamsDestination = await (
+      const teamsDestinations = await (
         prisma as unknown as {
           microsoftTeamsDestination: {
-            findFirst: (a: unknown) => Promise<{ id: string; enabled: boolean } | null>;
+            findMany: (a: unknown) => Promise<Array<{ id: string; enabled: boolean }>>;
           };
         }
-      ).microsoftTeamsDestination.findFirst({
+      ).microsoftTeamsDestination.findMany({
         where: { serviceId: service.id, enabled: true },
-        orderBy: { updatedAt: 'desc' },
+        orderBy: { createdAt: 'asc' },
       } as never);
-      if (teamsDestination?.enabled) {
+      if (teamsDestinations.length > 0) {
         // Claim-first ExternalOperation path: idempotent row + durable BackgroundJob
         // (ExternalOperation @@unique([provider,idempotencyKey]) + advisory lock + AMBIGUOUS semantics).
         // Central Notification intent is superseded for Teams — this fence prevents duplicate cards
@@ -238,18 +238,24 @@ export async function sendServiceNotifications(
               : teamsEventType === 'resolved'
                 ? (incident.resolvedAt ?? incident.updatedAt)
                 : incident.updatedAt);
-        const result = await persistIntent(async () => {
-          const { enqueueMicrosoftTeamsDelivery } = await import('./microsoft-teams/delivery');
-          await enqueueMicrosoftTeamsDelivery({
-            incidentId,
-            destinationId: teamsDestination.id,
-            eventType: teamsEventType,
-            incidentUpdatedAt: incidentUpdatedAtForTeams,
-            escalationGeneration: eventGeneration,
-          });
-        });
-        if (!result.success)
-          errors.push(`Microsoft Teams notification failed: ${result.error || 'Unknown error'}`);
+        const { enqueueMicrosoftTeamsDelivery } = await import('./microsoft-teams/delivery');
+        await Promise.all(
+          teamsDestinations.map(async teamsDestination => {
+            const result = await persistIntent(async () => {
+              await enqueueMicrosoftTeamsDelivery({
+                incidentId,
+                destinationId: teamsDestination.id,
+                eventType: teamsEventType,
+                incidentUpdatedAt: incidentUpdatedAtForTeams,
+                escalationGeneration: eventGeneration,
+              });
+            });
+            if (!result.success)
+              errors.push(
+                `Microsoft Teams notification failed for destination ${teamsDestination.id}: ${result.error || 'Unknown error'}`
+              );
+          })
+        );
       }
     }
 
