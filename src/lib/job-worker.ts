@@ -433,7 +433,7 @@ export function startJobWorker(
   workerState.workerConfig = getJobWorkerConfig();
   workerState.workerLane = lane;
   workerState.ownsQueueMaintenance =
-    options.ownsQueueMaintenance ?? (lane === 'all' || lane === 'general');
+    options.ownsQueueMaintenance ?? lane === 'all';
   workerState.initialized = true;
   workerState.lastRunAt = null;
   workerState.lastSuccessAt = null;

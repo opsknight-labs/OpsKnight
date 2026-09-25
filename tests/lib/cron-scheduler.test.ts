@@ -159,7 +159,7 @@ describe('cron-scheduler lifecycle', () => {
 
     expect(tasks.processPendingJobs).not.toHaveBeenCalled();
     expect(tasks.processPendingEscalations).not.toHaveBeenCalled();
-    expect(tasks.runQueueMaintenance).not.toHaveBeenCalled();
+    expect(tasks.runQueueMaintenance).toHaveBeenCalledTimes(1);
     expect(tasks.retryFailedNotifications).not.toHaveBeenCalled();
     expect(tasks.processCentralNotificationQueue).not.toHaveBeenCalled();
     expect(tasks.reconcileEscalations).not.toHaveBeenCalled();

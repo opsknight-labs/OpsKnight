@@ -167,7 +167,7 @@ describe('dedicated job worker', () => {
     expect(processPendingJobs).not.toHaveBeenCalled();
     expect(runCriticalEscalationCycle).not.toHaveBeenCalled();
     expect(runCriticalNotificationCycle).not.toHaveBeenCalled();
-    expect(runQueueMaintenance).toHaveBeenCalledTimes(1);
+    expect(runQueueMaintenance).not.toHaveBeenCalled();
   });
 
   it('does not duplicate queue maintenance on specialized worker lanes', async () => {

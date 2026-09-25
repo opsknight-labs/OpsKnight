@@ -77,9 +77,9 @@ export async function register() {
     if (responsibilities.startJobWorker) {
       const { startJobWorker, stopJobWorker } = await import('./lib/job-worker');
       startJobWorker(responsibilities.workerLane ?? 'all', {
-        // Integrated mode starts the full scheduler, which is the sole queue
-        // maintenance owner. A standalone legacy worker retains ownership.
-        ownsQueueMaintenance: !responsibilities.startScheduler,
+        // Elected schedulers own maintenance in integrated and split modes.
+        // Preserve it only for the legacy standalone all-lane worker role.
+        ownsQueueMaintenance: role === 'worker',
       });
       stopJobWorkerService = stopJobWorker;
     }

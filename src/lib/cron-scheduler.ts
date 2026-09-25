@@ -375,16 +375,15 @@ async function runOnce() {
       ? await processPendingEscalations()
       : { processed: 0, total: 0 };
 
-    // Full-profile schedulers preserve the historical recovery fallback.
-    // Maintenance-profile schedulers leave queue ownership to dedicated lanes.
-    if (ownership.backgroundJobs) {
-      try {
-        await runQueueMaintenance();
-      } catch (queueMaintErr) {
-        logger.warn('[Cron] Periodic queue maintenance sweep failed', {
-          error: queueMaintErr instanceof Error ? queueMaintErr.message : String(queueMaintErr),
-        });
-      }
+    // Queue maintenance belongs to the elected scheduler leader in every
+    // topology. The scheduler's distributed lock ensures that multiple
+    // scheduler replicas do not duplicate reconciliation and stale-job sweeps.
+    try {
+      await runQueueMaintenance();
+    } catch (queueMaintErr) {
+      logger.warn('[Cron] Periodic queue maintenance sweep failed', {
+        error: queueMaintErr instanceof Error ? queueMaintErr.message : String(queueMaintErr),
+      });
     }
 
     const reconciliation = ownership.escalations
