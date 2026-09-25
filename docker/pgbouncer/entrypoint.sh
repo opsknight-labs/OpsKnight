@@ -8,94 +8,52 @@ WORK_DIR="/tmp/pgbouncer"
 mkdir -p "$WORK_DIR"
 chmod 700 "$WORK_DIR"
 
-# Parse connection settings from explicit variables or OPSKNIGHT_DATABASE_URL
 DB_HOST="${PGBOUNCER_DB_HOST:-}"
-DB_PORT="${PGBOUNCER_DB_PORT:-}"
-DB_NAME="${PGBOUNCER_DB_NAME:-}"
-DB_USER="${PGBOUNCER_DB_USER:-}"
-DB_PASS="${PGBOUNCER_DB_PASSWORD:-}"
-TLS_SSLMODE="${PGBOUNCER_SERVER_TLS_SSLMODE:-}"
 TLS_CA_FILE="${PGBOUNCER_SERVER_TLS_CA_FILE:-/etc/ssl/certs/ca-certificates.crt}"
 
-# If OPSKNIGHT_DATABASE_URL is set and explicit DB_HOST is not provided, parse the URL
-if [ -z "$DB_HOST" ] && [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
-  # Format: postgresql://[user[:password]@]host[:port][/dbname][?params]
-  URL_WITHOUT_PROTO="${OPSKNIGHT_DATABASE_URL#*://}"
-  PARAMS=""
-  case "$URL_WITHOUT_PROTO" in
-    *\?*)
-      PARAMS="${URL_WITHOUT_PROTO#*\?}"
-      URL_WITHOUT_PROTO="${URL_WITHOUT_PROTO%%\?*}"
-      ;;
-  esac
-
-  case "$URL_WITHOUT_PROTO" in
-    *@*)
-      AUTH_PART="${URL_WITHOUT_PROTO%%@*}"
-      HOST_DB_PART="${URL_WITHOUT_PROTO#*@}"
-      if [ -z "$DB_USER" ]; then
-        case "$AUTH_PART" in
-          *:*) DB_USER="${AUTH_PART%%:*}"; DB_PASS="${AUTH_PART#*:}" ;;
-          *) DB_USER="$AUTH_PART" ;;
-        esac
-      fi
-      ;;
-    *)
-      HOST_DB_PART="$URL_WITHOUT_PROTO"
-      ;;
-  esac
-
-  case "$HOST_DB_PART" in
-    */*)
-      HOST_PORT_PART="${HOST_DB_PART%%/*}"
-      if [ -z "$DB_NAME" ]; then
-        DB_NAME="${HOST_DB_PART#*/}"
-      fi
-      ;;
-    *)
-      HOST_PORT_PART="$HOST_DB_PART"
-      ;;
-  esac
-
-  case "$HOST_PORT_PART" in
-    *:*)
-      DB_HOST="${HOST_PORT_PART%%:*}"
-      if [ -z "$DB_PORT" ]; then
-        DB_PORT="${HOST_PORT_PART#*:}"
-      fi
-      ;;
-    *)
-      DB_HOST="$HOST_PORT_PART"
-      ;;
-  esac
-
-  # Extract sslmode if present in params
-  if [ -z "$TLS_SSLMODE" ] && [ -n "$PARAMS" ]; then
-    case "$PARAMS" in
-      *sslmode=verify-full*) TLS_SSLMODE="verify-full" ;;
-      *sslmode=verify-ca*)   TLS_SSLMODE="verify-ca" ;;
-      *sslmode=require*)     TLS_SSLMODE="require" ;;
-      *sslmode=prefer*)      TLS_SSLMODE="prefer" ;;
-      *sslmode=disable*)     TLS_SSLMODE="disable" ;;
-    esac
+# Fail-closed validation for external database without PgBouncer configuration
+if [ -z "$DB_HOST" ]; then
+  if [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
+    echo "[FATAL] External PostgreSQL (OPSKNIGHT_DATABASE_URL) requires explicit structured PgBouncer parameters:" >&2
+    echo "  - PGBOUNCER_DB_HOST" >&2
+    echo "  - PGBOUNCER_DB_PORT (default: 5432)" >&2
+    echo "  - PGBOUNCER_DB_NAME (default: \${POSTGRES_DB:-opsknight_db})" >&2
+    echo "  - PGBOUNCER_DB_USER (default: \${POSTGRES_USER:-opsknight})" >&2
+    echo "  - PGBOUNCER_DB_PASSWORD" >&2
+    echo "  - PGBOUNCER_SERVER_TLS_SSLMODE (default: verify-full)" >&2
+    exit 1
   fi
-fi
 
-# Fallback to local container defaults
-DB_HOST="${DB_HOST:-${POSTGRES_HOST:-opsknight-db}}"
-DB_PORT="${DB_PORT:-${POSTGRES_PORT:-5432}}"
-DB_NAME="${DB_NAME:-${POSTGRES_DB:-opsknight_db}}"
-DB_USER="${DB_USER:-${POSTGRES_USER:-opsknight}}"
-DB_PASS="${DB_PASS:-${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}"
+  # Automatic fallback for bundled PostgreSQL container
+  DB_HOST="${POSTGRES_HOST:-opsknight-db}"
+  DB_PORT="${POSTGRES_PORT:-5432}"
+  DB_NAME="${POSTGRES_DB:-opsknight_db}"
+  DB_USER="${POSTGRES_USER:-opsknight}"
+  DB_PASS="${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}"
+  TLS_SSLMODE="disable"
+else
+  # Explicit DB_HOST configured
+  DB_PORT="${PGBOUNCER_DB_PORT:-${POSTGRES_PORT:-5432}}"
+  DB_NAME="${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}"
+  DB_USER="${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}"
+  DB_PASS="${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-}}"
 
-# Determine default TLS mode:
-# If connecting to the bundled opsknight-db container, TLS is disabled by default.
-# For external DB hosts, default to verify-full for production safety.
-if [ -z "$TLS_SSLMODE" ]; then
-  if [ "$DB_HOST" = "opsknight-db" ] || [ "$DB_HOST" = "127.0.0.1" ] || [ "$DB_HOST" = "localhost" ]; then
-    TLS_SSLMODE="disable"
+  if [ "$DB_HOST" = "opsknight-db" ] || [ "$DB_HOST" = "localhost" ] || [ "$DB_HOST" = "127.0.0.1" ]; then
+    TLS_SSLMODE="${PGBOUNCER_SERVER_TLS_SSLMODE:-disable}"
+    DB_PASS="${DB_PASS:-opsknight_secure_password_change_me}"
   else
-    TLS_SSLMODE="verify-full"
+    # External host requires password and secure TLS by default
+    TLS_SSLMODE="${PGBOUNCER_SERVER_TLS_SSLMODE:-verify-full}"
+    if [ -z "$DB_PASS" ] || [ "$DB_PASS" = "opsknight_secure_password_change_me" ]; then
+      echo "[FATAL] PGBOUNCER_DB_PASSWORD must be configured with the external database password." >&2
+      exit 1
+    fi
+    if [ "$TLS_SSLMODE" = "verify-full" ] || [ "$TLS_SSLMODE" = "verify-ca" ]; then
+      if [ ! -f "$TLS_CA_FILE" ]; then
+        echo "[FATAL] TLS certificate authority file '$TLS_CA_FILE' not found." >&2
+        exit 1
+      fi
+    fi
   fi
 fi
 

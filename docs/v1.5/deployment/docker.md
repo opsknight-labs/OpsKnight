@@ -99,7 +99,13 @@ OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight:2.0.0" \
 
 # With external managed PostgreSQL:
 OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight:2.0.0" \
-OPSKNIGHT_DATABASE_URL="postgresql://user:pass@db.example.com:5432/opsknight_db?sslmode=verify-full" \
+OPSKNIGHT_DATABASE_URL="postgresql://enterprise_user:enterprise_password@db.example.com:5432/opsknight_db?sslmode=verify-full" \
+PGBOUNCER_DB_HOST="db.example.com" \
+PGBOUNCER_DB_PORT="5432" \
+PGBOUNCER_DB_NAME="opsknight_db" \
+PGBOUNCER_DB_USER="enterprise_user" \
+PGBOUNCER_DB_PASSWORD="enterprise_password" \
+PGBOUNCER_SERVER_TLS_SSLMODE="verify-full" \
   docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml -f docker-compose.external-db.yml up -d
 ```
 

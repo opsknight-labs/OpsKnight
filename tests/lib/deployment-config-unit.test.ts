@@ -403,7 +403,7 @@ describe('deployment configuration invariants', () => {
     expect(pgbouncer).toContain('./docker/pgbouncer/entrypoint.sh:/docker-entrypoint.sh:ro');
     expect(pgbouncer).toContain('/usr/bin/psql -h 127.0.0.1 -p 6432');
     expect(pgbouncer).toContain('SELECT 1');
-    expect(pgbouncer).toContain('@opsknight-pgbouncer:6432/${POSTGRES_DB:-opsknight_db}?sslmode=disable&pgbouncer=true');
+    expect(pgbouncer).toContain('@opsknight-pgbouncer:6432/${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}?sslmode=disable&pgbouncer=true');
     expect(pgbouncer).toContain('DIRECT_DATABASE_URL:');
     expect(split).toContain('DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://');
 
@@ -472,5 +472,29 @@ describe('deployment configuration invariants', () => {
       /not a recognized boolean/
     );
     expect(() => calculateRuntimeCapacity({ DATABASE_POOL_SIZE_WEB: '-5' })).toThrow();
+
+    // Consumes actual .env configuration via loadDotenvIfPresent and CLI
+    const tempEnv = path.join(root, 'node_modules/.tmp-test.env');
+    fs.mkdirSync(path.dirname(tempEnv), { recursive: true });
+    fs.writeFileSync(tempEnv, 'DATABASE_MAX_CONNECTIONS=20\nOPSKNIGHT_RUNTIME_MODE=split\n');
+    try {
+      const cliScript = path.join(root, 'scripts/validate-runtime-capacity.cjs');
+      const cliResult = spawnSync(process.execPath, [cliScript], {
+        cwd: root,
+        env: {
+          ...process.env,
+          DOTENV_CONFIG_PATH: tempEnv,
+          DATABASE_MAX_CONNECTIONS: undefined,
+          OPSKNIGHT_RUNTIME_MODE: undefined,
+        },
+        encoding: 'utf8',
+      });
+      expect(cliResult.status).toBe(1);
+      expect(cliResult.stderr).toContain('FATAL CAPACITY MISMATCH');
+    } finally {
+      if (fs.existsSync(tempEnv)) {
+        fs.unlinkSync(tempEnv);
+      }
+    }
   });
 });

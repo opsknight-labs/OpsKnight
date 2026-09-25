@@ -1,6 +1,41 @@
 #!/usr/bin/env node
 'use strict';
 
+const fs = require('node:fs');
+const path = require('node:path');
+
+/**
+ * Loads .env file into environment if present, without overwriting existing keys.
+ */
+function loadDotenvIfPresent(filePath) {
+  const target = filePath || process.env.DOTENV_CONFIG_PATH || path.join(process.cwd(), '.env');
+  if (fs.existsSync(target)) {
+    try {
+      const content = fs.readFileSync(target, 'utf8');
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const match = trimmed.match(/^([\w.-]+)\s*=\s*(.*)?$/);
+        if (match) {
+          const key = match[1];
+          let val = match[2] || '';
+          if (
+            (val.startsWith('"') && val.endsWith('"')) ||
+            (val.startsWith("'") && val.endsWith("'"))
+          ) {
+            val = val.slice(1, -1);
+          }
+          if (process.env[key] === undefined) {
+            process.env[key] = val;
+          }
+        }
+      }
+    } catch {
+      // Ignore reading errors if unreadable
+    }
+  }
+}
+
 /**
  * Fail-closed parser for positive integer configuration values.
  */
@@ -43,6 +78,9 @@ function parseStrictBoolean(key, val, fallback = false) {
 }
 
 function calculateRuntimeCapacity(env = process.env) {
+  if (env === process.env) {
+    loadDotenvIfPresent();
+  }
   const rawMode = (env.OPSKNIGHT_RUNTIME_MODE || 'split').trim().toLowerCase();
   if (rawMode !== 'integrated' && rawMode !== 'split') {
     throw new Error(
@@ -263,4 +301,5 @@ module.exports = {
   calculateRuntimeCapacity,
   parseStrictPositiveInt,
   parseStrictBoolean,
+  loadDotenvIfPresent,
 };

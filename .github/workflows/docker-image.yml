@@ -351,6 +351,105 @@ jobs:
 
           echo "Live Docker Compose split runtime + PgBouncer validation passed successfully!"
 
+      - name: Verify Compose split runtime with PgBouncer and external PostgreSQL
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="opsknight-pr-validation:${GITHUB_SHA}"
+          echo "Verifying live Docker Compose split runtime + PgBouncer with external PostgreSQL"
+
+          COMPOSE_PROJECT="ci-ext-${GITHUB_SHA:0:8}"
+          EXT_DB_CONTAINER="ci-ext-postgres-${GITHUB_SHA:0:8}"
+          EXT_NETWORK="${COMPOSE_PROJECT}_opsknight-network"
+
+          docker network create "$EXT_NETWORK" || true
+
+          docker run -d \
+            --name "$EXT_DB_CONTAINER" \
+            --network "$EXT_NETWORK" \
+            -e POSTGRES_USER=ext_opsknight_user \
+            -e POSTGRES_PASSWORD=ext_strong_secret_password \
+            -e POSTGRES_DB=ext_opsknight_db \
+            postgres:16-alpine
+
+          cleanup() {
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.split.yml \
+              -f docker-compose.pgbouncer.yml \
+              -f docker-compose.external-db.yml \
+              down -v || true
+            docker rm -f "$EXT_DB_CONTAINER" 2>/dev/null || true
+            docker network rm "$EXT_NETWORK" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for i in $(seq 1 30); do
+            if docker exec "$EXT_DB_CONTAINER" pg_isready -U ext_opsknight_user >/dev/null 2>&1; then
+              echo "External PostgreSQL container is ready!"
+              break
+            fi
+            sleep 1
+          done
+
+          export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
+          export OPSKNIGHT_IMAGE="$IMAGE"
+          export APP_PORT=33001
+          export OPSKNIGHT_DATABASE_URL="postgresql://ext_opsknight_user:ext_strong_secret_password@${EXT_DB_CONTAINER}:5432/ext_opsknight_db?sslmode=disable"
+          export PGBOUNCER_DB_HOST="$EXT_DB_CONTAINER"
+          export PGBOUNCER_DB_PORT="5432"
+          export PGBOUNCER_DB_NAME="ext_opsknight_db"
+          export PGBOUNCER_DB_USER="ext_opsknight_user"
+          export PGBOUNCER_DB_PASSWORD="ext_strong_secret_password"
+          export PGBOUNCER_SERVER_TLS_SSLMODE="disable"
+
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.split.yml \
+            -f docker-compose.pgbouncer.yml \
+            -f docker-compose.external-db.yml \
+            up -d
+
+          echo "Waiting for opsknight-migration container to complete against external DB..."
+          mig_status=""
+          mig_exit=""
+          for i in $(seq 1 30); do
+            mig_status=$(docker compose -f docker-compose.yml -f docker-compose.split.yml ps -a opsknight-migration --format '{{.State}}' 2>/dev/null || true)
+            mig_exit=$(docker compose -f docker-compose.yml -f docker-compose.split.yml ps -a opsknight-migration --format '{{.ExitCode}}' 2>/dev/null || true)
+            if [ "$mig_status" = "exited" ] && [ "$mig_exit" = "0" ]; then
+              echo "opsknight-migration successfully completed (exit 0) against external DB!"
+              break
+            fi
+            sleep 2
+          done
+          test "$mig_status" = "exited"
+          test "$mig_exit" = "0"
+
+          echo "Waiting for opsknight-pgbouncer health pointing to external DB..."
+          pgb_health=""
+          for i in $(seq 1 30); do
+            pgb_health=$(docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml ps opsknight-pgbouncer --format '{{.Health}}' 2>/dev/null || true)
+            if [ "$pgb_health" = "healthy" ]; then
+              echo "opsknight-pgbouncer is healthy with authenticated query to external DB!"
+              break
+            fi
+            sleep 2
+          done
+          test "$pgb_health" = "healthy"
+
+          echo "Waiting for opsknight-web readiness through PgBouncer..."
+          for i in $(seq 1 45); do
+            if curl -s -f "http://127.0.0.1:33001/api/health?mode=readiness" 2>/dev/null | grep -q 'healthy'; then
+              echo "opsknight-web is healthy and connected to external DB via PgBouncer!"
+              break
+            fi
+            sleep 2
+          done
+          curl -s -f "http://127.0.0.1:33001/api/health?mode=readiness" | grep -q 'healthy'
+
+          echo "External PostgreSQL + PgBouncer + split runtime validation passed successfully!"
+
       - name: Build + push (test channel - main)
         if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v7
