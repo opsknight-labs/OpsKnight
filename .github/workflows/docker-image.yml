@@ -292,7 +292,8 @@ jobs:
           export POSTGRES_PORT=35432
 
           docker pull postgres:15-alpine
-          docker pull ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75
+          docker build -t opsknight-pgbouncer:1.26.0 docker/pgbouncer
+          export PGBOUNCER_IMAGE="opsknight-pgbouncer:1.26.0"
 
           cleanup() {
             docker compose \
@@ -379,8 +380,8 @@ jobs:
           openssl x509 -req -in /tmp/ci-tls/server.csr -days 1 \
             -CA /tmp/ci-tls/ca.crt -CAkey /tmp/ci-tls/ca.key -CAcreateserial \
             -out /tmp/ci-tls/server.crt 2>/dev/null
-          chmod 600 /tmp/ci-tls/server.key /tmp/ci-tls/ca.key
-          chmod 644 /tmp/ci-tls/ca.crt /tmp/ci-tls/server.crt
+          docker run --rm -v /tmp/ci-tls:/tls:rw alpine sh -c "chown 70:70 /tls/server.key /tls/server.crt && chmod 600 /tls/server.key && chmod 644 /tls/server.crt"
+          chmod 644 /tmp/ci-tls/ca.crt
 
           docker run -d \
             --name "$EXT_DB_CONTAINER" \
@@ -419,6 +420,7 @@ jobs:
 
           export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
           export OPSKNIGHT_IMAGE="$IMAGE"
+          export PGBOUNCER_IMAGE="opsknight-pgbouncer:1.26.0"
           export OPSKNIGHT_PULL_POLICY="if_not_present"
           export APP_PORT=33001
           export OPSKNIGHT_DATABASE_URL="postgresql://ext_opsknight_user:ext_strong_secret_password@${EXT_DB_CONTAINER}:5432/ext_opsknight_db?sslmode=require"

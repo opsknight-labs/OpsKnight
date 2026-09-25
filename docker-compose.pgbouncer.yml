@@ -7,7 +7,9 @@ services:
     build:
       context: ./docker/pgbouncer
       dockerfile: Dockerfile
-    image: ${PGBOUNCER_IMAGE:-ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75}
+      args:
+        BASE_IMAGE: ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75
+    image: ${PGBOUNCER_IMAGE:-opsknight-pgbouncer:1.26.0}
     pull_policy: if_not_present
     restart: unless-stopped
     entrypoint: ["/docker-entrypoint.sh"]
@@ -41,8 +43,8 @@ services:
         ]
       interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 10s
+      retries: 5
+      start_period: 30s
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -56,7 +58,7 @@ services:
       PGBOUNCER_DB_USER: ${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}
       PGBOUNCER_DB_PASSWORD: ${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}
       PGBOUNCER_DB_NAME: ${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}
-      WEB_DATABASE_URL: ${WEB_DATABASE_URL:-postgresql://${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}:${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}@opsknight-pgbouncer:6432/${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}?sslmode=disable&pgbouncer=true}
+      WEB_DATABASE_URL: ${WEB_DATABASE_URL:-}
       DATABASE_URL: ${WEB_DATABASE_URL:-postgresql://${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}:${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}@opsknight-pgbouncer:6432/${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}?sslmode=disable&pgbouncer=true}
       DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=40&pool_timeout=30}
     depends_on:
