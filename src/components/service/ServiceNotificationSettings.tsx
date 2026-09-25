@@ -1074,11 +1074,19 @@ export default function ServiceNotificationSettings({
                               <SelectValue placeholder="Select a channel…" />
                             </SelectTrigger>
                             <SelectContent>
-                              {teamsChannels.map(c => (
-                                <SelectItem key={c.id} value={c.id}>
-                                  {c.displayName ? `${c.displayName} — ${c.id.slice(0, 8)}…` : c.id}
-                                </SelectItem>
-                              ))}
+                              {teamsChannels.map(c => {
+                                const isAlreadyLinked = existingTeamsDests.some(
+                                  d => d.teamId === selectedTeamId && d.channelId === c.id
+                                );
+                                return (
+                                  <SelectItem key={c.id} value={c.id} disabled={isAlreadyLinked}>
+                                    {c.displayName
+                                      ? `${c.displayName} — ${c.id.slice(0, 8)}…`
+                                      : c.id}
+                                    {isAlreadyLinked ? ' (Already linked)' : ''}
+                                  </SelectItem>
+                                );
+                              })}
                             </SelectContent>
                           </Select>
                         )}
@@ -1090,7 +1098,15 @@ export default function ServiceNotificationSettings({
                         type="button"
                         size="sm"
                         className="text-xs h-8"
-                        disabled={!selectedTeamId || !selectedTeamsChannelId || teamsLinking}
+                        disabled={
+                          !selectedTeamId ||
+                          !selectedTeamsChannelId ||
+                          existingTeamsDests.some(
+                            d =>
+                              d.teamId === selectedTeamId && d.channelId === selectedTeamsChannelId
+                          ) ||
+                          teamsLinking
+                        }
                         onClick={async () => {
                           setTeamsLinking(true);
                           setTeamsLinkResult(null);
