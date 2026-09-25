@@ -1,10 +1,12 @@
-/* eslint-disable security/detect-non-literal-fs-filename, security/detect-object-injection, security/detect-unsafe-regex -- Preflight capacity utility loads repository-local dotenv files */
 import fs from 'node:fs';
 import path from 'node:path';
 
 export interface CapacityEnv {
   OPSKNIGHT_RUNTIME_MODE?: string;
   PGBOUNCER_ENABLED?: string;
+  WEB_DATABASE_URL?: string;
+  DATABASE_URL?: string;
+  DIRECT_DATABASE_URL?: string;
   WEB_REPLICAS?: string;
   DATABASE_POOL_SIZE_WEB?: string;
   PGBOUNCER_REPLICAS?: string;
@@ -103,6 +105,7 @@ export function parseStrictBoolean(
 /**
  * Loads .env file into environment if present, without overwriting existing keys.
  */
+/* eslint-disable security/detect-non-literal-fs-filename, security/detect-object-injection, security/detect-unsafe-regex -- Narrowed suppression for preflight dotenv file parsing */
 export function loadDotenvIfPresent(filePath?: string): void {
   const target = filePath || process.env.DOTENV_CONFIG_PATH || path.join(process.cwd(), '.env');
   if (fs.existsSync(target)) {
@@ -131,6 +134,7 @@ export function loadDotenvIfPresent(filePath?: string): void {
     }
   }
 }
+/* eslint-enable security/detect-non-literal-fs-filename, security/detect-object-injection, security/detect-unsafe-regex */
 
 export function calculateRuntimeCapacity(
   env: CapacityEnv | Record<string, string | undefined> = process.env
