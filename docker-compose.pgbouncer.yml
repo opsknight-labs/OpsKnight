@@ -1,0 +1,38 @@
+# Overlay for split runtime with PgBouncer connection pooling.
+# Apply after docker-compose.yml and docker-compose.split.yml:
+# Bundled DB:  docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml up -d
+# External DB: docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.external-db.yml -f docker-compose.pgbouncer.yml up -d
+services:
+  opsknight-pgbouncer:
+    image: ${PGBOUNCER_IMAGE:-ghcr.io/icoretech/pgbouncer-docker@sha256:ff6568eecd8c84087d46e08fd154e80928b387def94eac55fb94ec592fa4c4fd}
+    pull_policy: if_not_present
+    restart: unless-stopped
+    volumes:
+      - ./docker/pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ${PGBOUNCER_AUTH_FILE:-./docker/pgbouncer/userlist.txt}:/etc/pgbouncer/userlist.txt:ro
+    depends_on:
+      opsknight-db:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/bin/pg_isready -h 127.0.0.1 -p 6432 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - opsknight-network
+
+  opsknight-web:
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-pgbouncer:6432/${POSTGRES_DB:-opsknight_db}?sslmode=disable&pgbouncer=true
+      DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=40&pool_timeout=30}
+    depends_on:
+      opsknight-migration:
+        condition: service_completed_successfully
+      opsknight-pgbouncer:
+        condition: service_healthy

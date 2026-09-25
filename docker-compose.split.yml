@@ -1,0 +1,278 @@
+# Overlay for isolated split runtime topology.
+# Apply after docker-compose.yml:
+# docker compose -f docker-compose.yml -f docker-compose.split.yml up -d
+services:
+  opsknight-app:
+    profiles:
+      - integrated-runtime
+
+  opsknight-migration:
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    pull_policy: always
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_MIGRATION_ONLY: "true"
+      DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=10&pool_timeout=30}
+      DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=10&pool_timeout=30}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+    depends_on:
+      opsknight-db:
+        condition: service_healthy
+        required: false
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - opsknight-network
+
+  opsknight-web:
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      - '${APP_PORT:-3000}:3000'
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_PROCESS_ROLE: web
+      DATABASE_POOL_SIZE_WEB: ${DATABASE_POOL_SIZE_WEB:-10}
+      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=40&pool_timeout=30}
+      DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=40&pool_timeout=30}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      NOTIFICATION_CONTROL_PLANE_PERSONAL: ${NOTIFICATION_CONTROL_PLANE_PERSONAL:-true}
+      PROMETHEUS_SCRAPE_TOKEN: ${PROMETHEUS_SCRAPE_TOKEN:-}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
+    depends_on:
+      opsknight-migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - opsknight-network
+
+  opsknight-scheduler:
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_PROCESS_ROLE: scheduler
+      OPSKNIGHT_SCHEDULER_PROFILE: maintenance
+      DATABASE_POOL_SIZE_SCHEDULER: ${DATABASE_POOL_SIZE_SCHEDULER:-3}
+      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=10&pool_timeout=30}
+      DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=10&pool_timeout=30}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
+    depends_on:
+      opsknight-migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - opsknight-network
+
+  opsknight-general-worker:
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_PROCESS_ROLE: general-worker
+      DATABASE_POOL_SIZE_GENERAL_WORKER: ${DATABASE_POOL_SIZE_GENERAL_WORKER:-5}
+      OPSKNIGHT_WORKER_BATCH_SIZE: ${OPSKNIGHT_WORKER_BATCH_SIZE:-100}
+      OPSKNIGHT_WORKER_CONCURRENCY: ${OPSKNIGHT_WORKER_CONCURRENCY:-15}
+      OPSKNIGHT_WORKER_IDLE_POLL_MS: ${OPSKNIGHT_WORKER_IDLE_POLL_MS:-1000}
+      OPSKNIGHT_WORKER_BUSY_POLL_MS: ${OPSKNIGHT_WORKER_BUSY_POLL_MS:-100}
+      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=20&pool_timeout=30}
+      DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=20&pool_timeout=30}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
+    depends_on:
+      opsknight-migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - opsknight-network
+
+  opsknight-critical-worker:
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_PROCESS_ROLE: critical-worker
+      DATABASE_POOL_SIZE_CRITICAL_WORKER: ${DATABASE_POOL_SIZE_CRITICAL_WORKER:-5}
+      OPSKNIGHT_WORKER_BATCH_SIZE: ${OPSKNIGHT_WORKER_BATCH_SIZE_CRITICAL:-50}
+      OPSKNIGHT_WORKER_CONCURRENCY: ${OPSKNIGHT_WORKER_CONCURRENCY_CRITICAL:-10}
+      OPSKNIGHT_WORKER_IDLE_POLL_MS: ${OPSKNIGHT_WORKER_IDLE_POLL_MS_CRITICAL:-1000}
+      OPSKNIGHT_WORKER_BUSY_POLL_MS: ${OPSKNIGHT_WORKER_BUSY_POLL_MS_CRITICAL:-100}
+      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=20&pool_timeout=30}
+      DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=20&pool_timeout=30}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
+    depends_on:
+      opsknight-migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - opsknight-network
+
+  opsknight-bulk-worker:
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_PROCESS_ROLE: bulk-worker
+      DATABASE_POOL_SIZE_BULK_WORKER: ${DATABASE_POOL_SIZE_BULK_WORKER:-3}
+      OPSKNIGHT_WORKER_BATCH_SIZE: ${OPSKNIGHT_WORKER_BATCH_SIZE_BULK:-100}
+      OPSKNIGHT_WORKER_CONCURRENCY: ${OPSKNIGHT_WORKER_CONCURRENCY_BULK:-15}
+      OPSKNIGHT_WORKER_IDLE_POLL_MS: ${OPSKNIGHT_WORKER_IDLE_POLL_MS_BULK:-1000}
+      OPSKNIGHT_WORKER_BUSY_POLL_MS: ${OPSKNIGHT_WORKER_BUSY_POLL_MS_BULK:-100}
+      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=15&pool_timeout=30}
+      DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=15&pool_timeout=30}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
+    depends_on:
+      opsknight-migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - opsknight-network
+
+  opsknight-status-projector:
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_PROCESS_ROLE: status-projector
+      DATABASE_POOL_SIZE_STATUS_PROJECTOR: ${DATABASE_POOL_SIZE_STATUS_PROJECTOR:-3}
+      OPSKNIGHT_WORKER_BATCH_SIZE: ${OPSKNIGHT_WORKER_BATCH_SIZE_PROJECTOR:-100}
+      OPSKNIGHT_WORKER_CONCURRENCY: ${OPSKNIGHT_WORKER_CONCURRENCY_PROJECTOR:-15}
+      OPSKNIGHT_WORKER_IDLE_POLL_MS: ${OPSKNIGHT_WORKER_IDLE_POLL_MS_PROJECTOR:-1000}
+      OPSKNIGHT_WORKER_BUSY_POLL_MS: ${OPSKNIGHT_WORKER_BUSY_POLL_MS_PROJECTOR:-100}
+      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=15&pool_timeout=30}
+      DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=15&pool_timeout=30}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
+    depends_on:
+      opsknight-migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - opsknight-network

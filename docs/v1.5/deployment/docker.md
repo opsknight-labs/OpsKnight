@@ -48,6 +48,60 @@ Pin `OPSKNIGHT_IMAGE` to the immutable version or digest you tested. The default
 
 The checked-in fallbacks are development values, not production secrets. Keep `ENCRYPTION_KEY` stable and backed up with the database; losing it means re-entering encrypted provider/integration credentials.
 
+## Deployment topologies
+
+OpsKnight provides full runtime parity across Docker Compose, Helm, and Kustomize. You can select between 4 canonical deployment patterns using composable overlays:
+
+### 1. Simple (Integrated + Bundled DB)
+Ideal for local evaluation or lightweight single-node deployments where an all-in-one process is preferred.
+```bash
+docker compose up -d
+```
+
+### 2. Integrated + Managed / External PostgreSQL
+Connects the integrated all-in-one application container directly to an external database.
+```bash
+OPSKNIGHT_DATABASE_URL="postgresql://user:pass@db.example.com:5432/opsknight_db?sslmode=require" \
+  docker compose -f docker-compose.yml -f docker-compose.external-db.yml up -d
+```
+
+### 3. Production Split (Process-Isolated Roles + Dedicated Migration)
+Runs dedicated, decoupled containers for each role:
+- `opsknight-migration`: One-shot container that executes Prisma migrations and online indexes before any application container starts.
+- `opsknight-web`: Serves HTTP traffic and user requests on `${APP_PORT:-3000}`.
+- `opsknight-scheduler`: Owns maintenance cron sweeps (`OPSKNIGHT_SCHEDULER_PROFILE=maintenance`).
+- `opsknight-general-worker`: Durable general job processor.
+- `opsknight-critical-worker`: Isolated emergency on-call alerting and escalation engine.
+- `opsknight-bulk-worker`: Dedicated high-volume announcement fanout worker.
+- `opsknight-status-projector`: High-frequency status page real-time subscriber projection.
+
+Only `opsknight-web` publishes a host port (`3000`); background workers and the scheduler expose no public ports and run as non-root with dropped capabilities.
+```bash
+docker compose -f docker-compose.yml -f docker-compose.split.yml up -d
+```
+
+### 4. Production Split + PgBouncer Pooling (+ Optional External DB)
+Adds a dedicated PgBouncer connection pooler container (`opsknight-pgbouncer`) on port `6432` with transaction pooling.
+- `opsknight-web` routes through PgBouncer for high-concurrency HTTP traffic (`pgbouncer=true`).
+- `opsknight-migration` and `opsknight-web` preserve direct connections (`DIRECT_DATABASE_URL`) for schema commands.
+- `opsknight-scheduler` and all worker containers connect directly to PostgreSQL.
+```bash
+# With bundled PostgreSQL:
+docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml up -d
+
+# With external managed PostgreSQL:
+OPSKNIGHT_DATABASE_URL="postgresql://user:pass@db.example.com:5432/opsknight_db?sslmode=require" \
+  docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml -f docker-compose.external-db.yml up -d
+```
+
+## Connection capacity and budgeting
+
+Before scaling split containers or altering pool sizes, validate your connection budget against PostgreSQL capacity:
+```bash
+node scripts/validate-runtime-capacity.cjs
+```
+This utility calculates total connection demand across web pool / PgBouncer backends and direct worker lanes, ensuring demand never exceeds `database.maxApplicationConnections`.
+
 ## Database connection behavior
 
 With the bundled PostgreSQL service, Compose constructs the application `DATABASE_URL` using the internal hostname `opsknight-db`. The host-oriented `DATABASE_URL` in `env.example` is therefore not passed into the Compose application container.

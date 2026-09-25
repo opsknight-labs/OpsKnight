@@ -67,6 +67,7 @@ verify_fix.ts
 
 # Temporary test logs and reports
 *.txt
+!docker/pgbouncer/userlist.txt
 eslint_output.json
 job_log*.txt
 jobs.json

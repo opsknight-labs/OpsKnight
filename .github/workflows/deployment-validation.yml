@@ -59,6 +59,17 @@ jobs:
           OPSKNIGHT_DATABASE_URL='postgresql://user:encoded%40password@db.example.com:6432/opsknight_db?sslmode=require' \
             docker compose -f docker-compose.yml -f docker-compose.external-db.yml \
             config > /tmp/opsknight-compose-external-db.yaml
+          docker compose -f docker-compose.yml -f docker-compose.split.yml \
+            config > /tmp/opsknight-compose-split.yaml
+          OPSKNIGHT_DATABASE_URL='postgresql://user:encoded%40password@db.example.com:6432/opsknight_db?sslmode=require' \
+            docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.external-db.yml \
+            config > /tmp/opsknight-compose-split-external-db.yaml
+          docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml \
+            config > /tmp/opsknight-compose-split-pgbouncer.yaml
+          OPSKNIGHT_DATABASE_URL='postgresql://user:encoded%40password@db.example.com:6432/opsknight_db?sslmode=require' \
+            docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml -f docker-compose.external-db.yml \
+            config > /tmp/opsknight-compose-split-pgbouncer-external-db.yaml
+          node scripts/validate-runtime-capacity.cjs
 
       - name: Set up Helm
         uses: azure/setup-helm@v5
@@ -218,6 +229,18 @@ jobs:
           grep -q 'kubernetes.io/metadata.name: ingress-nginx' /tmp/opsknight-kustomize.yaml
           grep -q '127.0.0.1' /tmp/opsknight-compose.yaml
           grep -q 'db.example.com:6432' /tmp/opsknight-compose-external-db.yaml
+          grep -q 'published: "3000"' /tmp/opsknight-compose-split.yaml
+          grep -q 'OPSKNIGHT_PROCESS_ROLE: scheduler' /tmp/opsknight-compose-split.yaml
+          grep -q 'OPSKNIGHT_PROCESS_ROLE: general-worker' /tmp/opsknight-compose-split.yaml
+          grep -q 'OPSKNIGHT_PROCESS_ROLE: critical-worker' /tmp/opsknight-compose-split.yaml
+          grep -q 'OPSKNIGHT_PROCESS_ROLE: bulk-worker' /tmp/opsknight-compose-split.yaml
+          grep -q 'OPSKNIGHT_PROCESS_ROLE: status-projector' /tmp/opsknight-compose-split.yaml
+          grep -q 'OPSKNIGHT_MIGRATION_ONLY: "true"' /tmp/opsknight-compose-split.yaml
+          grep -q 'condition: service_completed_successfully' /tmp/opsknight-compose-split.yaml
+          grep -q 'opsknight-pgbouncer:6432' /tmp/opsknight-compose-split-pgbouncer.yaml
+          grep -q 'pgbouncer=true' /tmp/opsknight-compose-split-pgbouncer.yaml
+          grep -q 'db.example.com:6432' /tmp/opsknight-compose-split-external-db.yaml
+          grep -q 'db.example.com:6432' /tmp/opsknight-compose-split-pgbouncer-external-db.yaml
           grep -q 'port: 6432' /tmp/opsknight-helm-external-db.yaml
           grep -q 'cidr: "10.24.0.0/16"' /tmp/opsknight-helm-external-db.yaml
           grep -q 'ghcr.io/opsknight-labs/opsknight@sha256:0000000000000000000000000000000000000000000000000000000000000000' /tmp/opsknight-helm-external-secret.yaml

@@ -364,4 +364,82 @@ describe('deployment configuration invariants', () => {
     expect(content).not.toMatch(/ghcr\.io\/opsknight-labs\/OpsKnight/);
     expect(content).not.toMatch(/(?:^|\s)opsknight\/opsknight:/);
   });
+
+  it('ships complete split-runtime and PgBouncer Docker Compose overlays', () => {
+    const split = read('docker-compose.split.yml');
+    const pgbouncer = read('docker-compose.pgbouncer.yml');
+    const external = read('docker-compose.external-db.yml');
+    const entrypoint = read('docker-entrypoint.sh');
+
+    // Split services and profile isolation
+    expect(split).toContain('opsknight-app:\n    profiles:\n      - integrated-runtime');
+    expect(split).toContain('opsknight-migration:');
+    expect(split).toContain('opsknight-web:');
+    expect(split).toContain('opsknight-scheduler:');
+    expect(split).toContain('opsknight-general-worker:');
+    expect(split).toContain('opsknight-critical-worker:');
+    expect(split).toContain('opsknight-bulk-worker:');
+    expect(split).toContain('opsknight-status-projector:');
+
+    // Host port isolation: ONLY web publishes port 3000
+    expect(split).toMatch(/opsknight-web:[\s\S]*?ports:\s*-\s*'\$\{APP_PORT:-3000\}:3000'/);
+    expect(split).not.toMatch(/opsknight-scheduler:[\s\S]*?ports:/);
+    expect(split).not.toMatch(/opsknight-general-worker:[\s\S]*?ports:/);
+    expect(split).not.toMatch(/opsknight-critical-worker:[\s\S]*?ports:/);
+    expect(split).not.toMatch(/opsknight-bulk-worker:[\s\S]*?ports:/);
+    expect(split).not.toMatch(/opsknight-status-projector:[\s\S]*?ports:/);
+
+    // Security hardening
+    expect(split).toContain('no-new-privileges:true');
+    expect(split).toContain('cap_drop:\n      - ALL');
+    expect(pgbouncer).toContain('no-new-privileges:true');
+
+    // PgBouncer configuration and URL routing
+    expect(pgbouncer).toContain('opsknight-pgbouncer:');
+    expect(pgbouncer).toContain('/usr/bin/pg_isready -h 127.0.0.1 -p 6432');
+    expect(pgbouncer).toContain('@opsknight-pgbouncer:6432/${POSTGRES_DB:-opsknight_db}?sslmode=disable&pgbouncer=true');
+    expect(pgbouncer).toContain('DIRECT_DATABASE_URL:');
+    expect(split).toContain('DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://');
+
+    // Dedicated one-shot migration contract
+    expect(entrypoint).toContain('OPSKNIGHT_MIGRATION_ONLY');
+    expect(split).toContain('OPSKNIGHT_MIGRATION_ONLY: "true"');
+    expect(split).toContain('condition: service_completed_successfully');
+
+    // External DB overlay disables bundled database cleanly
+    expect(external).toContain('profiles:\n      - bundled-database');
+  });
+
+  it('validates runtime database connection capacity budgets across topologies', () => {
+    const script = path.join(root, 'scripts/validate-runtime-capacity.cjs');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { calculateRuntimeCapacity } = require(script);
+
+    // Default split capacity within budget
+    const defaultSplit = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'split' });
+    expect(defaultSplit.safe).toBe(true);
+    expect(defaultSplit.totalDemand).toBe(29);
+    expect(defaultSplit.headroom).toBe(51);
+
+    // Overflow budget triggers failure
+    const overflow = calculateRuntimeCapacity({
+      OPSKNIGHT_RUNTIME_MODE: 'split',
+      DATABASE_MAX_CONNECTIONS: '25',
+    });
+    expect(overflow.safe).toBe(false);
+    expect(overflow.headroom).toBe(-4);
+
+    // PgBouncer bounds web connection demand
+    const pgbouncerBounded = calculateRuntimeCapacity({
+      OPSKNIGHT_RUNTIME_MODE: 'split',
+      PGBOUNCER_ENABLED: 'true',
+      WEB_REPLICAS: '12',
+      PGBOUNCER_DEFAULT_POOL_SIZE: '10',
+      PGBOUNCER_RESERVE_POOL_SIZE: '5',
+      DATABASE_MAX_CONNECTIONS: '80',
+    });
+    expect(pgbouncerBounded.safe).toBe(true);
+    expect(pgbouncerBounded.webConnections).toBe(15);
+    expect(pgbouncerBounded.totalDemand).toBe(34);
+  });
 });

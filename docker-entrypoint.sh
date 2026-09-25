@@ -98,6 +98,11 @@ if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
     export DATABASE_URL="$RUNTIME_DATABASE_URL"
 fi
 
+if [ "${OPSKNIGHT_MIGRATION_ONLY:-}" = "true" ]; then
+    echo "🏁 Migrations and online indexes completed successfully (OPSKNIGHT_MIGRATION_ONLY=true)."
+    exit 0
+fi
+
 echo "🚀 Starting application..."
 export NEXT_RUNTIME=nodejs
 exec node server.js
