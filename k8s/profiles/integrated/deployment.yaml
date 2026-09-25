@@ -64,6 +64,9 @@ spec:
             httpGet:
               path: /api/health?mode=readiness
               port: http
+              httpHeaders:
+                - name: Host
+                  value: localhost
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 30
@@ -71,6 +74,9 @@ spec:
             httpGet:
               path: /api/health
               port: http
+              httpHeaders:
+                - name: Host
+                  value: localhost
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
@@ -78,6 +84,9 @@ spec:
             httpGet:
               path: /api/health?mode=readiness
               port: http
+              httpHeaders:
+                - name: Host
+                  value: localhost
             periodSeconds: 10
             timeoutSeconds: 5
             successThreshold: 1

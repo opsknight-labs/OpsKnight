@@ -107,6 +107,9 @@ startupProbe:
   httpGet:
     path: /api/health?mode=readiness
     port: http
+    httpHeaders:
+      - name: Host
+        value: localhost
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 30
@@ -115,6 +118,9 @@ livenessProbe:
   httpGet:
     path: /api/health
     port: http
+    httpHeaders:
+      - name: Host
+        value: localhost
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
@@ -123,6 +129,9 @@ readinessProbe:
   httpGet:
     path: /api/health?mode=readiness
     port: http
+    httpHeaders:
+      - name: Host
+        value: localhost
   periodSeconds: 10
   timeoutSeconds: 5
   successThreshold: 1
