@@ -224,9 +224,9 @@ export default function HelpPage() {
   }, [selectedCategory, searchQuery]);
 
   return (
-    <main className="w-full max-w-[1200px] min-[1440px]:max-w-[1080px] min-[1920px]:max-w-[1180px] mx-auto py-8 px-4 sm:px-6 min-[1440px]:px-[54px] min-[1920px]:px-[60px] container">
+    <main className="mx-auto w-full max-w-[1600px] space-y-8 px-4 py-6 md:px-6 md:py-8">
       {/* Top Header matching product styling */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs">
@@ -309,7 +309,7 @@ export default function HelpPage() {
           </Button>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {/* Diagnostics Card */}
           <Card className="flex flex-col border-border/80 bg-card/80 backdrop-blur-xs hover:border-border transition-all duration-150 shadow-2xs">
             <CardHeader className="p-4 pb-2">
@@ -464,7 +464,7 @@ export default function HelpPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
           {/* FAQ Sidebar */}
-          <div className="md:col-span-4 lg:col-span-4 space-y-4">
+          <div className="md:col-span-4 lg:col-span-3.5 xl:col-span-3 space-y-4">
             {/* Search Box */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -567,7 +567,7 @@ export default function HelpPage() {
           </div>
 
           {/* FAQ Content Area */}
-          <div className="md:col-span-8 lg:col-span-8 space-y-3">
+          <div className="md:col-span-8 lg:col-span-8.5 xl:col-span-9 space-y-3">
             {/* Header info bar */}
             <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
               <span>
