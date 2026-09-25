@@ -108,7 +108,7 @@ describe('Cron Scheduler - Lock Management', () => {
   });
 
   it('enforces lease epoch fencing in updateSchedulerState', async () => {
-    vi.mocked(prisma.cronSchedulerState.updateMany).mockResolvedValueOnce({ count: 1 } as any);
+    vi.mocked(prisma.cronSchedulerState.updateMany).mockResolvedValueOnce({ count: 1 });
 
     await updateSchedulerState({ lastRunAt: new Date('2026-01-01T12:00:00.000Z') }, 10);
 
@@ -126,7 +126,7 @@ describe('Cron Scheduler - Lock Management', () => {
   });
 
   it('rejects updateSchedulerState when lease epoch is no longer authoritative', async () => {
-    vi.mocked(prisma.cronSchedulerState.updateMany).mockResolvedValueOnce({ count: 0 } as any);
+    vi.mocked(prisma.cronSchedulerState.updateMany).mockResolvedValueOnce({ count: 0 });
 
     await expect(
       updateSchedulerState({ lastRunAt: new Date('2026-01-01T12:00:00.000Z') }, 9)

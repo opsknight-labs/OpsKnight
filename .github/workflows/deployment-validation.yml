@@ -207,7 +207,7 @@ jobs:
           grep -q '/usr/bin/pg_isready' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'kind: Job' /tmp/opsknight-helm-migration-job.yaml
           grep -q 'name: opsknight-migration' /tmp/opsknight-helm-migration-job.yaml
-          grep -q 'helm.sh/hook: pre-install,pre-upgrade' /tmp/opsknight-helm-migration-job.yaml
+          grep -Eq '("helm\.sh/hook"|helm\.sh/hook): pre-install,pre-upgrade' /tmp/opsknight-helm-migration-job.yaml
           grep -q 'pgbouncer=true' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'name: DIRECT_DATABASE_URL' /tmp/opsknight-helm-split-pgbouncer.yaml
           grep -q 'name: DIRECT_DATABASE_URL' /tmp/opsknight-kustomize-split-pgbouncer.yaml
