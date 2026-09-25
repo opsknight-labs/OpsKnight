@@ -54,7 +54,9 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Build auth browser application
-        run: npm run build
+        uses: ./.github/actions/build-app
+        with:
+          upload-artifact: 'false'
 
       - name: Run authentication browser contracts
         run: npx playwright test --project=chromium

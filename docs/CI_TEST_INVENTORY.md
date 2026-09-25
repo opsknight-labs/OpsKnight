@@ -8,10 +8,10 @@ This document establishes the machine-readable inventory and classification of O
 
 | Layer | Classification | Scope & Characteristics | Target Duration | Environment / DB |
 | :--- | :--- | :--- | :--- | :--- |
-| **L0** | **Static / Instant** | ESLint (`npm run lint:check`), TypeScript (`tsc --noEmit`), architecture/contract verification, schema validation | < 1–2 min | None (pure static analysis) |
+| **L0** | **Static / Instant** | TypeScript check (`tsc --noEmit` - blocking), ESLint (`npm run lint:check` - visible/diagnostic pending lint debt cleanup), schema validation | < 1–2 min | None (pure static analysis) |
 | **L1** | **Unit** | Pure application logic: state machines, SLA calculators, deduplication, router, utilities, UI component tests | < 2 min | Mocked DB (memory-only Prisma mock) |
-| **L2** | **Integration** | Real persistence: Postgres migrations, relational integrity, advisory locks, queue semantics, webhooks | 2–4 min | Single PostgreSQL instance |
-| **L3** | **End-to-End (E2E)** | User and browser flows: auth lifecycle, host proxy routing, mobile PWA, incident management | 3–5 min (PR smoke) | Pre-built application + PostgreSQL + Playwright |
+| **L2** | **Integration** | Real persistence: Postgres migrations, relational integrity, advisory locks, queue semantics, webhooks | 2–5 min | Single PostgreSQL instance |
+| **L3** | **End-to-End (E2E)** | User and browser flows: auth lifecycle, host proxy routing, mobile PWA, incident management | ~3–6 min per suite (~10m total PR pipeline) | Pre-built application + PostgreSQL + Playwright |
 | **Cert** | **Certification / Resilience** | Multi-replica failover (3 web + 3 workers), k6 retry storm, chaos drills, backup/restore, cross-platform packaging | 15–35 min (Nightly / Release) | Multi-container Docker Compose / k6 |
 
 ---
@@ -44,7 +44,7 @@ This document establishes the machine-readable inventory and classification of O
 
 ## 3. Shared Composite Actions (`.github/actions/`)
 
-To eliminate duplicate setup across all pipelines, common actions are standardized:
+Standardizes setup for workflows using the shared CI actions:
 
 1. [`.github/actions/setup-node`](../.github/actions/setup-node/action.yml)
    * Standardizes Node 20.x setup.
@@ -70,8 +70,9 @@ To eliminate duplicate setup across all pipelines, common actions are standardiz
 
 ## 4. Execution Principles
 
-1. **Build Once for PR Browser E2E**: All PR browser/E2E workflows consume the canonical shared build artifact. Standalone workflow_dispatch runs remain independently executable for debugging.
+1. **Build Once for PR Browser E2E**: In the primary PR test pipeline (`tests.yml`), the host Next.js application is compiled once in the canonical `build` job. Auth E2E and Mobile Chromium/WebKit/PWA suites download the artifact and start `next start` without recompiling. Standalone `workflow_dispatch` runs remain independently executable for debugging.
 2. **Container Boundary**: Docker container build remains a separate artifact boundary with its own platform/runtime packaging concerns.
 3. **Isolate Unit from Infrastructure**: Unit tests (L1) run against the Prisma mock in memory without provisioning PostgreSQL.
 4. **Decouple Fast Gates from Certification**: Heavy stress, retry storms (k6), and 3-replica worker tests belong in nightly and release certification workflows, not on ordinary PR feedback paths.
 5. **Required Gate Stability**: The aggregate PR check retains the exact `test` context required by repository branch protection rulesets.
+6. **False-Green Protection**: Aggregate gate strictly validates that artifact reports exist, XML is well-formed, test counts are positive, and all prerequisite jobs succeeded.

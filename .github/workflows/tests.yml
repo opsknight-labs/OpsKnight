@@ -49,7 +49,7 @@ jobs:
         with:
           name: junit-unit-report
           path: reports/junit-unit.xml
-          if-no-files-found: ignore
+          if-no-files-found: error
 
   build:
     name: Application build & budgets (canonical E2E artifact)
@@ -133,7 +133,7 @@ jobs:
           path: |
             reports/junit-db.xml
             reports/ci-db-smoke.xml
-          if-no-files-found: ignore
+          if-no-files-found: error
 
   auth-e2e:
     name: Auth browser E2E (L3)
@@ -287,14 +287,12 @@ jobs:
         with:
           name: junit-unit-report
           path: reports
-        continue-on-error: true
 
       - name: Download db test reports
         uses: actions/download-artifact@v4
         with:
           name: junit-db-report
           path: reports
-        continue-on-error: true
 
       - name: Publish test results to GitHub Checks
         uses: dorny/test-reporter@v3
@@ -343,17 +341,21 @@ jobs:
               };
             }
             
-            return { tests: 0, failures: 0, errors: 0, skipped: 0 };
+            throw new Error('Malformed or empty JUnit XML: missing <testsuites> or <testsuite> root element');
           };
 
           let gateStatus = 'failure';
 
           try {
             if (!fs.existsSync('reports')) {
-              fs.mkdirSync('reports');
+              throw new Error('Reports directory does not exist; no test artifacts downloaded');
             }
             const xmlFiles = fs.readdirSync('reports').filter((f) => f.endsWith('.xml'));
             console.log(`Found ${xmlFiles.length} XML files: ${xmlFiles.join(', ')}`);
+
+            if (xmlFiles.length === 0) {
+              throw new Error('No JUnit XML files found in reports directory');
+            }
 
             const totals = xmlFiles.reduce(
               (acc, f) => {
@@ -370,6 +372,7 @@ jobs:
 
             console.log('Parsed Totals:', totals);
 
+            const hasTests = totals.tests > 0;
             const passed = Math.max(0, totals.tests - totals.failures - totals.errors - totals.skipped);
             const prereqsOk = process.env.FAST_STATUS === 'success' &&
                               process.env.BUILD_STATUS === 'success' &&
@@ -377,7 +380,7 @@ jobs:
                               process.env.AUTH_STATUS === 'success' &&
                               process.env.MOBILE_STATUS === 'success';
 
-            const suiteOk = (totals.failures === 0 && totals.errors === 0);
+            const suiteOk = hasTests && (totals.failures === 0 && totals.errors === 0);
             gateStatus = (prereqsOk && suiteOk) ? 'success' : 'failure';
 
             const status = (gateStatus === 'success') ? '✅ Passed' : '❌ Failed';
@@ -400,11 +403,11 @@ jobs:
             }
 
             const md = [
-              `## ${status} Vitest & Pipeline Results`,
+              `## ${status} Test Suite & Pipeline Results`,
               '',
               '| Metric | Count |',
               '| :--- | :---: |',
-              `| **Total Tests** | ${totals.tests} |`,
+              `| **Unit & DB Tests** | ${totals.tests} |`,
               `| **Passed** | ${passed} |`,
               `| **Failed** | ${totals.failures + totals.errors} |`,
               `| **Skipped** | ${totals.skipped} |`,
@@ -420,7 +423,7 @@ jobs:
           } catch (error) {
             console.error('Error summarizing results:', error);
             gateStatus = 'failure';
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, `markdown<<EOF\n## ⚠️ Test Summary generation failed\nCheck job logs for details.\nEOF\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `markdown<<EOF\n## ❌ Test Summary generation failed: ${error.message}\nCheck job logs for details.\nEOF\n`);
           } finally {
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `gate_status=${gateStatus}\n`);
           }
