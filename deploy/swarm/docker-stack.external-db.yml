@@ -1,0 +1,50 @@
+version: '3.8'
+
+# ==============================================================================
+# OpsKnight Docker Swarm External Database Overlay
+#
+# Connects OpsKnight services directly to an external managed PostgreSQL instance
+# (e.g. AWS RDS, GCP Cloud SQL, Azure Database for PostgreSQL) instead of the
+# bundled containerized PostgreSQL service.
+#
+# Deploy:
+#   docker stack deploy --with-registry-auth \
+#     -c deploy/swarm/docker-stack.yml \
+#     -c deploy/swarm/docker-stack.external-db.yml \
+#     opsknight
+# ==============================================================================
+
+services:
+  opsknight-db:
+    deploy:
+      replicas: 0
+
+  opsknight-web:
+    environment:
+      POSTGRES_HOST: ${EXTERNAL_DB_HOST:-}
+      POSTGRES_PORT: ${EXTERNAL_DB_PORT:-5432}
+
+  opsknight-scheduler:
+    environment:
+      POSTGRES_HOST: ${EXTERNAL_DB_HOST:-}
+      POSTGRES_PORT: ${EXTERNAL_DB_PORT:-5432}
+
+  opsknight-general-worker:
+    environment:
+      POSTGRES_HOST: ${EXTERNAL_DB_HOST:-}
+      POSTGRES_PORT: ${EXTERNAL_DB_PORT:-5432}
+
+  opsknight-critical-worker:
+    environment:
+      POSTGRES_HOST: ${EXTERNAL_DB_HOST:-}
+      POSTGRES_PORT: ${EXTERNAL_DB_PORT:-5432}
+
+  opsknight-bulk-worker:
+    environment:
+      POSTGRES_HOST: ${EXTERNAL_DB_HOST:-}
+      POSTGRES_PORT: ${EXTERNAL_DB_PORT:-5432}
+
+  opsknight-status-projector:
+    environment:
+      POSTGRES_HOST: ${EXTERNAL_DB_HOST:-}
+      POSTGRES_PORT: ${EXTERNAL_DB_PORT:-5432}

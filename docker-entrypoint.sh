@@ -4,6 +4,29 @@ set -e
 echo "🚀 OpsKnight Startup"
 echo "======================"
 
+# Load secrets from files (_FILE convention for Docker Swarm and Kubernetes secrets)
+load_secret_file() {
+    file_var="$1"
+    target_var="$2"
+    eval "file_path=\${$file_var:-}"
+    if [ -n "$file_path" ]; then
+        if [ -f "$file_path" ]; then
+            val=$(cat "$file_path" | tr -d '\r\n')
+            export "$target_var"="$val"
+            echo "🔑 Loaded secret $target_var from $file_path"
+        else
+            echo "⚠️  Secret file $file_path specified by $file_var not found"
+        fi
+    fi
+}
+
+load_secret_file "DATABASE_URL_FILE" "DATABASE_URL"
+load_secret_file "DIRECT_DATABASE_URL_FILE" "DIRECT_DATABASE_URL"
+load_secret_file "WEB_DATABASE_URL_FILE" "WEB_DATABASE_URL"
+load_secret_file "NEXTAUTH_SECRET_FILE" "NEXTAUTH_SECRET"
+load_secret_file "ENCRYPTION_KEY_FILE" "ENCRYPTION_KEY"
+load_secret_file "PROMETHEUS_SCRAPE_TOKEN_FILE" "PROMETHEUS_SCRAPE_TOKEN"
+
 # If PgBouncer is enabled and raw credentials are provided without an encoded WEB_DATABASE_URL,
 # safely construct an encoded WEB_DATABASE_URL to protect against passwords with special characters (@, :, /, ?, #, %).
 if [ "${PGBOUNCER_ENABLED:-}" = "true" ] && [ -n "${PGBOUNCER_DB_PASSWORD:-}" ] && [ -z "${WEB_DATABASE_URL:-}" ]; then

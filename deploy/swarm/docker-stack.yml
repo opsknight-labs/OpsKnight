@@ -1,0 +1,447 @@
+version: '3.8'
+
+# ==============================================================================
+# OpsKnight Production Docker Swarm Stack (Core Manifest)
+#
+# Topology: Split Runtime with horizontal web scaling, isolated queue workers,
+# lease-fenced maintenance scheduler, and resilient Raft-managed secrets.
+#
+# Deploy:
+#   docker stack deploy --with-registry-auth -c deploy/swarm/docker-stack.yml opsknight
+# ==============================================================================
+
+services:
+  opsknight-web:
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    ports:
+      - target: 3000
+        published: ${APP_PORT:-3000}
+        protocol: tcp
+        mode: ingress
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_PROCESS_ROLE: web
+      DATABASE_POOL_SIZE_WEB: ${DATABASE_POOL_SIZE_WEB:-10}
+      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NOTIFICATION_CONTROL_PLANE_PERSONAL: ${NOTIFICATION_CONTROL_PLANE_PERSONAL:-true}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL_FILE: /run/secrets/opsknight_database_url
+      DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
+      NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
+      ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
+    secrets:
+      - source: opsknight_database_url
+        target: /run/secrets/opsknight_database_url
+      - source: opsknight_direct_database_url
+        target: /run/secrets/opsknight_direct_database_url
+      - source: opsknight_nextauth_secret
+        target: /run/secrets/opsknight_nextauth_secret
+      - source: opsknight_encryption_key
+        target: /run/secrets/opsknight_encryption_key
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        monitor: 30s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        monitor: 30s
+        failure_action: pause
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 60s
+      resources:
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    networks:
+      - opsknight
+
+  opsknight-scheduler:
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_PROCESS_ROLE: scheduler
+      OPSKNIGHT_SCHEDULER_PROFILE: maintenance
+      DATABASE_POOL_SIZE_SCHEDULER: ${DATABASE_POOL_SIZE_SCHEDULER:-3}
+      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL_FILE: /run/secrets/opsknight_database_url
+      DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
+      NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
+      ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
+    secrets:
+      - source: opsknight_database_url
+        target: /run/secrets/opsknight_database_url
+      - source: opsknight_direct_database_url
+        target: /run/secrets/opsknight_direct_database_url
+      - source: opsknight_nextauth_secret
+        target: /run/secrets/opsknight_nextauth_secret
+      - source: opsknight_encryption_key
+        target: /run/secrets/opsknight_encryption_key
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        monitor: 30s
+        failure_action: rollback
+        order: stop-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        monitor: 30s
+        failure_action: pause
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 60s
+      resources:
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    networks:
+      - opsknight
+
+  opsknight-general-worker:
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_PROCESS_ROLE: general-worker
+      DATABASE_POOL_SIZE_GENERAL_WORKER: ${DATABASE_POOL_SIZE_GENERAL_WORKER:-5}
+      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL_FILE: /run/secrets/opsknight_database_url
+      DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
+      NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
+      ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
+    secrets:
+      - source: opsknight_database_url
+        target: /run/secrets/opsknight_database_url
+      - source: opsknight_direct_database_url
+        target: /run/secrets/opsknight_direct_database_url
+      - source: opsknight_nextauth_secret
+        target: /run/secrets/opsknight_nextauth_secret
+      - source: opsknight_encryption_key
+        target: /run/secrets/opsknight_encryption_key
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        monitor: 30s
+        failure_action: rollback
+        order: stop-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        monitor: 30s
+        failure_action: pause
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 60s
+      resources:
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    networks:
+      - opsknight
+
+  opsknight-critical-worker:
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_PROCESS_ROLE: critical-worker
+      DATABASE_POOL_SIZE_CRITICAL_WORKER: ${DATABASE_POOL_SIZE_CRITICAL_WORKER:-5}
+      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL_FILE: /run/secrets/opsknight_database_url
+      DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
+      NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
+      ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
+    secrets:
+      - source: opsknight_database_url
+        target: /run/secrets/opsknight_database_url
+      - source: opsknight_direct_database_url
+        target: /run/secrets/opsknight_direct_database_url
+      - source: opsknight_nextauth_secret
+        target: /run/secrets/opsknight_nextauth_secret
+      - source: opsknight_encryption_key
+        target: /run/secrets/opsknight_encryption_key
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        monitor: 30s
+        failure_action: rollback
+        order: stop-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        monitor: 30s
+        failure_action: pause
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 60s
+      resources:
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    networks:
+      - opsknight
+
+  opsknight-bulk-worker:
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_PROCESS_ROLE: bulk-worker
+      DATABASE_POOL_SIZE_BULK_WORKER: ${DATABASE_POOL_SIZE_BULK_WORKER:-3}
+      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL_FILE: /run/secrets/opsknight_database_url
+      DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
+      NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
+      ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
+    secrets:
+      - source: opsknight_database_url
+        target: /run/secrets/opsknight_database_url
+      - source: opsknight_direct_database_url
+        target: /run/secrets/opsknight_direct_database_url
+      - source: opsknight_nextauth_secret
+        target: /run/secrets/opsknight_nextauth_secret
+      - source: opsknight_encryption_key
+        target: /run/secrets/opsknight_encryption_key
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        monitor: 30s
+        failure_action: rollback
+        order: stop-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        monitor: 30s
+        failure_action: pause
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 60s
+      resources:
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    networks:
+      - opsknight
+
+  opsknight-status-projector:
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    environment:
+      NODE_ENV: production
+      OPSKNIGHT_PROCESS_ROLE: status-projector
+      DATABASE_POOL_SIZE_STATUS_PROJECTOR: ${DATABASE_POOL_SIZE_STATUS_PROJECTOR:-3}
+      OPSKNIGHT_SKIP_MIGRATIONS: "true"
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      PORT: '3000'
+      HOSTNAME: '0.0.0.0'
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL_FILE: /run/secrets/opsknight_database_url
+      DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
+      NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
+      ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
+    secrets:
+      - source: opsknight_database_url
+        target: /run/secrets/opsknight_database_url
+      - source: opsknight_direct_database_url
+        target: /run/secrets/opsknight_direct_database_url
+      - source: opsknight_nextauth_secret
+        target: /run/secrets/opsknight_nextauth_secret
+      - source: opsknight_encryption_key
+        target: /run/secrets/opsknight_encryption_key
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "require(''http'').get(''http://localhost:3000/api/health?mode=readiness'', (r) => {let data='''';r.on(''data'',(c)=>data+=c);r.on(''end'',()=>{try{const res=JSON.parse(data);process.exit(res.status===''healthy''?0:1)}catch(e){process.exit(1)}});}).on(''error'',()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        monitor: 30s
+        failure_action: rollback
+        order: stop-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        monitor: 30s
+        failure_action: pause
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 60s
+      resources:
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    networks:
+      - opsknight
+
+  opsknight-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-opsknight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-opsknight_db}
+    volumes:
+      - opsknight-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-opsknight} -d ${POSTGRES_DB:-opsknight_db}',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      resources:
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    networks:
+      - opsknight
+
+networks:
+  opsknight:
+    driver: overlay
+    attachable: true
+
+volumes:
+  opsknight-db-data:
+
+secrets:
+  opsknight_database_url:
+    file: ${OPSKNIGHT_DATABASE_URL_FILE:-./secrets.example/database-url.txt.example}
+  opsknight_direct_database_url:
+    file: ${OPSKNIGHT_DIRECT_DATABASE_URL_FILE:-./secrets.example/direct-database-url.txt.example}
+  opsknight_nextauth_secret:
+    file: ${OPSKNIGHT_NEXTAUTH_SECRET_FILE:-./secrets.example/nextauth-secret.txt.example}
+  opsknight_encryption_key:
+    file: ${OPSKNIGHT_ENCRYPTION_KEY_FILE:-./secrets.example/encryption-key.txt.example}

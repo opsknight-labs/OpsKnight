@@ -1,0 +1,82 @@
+version: '3.8'
+
+# ==============================================================================
+# OpsKnight Docker Swarm PgBouncer Overlay
+#
+# Adds a 2-replica high-availability PgBouncer connection multiplexer in front
+# of PostgreSQL for web client request connection offloading.
+#
+# Deploy:
+#   docker stack deploy --with-registry-auth \
+#     -c deploy/swarm/docker-stack.yml \
+#     -c deploy/swarm/docker-stack.pgbouncer.yml \
+#     opsknight
+# ==============================================================================
+
+services:
+  opsknight-pgbouncer:
+    image: ${OPSKNIGHT_PGBOUNCER_IMAGE:-ghcr.io/opsknight-labs/opsknight-pgbouncer:1.26.0}
+    environment:
+      PGBOUNCER_AUTH_FILE: /run/secrets/pgbouncer_userlist
+      PGBOUNCER_POOL_MODE: ${PGBOUNCER_POOL_MODE:-transaction}
+      PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-10}
+      PGBOUNCER_RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-5}
+      PGBOUNCER_MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-1000}
+      PGBOUNCER_DB_HOST: ${PGBOUNCER_DB_HOST:-opsknight-db}
+      PGBOUNCER_DB_PORT: ${PGBOUNCER_DB_PORT:-5432}
+      PGBOUNCER_DB_NAME: ${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}
+      PGBOUNCER_SERVER_TLS_SSLMODE: ${PGBOUNCER_SERVER_TLS_SSLMODE:-disable}
+    secrets:
+      - source: opsknight_pgbouncer_userlist
+        target: /run/secrets/pgbouncer_userlist
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -h 127.0.0.1 -p 6432 || exit 1',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        monitor: 30s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        monitor: 30s
+        failure_action: pause
+        order: stop-first
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 60s
+      resources:
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+        limits:
+          cpus: '0.50'
+          memory: 512M
+    networks:
+      - opsknight
+
+  opsknight-web:
+    environment:
+      PGBOUNCER_ENABLED: 'true'
+      WEB_DATABASE_URL_FILE: /run/secrets/opsknight_web_database_url
+    secrets:
+      - source: opsknight_web_database_url
+        target: /run/secrets/opsknight_web_database_url
+
+secrets:
+  opsknight_pgbouncer_userlist:
+    file: ${OPSKNIGHT_PGBOUNCER_USERLIST_FILE:-./secrets.example/pgbouncer-userlist.txt.example}
+  opsknight_web_database_url:
+    file: ${OPSKNIGHT_WEB_DATABASE_URL_FILE:-./secrets.example/web-database-url.txt.example}

@@ -99,6 +99,9 @@ function calculateRuntimeCapacity(customEnv) {
   if (!pgbouncer && env.COMPOSE_FILE && env.COMPOSE_FILE.includes('docker-compose.pgbouncer.yml')) {
     pgbouncer = true;
   }
+  if (!pgbouncer && env.SWARM_STACK_FILE && env.SWARM_STACK_FILE.includes('docker-stack.pgbouncer.yml')) {
+    pgbouncer = true;
+  }
 
   if (mode === 'integrated' && pgbouncer) {
     throw new Error(
@@ -106,10 +109,18 @@ function calculateRuntimeCapacity(customEnv) {
     );
   }
 
-  const webReplicas = parseStrictPositiveInt('WEB_REPLICAS', env.WEB_REPLICAS, 1);
+  const webReplicas = parseStrictPositiveInt(
+    'WEB_REPLICAS',
+    env.SWARM_REPLICAS_WEB || env.SWARM_WEB_REPLICAS || env.WEB_REPLICAS,
+    1
+  );
   const webPool = parseStrictPositiveInt('DATABASE_POOL_SIZE_WEB', env.DATABASE_POOL_SIZE_WEB, 10);
 
-  const pgbouncerReplicas = parseStrictPositiveInt('PGBOUNCER_REPLICAS', env.PGBOUNCER_REPLICAS, 1);
+  const pgbouncerReplicas = parseStrictPositiveInt(
+    'PGBOUNCER_REPLICAS',
+    env.SWARM_REPLICAS_PGBOUNCER || env.SWARM_PGBOUNCER_REPLICAS || env.PGBOUNCER_REPLICAS,
+    1
+  );
   const pgbouncerPool = parseStrictPositiveInt(
     'PGBOUNCER_DEFAULT_POOL_SIZE',
     env.PGBOUNCER_DEFAULT_POOL_SIZE,
@@ -123,7 +134,7 @@ function calculateRuntimeCapacity(customEnv) {
 
   const schedulerReplicas = parseStrictPositiveInt(
     'SCHEDULER_REPLICAS',
-    env.SCHEDULER_REPLICAS,
+    env.SWARM_REPLICAS_SCHEDULER || env.SWARM_SCHEDULER_REPLICAS || env.SCHEDULER_REPLICAS,
     1
   );
   const schedulerPool = parseStrictPositiveInt(
@@ -134,7 +145,10 @@ function calculateRuntimeCapacity(customEnv) {
 
   const generalReplicas = parseStrictPositiveInt(
     'GENERAL_WORKER_REPLICAS',
-    env.GENERAL_WORKER_REPLICAS || env.GENERAL_REPLICAS,
+    env.SWARM_REPLICAS_GENERAL_WORKER ||
+      env.SWARM_GENERAL_WORKER_REPLICAS ||
+      env.GENERAL_WORKER_REPLICAS ||
+      env.GENERAL_REPLICAS,
     1
   );
   const generalPool = parseStrictPositiveInt(
@@ -145,7 +159,10 @@ function calculateRuntimeCapacity(customEnv) {
 
   const criticalReplicas = parseStrictPositiveInt(
     'CRITICAL_WORKER_REPLICAS',
-    env.CRITICAL_WORKER_REPLICAS || env.CRITICAL_REPLICAS,
+    env.SWARM_REPLICAS_CRITICAL_WORKER ||
+      env.SWARM_CRITICAL_WORKER_REPLICAS ||
+      env.CRITICAL_WORKER_REPLICAS ||
+      env.CRITICAL_REPLICAS,
     1
   );
   const criticalPool = parseStrictPositiveInt(
@@ -156,7 +173,10 @@ function calculateRuntimeCapacity(customEnv) {
 
   const bulkReplicas = parseStrictPositiveInt(
     'BULK_WORKER_REPLICAS',
-    env.BULK_WORKER_REPLICAS || env.BULK_REPLICAS,
+    env.SWARM_REPLICAS_BULK_WORKER ||
+      env.SWARM_BULK_WORKER_REPLICAS ||
+      env.BULK_WORKER_REPLICAS ||
+      env.BULK_REPLICAS,
     1
   );
   const bulkPool = parseStrictPositiveInt(
@@ -167,7 +187,10 @@ function calculateRuntimeCapacity(customEnv) {
 
   const projectorReplicas = parseStrictPositiveInt(
     'STATUS_PROJECTOR_REPLICAS',
-    env.STATUS_PROJECTOR_REPLICAS || env.PROJECTOR_REPLICAS,
+    env.SWARM_REPLICAS_STATUS_PROJECTOR ||
+      env.SWARM_STATUS_PROJECTOR_REPLICAS ||
+      env.STATUS_PROJECTOR_REPLICAS ||
+      env.PROJECTOR_REPLICAS,
     1
   );
   const projectorPool = parseStrictPositiveInt(
