@@ -192,9 +192,9 @@ describe('deployment configuration invariants', () => {
     expect(read('helm/opsknight/templates/split-deployments.yaml')).toContain(
       '(eq $role.name "web") $root.Values.pgbouncer.enabled'
     );
-    expect(rawWebPatch).toContain('@opsknight-pgbouncer:6432');
+    expect(rawWebPatch).toContain('key: WEB_DATABASE_URL');
     expect(rawWebPatch).toContain('DIRECT_DATABASE_URL');
-    expect(rawWebPatch).toContain('@$(POSTGRES_HOST):$(POSTGRES_PORT)');
+    expect(rawWebPatch).toContain('key: DIRECT_DATABASE_URL');
     expect(read('helm/opsknight/templates/split-deployments.yaml')).toContain(
       'name: DIRECT_DATABASE_URL'
     );

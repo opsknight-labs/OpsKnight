@@ -41,7 +41,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "PASS=$$(sed -n 's/^\"[^\"]*\" \"\\(.*\\)\"$$/\\1/p' /run/secrets/pgbouncer_userlist 2>/dev/null | head -n1 | sed 's/\"\"/\"/g'); PGPASSWORD=\"$$PASS\" psql -h 127.0.0.1 -p 6432 -U \"$${PGBOUNCER_DB_USER:-$${POSTGRES_USER:-opsknight}}\" -d \"$${PGBOUNCER_DB_NAME:-$${POSTGRES_DB:-opsknight_db}}\" -c 'SELECT 1' || exit 1",
+          "if [ -f /run/secrets/pgbouncer_db_password ]; then PASS=$$(cat /run/secrets/pgbouncer_db_password); else PASS=$$(sed -n 's/^\"[^\"]*\" \"\\(.*\\)\"$$/\\1/p' /run/secrets/pgbouncer_userlist 2>/dev/null | head -n1 | sed 's/\"\"/\"/g'); fi; PGPASSWORD=\"$$PASS\" psql -h 127.0.0.1 -p 6432 -U \"$${PGBOUNCER_DB_USER:-$${POSTGRES_USER:-opsknight}}\" -d \"$${PGBOUNCER_DB_NAME:-$${POSTGRES_DB:-opsknight_db}}\" -c 'SELECT 1' || exit 1",
         ]
       interval: 10s
       timeout: 5s

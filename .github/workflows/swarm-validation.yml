@@ -242,3 +242,69 @@ jobs:
           ./deploy/swarm/scripts/deploy.sh
           ./deploy/swarm/scripts/health-check.sh
           echo "✅ Integrated Swarm with Custom CA deployed and healthy."
+
+      - name: Test Live External PostgreSQL with TLS, Custom CA, and PgBouncer verify-full
+        run: |
+          echo "Setting up external TLS-enabled PostgreSQL on Swarm overlay network..."
+          docker network inspect opsknight_network >/dev/null 2>&1 || \
+            docker network create --driver overlay --attachable opsknight_network
+
+          mkdir -p /tmp/swarm-tls
+          openssl req -new -x509 -days 1 -nodes -out /tmp/swarm-tls/ca.crt \
+            -keyout /tmp/swarm-tls/ca.key -subj "/CN=swarm-ca" 2>/dev/null
+          openssl req -new -nodes -out /tmp/swarm-tls/server.csr \
+            -keyout /tmp/swarm-tls/server.key -subj "/CN=swarm-ext-postgres" 2>/dev/null
+          openssl x509 -req -in /tmp/swarm-tls/server.csr -days 1 \
+            -CA /tmp/swarm-tls/ca.crt -CAkey /tmp/swarm-tls/ca.key -CAcreateserial \
+            -out /tmp/swarm-tls/server.crt 2>/dev/null
+          docker run --rm -v /tmp/swarm-tls:/tls:rw alpine sh -c "chown 70:70 /tls/server.key /tls/server.crt && chmod 600 /tls/server.key && chmod 644 /tls/server.crt"
+          chmod 644 /tmp/swarm-tls/ca.crt
+
+          docker rm -f swarm-ext-postgres 2>/dev/null || true
+          docker run -d \
+            --name swarm-ext-postgres \
+            --network opsknight_network \
+            -v /tmp/swarm-tls/server.crt:/var/lib/postgresql/server.crt:ro \
+            -v /tmp/swarm-tls/server.key:/var/lib/postgresql/server.key:ro \
+            -e POSTGRES_USER=ext_swarm_user \
+            -e POSTGRES_PASSWORD=ext_swarm_secret_password_123 \
+            -e POSTGRES_DB=ext_swarm_db \
+            postgres:16-alpine \
+            -c ssl=on \
+            -c ssl_cert_file=/var/lib/postgresql/server.crt \
+            -c ssl_key_file=/var/lib/postgresql/server.key
+
+          cleanup_ext_db() {
+            docker rm -f swarm-ext-postgres 2>/dev/null || true
+            rm -rf /tmp/swarm-tls 2>/dev/null || true
+          }
+          trap cleanup_ext_db EXIT
+
+          for i in $(seq 1 30); do
+            if docker exec swarm-ext-postgres pg_isready -U ext_swarm_user >/dev/null 2>&1; then
+              echo "External TLS PostgreSQL is ready!"
+              break
+            fi
+            sleep 1
+          done
+
+          echo "Deploying Swarm split stack with external TLS DB + PgBouncer verify-full..."
+          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
+          export OPSKNIGHT_PGBOUNCER_IMAGE="opsknight-pgbouncer:local"
+          export SWARM_RUNTIME_MODE="split"
+          export ENABLE_PGBOUNCER="true"
+          export EXTERNAL_DB="true"
+          export EXTERNAL_DB_HOST="swarm-ext-postgres"
+          export EXTERNAL_DB_PORT="5432"
+          export EXTERNAL_DB_USER="ext_swarm_user"
+          export EXTERNAL_DB_PASSWORD="ext_swarm_secret_password_123"
+          export EXTERNAL_DB_NAME="ext_swarm_db"
+          export EXTERNAL_DB_SSLMODE="verify-full"
+          export PGBOUNCER_TLS_CA_CERT="/tmp/swarm-tls/ca.crt"
+          export SWARM_RESOLVE_IMAGE_NEVER="true"
+          export ALLOW_INSECURE_SECRETS="true"
+          export ENVIRONMENT="development"
+
+          ./deploy/swarm/scripts/deploy.sh
+          ./deploy/swarm/scripts/health-check.sh
+          echo "✅ External PostgreSQL with TLS verify-full, Custom CA, and PgBouncer succeeded!"

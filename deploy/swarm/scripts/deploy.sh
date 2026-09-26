@@ -37,6 +37,78 @@ else
   STRICT_SECRETS="${STRICT_SECRETS:-false}"
 fi
 
+# --- Early Resolution: Resolve Database URLs and Credentials ---
+DB_USER="${POSTGRES_USER:-opsknight}"
+DB_PASS="${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}"
+DB_NAME="${POSTGRES_DB:-opsknight_db}"
+DB_HOST="opsknight-db"
+DB_PORT="5432"
+
+# Parse structured credentials from supplied database URLs if provided
+if [ -n "${DIRECT_DATABASE_URL:-}" ] || [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
+  SAMPLE_URL="${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL}}"
+  PARSED_CREDS=$(node -e '
+    try {
+      const u = new URL(process.argv[1]);
+      const user = decodeURIComponent(u.username || "");
+      const pass = decodeURIComponent(u.password || "");
+      const host = u.hostname || "";
+      const port = u.port || "5432";
+      const db = (u.pathname || "").replace(/^\//, "");
+      console.log(JSON.stringify({ user, pass, host, port, db }));
+    } catch (e) {
+      console.log("{}");
+    }
+  ' "$SAMPLE_URL" 2>/dev/null || echo "{}")
+
+  PARSED_USER=$(node -e 'console.log(JSON.parse(process.argv[1]).user || "")' "$PARSED_CREDS" 2>/dev/null || true)
+  PARSED_PASS=$(node -e 'console.log(JSON.parse(process.argv[1]).pass || "")' "$PARSED_CREDS" 2>/dev/null || true)
+  PARSED_HOST=$(node -e 'console.log(JSON.parse(process.argv[1]).host || "")' "$PARSED_CREDS" 2>/dev/null || true)
+  PARSED_PORT=$(node -e 'console.log(JSON.parse(process.argv[1]).port || "")' "$PARSED_CREDS" 2>/dev/null || true)
+  PARSED_DB=$(node -e 'console.log(JSON.parse(process.argv[1]).db || "")' "$PARSED_CREDS" 2>/dev/null || true)
+
+  if [ -n "${PARSED_USER}" ] && [ -z "${POSTGRES_USER:-}" ] && [ -z "${EXTERNAL_DB_USER:-}" ]; then
+    DB_USER="${PARSED_USER}"
+  fi
+  if [ -n "${PARSED_PASS}" ] && [ -z "${POSTGRES_PASSWORD:-}" ] && [ -z "${EXTERNAL_DB_PASSWORD:-}" ]; then
+    DB_PASS="${PARSED_PASS}"
+  fi
+  if [ -n "${PARSED_HOST}" ] && [ -z "${EXTERNAL_DB_HOST:-}" ] && [ "${PARSED_HOST}" != "opsknight-db" ]; then
+    DB_HOST="${PARSED_HOST}"
+    USE_EXTERNAL_DB="true"
+    EXTERNAL_DB_HOST="${PARSED_HOST}"
+  fi
+  if [ -n "${PARSED_PORT}" ] && [ -z "${EXTERNAL_DB_PORT:-}" ]; then
+    DB_PORT="${PARSED_PORT}"
+  fi
+  if [ -n "${PARSED_DB}" ] && [ -z "${POSTGRES_DB:-}" ] && [ -z "${EXTERNAL_DB_NAME:-}" ]; then
+    DB_NAME="${PARSED_DB}"
+  fi
+fi
+
+if [ "${USE_EXTERNAL_DB}" = "true" ]; then
+  DB_HOST="${EXTERNAL_DB_HOST:-${DB_HOST}}"
+  DB_PORT="${EXTERNAL_DB_PORT:-${DB_PORT}}"
+  DB_USER="${EXTERNAL_DB_USER:-${DB_USER}}"
+  DB_PASS="${EXTERNAL_DB_PASSWORD:-${DB_PASS}}"
+  DB_NAME="${EXTERNAL_DB_NAME:-${DB_NAME}}"
+
+  export EXTERNAL_DB_HOST="${DB_HOST}"
+  export EXTERNAL_DB_PORT="${DB_PORT}"
+  export EXTERNAL_DB_USER="${DB_USER}"
+  export EXTERNAL_DB_PASSWORD="${DB_PASS}"
+  export EXTERNAL_DB_NAME="${DB_NAME}"
+  export PGBOUNCER_DB_HOST="${DB_HOST}"
+  export PGBOUNCER_DB_PORT="${DB_PORT}"
+  export PGBOUNCER_DB_NAME="${DB_NAME}"
+  export PGBOUNCER_DB_USER="${DB_USER}"
+
+  if [ -z "${DB_HOST}" ] || [ "${DB_HOST}" = "opsknight-db" ]; then
+    echo "❌ [FATAL] External database requested but EXTERNAL_DB_HOST is not set." >&2
+    exit 1
+  fi
+fi
+
 echo "═══════════════════════════════════════════════════════════════════════"
 echo "  OpsKnight Docker Swarm Safe Rollout Orchestrator"
 echo "═══════════════════════════════════════════════════════════════════════"
@@ -116,77 +188,8 @@ if ! docker network inspect "${NETWORK_NAME}" >/dev/null 2>&1; then
   docker network create --driver overlay --attachable "${NETWORK_NAME}"
 fi
 
-# Resolve dynamic database URLs and credentials
-DB_USER="${POSTGRES_USER:-opsknight}"
-DB_PASS="${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}"
-DB_NAME="${POSTGRES_DB:-opsknight_db}"
-DB_HOST="opsknight-db"
-DB_PORT="5432"
-
-# Parse structured credentials from supplied database URLs if provided
-if [ -n "${DIRECT_DATABASE_URL:-}" ] || [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
-  SAMPLE_URL="${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL}}"
-  PARSED_CREDS=$(node -e '
-    try {
-      const u = new URL(process.argv[1]);
-      const user = decodeURIComponent(u.username || "");
-      const pass = decodeURIComponent(u.password || "");
-      const host = u.hostname || "";
-      const port = u.port || "5432";
-      const db = (u.pathname || "").replace(/^\//, "");
-      console.log(JSON.stringify({ user, pass, host, port, db }));
-    } catch (e) {
-      console.log("{}");
-    }
-  ' "$SAMPLE_URL" 2>/dev/null || echo "{}")
-
-  PARSED_USER=$(node -e 'console.log(JSON.parse(process.argv[1]).user || "")' "$PARSED_CREDS" 2>/dev/null || true)
-  PARSED_PASS=$(node -e 'console.log(JSON.parse(process.argv[1]).pass || "")' "$PARSED_CREDS" 2>/dev/null || true)
-  PARSED_HOST=$(node -e 'console.log(JSON.parse(process.argv[1]).host || "")' "$PARSED_CREDS" 2>/dev/null || true)
-  PARSED_PORT=$(node -e 'console.log(JSON.parse(process.argv[1]).port || "")' "$PARSED_CREDS" 2>/dev/null || true)
-  PARSED_DB=$(node -e 'console.log(JSON.parse(process.argv[1]).db || "")' "$PARSED_CREDS" 2>/dev/null || true)
-
-  if [ -n "${PARSED_USER}" ] && [ -z "${POSTGRES_USER:-}" ] && [ -z "${EXTERNAL_DB_USER:-}" ]; then
-    DB_USER="${PARSED_USER}"
-  fi
-  if [ -n "${PARSED_PASS}" ] && [ -z "${POSTGRES_PASSWORD:-}" ] && [ -z "${EXTERNAL_DB_PASSWORD:-}" ]; then
-    DB_PASS="${PARSED_PASS}"
-  fi
-  if [ -n "${PARSED_HOST}" ] && [ -z "${EXTERNAL_DB_HOST:-}" ] && [ "${PARSED_HOST}" != "opsknight-db" ]; then
-    DB_HOST="${PARSED_HOST}"
-    USE_EXTERNAL_DB="true"
-    EXTERNAL_DB_HOST="${PARSED_HOST}"
-  fi
-  if [ -n "${PARSED_PORT}" ] && [ -z "${EXTERNAL_DB_PORT:-}" ]; then
-    DB_PORT="${PARSED_PORT}"
-  fi
-  if [ -n "${PARSED_DB}" ] && [ -z "${POSTGRES_DB:-}" ] && [ -z "${EXTERNAL_DB_NAME:-}" ]; then
-    DB_NAME="${PARSED_DB}"
-  fi
-fi
-
+# Configure connection URLs based on database topology
 if [ "${USE_EXTERNAL_DB}" = "true" ]; then
-  DB_HOST="${EXTERNAL_DB_HOST:-${DB_HOST}}"
-  DB_PORT="${EXTERNAL_DB_PORT:-${DB_PORT}}"
-  DB_USER="${EXTERNAL_DB_USER:-${DB_USER}}"
-  DB_PASS="${EXTERNAL_DB_PASSWORD:-${DB_PASS}}"
-  DB_NAME="${EXTERNAL_DB_NAME:-${DB_NAME}}"
-
-  export EXTERNAL_DB_HOST="${DB_HOST}"
-  export EXTERNAL_DB_PORT="${DB_PORT}"
-  export EXTERNAL_DB_USER="${DB_USER}"
-  export EXTERNAL_DB_PASSWORD="${DB_PASS}"
-  export EXTERNAL_DB_NAME="${DB_NAME}"
-  export PGBOUNCER_DB_HOST="${DB_HOST}"
-  export PGBOUNCER_DB_PORT="${DB_PORT}"
-  export PGBOUNCER_DB_NAME="${DB_NAME}"
-  export PGBOUNCER_DB_USER="${DB_USER}"
-
-  if [ -z "${DB_HOST}" ] || [ "${DB_HOST}" = "opsknight-db" ]; then
-    echo "❌ [FATAL] External database requested but EXTERNAL_DB_HOST is not set." >&2
-    exit 1
-  fi
-
   EXTERNAL_DB_SSLMODE="${EXTERNAL_DB_SSLMODE:-verify-full}"
   export EXTERNAL_DB_SSLMODE
   export PGBOUNCER_SERVER_TLS_SSLMODE="${EXTERNAL_DB_SSLMODE}"
@@ -251,13 +254,16 @@ if [ "${STRICT_SECRETS}" = "true" ]; then
     echo "   Provide a 64-hex-char encryption key with: export ENCRYPTION_KEY='...'" >&2
     exit 1
   fi
-  if [ "${USE_EXTERNAL_DB}" = "true" ] && [ -z "${DB_PASS}" ]; then
-    echo "❌ [FATAL] STRICT_SECRETS enforced: External database password cannot be empty." >&2
-    exit 1
-  fi
-  if [ "${USE_EXTERNAL_DB}" != "true" ] && [ "${DB_PASS}" = "opsknight_secure_password_change_me" ]; then
-    echo "❌ [FATAL] STRICT_SECRETS enforced: POSTGRES_PASSWORD must be changed from the default placeholder." >&2
-    exit 1
+  if [ "${USE_EXTERNAL_DB}" = "true" ]; then
+    if [ -z "${DB_PASS}" ] || [ "${DB_PASS}" = "opsknight_secure_password_change_me" ]; then
+      echo "❌ [FATAL] STRICT_SECRETS enforced: External database password cannot be empty or use known default placeholder." >&2
+      exit 1
+    fi
+  else
+    if [ "${DB_PASS}" = "opsknight_secure_password_change_me" ]; then
+      echo "❌ [FATAL] STRICT_SECRETS enforced: POSTGRES_PASSWORD must be changed from the default placeholder." >&2
+      exit 1
+    fi
   fi
 fi
 
@@ -289,10 +295,14 @@ create_versioned_secret() {
   content_hash=$(printf '%s' "${secret_val}" | hash_string | head -c 8)
   local versioned_name="${STACK_NAME}_${base_name}_${content_hash}"
 
-  # If user explicitly overrode the secret name, honor it directly
+  # If user explicitly overrode the secret name, guarantee immutability & rotation by attaching hash
   local current_env_val="${!env_override_var:-}"
   if [ -n "${current_env_val}" ]; then
-    versioned_name="${current_env_val}"
+    if [[ "${current_env_val}" != *"${content_hash}"* ]]; then
+      versioned_name="${current_env_val}_${content_hash}"
+    else
+      versioned_name="${current_env_val}"
+    fi
   fi
 
   if ! docker secret inspect "${versioned_name}" >/dev/null 2>&1; then
@@ -385,28 +395,23 @@ else
       exit 1
     fi
 
-    # Check cluster-wide Swarm task state first (works on multi-node and manager nodes)
-    TASK_STATE=$(docker service ps "${STACK_NAME}_opsknight-db" --filter "desired-state=running" --no-trunc --format '{{.CurrentState}}' 2>/dev/null | head -n 1 || true)
-    if echo "${TASK_STATE}" | grep -q -i 'healthy'; then
-      echo "✅ PostgreSQL service task is healthy across cluster (${ELAPSED}s)."
-      DB_READY=1
-      break
-    elif echo "${TASK_STATE}" | grep -q '^Running' && ! echo "${TASK_STATE}" | grep -q -i 'unhealthy'; then
-      echo "✅ PostgreSQL service task is running across cluster (${ELAPSED}s)."
-      DB_READY=1
-      break
-    fi
-
-    # Fallback to local container inspection if on same node
+    # 1. Direct container probe if PostgreSQL task container is on the current node
     TASK_CONTAINER=$(docker ps --filter "label=com.docker.swarm.service.name=${STACK_NAME}_opsknight-db" -q | head -n 1 || true)
     if [ -n "${TASK_CONTAINER}" ]; then
-      HEALTH_STATUS=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' "${TASK_CONTAINER}" 2>/dev/null || echo "unknown")
-      if [ "${HEALTH_STATUS}" = "healthy" ]; then
-        echo "✅ PostgreSQL is healthy and accepting connections (${ELAPSED}s)."
+      if docker exec "${TASK_CONTAINER}" pg_isready -U "${DB_USER}" -d "${DB_NAME}" >/dev/null 2>&1; then
+        echo "✅ PostgreSQL is accepting connections on local node (${ELAPSED}s)."
+        DB_READY=1
+        break
+      fi
+    else
+      # 2. Network probe over Swarm overlay network for multi-node clusters
+      if docker run --rm --network "${NETWORK_NAME}" postgres:15-alpine pg_isready -h opsknight-db -p 5432 -U "${DB_USER}" -d "${DB_NAME}" >/dev/null 2>&1; then
+        echo "✅ PostgreSQL is accepting connections across Swarm overlay network (${ELAPSED}s)."
         DB_READY=1
         break
       fi
     fi
+
     sleep 2
   done
 fi
