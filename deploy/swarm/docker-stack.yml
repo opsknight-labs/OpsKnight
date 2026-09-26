@@ -44,8 +44,6 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     healthcheck:
@@ -115,8 +113,6 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     healthcheck:
@@ -185,8 +181,6 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     healthcheck:
@@ -255,8 +249,6 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     healthcheck:
@@ -325,8 +317,6 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     healthcheck:
@@ -395,8 +385,6 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     healthcheck:

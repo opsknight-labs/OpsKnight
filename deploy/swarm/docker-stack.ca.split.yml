@@ -10,6 +10,7 @@ services:
   opsknight-web:
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
     secrets:
       - source: opsknight_custom_ca
         target: /etc/ssl/certs/custom-ca.crt
@@ -17,6 +18,7 @@ services:
   opsknight-scheduler:
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
     secrets:
       - source: opsknight_custom_ca
         target: /etc/ssl/certs/custom-ca.crt
@@ -24,6 +26,7 @@ services:
   opsknight-general-worker:
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
     secrets:
       - source: opsknight_custom_ca
         target: /etc/ssl/certs/custom-ca.crt
@@ -31,6 +34,7 @@ services:
   opsknight-critical-worker:
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
     secrets:
       - source: opsknight_custom_ca
         target: /etc/ssl/certs/custom-ca.crt
@@ -38,6 +42,7 @@ services:
   opsknight-bulk-worker:
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
     secrets:
       - source: opsknight_custom_ca
         target: /etc/ssl/certs/custom-ca.crt
@@ -45,6 +50,7 @@ services:
   opsknight-status-projector:
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
     secrets:
       - source: opsknight_custom_ca
         target: /etc/ssl/certs/custom-ca.crt

@@ -418,6 +418,19 @@ jobs:
             sleep 1
           done
 
+          echo "Proving negative test: direct connection with sslmode=verify-full fails closed without trusted CA..."
+          if docker run --rm --network "$EXT_NETWORK" \
+            -e DATABASE_URL="postgresql://ext_opsknight_user:ext_strong_secret_password@${EXT_DB_CONTAINER}:5432/ext_opsknight_db?sslmode=verify-full" \
+            -e OPSKNIGHT_MIGRATION_ONLY="true" \
+            "$IMAGE" >/tmp/neg-mig.log 2>&1; then
+            echo "SECURITY VIOLATION: migration unexpectedly succeeded without custom CA root certificate!" >&2
+            exit 1
+          else
+            echo "Direct migration safely failed closed without custom CA root certificate (exit non-zero as expected)."
+            echo "Negative error snippet:"
+            tail -n 10 /tmp/neg-mig.log || true
+          fi
+
           export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
           export OPSKNIGHT_IMAGE="$IMAGE"
           export PGBOUNCER_IMAGE="opsknight-pgbouncer:1.26.0"
@@ -540,6 +553,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:latest
+            ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:1.26.0
             ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:sha-${{ github.sha }}
           cache-from: type=gha,scope=opsknight-pgbouncer-main
           cache-to: type=gha,scope=opsknight-pgbouncer-main,mode=max

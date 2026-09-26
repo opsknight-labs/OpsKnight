@@ -28,8 +28,6 @@ services:
       PGBOUNCER_DB_NAME: ${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}
       PGBOUNCER_DB_USER: ${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}
       PGBOUNCER_SERVER_TLS_SSLMODE: ${PGBOUNCER_SERVER_TLS_SSLMODE:-disable}
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     secrets:

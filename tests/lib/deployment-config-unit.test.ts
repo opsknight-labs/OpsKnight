@@ -405,7 +405,9 @@ describe('deployment configuration invariants', () => {
     expect(pgbouncer).toContain('SELECT 1');
     expect(pgbouncer).toContain('@opsknight-pgbouncer:6432/${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}?sslmode=disable&pgbouncer=true');
     expect(pgbouncer).toContain('DIRECT_DATABASE_URL:');
-    expect(split).toContain('DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://');
+    expect(split).toContain(
+      'DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://'
+    );
 
     // Helm PgBouncer aligns on 1.26.0 security update
     const helm = read('helm/opsknight/values.yaml');
