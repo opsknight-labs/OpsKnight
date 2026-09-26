@@ -183,11 +183,16 @@ if [ "${USE_EXTERNAL_DB}" = "true" ]; then
   ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$DB_USER")
   ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$DB_PASS")
 
+  CA_PARAM=""
+  if [ -n "${PGBOUNCER_TLS_CA_CERT:-}" ] && [ -f "${PGBOUNCER_TLS_CA_CERT}" ]; then
+    CA_PARAM="&sslrootcert=/etc/ssl/certs/custom-ca.crt"
+  fi
+
   if [ -z "${DIRECT_DATABASE_URL:-}" ]; then
-    export DIRECT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${EXTERNAL_DB_SSLMODE}&connection_limit=10&pool_timeout=30"
+    export DIRECT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${EXTERNAL_DB_SSLMODE}&connection_limit=10&pool_timeout=30${CA_PARAM}"
   fi
   if [ -z "${OPSKNIGHT_DATABASE_URL:-}" ]; then
-    export OPSKNIGHT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${EXTERNAL_DB_SSLMODE}&connection_limit=40&pool_timeout=30"
+    export OPSKNIGHT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${EXTERNAL_DB_SSLMODE}&connection_limit=40&pool_timeout=30${CA_PARAM}"
   fi
   if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
     export WEB_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-pgbouncer:6432/${DB_NAME}?sslmode=disable&pgbouncer=true"
@@ -212,9 +217,10 @@ else
   fi
 fi
 
-# Robustly escape PgBouncer userlist credentials
-CLEAN_USER=$(printf '%s' "${DB_USER}" | sed 's/\\/\\\\/g; s/"/\\"/g')
-CLEAN_PASS=$(printf '%s' "${DB_PASS}" | sed 's/\\/\\\\/g; s/"/\\"/g')
+# Robustly escape PgBouncer userlist credentials per PgBouncer auth_file spec:
+# Literal double quotes inside quoted strings are doubled (""), backslashes are literal
+CLEAN_USER=$(printf '%s' "${DB_USER}" | sed 's/"/""/g')
+CLEAN_PASS=$(printf '%s' "${DB_PASS}" | sed 's/"/""/g')
 PGBOUNCER_USERLIST_CONTENT=$(printf '"%s" "%s"\n' "${CLEAN_USER}" "${CLEAN_PASS}")
 
 # Export credentials for child processes & stack environment
@@ -283,6 +289,7 @@ create_versioned_secret "encryption_key" "${ENCRYPTION_KEY}" "OPSKNIGHT_ENCRYPTI
 
 if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
   create_versioned_secret "pgbouncer_userlist" "${PGBOUNCER_USERLIST_CONTENT}" "OPSKNIGHT_PGBOUNCER_USERLIST_SECRET"
+  create_versioned_secret "pgbouncer_db_password" "${DB_PASS}" "OPSKNIGHT_PGBOUNCER_DB_PASSWORD_SECRET"
   create_versioned_secret "web_database_url" "${WEB_DATABASE_URL}" "OPSKNIGHT_WEB_DATABASE_URL_SECRET"
 fi
 
@@ -317,13 +324,18 @@ if [ -n "${PGBOUNCER_TLS_CA_CERT:-}" ] && [ -f "${PGBOUNCER_TLS_CA_CERT}" ]; the
   STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.pgbouncer-ca.yml")
 fi
 
+DEPLOY_OPTS=("--with-registry-auth")
+if [ "${SWARM_RESOLVE_IMAGE_NEVER:-}" = "true" ] || [[ "${OPSKNIGHT_IMAGE:-}" == *local* ]]; then
+  DEPLOY_OPTS+=("--resolve-image=never")
+fi
+
 # --- Step 4: Bootstrap / Ensure Database Readiness ---
 echo "--- [4/8] Ensuring Database Service Readiness ---"
 if [ "${USE_EXTERNAL_DB}" = "true" ]; then
   echo "ℹ️  Using external database; skipping bundled PostgreSQL startup."
 else
   echo "  Deploying bundled PostgreSQL service manifest..."
-  docker stack deploy --with-registry-auth -c "${SWARM_DIR}/docker-stack.db.yml" "${STACK_NAME}"
+  docker stack deploy "${DEPLOY_OPTS[@]}" -c "${SWARM_DIR}/docker-stack.db.yml" "${STACK_NAME}"
 
   echo "⏳ Waiting for bundled PostgreSQL readiness (timeout: ${DB_READY_TIMEOUT_SEC}s)..."
   START_TIME=$(date +%s)
@@ -356,13 +368,17 @@ echo "--- [5/8] Running Ephemeral Schema Migration ---"
 export OPSKNIGHT_IMAGE
 export SWARM_NETWORK_NAME="${NETWORK_NAME}"
 export SWARM_STACK_NAME="${STACK_NAME}"
-export DIRECT_DATABASE_URL
-export OPSKNIGHT_DATABASE_URL
+export OPSKNIGHT_DIRECT_DATABASE_URL_SECRET
+export OPSKNIGHT_DATABASE_URL_SECRET
+export OPSKNIGHT_NEXTAUTH_SECRET_SECRET
+export OPSKNIGHT_ENCRYPTION_KEY_SECRET
+export OPSKNIGHT_CUSTOM_CA_SECRET
+unset DIRECT_DATABASE_URL OPSKNIGHT_DATABASE_URL
 "${SCRIPT_DIR}/migrate.sh"
 
 # --- Step 6: Deploy Application Stack with Prune ---
 echo "--- [6/8] Deploying OpsKnight Swarm Stack (${SWARM_RUNTIME_MODE} mode with --prune) ---"
-docker stack deploy --with-registry-auth "${STACK_FILES[@]}" --prune "${STACK_NAME}"
+docker stack deploy "${DEPLOY_OPTS[@]}" "${STACK_FILES[@]}" --prune "${STACK_NAME}"
 
 # --- Step 7: Service Convergence Verification ---
 echo "--- [7/8] Waiting for Service Convergence (timeout: ${CONVERGENCE_TIMEOUT_SEC}s) ---"

@@ -84,11 +84,15 @@ The shipped split pools are bounded to a potential 58 database connections at tw
 
 Split role replicas use a hard `kubernetes.io/hostname` spread constraint and therefore require at least two schedulable nodes. PDBs govern voluntary disruption only; node/zone survival depends on actual failure-domain placement. Add a `topology.kubernetes.io/zone` constraint in multi-zone production overlays.
 
-## External database overlays
+## External database overlays & special-character credentials
 
-The base application constructs a URI for its bundled PostgreSQL. For managed PostgreSQL, patch the `DATABASE_URL` environment entry to read a complete URI from your secret system. This supports TLS parameters, PgBouncer, provider options, and percent-encoded credentials without reconstructing the URI from separate fields.
+The shipped base manifests support pre-formed `DATABASE_URL` and `DIRECT_DATABASE_URL` keys in `opsknight-secrets`. When passwords contain reserved URI characters (`@`, `:`, `/`, `?`, `#`), provide the fully percent-encoded URI directly via Secret rather than relying on inline shell variable substitution (`postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@...`).
 
-The raw NetworkPolicy allows TCP/5432 to external destinations so an external database is not accidentally blocked. Narrow that rule to your known database CIDR/namespace in the production overlay. When adapting the PgBouncer profile to an external database, mount the trusted CA into PgBouncer and every direct worker/scheduler pod and use `sslmode=verify-full`.
+Deploying an external managed PostgreSQL database with Kustomize requires a production overlay that configures the following four components:
+1. **Secrets**: Supply `DATABASE_URL` and `DIRECT_DATABASE_URL` in `opsknight-secrets` with connection pool limits, `sslmode=verify-full`, and URI-encoded credentials.
+2. **PgBouncer Backend**: In `profiles/split-pgbouncer`, update `pgbouncer-configmap.yaml` to route to the external database host and port instead of `opsknight-postgres-service:5432`.
+3. **Egress NetworkPolicy**: Update `worker-network-policies.yaml` and `pgbouncer-network-policy.yaml` egress rules from `podSelector: { app: opsknight-postgres }` to `ipBlock` CIDRs allowing traffic to your external database endpoints.
+4. **Private CA Certificates**: Mount your enterprise CA bundle into `/etc/ssl/certs/custom-ca.crt` with `NODE_EXTRA_CA_CERTS` and `SSL_CERT_FILE` in PgBouncer and all worker/scheduler pods using direct database connections.
 
 ## Apply and observe
 

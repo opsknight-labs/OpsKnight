@@ -18,6 +18,7 @@ services:
     image: ${OPSKNIGHT_PGBOUNCER_IMAGE:-ghcr.io/opsknight-labs/opsknight-pgbouncer:1.26.0}
     environment:
       PGBOUNCER_AUTH_FILE: /run/secrets/pgbouncer_userlist
+      PGBOUNCER_DB_PASSWORD_FILE: /run/secrets/pgbouncer_db_password
       PGBOUNCER_POOL_MODE: ${PGBOUNCER_POOL_MODE:-transaction}
       PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-10}
       PGBOUNCER_RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-5}
@@ -34,11 +35,13 @@ services:
     secrets:
       - source: opsknight_pgbouncer_userlist
         target: /run/secrets/pgbouncer_userlist
+      - source: opsknight_pgbouncer_db_password
+        target: /run/secrets/pgbouncer_db_password
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "PASS=$$(sed -n 's/^\"[^\"]*\" \"\\(.*\\)\"$$/\\1/p' /run/secrets/pgbouncer_userlist 2>/dev/null | head -n1); PGPASSWORD=\"$$PASS\" psql -h 127.0.0.1 -p 6432 -U \"$${PGBOUNCER_DB_USER:-$${POSTGRES_USER:-opsknight}}\" -d \"$${PGBOUNCER_DB_NAME:-$${POSTGRES_DB:-opsknight_db}}\" -c 'SELECT 1' || exit 1",
+          "PASS=$$(sed -n 's/^\"[^\"]*\" \"\\(.*\\)\"$$/\\1/p' /run/secrets/pgbouncer_userlist 2>/dev/null | head -n1 | sed 's/\"\"/\"/g'); PGPASSWORD=\"$$PASS\" psql -h 127.0.0.1 -p 6432 -U \"$${PGBOUNCER_DB_USER:-$${POSTGRES_USER:-opsknight}}\" -d \"$${PGBOUNCER_DB_NAME:-$${POSTGRES_DB:-opsknight_db}}\" -c 'SELECT 1' || exit 1",
         ]
       interval: 10s
       timeout: 5s
@@ -92,6 +95,9 @@ secrets:
   opsknight_pgbouncer_userlist:
     external: true
     name: ${OPSKNIGHT_PGBOUNCER_USERLIST_SECRET:-opsknight_pgbouncer_userlist}
+  opsknight_pgbouncer_db_password:
+    external: true
+    name: ${OPSKNIGHT_PGBOUNCER_DB_PASSWORD_SECRET:-opsknight_pgbouncer_db_password}
   opsknight_web_database_url:
     external: true
     name: ${OPSKNIGHT_WEB_DATABASE_URL_SECRET:-opsknight_web_database_url}

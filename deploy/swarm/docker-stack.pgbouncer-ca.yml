@@ -1,9 +1,10 @@
 version: '3.8'
 
 # ==============================================================================
-# OpsKnight Docker Swarm Custom CA Overlay for PgBouncer
+# OpsKnight Docker Swarm Custom CA Overlay
 #
-# Mounts a custom enterprise CA bundle for verifying external PostgreSQL certificates.
+# Mounts a custom enterprise CA bundle for verifying external PostgreSQL certificates
+# across PgBouncer and all direct application / worker services.
 #
 # Deploy:
 #   docker stack deploy --with-registry-auth \
@@ -18,6 +19,62 @@ services:
   opsknight-pgbouncer:
     environment:
       PGBOUNCER_SERVER_TLS_CA_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-app:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-web:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-scheduler:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-worker-general:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-worker-critical:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-worker-bulk:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-projector-status:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
     secrets:
       - source: opsknight_custom_ca
         target: /etc/ssl/certs/custom-ca.crt

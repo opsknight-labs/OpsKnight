@@ -4,17 +4,14 @@ on:
   push:
     branches:
       - main
-      - feat/docker-swarm-deployment
     paths:
       - 'deploy/swarm/**'
-      - 'docker-entrypoint.sh'
-      - 'scripts/validate-runtime-capacity.cjs'
       - '.github/workflows/swarm-validation.yml'
   pull_request:
+    branches:
+      - main
     paths:
       - 'deploy/swarm/**'
-      - 'docker-entrypoint.sh'
-      - 'scripts/validate-runtime-capacity.cjs'
       - '.github/workflows/swarm-validation.yml'
 
 concurrency:
@@ -148,6 +145,7 @@ jobs:
           export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
           export ALLOW_INSECURE_SECRETS="true"
           export ENVIRONMENT="development"
+          export SWARM_RESOLVE_IMAGE_NEVER="true"
           ./deploy/swarm/scripts/deploy.sh
 
       - name: Test Horizontal Dynamic Scaling

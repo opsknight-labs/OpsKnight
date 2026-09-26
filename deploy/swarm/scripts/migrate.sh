@@ -67,38 +67,54 @@ ENV_ARGS=(
   --env NEXT_PUBLIC_APP_URL="${NEXT_PUBLIC_APP_URL:-http://localhost:3000}"
 )
 
-# Prioritize direct connection URL for migrations (Prisma cannot use transaction poolers)
-if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
-  ENV_ARGS+=(--env DIRECT_DATABASE_URL="${DIRECT_DATABASE_URL}")
-  ENV_ARGS+=(--env DATABASE_URL="${DIRECT_DATABASE_URL}")
-elif attach_secret_if_exists "${DIRECT_DB_SECRET}" "/run/secrets/opsknight_direct_database_url"; then
+# Prioritize versioned Swarm secrets to avoid exposing database credentials in container environment
+if attach_secret_if_exists "${DIRECT_DB_SECRET}" "/run/secrets/opsknight_direct_database_url"; then
   ENV_ARGS+=(--env DIRECT_DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
   ENV_ARGS+=(--env DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
 elif attach_secret_if_exists "opsknight_direct_database_url" "/run/secrets/opsknight_direct_database_url"; then
   ENV_ARGS+=(--env DIRECT_DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
   ENV_ARGS+=(--env DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
-elif [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
-  ENV_ARGS+=(--env DIRECT_DATABASE_URL="${OPSKNIGHT_DATABASE_URL}")
-  ENV_ARGS+=(--env DATABASE_URL="${OPSKNIGHT_DATABASE_URL}")
 elif attach_secret_if_exists "${DB_SECRET}" "/run/secrets/opsknight_database_url"; then
   ENV_ARGS+=(--env DIRECT_DATABASE_URL_FILE=/run/secrets/opsknight_database_url)
   ENV_ARGS+=(--env DATABASE_URL_FILE=/run/secrets/opsknight_database_url)
+elif [ -n "${DIRECT_DATABASE_URL:-}" ]; then
+  # Standalone invocation fallback when Swarm secrets are not used
+  ENV_ARGS+=(--env DIRECT_DATABASE_URL="${DIRECT_DATABASE_URL}")
+  ENV_ARGS+=(--env DATABASE_URL="${DIRECT_DATABASE_URL}")
+elif [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
+  ENV_ARGS+=(--env DIRECT_DATABASE_URL="${OPSKNIGHT_DATABASE_URL}")
+  ENV_ARGS+=(--env DATABASE_URL="${OPSKNIGHT_DATABASE_URL}")
 fi
 
-if [ -n "${NEXTAUTH_SECRET:-}" ]; then
-  ENV_ARGS+=(--env NEXTAUTH_SECRET="${NEXTAUTH_SECRET}")
-elif attach_secret_if_exists "${NEXTAUTH_SECRET_NAME}" "/run/secrets/opsknight_nextauth_secret"; then
+if attach_secret_if_exists "${NEXTAUTH_SECRET_NAME}" "/run/secrets/opsknight_nextauth_secret"; then
   ENV_ARGS+=(--env NEXTAUTH_SECRET_FILE=/run/secrets/opsknight_nextauth_secret)
 elif attach_secret_if_exists "opsknight_nextauth_secret" "/run/secrets/opsknight_nextauth_secret"; then
   ENV_ARGS+=(--env NEXTAUTH_SECRET_FILE=/run/secrets/opsknight_nextauth_secret)
+elif [ -n "${NEXTAUTH_SECRET:-}" ]; then
+  ENV_ARGS+=(--env NEXTAUTH_SECRET="${NEXTAUTH_SECRET}")
 fi
 
-if [ -n "${ENCRYPTION_KEY:-}" ]; then
-  ENV_ARGS+=(--env ENCRYPTION_KEY="${ENCRYPTION_KEY}")
-elif attach_secret_if_exists "${ENCRYPTION_SECRET_NAME}" "/run/secrets/opsknight_encryption_key"; then
+if attach_secret_if_exists "${ENCRYPTION_SECRET_NAME}" "/run/secrets/opsknight_encryption_key"; then
   ENV_ARGS+=(--env ENCRYPTION_KEY_FILE=/run/secrets/opsknight_encryption_key)
 elif attach_secret_if_exists "opsknight_encryption_key" "/run/secrets/opsknight_encryption_key"; then
   ENV_ARGS+=(--env ENCRYPTION_KEY_FILE=/run/secrets/opsknight_encryption_key)
+elif [ -n "${ENCRYPTION_KEY:-}" ]; then
+  ENV_ARGS+=(--env ENCRYPTION_KEY="${ENCRYPTION_KEY}")
+fi
+
+# Attach custom CA certificate if present
+CUSTOM_CA_SECRET_NAME="${OPSKNIGHT_CUSTOM_CA_SECRET:-${STACK_NAME}_custom_ca}"
+if attach_secret_if_exists "${CUSTOM_CA_SECRET_NAME}" "/etc/ssl/certs/custom-ca.crt"; then
+  ENV_ARGS+=(--env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/custom-ca.crt)
+  ENV_ARGS+=(--env SSL_CERT_FILE=/etc/ssl/certs/custom-ca.crt)
+elif attach_secret_if_exists "opsknight_custom_ca" "/etc/ssl/certs/custom-ca.crt"; then
+  ENV_ARGS+=(--env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/custom-ca.crt)
+  ENV_ARGS+=(--env SSL_CERT_FILE=/etc/ssl/certs/custom-ca.crt)
+fi
+
+SERVICE_CREATE_OPTS=("--with-registry-auth")
+if [ "${SWARM_RESOLVE_IMAGE_NEVER:-}" = "true" ] || [[ "${OPSKNIGHT_IMAGE:-}" == *local* ]]; then
+  SERVICE_CREATE_OPTS+=("--no-resolve-image")
 fi
 
 echo "🚀 Dispatching migration service task '${SERVICE_NAME}'..."
@@ -106,7 +122,7 @@ docker service create \
   --name "${SERVICE_NAME}" \
   --network "${NETWORK_NAME}" \
   --restart-condition none \
-  --with-registry-auth \
+  "${SERVICE_CREATE_OPTS[@]}" \
   "${SECRET_ARGS[@]}" \
   "${ENV_ARGS[@]}" \
   "${OPSKNIGHT_IMAGE}" >/dev/null

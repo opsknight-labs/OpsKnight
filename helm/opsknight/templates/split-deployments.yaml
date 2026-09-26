@@ -157,13 +157,13 @@ spec:
                   - "3"
             {{- end }}
           {{- end }}
-          {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled (or (ne $role.name "web") (not $root.Values.pgbouncer.enabled)) }}
+          {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled }}
           volumeMounts:
             - name: database-tls
               mountPath: /etc/opsknight-db-tls
               readOnly: true
           {{- end }}
-      {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled (or (ne $role.name "web") (not $root.Values.pgbouncer.enabled)) }}
+      {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled }}
       volumes:
         - name: database-tls
           secret:

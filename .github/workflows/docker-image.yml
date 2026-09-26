@@ -518,3 +518,35 @@ jobs:
           cache-to: type=gha,scope=opsknight-release,mode=max
           provenance: mode=max
           sbom: true
+
+      - name: Build + push PgBouncer (test channel - main)
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v7
+        with:
+          context: docker/pgbouncer
+          file: docker/pgbouncer/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:1.26.0
+            ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:latest
+          cache-from: type=gha,scope=opsknight-pgbouncer-main
+          cache-to: type=gha,scope=opsknight-pgbouncer-main,mode=max
+          provenance: false
+          sbom: false
+
+      - name: Build + push PgBouncer (release channel - version tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/build-push-action@v7
+        with:
+          context: docker/pgbouncer
+          file: docker/pgbouncer/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:1.26.0
+            ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:latest
+          cache-from: type=gha,scope=opsknight-pgbouncer-release
+          cache-to: type=gha,scope=opsknight-pgbouncer-release,mode=max
+          provenance: mode=max
+          sbom: true
