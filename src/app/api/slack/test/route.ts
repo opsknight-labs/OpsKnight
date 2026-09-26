@@ -3,6 +3,7 @@ import { assertAdminOrResponder, assertCanModifyService } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { retryFetch } from '@/lib/retry';
 import { getSlackBotToken } from '@/lib/slack';
+import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { integrationProviderError, jsonProviderError } from '@/lib/provider-errors';
@@ -20,9 +21,21 @@ export async function POST(request: NextRequest) {
       return jsonError(new AppError({ code: 'INVALID_JSON', cause: error }));
     }
     const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
-    const channelId = typeof payload.channelId === 'string' ? payload.channelId : null;
-    const channelName = typeof payload.channelName === 'string' ? payload.channelName : null;
-    const serviceId = typeof payload.serviceId === 'string' ? payload.serviceId : null;
+    const destinationId = typeof payload.destinationId === 'string' ? payload.destinationId : null;
+    let channelId = typeof payload.channelId === 'string' ? payload.channelId : null;
+    let channelName = typeof payload.channelName === 'string' ? payload.channelName : null;
+    let serviceId = typeof payload.serviceId === 'string' ? payload.serviceId : null;
+
+    if (destinationId && (!channelId || !serviceId)) {
+      const dest = await prisma.slackDestination.findUnique({
+        where: { id: destinationId },
+      });
+      if (dest) {
+        channelId = channelId || dest.channelId;
+        channelName = channelName || dest.channelName;
+        serviceId = serviceId || dest.serviceId;
+      }
+    }
 
     const user = serviceId
       ? await assertCanModifyService(serviceId)

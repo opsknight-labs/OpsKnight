@@ -57,6 +57,7 @@ const mocks = vi.hoisted(() => {
     oidcConfig: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     slackIntegration: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     slackOAuthConfig: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    slackDestination: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     notificationProvider: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     microsoftTeamsConfig: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     microsoftTeamsInstallation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },

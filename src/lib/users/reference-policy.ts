@@ -21,6 +21,7 @@ export const USER_REFERENCE_POLICY = {
   teamsLed: { deactivate: 'REPORT', delete: 'BLOCK' },
   slackIntegrations: { deactivate: 'KEEP', delete: 'SET_NULL' },
   slackOAuthConfigs: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  slackDestinations: { deactivate: 'KEEP', delete: 'SET_NULL' },
   jiraConfigsUpdated: { deactivate: 'KEEP', delete: 'SET_NULL' },
   microsoftTeamsConfigs: { deactivate: 'KEEP', delete: 'SET_NULL' },
   microsoftTeamsInstallations: { deactivate: 'KEEP', delete: 'SET_NULL' },

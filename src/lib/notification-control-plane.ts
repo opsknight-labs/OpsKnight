@@ -1508,10 +1508,27 @@ async function serviceTargetDeliveryRevoked(
   if (!service || !serviceEventEnabled(service, policy.eventType))
     return 'Service notification target was disabled';
   if (policy.targetKind === 'SERVICE_SLACK_CHANNEL') {
-    return service.serviceNotificationChannels.includes('SLACK') &&
-      service.slackChannel?.trim() === policy.targetAddress
-      ? null
-      : 'Service Slack channel was disabled or retargeted';
+    if (!service.serviceNotificationChannels.includes('SLACK')) {
+      return 'Service Slack notifications were disabled';
+    }
+    if (service.slackChannel?.trim() === policy.targetAddress) return null;
+    const dest = await (
+      prisma as unknown as {
+        slackDestination?: {
+          findFirst: (a: unknown) => Promise<{ id: string } | null>;
+        };
+      }
+    ).slackDestination
+      ?.findFirst({
+        where: {
+          serviceId: policy.serviceId,
+          enabled: true,
+          OR: [{ channelId: policy.targetAddress }, { channelName: policy.targetAddress }],
+        },
+        select: { id: true },
+      })
+      .catch(() => null);
+    return dest ? null : 'Service Slack channel was disabled or retargeted';
   }
   if (policy.targetKind === 'SERVICE_SLACK_WEBHOOK') {
     return service.serviceNotificationChannels.includes('SLACK') &&
@@ -1598,8 +1615,28 @@ async function serviceSlackDeliveryRevoked(
       return 'Service Slack notifications were disabled';
     if (payload.kind === 'SLACK_CHANNEL') {
       const currentChannel = service.slackChannel?.trim();
-      if (!currentChannel || currentChannel !== payload.channel.trim())
-        return 'Service Slack channel was removed or changed';
+      const targetChannel = payload.channel.trim();
+      if (!currentChannel || currentChannel !== targetChannel) {
+        const dest = await (
+          prisma as unknown as {
+            slackDestination?: {
+              findFirst: (a: unknown) => Promise<{ id: string } | null>;
+            };
+          }
+        ).slackDestination
+          ?.findFirst({
+            where: {
+              serviceId: policy.serviceId,
+              enabled: true,
+              OR: [{ channelId: targetChannel }, { channelName: targetChannel }],
+            },
+            select: { id: true },
+          })
+          .catch(() => null);
+        if (!dest) {
+          return 'Service Slack channel was removed or changed';
+        }
+      }
     } else {
       const currentWebhook = service.slackWebhookUrl?.trim();
       if (!currentWebhook || currentWebhook !== payload.webhookUrl?.trim())

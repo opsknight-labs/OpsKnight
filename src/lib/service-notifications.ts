@@ -132,45 +132,93 @@ export async function sendServiceNotifications(
     };
 
     if (serviceChannels.includes('SLACK')) {
-      const slackChannel = service.slackChannel?.trim();
+      const slackDestinations =
+        (await (
+          prisma as unknown as {
+            slackDestination?: {
+              findMany: (
+                a: unknown
+              ) => Promise<
+                Array<{
+                  id: string;
+                  channelId: string;
+                  channelName: string | null;
+                  enabled: boolean;
+                }>
+              >;
+            };
+          }
+        ).slackDestination
+          ?.findMany({
+            where: { serviceId: service.id, enabled: true },
+            orderBy: { createdAt: 'asc' },
+          })
+          .catch(() => [])) ?? [];
+
+      const activeChannels: Array<{ id: string; address: string; name: string | null }> =
+        slackDestinations.length > 0
+          ? slackDestinations.map(d => ({
+              id: d.id,
+              address: d.channelId || d.channelName || '',
+              name: d.channelName,
+            }))
+          : service.slackChannel?.trim()
+            ? [
+                {
+                  id: 'legacy',
+                  address: service.slackChannel.trim(),
+                  name: service.slackChannel.trim(),
+                },
+              ]
+            : [];
+
       const slackWebhookUrl = service.slackWebhookUrl?.trim();
-      if (slackChannel && eventType !== 'updated') {
-        const result = await persistIntent(async () => {
-          await enqueueCentralNotification({
-            category: 'INCIDENT',
-            channel: 'SLACK',
-            recipientType: 'SLACK_CHANNEL',
-            recipientId: service.id,
-            recipientAddress: slackChannel,
-            incidentId,
-            templateKey: `service-slack-${eventType}`,
-            sourceType: 'SERVICE_INCIDENT',
-            sourceId: `${service.id}:${incidentId}`,
-            eventKey: deliveryKey,
-            displayMessage: `${eventType}: ${incident.title}`,
-            ...incidentNotificationPriority({
-              eventType,
-              priority: incident.priority,
-              urgency: incident.urgency,
-            }),
-            payload: {
-              kind: 'SLACK_CHANNEL',
-              channel: slackChannel,
-              incident: incidentPresentation,
-              eventType,
-              includeInteractiveButtons: true,
-              serviceId: incident.serviceId,
-              lifecyclePolicy: {
-                ...lifecyclePolicy,
-                targetKind: 'SERVICE_SLACK_CHANNEL',
-                targetId: service.id,
-                targetAddress: slackChannel,
-              },
-            },
-          });
-        });
-        if (!result.success)
-          errors.push(`Slack channel notification failed: ${result.error || 'Unknown error'}`);
+      if (activeChannels.length > 0 && eventType !== 'updated') {
+        await Promise.all(
+          activeChannels.map(async target => {
+            const channelAddress = target.address;
+            if (!channelAddress) return;
+            const channelDeliveryKey = `${deliveryKey}:${target.id}`;
+            const result = await persistIntent(async () => {
+              await enqueueCentralNotification({
+                category: 'INCIDENT',
+                channel: 'SLACK',
+                recipientType: 'SLACK_CHANNEL',
+                recipientId: service.id,
+                recipientAddress: channelAddress,
+                incidentId,
+                templateKey: `service-slack-${eventType}`,
+                sourceType: 'SERVICE_INCIDENT',
+                sourceId: `${service.id}:${incidentId}`,
+                eventKey: channelDeliveryKey,
+                displayMessage: `${eventType}: ${incident.title}`,
+                ...incidentNotificationPriority({
+                  eventType,
+                  priority: incident.priority,
+                  urgency: incident.urgency,
+                }),
+                payload: {
+                  kind: 'SLACK_CHANNEL',
+                  channel: channelAddress,
+                  incident: incidentPresentation,
+                  eventType,
+                  includeInteractiveButtons: true,
+                  serviceId: incident.serviceId,
+                  lifecyclePolicy: {
+                    ...lifecyclePolicy,
+                    targetKind: 'SERVICE_SLACK_CHANNEL',
+                    targetId: service.id,
+                    targetAddress: channelAddress,
+                  },
+                },
+              });
+            });
+            if (!result.success)
+              errors.push(
+                `Slack channel notification failed for ${target.name ?? channelAddress}: ${result.error || 'Unknown error'}`
+              );
+          })
+        );
       }
 
       if (slackWebhookUrl && eventType !== 'updated') {
