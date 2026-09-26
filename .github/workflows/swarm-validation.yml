@@ -94,6 +94,11 @@ jobs:
           SWARM_STACK_FILE="docker-stack.pgbouncer.yml" \
           node scripts/validate-runtime-capacity.cjs
 
+          echo "--- Testing Integrated Swarm Capacity (3 replicas) ---"
+          OPSKNIGHT_RUNTIME_MODE="integrated" \
+          INTEGRATED_REPLICAS=3 \
+          node scripts/validate-runtime-capacity.cjs
+
   swarm-e2e-lifecycle:
     name: L1-L5 Swarm Convergence, Scaling & Fault Recovery
     needs: swarm-l0-validation

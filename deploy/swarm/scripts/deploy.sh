@@ -83,7 +83,9 @@ if [ "${SWARM_RUNTIME_MODE}" = "split" ]; then
 elif [ "${SWARM_RUNTIME_MODE}" = "integrated" ]; then
   STACK_FILES=("-c" "${SWARM_DIR}/docker-stack.integrated.yml")
   if [ -f "${ROOT_DIR}/scripts/validate-runtime-capacity.cjs" ]; then
-    OPSKNIGHT_RUNTIME_MODE="integrated" node "${ROOT_DIR}/scripts/validate-runtime-capacity.cjs"
+    OPSKNIGHT_RUNTIME_MODE="integrated" \
+    SWARM_REPLICAS_INTEGRATED="${INTEGRATED_REPLICAS:-1}" \
+    node "${ROOT_DIR}/scripts/validate-runtime-capacity.cjs"
   fi
 else
   echo "❌ [FATAL] Unknown SWARM_RUNTIME_MODE: '${SWARM_RUNTIME_MODE}'. Must be 'split' or 'integrated'." >&2
@@ -96,6 +98,69 @@ if ! docker network inspect "${NETWORK_NAME}" >/dev/null 2>&1; then
   echo "  Creating external attachable overlay network: ${NETWORK_NAME}..."
   docker network create --driver overlay --attachable "${NETWORK_NAME}"
 fi
+
+# Resolve dynamic database URLs and credentials
+DB_USER="${POSTGRES_USER:-opsknight}"
+DB_PASS="${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}"
+DB_NAME="${POSTGRES_DB:-opsknight_db}"
+
+if [ "${USE_EXTERNAL_DB}" = "true" ] || [ "${EXTERNAL_DB:-false}" = "true" ]; then
+  DB_HOST="${EXTERNAL_DB_HOST:-${POSTGRES_HOST:-}}"
+  DB_PORT="${EXTERNAL_DB_PORT:-${POSTGRES_PORT:-5432}}"
+  DB_USER="${EXTERNAL_DB_USER:-${POSTGRES_USER:-opsknight}}"
+  DB_PASS="${EXTERNAL_DB_PASSWORD:-${POSTGRES_PASSWORD:-}}"
+  DB_NAME="${EXTERNAL_DB_NAME:-${POSTGRES_DB:-opsknight_db}}"
+
+  if [ -z "${DB_HOST}" ]; then
+    echo "❌ [FATAL] External database requested but EXTERNAL_DB_HOST is not set." >&2
+    exit 1
+  fi
+
+  ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$DB_USER")
+  ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$DB_PASS")
+
+  if [ -z "${DIRECT_DATABASE_URL:-}" ]; then
+    export DIRECT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=prefer&connection_limit=10&pool_timeout=30"
+  fi
+  if [ -z "${OPSKNIGHT_DATABASE_URL:-}" ]; then
+    if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
+      export WEB_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-pgbouncer:6432/${DB_NAME}?sslmode=disable&pgbouncer=true"
+      export OPSKNIGHT_DATABASE_URL="$WEB_DATABASE_URL"
+    else
+      export OPSKNIGHT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=prefer&connection_limit=40&pool_timeout=30"
+    fi
+  fi
+else
+  # Bundled PostgreSQL
+  ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$DB_USER")
+  ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$DB_PASS")
+
+  if [ -z "${DIRECT_DATABASE_URL:-}" ]; then
+    export DIRECT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-db:5432/${DB_NAME}?sslmode=prefer&connection_limit=10&pool_timeout=30"
+  fi
+  if [ -z "${OPSKNIGHT_DATABASE_URL:-}" ]; then
+    if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
+      export WEB_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-pgbouncer:6432/${DB_NAME}?sslmode=disable&pgbouncer=true"
+      export OPSKNIGHT_DATABASE_URL="$WEB_DATABASE_URL"
+    else
+      export OPSKNIGHT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-db:5432/${DB_NAME}?sslmode=prefer&connection_limit=40&pool_timeout=30"
+    fi
+  fi
+fi
+
+if [ "${ENABLE_PGBOUNCER}" = "true" ] && [ -z "${WEB_DATABASE_URL:-}" ]; then
+  ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$DB_USER")
+  ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$DB_PASS")
+  export WEB_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-pgbouncer:6432/${DB_NAME}?sslmode=disable&pgbouncer=true"
+fi
+
+PGBOUNCER_USERLIST_CONTENT=$(printf '"%s" "%s"\n' "${DB_USER}" "${DB_PASS}")
+
+# Export credentials for child processes / stack environment
+export POSTGRES_USER="${DB_USER}"
+export POSTGRES_PASSWORD="${DB_PASS}"
+export PGBOUNCER_DB_USER="${DB_USER}"
+export PGBOUNCER_DB_PASSWORD="${DB_PASS}"
 
 create_secret_if_missing() {
   local secret_name="$1"
@@ -129,7 +194,7 @@ create_secret_if_missing "opsknight_nextauth_secret" "${SECRETS_DIR}/nextauth-se
 create_secret_if_missing "opsknight_encryption_key" "${SECRETS_DIR}/encryption-key.txt.example" "${ENCRYPTION_KEY:-}"
 
 if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
-  create_secret_if_missing "opsknight_pgbouncer_userlist" "${SECRETS_DIR}/pgbouncer-userlist.txt.example" ""
+  create_secret_if_missing "opsknight_pgbouncer_userlist" "${SECRETS_DIR}/pgbouncer-userlist.txt.example" "${PGBOUNCER_USERLIST_CONTENT}"
   create_secret_if_missing "opsknight_web_database_url" "${SECRETS_DIR}/web-database-url.txt.example" "${WEB_DATABASE_URL:-}"
 fi
 

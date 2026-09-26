@@ -25,6 +25,10 @@ services:
       PGBOUNCER_DB_HOST: ${PGBOUNCER_DB_HOST:-opsknight-db}
       PGBOUNCER_DB_PORT: ${PGBOUNCER_DB_PORT:-5432}
       PGBOUNCER_DB_NAME: ${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}
+      PGBOUNCER_DB_USER: ${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}
+      PGBOUNCER_DB_PASSWORD: ${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}
+      POSTGRES_USER: ${POSTGRES_USER:-opsknight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}
       PGBOUNCER_SERVER_TLS_SSLMODE: ${PGBOUNCER_SERVER_TLS_SSLMODE:-disable}
     secrets:
       - source: opsknight_pgbouncer_userlist

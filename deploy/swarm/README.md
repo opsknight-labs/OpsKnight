@@ -135,10 +135,16 @@ PGBOUNCER_ENABLED=true ./deploy/swarm/scripts/deploy.sh
 export EXTERNAL_DB="true"
 export EXTERNAL_DB_HOST="postgres.production.internal"
 export EXTERNAL_DB_PORT="5432"
+export EXTERNAL_DB_USER="opsknight_admin"
+export EXTERNAL_DB_PASSWORD="your_secure_db_password"
+export EXTERNAL_DB_NAME="opsknight_db"
 export PGBOUNCER_ENABLED="true"
 
 ./deploy/swarm/scripts/deploy.sh
 ```
+
+> [!NOTE]
+> `deploy.sh` automatically URL-encodes credentials, constructs `DIRECT_DATABASE_URL` and `WEB_DATABASE_URL`, writes the Raft secrets, and configures PgBouncer's userlist authentication. Alternatively, you can pre-set `OPSKNIGHT_DATABASE_URL` and `DIRECT_DATABASE_URL` directly.
 
 ---
 

@@ -114,6 +114,16 @@ function calculateRuntimeCapacity(customEnv) {
     env.SWARM_REPLICAS_WEB || env.SWARM_WEB_REPLICAS || env.WEB_REPLICAS,
     1
   );
+  const integratedReplicas = parseStrictPositiveInt(
+    'INTEGRATED_REPLICAS',
+    env.SWARM_REPLICAS_INTEGRATED ||
+      env.SWARM_INTEGRATED_REPLICAS ||
+      env.INTEGRATED_REPLICAS ||
+      env.SWARM_REPLICAS_WEB ||
+      env.SWARM_WEB_REPLICAS ||
+      env.WEB_REPLICAS,
+    1
+  );
   const webPool = parseStrictPositiveInt('DATABASE_POOL_SIZE_WEB', env.DATABASE_POOL_SIZE_WEB, 10);
 
   const pgbouncerReplicas = parseStrictPositiveInt(
@@ -205,7 +215,7 @@ function calculateRuntimeCapacity(customEnv) {
 
   let webConnections = 0;
   if (mode === 'integrated') {
-    webConnections = webReplicas * webPool;
+    webConnections = integratedReplicas * webPool;
   } else if (pgbouncer) {
     webConnections = pgbouncerReplicas * (pgbouncerPool + pgbouncerReserve);
   } else {
@@ -235,7 +245,11 @@ function calculateRuntimeCapacity(customEnv) {
     safe,
     headroom,
     breakdown: {
-      web: { replicas: webReplicas, pool: webPool, effective: webConnections },
+      web: {
+        replicas: mode === 'integrated' ? integratedReplicas : webReplicas,
+        pool: webPool,
+        effective: webConnections,
+      },
       pgbouncer:
         pgbouncer && mode === 'split'
           ? { replicas: pgbouncerReplicas, defaultPool: pgbouncerPool, reserve: pgbouncerReserve }

@@ -20,7 +20,7 @@ services:
         mode: ingress
     environment:
       NODE_ENV: production
-      OPSKNIGHT_PROCESS_ROLE: all
+      OPSKNIGHT_PROCESS_ROLE: integrated
       OPSKNIGHT_RUNTIME_MODE: integrated
       DATABASE_POOL_SIZE_WEB: ${DATABASE_POOL_SIZE_WEB:-10}
       OPSKNIGHT_SKIP_MIGRATIONS: "true"
