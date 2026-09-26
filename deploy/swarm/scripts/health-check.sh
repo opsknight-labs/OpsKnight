@@ -43,7 +43,8 @@ while read -r name image replicas ports; do
 done < <(docker stack services "${STACK_NAME}" --format '{{.Name}} {{.Image}} {{.Replicas}} {{.Ports}}')
 
 if [ "${DEGRADED_SERVICES}" -gt 0 ]; then
-  echo "❌ [ERROR] ${DEGRADED_SERVICES} service(s) have not converged."
+  echo "❌ [ERROR] ${DEGRADED_SERVICES} service(s) have not converged to desired replica counts."
+  exit 1
 else
   echo "✅ All stack services have converged to desired replica counts."
 fi
@@ -54,12 +55,12 @@ echo "--- [3/4] Active & Recent Tasks ---"
 docker stack ps "${STACK_NAME}" --no-trunc | head -n 20
 echo ""
 
-# Check for rejected or failed tasks in the last 5 minutes
+# Check for rejected or failed tasks
 FAILED_TASKS=$(docker stack ps "${STACK_NAME}" --filter "desired-state=running" --format '{{.CurrentState}}' | grep -iE 'Failed|Rejected' || true)
 if [ -n "${FAILED_TASKS}" ]; then
-  echo "⚠️  [WARNING] Found failed or rejected tasks:"
+  echo "❌ [ERROR] Found failed or rejected tasks:"
   echo "${FAILED_TASKS}"
-  echo ""
+  exit 1
 fi
 
 # 4. HTTP Application Readiness Probe

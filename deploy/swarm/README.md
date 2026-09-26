@@ -32,21 +32,27 @@ OpsKnight on Docker Swarm maps identical runtime contracts from Kubernetes and D
     (2 Replicas, Lease-Fenced) (general, critical, bulk)    (Dedicated Read Projector)
 ```
 
-### Logical Role Breakdown
+### Supported Runtime Topologies
 
-| Role | Default Replicas | Update Strategy | Rollback Strategy | Purpose & Isolation |
+OpsKnight on Swarm supports two deployment topologies selectable via `SWARM_RUNTIME_MODE`:
+1. **Split Runtime (`SWARM_RUNTIME_MODE=split`, Default)**: Enterprise architecture with separate process containers for HTTP web serving, maintenance scheduling, and dedicated worker lanes (`general`, `critical`, `bulk`).
+2. **Integrated Runtime (`SWARM_RUNTIME_MODE=integrated`)**: Single-container deployment (`opsknight-app`) running web, workers, and schedulers for small-to-medium teams.
+
+### Logical Role Breakdown (Split Topology)
+
+| Role | Default Replicas | Placement Strategy | Update Strategy | Purpose & Isolation |
 | :--- | :--- | :--- | :--- | :--- |
-| **`opsknight-web`** | 2 (Scalable) | `start-first` | `stop-first` | Serves UI & API traffic, health checks, authentication. |
-| **`opsknight-scheduler`** | 2 | `stop-first` | `stop-first` | Maintenance cron jobs, SLA recalculation. Fenced by DB lease. |
-| **`opsknight-general-worker`** | 1 | `stop-first` | `stop-first` | Standard background queues, webhooks, non-urgent syncs. |
-| **`opsknight-critical-worker`** | 1 | `stop-first` | `stop-first` | High-priority alerting, SMS, Twilio, push notifications. |
-| **`opsknight-bulk-worker`** | 1 | `stop-first` | `stop-first` | Heavy digest emails, compliance rollups, audit purging. |
-| **`opsknight-status-projector`** | 1 | `stop-first` | `stop-first` | Real-time incident timeline projection and public status sync. |
-| **`opsknight-pgbouncer`** *(Optional)* | 2 | `start-first` | `stop-first` | Transaction connection pooler offloading PostgreSQL backend. |
-| **`opsknight-db`** *(Bundled)* | 1 | `stop-first` | `stop-first` | Pinned single-node PostgreSQL persistence (dev/simple deploys). |
+| **`opsknight-web`** | 2 (Scalable) | Spread across nodes (`node.id`) | `start-first` | Serves UI & API traffic, health checks, authentication. |
+| **`opsknight-scheduler`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Maintenance cron jobs, SLA recalculation. Fenced by DB lease. |
+| **`opsknight-general-worker`** | 1 | Spread across nodes (`node.id`) | `stop-first` | Standard background queues, webhooks, non-urgent syncs. |
+| **`opsknight-critical-worker`** | 1 | Spread across nodes (`node.id`) | `stop-first` | High-priority alerting, SMS, Twilio, push notifications. |
+| **`opsknight-bulk-worker`** | 1 | Spread across nodes (`node.id`) | `stop-first` | Heavy digest emails, compliance rollups, audit purging. |
+| **`opsknight-status-projector`** | 1 | Spread across nodes (`node.id`) | `stop-first` | Real-time incident timeline projection and public status sync. |
+| **`opsknight-pgbouncer`** *(Optional)* | 2 | Spread across nodes (`node.id`) | `start-first` | Transaction connection pooler offloading PostgreSQL backend. |
+| **`opsknight-db`** *(Bundled)* | 1 | Pinned: `opsknight.database == true` | `stop-first` | Single-node PostgreSQL persistence (dev/simple deploys). |
 
 > [!IMPORTANT]
-> **Bundled PostgreSQL is NOT High Availability**: While Docker Swarm can restart the container upon failure, local volume mounts (`opsknight-db-data`) are pinned to a single physical node. For multi-node high availability, connect to an external managed database (AWS RDS, GCP Cloud SQL, or a Patroni HA cluster) using `docker-stack.external-db.yml`.
+> **Bundled PostgreSQL is Single-Node Persistence**: While Docker Swarm can restart the container upon failure, local volume mounts (`opsknight-db-data`) are pinned to a specific physical node via `node.labels.opsknight.database == true`. For multi-node high availability, connect to an external managed database (AWS RDS, GCP Cloud SQL, or a Patroni HA cluster) using `docker-stack.external-db.yml`.
 
 ---
 
@@ -62,7 +68,7 @@ Ensure the following ports are open between nodes in your Docker Swarm cluster:
 | **`3000/tcp`** | Inbound from Clients / LB | OpsKnight Web Ingress | Published on the Swarm routing mesh to reach web replicas. |
 
 > [!NOTE]
-> Database (`5432`), PgBouncer (`6432`), and worker ports are attached strictly to the private Swarm overlay network (`opsknight`) and **never exposed externally**.
+> Database (`5432`), PgBouncer (`6432`), and worker ports are attached strictly to the private external Swarm overlay network (`opsknight`) and **never exposed externally**.
 
 ---
 
@@ -79,88 +85,100 @@ OpsKnight natively supports Docker Swarm Raft-encrypted secrets via the `*_FILE`
 | `opsknight_web_database_url` | `/run/secrets/opsknight_web_database_url` | `WEB_DATABASE_URL_FILE` |
 | `opsknight_pgbouncer_userlist` | `/run/secrets/pgbouncer_userlist` | `PGBOUNCER_AUTH_FILE` |
 
-### Initializing Swarm Secrets:
-```bash
-# Generate secrets from files or strings
-echo "postgresql://user:pass@host:5432/opsknight_db" | docker secret create opsknight_database_url -
-echo "postgresql://user:pass@host:5432/opsknight_db" | docker secret create opsknight_direct_database_url -
-openssl rand -base64 32 | docker secret create opsknight_nextauth_secret -
-openssl rand -hex 32 | docker secret create opsknight_encryption_key -
-```
+All stack manifests reference these as pre-created external secrets (`external: true`), ensuring deterministic secret identity between `deploy.sh` and the Swarm tasks.
 
 Example templates are available in [deploy/swarm/secrets.example/](./secrets.example/).
 
 ---
 
-## 4. Migration & Deployment Lifecycle
+## 4. Bootstrap, Migration & Deployment Lifecycle
 
-Docker Swarm does not support Compose's `depends_on: { condition: service_completed_successfully }`. Therefore, OpsKnight uses an explicit, sequential orchestration pipeline:
+Docker Swarm lacks Compose's `depends_on: { condition: service_completed_successfully }`. Therefore, [`deploy.sh`](./scripts/deploy.sh) orchestrates an explicit, fail-closed rollout sequence:
 
 ```
-[1. Capacity Pre-flight] ──> [2. Ephemeral Migration Task] ──> [3. Stack Convergence] ──> [4. Health Verification]
- (validate connection pool)    (OPSKNIGHT_MIGRATION_ONLY=true)    (docker stack deploy)     (readiness probe)
+[1. Capacity Pre-flight] ──> [2. Overlay Network & Secrets] ──> [3. Database Readiness]
+                                                                        │
+[6. Health Verification] <── [5. Stack Convergence] <── [4. Ephemeral Migration Task]
 ```
 
-### Full Deployment via Script:
+1. **Overlay Network & Secrets**: Creates attachable overlay network `opsknight` and verifies Raft secrets.
+2. **Database Readiness**: If bundled PostgreSQL is used, deploys `docker-stack.db.yml` and waits for `pg_isready` before proceeding.
+3. **Standalone Migration**: Runs [`migrate.sh`](./scripts/migrate.sh) to execute schema migrations and online index creation in an ephemeral task (`OPSKNIGHT_MIGRATION_ONLY=true`). Fails closed if migrations do not exit 0.
+4. **Stack Rollout**: Deploys application services (split or integrated) with `OPSKNIGHT_SKIP_MIGRATIONS=true`.
+5. **Convergence & Health**: Awaits replica convergence (fails closed on timeout) and verifies cluster nodes, task states, and HTTP JSON readiness.
+
+### Quick Start Deployment:
 ```bash
-# Run automated pre-flight, migration, rollout, and convergence
+# Automated deployment of split runtime stack
 ./deploy/swarm/scripts/deploy.sh
-```
 
-### Running Standalone Migration:
-```bash
-./deploy/swarm/scripts/migrate.sh
+# Or deploy integrated runtime stack
+SWARM_RUNTIME_MODE=integrated ./deploy/swarm/scripts/deploy.sh
 ```
 
 ---
 
 ## 5. Deployment Flavors & Overlays
 
-### A. Core Stack (Bundled PostgreSQL)
+### A. Core Split Stack (Bundled PostgreSQL)
 ```bash
-docker stack deploy --with-registry-auth -c deploy/swarm/docker-stack.yml opsknight
+./deploy/swarm/scripts/deploy.sh
 ```
 
-### B. Core Stack + High-Availability PgBouncer
+### B. Core Split Stack + High-Availability PgBouncer
 ```bash
-docker stack deploy --with-registry-auth \
-  -c deploy/swarm/docker-stack.yml \
-  -c deploy/swarm/docker-stack.pgbouncer.yml \
-  opsknight
+PGBOUNCER_ENABLED=true ./deploy/swarm/scripts/deploy.sh
 ```
 
 ### C. External Managed PostgreSQL (RDS / Cloud SQL) + PgBouncer
 ```bash
+export EXTERNAL_DB="true"
 export EXTERNAL_DB_HOST="postgres.production.internal"
 export EXTERNAL_DB_PORT="5432"
+export PGBOUNCER_ENABLED="true"
 
-docker stack deploy --with-registry-auth \
-  -c deploy/swarm/docker-stack.yml \
-  -c deploy/swarm/docker-stack.pgbouncer.yml \
-  -c deploy/swarm/docker-stack.external-db.yml \
-  opsknight
+./deploy/swarm/scripts/deploy.sh
 ```
 
 ---
 
-## 6. Worker Placement & Node Labeling
+## 6. Node Placement & Storage Pinning
 
-To dedicate specific nodes for background worker execution and database pinning:
+OpsKnight uses Swarm spread preferences for high-availability application tiers and placement constraints for stateful storage:
 
 ```bash
-# Label worker nodes
+# Pin bundled PostgreSQL to a dedicated storage node
+docker node update --label-add opsknight.database=true db-node-01
+
+# Optional: Label worker compute nodes
 docker node update --label-add opsknight.workers=true worker-node-01
 docker node update --label-add opsknight.workers=true worker-node-02
-
-# Label database persistence node (for bundled postgres)
-docker node update --label-add opsknight.database=true db-node-01
 ```
 
 ---
 
-## 7. Scaling Operations
+## 7. Connection Capacity Planning
 
-Scale application tiers dynamically without restarting the cluster:
+Database connection budgets are validated before deployment via `scripts/validate-runtime-capacity.cjs`:
+
+* **Core Split Stack**:
+  * Web (2 × 10) = 20
+  * Scheduler (2 × 3) = 6
+  * General Worker (1 × 5) = 5
+  * Critical Worker (1 × 5) = 5
+  * Bulk Worker (1 × 3) = 3
+  * Status Projector (1 × 3) = 3
+  * **Total Demand: 42 connections** (Safety Headroom: 38 / 80)
+* **Split Stack with PgBouncer**:
+  * PgBouncer (2 replicas × [10 default + 5 reserve]) = 30 backend connections
+  * Direct Workers (2×3 + 1×5 + 1×5 + 1×3 + 1×3) = 22 connections
+  * **Total Demand: 52 connections** (Safety Headroom: 28 / 80)
+
+---
+
+## 8. Scaling Operations
+
+Scale application tiers dynamically without taking down the cluster:
 
 ```bash
 # Scale web tier to 4 replicas
@@ -170,12 +188,9 @@ docker service scale opsknight_opsknight-web=4
 docker service scale opsknight_opsknight-general-worker=3
 ```
 
-> [!CAUTION]
-> **Plan Critical Worker Scaling**: Critical workers consume direct PostgreSQL connections for notification escalation. Verify available connection headroom using `node scripts/validate-runtime-capacity.cjs` before scaling critical workers.
-
 ---
 
-## 8. Health Verification & Rollback
+## 9. Health Verification & Rollback
 
 ### Check Status & Convergence:
 ```bash

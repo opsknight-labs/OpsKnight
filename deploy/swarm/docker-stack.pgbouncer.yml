@@ -33,13 +33,16 @@ services:
       test:
         [
           'CMD-SHELL',
-          'pg_isready -h 127.0.0.1 -p 6432 || exit 1',
+          'PGPASSWORD="${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}" psql -h 127.0.0.1 -p 6432 -U "${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}" -d "${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}" -c "SELECT 1" || exit 1',
         ]
       interval: 10s
       timeout: 5s
       retries: 3
     deploy:
       replicas: 2
+      placement:
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
@@ -75,8 +78,15 @@ services:
       - source: opsknight_web_database_url
         target: /run/secrets/opsknight_web_database_url
 
+networks:
+  opsknight:
+    external: true
+    name: ${SWARM_NETWORK_NAME:-opsknight}
+
 secrets:
   opsknight_pgbouncer_userlist:
-    file: ${OPSKNIGHT_PGBOUNCER_USERLIST_FILE:-./secrets.example/pgbouncer-userlist.txt.example}
+    external: true
+    name: ${OPSKNIGHT_PGBOUNCER_USERLIST_SECRET:-opsknight_pgbouncer_userlist}
   opsknight_web_database_url:
-    file: ${OPSKNIGHT_WEB_DATABASE_URL_FILE:-./secrets.example/web-database-url.txt.example}
+    external: true
+    name: ${OPSKNIGHT_WEB_DATABASE_URL_SECRET:-opsknight_web_database_url}

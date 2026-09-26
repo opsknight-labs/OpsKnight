@@ -5,11 +5,12 @@
 # Sequential, fail-closed deployment workflow:
 # 1. Validate environment, manager node status, and container image
 # 2. Run runtime database connection capacity pre-flight check
-# 3. Create or verify Docker Swarm secrets
-# 4. Dispatch standalone database schema migration and wait for exit 0
-# 5. Deploy / update Docker Swarm application stack
-# 6. Wait for service convergence across all replicas
-# 7. Run end-to-end health verification
+# 3. Create or verify Docker Swarm external overlay network and secrets
+# 4. Bootstrap / ensure PostgreSQL service readiness (if bundled DB is used)
+# 5. Dispatch standalone database schema migration and wait for exit 0
+# 6. Deploy / update Docker Swarm application stack (split or integrated)
+# 7. Wait for service convergence across all replicas (fails closed on timeout)
+# 8. Run end-to-end health verification (fails closed on degraded service)
 # ==============================================================================
 
 set -euo pipefail
@@ -19,22 +20,30 @@ SWARM_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ROOT_DIR="$(cd "${SWARM_DIR}/../.." && pwd)"
 
 STACK_NAME="${SWARM_STACK_NAME:-opsknight}"
+NETWORK_NAME="${SWARM_NETWORK_NAME:-opsknight}"
 OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}"
+SWARM_RUNTIME_MODE="${SWARM_RUNTIME_MODE:-split}"
 ENABLE_PGBOUNCER="${PGBOUNCER_ENABLED:-false}"
 USE_EXTERNAL_DB="${EXTERNAL_DB:-false}"
+STRICT_SECRETS="${STRICT_SECRETS:-false}"
+ENVIRONMENT="${ENVIRONMENT:-${NODE_ENV:-development}}"
 CONVERGENCE_TIMEOUT_SEC="${CONVERGENCE_TIMEOUT_SEC:-180}"
+DB_READY_TIMEOUT_SEC="${DB_READY_TIMEOUT_SEC:-60}"
 
 echo "═══════════════════════════════════════════════════════════════════════"
 echo "  OpsKnight Docker Swarm Safe Rollout Orchestrator"
 echo "═══════════════════════════════════════════════════════════════════════"
 echo "Stack Name:        ${STACK_NAME}"
+echo "Overlay Network:   ${NETWORK_NAME}"
+echo "Runtime Mode:      ${SWARM_RUNTIME_MODE}"
 echo "Application Image: ${OPSKNIGHT_IMAGE}"
 echo "PgBouncer Enabled: ${ENABLE_PGBOUNCER}"
 echo "External Database: ${USE_EXTERNAL_DB}"
+echo "Environment:       ${ENVIRONMENT}"
 echo ""
 
 # --- Step 1: Pre-flight Environment Validation ---
-echo "--- [1/7] Validating Swarm Cluster State ---"
+echo "--- [1/8] Validating Swarm Cluster State ---"
 if ! command -v docker >/dev/null 2>&1; then
   echo "❌ [FATAL] Docker CLI not found in PATH." >&2
   exit 1
@@ -55,28 +64,39 @@ fi
 echo "✅ Node is an active Swarm manager."
 
 # --- Step 2: Validate Database Connection Capacity ---
-echo "--- [2/7] Running Connection Capacity Pre-flight ---"
-STACK_FILES=("-c" "${SWARM_DIR}/docker-stack.yml")
+echo "--- [2/8] Running Connection Capacity Pre-flight ---"
+if [ "${SWARM_RUNTIME_MODE}" = "split" ]; then
+  STACK_FILES=("-c" "${SWARM_DIR}/docker-stack.yml")
+  if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
+    STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.pgbouncer.yml")
+    export SWARM_STACK_FILE="docker-stack.pgbouncer.yml"
+  fi
+  if [ "${USE_EXTERNAL_DB}" = "true" ]; then
+    STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.external-db.yml")
+  fi
 
-if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
-  STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.pgbouncer.yml")
-  export SWARM_STACK_FILE="docker-stack.pgbouncer.yml"
-fi
-
-if [ "${USE_EXTERNAL_DB}" = "true" ]; then
-  STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.external-db.yml")
-fi
-
-if [ -f "${ROOT_DIR}/scripts/validate-runtime-capacity.cjs" ]; then
-  SWARM_REPLICAS_WEB="${WEB_REPLICAS:-2}" \
-  SWARM_REPLICAS_SCHEDULER="${SCHEDULER_REPLICAS:-2}" \
-  node "${ROOT_DIR}/scripts/validate-runtime-capacity.cjs"
+  if [ -f "${ROOT_DIR}/scripts/validate-runtime-capacity.cjs" ]; then
+    SWARM_REPLICAS_WEB="${WEB_REPLICAS:-2}" \
+    SWARM_REPLICAS_SCHEDULER="${SCHEDULER_REPLICAS:-2}" \
+    node "${ROOT_DIR}/scripts/validate-runtime-capacity.cjs"
+  fi
+elif [ "${SWARM_RUNTIME_MODE}" = "integrated" ]; then
+  STACK_FILES=("-c" "${SWARM_DIR}/docker-stack.integrated.yml")
+  if [ -f "${ROOT_DIR}/scripts/validate-runtime-capacity.cjs" ]; then
+    OPSKNIGHT_RUNTIME_MODE="integrated" node "${ROOT_DIR}/scripts/validate-runtime-capacity.cjs"
+  fi
 else
-  echo "ℹ️  Capacity script not found; skipping capacity preflight."
+  echo "❌ [FATAL] Unknown SWARM_RUNTIME_MODE: '${SWARM_RUNTIME_MODE}'. Must be 'split' or 'integrated'." >&2
+  exit 1
 fi
 
-# --- Step 3: Create / Verify Swarm Secrets ---
-echo "--- [3/7] Verifying Docker Swarm Secrets ---"
+# --- Step 3: Create External Overlay Network & Verify Secrets ---
+echo "--- [3/8] Ensuring Overlay Network & Raft Secrets ---"
+if ! docker network inspect "${NETWORK_NAME}" >/dev/null 2>&1; then
+  echo "  Creating external attachable overlay network: ${NETWORK_NAME}..."
+  docker network create --driver overlay --attachable "${NETWORK_NAME}"
+fi
+
 create_secret_if_missing() {
   local secret_name="$1"
   local example_file="$2"
@@ -87,6 +107,11 @@ create_secret_if_missing() {
     if [ -n "${env_val}" ]; then
       printf '%s' "${env_val}" | docker secret create "${secret_name}" -
     elif [ -f "${example_file}" ]; then
+      if [ "${STRICT_SECRETS}" = "true" ] || [ "${ENVIRONMENT}" = "production" ]; then
+        echo "❌ [FATAL] STRICT_SECRETS enforced: Refusing to create ${secret_name} from placeholder ${example_file}." >&2
+        exit 1
+      fi
+      echo "  ⚠️  [DEV WARNING] Populating secret ${secret_name} from example template: ${example_file}"
       docker secret create "${secret_name}" "${example_file}"
     else
       echo "❌ [FATAL] Cannot initialize secret ${secret_name}: source not found." >&2
@@ -108,17 +133,59 @@ if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
   create_secret_if_missing "opsknight_web_database_url" "${SECRETS_DIR}/web-database-url.txt.example" "${WEB_DATABASE_URL:-}"
 fi
 
-# --- Step 4: Standalone Database Migration ---
-echo "--- [4/7] Running Ephemeral Schema Migration ---"
+# --- Step 4: Bootstrap / Ensure Database Readiness ---
+echo "--- [4/8] Ensuring Database Service Readiness ---"
+if [ "${USE_EXTERNAL_DB}" = "true" ]; then
+  echo "ℹ️  Using external database; skipping bundled PostgreSQL startup."
+else
+  # Ensure storage node pinning label exists
+  if ! docker node ls --filter "node.label=opsknight.database=true" -q | grep -q .; then
+    CURRENT_NODE_ID=$(docker info --format '{{.Swarm.NodeID}}')
+    echo "  Applying 'opsknight.database=true' label to current node: ${CURRENT_NODE_ID}..."
+    docker node update --label-add opsknight.database=true "${CURRENT_NODE_ID}" >/dev/null
+  fi
+
+  echo "  Deploying bundled PostgreSQL service manifest..."
+  docker stack deploy --with-registry-auth -c "${SWARM_DIR}/docker-stack.db.yml" "${STACK_NAME}"
+
+  echo "⏳ Waiting for bundled PostgreSQL readiness (timeout: ${DB_READY_TIMEOUT_SEC}s)..."
+  START_TIME=$(date +%s)
+  DB_READY=0
+
+  while true; do
+    CURRENT_TIME=$(date +%s)
+    ELAPSED=$((CURRENT_TIME - START_TIME))
+    if [ "${ELAPSED}" -gt "${DB_READY_TIMEOUT_SEC}" ]; then
+      echo "❌ [TIMEOUT] PostgreSQL service was not ready within ${DB_READY_TIMEOUT_SEC}s." >&2
+      docker service logs "${STACK_NAME}_opsknight-db" 2>&1 | tail -n 25 || true
+      exit 1
+    fi
+
+    # Check container health status via docker inspect on the task container
+    TASK_CONTAINER=$(docker ps --filter "label=com.docker.swarm.service.name=${STACK_NAME}_opsknight-db" -q | head -n 1 || true)
+    if [ -n "${TASK_CONTAINER}" ]; then
+      HEALTH_STATUS=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' "${TASK_CONTAINER}" 2>/dev/null || echo "unknown")
+      if [ "${HEALTH_STATUS}" = "healthy" ]; then
+        echo "✅ PostgreSQL is healthy and accepting connections (${ELAPSED}s)."
+        DB_READY=1
+        break
+      fi
+    fi
+    sleep 2
+  done
+fi
+
+# --- Step 5: Standalone Database Schema Migration ---
+echo "--- [5/8] Running Ephemeral Schema Migration ---"
+export OPSKNIGHT_IMAGE
 "${SCRIPT_DIR}/migrate.sh"
 
-# --- Step 5: Stack Deployment ---
-echo "--- [5/7] Deploying OpsKnight Swarm Stack ---"
-export OPSKNIGHT_IMAGE
+# --- Step 6: Deploy Application Stack ---
+echo "--- [6/8] Deploying OpsKnight Swarm Stack (${SWARM_RUNTIME_MODE} mode) ---"
 docker stack deploy --with-registry-auth "${STACK_FILES[@]}" "${STACK_NAME}"
 
-# --- Step 6: Service Convergence Verification ---
-echo "--- [6/7] Waiting for Service Convergence (timeout: ${CONVERGENCE_TIMEOUT_SEC}s) ---"
+# --- Step 7: Service Convergence Verification ---
+echo "--- [7/8] Waiting for Service Convergence (timeout: ${CONVERGENCE_TIMEOUT_SEC}s) ---"
 START_TIME=$(date +%s)
 CONVERGED=0
 
@@ -126,8 +193,9 @@ while true; do
   CURRENT_TIME=$(date +%s)
   ELAPSED=$((CURRENT_TIME - START_TIME))
   if [ "${ELAPSED}" -gt "${CONVERGENCE_TIMEOUT_SEC}" ]; then
-    echo "❌ [TIMEOUT] Services did not converge within ${CONVERGENCE_TIMEOUT_SEC}s." >&2
-    break
+    echo "💥 [FATAL] Stack convergence timed out after ${CONVERGENCE_TIMEOUT_SEC}s." >&2
+    docker stack ps "${STACK_NAME}" --no-trunc | head -n 25 >&2
+    exit 1
   fi
 
   PENDING=0
@@ -150,14 +218,10 @@ while true; do
   sleep 5
 done
 
-if [ "${CONVERGED}" -ne 1 ]; then
-  echo "⚠️  [WARNING] Stack convergence timed out. Checking task diagnostics:"
-  docker stack ps "${STACK_NAME}" --no-trunc | head -n 25
-fi
-
-# --- Step 7: Health Verification ---
-echo "--- [7/7] Verifying System Health ---"
+# --- Step 8: Health Verification ---
+echo "--- [8/8] Verifying System Health ---"
 "${SCRIPT_DIR}/health-check.sh"
 
 echo ""
 echo "🎉 OpsKnight Swarm deployment finished successfully!"
+exit 0

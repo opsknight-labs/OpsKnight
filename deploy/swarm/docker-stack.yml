@@ -1,12 +1,14 @@
 version: '3.8'
 
 # ==============================================================================
-# OpsKnight Production Docker Swarm Stack (Core Manifest)
+# OpsKnight Production Docker Swarm Stack (Core Split Manifest)
 #
 # Topology: Split Runtime with horizontal web scaling, isolated queue workers,
 # lease-fenced maintenance scheduler, and resilient Raft-managed secrets.
 #
 # Deploy:
+#   ./deploy/swarm/scripts/deploy.sh
+#   OR
 #   docker stack deploy --with-registry-auth -c deploy/swarm/docker-stack.yml opsknight
 # ==============================================================================
 
@@ -54,6 +56,9 @@ services:
       start_period: 40s
     deploy:
       replicas: 2
+      placement:
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
@@ -118,6 +123,9 @@ services:
       start_period: 40s
     deploy:
       replicas: 2
+      placement:
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
@@ -181,6 +189,9 @@ services:
       start_period: 40s
     deploy:
       replicas: 1
+      placement:
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
@@ -244,6 +255,9 @@ services:
       start_period: 40s
     deploy:
       replicas: 1
+      placement:
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
@@ -307,6 +321,9 @@ services:
       start_period: 40s
     deploy:
       replicas: 1
+      placement:
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
@@ -370,6 +387,9 @@ services:
       start_period: 40s
     deploy:
       replicas: 1
+      placement:
+        preferences:
+          - spread: node.id
       update_config:
         parallelism: 1
         delay: 10s
@@ -416,6 +436,9 @@ services:
       retries: 5
     deploy:
       replicas: 1
+      placement:
+        constraints:
+          - node.labels.opsknight.database == true
       restart_policy:
         condition: on-failure
       resources:
@@ -430,18 +453,22 @@ services:
 
 networks:
   opsknight:
-    driver: overlay
-    attachable: true
+    external: true
+    name: ${SWARM_NETWORK_NAME:-opsknight}
 
 volumes:
   opsknight-db-data:
 
 secrets:
   opsknight_database_url:
-    file: ${OPSKNIGHT_DATABASE_URL_FILE:-./secrets.example/database-url.txt.example}
+    external: true
+    name: ${OPSKNIGHT_DATABASE_URL_SECRET:-opsknight_database_url}
   opsknight_direct_database_url:
-    file: ${OPSKNIGHT_DIRECT_DATABASE_URL_FILE:-./secrets.example/direct-database-url.txt.example}
+    external: true
+    name: ${OPSKNIGHT_DIRECT_DATABASE_URL_SECRET:-opsknight_direct_database_url}
   opsknight_nextauth_secret:
-    file: ${OPSKNIGHT_NEXTAUTH_SECRET_FILE:-./secrets.example/nextauth-secret.txt.example}
+    external: true
+    name: ${OPSKNIGHT_NEXTAUTH_SECRET_SECRET:-opsknight_nextauth_secret}
   opsknight_encryption_key:
-    file: ${OPSKNIGHT_ENCRYPTION_KEY_FILE:-./secrets.example/encryption-key.txt.example}
+    external: true
+    name: ${OPSKNIGHT_ENCRYPTION_KEY_SECRET:-opsknight_encryption_key}

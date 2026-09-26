@@ -40,11 +40,23 @@ jobs:
           bash -n deploy/swarm/scripts/*.sh
           echo "All scripts passed syntax validation."
 
-      - name: Validate Core Stack Config
+      - name: Validate Bundled DB Stack Config
+        run: |
+          cd deploy/swarm
+          docker stack config -c docker-stack.db.yml >/dev/null
+          echo "Bundled DB docker-stack.db.yml is valid."
+
+      - name: Validate Integrated Stack Config
+        run: |
+          cd deploy/swarm
+          docker stack config -c docker-stack.integrated.yml >/dev/null
+          echo "Integrated docker-stack.integrated.yml is valid."
+
+      - name: Validate Core Split Stack Config
         run: |
           cd deploy/swarm
           docker stack config -c docker-stack.yml >/dev/null
-          echo "Core docker-stack.yml is valid."
+          echo "Core split docker-stack.yml is valid."
 
       - name: Validate PgBouncer Overlay Config
         run: |
@@ -55,23 +67,31 @@ jobs:
       - name: Validate External DB Overlay Config
         run: |
           cd deploy/swarm
-          docker stack config -c docker-stack.yml -c docker-stack.external-db.yml >/dev/null
+          EXTERNAL_DB_HOST="postgres.test.internal" docker stack config -c docker-stack.yml -c docker-stack.external-db.yml >/dev/null
           echo "External DB overlay configuration is valid."
 
       - name: Validate All Combined Overlays
         run: |
           cd deploy/swarm
-          docker stack config -c docker-stack.yml -c docker-stack.pgbouncer.yml -c docker-stack.external-db.yml >/dev/null
+          EXTERNAL_DB_HOST="postgres.test.internal" docker stack config -c docker-stack.yml -c docker-stack.pgbouncer.yml -c docker-stack.external-db.yml >/dev/null
           echo "All combined overlays are valid."
 
       - name: Validate Runtime Capacity for Swarm Replicas
         run: |
+          echo "--- Testing Split Swarm Capacity ---"
           SWARM_REPLICAS_WEB=2 \
           SWARM_REPLICAS_SCHEDULER=2 \
           SWARM_REPLICAS_GENERAL_WORKER=1 \
           SWARM_REPLICAS_CRITICAL_WORKER=1 \
           SWARM_REPLICAS_BULK_WORKER=1 \
           SWARM_REPLICAS_STATUS_PROJECTOR=1 \
+          node scripts/validate-runtime-capacity.cjs
+
+          echo "--- Testing Split Swarm + PgBouncer Capacity ---"
+          SWARM_REPLICAS_WEB=4 \
+          SWARM_REPLICAS_PGBOUNCER=2 \
+          SWARM_REPLICAS_SCHEDULER=2 \
+          SWARM_STACK_FILE="docker-stack.pgbouncer.yml" \
           node scripts/validate-runtime-capacity.cjs
 
   swarm-e2e-lifecycle:
@@ -90,57 +110,24 @@ jobs:
       - name: Initialize Docker Swarm Node
         run: |
           docker swarm init --advertise-addr 127.0.0.1
+          docker node update --label-add opsknight.database=true $(docker info --format '{{.Swarm.NodeID}}')
           docker node ls
 
       - name: Build Swarm Test Container Image
         run: |
           docker build -t opsknight-local:swarm-ci -f Dockerfile .
 
-      - name: Deploy Swarm Secrets
-        run: |
-          SECRETS_DIR="deploy/swarm/secrets.example"
-          docker secret create opsknight_database_url "${SECRETS_DIR}/database-url.txt.example"
-          docker secret create opsknight_direct_database_url "${SECRETS_DIR}/direct-database-url.txt.example"
-          docker secret create opsknight_nextauth_secret "${SECRETS_DIR}/nextauth-secret.txt.example"
-          docker secret create opsknight_encryption_key "${SECRETS_DIR}/encryption-key.txt.example"
-
-      - name: Deploy Core Stack
+      - name: Run Swarm Deployment Orchestration Pipeline
         run: |
           export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
-          docker stack deploy -c deploy/swarm/docker-stack.yml opsknight
-
-      - name: Wait for Stack Convergence
-        run: |
-          echo "Waiting up to 180s for all services to converge..."
-          for i in {1..36}; do
-            PENDING=0
-            while read -r name image replicas ports; do
-              [ -z "$replicas" ] && continue
-              current=$(echo "$replicas" | cut -d'/' -f1)
-              desired=$(echo "$replicas" | cut -d'/' -f2)
-              if [ "$current" != "$desired" ]; then
-                PENDING=$((PENDING + 1))
-              fi
-            done < <(docker stack services opsknight --format '{{.Name}} {{.Image}} {{.Replicas}} {{.Ports}}')
-            if [ "$PENDING" -eq 0 ]; then
-              echo "Stack converged in $((i * 5))s!"
-              break
-            fi
-            echo "Waiting for $PENDING services to converge ($((i * 5))s)..."
-            sleep 5
-          done
-          docker stack services opsknight
-
-      - name: Run Swarm Health Verification
-        run: |
-          ./deploy/swarm/scripts/health-check.sh
+          ./deploy/swarm/scripts/deploy.sh
 
       - name: Test Horizontal Dynamic Scaling
         run: |
           echo "Scaling web tier from 2 to 3 replicas..."
           docker service scale opsknight_opsknight-web=3
           sleep 10
-          docker stack services opsknight
+          ./deploy/swarm/scripts/health-check.sh
 
       - name: Test Task Recovery (Forced Task Replacement)
         run: |
