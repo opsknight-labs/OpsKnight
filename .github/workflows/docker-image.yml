@@ -142,10 +142,10 @@ jobs:
       - name: Render release deployment contract
         run: |
           cp env.example .env
-          docker compose config > /tmp/opsknight-compose.yaml
-          helm lint helm/opsknight
-          helm template opsknight helm/opsknight --namespace opsknight > /tmp/opsknight-helm.yaml
-          kubectl kustomize k8s > /tmp/opsknight-kustomize.yaml
+          docker compose -f deploy/compose/docker-compose.yml config > /tmp/opsknight-compose.yaml
+          helm lint deploy/kubernetes/helm/opsknight
+          helm template opsknight deploy/kubernetes/helm/opsknight --namespace opsknight > /tmp/opsknight-helm.yaml
+          kubectl kustomize deploy/kubernetes/kustomize/profiles/integrated > /tmp/opsknight-kustomize.yaml
           grep -q 'startupProbe:' /tmp/opsknight-helm.yaml
           grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
 
@@ -292,30 +292,30 @@ jobs:
           export POSTGRES_PORT=35432
 
           docker pull postgres:15-alpine
-          docker build -t opsknight-pgbouncer:1.26.0 docker/pgbouncer
+          docker build -t opsknight-pgbouncer:1.26.0 deploy/images/pgbouncer
           export PGBOUNCER_IMAGE="opsknight-pgbouncer:1.26.0"
 
           cleanup() {
             docker compose \
-              -f docker-compose.yml \
-              -f docker-compose.split.yml \
-              -f docker-compose.pgbouncer.yml \
+              -f deploy/compose/docker-compose.yml \
+              -f deploy/compose/docker-compose.split.yml \
+              -f deploy/compose/docker-compose.pgbouncer.yml \
               down -v || true
           }
           trap cleanup EXIT
 
           docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.split.yml \
-            -f docker-compose.pgbouncer.yml \
+            -f deploy/compose/docker-compose.yml \
+            -f deploy/compose/docker-compose.split.yml \
+            -f deploy/compose/docker-compose.pgbouncer.yml \
             up -d
 
           echo "Waiting for opsknight-migration container to complete..."
           mig_status=""
           mig_exit=""
           for i in $(seq 1 30); do
-            mig_status=$(docker compose -f docker-compose.yml -f docker-compose.split.yml ps -a opsknight-migration --format '{{.State}}' 2>/dev/null || true)
-            mig_exit=$(docker compose -f docker-compose.yml -f docker-compose.split.yml ps -a opsknight-migration --format '{{.ExitCode}}' 2>/dev/null || true)
+            mig_status=$(docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml ps -a opsknight-migration --format '{{.State}}' 2>/dev/null || true)
+            mig_exit=$(docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml ps -a opsknight-migration --format '{{.ExitCode}}' 2>/dev/null || true)
             if [ "$mig_status" = "exited" ] && [ "$mig_exit" = "0" ]; then
               echo "opsknight-migration successfully completed (exit 0)!"
               break
@@ -328,7 +328,7 @@ jobs:
           echo "Waiting for opsknight-pgbouncer health..."
           pgb_health=""
           for i in $(seq 1 30); do
-            pgb_health=$(docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml ps opsknight-pgbouncer --format '{{.Health}}' 2>/dev/null || true)
+            pgb_health=$(docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml ps opsknight-pgbouncer --format '{{.Health}}' 2>/dev/null || true)
             if [ "$pgb_health" = "healthy" ]; then
               echo "opsknight-pgbouncer is healthy with authenticated backend query!"
               break
@@ -349,7 +349,7 @@ jobs:
 
           echo "Verifying split background workers are running..."
           for role in opsknight-scheduler opsknight-general-worker opsknight-critical-worker opsknight-bulk-worker opsknight-status-projector; do
-            role_state=$(docker compose -f docker-compose.yml -f docker-compose.split.yml ps "$role" --format '{{.State}}' 2>/dev/null || true)
+            role_state=$(docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml ps "$role" --format '{{.State}}' 2>/dev/null || true)
             echo "Role $role state: $role_state"
             test "$role_state" = "running"
           done
@@ -413,10 +413,10 @@ jobs:
 
           cleanup() {
             docker compose \
-              -f docker-compose.yml \
-              -f docker-compose.split.yml \
-              -f docker-compose.pgbouncer.yml \
-              -f docker-compose.external-db.yml \
+              -f deploy/compose/docker-compose.yml \
+              -f deploy/compose/docker-compose.split.yml \
+              -f deploy/compose/docker-compose.pgbouncer.yml \
+              -f deploy/compose/docker-compose.external-db.yml \
               -f /tmp/ci-ext-net.yml \
               down -v || true
             docker rm -f "$EXT_DB_CONTAINER" 2>/dev/null || true
@@ -434,11 +434,11 @@ jobs:
           done
 
           docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.split.yml \
-            -f docker-compose.pgbouncer.yml \
-            -f docker-compose.external-db.yml \
-            -f docker-compose.pgbouncer-ca.yml \
+            -f deploy/compose/docker-compose.yml \
+            -f deploy/compose/docker-compose.split.yml \
+            -f deploy/compose/docker-compose.pgbouncer.yml \
+            -f deploy/compose/docker-compose.external-db.yml \
+            -f deploy/compose/docker-compose.pgbouncer-ca.yml \
             -f /tmp/ci-ext-net.yml \
             up -d
 
@@ -446,8 +446,8 @@ jobs:
           mig_status=""
           mig_exit=""
           for i in $(seq 1 30); do
-            mig_status=$(docker compose -f docker-compose.yml -f docker-compose.split.yml ps -a opsknight-migration --format '{{.State}}' 2>/dev/null || true)
-            mig_exit=$(docker compose -f docker-compose.yml -f docker-compose.split.yml ps -a opsknight-migration --format '{{.ExitCode}}' 2>/dev/null || true)
+            mig_status=$(docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml ps -a opsknight-migration --format '{{.State}}' 2>/dev/null || true)
+            mig_exit=$(docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml ps -a opsknight-migration --format '{{.ExitCode}}' 2>/dev/null || true)
             if [ "$mig_status" = "exited" ] && [ "$mig_exit" = "0" ]; then
               echo "opsknight-migration successfully completed (exit 0) against external DB!"
               break
@@ -460,7 +460,7 @@ jobs:
           echo "Waiting for opsknight-pgbouncer health pointing to external DB..."
           pgb_health=""
           for i in $(seq 1 30); do
-            pgb_health=$(docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml ps opsknight-pgbouncer --format '{{.Health}}' 2>/dev/null || true)
+            pgb_health=$(docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml ps opsknight-pgbouncer --format '{{.Health}}' 2>/dev/null || true)
             if [ "$pgb_health" = "healthy" ]; then
               echo "opsknight-pgbouncer is healthy with authenticated query to external DB!"
               break
@@ -481,10 +481,10 @@ jobs:
 
           echo "Verifying split background workers are running with direct external DB TLS..."
           for worker in scheduler general-worker critical-worker bulk-worker status-projector; do
-            w_state=$(docker compose -f docker-compose.yml -f docker-compose.split.yml ps "opsknight-${worker}" --format '{{.State}}' 2>/dev/null || true)
+            w_state=$(docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml ps "opsknight-${worker}" --format '{{.State}}' 2>/dev/null || true)
             if [ "$w_state" != "running" ]; then
               echo "Error: opsknight-${worker} is in state '$w_state', expected 'running'" >&2
-              docker compose -f docker-compose.yml -f docker-compose.split.yml logs "opsknight-${worker}" --tail 30 >&2 || true
+              docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml logs "opsknight-${worker}" --tail 30 >&2 || true
               exit 1
             fi
             echo "opsknight-${worker} is running."
@@ -534,8 +534,8 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v7
         with:
-          context: docker/pgbouncer
-          file: docker/pgbouncer/Dockerfile
+          context: deploy/images/pgbouncer
+          file: deploy/images/pgbouncer/Dockerfile
           platforms: linux/amd64
           push: true
           tags: |
@@ -551,8 +551,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: docker/build-push-action@v7
         with:
-          context: docker/pgbouncer
-          file: docker/pgbouncer/Dockerfile
+          context: deploy/images/pgbouncer
+          file: deploy/images/pgbouncer/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |

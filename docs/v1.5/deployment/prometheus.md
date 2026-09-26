@@ -97,7 +97,7 @@ The expression `up{job="opsknight"}` should return `1` for every scraped replica
 
 ## Docker Compose
 
-The supplied `docker-compose.yml` passes `PROMETHEUS_SCRAPE_TOKEN` from the host environment into the
+The supplied `deploy/compose/docker-compose.yml` passes `PROMETHEUS_SCRAPE_TOKEN` from the host environment into the
 application container. Add the token to the protected `.env` or your Compose secret-injection layer:
 
 ```dotenv
@@ -107,8 +107,8 @@ PROMETHEUS_SCRAPE_TOKEN=REPLACE_WITH_64_HEX_CHARACTERS
 Recreate the application so it receives the new value:
 
 ```bash
-docker compose up -d --force-recreate opsknight-app
-docker compose exec opsknight-app printenv PROMETHEUS_SCRAPE_TOKEN >/dev/null
+docker compose -f deploy/compose/docker-compose.yml up -d --force-recreate opsknight-app
+docker compose -f deploy/compose/docker-compose.yml exec opsknight-app printenv PROMETHEUS_SCRAPE_TOKEN >/dev/null
 ```
 
 Do not use `docker compose config` in shared logs after adding production secrets because rendered
@@ -150,8 +150,8 @@ The chart injects the same Secret key into the OpsKnight Deployment and referenc
 `ServiceMonitor`. Render and verify both references before upgrading:
 
 ```bash
-helm lint helm/opsknight --values values.production.yaml
-helm template opsknight helm/opsknight \
+helm lint deploy/kubernetes/helm/opsknight --values values.production.yaml
+helm template opsknight deploy/kubernetes/helm/opsknight \
   --namespace opsknight \
   --values values.production.yaml > /tmp/opsknight-rendered.yaml
 kubectl apply --dry-run=server -f /tmp/opsknight-rendered.yaml
@@ -191,7 +191,7 @@ Adjust release names, labels, namespace, and port to the rendered resources.
 
 ## Raw Kubernetes and Kustomize
 
-`k8s/monitoring/servicemonitor.yaml` is optional and is not part of the base kustomization because
+`deploy/kubernetes/kustomize/monitoring/servicemonitor.yaml` is optional and is not part of the base kustomization because
 clusters without the Prometheus Operator do not have the `ServiceMonitor` CRD.
 
 For an Operator-enabled production overlay:
@@ -200,7 +200,7 @@ For an Operator-enabled production overlay:
    `PROMETHEUS_SCRAPE_TOKEN`.
 2. Patch `deployment/opsknight-app` so its `PROMETHEUS_SCRAPE_TOKEN` environment variable reads the
    same Secret key.
-3. Add `k8s/monitoring/servicemonitor.yaml` as an overlay resource.
+3. Add `deploy/kubernetes/kustomize/monitoring/servicemonitor.yaml` as an overlay resource.
 4. Add the labels required by the Prometheus `serviceMonitorSelector`.
 5. If NetworkPolicy is enforced, allow ingress from the monitoring namespace or Prometheus pods.
 

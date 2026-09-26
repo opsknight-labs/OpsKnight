@@ -17,7 +17,7 @@ OpsKnight v1.4 ships one Next.js application and PostgreSQL-backed state. Choose
 | [Kubernetes/Kustomize](./kubernetes) | Your platform team owns raw manifests/overlays.                    | The supplied PostgreSQL StatefulSet is a single-instance starting topology. |
 | [Helm](./helm)                       | Your platform team wants a values-driven Kubernetes release.       | Render and validate chart values against cluster policy before install.     |
 
-`k8s/kustomization.yaml` is the raw-manifest entry point. [Mobile/PWA](./mobile-pwa) is a client-access guide, not a server deployment method.
+`deploy/kubernetes/kustomize/profiles/integrated/kustomization.yaml` (and `deploy/kubernetes/kustomize/base/kustomization.yaml`) is the raw-manifest entry point. [Mobile/PWA](./mobile-pwa) is a client-access guide, not a server deployment method.
 
 For high-volume installations, follow the [dashboard query-isolation and performance certification guide](./dashboard-query-isolation).
 

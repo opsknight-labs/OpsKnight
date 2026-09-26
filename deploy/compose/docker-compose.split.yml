@@ -1,6 +1,6 @@
 # Overlay for isolated split runtime topology.
-# Apply after docker-compose.yml:
-# docker compose -f docker-compose.yml -f docker-compose.split.yml up -d
+# Apply after deploy/compose/docker-compose.yml:
+# docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml up -d
 services:
   opsknight-app:
     profiles:

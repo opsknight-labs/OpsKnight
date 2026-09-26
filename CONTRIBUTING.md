@@ -60,7 +60,7 @@ npm install
 cp env.example .env
 
 # Start PostgreSQL (Docker)
-docker compose up -d postgres
+docker compose -f deploy/compose/docker-compose.dev.yml up -d postgres
 
 # Run database migrations
 npx prisma migrate deploy

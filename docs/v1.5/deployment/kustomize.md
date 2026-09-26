@@ -6,21 +6,21 @@ description: Render, customize, validate, and apply the integrated or split OpsK
 
 # Kustomize
 
-`k8s/kustomization.yaml` is the entry point for the raw Kubernetes base. It composes the namespace, application, PostgreSQL StatefulSet and governing Service, application Service, ingress, HPA, NetworkPolicy, ServiceAccount, ConfigMap, Secret, and PodDisruptionBudget. PostgreSQL storage is created by the StatefulSet volume claim template; the base no longer allocates an unused standalone PVC. The existing ClusterIP mode of the PostgreSQL Service is preserved so upgrades do not attempt an immutable Service conversion.
+`deploy/kubernetes/kustomize/base/kustomization.yaml` is the entry point for the raw Kubernetes shared base. Together with `deploy/kubernetes/kustomize/profiles/integrated`, it composes the namespace, application, PostgreSQL StatefulSet and governing Service, application Service, ingress, HPA, NetworkPolicy, ServiceAccount, ConfigMap, Secret, and PodDisruptionBudget. PostgreSQL storage is created by the StatefulSet volume claim template; the base no longer allocates an unused standalone PVC. The existing ClusterIP mode of the PostgreSQL Service is preserved so upgrades do not attempt an immutable Service conversion.
 
-The root remains the integrated compatibility entrypoint. Three profiles make the runtime contract explicit:
+Three profiles make the runtime contract explicit:
 
-- `k8s/profiles/integrated` renders the same integrated application topology from the shared base;
-- `k8s/profiles/split` renders web, maintenance scheduler, general worker, critical worker, bulk worker, and status projector roles;
-- `k8s/profiles/split-pgbouncer` adds a two-replica transaction-pooling tier used only by web pods.
+- `deploy/kubernetes/kustomize/profiles/integrated` renders the integrated application topology from the shared base;
+- `deploy/kubernetes/kustomize/profiles/split` renders web, maintenance scheduler, general worker, critical worker, bulk worker, and status projector roles;
+- `deploy/kubernetes/kustomize/profiles/split-pgbouncer` adds a two-replica transaction-pooling tier used only by web pods.
 
 The PgBouncer profile routes web runtime traffic to PgBouncer TCP/6432. A narrowly selected web-to-PostgreSQL TCP/5432 rule remains for startup schema management through `DIRECT_DATABASE_URL`; PgBouncer also receives PostgreSQL TCP/5432 egress, plus DNS for resolving the Service hostname. Kubernetes NetworkPolicies are additive, so production overlays should preserve these selected pod destinations rather than add broad database egress.
 
 The web pod still receives `DIRECT_DATABASE_URL` for startup schema management. The entrypoint uses that direct PostgreSQL path for Prisma migrations and index installation, then restores the pooled `DATABASE_URL` before starting the web runtime. Preserve both environment entries when customizing the PgBouncer overlay.
 
-The checked-in `k8s/base` contains the common resources shared by those profiles. Do not omit the general worker: the specialized lanes intentionally do not claim ordinary operational background jobs. The split manifests intentionally use the non-published marker tag `split-runtime-image-required`; a production overlay must replace it with a tested tag or digest containing the split roles. This prevents the older integrated compatibility image from being started with unsupported role names.
+The checked-in `deploy/kubernetes/kustomize/base` contains the common resources shared by those profiles. Do not omit the general worker: the specialized lanes intentionally do not claim ordinary operational background jobs. The split manifests intentionally use the non-published marker tag `split-runtime-image-required`; a production overlay must replace it with a tested tag or digest containing the split roles. This prevents the older integrated compatibility image from being started with unsupported role names.
 
-Moving an existing installation from the root integrated entrypoint to a split profile changes the Service selector to `opsknight-role: web`. Existing integrated pods lack that label. Plan this as a controlled one-time endpoint cutover or pre-stage a compatible serving label; a Deployment `maxUnavailable: 0` setting does not by itself make a Service-selector migration interruption-free.
+Moving an existing installation from the integrated profile to a split profile changes the Service selector to `opsknight-role: web`. Existing integrated pods lack that label. Plan this as a controlled one-time endpoint cutover or pre-stage a compatible serving label; a Deployment `maxUnavailable: 0` setting does not by itself make a Service-selector migration interruption-free.
 
 ## Do not apply the base unchanged in production
 
@@ -55,7 +55,7 @@ images:
     digest: sha256:<tested-split-runtime-manifest-digest>
 ```
 
-For Prometheus Operator, add the optional `k8s/monitoring/servicemonitor.yaml` from the production
+For Prometheus Operator, add the optional `deploy/kubernetes/kustomize/monitoring/servicemonitor.yaml` from the production
 overlay, inject `PROMETHEUS_SCRAPE_TOKEN` into the application from a dedicated Secret, and allow the
 monitoring source through NetworkPolicy. The monitor is intentionally excluded from the base so
 clusters without the `ServiceMonitor` CRD remain deployable. See [Prometheus metrics](./prometheus).
@@ -72,10 +72,10 @@ kubectl apply --server-side --dry-run=server -f /tmp/opsknight-rendered.yaml
 Before creating a production overlay, render the shipped contracts directly:
 
 ```bash
-kubectl kustomize k8s
-kubectl kustomize k8s/profiles/integrated
-kubectl kustomize k8s/profiles/split
-kubectl kustomize k8s/profiles/split-pgbouncer
+kubectl kustomize deploy/kubernetes/kustomize/base
+kubectl kustomize deploy/kubernetes/kustomize/profiles/integrated
+kubectl kustomize deploy/kubernetes/kustomize/profiles/split
+kubectl kustomize deploy/kubernetes/kustomize/profiles/split-pgbouncer
 ```
 
 Review the rendered image, Secrets, `DATABASE_URL`, public URLs, ingress, NetworkPolicy, storage, and health probes before applying.

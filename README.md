@@ -231,8 +231,8 @@ printf 'NEXTAUTH_SECRET=%s\n' "$(openssl rand -base64 32)" >> .env
 printf 'ENCRYPTION_KEY=%s\n'  "$(openssl rand -hex 32)"    >> .env
 
 # 4. Start OpsKnight and PostgreSQL
-docker compose pull
-docker compose up -d
+docker compose -f deploy/compose/docker-compose.yml pull
+docker compose -f deploy/compose/docker-compose.yml up -d
 ```
 
 The main-branch Compose file defaults to the patched `ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix` image. You do not need to switch branches or manually configure `latest`.

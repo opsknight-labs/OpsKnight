@@ -12,8 +12,8 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 describe('deployment configuration invariants', () => {
   it('keeps packaged deployment versions aligned with the application version', () => {
     const pkg = JSON.parse(read('package.json')) as { version: string };
-    const chart = read('helm/opsknight/Chart.yaml');
-    const rawDeployment = read('k8s/deployment.yaml');
+    const chart = read('deploy/kubernetes/helm/opsknight/Chart.yaml');
+    const rawDeployment = read('deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml');
     expect(chart).toContain(`version: ${pkg.version}`);
     expect(chart).toMatch(new RegExp(`appVersion: '${pkg.version}(?:-hotfix)?'`));
     expect(rawDeployment).toMatch(
@@ -22,8 +22,8 @@ describe('deployment configuration invariants', () => {
   });
 
   it('runs postgres:15-alpine with its uid/gid instead of uid 999', () => {
-    const raw = read('k8s/postgres-statefulset.yaml');
-    const helm = read('helm/opsknight/values.yaml');
+    const raw = read('deploy/kubernetes/kustomize/base/postgres-statefulset.yaml');
+    const helm = read('deploy/kubernetes/helm/opsknight/values.yaml');
     expect(raw).toContain('runAsUser: 70');
     expect(raw).toContain('runAsGroup: 70');
     expect(raw).not.toContain('runAsUser: 999');
@@ -32,15 +32,15 @@ describe('deployment configuration invariants', () => {
   });
 
   it('does not ship the obsolete OpsSentinal postgres credentials', () => {
-    const secret = read('k8s/secret.yaml');
+    const secret = read('deploy/kubernetes/kustomize/base/secret.yaml');
     expect(secret).toContain('POSTGRES_USER: b3Bza25pZ2h0');
     expect(secret).not.toContain('T3BzU2VudGluYWw=');
     expect(secret).not.toContain('T3BzU2VudGluYWxfc2VjdXJlX3Bhc3N3b3JkX2NoYW5nZV9tZQ==');
   });
 
   it('uses portable network policies and isolates bundled postgres egress', () => {
-    const raw = read('k8s/network-policy.yaml');
-    const helm = read('helm/opsknight/templates/networkpolicy.yaml');
+    const raw = read('deploy/kubernetes/kustomize/base/network-policy.yaml');
+    const helm = read('deploy/kubernetes/helm/opsknight/templates/networkpolicy.yaml');
     expect(raw).toContain('kubernetes.io/metadata.name: ingress-nginx');
     expect(helm).toContain('ingressNamespaceLabels');
     expect(raw).toContain('port: 5432');
@@ -51,12 +51,14 @@ describe('deployment configuration invariants', () => {
   });
 
   it('exposes the public app URL in Kubernetes and Helm', () => {
-    expect(read('k8s/configmap.yaml')).toContain('NEXT_PUBLIC_APP_URL');
-    expect(read('helm/opsknight/templates/configmap.yaml')).toContain('NEXT_PUBLIC_APP_URL');
+    expect(read('deploy/kubernetes/kustomize/base/configmap.yaml')).toContain('NEXT_PUBLIC_APP_URL');
+    expect(read('deploy/kubernetes/helm/opsknight/templates/configmap.yaml')).toContain(
+      'NEXT_PUBLIC_APP_URL'
+    );
   });
 
   it('fails Helm rendering when ServiceMonitor authentication is missing', () => {
-    const serviceMonitor = read('helm/opsknight/templates/servicemonitor.yaml');
+    const serviceMonitor = read('deploy/kubernetes/helm/opsknight/templates/servicemonitor.yaml');
     expect(serviceMonitor).toContain(
       'metrics.serviceMonitor.enabled requires metrics.scrapeTokenSecret.existingSecret'
     );
@@ -64,16 +66,20 @@ describe('deployment configuration invariants', () => {
   });
 
   it('keeps the raw ServiceMonitor selector aligned with the application Service', () => {
-    const service = read('k8s/service.yaml');
-    const serviceMonitor = read('k8s/monitoring/servicemonitor.yaml');
+    const service = read('deploy/kubernetes/kustomize/base/service.yaml');
+    const serviceMonitor = read('deploy/kubernetes/kustomize/monitoring/servicemonitor.yaml');
     expect(service).toContain('app: opsknight-app');
     expect(serviceMonitor).toContain('app: opsknight-app');
     expect(serviceMonitor).not.toContain('app: opsknight\n');
   });
 
   it('protects long migration starts and fails closed on migration failure', () => {
-    expect(read('k8s/deployment.yaml')).toContain('startupProbe:');
-    expect(read('helm/opsknight/templates/deployment.yaml')).toContain('startupProbe:');
+    expect(read('deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml')).toContain(
+      'startupProbe:'
+    );
+    expect(read('deploy/kubernetes/helm/opsknight/templates/deployment.yaml')).toContain(
+      'startupProbe:'
+    );
     const entrypoint = read('docker-entrypoint.sh');
     expect(entrypoint).toContain('Refusing to start against an unknown database schema');
     expect(entrypoint).toMatch(/MIGRATION_SUCCESS=0[\s\S]*exit 1/);
@@ -110,25 +116,31 @@ describe('deployment configuration invariants', () => {
   });
 
   it('does not allocate an unused standalone postgres PVC', () => {
-    expect(read('k8s/kustomization.yaml')).not.toContain('postgres-pvc.yaml');
-    expect(fs.existsSync(path.join(root, 'k8s/postgres-pvc.yaml'))).toBe(false);
+    expect(read('deploy/kubernetes/kustomize/base/kustomization.yaml')).not.toContain(
+      'postgres-pvc.yaml'
+    );
+    expect(
+      fs.existsSync(path.join(root, 'deploy/kubernetes/kustomize/base/postgres-pvc.yaml'))
+    ).toBe(false);
   });
 
   it('supports explicit database URL overrides for Compose and Helm', () => {
-    expect(read('docker-compose.yml')).toContain('OPSKNIGHT_DATABASE_URL');
-    const external = read('docker-compose.external-db.yml');
+    expect(read('deploy/compose/docker-compose.yml')).toContain('OPSKNIGHT_DATABASE_URL');
+    const external = read('deploy/compose/docker-compose.external-db.yml');
     expect(external).toContain('depends_on: !reset {}');
     expect(external).toContain('profiles:');
-    expect(read('helm/opsknight/values.yaml')).toContain('database:\n  url:');
-    expect(read('helm/opsknight/templates/secret.yaml')).toContain(
+    expect(read('deploy/kubernetes/helm/opsknight/values.yaml')).toContain('database:\n  url:');
+    expect(read('deploy/kubernetes/helm/opsknight/templates/secret.yaml')).toContain(
       '.Values.secrets.keys.databaseUrl'
     );
   });
 
   it('models every split-runtime ownership lane in Helm and Kustomize', () => {
-    const values = read('helm/opsknight/values.yaml');
-    const helmDeployments = read('helm/opsknight/templates/split-deployments.yaml');
-    const rawDeployments = read('k8s/profiles/split/runtime-deployments.yaml');
+    const values = read('deploy/kubernetes/helm/opsknight/values.yaml');
+    const helmDeployments = read('deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml');
+    const rawDeployments = read(
+      'deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml'
+    );
     for (const role of [
       'web',
       'scheduler',
@@ -142,60 +154,68 @@ describe('deployment configuration invariants', () => {
     }
     expect(values).toContain('profile: maintenance');
     expect(rawDeployments).toContain('OPSKNIGHT_SCHEDULER_PROFILE, value: maintenance');
-    expect(read('helm/opsknight/templates/service.yaml')).toContain(
+    expect(read('deploy/kubernetes/helm/opsknight/templates/service.yaml')).toContain(
       'app.kubernetes.io/component: web'
     );
-    expect(read('k8s/profiles/split/web-service.yaml')).toContain('opsknight-role: web');
+    expect(read('deploy/kubernetes/kustomize/profiles/split/web-service.yaml')).toContain(
+      'opsknight-role: web'
+    );
     expect(rawDeployments).toContain('opsknight:split-runtime-image-required');
     expect(rawDeployments).not.toContain('opsknight:1.4.0-hotfix');
     expect(helmDeployments).toContain('requires an explicit image.tag or image.digest');
     expect(helmDeployments).toContain('requires scheduler.profile=maintenance');
-    expect(read('k8s/profiles/split/kustomization.yaml')).not.toContain('web-hpa.yaml');
+    expect(read('deploy/kubernetes/kustomize/profiles/split/kustomization.yaml')).not.toContain(
+      'web-hpa.yaml'
+    );
     expect(helmDeployments).toContain('$root.Values.podAnnotations');
     expect(helmDeployments).toContain('PROMETHEUS_SCRAPE_TOKEN');
     expect(helmDeployments).toContain('$root.Values.metrics.scrapeTokenSecret.existingSecret');
     expect(helmDeployments).toContain('whenUnsatisfiable: DoNotSchedule');
-    expect(read('helm/opsknight/templates/pgbouncer-deployment.yaml')).toContain(
-      'whenUnsatisfiable: DoNotSchedule'
-    );
+    expect(
+      read('deploy/kubernetes/helm/opsknight/templates/pgbouncer-deployment.yaml')
+    ).toContain('whenUnsatisfiable: DoNotSchedule');
   });
 
-  it('keeps Kustomize shared-base copies aligned with the compatibility root', () => {
-    for (const file of [
-      'namespace.yaml',
-      'secret.yaml',
-      'configmap.yaml',
-      'service-account.yaml',
-      'postgres-service.yaml',
-      'postgres-statefulset.yaml',
-      'service.yaml',
-      'ingress.yaml',
-      'network-policy.yaml',
-      'pod-disruption-budget.yaml',
-    ]) {
-      expect(read(`k8s/base/${file}`)).toBe(read(`k8s/${file}`));
-    }
-    expect(read('k8s/profiles/integrated/deployment.yaml')).toBe(read('k8s/deployment.yaml'));
-    expect(read('k8s/profiles/integrated/hpa.yaml')).toBe(read('k8s/hpa.yaml'));
+  it('keeps all runtime deployment artifacts consolidated under deploy/', () => {
+    const script = path.join(root, 'deploy/scripts/check-layout.cjs');
+    const result = spawnSync(process.execPath, [script], {
+      cwd: root,
+      encoding: 'utf8',
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('Deployment layout check passed.');
+
+    const integratedKustomization = read(
+      'deploy/kubernetes/kustomize/profiles/integrated/kustomization.yaml'
+    );
+    expect(integratedKustomization).toContain('../../base');
+    expect(integratedKustomization).toContain('deployment.yaml');
+    expect(integratedKustomization).toContain('hpa.yaml');
   });
 
   it('keeps PgBouncer optional and separates web runtime from migration traffic', () => {
-    const values = read('helm/opsknight/values.yaml');
-    const helmPgBouncer = read('helm/opsknight/templates/pgbouncer-configmap.yaml');
-    const rawWebPatch = read('k8s/profiles/split-pgbouncer/web-database-patch.yaml');
-    const overlay = read('k8s/profiles/split-pgbouncer/kustomization.yaml');
+    const values = read('deploy/kubernetes/helm/opsknight/values.yaml');
+    const helmPgBouncer = read(
+      'deploy/kubernetes/helm/opsknight/templates/pgbouncer-configmap.yaml'
+    );
+    const rawWebPatch = read(
+      'deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml'
+    );
+    const overlay = read(
+      'deploy/kubernetes/kustomize/profiles/split-pgbouncer/kustomization.yaml'
+    );
     const rawNetworkPolicy = read(
-      'k8s/profiles/split-pgbouncer/pgbouncer-network-policy.yaml'
+      'deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-network-policy.yaml'
     );
     expect(values).toContain('pgbouncer:\n  enabled: false');
     expect(helmPgBouncer).toContain('pool_mode = {{ .Values.pgbouncer.poolMode }}');
-    expect(read('helm/opsknight/templates/split-deployments.yaml')).toContain(
+    expect(read('deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml')).toContain(
       '(eq $role.name "web") $root.Values.pgbouncer.enabled'
     );
     expect(rawWebPatch).toContain('key: WEB_DATABASE_URL');
     expect(rawWebPatch).toContain('DIRECT_DATABASE_URL');
     expect(rawWebPatch).toContain('key: DIRECT_DATABASE_URL');
-    expect(read('helm/opsknight/templates/split-deployments.yaml')).toContain(
+    expect(read('deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml')).toContain(
       'name: DIRECT_DATABASE_URL'
     );
     expect(overlay).toContain('path: /spec/egress/0');
@@ -206,22 +226,26 @@ describe('deployment configuration invariants', () => {
     expect(overlay).not.toContain('web-pgbouncer-egress.yaml');
     expect(rawNetworkPolicy).toContain('port: 53');
     expect(rawNetworkPolicy).toContain('port: 5432');
-    expect(read('k8s/profiles/split/runtime-deployments.yaml')).not.toContain(
-      '@opsknight-pgbouncer:6432'
-    );
-    expect(read('helm/opsknight/templates/pgbouncer-deployment.yaml')).toContain(
-      '/usr/bin/pg_isready'
-    );
-    expect(read('k8s/profiles/split-pgbouncer/pgbouncer-deployment.yaml')).toContain(
-      '/usr/bin/pg_isready'
-    );
+    expect(
+      read('deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml')
+    ).not.toContain('@opsknight-pgbouncer:6432');
+    expect(
+      read('deploy/kubernetes/helm/opsknight/templates/pgbouncer-deployment.yaml')
+    ).toContain('/usr/bin/pg_isready');
+    expect(
+      read('deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-deployment.yaml')
+    ).toContain('/usr/bin/pg_isready');
     expect(read('docker-entrypoint.sh')).toContain('OPSKNIGHT_SKIP_MIGRATIONS');
-    expect(read('helm/opsknight/templates/migration-job.yaml')).toContain('helm.sh/hook');
+    expect(read('deploy/kubernetes/helm/opsknight/templates/migration-job.yaml')).toContain(
+      'helm.sh/hook'
+    );
   });
 
   it('ships bounded split-runtime database pools and a strict Helm schema', () => {
-    const values = read('helm/opsknight/values.yaml');
-    const schema = JSON.parse(read('helm/opsknight/values.schema.json')) as {
+    const values = read('deploy/kubernetes/helm/opsknight/values.yaml');
+    const schema = JSON.parse(
+      read('deploy/kubernetes/helm/opsknight/values.schema.json')
+    ) as {
       properties: Record<string, { $ref?: string }>;
       definitions: Record<string, { additionalProperties?: boolean }>;
     };
@@ -242,9 +266,9 @@ describe('deployment configuration invariants', () => {
   });
 
   it('supports digest-pinned images, external Secrets, and configuration rollouts in Helm', () => {
-    const values = read('helm/opsknight/values.yaml');
-    const helpers = read('helm/opsknight/templates/_helpers.tpl');
-    const deployment = read('helm/opsknight/templates/deployment.yaml');
+    const values = read('deploy/kubernetes/helm/opsknight/values.yaml');
+    const helpers = read('deploy/kubernetes/helm/opsknight/templates/_helpers.tpl');
+    const deployment = read('deploy/kubernetes/helm/opsknight/templates/deployment.yaml');
     expect(values).toContain("digest: ''");
     expect(values).toContain("existingSecret: ''");
     expect(helpers).toContain('printf "%s@%s"');
@@ -255,11 +279,13 @@ describe('deployment configuration invariants', () => {
   });
 
   it('ships an enterprise high-availability baseline and guarded recovery drills', () => {
-    const values = read('helm/opsknight/values.yaml');
-    const deployment = read('helm/opsknight/templates/deployment.yaml');
-    const enterprise = read('helm/opsknight/examples/values-enterprise-ha.yaml');
-    const failover = read('scripts/verify-k8s-failover.sh');
-    const restore = read('scripts/verify-backup-restore.sh');
+    const values = read('deploy/kubernetes/helm/opsknight/values.yaml');
+    const deployment = read('deploy/kubernetes/helm/opsknight/templates/deployment.yaml');
+    const enterprise = read(
+      'deploy/kubernetes/helm/opsknight/examples/values-enterprise-ha.yaml'
+    );
+    const failover = read('deploy/scripts/drills/verify-k8s-failover.sh');
+    const restore = read('deploy/scripts/drills/verify-backup-restore.sh');
 
     expect(values).toContain('topologySpreadConstraints:');
     expect(deployment).toContain('maxUnavailable: 0');
@@ -274,12 +300,16 @@ describe('deployment configuration invariants', () => {
   });
 
   it('preserves the existing postgres Service cluster-IP mode for upgrade safety', () => {
-    expect(read('k8s/postgres-service.yaml')).not.toContain('clusterIP: None');
-    expect(read('helm/opsknight/templates/postgres-service.yaml')).not.toContain('clusterIP: None');
+    expect(read('deploy/kubernetes/kustomize/base/postgres-service.yaml')).not.toContain(
+      'clusterIP: None'
+    );
+    expect(
+      read('deploy/kubernetes/helm/opsknight/templates/postgres-service.yaml')
+    ).not.toContain('clusterIP: None');
   });
 
   it('keeps Compose host-safe and project-safe by default', () => {
-    const compose = read('docker-compose.yml');
+    const compose = read('deploy/compose/docker-compose.yml');
     expect(compose).toContain('127.0.0.1:${POSTGRES_PORT:-5432}:5432');
     expect(compose).not.toContain('container_name:');
     expect(compose).not.toContain('com.docker.network.bridge.name');
@@ -351,10 +381,10 @@ describe('deployment configuration invariants', () => {
     const files = [
       'README.md',
       'CHANGELOG.md',
-      'docker-compose.yml',
+      'deploy/compose/docker-compose.yml',
       'env.example',
-      'helm/opsknight/values.yaml',
-      'k8s/deployment.yaml',
+      'deploy/kubernetes/helm/opsknight/values.yaml',
+      'deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml',
       'docs/v1/deployment/README.md',
       'docs/v1.1/deployment/README.md',
       'docs/v1.2/deployment/README.md',
@@ -367,9 +397,9 @@ describe('deployment configuration invariants', () => {
   });
 
   it('ships complete split-runtime and PgBouncer Docker Compose overlays', () => {
-    const split = read('docker-compose.split.yml');
-    const pgbouncer = read('docker-compose.pgbouncer.yml');
-    const external = read('docker-compose.external-db.yml');
+    const split = read('deploy/compose/docker-compose.split.yml');
+    const pgbouncer = read('deploy/compose/docker-compose.pgbouncer.yml');
+    const external = read('deploy/compose/docker-compose.external-db.yml');
     const entrypoint = read('docker-entrypoint.sh');
 
     // Split services and profile isolation
@@ -400,7 +430,7 @@ describe('deployment configuration invariants', () => {
 
     // PgBouncer 1.26.0 security update and dynamic entrypoint
     expect(pgbouncer).toContain('ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75');
-    expect(pgbouncer).toContain('./docker/pgbouncer/entrypoint.sh:/docker-entrypoint.sh:ro');
+    expect(pgbouncer).toContain('../images/pgbouncer/entrypoint.sh:/docker-entrypoint.sh:ro');
     expect(pgbouncer).toContain('/usr/bin/psql -h 127.0.0.1 -p 6432');
     expect(pgbouncer).toContain('SELECT 1');
     expect(pgbouncer).toContain('@opsknight-pgbouncer:6432/${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}?sslmode=disable&pgbouncer=true');
@@ -410,7 +440,7 @@ describe('deployment configuration invariants', () => {
     );
 
     // Helm PgBouncer aligns on 1.26.0 security update
-    const helm = read('helm/opsknight/values.yaml');
+    const helm = read('deploy/kubernetes/helm/opsknight/values.yaml');
     expect(helm).toContain("tag: '1.26.0'");
     expect(helm).toContain("digest: 'sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75'");
 
@@ -419,8 +449,19 @@ describe('deployment configuration invariants', () => {
     expect(split).toContain('OPSKNIGHT_MIGRATION_ONLY: "true"');
     expect(split).toContain('condition: service_completed_successfully');
 
-    // External DB overlay disables bundled database cleanly
+    // External DB overlay disables bundled database cleanly without injecting PgBouncer into non-pooled topologies
     expect(external).toContain('profiles:\n      - bundled-database');
+    expect(external).not.toContain('opsknight-pgbouncer');
+
+    // Deployment READMEs and runbooks must not use pre-split 1.4.0 image for split runtime or bare docker compose commands
+    const k8sReadme = read('deploy/kubernetes/README.md');
+    const composeReadme = read('deploy/compose/README.md');
+    const dockerDoc = read('docs/v1.5/deployment/docker.md');
+    expect(k8sReadme).not.toContain('image.tag=1.4.0');
+    expect(composeReadme).not.toContain('opsknight:1.4.0');
+    expect(dockerDoc).not.toMatch(
+      /^docker compose (?:exec|stop|start|pull|up|ps|logs|restart|down)\b/m
+    );
   });
 
   it('validates runtime database connection capacity budgets across topologies', () => {
@@ -480,7 +521,7 @@ describe('deployment configuration invariants', () => {
     fs.mkdirSync(path.dirname(tempEnv), { recursive: true });
     fs.writeFileSync(tempEnv, 'DATABASE_MAX_CONNECTIONS=20\nOPSKNIGHT_RUNTIME_MODE=split\n');
     try {
-      const cliScript = path.join(root, 'scripts/validate-runtime-capacity.cjs');
+      const cliScript = path.join(root, 'deploy/scripts/validate-runtime-capacity.cjs');
       const cliResult = spawnSync(process.execPath, [cliScript], {
         cwd: root,
         env: {
@@ -549,7 +590,9 @@ describe('deployment configuration invariants', () => {
     );
 
     // Kustomize external database CIDR patch provides targeted egress for split workers
-    const cidrPatch = read('k8s/profiles/split/external-database-cidr-patch.yaml');
+    const cidrPatch = read(
+      'deploy/kubernetes/kustomize/profiles/split/external-database-cidr-patch.yaml'
+    );
     expect(cidrPatch).toContain('kind: NetworkPolicy');
     expect(cidrPatch).toContain('cidr: 10.24.0.0/16');
     expect(cidrPatch).toContain('opsknight-scheduler-network-policy');

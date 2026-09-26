@@ -56,8 +56,8 @@ That command validates files, checks database history, applies migrations, and e
 Docker Compose:
 
 ```bash
-docker compose logs --tail=300 opsknight-app
-docker compose exec -T opsknight-app npm run prisma:health
+docker compose -f deploy/compose/docker-compose.yml logs --tail=300 opsknight-app
+docker compose -f deploy/compose/docker-compose.yml exec -T opsknight-app npm run prisma:health
 ```
 
 Kubernetes/Helm:

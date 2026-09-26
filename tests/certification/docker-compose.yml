@@ -15,6 +15,7 @@ services:
     image: opsknight-certification:local
     environment: &app-env
       NODE_ENV: production
+      # checkov:skip=CKV_SECRET_4: Ephemeral local certification test database URI
       DATABASE_URL: postgresql://opsknight:certification-only@db:5432/opsknight
       NEXTAUTH_URL: http://proxy:3000
       NEXT_PUBLIC_APP_URL: http://proxy:3000
