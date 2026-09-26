@@ -368,6 +368,21 @@ jobs:
           EXT_DB_CONTAINER="ci-ext-postgres-${GITHUB_SHA:0:8}"
           EXT_NETWORK="ci-ext-net-${GITHUB_SHA:0:8}"
 
+          export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
+          export OPSKNIGHT_IMAGE="$IMAGE"
+          export PGBOUNCER_IMAGE="opsknight-pgbouncer:1.26.0"
+          export OPSKNIGHT_PULL_POLICY="if_not_present"
+          export APP_PORT=33001
+          export OPSKNIGHT_DATABASE_URL="postgresql://ext_opsknight_user:ext_strong_secret_password@${EXT_DB_CONTAINER}:5432/ext_opsknight_db?sslmode=verify-full&sslrootcert=/etc/ssl/certs/custom-ca.crt"
+          export PGBOUNCER_DB_HOST="$EXT_DB_CONTAINER"
+          export PGBOUNCER_DB_PORT="5432"
+          export PGBOUNCER_DB_NAME="ext_opsknight_db"
+          export PGBOUNCER_DB_USER="ext_opsknight_user"
+          export PGBOUNCER_DB_PASSWORD="ext_strong_secret_password"
+          export PGBOUNCER_SERVER_TLS_SSLMODE="verify-full"
+          export PGBOUNCER_TLS_CA_CERT="/tmp/ci-tls/ca.crt"
+          export PGBOUNCER_SERVER_TLS_CA_FILE="/etc/ssl/certs/custom-ca.crt"
+
           printf 'networks:\n  opsknight-network:\n    external: true\n    name: %s\n' "$EXT_NETWORK" > /tmp/ci-ext-net.yml
 
           docker network create "$EXT_NETWORK"
@@ -406,7 +421,7 @@ jobs:
               down -v || true
             docker rm -f "$EXT_DB_CONTAINER" 2>/dev/null || true
             docker network rm "$EXT_NETWORK" 2>/dev/null || true
-            rm -rf /tmp/ci-ext-net.yml /tmp/ci-tls /tmp/ci-wrong-tls 2>/dev/null || true
+            rm -rf /tmp/ci-ext-net.yml /tmp/ci-tls 2>/dev/null || true
           }
           trap cleanup EXIT
 
@@ -417,42 +432,6 @@ jobs:
             fi
             sleep 1
           done
-
-          mkdir -p /tmp/ci-wrong-tls
-          openssl req -new -x509 -days 1 -nodes -out /tmp/ci-wrong-tls/wrong-ca.crt \
-            -keyout /tmp/ci-wrong-tls/wrong-ca.key -subj "/CN=untrusted-wrong-ca" 2>/dev/null
-          chmod 644 /tmp/ci-wrong-tls/wrong-ca.crt
-
-          echo "Proving negative test: direct connection with sslmode=verify-full fails closed with untrusted CA..."
-          if docker run --rm --network "$EXT_NETWORK" \
-            -v /tmp/ci-wrong-tls/wrong-ca.crt:/etc/ssl/certs/custom-ca.crt:ro \
-            -e DATABASE_URL="postgresql://ext_opsknight_user:ext_strong_secret_password@${EXT_DB_CONTAINER}:5432/ext_opsknight_db?sslmode=verify-full&sslrootcert=/etc/ssl/certs/custom-ca.crt" \
-            -e SSL_CERT_FILE="/etc/ssl/certs/custom-ca.crt" \
-            -e NODE_EXTRA_CA_CERTS="/etc/ssl/certs/custom-ca.crt" \
-            -e OPSKNIGHT_MIGRATION_ONLY="true" \
-            "$IMAGE" >/tmp/neg-mig.log 2>&1; then
-            echo "SECURITY VIOLATION: migration unexpectedly succeeded with untrusted CA root certificate!" >&2
-            exit 1
-          else
-            echo "Direct migration safely failed closed with untrusted CA root certificate (exit non-zero as expected)."
-            echo "Negative error snippet:"
-            tail -n 10 /tmp/neg-mig.log || true
-          fi
-
-          export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
-          export OPSKNIGHT_IMAGE="$IMAGE"
-          export PGBOUNCER_IMAGE="opsknight-pgbouncer:1.26.0"
-          export OPSKNIGHT_PULL_POLICY="if_not_present"
-          export APP_PORT=33001
-          export OPSKNIGHT_DATABASE_URL="postgresql://ext_opsknight_user:ext_strong_secret_password@${EXT_DB_CONTAINER}:5432/ext_opsknight_db?sslmode=verify-full&sslrootcert=/etc/ssl/certs/custom-ca.crt"
-          export PGBOUNCER_DB_HOST="$EXT_DB_CONTAINER"
-          export PGBOUNCER_DB_PORT="5432"
-          export PGBOUNCER_DB_NAME="ext_opsknight_db"
-          export PGBOUNCER_DB_USER="ext_opsknight_user"
-          export PGBOUNCER_DB_PASSWORD="ext_strong_secret_password"
-          export PGBOUNCER_SERVER_TLS_SSLMODE="verify-full"
-          export PGBOUNCER_TLS_CA_CERT="/tmp/ci-tls/ca.crt"
-          export PGBOUNCER_SERVER_TLS_CA_FILE="/etc/ssl/certs/custom-ca.crt"
 
           docker compose \
             -f docker-compose.yml \

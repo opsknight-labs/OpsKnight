@@ -57,7 +57,7 @@ services:
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 2
+      replicas: ${SWARM_REPLICAS_WEB:-2}
       placement:
         preferences:
           - spread: node.id
@@ -126,7 +126,7 @@ services:
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 2
+      replicas: ${SWARM_REPLICAS_SCHEDULER:-2}
       placement:
         preferences:
           - spread: node.id
@@ -194,7 +194,7 @@ services:
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 1
+      replicas: ${SWARM_REPLICAS_GENERAL_WORKER:-2}
       placement:
         preferences:
           - spread: node.id
@@ -262,7 +262,7 @@ services:
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 1
+      replicas: ${SWARM_REPLICAS_CRITICAL_WORKER:-2}
       placement:
         preferences:
           - spread: node.id
@@ -330,7 +330,7 @@ services:
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 1
+      replicas: ${SWARM_REPLICAS_BULK_WORKER:-2}
       placement:
         preferences:
           - spread: node.id
@@ -398,7 +398,7 @@ services:
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 1
+      replicas: ${SWARM_REPLICAS_STATUS_PROJECTOR:-2}
       placement:
         preferences:
           - spread: node.id

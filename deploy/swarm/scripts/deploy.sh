@@ -21,7 +21,6 @@ ROOT_DIR="$(cd "${SWARM_DIR}/../.." && pwd)"
 
 STACK_NAME="${SWARM_STACK_NAME:-opsknight}"
 NETWORK_NAME="${SWARM_NETWORK_NAME:-${STACK_NAME}_network}"
-OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}"
 SWARM_RUNTIME_MODE="${SWARM_RUNTIME_MODE:-split}"
 ENABLE_PGBOUNCER="${PGBOUNCER_ENABLED:-${ENABLE_PGBOUNCER:-false}}"
 USE_EXTERNAL_DB="${EXTERNAL_DB:-${USE_EXTERNAL_DB:-false}}"
@@ -30,6 +29,22 @@ ALLOW_INSECURE_SECRETS="${ALLOW_INSECURE_SECRETS:-false}"
 AUTO_LABEL_DATABASE_NODE="${AUTO_LABEL_DATABASE_NODE:-false}"
 CONVERGENCE_TIMEOUT_SEC="${CONVERGENCE_TIMEOUT_SEC:-180}"
 DB_READY_TIMEOUT_SEC="${DB_READY_TIMEOUT_SEC:-60}"
+
+# Fail-closed image validation: prevent split mode from running the incompatible latest release tag (v1.4.0)
+if [ "${SWARM_RUNTIME_MODE}" = "split" ]; then
+  if [ -z "${OPSKNIGHT_IMAGE:-}" ] || [ "${OPSKNIGHT_IMAGE}" = "ghcr.io/opsknight-labs/opsknight:latest" ] || [ "${OPSKNIGHT_IMAGE}" = "opsknight:latest" ]; then
+    echo "❌ [FATAL] SWARM_RUNTIME_MODE=split requires an explicit OPSKNIGHT_IMAGE tag or immutable digest built with split-runtime support." >&2
+    echo "   The default 'latest' image tag points to the v1.4.0 release which predates split-runtime process roles." >&2
+    echo "   Starting split runtime with 'latest' will fail because the image does not recognize role entrypoints." >&2
+    echo "   Please supply a compatible image tag or digest, e.g.:" >&2
+    echo "     export OPSKNIGHT_IMAGE=\"ghcr.io/opsknight-labs/opsknight@sha256:<digest>\"" >&2
+    echo "   Or switch to integrated mode if deploying historical monolithic releases:" >&2
+    echo "     export SWARM_RUNTIME_MODE=integrated" >&2
+    exit 1
+  fi
+else
+  OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}"
+fi
 
 if [ "${ENVIRONMENT}" = "production" ] && [ "${ALLOW_INSECURE_SECRETS}" != "true" ]; then
   STRICT_SECRETS="true"
@@ -183,6 +198,10 @@ echo "--- [2/8] Running Connection Capacity Pre-flight ---"
 export SWARM_NETWORK_NAME="${NETWORK_NAME}"
 export SWARM_REPLICAS_WEB="${SWARM_REPLICAS_WEB:-${WEB_REPLICAS:-2}}"
 export SWARM_REPLICAS_SCHEDULER="${SWARM_REPLICAS_SCHEDULER:-${SCHEDULER_REPLICAS:-2}}"
+export SWARM_REPLICAS_GENERAL_WORKER="${SWARM_REPLICAS_GENERAL_WORKER:-${GENERAL_WORKER_REPLICAS:-2}}"
+export SWARM_REPLICAS_CRITICAL_WORKER="${SWARM_REPLICAS_CRITICAL_WORKER:-${CRITICAL_WORKER_REPLICAS:-2}}"
+export SWARM_REPLICAS_BULK_WORKER="${SWARM_REPLICAS_BULK_WORKER:-${BULK_WORKER_REPLICAS:-2}}"
+export SWARM_REPLICAS_STATUS_PROJECTOR="${SWARM_REPLICAS_STATUS_PROJECTOR:-${STATUS_PROJECTOR_REPLICAS:-2}}"
 export SWARM_REPLICAS_PGBOUNCER="${SWARM_REPLICAS_PGBOUNCER:-${PGBOUNCER_REPLICAS:-2}}"
 export SWARM_REPLICAS_INTEGRATED="${SWARM_REPLICAS_INTEGRATED:-${INTEGRATED_REPLICAS:-1}}"
 export PGBOUNCER_ENABLED="${ENABLE_PGBOUNCER}"
