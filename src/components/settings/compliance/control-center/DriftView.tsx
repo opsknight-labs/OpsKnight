@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { CheckCircle2, Filter, RefreshCw, Search, ArrowRight, Calendar } from 'lucide-react';
+import { CheckCircle2, Filter, RefreshCw, ArrowRight, Calendar } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -93,13 +93,12 @@ export function DriftView({
       <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-lg border border-border bg-card">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <input
               type="text"
               placeholder="Search control ID or summary..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="pl-9 pr-3 py-1.5 text-xs rounded-md border border-border bg-background w-64 focus:outline-none focus:ring-1 focus:ring-primary"
+              className="px-3 pr-3 py-1.5 text-xs rounded-md border border-border bg-background w-64 focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
 

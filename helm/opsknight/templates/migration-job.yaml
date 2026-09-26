@@ -1,0 +1,61 @@
+{{- if .Values.migrations.job.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "opsknight.fullname" . }}-migration
+  labels:
+    {{- include "opsknight.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "-1"
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "opsknight.labels" . | nindent 8 }}
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: OnFailure
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ include "opsknight.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              echo "Starting schema migration Job..."
+              RUNTIME_DATABASE_URL=${DATABASE_URL:-}
+              if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
+                export DATABASE_URL="$DIRECT_DATABASE_URL"
+              fi
+              node node_modules/prisma/build/index.js migrate deploy
+              if [ -f "scripts/create-status-platform-online-indexes.cjs" ]; then
+                node scripts/create-status-platform-online-indexes.cjs
+              fi
+              echo "Migration Job completed successfully."
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.databaseUrl }}
+            - name: DIRECT_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.databaseUrl }}
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+{{- end }}

@@ -4,6 +4,82 @@ set -e
 echo "🚀 OpsKnight Startup"
 echo "======================"
 
+# Load secrets from files (_FILE convention for Docker Swarm and Kubernetes secrets)
+load_secret_file() {
+    file_var="$1"
+    target_var="$2"
+    eval "file_path=\${$file_var:-}"
+    if [ -n "$file_path" ]; then
+        if [ -f "$file_path" ]; then
+            val=$(cat "$file_path" | tr -d '\r\n')
+            export "$target_var"="$val"
+            echo "🔑 Loaded secret $target_var from $file_path"
+        else
+            echo "⚠️  Secret file $file_path specified by $file_var not found"
+        fi
+    fi
+}
+
+load_secret_file "DATABASE_URL_FILE" "DATABASE_URL"
+load_secret_file "DIRECT_DATABASE_URL_FILE" "DIRECT_DATABASE_URL"
+load_secret_file "WEB_DATABASE_URL_FILE" "WEB_DATABASE_URL"
+load_secret_file "NEXTAUTH_SECRET_FILE" "NEXTAUTH_SECRET"
+load_secret_file "ENCRYPTION_KEY_FILE" "ENCRYPTION_KEY"
+load_secret_file "PROMETHEUS_SCRAPE_TOKEN_FILE" "PROMETHEUS_SCRAPE_TOKEN"
+
+# If PgBouncer is enabled and raw credentials are provided without an encoded WEB_DATABASE_URL,
+# safely construct an encoded WEB_DATABASE_URL to protect against passwords with special characters (@, :, /, ?, #, %).
+if [ "${PGBOUNCER_ENABLED:-}" = "true" ] && [ -n "${PGBOUNCER_DB_PASSWORD:-}" ] && [ -z "${WEB_DATABASE_URL:-}" ]; then
+    ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}")
+    ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$PGBOUNCER_DB_PASSWORD")
+    DB_NAME="${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}"
+    export WEB_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-pgbouncer:6432/${DB_NAME}?sslmode=disable&pgbouncer=true"
+    DATABASE_URL="$WEB_DATABASE_URL"
+fi
+
+# Safely URL-encode credentials for direct bundled opsknight-db connections across all roles.
+# IMPORTANT: Only synthesize opsknight-db URLs when DATABASE_URL is empty or already targets
+# the bundled opsknight-db container. If DATABASE_URL points to an external host (RDS, Cloud SQL,
+# separate EC2, etc.), do NOT generate a DIRECT_DATABASE_URL pointing to opsknight-db — the later
+# promotion block would overwrite the valid external DATABASE_URL and cause a crash loop.
+if [ -n "${POSTGRES_PASSWORD:-}" ] && [ -z "${OPSKNIGHT_DATABASE_URL:-}" ]; then
+    _db_targets_bundled=false
+    if [ -z "${DATABASE_URL:-}" ] || echo "${DATABASE_URL:-}" | grep -q "@opsknight-db:"; then
+        _db_targets_bundled=true
+    fi
+
+    if [ "$_db_targets_bundled" = "true" ]; then
+        ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "${POSTGRES_USER:-opsknight}")
+        ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$POSTGRES_PASSWORD")
+        DB_NAME="${POSTGRES_DB:-opsknight_db}"
+        if [ -z "${DIRECT_DATABASE_URL:-}" ] || echo "${DIRECT_DATABASE_URL:-}" | grep -q "@opsknight-db:"; then
+            export DIRECT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-db:5432/${DB_NAME}?sslmode=prefer&connection_limit=40&pool_timeout=30"
+        fi
+        if [ "${PGBOUNCER_ENABLED:-}" != "true" ]; then
+            export DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-db:5432/${DB_NAME}?sslmode=prefer&connection_limit=40&pool_timeout=30"
+        fi
+    fi
+fi
+
+# Prisma Migrate and the packaged index installers must bypass transaction
+# poolers such as PgBouncer. Preserve the runtime URL and temporarily promote
+# the direct URL for every schema-management command.
+RUNTIME_DATABASE_URL=${DATABASE_URL:-}
+if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
+    export DATABASE_URL="$DIRECT_DATABASE_URL"
+    echo "🔐 Using direct database connection for schema management"
+fi
+
+if [ "${OPSKNIGHT_SKIP_MIGRATIONS:-}" = "true" ] || [ "${SKIP_MIGRATIONS:-}" = "true" ]; then
+    echo "⏭️  Skipping in-pod migrations (OPSKNIGHT_SKIP_MIGRATIONS=true)"
+    if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
+        export DATABASE_URL="${WEB_DATABASE_URL:-$RUNTIME_DATABASE_URL}"
+    fi
+    echo "🚀 Starting application..."
+    export NEXT_RUNTIME=nodejs
+    exec node server.js
+fi
+
 echo "🔄 Running database migrations..."
 
 run_migrations() {
@@ -74,6 +150,16 @@ fi
 
 echo "✅ Status platform indexes are ready."
 echo "✅ Database is ready."
+
+if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
+    export DATABASE_URL="$RUNTIME_DATABASE_URL"
+fi
+
+if [ "${OPSKNIGHT_MIGRATION_ONLY:-}" = "true" ]; then
+    echo "🏁 Migrations and online indexes completed successfully (OPSKNIGHT_MIGRATION_ONLY=true)."
+    exit 0
+fi
+
 echo "🚀 Starting application..."
 export NEXT_RUNTIME=nodejs
 exec node server.js

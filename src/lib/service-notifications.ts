@@ -132,45 +132,100 @@ export async function sendServiceNotifications(
     };
 
     if (serviceChannels.includes('SLACK')) {
-      const slackChannel = service.slackChannel?.trim();
+      const slackDestinations =
+        (await (
+          prisma as unknown as {
+            slackDestination?: {
+              findMany: (a: unknown) => Promise<
+                Array<{
+                  id: string;
+                  channelId: string;
+                  channelName: string | null;
+                }>
+              >;
+            };
+          }
+        ).slackDestination?.findMany({
+          where: { serviceId: service.id, enabled: true },
+          select: { id: true, channelId: true, channelName: true },
+          orderBy: { createdAt: 'asc' },
+        })) ?? [];
+
+      const rawChannels: Array<{ id: string; address: string; name: string | null }> =
+        slackDestinations.length > 0
+          ? slackDestinations.map(d => ({
+              id: d.id,
+              address: (d.channelId || d.channelName || '').trim(),
+              name: d.channelName?.trim() || null,
+            }))
+          : service.slackChannel?.trim()
+            ? [
+                {
+                  id: 'legacy',
+                  address: service.slackChannel.trim(),
+                  name: service.slackChannel.trim(),
+                },
+              ]
+            : [];
+
+      // Filter empty addresses and deduplicate by address
+      const seenAddresses = new Set<string>();
+      const activeChannels: Array<{ id: string; address: string; name: string | null }> = [];
+      for (const target of rawChannels) {
+        const normalized = target.address.toLowerCase();
+        if (normalized && !seenAddresses.has(normalized)) {
+          seenAddresses.add(normalized);
+          activeChannels.push(target);
+        }
+      }
+
       const slackWebhookUrl = service.slackWebhookUrl?.trim();
-      if (slackChannel && eventType !== 'updated') {
-        const result = await persistIntent(async () => {
-          await enqueueCentralNotification({
-            category: 'INCIDENT',
-            channel: 'SLACK',
-            recipientType: 'SLACK_CHANNEL',
-            recipientId: service.id,
-            recipientAddress: slackChannel,
-            incidentId,
-            templateKey: `service-slack-${eventType}`,
-            sourceType: 'SERVICE_INCIDENT',
-            sourceId: `${service.id}:${incidentId}`,
-            eventKey: deliveryKey,
-            displayMessage: `${eventType}: ${incident.title}`,
-            ...incidentNotificationPriority({
-              eventType,
-              priority: incident.priority,
-              urgency: incident.urgency,
-            }),
-            payload: {
-              kind: 'SLACK_CHANNEL',
-              channel: slackChannel,
-              incident: incidentPresentation,
-              eventType,
-              includeInteractiveButtons: true,
-              serviceId: incident.serviceId,
-              lifecyclePolicy: {
-                ...lifecyclePolicy,
-                targetKind: 'SERVICE_SLACK_CHANNEL',
-                targetId: service.id,
-                targetAddress: slackChannel,
-              },
-            },
-          });
-        });
-        if (!result.success)
-          errors.push(`Slack channel notification failed: ${result.error || 'Unknown error'}`);
+      if (activeChannels.length > 0 && eventType !== 'updated') {
+        await Promise.all(
+          activeChannels.map(async target => {
+            const channelAddress = target.address;
+            if (!channelAddress) return;
+            const channelDeliveryKey = `${deliveryKey}:${target.id}`;
+            const result = await persistIntent(async () => {
+              await enqueueCentralNotification({
+                category: 'INCIDENT',
+                channel: 'SLACK',
+                recipientType: 'SLACK_CHANNEL',
+                recipientId: service.id,
+                recipientAddress: channelAddress,
+                incidentId,
+                templateKey: `service-slack-${eventType}`,
+                sourceType: 'SERVICE_INCIDENT',
+                sourceId: `${service.id}:${incidentId}`,
+                eventKey: channelDeliveryKey,
+                displayMessage: `${eventType}: ${incident.title}`,
+                ...incidentNotificationPriority({
+                  eventType,
+                  priority: incident.priority,
+                  urgency: incident.urgency,
+                }),
+                payload: {
+                  kind: 'SLACK_CHANNEL',
+                  channel: channelAddress,
+                  incident: incidentPresentation,
+                  eventType,
+                  includeInteractiveButtons: true,
+                  serviceId: incident.serviceId,
+                  lifecyclePolicy: {
+                    ...lifecyclePolicy,
+                    targetKind: 'SERVICE_SLACK_CHANNEL',
+                    targetId: target.id,
+                    targetAddress: channelAddress,
+                  },
+                },
+              });
+            });
+            if (!result.success)
+              errors.push(
+                `Slack channel notification failed for ${target.name ?? channelAddress}: ${result.error || 'Unknown error'}`
+              );
+          })
+        );
       }
 
       if (slackWebhookUrl && eventType !== 'updated') {
@@ -213,17 +268,17 @@ export async function sendServiceNotifications(
     }
 
     if (serviceChannels.includes('MICROSOFT_TEAMS' as never)) {
-      const teamsDestination = await (
+      const teamsDestinations = await (
         prisma as unknown as {
           microsoftTeamsDestination: {
-            findFirst: (a: unknown) => Promise<{ id: string; enabled: boolean } | null>;
+            findMany: (a: unknown) => Promise<Array<{ id: string; enabled: boolean }>>;
           };
         }
-      ).microsoftTeamsDestination.findFirst({
+      ).microsoftTeamsDestination.findMany({
         where: { serviceId: service.id, enabled: true },
-        orderBy: { updatedAt: 'desc' },
+        orderBy: { createdAt: 'asc' },
       } as never);
-      if (teamsDestination?.enabled) {
+      if (teamsDestinations.length > 0) {
         // Claim-first ExternalOperation path: idempotent row + durable BackgroundJob
         // (ExternalOperation @@unique([provider,idempotencyKey]) + advisory lock + AMBIGUOUS semantics).
         // Central Notification intent is superseded for Teams — this fence prevents duplicate cards
@@ -238,18 +293,24 @@ export async function sendServiceNotifications(
               : teamsEventType === 'resolved'
                 ? (incident.resolvedAt ?? incident.updatedAt)
                 : incident.updatedAt);
-        const result = await persistIntent(async () => {
-          const { enqueueMicrosoftTeamsDelivery } = await import('./microsoft-teams/delivery');
-          await enqueueMicrosoftTeamsDelivery({
-            incidentId,
-            destinationId: teamsDestination.id,
-            eventType: teamsEventType,
-            incidentUpdatedAt: incidentUpdatedAtForTeams,
-            escalationGeneration: eventGeneration,
-          });
-        });
-        if (!result.success)
-          errors.push(`Microsoft Teams notification failed: ${result.error || 'Unknown error'}`);
+        const { enqueueMicrosoftTeamsDelivery } = await import('./microsoft-teams/delivery');
+        await Promise.all(
+          teamsDestinations.map(async teamsDestination => {
+            const result = await persistIntent(async () => {
+              await enqueueMicrosoftTeamsDelivery({
+                incidentId,
+                destinationId: teamsDestination.id,
+                eventType: teamsEventType,
+                incidentUpdatedAt: incidentUpdatedAtForTeams,
+                escalationGeneration: eventGeneration,
+              });
+            });
+            if (!result.success)
+              errors.push(
+                `Microsoft Teams notification failed for destination ${teamsDestination.id}: ${result.error || 'Unknown error'}`
+              );
+          })
+        );
       }
     }
 

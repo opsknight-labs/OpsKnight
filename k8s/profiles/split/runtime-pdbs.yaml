@@ -1,0 +1,41 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: opsknight-web-pdb, namespace: opsknight }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: web } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: opsknight-scheduler-pdb, namespace: opsknight }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: scheduler } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: opsknight-general-worker-pdb, namespace: opsknight }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: general-worker } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: opsknight-critical-worker-pdb, namespace: opsknight }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: critical-worker } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: opsknight-bulk-worker-pdb, namespace: opsknight }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: bulk-worker } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: opsknight-status-projector-pdb, namespace: opsknight }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: status-projector } }

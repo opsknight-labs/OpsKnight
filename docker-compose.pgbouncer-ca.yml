@@ -1,0 +1,9 @@
+# Overlay for mounting a custom Enterprise CA certificate for PgBouncer TLS verification.
+# Apply when using a private/enterprise CA not present in standard root CA bundles:
+# docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml -f docker-compose.external-db.yml -f docker-compose.pgbouncer-ca.yml up -d
+services:
+  opsknight-pgbouncer:
+    volumes:
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+    environment:
+      PGBOUNCER_SERVER_TLS_CA_FILE: /etc/ssl/certs/custom-ca.crt

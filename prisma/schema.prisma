@@ -500,6 +500,7 @@ model User {
   teamsLed                    Team[]                       @relation("TeamLead")
   slackIntegrations           SlackIntegration[]
   slackOAuthConfigs           SlackOAuthConfig[]           @relation("SlackOAuthConfigUpdater")
+  slackDestinations           SlackDestination[]           @relation("SlackDestinationUpdater")
   jiraConfigsUpdated          JiraConfig[]                 @relation("JiraConfigUpdater")
   microsoftTeamsConfigs       MicrosoftTeamsConfig[]       @relation("MicrosoftTeamsConfigUpdater")
   microsoftTeamsInstallations MicrosoftTeamsInstallation[] @relation("MicrosoftTeamsInstallationInstaller")
@@ -626,6 +627,7 @@ model Service {
   slackIntegration                SlackIntegration?               @relation("ServiceSlackIntegration", fields: [slackIntegrationId], references: [id], onDelete: SetNull)
   jiraServiceMapping              JiraServiceMapping?
   subscriptionServices            StatusPageSubscriptionService[]
+  slackDestinations               SlackDestination[]
   microsoftTeamsDestinations      MicrosoftTeamsDestination[]
 
   @@index([teamId])
@@ -783,10 +785,37 @@ model SlackIntegration {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   services      Service[] @relation("ServiceSlackIntegration")
+  destinations  SlackDestination[]
   installer     User?     @relation(fields: [installedBy], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId])
   @@index([workspaceId])
+}
+
+model SlackDestination {
+  id               String            @id @default(cuid())
+  serviceId        String
+  workspaceId      String
+  channelId        String
+  channelName      String?
+  isPrivate        Boolean           @default(false)
+  enabled          Boolean           @default(true)
+  integrationId    String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  updatedBy        String?
+
+  service          Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  integration      SlackIntegration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  updater          User?             @relation("SlackDestinationUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@unique([serviceId, workspaceId, channelId])
+  @@index([serviceId])
+  @@index([serviceId, enabled])
+  @@index([workspaceId])
+  @@index([channelId])
+  @@index([integrationId])
+  @@index([enabled])
 }
 
 model MicrosoftTeamsConfig {
@@ -854,6 +883,7 @@ model MicrosoftTeamsDestination {
 
   @@unique([serviceId, tenantId, teamId, channelId])
   @@index([serviceId])
+  @@index([serviceId, enabled])
   @@index([tenantId, teamId])
   @@index([channelId])
   @@index([installationId])
@@ -2650,6 +2680,7 @@ model CronSchedulerState {
   lastObjectiveSnapshotFailed     Int       @default(0)
   lockedBy                        String?
   lockedAt                        DateTime?
+  leaseEpoch                      Int       @default(0)
   updatedAt                       DateTime  @updatedAt
 
   @@map("cron_scheduler_state")

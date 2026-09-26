@@ -250,7 +250,10 @@ export async function discoverSubjectErasureData(
       : prisma.auditLog.count({ where: { actorId: subjectId } }),
     prisma.oidcConfig.count({ where: { updatedBy: subjectId } }),
     prisma.slackIntegration.count({ where: { installedBy: subjectId } }),
-    prisma.slackOAuthConfig.count({ where: { updatedBy: subjectId } }),
+    Promise.all([
+      prisma.slackOAuthConfig.count({ where: { updatedBy: subjectId } }),
+      prisma.slackDestination.count({ where: { updatedBy: subjectId } }),
+    ]).then(counts => counts.reduce((sum, count) => sum + count, 0)),
     prisma.notificationProvider.count({ where: { updatedBy: subjectId } }),
     Promise.all([
       prisma.microsoftTeamsConfig.count({ where: { updatedBy: subjectId } }),

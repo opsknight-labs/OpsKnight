@@ -219,7 +219,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
               avatarUrl={user?.avatarUrl}
               lastOidcSync={lastOidcSync}
             />
-            <ConnectedChatOpsAccounts links={chatIdentityLinks} />
+            {chatIdentityLinks.length > 0 && <ConnectedChatOpsAccounts links={chatIdentityLinks} />}
           </>
         }
         notificationsContent={

@@ -1,5 +1,7 @@
-# Overlay for managed/external PostgreSQL. Apply after docker-compose.yml:
-# docker compose -f docker-compose.yml -f docker-compose.external-db.yml up -d
+# Overlay for managed/external PostgreSQL. Apply after base compose files:
+# Integrated: docker compose -f docker-compose.yml -f docker-compose.external-db.yml up -d
+# Split:      docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.external-db.yml up -d
+# Split+Pool: docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml -f docker-compose.external-db.yml up -d
 services:
   opsknight-db:
     profiles:
@@ -9,3 +11,4 @@ services:
     depends_on: !reset {}
     environment:
       DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:?Set OPSKNIGHT_DATABASE_URL to the complete external PostgreSQL URI}
+      DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:?Set OPSKNIGHT_DATABASE_URL to the complete external PostgreSQL URI}

@@ -88,12 +88,11 @@ export default function AddIntegrationGrid({ serviceId }: AddIntegrationGridProp
           <p className="text-sm text-slate-500">Select a tool to connect with OpsKnight.</p>
         </div>
         <div className="w-full md:w-72 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             placeholder="Search integrations..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="pl-9 bg-slate-50 border-slate-200 focus:bg-white transition-colors"
+            className="bg-slate-50 border-slate-200 focus:bg-white transition-colors"
           />
         </div>
       </div>

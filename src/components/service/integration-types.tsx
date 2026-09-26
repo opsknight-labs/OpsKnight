@@ -27,6 +27,7 @@ export type IntegrationType =
   | 'NAGIOS'
   | 'ICINGA'
   | 'ZABBIX'
+  | 'MANAGEENGINE'
   | 'PAGERDUTY'
   | 'GITLAB'
   | 'VERCEL';
@@ -36,6 +37,7 @@ type BrandIconProps = {
   color?: string;
   path?: string;
   paths?: readonly string[];
+  coloredPaths?: readonly { d: string; fill: string }[];
   viewBox?: string;
 };
 
@@ -44,6 +46,7 @@ const BrandIcon = ({
   color = '#ffffff',
   path,
   paths,
+  coloredPaths,
   viewBox = '0 0 24 24',
 }: BrandIconProps) => (
   <svg
@@ -54,9 +57,13 @@ const BrandIcon = ({
     style={{ color }}
   >
     <title>{title}</title>
-    {(paths || (path ? [path] : [])).map((d, index) => (
-      <path key={`${title}-path-${index}`} d={d} fill="currentColor" />
-    ))}
+    {coloredPaths
+      ? coloredPaths.map((item, index) => (
+          <path key={`${title}-cpath-${index}`} d={item.d} fill={item.fill} fillRule="evenodd" />
+        ))
+      : (paths || (path ? [path] : [])).map((d, index) => (
+          <path key={`${title}-path-${index}`} d={d} fill="currentColor" />
+        ))}
   </svg>
 );
 
@@ -178,6 +185,29 @@ const BRAND_PATHS = {
     title: 'Zabbix',
     color: '#D40000',
     path: 'M21.099 18.887v1.455H3.645v-.963l13.921-14.31H4.372V3.615h16v1.136L6.388 18.887z',
+  },
+  manageengine: {
+    title: 'ManageEngine',
+    color: '#ffffff',
+    viewBox: '662 -2 128 124',
+    coloredPaths: [
+      {
+        d: 'm749.85,3.9c46.25,32.16,26.95,106.79-22.48,114.86h0c63.48.05,84.09-86.02,22.48-114.86',
+        fill: '#faa61a',
+      },
+      {
+        d: 'm700.59,3.42c55.15-8.12,77.76,60,53.63,91.49,39.93-40.24,7.98-111.31-53.63-91.49',
+        fill: '#0078b6',
+      },
+      {
+        d: 'm668.03,36.66c27.19-40.27,83.68-15.35,89.34,25.35,6.49-50.3-59.82-78.18-89.34-25.35',
+        fill: '#009a50',
+      },
+      {
+        d: 'm666.7,66.77c6.61-41.8,61.01-46.18,80.61-16.82-16.02-41.6-79.55-36.51-80.61,16.82',
+        fill: '#ca2031',
+      },
+    ],
   },
   pagerduty: {
     title: 'PagerDuty',
@@ -374,9 +404,19 @@ export const INTEGRATION_TYPES: Array<{
     category: 'Monitoring & APM',
   },
   {
+    value: 'MANAGEENGINE',
+    label: 'ManageEngine',
+    description:
+      'Receive availability, threshold, and network alarms from ManageEngine OpManager & Applications Manager',
+    icon: <BrandIcon {...BRAND_PATHS.manageengine} />,
+    iconBg: BRAND_PATHS.manageengine.color,
+    category: 'Monitoring & APM',
+  },
+  {
     value: 'PAGERDUTY',
     label: 'PagerDuty Events API v2',
-    description: 'Ingest Events API v2 payloads. Change the destination URL. Not a PagerDuty product.',
+    description:
+      'Ingest Events API v2 payloads. Change the destination URL. Not a PagerDuty product.',
     icon: <BrandIcon {...BRAND_PATHS.pagerduty} color="#ffffff" />,
     iconBg: BRAND_PATHS.pagerduty.color,
     category: 'Incident Management',

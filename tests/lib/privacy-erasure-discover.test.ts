@@ -56,6 +56,7 @@ function buildMockPrisma() {
     oidcConfig: { count: countStub() },
     slackIntegration: { count: countStub() },
     slackOAuthConfig: { count: countStub() },
+    slackDestination: { count: countStub() },
     notificationProvider: { count: countStub() },
     microsoftTeamsConfig: { count: countStub() },
     microsoftTeamsInstallation: { count: countStub() },

@@ -1508,10 +1508,35 @@ async function serviceTargetDeliveryRevoked(
   if (!service || !serviceEventEnabled(service, policy.eventType))
     return 'Service notification target was disabled';
   if (policy.targetKind === 'SERVICE_SLACK_CHANNEL') {
-    return service.serviceNotificationChannels.includes('SLACK') &&
-      service.slackChannel?.trim() === policy.targetAddress
-      ? null
-      : 'Service Slack channel was disabled or retargeted';
+    if (!service.serviceNotificationChannels.includes('SLACK')) {
+      return 'Service Slack notifications were disabled';
+    }
+    if (service.slackChannel?.trim() === policy.targetAddress) return null;
+    const dest = await (
+      prisma as unknown as {
+        slackDestination?: {
+          findFirst: (a: unknown) => Promise<{ id: string } | null>;
+        };
+      }
+    ).slackDestination?.findFirst({
+      where: {
+        serviceId: policy.serviceId,
+        enabled: true,
+        ...(policy.targetId && policy.targetId !== 'legacy' && policy.targetId !== policy.serviceId
+          ? {
+              OR: [
+                { id: policy.targetId },
+                { channelId: policy.targetAddress },
+                { channelName: policy.targetAddress },
+              ],
+            }
+          : {
+              OR: [{ channelId: policy.targetAddress }, { channelName: policy.targetAddress }],
+            }),
+      },
+      select: { id: true },
+    });
+    return dest ? null : 'Service Slack channel was disabled or retargeted';
   }
   if (policy.targetKind === 'SERVICE_SLACK_WEBHOOK') {
     return service.serviceNotificationChannels.includes('SLACK') &&
@@ -1569,6 +1594,15 @@ async function serviceSlackDeliveryRevoked(
   }
 ): Promise<string | null> {
   if (payload.kind !== 'SLACK_CHANNEL' && payload.kind !== 'SLACK_WEBHOOK') return null;
+  // If the payload already has an authoritative lifecyclePolicy, lifecycleDeliveryRevoked -> serviceTargetDeliveryRevoked
+  // handles it with comprehensive event status checking. Skip here to avoid duplicate DB queries.
+  if (
+    payload.lifecyclePolicy?.targetKind &&
+    payload.lifecyclePolicy.targetId &&
+    payload.lifecyclePolicy.serviceId
+  ) {
+    return null;
+  }
   const inferredLegacyPolicy =
     notification.sourceType === 'SERVICE_INCIDENT' &&
     notification.templateKey?.startsWith('service-slack-')
@@ -1584,31 +1618,45 @@ async function serviceSlackDeliveryRevoked(
       : null;
   const policy = inferredLegacyPolicy;
   if (!policy?.serviceId) return null;
-  try {
-    const service = await prisma.service.findUnique({
-      where: { id: policy.serviceId },
-      select: {
-        serviceNotificationChannels: true,
-        slackChannel: true,
-        slackWebhookUrl: true,
-      },
-    });
-    if (!service) return 'Service no longer exists';
-    if (!service.serviceNotificationChannels.includes('SLACK'))
-      return 'Service Slack notifications were disabled';
-    if (payload.kind === 'SLACK_CHANNEL') {
-      const currentChannel = service.slackChannel?.trim();
-      if (!currentChannel || currentChannel !== payload.channel.trim())
+  const service = await prisma.service.findUnique({
+    where: { id: policy.serviceId },
+    select: {
+      serviceNotificationChannels: true,
+      slackChannel: true,
+      slackWebhookUrl: true,
+    },
+  });
+  if (!service) return 'Service no longer exists';
+  if (!service.serviceNotificationChannels.includes('SLACK'))
+    return 'Service Slack notifications were disabled';
+  if (payload.kind === 'SLACK_CHANNEL') {
+    const currentChannel = service.slackChannel?.trim();
+    const targetChannel = payload.channel.trim();
+    if (!currentChannel || currentChannel !== targetChannel) {
+      const dest = await (
+        prisma as unknown as {
+          slackDestination?: {
+            findFirst: (a: unknown) => Promise<{ id: string } | null>;
+          };
+        }
+      ).slackDestination?.findFirst({
+        where: {
+          serviceId: policy.serviceId,
+          enabled: true,
+          OR: [{ channelId: targetChannel }, { channelName: targetChannel }],
+        },
+        select: { id: true },
+      });
+      if (!dest) {
         return 'Service Slack channel was removed or changed';
-    } else {
-      const currentWebhook = service.slackWebhookUrl?.trim();
-      if (!currentWebhook || currentWebhook !== payload.webhookUrl?.trim())
-        return 'Service Slack webhook was removed or changed';
+      }
     }
-    return null;
-  } catch {
-    return 'Service Slack delivery policy could not be revalidated';
+  } else {
+    const currentWebhook = service.slackWebhookUrl?.trim();
+    if (!currentWebhook || currentWebhook !== payload.webhookUrl?.trim())
+      return 'Service Slack webhook was removed or changed';
   }
+  return null;
 }
 
 async function statusSubscriberDeliveryRevoked(

@@ -67,10 +67,7 @@ function slackRetryAfterMs(response: Response): number | undefined {
   return Number.isFinite(deadline) ? Math.max(1_000, deadline - Date.now()) : undefined;
 }
 
-function slackFailure(
-  errorCode: string,
-  response: Response
-): SlackDeliveryResult {
+function slackFailure(errorCode: string, response: Response): SlackDeliveryResult {
   // Slack reports this workspace-wide free-plan usage cap as an API error,
   // rather than an HTTP 429. Waiting seconds and retrying cannot clear it.
   const rateLimited = errorCode === 'rate_limited' || response.status === 429;
@@ -86,7 +83,9 @@ function slackFailure(
 /**
  * Get Slack bot token for a service (from OAuth integration or env fallback)
  */
-export async function getSlackBotToken(serviceId?: string): Promise<string | null> {
+const botTokenInFlight = new Map<string, Promise<string | null>>();
+
+async function resolveSlackBotToken(serviceId?: string): Promise<string | null> {
   // Try to get from service-specific integration first
   if (serviceId) {
     const service = await prisma.service.findUnique({
@@ -124,6 +123,23 @@ export async function getSlackBotToken(serviceId?: string): Promise<string | nul
 
   // Fallback to environment variable
   return SLACK_BOT_TOKEN || null;
+}
+
+/**
+ * Get Slack bot token for a service (from OAuth integration or env fallback)
+ * Coalesces concurrent in-flight lookups to eliminate database query spikes during multi-channel fan-out.
+ */
+export async function getSlackBotToken(serviceId?: string): Promise<string | null> {
+  const cacheKey = serviceId || '__global__';
+  const inFlight = botTokenInFlight.get(cacheKey);
+  if (inFlight) return inFlight;
+
+  const promise = resolveSlackBotToken(serviceId).finally(() => {
+    botTokenInFlight.delete(cacheKey);
+  });
+
+  botTokenInFlight.set(cacheKey, promise);
+  return promise;
 }
 
 /**
@@ -219,8 +235,7 @@ export async function sendSlackNotification(
       return slackFailure(errorText.trim() || `HTTP ${response.status}`, response);
     }
 
-    const responseText =
-      typeof response.text === 'function' ? await response.text() : 'ok';
+    const responseText = typeof response.text === 'function' ? await response.text() : 'ok';
     if (responseText.trim() !== 'ok') return slackFailure(responseText.trim(), response);
 
     logger.info(
@@ -306,6 +321,7 @@ function buildSlackBlocks(
     acknowledged: 'Acknowledged',
     resolved: 'Resolved',
   };
+  // eslint-disable-next-line security/detect-object-injection
   const eventLabel = statusLabels[eventType] || eventType.toUpperCase();
 
   const prefix = `${emoji} Incident ${eventLabel}: `;

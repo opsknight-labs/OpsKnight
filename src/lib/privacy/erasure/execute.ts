@@ -338,6 +338,10 @@ export async function executeErasure(
           where: { updatedBy: subjectId },
           data: { updatedBy: null },
         });
+        await tx.slackDestination.updateMany({
+          where: { updatedBy: subjectId },
+          data: { updatedBy: null },
+        });
         await tx.notificationProvider.updateMany({
           where: { updatedBy: subjectId },
           data: { updatedBy: null },

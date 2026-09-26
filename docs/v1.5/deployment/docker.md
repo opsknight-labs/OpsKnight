@@ -48,6 +48,87 @@ Pin `OPSKNIGHT_IMAGE` to the immutable version or digest you tested. The default
 
 The checked-in fallbacks are development values, not production secrets. Keep `ENCRYPTION_KEY` stable and backed up with the database; losing it means re-entering encrypted provider/integration credentials.
 
+## Deployment topologies
+
+OpsKnight provides full runtime parity across Docker Compose, Helm, and Kustomize. You can select between 4 canonical deployment patterns using composable overlays:
+
+### 1. Simple (Integrated + Bundled DB)
+Ideal for local evaluation or lightweight single-node deployments where an all-in-one process is preferred.
+```bash
+docker compose up -d
+```
+
+### 2. Integrated + Managed / External PostgreSQL
+Connects the integrated all-in-one application container directly to an external database.
+```bash
+OPSKNIGHT_DATABASE_URL="postgresql://user:pass@db.example.com:5432/opsknight_db?sslmode=require" \
+  docker compose -f docker-compose.yml -f docker-compose.external-db.yml up -d
+```
+
+### 3. Production Split (Process-Isolated Roles + Dedicated Migration)
+Runs dedicated, decoupled containers for each role:
+- `opsknight-migration`: One-shot container that executes Prisma migrations and online indexes before any application container starts.
+- `opsknight-web`: Serves HTTP traffic and user requests on `${APP_PORT:-3000}`.
+- `opsknight-scheduler`: Owns maintenance cron sweeps (`OPSKNIGHT_SCHEDULER_PROFILE=maintenance`).
+- `opsknight-general-worker`: Durable general job processor.
+- `opsknight-critical-worker`: Isolated emergency on-call alerting and escalation engine.
+- `opsknight-bulk-worker`: Dedicated high-volume announcement fanout worker.
+- `opsknight-status-projector`: High-frequency status page real-time subscriber projection.
+
+> [!IMPORTANT]
+> The split runtime overlay requires an explicit `OPSKNIGHT_IMAGE` environment variable pointing to a release image with split-runtime support (e.g. `2.0.0` or later).
+
+Only `opsknight-web` publishes a host port (`3000`); background workers and the scheduler expose no public ports and run as non-root with dropped capabilities.
+```bash
+OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight:2.0.0" \
+  docker compose -f docker-compose.yml -f docker-compose.split.yml up -d
+```
+
+### 4. Production Split + PgBouncer Pooling (+ Optional External DB)
+Adds a dedicated PgBouncer connection pooler container (`opsknight-pgbouncer`) on port `6432` with transaction pooling, dynamic configuration, and security isolation.
+- `opsknight-web` routes through PgBouncer for high-concurrency HTTP traffic (`pgbouncer=true`).
+- `opsknight-migration` and `opsknight-web` preserve direct connections (`DIRECT_DATABASE_URL`) for schema commands and migrations.
+- `opsknight-scheduler` and all worker containers connect directly to PostgreSQL.
+- Dynamic authentication: for bundled PostgreSQL, PgBouncer credentials and userlist are generated automatically from POSTGRES_USER / POSTGRES_PASSWORD at container startup; for external PostgreSQL, explicit structured PGBOUNCER_DB_* parameters are required and validated fail-closed. If passwords contain special URI characters, they are automatically percent-encoded or WEB_DATABASE_URL can be supplied directly. Plaintext credentials are never committed.
+- Least privilege: application database users are never assigned administrative PgBouncer control plane privileges (`admin_users`).
+- External PostgreSQL connections support encrypted TLS verification (`PGBOUNCER_SERVER_TLS_SSLMODE=verify-full`). A standard root CA bundle is mounted into `/etc/ssl/certs/ca-certificates.crt`, and custom enterprise CA bundles can be mounted via `PGBOUNCER_TLS_CA_CERT=/path/to/custom-ca.crt`.
+```bash
+# With bundled PostgreSQL:
+OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight:2.0.0" \
+  docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml up -d
+
+# With external managed PostgreSQL:
+OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight:2.0.0" \
+OPSKNIGHT_DATABASE_URL="postgresql://enterprise_user:enterprise_password@db.example.com:5432/opsknight_db?sslmode=verify-full" \
+PGBOUNCER_DB_HOST="db.example.com" \
+PGBOUNCER_DB_PORT="5432" \
+PGBOUNCER_DB_NAME="opsknight_db" \
+PGBOUNCER_DB_USER="enterprise_user" \
+PGBOUNCER_DB_PASSWORD="enterprise_password" \
+PGBOUNCER_SERVER_TLS_SSLMODE="verify-full" \
+PGBOUNCER_TLS_CA_CERT="/path/to/enterprise-ca.crt" \
+  docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml -f docker-compose.external-db.yml up -d
+```
+
+## Scaling architecture in Docker Compose
+
+Compose split mode provides clean process isolation across roles:
+- **Worker and scheduler scaling**: Background worker lanes can be horizontally scaled directly with Compose:
+  ```bash
+  docker compose -f docker-compose.yml -f docker-compose.split.yml up -d \
+    --scale opsknight-general-worker=3 \
+    --scale opsknight-critical-worker=2
+  ```
+- **Web horizontal scaling**: By default, `opsknight-web` binds host port `3000` (`${APP_PORT:-3000}:3000`) for direct access in single-instance deployments. Scaling `opsknight-web` beyond 1 replica requires placing an external reverse proxy / ingress load balancer (such as NGINX, HAProxy, Envoy, or AWS ALB) in front of Compose and removing the static host port binding or routing to dynamically assigned ports, mirroring production Kubernetes Ingress/HPA topologies.
+
+## Connection capacity and budgeting
+
+Before scaling split containers or altering pool sizes, validate your connection budget against PostgreSQL capacity:
+```bash
+node scripts/validate-runtime-capacity.cjs
+```
+This utility calculates total connection demand across web pool / PgBouncer backends and direct worker lanes, ensuring demand never exceeds `database.maxApplicationConnections`.
+
 ## Database connection behavior
 
 With the bundled PostgreSQL service, Compose constructs the application `DATABASE_URL` using the internal hostname `opsknight-db`. The host-oriented `DATABASE_URL` in `env.example` is therefore not passed into the Compose application container.

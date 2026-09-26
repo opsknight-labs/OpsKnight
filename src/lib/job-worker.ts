@@ -1,4 +1,9 @@
-import { processPendingJobs, processPendingJobsByType, runQueueMaintenance } from './jobs/queue';
+import {
+  processPendingGeneralJobs,
+  processPendingJobs,
+  processPendingJobsByType,
+  runQueueMaintenance,
+} from './jobs/queue';
 import { logger } from './logger';
 import {
   consumeEscalationWakeRequest,
@@ -28,7 +33,11 @@ export interface JobWorkerConfig {
   busyPollMs: number;
 }
 
-export type JobWorkerLane = 'all' | 'critical' | 'bulk' | 'projector';
+export type JobWorkerLane = 'all' | 'general' | 'critical' | 'bulk' | 'projector';
+
+export interface JobWorkerOptions {
+  ownsQueueMaintenance?: boolean;
+}
 
 interface JobWorkerSharedState {
   timer: NodeJS.Timeout | null;
@@ -40,6 +49,7 @@ interface JobWorkerSharedState {
   startedAt: Date | null;
   lastError: string | null;
   workerLane: JobWorkerLane;
+  ownsQueueMaintenance: boolean;
   controlPlaneState: 'UNINITIALIZED' | 'HEALTHY' | 'EMERGENCY_LOCAL';
   lastControlPlaneProbeAt: number;
   lastQueueMaintenanceAt: number;
@@ -60,6 +70,7 @@ const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
   startedAt: null,
   lastError: null,
   workerLane: 'all',
+  ownsQueueMaintenance: true,
   controlPlaneState: 'UNINITIALIZED',
   lastControlPlaneProbeAt: 0,
   lastQueueMaintenanceAt: 0,
@@ -185,6 +196,7 @@ async function runOnce(): Promise<void> {
   try {
     const now = Date.now();
     if (
+      workerState.ownsQueueMaintenance &&
       !workerState.queueMaintenanceInFlight &&
       now - workerState.lastQueueMaintenanceAt >= QUEUE_MAINTENANCE_INTERVAL_MS
     ) {
@@ -259,7 +271,16 @@ async function runOnce(): Promise<void> {
         workerState.workerConfig.batchSize,
         workerState.workerConfig.concurrency
       );
-      const failed = notifications.failed + incidentFanout.failed + announcementFanout.failed;
+      const announcementFanoutV2 = await processPendingJobsByType(
+        'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2',
+        workerState.workerConfig.batchSize,
+        workerState.workerConfig.concurrency
+      );
+      const failed =
+        notifications.failed +
+        incidentFanout.failed +
+        announcementFanout.failed +
+        announcementFanoutV2.failed;
       if (failed > 0) {
         workerState.lastError = `${failed} bulk delivery job(s) failed`;
         logger.warn('[JobWorker] Bulk lane degraded', { failed });
@@ -267,7 +288,12 @@ async function runOnce(): Promise<void> {
         workerState.lastSuccessAt = new Date();
         workerState.lastError = null;
       }
-      const busy = notifications.processed + incidentFanout.total + announcementFanout.total > 0;
+      const busy =
+        notifications.processed +
+          incidentFanout.total +
+          announcementFanout.total +
+          announcementFanoutV2.total >
+        0;
       scheduleNextRun(
         busy
           ? workerState.workerConfig.busyPollMs
@@ -299,6 +325,26 @@ async function runOnce(): Promise<void> {
         criticalNotificationCycleWasBusy(notifications);
       scheduleNextRun(
         busy
+          ? workerState.workerConfig.busyPollMs
+          : withIdleJitter(workerState.workerConfig.idlePollMs)
+      );
+      return;
+    }
+
+    if (workerState.workerLane === 'general') {
+      const result = await processPendingGeneralJobs(
+        workerState.workerConfig.batchSize,
+        workerState.workerConfig.concurrency
+      );
+      if (result.failed > 0) {
+        workerState.lastError = `${result.failed} general job(s) failed`;
+        logger.warn('[JobWorker] General lane degraded', { failed: result.failed });
+      } else {
+        workerState.lastSuccessAt = new Date();
+        workerState.lastError = null;
+      }
+      scheduleNextRun(
+        result.total > 0
           ? workerState.workerConfig.busyPollMs
           : withIdleJitter(workerState.workerConfig.idlePollMs)
       );
@@ -375,7 +421,10 @@ async function runOnce(): Promise<void> {
  * claim is the concurrency boundary, so multiple worker processes can safely
  * call this loop against the same database.
  */
-export function startJobWorker(lane: JobWorkerLane = 'all'): void {
+export function startJobWorker(
+  lane: JobWorkerLane = 'all',
+  options: JobWorkerOptions = {}
+): void {
   if (workerState.initialized) {
     logger.debug('[JobWorker] Already initialized, skipping');
     return;
@@ -383,6 +432,8 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
 
   workerState.workerConfig = getJobWorkerConfig();
   workerState.workerLane = lane;
+  workerState.ownsQueueMaintenance =
+    options.ownsQueueMaintenance ?? lane === 'all';
   workerState.initialized = true;
   workerState.lastRunAt = null;
   workerState.lastSuccessAt = null;
@@ -390,6 +441,7 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
   workerState.lastError = null;
   workerState.controlPlaneState = 'UNINITIALIZED';
   workerState.lastControlPlaneProbeAt = Date.now();
+  workerState.lastQueueMaintenanceAt = 0;
 
   logger.info('[JobWorker] Starting', {
     batchSize: workerState.workerConfig.batchSize,
@@ -397,6 +449,7 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
     idlePollMs: workerState.workerConfig.idlePollMs,
     busyPollMs: workerState.workerConfig.busyPollMs,
     lane: workerState.workerLane,
+    ownsQueueMaintenance: workerState.ownsQueueMaintenance,
   });
 
   // Certify notification control-plane tables at worker boot.

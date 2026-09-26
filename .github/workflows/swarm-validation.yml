@@ -1,0 +1,205 @@
+name: Docker Swarm Validation
+
+on:
+  push:
+    branches:
+      - main
+      - feat/docker-swarm-deployment
+    paths:
+      - 'deploy/swarm/**'
+      - 'docker-entrypoint.sh'
+      - 'scripts/validate-runtime-capacity.cjs'
+      - '.github/workflows/swarm-validation.yml'
+  pull_request:
+    paths:
+      - 'deploy/swarm/**'
+      - 'docker-entrypoint.sh'
+      - 'scripts/validate-runtime-capacity.cjs'
+      - '.github/workflows/swarm-validation.yml'
+
+concurrency:
+  group: swarm-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swarm-l0-validation:
+    name: L0 Syntax, Config & Capacity Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate Shell Script Syntax
+        run: |
+          echo "Checking shell scripts syntax..."
+          bash -n deploy/swarm/scripts/*.sh
+          echo "All scripts passed syntax validation."
+
+      - name: Validate Bundled DB Stack Config
+        run: |
+          cd deploy/swarm
+          docker stack config -c docker-stack.db.yml >/dev/null
+          echo "Bundled DB docker-stack.db.yml is valid."
+
+      - name: Validate Integrated Stack Config
+        run: |
+          cd deploy/swarm
+          docker stack config -c docker-stack.integrated.yml >/dev/null
+          echo "Integrated docker-stack.integrated.yml is valid."
+
+      - name: Validate Core Split Stack Config
+        run: |
+          cd deploy/swarm
+          docker stack config -c docker-stack.yml >/dev/null
+          echo "Core split docker-stack.yml is valid."
+
+      - name: Validate PgBouncer Overlay Config
+        run: |
+          cd deploy/swarm
+          docker stack config -c docker-stack.yml -c docker-stack.pgbouncer.yml >/dev/null
+          echo "PgBouncer overlay configuration is valid."
+
+      - name: Validate External DB Overlay Config
+        run: |
+          cd deploy/swarm
+          EXTERNAL_DB_HOST="postgres.test.internal" docker stack config -c docker-stack.yml -c docker-stack.external-db.yml >/dev/null
+          echo "External DB overlay configuration is valid."
+
+      - name: Validate Custom CA Overlay Config
+        run: |
+          cd deploy/swarm
+          docker stack config -c docker-stack.pgbouncer-ca.yml >/dev/null
+          echo "Custom CA overlay configuration is valid."
+
+      - name: Validate All Combined Overlays
+        run: |
+          cd deploy/swarm
+          EXTERNAL_DB_HOST="postgres.test.internal" docker stack config \
+            -c docker-stack.yml \
+            -c docker-stack.external-db.yml \
+            -c docker-stack.pgbouncer.yml \
+            -c docker-stack.pgbouncer-ca.yml >/dev/null
+          echo "All combined overlays are valid."
+
+      - name: Validate Runtime Capacity for Swarm Replicas
+        run: |
+          echo "--- Testing Split Swarm Capacity ---"
+          SWARM_REPLICAS_WEB=2 \
+          SWARM_REPLICAS_SCHEDULER=2 \
+          SWARM_REPLICAS_GENERAL_WORKER=1 \
+          SWARM_REPLICAS_CRITICAL_WORKER=1 \
+          SWARM_REPLICAS_BULK_WORKER=1 \
+          SWARM_REPLICAS_STATUS_PROJECTOR=1 \
+          node scripts/validate-runtime-capacity.cjs
+
+          echo "--- Testing Split Swarm + PgBouncer Capacity ---"
+          SWARM_REPLICAS_WEB=4 \
+          SWARM_REPLICAS_PGBOUNCER=2 \
+          SWARM_REPLICAS_SCHEDULER=2 \
+          SWARM_STACK_FILE="docker-stack.pgbouncer.yml" \
+          PGBOUNCER_ENABLED="true" \
+          node scripts/validate-runtime-capacity.cjs
+
+          echo "--- Testing Integrated Swarm Capacity (3 replicas) ---"
+          OPSKNIGHT_RUNTIME_MODE="integrated" \
+          INTEGRATED_REPLICAS=3 \
+          node scripts/validate-runtime-capacity.cjs
+
+  swarm-e2e-lifecycle:
+    name: L1-L5 Swarm Convergence, Scaling, Secret Rotation & Mode Switching
+    needs: swarm-l0-validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Initialize Docker Swarm Node
+        run: |
+          docker swarm init --advertise-addr 127.0.0.1
+          docker node update --label-add opsknight.database=true $(docker info --format '{{.Swarm.NodeID}}')
+          docker node ls
+
+      - name: Build Swarm Test Container Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: opsknight-local:swarm-ci
+          build-args: |
+            SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
+            BUILD_REVISION=${{ github.sha }}
+
+      - name: Deploy Core Split Swarm Stack
+        run: |
+          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
+          export ALLOW_INSECURE_SECRETS="true"
+          export ENVIRONMENT="development"
+          ./deploy/swarm/scripts/deploy.sh
+
+      - name: Test Horizontal Dynamic Scaling
+        run: |
+          echo "Scaling web tier from 2 to 3 replicas..."
+          docker service scale opsknight_opsknight-web=3
+          sleep 10
+          ./deploy/swarm/scripts/health-check.sh
+
+      - name: Test Secret Rotation with Zero Downtime
+        run: |
+          echo "Rotating secret with new version..."
+          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
+          export ALLOW_INSECURE_SECRETS="true"
+          export ENVIRONMENT="development"
+          export NEXTAUTH_SECRET="rotated_secret_value_for_testing_123456789"
+          ./deploy/swarm/scripts/deploy.sh
+          ./deploy/swarm/scripts/health-check.sh
+
+      - name: Test Runtime Mode Switching (Split -> Integrated with Prune)
+        run: |
+          echo "Switching runtime from split to integrated mode..."
+          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
+          export ALLOW_INSECURE_SECRETS="true"
+          export ENVIRONMENT="development"
+          export SWARM_RUNTIME_MODE="integrated"
+          ./deploy/swarm/scripts/deploy.sh
+
+          if docker service inspect opsknight_opsknight-web >/dev/null 2>&1; then
+            echo "❌ Old opsknight-web service was not pruned!" >&2
+            exit 1
+          fi
+          docker service inspect opsknight_opsknight-app >/dev/null 2>&1
+          echo "✅ Successfully transitioned to integrated mode; split services pruned."
+
+      - name: Test Topology-Aware Rollback on Integrated App
+        run: |
+          echo "Testing rollback on integrated app..."
+          ./deploy/swarm/scripts/rollback.sh
+
+      - name: Test Runtime Mode Switching (Integrated -> Split with Prune)
+        run: |
+          echo "Switching runtime back from integrated to split mode..."
+          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
+          export ALLOW_INSECURE_SECRETS="true"
+          export ENVIRONMENT="development"
+          export SWARM_RUNTIME_MODE="split"
+          ./deploy/swarm/scripts/deploy.sh
+
+          if docker service inspect opsknight_opsknight-app >/dev/null 2>&1; then
+            echo "❌ Old opsknight-app service was not pruned!" >&2
+            exit 1
+          fi
+          docker service inspect opsknight_opsknight-web >/dev/null 2>&1
+          echo "✅ Successfully transitioned back to split mode; integrated service pruned."

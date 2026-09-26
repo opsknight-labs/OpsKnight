@@ -30,7 +30,6 @@ import {
 import { Skeleton } from '@/components/ui/shadcn/skeleton';
 import {
   RefreshCw,
-  Search,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -503,12 +502,11 @@ export default function NotificationHistory() {
           {/* Multi-filter toolbar */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 pt-3">
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 value={searchQuery}
                 onChange={event => setSearchQuery(event.target.value)}
                 placeholder="Search incident, message..."
-                className="pl-8 h-8 text-xs bg-background"
+                className="h-8 text-xs bg-background"
                 aria-label="Search notifications"
               />
             </div>

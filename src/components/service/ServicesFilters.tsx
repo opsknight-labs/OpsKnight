@@ -20,16 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/shadcn/card';
-import {
-  Filter,
-  X,
-  Search,
-  Activity,
-  Users,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-} from 'lucide-react';
+import { Filter, X, Activity, Users, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 
 type ServicesFiltersProps = {
   currentSearch?: string;
@@ -159,12 +150,10 @@ export default function ServicesFilters({
           <div className="space-y-2">
             <Label className="text-xs font-semibold text-muted-foreground uppercase">Search</Label>
             <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by name..."
                 value={currentSearch}
                 onChange={e => updateParams({ search: e.target.value })}
-                className="pl-8"
               />
             </div>
           </div>

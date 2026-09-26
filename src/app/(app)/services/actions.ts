@@ -198,6 +198,13 @@ export async function updateServiceNotificationSettings(serviceId: string, formD
     },
   });
 
+  if (!isSlackEnabled) {
+    await prisma.slackDestination.updateMany({
+      where: { serviceId, enabled: true },
+      data: { enabled: false },
+    });
+  }
+
   await logAudit({
     action: 'service.notifications.updated',
     entityType: 'SERVICE',

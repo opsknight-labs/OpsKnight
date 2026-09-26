@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { logger } from '@/lib/logger';
 import {
   Card,
@@ -93,10 +93,6 @@ export default function ServiceNotificationSettings({
     message: string | null;
     channelId: string | null;
   }>({ status: 'idle', message: null, channelId: null });
-  const [testState, setTestState] = useState<{
-    testing: boolean;
-    result: 'success' | 'error' | null;
-  }>({ testing: false, result: null });
 
   // Microsoft Teams discovery
   const [teams, setTeams] = useState<
@@ -116,14 +112,51 @@ export default function ServiceNotificationSettings({
     status: 'success' | 'error';
     message: string;
   } | null>(null);
-  const [existingTeamsDest, setExistingTeamsDest] = useState<null | {
-    id: string;
-    teamName: string | null;
-    channelName: string | null;
-    tenantId: string;
-    teamId: string;
-    channelId: string;
-  }>(null);
+  const [existingTeamsDests, setExistingTeamsDests] = useState<
+    Array<{
+      id: string;
+      teamName: string | null;
+      channelName: string | null;
+      tenantId: string;
+      teamId: string;
+      channelId: string;
+      warRoomEnabled?: boolean;
+    }>
+  >([]);
+
+  // Slack multi-channel destinations
+  const [existingSlackDests, setExistingSlackDests] = useState<
+    Array<{
+      id: string;
+      channelId: string;
+      channelName: string | null;
+      isPrivate: boolean;
+      enabled: boolean;
+    }>
+  >([]);
+  const [slackLinking, setSlackLinking] = useState(false);
+  const [slackLinkResult, setSlackLinkResult] = useState<{
+    status: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const refreshSlackDestinations = useCallback(() => {
+    fetch(`/api/slack/destinations?serviceId=${encodeURIComponent(serviceId)}`)
+      .then(r => r.json())
+      .then(d => {
+        const dests = (d?.data?.destinations ?? d?.destinations ?? []) as typeof existingSlackDests;
+        if (Array.isArray(dests)) {
+          setExistingSlackDests(dests);
+        }
+      })
+      .catch(() => undefined);
+  }, [serviceId]);
+
+  useEffect(() => {
+    if (channels.includes('SLACK') || slackIntegration) {
+      refreshSlackDestinations();
+    }
+  }, [channels, slackIntegration, refreshSlackDestinations]);
 
   // Ref for native validation (if using hidden native select for form submission)
   const selectRef = useRef<HTMLInputElement>(null);
@@ -132,18 +165,18 @@ export default function ServiceNotificationSettings({
   useEffect(() => {
     if (!selectRef.current) return;
 
-    if (!channels.includes('SLACK') || !selectedSlackChannel) {
+    if (!channels.includes('SLACK') || existingSlackDests.length > 0 || !selectedSlackChannel) {
       selectRef.current.setCustomValidity('');
       return;
     }
 
     const channel = slackChannels.find(ch => ch.name === selectedSlackChannel);
-    if (channel && !channel.isMember) {
+    if (channel && !channel.isMember && !channel.isPrivate) {
       selectRef.current.setCustomValidity('Bot must be connected to this channel before saving.');
     } else {
       selectRef.current.setCustomValidity('');
     }
-  }, [selectedSlackChannel, slackChannels, channels]);
+  }, [selectedSlackChannel, slackChannels, channels, existingSlackDests.length]);
 
   const refreshChannels = () => {
     if (!slackIntegration) return;
@@ -160,23 +193,6 @@ export default function ServiceNotificationSettings({
       })
       .catch(err => setChannelsError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoadingChannels(false));
-  };
-
-  const handleTestNotification = async () => {
-    const channel = slackChannels.find(ch => ch.name === selectedSlackChannel);
-    if (!channel || !channel.isMember) return;
-    setTestState({ testing: true, result: null });
-    try {
-      const res = await fetch('/api/slack/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serviceId, channelId: channel.id, channelName: channel.name }),
-      });
-      setTestState({ testing: false, result: res.ok ? 'success' : 'error' });
-      setTimeout(() => setTestState({ testing: false, result: null }), 3000);
-    } catch {
-      setTestState({ testing: false, result: 'error' });
-    }
   };
 
   // Fetch Slack channels when Slack is selected or integration exists
@@ -212,17 +228,23 @@ export default function ServiceNotificationSettings({
     }
   }, [slackIntegration, serviceId]);
 
-  // Fetch existing Microsoft Teams destination + discovery when channel is toggled
+  // Fetch existing Microsoft Teams destinations + discovery when channel is toggled
   useEffect(() => {
     if (!channels.includes('MICROSOFT_TEAMS')) return;
     fetch(`/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`)
       .then(r => r.json())
       .then(d => {
-        if (d?.data?.destination || d?.destination) {
-          const dest = (d.data?.destination ?? d.destination) as typeof existingTeamsDest;
-          if (dest) {
-            setExistingTeamsDest(dest);
-            if (dest.teamId) setSelectedTeamId(dest.teamId);
+        const dests = (d?.data?.destinations ??
+          d?.destinations ??
+          (d?.data?.destination
+            ? [d.data.destination]
+            : d?.destination
+              ? [d.destination]
+              : [])) as typeof existingTeamsDests;
+        if (Array.isArray(dests)) {
+          setExistingTeamsDests(dests);
+          if (dests.length > 0 && dests[0].teamId) {
+            setSelectedTeamId(current => current || dests[0].teamId);
           }
         }
       })
@@ -353,6 +375,107 @@ export default function ServiceNotificationSettings({
     }
   };
 
+  const handleLinkSlackChannel = async (channelOverride?: {
+    id: string;
+    name: string;
+    isPrivate: boolean;
+  }) => {
+    const target =
+      channelOverride ??
+      slackChannels.find(ch => ch.name === selectedSlackChannel || ch.id === selectedSlackChannel);
+    if (!target) return;
+    setSlackLinking(true);
+    setSlackLinkResult(null);
+    try {
+      const res = await fetch('/api/slack/destinations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serviceId,
+          channelId: target.id,
+          channelName: target.name,
+          isPrivate: target.isPrivate,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok)
+        throw new Error(data?.error || data?.userMessage || 'Failed to link Slack channel');
+      refreshSlackDestinations();
+      setSelectedSlackChannel('');
+      setJoinState({ status: 'idle', message: null, channelId: null });
+      setSlackLinkResult({
+        status: 'success',
+        message: `Linked #${target.name} for notifications.`,
+      });
+    } catch (e) {
+      setSlackLinkResult({
+        status: 'error',
+        message: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setSlackLinking(false);
+      setTimeout(() => setSlackLinkResult(null), 3500);
+    }
+  };
+
+  const handleUnlinkSlackChannel = async (destId: string) => {
+    setSlackLinking(true);
+    try {
+      const res = await fetch(
+        `/api/slack/destinations?serviceId=${encodeURIComponent(serviceId)}&destinationId=${encodeURIComponent(destId)}`,
+        { method: 'DELETE' }
+      );
+      if (!res.ok) throw new Error('Failed to unlink');
+      refreshSlackDestinations();
+      setSlackLinkResult({
+        status: 'success',
+        message: 'Slack channel unlinked.',
+      });
+    } catch (e) {
+      setSlackLinkResult({
+        status: 'error',
+        message: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setSlackLinking(false);
+      setTimeout(() => setSlackLinkResult(null), 3000);
+    }
+  };
+
+  const handleTestSlackDestination = async (dest: {
+    id: string;
+    channelId: string;
+    channelName: string | null;
+  }) => {
+    setSlackLinking(true);
+    try {
+      const res = await fetch('/api/slack/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serviceId,
+          destinationId: dest.id,
+          channelId: dest.channelId,
+          channelName: dest.channelName,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Test notification failed');
+      setSlackLinkResult({
+        status: 'success',
+        message: `Test message sent to #${dest.channelName ?? dest.channelId}.`,
+      });
+    } catch (e) {
+      setSlackLinkResult({
+        status: 'error',
+        message: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setSlackLinking(false);
+      setTimeout(() => setSlackLinkResult(null), 3500);
+    }
+  };
+
   const memberCount = slackChannels.reduce(
     (count, channel) => count + (channel.isMember ? 1 : 0),
     0
@@ -381,13 +504,34 @@ export default function ServiceNotificationSettings({
           name="serviceNotificationChannelsJson"
           value={JSON.stringify(channels)}
         />
+        <input
+          type="hidden"
+          name="slackChannel"
+          value={
+            existingSlackDests[0]?.channelName ||
+            existingSlackDests[0]?.channelId ||
+            selectedSlackChannel ||
+            ''
+          }
+        />
         {/* Hidden input for validation */}
         <input
           ref={selectRef}
           style={{ opacity: 0, height: 1, position: 'absolute' }}
           tabIndex={-1}
-          required={channels.includes('SLACK')}
-          value={channels.includes('SLACK') ? selectedSlackChannel || '' : ''}
+          required={
+            channels.includes('SLACK') &&
+            existingSlackDests.length === 0 &&
+            !slackWebhookUrl?.trim()
+          }
+          value={
+            channels.includes('SLACK')
+              ? existingSlackDests[0]?.channelName ||
+                existingSlackDests[0]?.channelId ||
+                selectedSlackChannel ||
+                (slackWebhookUrl?.trim() ? 'webhook' : '')
+              : ''
+          }
           readOnly
           onChange={() => {}}
         />
@@ -628,14 +772,15 @@ export default function ServiceNotificationSettings({
                 <div className="flex items-center justify-between gap-2 pb-3 border-b border-border/60">
                   <div className="flex items-center gap-2">
                     <SlackLogo className="h-4 w-4 shrink-0" />
-                    <span className="text-xs font-bold text-foreground">
-                      Slack Channel Configuration
-                    </span>
+                    <span className="text-xs font-bold text-foreground">Slack Destination</span>
                   </div>
-                  {slackIntegration ? (
+                  {existingSlackDests.length > 0 ? (
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
-                      <Check className="h-3 w-3" /> Connected (
-                      {slackIntegration.workspaceName || 'Workspace'})
+                      <Check className="h-3 w-3" /> Linked ({existingSlackDests.length}/3)
+                    </span>
+                  ) : slackIntegration ? (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+                      Unlinked
                     </span>
                   ) : (
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
@@ -665,173 +810,258 @@ export default function ServiceNotificationSettings({
                     </AlertDescription>
                   </Alert>
                 ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-semibold text-foreground">
-                        Select Channel for Notifications
-                      </Label>
-                      <span className="text-[11px] text-muted-foreground">
-                        Bot has access to {memberCount} channel{memberCount === 1 ? '' : 's'}
-                      </span>
+                  <div className="space-y-4">
+                    <div className="text-xs text-muted-foreground leading-relaxed">
+                      Link up to 3 Slack channels to receive incident notification cards
+                      simultaneously. Configure Slack workspace in{' '}
+                      <Link
+                        href="/settings/integrations/slack"
+                        className="text-primary font-semibold hover:underline"
+                      >
+                        Settings &rarr; Integrations &rarr; Slack
+                      </Link>
+                      .
                     </div>
 
-                    <input type="hidden" name="slackChannel" value={selectedSlackChannel} />
-
-                    {loadingChannels ? (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground p-2">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                        Loading channels from Slack...
-                      </div>
-                    ) : channelsError ? (
-                      <div className="text-xs text-destructive flex items-center gap-2">
-                        <XCircle className="h-3.5 w-3.5" />
-                        {channelsError}
-                      </div>
-                    ) : slackChannels.length === 0 ? (
-                      <div className="text-xs text-muted-foreground">
-                        No channels found. Check Slack scopes and ensure the workspace is connected.
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <div className="flex-1">
-                          <Select
-                            value={selectedSlackChannel}
-                            onValueChange={handleSlackChannelChange}
-                            name="slackChannel"
-                          >
-                            <SelectTrigger className="w-full text-xs h-9">
-                              <SelectValue placeholder="Choose a channel..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {slackChannels.map(ch => (
-                                <SelectItem key={ch.id} value={ch.name}>
-                                  <span className="flex items-center gap-2 text-xs">
-                                    <span className="font-semibold">#{ch.name}</span>
-                                    {ch.isPrivate && (
-                                      <span className="text-[10px] text-muted-foreground">
-                                        (private)
-                                      </span>
-                                    )}
-                                    {ch.isMember && <Check className="h-3 w-3 text-emerald-500" />}
+                    {existingSlackDests.length > 0 && (
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold text-foreground">
+                          Linked Channels ({existingSlackDests.length}/3)
+                        </Label>
+                        <div className="space-y-2">
+                          {existingSlackDests.map(dest => (
+                            <div
+                              key={dest.id}
+                              className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs flex items-center justify-between gap-3"
+                            >
+                              <div className="flex items-center gap-2 font-medium text-emerald-800 dark:text-emerald-300 min-w-0">
+                                <Check className="h-4 w-4 shrink-0" />
+                                <span className="truncate">
+                                  <strong>#{dest.channelName ?? dest.channelId}</strong>
+                                </span>
+                                {dest.isPrivate && (
+                                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                                    (private)
                                   </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  disabled={slackLinking}
+                                  onClick={() => void handleTestSlackDestination(dest)}
+                                >
+                                  <Send className="mr-1 h-3 w-3" /> Test
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs text-destructive hover:bg-destructive/10"
+                                  disabled={slackLinking}
+                                  onClick={() => void handleUnlinkSlackChannel(dest.id)}
+                                >
+                                  Unlink
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9 shrink-0"
-                          onClick={refreshChannels}
-                          disabled={loadingChannels}
-                          title="Refresh channel list"
-                        >
-                          <RefreshCw
-                            className={cn('h-3.5 w-3.5', loadingChannels && 'animate-spin')}
-                          />
-                        </Button>
                       </div>
                     )}
 
-                    {joinState.status !== 'idle' && joinState.message && (
-                      <Alert
+                    {slackLinkResult && (
+                      <div
                         className={cn(
-                          'border text-xs py-2.5',
-                          joinState.status === 'success'
-                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
-                            : joinState.status === 'error'
-                              ? 'bg-destructive/10 border-destructive/30 text-destructive'
-                              : 'bg-primary/10 border-primary/30 text-primary'
+                          'rounded-md px-3 py-2 text-xs border',
+                          slackLinkResult.status === 'success'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                            : 'bg-destructive/10 border-destructive/30 text-destructive'
                         )}
                       >
-                        <div className="flex items-start gap-2">
-                          {joinState.status === 'success' ? (
-                            <Check className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                          ) : joinState.status === 'error' ? (
-                            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                          ) : (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin mt-0.5 shrink-0" />
-                          )}
-                          <div>{joinState.message}</div>
-                        </div>
-                      </Alert>
+                        {slackLinkResult.message}
+                      </div>
                     )}
 
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {selectedSlackChannel &&
-                        (() => {
-                          const channel = slackChannels.find(
-                            ch => ch.name === selectedSlackChannel
-                          );
-                          if (channel && !channel.isMember && !channel.isPrivate) {
-                            return (
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={() => void handleConnectBot()}
-                                disabled={joinState.status === 'joining'}
-                                className="text-xs h-8 bg-blue-600 hover:bg-blue-700"
-                              >
-                                {joinState.status === 'joining' && (
-                                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                                )}
-                                Connect Bot to #{channel.name}
-                              </Button>
-                            );
-                          }
-                          return null;
-                        })()}
+                    {existingSlackDests.length >= 3 ? (
+                      <div className="rounded-lg border border-border/80 bg-muted/20 p-3 text-xs text-muted-foreground flex items-center gap-2">
+                        <Check className="h-4 w-4 text-emerald-500 shrink-0" />
+                        <span>
+                          Maximum limit reached (3 channels linked). Unlink a channel to connect
+                          another.
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 pt-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-semibold text-foreground">
+                            {existingSlackDests.length > 0
+                              ? 'Link Another Channel'
+                              : 'Select Channel for Notifications'}
+                          </Label>
+                          <span className="text-[11px] text-muted-foreground">
+                            Bot has access to {memberCount} channel{memberCount === 1 ? '' : 's'}
+                          </span>
+                        </div>
 
-                      {selectedSlackChannel &&
-                        (() => {
-                          const channel = slackChannels.find(
-                            ch => ch.name === selectedSlackChannel
-                          );
-                          if (channel?.isMember) {
-                            return (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void handleTestNotification()}
-                                disabled={testState.testing}
-                                className={cn(
-                                  'text-xs h-8',
-                                  testState.result === 'success' &&
-                                    'border-emerald-500 text-emerald-600 bg-emerald-500/10',
-                                  testState.result === 'error' &&
-                                    'border-destructive text-destructive bg-destructive/10'
-                                )}
+                        {loadingChannels ? (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground p-2">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                            Loading channels from Slack...
+                          </div>
+                        ) : channelsError ? (
+                          <div className="text-xs text-destructive flex items-center gap-2">
+                            <XCircle className="h-3.5 w-3.5" />
+                            {channelsError}
+                          </div>
+                        ) : slackChannels.length === 0 ? (
+                          <div className="text-xs text-muted-foreground">
+                            No channels found. Check Slack scopes and ensure the workspace is
+                            connected.
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <div className="flex-1">
+                              <Select
+                                value={selectedSlackChannel}
+                                onValueChange={handleSlackChannelChange}
                               >
-                                {testState.testing ? (
-                                  <>
-                                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                                    Sending...
-                                  </>
-                                ) : testState.result === 'success' ? (
-                                  <>
-                                    <Check className="mr-1.5 h-3.5 w-3.5" />
-                                    Test Sent!
-                                  </>
-                                ) : testState.result === 'error' ? (
-                                  <>
-                                    <XCircle className="mr-1.5 h-3.5 w-3.5" />
-                                    Failed
-                                  </>
-                                ) : (
-                                  <>
-                                    <Send className="mr-1.5 h-3.5 w-3.5" />
-                                    Send Test Message
-                                  </>
-                                )}
-                              </Button>
-                            );
-                          }
-                          return null;
-                        })()}
-                    </div>
+                                <SelectTrigger className="w-full text-xs h-9">
+                                  <SelectValue placeholder="Choose a channel..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {slackChannels.map(ch => {
+                                    const isAlreadyLinked = existingSlackDests.some(
+                                      d => d.channelId === ch.id || d.channelName === ch.name
+                                    );
+                                    return (
+                                      <SelectItem
+                                        key={ch.id}
+                                        value={ch.name}
+                                        disabled={isAlreadyLinked}
+                                      >
+                                        <span className="flex items-center gap-2 text-xs">
+                                          <span className="font-semibold">#{ch.name}</span>
+                                          {ch.isPrivate && (
+                                            <span className="text-[10px] text-muted-foreground">
+                                              (private)
+                                            </span>
+                                          )}
+                                          {isAlreadyLinked ? (
+                                            <span className="text-[10px] text-muted-foreground">
+                                              (Already linked)
+                                            </span>
+                                          ) : ch.isMember ? (
+                                            <Check className="h-3 w-3 text-emerald-500" />
+                                          ) : null}
+                                        </span>
+                                      </SelectItem>
+                                    );
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-9 w-9 shrink-0"
+                              onClick={refreshChannels}
+                              disabled={loadingChannels}
+                              title="Refresh channel list"
+                            >
+                              <RefreshCw
+                                className={cn('h-3.5 w-3.5', loadingChannels && 'animate-spin')}
+                              />
+                            </Button>
+                          </div>
+                        )}
+
+                        {joinState.status !== 'idle' && joinState.message && (
+                          <Alert
+                            className={cn(
+                              'border text-xs py-2.5',
+                              joinState.status === 'success'
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-300'
+                                : joinState.status === 'error'
+                                  ? 'bg-destructive/10 border-destructive/30 text-destructive'
+                                  : 'bg-primary/10 border-primary/30 text-primary'
+                            )}
+                          >
+                            <div className="flex items-start gap-2">
+                              {joinState.status === 'success' ? (
+                                <Check className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                              ) : joinState.status === 'error' ? (
+                                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                              ) : (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin mt-0.5 shrink-0" />
+                              )}
+                              <div>{joinState.message}</div>
+                            </div>
+                          </Alert>
+                        )}
+
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {selectedSlackChannel &&
+                            (() => {
+                              const channel = slackChannels.find(
+                                ch => ch.name === selectedSlackChannel
+                              );
+                              if (channel && !channel.isMember && !channel.isPrivate) {
+                                return (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => void handleConnectBot()}
+                                    disabled={joinState.status === 'joining'}
+                                    className="text-xs h-8 bg-blue-600 hover:bg-blue-700"
+                                  >
+                                    {joinState.status === 'joining' && (
+                                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                    )}
+                                    Connect Bot to #{channel.name}
+                                  </Button>
+                                );
+                              }
+                              return null;
+                            })()}
+
+                          {selectedSlackChannel &&
+                            (() => {
+                              const channel = slackChannels.find(
+                                ch => ch.name === selectedSlackChannel
+                              );
+                              const isAlreadyLinked = existingSlackDests.some(
+                                d => d.channelId === channel?.id || d.channelName === channel?.name
+                              );
+                              if (channel && !isAlreadyLinked) {
+                                return (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => void handleLinkSlackChannel(channel)}
+                                    disabled={
+                                      slackLinking || (!channel.isMember && !channel.isPrivate)
+                                    }
+                                    className="text-xs h-8"
+                                  >
+                                    {slackLinking ? (
+                                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <Check className="mr-1.5 h-3.5 w-3.5" />
+                                    )}
+                                    Link Channel
+                                  </Button>
+                                );
+                              }
+                              return null;
+                            })()}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="pt-3 border-t border-border/60">
                       <Label
@@ -866,9 +1096,9 @@ export default function ServiceNotificationSettings({
                       Microsoft Teams Destination
                     </span>
                   </div>
-                  {existingTeamsDest ? (
+                  {existingTeamsDests.length > 0 ? (
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
-                      <Check className="h-3 w-3" /> Linked
+                      <Check className="h-3 w-3" /> Linked ({existingTeamsDests.length}/3)
                     </span>
                   ) : (
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
@@ -878,207 +1108,274 @@ export default function ServiceNotificationSettings({
                 </div>
 
                 <div className="text-xs text-muted-foreground leading-relaxed">
-                  Teams is managed centrally for your tenant. Configure Azure credentials in{' '}
+                  Teams is managed centrally for your tenant. Link up to 3 channels to receive
+                  incident notification cards simultaneously. Incident War Rooms are hosted in the
+                  primary channel. Configure Azure credentials in{' '}
                   <Link
                     href="/settings/integrations/microsoft-teams"
                     className="text-primary font-semibold hover:underline"
                   >
                     Settings → Integrations → Microsoft Teams
                   </Link>
-                  . After installing the bot to a Team/Channel, select the destination below.
+                  .
                 </div>
 
-                {existingTeamsDest && (
-                  <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 font-medium text-emerald-800 dark:text-emerald-300">
-                      <Check className="h-4 w-4 shrink-0" />
-                      <span>
-                        Linked:{' '}
-                        <strong>{existingTeamsDest.teamName ?? existingTeamsDest.teamId}</strong>{' '}
-                        &rarr;{' '}
-                        <strong>
-                          {existingTeamsDest.channelName ?? existingTeamsDest.channelId}
-                        </strong>
-                      </span>
+                {existingTeamsDests.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-foreground">
+                      Linked Channels ({existingTeamsDests.length}/3)
+                    </Label>
+                    <div className="space-y-2">
+                      {existingTeamsDests.map(dest => (
+                        <div
+                          key={dest.id}
+                          className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs flex items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-2 font-medium text-emerald-800 dark:text-emerald-300 min-w-0">
+                            <Check className="h-4 w-4 shrink-0" />
+                            <span className="truncate">
+                              <strong>{dest.teamName ?? dest.teamId}</strong> &rarr;{' '}
+                              <strong>{dest.channelName ?? dest.channelId}</strong>
+                            </span>
+                            {dest.warRoomEnabled && (
+                              <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/25">
+                                War Room Primary
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              disabled={teamsLinking}
+                              onClick={async () => {
+                                setTeamsLinking(true);
+                                try {
+                                  const res = await fetch('/api/microsoft-teams/test', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ destinationId: dest.id }),
+                                  });
+                                  const data = await res.json().catch(() => ({}));
+                                  if (!res.ok) throw new Error(data?.error || 'Test failed');
+                                  setTeamsLinkResult({
+                                    status: 'success',
+                                    message: `Test Adaptive Card sent to ${dest.channelName ?? 'channel'}.`,
+                                  });
+                                } catch (e) {
+                                  setTeamsLinkResult({
+                                    status: 'error',
+                                    message: e instanceof Error ? e.message : String(e),
+                                  });
+                                } finally {
+                                  setTeamsLinking(false);
+                                  setTimeout(() => setTeamsLinkResult(null), 3500);
+                                }
+                              }}
+                            >
+                              <Send className="mr-1 h-3 w-3" /> Test
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs text-destructive hover:bg-destructive/10"
+                              disabled={teamsLinking}
+                              onClick={async () => {
+                                setTeamsLinking(true);
+                                try {
+                                  await fetch(
+                                    `/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}&destinationId=${encodeURIComponent(dest.id)}`,
+                                    { method: 'DELETE' }
+                                  );
+                                  const getRes = await fetch(
+                                    `/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`
+                                  );
+                                  const getData = await getRes.json().catch(() => ({}));
+                                  const nextDests = (getData?.data?.destinations ??
+                                    getData?.destinations ??
+                                    []) as typeof existingTeamsDests;
+                                  setExistingTeamsDests(nextDests);
+                                  setTeamsLinkResult({
+                                    status: 'success',
+                                    message: 'Teams channel unlinked.',
+                                  });
+                                } catch (e) {
+                                  setTeamsLinkResult({
+                                    status: 'error',
+                                    message: e instanceof Error ? e.message : String(e),
+                                  });
+                                } finally {
+                                  setTeamsLinking(false);
+                                  setTimeout(() => setTeamsLinkResult(null), 3000);
+                                }
+                              }}
+                            >
+                              Unlink
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={async () => {
-                        await fetch(
-                          `/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`,
-                          { method: 'DELETE' }
-                        );
-                        setExistingTeamsDest(null);
-                        setSelectedTeamId('');
-                        setSelectedTeamsChannelId('');
-                        setTeamsLinkResult({
-                          status: 'success',
-                          message: 'Teams destination unlinked.',
-                        });
-                        setTimeout(() => setTeamsLinkResult(null), 3000);
-                      }}
-                    >
-                      Unlink
-                    </Button>
                   </div>
                 )}
 
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Select Team</Label>
-                    {teamsLoading ? (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading Teams…
-                      </div>
-                    ) : teamsError ? (
-                      <div className="text-xs text-destructive flex items-center gap-2">
-                        <XCircle className="h-3.5 w-3.5" /> {teamsError}
-                      </div>
-                    ) : teams.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        No Teams found. Ensure the app is installed to a Team.
-                      </p>
-                    ) : (
-                      <Select
-                        value={selectedTeamId}
-                        onValueChange={v => {
-                          setSelectedTeamId(v);
-                          setSelectedTeamsChannelId('');
-                        }}
-                      >
-                        <SelectTrigger className="text-xs h-9">
-                          <SelectValue placeholder="Select a Team…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {teams.map(t => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.displayName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
+                {existingTeamsDests.length >= 3 ? (
+                  <div className="rounded-lg border border-border/80 bg-muted/20 p-3 text-xs text-muted-foreground flex items-center gap-2">
+                    <Check className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <span>
+                      Maximum limit reached (3 channels linked). Unlink a channel to connect
+                      another.
+                    </span>
                   </div>
-
-                  {selectedTeamId && (
+                ) : (
+                  <div className="space-y-3 pt-2">
+                    <div className="text-xs font-semibold text-foreground">
+                      {existingTeamsDests.length > 0
+                        ? 'Link Another Channel'
+                        : 'Link Teams Channel'}
+                    </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">Select Channel</Label>
-                      {teamsChannelsLoading ? (
+                      <Label className="text-xs font-semibold">Select Team</Label>
+                      {teamsLoading ? (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading channels…
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading Teams…
                         </div>
-                      ) : teamsChannelsError ? (
+                      ) : teamsError ? (
                         <div className="text-xs text-destructive flex items-center gap-2">
-                          <XCircle className="h-3.5 w-3.5" /> {teamsChannelsError}
+                          <XCircle className="h-3.5 w-3.5" /> {teamsError}
                         </div>
-                      ) : teamsChannels.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">No channels in this Team.</p>
+                      ) : teams.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No Teams found. Ensure the app is installed to a Team.
+                        </p>
                       ) : (
                         <Select
-                          value={selectedTeamsChannelId}
-                          onValueChange={setSelectedTeamsChannelId}
+                          value={selectedTeamId}
+                          onValueChange={v => {
+                            setSelectedTeamId(v);
+                            setSelectedTeamsChannelId('');
+                          }}
                         >
                           <SelectTrigger className="text-xs h-9">
-                            <SelectValue placeholder="Select a channel…" />
+                            <SelectValue placeholder="Select a Team…" />
                           </SelectTrigger>
                           <SelectContent>
-                            {teamsChannels.map(c => (
-                              <SelectItem key={c.id} value={c.id}>
-                                {c.displayName ? `${c.displayName} — ${c.id.slice(0, 8)}…` : c.id}
+                            {teams.map(t => (
+                              <SelectItem key={t.id} value={t.id}>
+                                {t.displayName}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       )}
                     </div>
-                  )}
 
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="text-xs h-8"
-                      disabled={!selectedTeamId || !selectedTeamsChannelId || teamsLinking}
-                      onClick={async () => {
-                        setTeamsLinking(true);
-                        setTeamsLinkResult(null);
-                        try {
-                          const teamName =
-                            teams.find(t => t.id === selectedTeamId)?.displayName ?? null;
-                          const channelName =
-                            teamsChannels.find(c => c.id === selectedTeamsChannelId)?.displayName ??
-                            null;
-                          const inferredTenantId = existingTeamsDest?.tenantId?.trim();
-                          const channelObj = teamsChannels.find(
-                            c => c.id === selectedTeamsChannelId
-                          );
-                          const resolvedChannelId = channelObj?.id ?? selectedTeamsChannelId;
-                          const payload: Record<string, unknown> = {
-                            serviceId,
-                            teamId: selectedTeamId,
-                            channelId: resolvedChannelId,
-                            channelName,
-                            teamName,
-                            warRoomEnabled: true,
-                          };
-                          if (inferredTenantId) payload.tenantId = inferredTenantId;
-                          const res = await fetch('/api/microsoft-teams/destinations', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload),
-                          });
-                          const data = await res.json().catch(() => ({}));
-                          if (!res.ok) {
-                            const msg =
-                              data?.error ||
-                              data?.data?.error ||
-                              'Failed to link Teams destination';
-                            throw new Error(msg);
-                          }
-                          const dest = (data.destination ??
-                            data.data?.destination) as typeof existingTeamsDest;
-                          if (dest) setExistingTeamsDest(dest);
-                          setTeamsLinkResult({
-                            status: 'success',
-                            message: 'Linked service to Teams channel.',
-                          });
-                        } catch (e) {
-                          setTeamsLinkResult({
-                            status: 'error',
-                            message: e instanceof Error ? e.message : String(e),
-                          });
-                        } finally {
-                          setTeamsLinking(false);
-                          setTimeout(() => setTeamsLinkResult(null), 4000);
-                        }
-                      }}
-                    >
-                      {teamsLinking && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-                      Link to Teams channel
-                    </Button>
-                    {existingTeamsDest && selectedTeamsChannelId && (
+                    {selectedTeamId && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">Select Channel</Label>
+                        {teamsChannelsLoading ? (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading channels…
+                          </div>
+                        ) : teamsChannelsError ? (
+                          <div className="text-xs text-destructive flex items-center gap-2">
+                            <XCircle className="h-3.5 w-3.5" /> {teamsChannelsError}
+                          </div>
+                        ) : teamsChannels.length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No channels in this Team.</p>
+                        ) : (
+                          <Select
+                            value={selectedTeamsChannelId}
+                            onValueChange={setSelectedTeamsChannelId}
+                          >
+                            <SelectTrigger className="text-xs h-9">
+                              <SelectValue placeholder="Select a channel…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {teamsChannels.map(c => {
+                                const isAlreadyLinked = existingTeamsDests.some(
+                                  d => d.teamId === selectedTeamId && d.channelId === c.id
+                                );
+                                return (
+                                  <SelectItem key={c.id} value={c.id} disabled={isAlreadyLinked}>
+                                    {c.displayName
+                                      ? `${c.displayName} — ${c.id.slice(0, 8)}…`
+                                      : c.id}
+                                    {isAlreadyLinked ? ' (Already linked)' : ''}
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-1">
                       <Button
                         type="button"
-                        variant="outline"
                         size="sm"
                         className="text-xs h-8"
-                        disabled={teamsLinking}
+                        disabled={
+                          !selectedTeamId ||
+                          !selectedTeamsChannelId ||
+                          existingTeamsDests.some(
+                            d =>
+                              d.teamId === selectedTeamId && d.channelId === selectedTeamsChannelId
+                          ) ||
+                          teamsLinking
+                        }
                         onClick={async () => {
                           setTeamsLinking(true);
+                          setTeamsLinkResult(null);
                           try {
-                            const res = await fetch('/api/microsoft-teams/test', {
+                            const teamName =
+                              teams.find(t => t.id === selectedTeamId)?.displayName ?? null;
+                            const channelName =
+                              teamsChannels.find(c => c.id === selectedTeamsChannelId)
+                                ?.displayName ?? null;
+                            const inferredTenantId = existingTeamsDests[0]?.tenantId?.trim();
+                            const channelObj = teamsChannels.find(
+                              c => c.id === selectedTeamsChannelId
+                            );
+                            const resolvedChannelId = channelObj?.id ?? selectedTeamsChannelId;
+                            const payload: Record<string, unknown> = {
+                              serviceId,
+                              teamId: selectedTeamId,
+                              channelId: resolvedChannelId,
+                              channelName,
+                              teamName,
+                              warRoomEnabled: existingTeamsDests.length === 0,
+                            };
+                            if (inferredTenantId) payload.tenantId = inferredTenantId;
+                            const res = await fetch('/api/microsoft-teams/destinations', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ serviceId }),
+                              body: JSON.stringify(payload),
                             });
                             const data = await res.json().catch(() => ({}));
-                            if (!res.ok) throw new Error(data?.error || 'Test failed');
+                            if (!res.ok) {
+                              const msg =
+                                data?.error ||
+                                data?.data?.error ||
+                                'Failed to link Teams destination';
+                              throw new Error(msg);
+                            }
+                            const getRes = await fetch(
+                              `/api/microsoft-teams/destinations?serviceId=${encodeURIComponent(serviceId)}`
+                            );
+                            const getData = await getRes.json().catch(() => ({}));
+                            const nextDests = (getData?.data?.destinations ??
+                              getData?.destinations ??
+                              []) as typeof existingTeamsDests;
+                            setExistingTeamsDests(nextDests);
+                            setSelectedTeamsChannelId('');
                             setTeamsLinkResult({
                               status: 'success',
-                              message: 'Test Adaptive Card enqueued — check Teams.',
+                              message: 'Linked service to Teams channel.',
                             });
                           } catch (e) {
                             setTeamsLinkResult({
@@ -1087,33 +1384,34 @@ export default function ServiceNotificationSettings({
                             });
                           } finally {
                             setTeamsLinking(false);
-                            setTimeout(() => setTeamsLinkResult(null), 3500);
+                            setTimeout(() => setTeamsLinkResult(null), 4000);
                           }
                         }}
                       >
-                        <Send className="mr-1.5 h-3.5 w-3.5" /> Send Test
+                        {teamsLinking && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                        Link Channel
                       </Button>
-                    )}
+                    </div>
                   </div>
+                )}
 
-                  {teamsLinkResult && (
-                    <Alert
-                      className={cn(
-                        'text-xs py-2',
-                        teamsLinkResult.status === 'success'
-                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
-                          : 'border-destructive/30 bg-destructive/10 text-destructive'
-                      )}
-                    >
-                      {teamsLinkResult.status === 'success' ? (
-                        <Check className="h-3.5 w-3.5" />
-                      ) : (
-                        <XCircle className="h-3.5 w-3.5" />
-                      )}
-                      <AlertDescription>{teamsLinkResult.message}</AlertDescription>
-                    </Alert>
-                  )}
-                </div>
+                {teamsLinkResult && (
+                  <Alert
+                    className={cn(
+                      'text-xs py-2',
+                      teamsLinkResult.status === 'success'
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+                        : 'border-destructive/30 bg-destructive/10 text-destructive'
+                    )}
+                  >
+                    {teamsLinkResult.status === 'success' ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <XCircle className="h-3.5 w-3.5" />
+                    )}
+                    <AlertDescription>{teamsLinkResult.message}</AlertDescription>
+                  </Alert>
+                )}
               </div>
             )}
 

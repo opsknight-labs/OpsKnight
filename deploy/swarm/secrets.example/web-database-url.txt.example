@@ -1,0 +1,1 @@
+postgresql://opsknight:opsknight_secure_password_change_me@opsknight-pgbouncer:6432/opsknight_db?sslmode=disable&pgbouncer=true

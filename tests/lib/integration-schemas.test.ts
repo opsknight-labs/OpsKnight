@@ -174,6 +174,7 @@ describe('Integration Schemas', () => {
         'PINGDOM',
         'BETTER_UPTIME',
         'UPTIME_KUMA',
+        'MANAGEENGINE',
         'WEBHOOK',
       ];
 

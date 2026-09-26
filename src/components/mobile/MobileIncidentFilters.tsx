@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Filter, Search, X } from 'lucide-react';
+import { Filter, X } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import {
@@ -143,17 +143,13 @@ export default function MobileIncidentFilters(props: Props) {
             submitSearch(query);
           }}
         >
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
           <Input
             value={query}
             onChange={event => setQuery(event.target.value)}
             placeholder="Search incidents"
             type="search"
             autoComplete="off"
-            className="h-[44px] min-h-[44px] rounded-xl bg-card pl-9 pr-10 text-sm shadow-none"
+            className="h-[44px] min-h-[44px] rounded-xl bg-card px-4 pr-10 text-sm shadow-none"
           />
           {query && (
             <button

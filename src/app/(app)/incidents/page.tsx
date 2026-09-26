@@ -17,6 +17,8 @@ import {
   normalizeIncidentSort,
   normalizeIncidentStatus,
 } from '@/lib/incidents-query';
+import { buildIncidentListHref } from '@/lib/incident-links';
+import type { IncidentUrgency } from '@prisma/client';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { AlertTriangle, User, AlertCircle, CheckCircle2, Clock, ShieldOff } from 'lucide-react';
 import { RealtimeProvider } from '@/hooks/useRealtime';
@@ -165,10 +167,52 @@ export default async function IncidentsPage({
       })
     : [];
 
+  const isMineActive = currentFilter === 'mine';
+  const isActiveActive =
+    currentFilter === 'all_open' ||
+    Boolean(
+      currentFilter === 'all' &&
+      currentStatus &&
+      (currentStatus === 'OPEN' || currentStatus === 'ACKNOWLEDGED')
+    );
+  const isResolvedActive = currentFilter === 'resolved' || currentStatus === 'RESOLVED';
+  const isSnoozedActive = currentFilter === 'snoozed' || currentStatus === 'SNOOZED';
+  const isSuppressedActive = currentFilter === 'suppressed' || currentStatus === 'SUPPRESSED';
+
+  const baseDrilldown = {
+    search: currentSearch || undefined,
+    urgency: currentUrgency !== 'all' ? (currentUrgency as IncidentUrgency) : undefined,
+    teamId: currentTeamId !== 'all' ? currentTeamId : undefined,
+    serviceId: currentServiceId !== 'all' ? currentServiceId : undefined,
+    assignee: currentAssignee,
+    createdAfter: params.createdAfter,
+    createdBefore: params.createdBefore,
+  };
+
   const drilldownScope = [
     currentStatus
       ? `Status: ${currentStatus === 'OPEN' ? 'Triggered' : currentStatus.toLowerCase()}`
-      : null,
+      : currentFilter !== 'all'
+        ? currentFilter === 'mine'
+          ? 'Filter: Mine'
+          : `Status: ${
+              currentFilter === 'all_open'
+                ? 'Active'
+                : currentFilter === 'resolved'
+                  ? 'Resolved'
+                  : currentFilter === 'snoozed'
+                    ? 'Snoozed'
+                    : currentFilter === 'suppressed'
+                      ? 'Suppressed'
+                      : currentFilter === 'open'
+                        ? 'Triggered'
+                        : currentFilter === 'acknowledged'
+                          ? 'Acknowledged'
+                          : currentFilter === 'muted'
+                            ? 'Muted'
+                            : currentFilter
+            }`
+        : null,
     currentAssignee
       ? currentAssignee.toLowerCase() === 'unassigned'
         ? 'Assignee: Unassigned'
@@ -202,42 +246,50 @@ export default async function IncidentsPage({
             label: 'Mine',
             value: mineCount,
             icon: <User className="h-3.5 w-3.5" />,
-            href: '/incidents?filter=mine',
-            active: currentFilter === 'mine',
+            href: isMineActive
+              ? buildIncidentListHref({ ...baseDrilldown, filter: 'all' })
+              : buildIncidentListHref({ ...baseDrilldown, filter: 'mine' }),
+            active: isMineActive,
           },
           {
             label: 'Active',
             value: activeCount,
             icon: <AlertCircle className="h-3.5 w-3.5 text-rose-200" />,
             valueClassName: activeCount > 0 ? 'text-rose-200' : undefined,
-            href: '/incidents?filter=all',
-            active:
-              currentFilter === 'all' &&
-              (!currentStatus || currentStatus === 'OPEN' || currentStatus === 'ACKNOWLEDGED'),
+            href: isActiveActive
+              ? buildIncidentListHref({ ...baseDrilldown, filter: 'all' })
+              : buildIncidentListHref({ ...baseDrilldown, filter: 'all_open' }),
+            active: isActiveActive,
           },
           {
             label: 'Resolved',
             value: resolvedCount,
             icon: <CheckCircle2 className="h-3.5 w-3.5 text-emerald-200" />,
             valueClassName: resolvedCount > 0 ? 'text-emerald-200' : undefined,
-            href: '/incidents?status=RESOLVED',
-            active: currentStatus === 'RESOLVED',
+            href: isResolvedActive
+              ? buildIncidentListHref({ ...baseDrilldown, filter: 'all' })
+              : buildIncidentListHref({ ...baseDrilldown, filter: 'resolved' }),
+            active: isResolvedActive,
           },
           {
             label: 'Snoozed',
             value: snoozedCount,
             icon: <Clock className="h-3.5 w-3.5 text-amber-200" />,
             valueClassName: snoozedCount > 0 ? 'text-amber-200' : undefined,
-            href: '/incidents?status=SNOOZED',
-            active: currentStatus === 'SNOOZED',
+            href: isSnoozedActive
+              ? buildIncidentListHref({ ...baseDrilldown, filter: 'all' })
+              : buildIncidentListHref({ ...baseDrilldown, filter: 'snoozed' }),
+            active: isSnoozedActive,
           },
           {
             label: 'Suppressed',
             value: suppressedCount,
             icon: <ShieldOff className="h-3.5 w-3.5 text-slate-200" />,
             valueClassName: suppressedCount > 0 ? 'text-slate-200' : undefined,
-            href: '/incidents?status=SUPPRESSED',
-            active: currentStatus === 'SUPPRESSED',
+            href: isSuppressedActive
+              ? buildIncidentListHref({ ...baseDrilldown, filter: 'all' })
+              : buildIncidentListHref({ ...baseDrilldown, filter: 'suppressed' }),
+            active: isSuppressedActive,
           },
         ]}
       />

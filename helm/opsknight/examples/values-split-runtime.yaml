@@ -1,0 +1,58 @@
+runtime:
+  mode: split
+
+# Requires at least two schedulable nodes. Add a zone-level constraint in a
+# production values file when the cluster spans multiple zones.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+
+# Required: set a tag or digest for an image built with split-runtime support.
+# image:
+#   digest: sha256:<tested-split-runtime-manifest-digest>
+
+web:
+  replicaCount: 2
+  database:
+    poolSize: 10
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 12
+
+scheduler:
+  replicaCount: 2
+  profile: maintenance
+  database:
+    poolSize: 3
+
+generalWorker:
+  replicaCount: 2
+  database:
+    poolSize: 5
+
+criticalWorker:
+  replicaCount: 2
+  database:
+    poolSize: 5
+
+bulkWorker:
+  replicaCount: 2
+  database:
+    poolSize: 3
+
+statusProjector:
+  replicaCount: 2
+  database:
+    poolSize: 3
+
+# When enabled, two replicas with defaultPoolSize 10 replace the web tier's
+# 20 direct connections. Budget those backends together with 38 direct
+# scheduler/worker connections and leave PostgreSQL operational headroom.
+pgbouncer:
+  defaultPoolSize: 10
+  reservePoolSize: 5
+
+networkPolicy:
+  enabled: true

@@ -84,6 +84,7 @@ const mockPrisma = {
   backgroundJob: createMockModel(),
   incidentEvent: createMockModel(),
   slackIntegration: createMockModel(),
+  slackDestination: createMockModel(),
   notificationProvider: createMockModel(),
   slackOAuthConfig: createMockModel(),
   apiKey: createMockModel(),

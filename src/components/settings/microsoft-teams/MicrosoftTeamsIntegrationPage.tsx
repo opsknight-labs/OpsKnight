@@ -38,7 +38,6 @@ import {
   Sparkles,
   Layers,
   ShieldCheck,
-  Search,
 } from 'lucide-react';
 
 type DestinationRow = {
@@ -419,12 +418,11 @@ export default function MicrosoftTeamsIntegrationPage({
               </div>
               <div className="flex items-center gap-2">
                 <div className="relative w-full sm:w-56">
-                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
                     placeholder="Filter destinations…"
                     value={destinationSearch}
                     onChange={e => setDestinationSearch(e.target.value)}
-                    className="h-8 pl-8 text-xs"
+                    className="h-8 px-3 text-xs"
                   />
                 </div>
                 <Badge variant="outline" className="text-[10px] shrink-0">

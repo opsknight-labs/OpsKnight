@@ -136,15 +136,25 @@ function getOwnerName(
   return users.find(user => user.id === ownerId)?.name || 'Unknown';
 }
 
+const DEFAULT_FALLBACK_CAPABILITY: JiraCapability = {
+  workspaceState: 'NOT_CONFIGURED',
+  serviceMapped: false,
+  syncEnabled: false,
+  showOperationalJira: false,
+  canCreate: false,
+  canLink: false,
+  canSync: false,
+  canUnlink: false,
+  reason: 'NOT_CONFIGURED',
+  rawEnabled: false,
+};
+
 function requireJiraCapability(
   capabilities: ReadonlyMap<string, JiraCapability>,
   serviceId: string
 ): JiraCapability {
   const capability = capabilities.get(serviceId);
-  if (!capability) {
-    throw new Error(`Missing Jira capability contract for service ${serviceId}`);
-  }
-  return capability;
+  return capability ?? DEFAULT_FALLBACK_CAPABILITY;
 }
 
 function ActionItemCard({
@@ -315,6 +325,18 @@ export default function ActionItemsBoard({
   useEffect(() => {
     setItems(initialItems);
   }, [initialItems]);
+
+  useEffect(() => {
+    setSelectedStatus(filters.status || '');
+  }, [filters.status]);
+
+  useEffect(() => {
+    setSelectedOwner(filters.owner || '');
+  }, [filters.owner]);
+
+  useEffect(() => {
+    setSelectedPriority(filters.priority || '');
+  }, [filters.priority]);
 
   const handleStatusChange = async (itemId: string, newStatus: ActionItemStatus) => {
     setItems(previous =>
@@ -575,7 +597,9 @@ export default function ActionItemsBoard({
                 </CardHeader>
                 <CardContent className="p-0 flex flex-col gap-2.5 flex-1 overflow-y-auto max-h-[75vh]">
                   {groupItems.length === 0 ? (
-                    <div className="p-6 text-center text-muted-foreground text-xs italic">No items</div>
+                    <div className="p-6 text-center text-muted-foreground text-xs italic">
+                      No items
+                    </div>
                   ) : (
                     groupItems.map(item => (
                       <ActionItemCard
@@ -669,7 +693,9 @@ export default function ActionItemsBoard({
                         />
                       </div>
                       {item.description && (
-                        <p className="text-sm text-muted-foreground mt-1 mb-2">{item.description}</p>
+                        <p className="text-sm text-muted-foreground mt-1 mb-2">
+                          {item.description}
+                        </p>
                       )}
                     </div>
 

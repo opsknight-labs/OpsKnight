@@ -1,11 +1,20 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { assertAdminOrResponder, assertCanModifyService } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { retryFetch } from '@/lib/retry';
 import { getSlackBotToken } from '@/lib/slack';
+import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { integrationProviderError, jsonProviderError } from '@/lib/provider-errors';
+
+const testSchema = z.object({
+  serviceId: z.string().trim().min(1).max(191).optional(),
+  destinationId: z.string().trim().min(1).max(191).optional(),
+  channelId: z.string().trim().min(1).max(255).optional(),
+  channelName: z.string().trim().max(255).optional(),
+});
 
 /**
  * POST /api/slack/test
@@ -19,10 +28,40 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       return jsonError(new AppError({ code: 'INVALID_JSON', cause: error }));
     }
-    const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
-    const channelId = typeof payload.channelId === 'string' ? payload.channelId : null;
-    const channelName = typeof payload.channelName === 'string' ? payload.channelName : null;
-    const serviceId = typeof payload.serviceId === 'string' ? payload.serviceId : null;
+    const parsed = testSchema.safeParse(body && typeof body === 'object' ? body : {});
+    if (!parsed.success) {
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: parsed.error.issues[0]?.message ?? 'Invalid request body.',
+        })
+      );
+    }
+
+    const { destinationId } = parsed.data;
+    let { serviceId, channelId, channelName } = parsed.data;
+
+    if (destinationId) {
+      const dest = await prisma.slackDestination.findUnique({
+        where: { id: destinationId },
+      });
+      if (!dest) {
+        return jsonError(
+          new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Slack destination not found.' })
+        );
+      }
+      if (serviceId && serviceId !== dest.serviceId) {
+        return jsonError(
+          new AppError({
+            code: 'AUTHORIZATION_DENIED',
+            userMessage: 'Destination does not belong to the specified service.',
+          })
+        );
+      }
+      serviceId = dest.serviceId;
+      channelId = channelId || dest.channelId;
+      channelName = (channelName || dest.channelName) ?? undefined;
+    }
 
     const user = serviceId
       ? await assertCanModifyService(serviceId)

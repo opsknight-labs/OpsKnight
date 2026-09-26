@@ -25,7 +25,6 @@ import {
   Layers2,
   UserPlus,
   Trash2,
-  Search,
   Filter,
   Lock,
 } from 'lucide-react';
@@ -208,7 +207,6 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
 
         {/* Search Bar */}
         <div className="relative w-full sm:w-64">
-          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             placeholder="Search incident or room…"
             value={searchQuery}
@@ -216,7 +214,7 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
               setSearchQuery(e.target.value);
               setPage(1);
             }}
-            className="h-8 pl-8 text-xs"
+            className="h-8 text-xs"
           />
         </div>
       </div>

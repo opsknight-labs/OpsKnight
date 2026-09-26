@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { configurePrismaDatasource } from './prisma-datasource';
+import { configurePrismaDatasource, selectPrismaDatasourceUrl } from './prisma-datasource';
 import { getOpsKnightProcessRole } from './runtime-role';
 
 /**
@@ -24,6 +24,8 @@ function rolePoolSize(): string | undefined {
       return process.env.DATABASE_POOL_SIZE_SCHEDULER;
     case 'worker':
       return process.env.DATABASE_POOL_SIZE_WORKER;
+    case 'general-worker':
+      return process.env.DATABASE_POOL_SIZE_GENERAL_WORKER;
     case 'critical-worker':
       return process.env.DATABASE_POOL_SIZE_CRITICAL_WORKER;
     case 'bulk-worker':
@@ -34,9 +36,11 @@ function rolePoolSize(): string | undefined {
 }
 
 const prismaClientSingleton = () => {
+  const role = getOpsKnightProcessRole();
+  const rawDatasourceUrl = selectPrismaDatasourceUrl(role);
   // Log configuration for debugging
   const datasourceUrl = configurePrismaDatasource(
-    process.env.DATABASE_URL,
+    rawDatasourceUrl,
     rolePoolSize() ?? process.env.DATABASE_POOL_SIZE
   );
 

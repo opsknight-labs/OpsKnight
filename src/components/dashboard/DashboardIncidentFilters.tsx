@@ -28,7 +28,6 @@ import {
   Flame,
   Loader2,
   MinusCircle,
-  Search,
   ArrowUpDown,
   Activity,
   X,
@@ -337,11 +336,10 @@ export default function DashboardIncidentFilters({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <Input
                 id="dashboard-incident-search"
                 placeholder="Search..."
-                className="h-9 pl-8 text-xs bg-white border-border hover:border-slate-300 focus:border-zinc-400 rounded-lg shadow-2xs"
+                className="h-9 text-xs bg-white border-border hover:border-slate-300 focus:border-zinc-400 rounded-lg shadow-2xs"
                 value={searchValue}
                 onChange={e => handleSearchChange(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
