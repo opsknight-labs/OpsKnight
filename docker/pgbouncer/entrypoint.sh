@@ -72,6 +72,12 @@ else
   fi
 fi
 
+# Defensively sanitize DB_NAME and DB_USER against unexpanded nested variable artifacts (e.g. from Swarm)
+DB_NAME=$(printf '%s' "$DB_NAME" | sed -e 's/^[${]*//' -e 's/[-:}]*$//' -e 's/.*:-//')
+DB_USER=$(printf '%s' "$DB_USER" | sed -e 's/^[${]*//' -e 's/[-:}]*$//' -e 's/.*:-//')
+[ -z "$DB_NAME" ] && DB_NAME="opsknight_db"
+[ -z "$DB_USER" ] && DB_USER="opsknight"
+
 # Handle authentication file (userlist.txt)
 AUTH_FILE_PATH="${PGBOUNCER_AUTH_FILE:-}"
 if [ -n "$AUTH_FILE_PATH" ] && [ -f "$AUTH_FILE_PATH" ]; then

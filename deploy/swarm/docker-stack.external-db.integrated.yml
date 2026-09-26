@@ -11,8 +11,8 @@ services:
     environment:
       POSTGRES_HOST: ${EXTERNAL_DB_HOST:-}
       POSTGRES_PORT: ${EXTERNAL_DB_PORT:-5432}
-      POSTGRES_DB: ${EXTERNAL_DB_NAME:-${POSTGRES_DB:-opsknight_db}}
-      POSTGRES_USER: ${EXTERNAL_DB_USER:-${POSTGRES_USER:-opsknight}}
+      POSTGRES_DB: ${EXTERNAL_DB_NAME:-opsknight_db}
+      POSTGRES_USER: ${EXTERNAL_DB_USER:-opsknight}
 
 networks:
   opsknight:
