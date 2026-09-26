@@ -1,0 +1,1 @@
+postgresql://opsknight:opsknight_secure_password_change_me@opsknight-db:5432/opsknight_db?sslmode=prefer&connection_limit=40&pool_timeout=30

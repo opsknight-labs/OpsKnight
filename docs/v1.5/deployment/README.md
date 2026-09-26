@@ -13,6 +13,7 @@ OpsKnight v1.4 ships one Next.js application and PostgreSQL-backed state. Choose
 | Path                                 | Use when                                                           | Important boundary                                                          |
 | ------------------------------------ | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
 | [Docker Compose](./docker)           | Evaluation, development, or a deliberate single-host installation. | One host and one PostgreSQL container are not highly available.             |
+| [Docker Swarm](./docker-swarm)       | Multi-node cluster with native rolling updates and Raft secrets.   | Stateful PostgreSQL requires storage node pinning or managed DB.            |
 | [Kubernetes/Kustomize](./kubernetes) | Your platform team owns raw manifests/overlays.                    | The supplied PostgreSQL StatefulSet is a single-instance starting topology. |
 | [Helm](./helm)                       | Your platform team wants a values-driven Kubernetes release.       | Render and validate chart values against cluster policy before install.     |
 
