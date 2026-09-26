@@ -10,62 +10,62 @@
 services:
   opsknight-pgbouncer:
     volumes:
-      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute host path of the enterprise CA certificate (relative paths resolve from deploy/compose/)}:/etc/ssl/certs/custom-ca.crt:ro
     environment:
       PGBOUNCER_SERVER_TLS_CA_FILE: /etc/ssl/certs/custom-ca.crt
 
   opsknight-app:
     volumes:
-      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute host path of the enterprise CA certificate (relative paths resolve from deploy/compose/)}:/etc/ssl/certs/custom-ca.crt:ro
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
       SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
 
   opsknight-migration:
     volumes:
-      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute host path of the enterprise CA certificate (relative paths resolve from deploy/compose/)}:/etc/ssl/certs/custom-ca.crt:ro
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
       SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
 
   opsknight-web:
     volumes:
-      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute host path of the enterprise CA certificate (relative paths resolve from deploy/compose/)}:/etc/ssl/certs/custom-ca.crt:ro
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
       SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
 
   opsknight-scheduler:
     volumes:
-      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute host path of the enterprise CA certificate (relative paths resolve from deploy/compose/)}:/etc/ssl/certs/custom-ca.crt:ro
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
       SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
 
   opsknight-general-worker:
     volumes:
-      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute host path of the enterprise CA certificate (relative paths resolve from deploy/compose/)}:/etc/ssl/certs/custom-ca.crt:ro
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
       SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
 
   opsknight-critical-worker:
     volumes:
-      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute host path of the enterprise CA certificate (relative paths resolve from deploy/compose/)}:/etc/ssl/certs/custom-ca.crt:ro
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
       SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
 
   opsknight-bulk-worker:
     volumes:
-      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute host path of the enterprise CA certificate (relative paths resolve from deploy/compose/)}:/etc/ssl/certs/custom-ca.crt:ro
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
       SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
 
   opsknight-status-projector:
     volumes:
-      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute host path of the enterprise CA certificate (relative paths resolve from deploy/compose/)}:/etc/ssl/certs/custom-ca.crt:ro
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
       SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt

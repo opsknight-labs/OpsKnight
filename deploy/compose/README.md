@@ -29,8 +29,11 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ### 2. Split Runtime (Bundled PostgreSQL)
 
+> [!IMPORTANT]
+> Split mode requires an explicit `OPSKNIGHT_IMAGE` tag or digest built with split-runtime role support (for example `2.0.0` or later; `1.4.0` predates split runtime).
+
 ```bash
-export OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:1.4.0
+export OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:2.0.0
 node deploy/scripts/validate-runtime-capacity.cjs
 docker compose \
   -f deploy/compose/docker-compose.yml \
@@ -41,7 +44,7 @@ docker compose \
 ### 3. Split Runtime + PgBouncer (Bundled PostgreSQL)
 
 ```bash
-export OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:1.4.0
+export OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:2.0.0
 export PGBOUNCER_ENABLED=true
 node deploy/scripts/validate-runtime-capacity.cjs
 docker compose \
@@ -51,10 +54,13 @@ docker compose \
   up -d
 ```
 
-### 4. Split Runtime + PgBouncer + External PostgreSQL
+### 4. Split Runtime + PgBouncer + External PostgreSQL (+ Optional Custom CA)
+
+> [!NOTE]
+> When mounting a custom enterprise CA bundle with `docker-compose.pgbouncer-ca.yml`, set `PGBOUNCER_TLS_CA_CERT` to an **absolute host path** (e.g. `/etc/ssl/certs/enterprise-ca.crt`). Relative volume paths in Docker Compose are resolved relative to `deploy/compose/`, not the caller's working directory.
 
 ```bash
-export OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:1.4.0
+export OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:2.0.0
 export OPSKNIGHT_DATABASE_URL="postgresql://user:pass@db.example.com:5432/opsknight_db?sslmode=verify-full"
 export EXTERNAL_DB_HOST="db.example.com"
 export EXTERNAL_DB_PASSWORD="pass"

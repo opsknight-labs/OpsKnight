@@ -91,23 +91,23 @@ Adds a dedicated PgBouncer connection pooler container (`opsknight-pgbouncer`) o
 - `opsknight-scheduler` and all worker containers connect directly to PostgreSQL.
 - Dynamic authentication: for bundled PostgreSQL, PgBouncer credentials and userlist are generated automatically from POSTGRES_USER / POSTGRES_PASSWORD at container startup; for external PostgreSQL, explicit structured PGBOUNCER_DB_* parameters are required and validated fail-closed. If passwords contain special URI characters, they are automatically percent-encoded or WEB_DATABASE_URL can be supplied directly. Plaintext credentials are never committed.
 - Least privilege: application database users are never assigned administrative PgBouncer control plane privileges (`admin_users`).
-- External PostgreSQL connections support encrypted TLS verification (`PGBOUNCER_SERVER_TLS_SSLMODE=verify-full`). A standard root CA bundle is mounted into `/etc/ssl/certs/ca-certificates.crt`, and custom enterprise CA bundles can be mounted via `PGBOUNCER_TLS_CA_CERT=/path/to/custom-ca.crt`.
+- External PostgreSQL connections support encrypted TLS verification (`PGBOUNCER_SERVER_TLS_SSLMODE=verify-full`). A standard root CA bundle is mounted into `/etc/ssl/certs/ca-certificates.crt`, and custom enterprise CA bundles can be mounted with `deploy/compose/docker-compose.pgbouncer-ca.yml` via `PGBOUNCER_TLS_CA_CERT=/etc/ssl/certs/custom-ca.crt` (use an **absolute host path**; relative volume paths in Docker Compose are resolved relative to `deploy/compose/`, not the caller's working directory).
 ```bash
 # With bundled PostgreSQL:
 OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight:2.0.0" \
   docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml up -d
 
-# With external managed PostgreSQL:
+# With external managed PostgreSQL + custom enterprise CA:
 OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight:2.0.0" \
-OPSKNIGHT_DATABASE_URL="postgresql://enterprise_user:enterprise_password@db.example.com:5432/opsknight_db?sslmode=verify-full" \
+OPSKNIGHT_DATABASE_URL="postgresql://enterprise_user:enterprise_password@db.example.com:5432/opsknight_db?sslmode=verify-full&sslrootcert=/etc/ssl/certs/custom-ca.crt" \
 PGBOUNCER_DB_HOST="db.example.com" \
 PGBOUNCER_DB_PORT="5432" \
 PGBOUNCER_DB_NAME="opsknight_db" \
 PGBOUNCER_DB_USER="enterprise_user" \
 PGBOUNCER_DB_PASSWORD="enterprise_password" \
 PGBOUNCER_SERVER_TLS_SSLMODE="verify-full" \
-PGBOUNCER_TLS_CA_CERT="/path/to/enterprise-ca.crt" \
-  docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f deploy/compose/docker-compose.external-db.yml up -d
+PGBOUNCER_TLS_CA_CERT="/etc/ssl/certs/enterprise-ca.crt" \
+  docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f deploy/compose/docker-compose.external-db.yml -f deploy/compose/docker-compose.pgbouncer-ca.yml up -d
 ```
 
 ## Scaling architecture in Docker Compose
@@ -189,7 +189,7 @@ Notification-provider credentials are configured in **Settings → Notification 
 These commands apply to the bundled database. For an external database, use the provider/operator's consistent backup and restore procedure instead.
 
 ```bash
-docker compose exec -T opsknight-db \
+docker compose -f deploy/compose/docker-compose.yml exec -T opsknight-db \
   pg_dump -U opsknight -d opsknight_db -Fc > opsknight-$(date +%Y%m%d-%H%M%S).dump
 ```
 
@@ -198,12 +198,12 @@ Also back up the production secret-store/`.env` values, especially `NEXTAUTH_SEC
 ## Restore
 
 ```bash
-docker compose stop opsknight-app
-docker compose exec -T opsknight-db \
+docker compose -f deploy/compose/docker-compose.yml stop opsknight-app
+docker compose -f deploy/compose/docker-compose.yml exec -T opsknight-db \
   pg_restore --clean --if-exists --no-owner -U opsknight -d opsknight_db \
   < BACKUP.dump
-docker compose start opsknight-app
-docker compose logs --tail=200 opsknight-app
+docker compose -f deploy/compose/docker-compose.yml start opsknight-app
+docker compose -f deploy/compose/docker-compose.yml logs --tail=200 opsknight-app
 curl --fail 'http://localhost:3000/api/health?mode=readiness'
 ```
 
@@ -219,9 +219,9 @@ Confirm authentication, users, services, integrations, and a controlled incident
 6. Verify readiness, login, database writes, incident handling, and notification/integration delivery.
 
 ```bash
-docker compose pull opsknight-app
-docker compose up -d opsknight-app
-docker compose logs -f opsknight-app
+docker compose -f deploy/compose/docker-compose.yml pull opsknight-app
+docker compose -f deploy/compose/docker-compose.yml up -d opsknight-app
+docker compose -f deploy/compose/docker-compose.yml logs -f opsknight-app
 ```
 
 A previous image may be incompatible with a newly migrated schema. Image rollback is not a database rollback; use release-specific compatibility guidance and the pre-upgrade recovery point when required.
@@ -229,14 +229,14 @@ A previous image may be incompatible with a newly migrated schema. Image rollbac
 ## Routine operations
 
 ```bash
-docker compose ps
-docker compose logs -f opsknight-app
-docker compose logs -f opsknight-db
-docker compose restart opsknight-app
-docker compose down
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml logs -f opsknight-app
+docker compose -f deploy/compose/docker-compose.yml logs -f opsknight-db
+docker compose -f deploy/compose/docker-compose.yml restart opsknight-app
+docker compose -f deploy/compose/docker-compose.yml down
 ```
 
-`docker compose down` preserves the named database volume. `docker compose down -v` destroys it.
+`docker compose -f deploy/compose/docker-compose.yml down` preserves the named database volume. `docker compose -f deploy/compose/docker-compose.yml down -v` destroys it.
 
 ## Troubleshooting
 

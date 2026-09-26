@@ -449,8 +449,19 @@ describe('deployment configuration invariants', () => {
     expect(split).toContain('OPSKNIGHT_MIGRATION_ONLY: "true"');
     expect(split).toContain('condition: service_completed_successfully');
 
-    // External DB overlay disables bundled database cleanly
+    // External DB overlay disables bundled database cleanly without injecting PgBouncer into non-pooled topologies
     expect(external).toContain('profiles:\n      - bundled-database');
+    expect(external).not.toContain('opsknight-pgbouncer');
+
+    // Deployment READMEs and runbooks must not use pre-split 1.4.0 image for split runtime or bare docker compose commands
+    const k8sReadme = read('deploy/kubernetes/README.md');
+    const composeReadme = read('deploy/compose/README.md');
+    const dockerDoc = read('docs/v1.5/deployment/docker.md');
+    expect(k8sReadme).not.toContain('image.tag=1.4.0');
+    expect(composeReadme).not.toContain('opsknight:1.4.0');
+    expect(dockerDoc).not.toMatch(
+      /^docker compose (?:exec|stop|start|pull|up|ps|logs|restart|down)\b/m
+    );
   });
 
   it('validates runtime database connection capacity budgets across topologies', () => {

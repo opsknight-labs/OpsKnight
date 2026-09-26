@@ -148,9 +148,9 @@ Open `http://localhost:3000`, bootstrap the Admin, and run the same controlled i
 ### PostgreSQL is unhealthy or unreachable
 
 ```bash
-docker compose ps
-docker compose logs --tail=200 opsknight-db
-docker compose exec -T opsknight-db \
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml logs --tail=200 opsknight-db
+docker compose -f deploy/compose/docker-compose.yml exec -T opsknight-db \
   pg_isready -U "${POSTGRES_USER:-opsknight}" -d "${POSTGRES_DB:-opsknight_db}"
 ```
 

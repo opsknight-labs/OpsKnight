@@ -232,6 +232,7 @@ jobs:
           grep -q 'kubernetes.io/metadata.name: ingress-nginx' /tmp/opsknight-kustomize.yaml
           grep -q '127.0.0.1' /tmp/opsknight-compose.yaml
           grep -q 'db.example.com:6432' /tmp/opsknight-compose-external-db.yaml
+          ! grep -q 'opsknight-pgbouncer' /tmp/opsknight-compose-external-db.yaml
           grep -q 'published: "3000"' /tmp/opsknight-compose-split.yaml
           grep -q 'OPSKNIGHT_PROCESS_ROLE: scheduler' /tmp/opsknight-compose-split.yaml
           grep -q 'OPSKNIGHT_PROCESS_ROLE: general-worker' /tmp/opsknight-compose-split.yaml
@@ -243,7 +244,9 @@ jobs:
           grep -q 'opsknight-pgbouncer:6432' /tmp/opsknight-compose-split-pgbouncer.yaml
           grep -q 'pgbouncer=true' /tmp/opsknight-compose-split-pgbouncer.yaml
           grep -q 'db.example.com:6432' /tmp/opsknight-compose-split-external-db.yaml
+          ! grep -q 'opsknight-pgbouncer' /tmp/opsknight-compose-split-external-db.yaml
           grep -q 'db.example.com:6432' /tmp/opsknight-compose-split-pgbouncer-external-db.yaml
+          grep -q 'opsknight-pgbouncer' /tmp/opsknight-compose-split-pgbouncer-external-db.yaml
           grep -q 'port: 6432' /tmp/opsknight-helm-external-db.yaml
           grep -q 'cidr: "10.24.0.0/16"' /tmp/opsknight-helm-external-db.yaml
           grep -q 'ghcr.io/opsknight-labs/opsknight@sha256:0000000000000000000000000000000000000000000000000000000000000000' /tmp/opsknight-helm-external-secret.yaml

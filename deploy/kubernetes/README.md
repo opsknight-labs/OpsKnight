@@ -19,11 +19,17 @@ helm lint deploy/kubernetes/helm/opsknight
 # Integrated mode
 helm template opsknight deploy/kubernetes/helm/opsknight --namespace opsknight
 
-# Split runtime + PgBouncer
+# Split runtime + PgBouncer (requires a release image built with split-runtime support; 1.4.0 predates split roles)
 helm template opsknight deploy/kubernetes/helm/opsknight \
   --namespace opsknight \
   -f deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml \
-  --set image.tag=1.4.0
+  --set-string image.digest=sha256:<tested-split-runtime-digest>
+
+# Or with an explicit split-runtime release tag:
+helm template opsknight deploy/kubernetes/helm/opsknight \
+  --namespace opsknight \
+  -f deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml \
+  --set-string image.tag=<tested-split-runtime-tag>
 ```
 
 ### Install / Upgrade

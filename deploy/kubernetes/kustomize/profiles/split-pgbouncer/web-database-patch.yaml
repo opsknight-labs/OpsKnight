@@ -1,6 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
-metadata: { name: opsknight-web, namespace: opsknight }
+metadata:
+  name: opsknight-web
+  namespace: opsknight
+  # Kustomize strategic merge patch overriding only DATABASE_URL and DIRECT_DATABASE_URL on
+  # opsknight-web; probes, resources, securityContext, seccomp, and image tag are defined in
+  # ../split/runtime-deployments.yaml.
+  # checkov:skip=CKV_K8S_8: Kustomize strategic merge patch; livenessProbe is defined in base split deployment
+  # checkov:skip=CKV_K8S_9: Kustomize strategic merge patch; readinessProbe is defined in base split deployment
+  # checkov:skip=CKV_K8S_10: Kustomize strategic merge patch; CPU requests are defined in base split deployment
+  # checkov:skip=CKV_K8S_11: Kustomize strategic merge patch; CPU limits are defined in base split deployment
+  # checkov:skip=CKV_K8S_12: Kustomize strategic merge patch; memory requests are defined in base split deployment
+  # checkov:skip=CKV_K8S_13: Kustomize strategic merge patch; memory limits are defined in base split deployment
+  # checkov:skip=CKV_K8S_14: Kustomize strategic merge patch; image tag is defined in base split deployment
+  # checkov:skip=CKV_K8S_15: Kustomize strategic merge patch; imagePullPolicy is defined in base split deployment
+  # checkov:skip=CKV_K8S_20: Kustomize strategic merge patch; allowPrivilegeEscalation is defined in base split deployment
+  # checkov:skip=CKV_K8S_22: Kustomize strategic merge patch; readOnlyRootFilesystem is defined in base split deployment
+  # checkov:skip=CKV_K8S_23: Kustomize strategic merge patch; runAsNonRoot is defined in base split deployment
+  # checkov:skip=CKV_K8S_28: Kustomize strategic merge patch; capabilities drop ALL is defined in base split deployment
+  # checkov:skip=CKV_K8S_29: Kustomize strategic merge patch; securityContext is defined in base split deployment
+  # checkov:skip=CKV_K8S_30: Kustomize strategic merge patch; container securityContext is defined in base split deployment
+  # checkov:skip=CKV_K8S_31: Kustomize strategic merge patch; seccompProfile is defined in base split deployment
+  # checkov:skip=CKV_K8S_37: Kustomize strategic merge patch; capabilities drop ALL is defined in base split deployment
 spec:
   template:
     spec:
