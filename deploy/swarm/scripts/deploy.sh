@@ -466,9 +466,11 @@ while true; do
     exit 1
   fi
 
+  TOTAL_SERVICES=0
   PENDING=0
   while read -r name image replicas ports; do
     [ -z "${replicas}" ] && continue
+    TOTAL_SERVICES=$((TOTAL_SERVICES + 1))
     current=$(echo "${replicas}" | cut -d'/' -f1)
     desired=$(echo "${replicas}" | cut -d'/' -f2)
     if [ "${current}" != "${desired}" ]; then
@@ -476,7 +478,7 @@ while true; do
     fi
   done < <(docker stack services "${STACK_NAME}" --format '{{.Name}} {{.Image}} {{.Replicas}} {{.Ports}}' 2>/dev/null || true)
 
-  if [ "${PENDING}" -eq 0 ]; then
+  if [ "${TOTAL_SERVICES}" -gt 0 ] && [ "${PENDING}" -eq 0 ]; then
     echo "✅ All services converged successfully in ${ELAPSED}s."
     CONVERGED=1
     break

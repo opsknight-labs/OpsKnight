@@ -114,7 +114,7 @@ elif attach_secret_if_exists "opsknight_custom_ca" "/etc/ssl/certs/custom-ca.crt
   ENV_ARGS+=(--env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/custom-ca.crt)
 fi
 
-SERVICE_CREATE_OPTS=("--with-registry-auth")
+SERVICE_CREATE_OPTS=("--with-registry-auth" "--detach")
 if [ "${SWARM_RESOLVE_IMAGE_NEVER:-}" = "true" ] || [[ "${OPSKNIGHT_IMAGE:-}" == *local* ]]; then
   SERVICE_CREATE_OPTS+=("--no-resolve-image")
 fi
@@ -137,20 +137,23 @@ EXIT_CODE=1
 while true; do
   CURRENT_TIME=$(date +%s)
   ELAPSED=$((CURRENT_TIME - START_TIME))
-  if [ "${ELAPSED}" -gt "${TIMEOUT_SEC}" ]; then
-    echo "❌ [TIMEOUT] Migration task exceeded ${TIMEOUT_SEC}s limit." >&2
-    break
-  fi
-
   # Get the latest task state
   TASK_LINE=$(docker service ps "${SERVICE_NAME}" --no-trunc --format '{{.CurrentState}}' 2>/dev/null | head -n 1 || true)
 
-  if echo "${TASK_LINE}" | grep -q -iE '^Complete'; then
+  if [ "${ELAPSED}" -gt "${TIMEOUT_SEC}" ]; then
+    echo "❌ [TIMEOUT] Migration task exceeded ${TIMEOUT_SEC}s limit (last state: ${TASK_LINE:-unknown})." >&2
+    echo "--- Task Logs ---"
+    docker service logs "${SERVICE_NAME}" 2>&1 | tail -n 50 || true
+    echo "-----------------"
+    break
+  fi
+
+  if echo "${TASK_LINE}" | grep -q -iE '^Complete|Shutdown \(0\)'; then
     echo "✅ Migration task completed successfully in ${ELAPSED}s."
     TASK_COMPLETED=1
     EXIT_CODE=0
     break
-  elif echo "${TASK_LINE}" | grep -q -iE '^Failed|^Rejected'; then
+  elif echo "${TASK_LINE}" | grep -q -iE '^Failed|^Rejected' || echo "${TASK_LINE}" | grep -q -E '\([1-9][0-9]*\)'; then
     echo "❌ Migration task failed with state: ${TASK_LINE}" >&2
     echo "--- Task Logs ---"
     docker service logs "${SERVICE_NAME}" 2>&1 | tail -n 50 || true

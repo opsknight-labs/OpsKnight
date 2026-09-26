@@ -31,8 +31,11 @@ docker stack services "${STACK_NAME}"
 echo ""
 
 # Verify every service is fully converged (no 0/1 or 0/2 replicas)
+TOTAL_SERVICES=0
 DEGRADED_SERVICES=0
 while read -r name image replicas ports; do
+  [ -z "${replicas}" ] && continue
+  TOTAL_SERVICES=$((TOTAL_SERVICES + 1))
   # Extract current and desired replicas
   current=$(echo "${replicas}" | cut -d'/' -f1)
   desired=$(echo "${replicas}" | cut -d'/' -f2)
@@ -40,7 +43,12 @@ while read -r name image replicas ports; do
     echo "⚠️  [WARNING] Service ${name} is degraded: ${replicas} running"
     DEGRADED_SERVICES=$((DEGRADED_SERVICES + 1))
   fi
-done < <(docker stack services "${STACK_NAME}" --format '{{.Name}} {{.Image}} {{.Replicas}} {{.Ports}}')
+done < <(docker stack services "${STACK_NAME}" --format '{{.Name}} {{.Image}} {{.Replicas}} {{.Ports}}' 2>/dev/null || true)
+
+if [ "${TOTAL_SERVICES}" -eq 0 ]; then
+  echo "❌ [ERROR] No services found running for stack '${STACK_NAME}'."
+  exit 1
+fi
 
 if [ "${DEGRADED_SERVICES}" -gt 0 ]; then
   echo "❌ [ERROR] ${DEGRADED_SERVICES} service(s) have not converged to desired replica counts."
@@ -66,11 +74,23 @@ fi
 # 4. HTTP Application Readiness Probe
 echo "--- [4/4] Probing HTTP Readiness Endpoint ---"
 if command -v curl >/dev/null 2>&1; then
-  HTTP_RESPONSE=$(curl -sL --max-time 10 "${HEALTH_URL}" 2>/dev/null || true)
-  if echo "${HTTP_RESPONSE}" | grep -q '"status":"healthy"'; then
-    echo "✅ Web Ingress is HEALTHY (Response: ${HTTP_RESPONSE})"
-  else
-    echo "❌ [ERROR] Health endpoint did not report healthy status."
+  PROBE_ATTEMPTS=6
+  PROBE_INTERVAL=5
+  HTTP_SUCCESS=0
+  for ((i=1; i<=PROBE_ATTEMPTS; i++)); do
+    HTTP_RESPONSE=$(curl -sL --max-time 10 "${HEALTH_URL}" 2>/dev/null || true)
+    if echo "${HTTP_RESPONSE}" | grep -q '"status":"healthy"'; then
+      echo "✅ Web Ingress is HEALTHY (Response: ${HTTP_RESPONSE})"
+      HTTP_SUCCESS=1
+      break
+    fi
+    if [ "$i" -lt "$PROBE_ATTEMPTS" ]; then
+      echo "  [Attempt $i/${PROBE_ATTEMPTS}] Health endpoint not ready yet, retrying in ${PROBE_INTERVAL}s..."
+      sleep "${PROBE_INTERVAL}"
+    fi
+  done
+  if [ "${HTTP_SUCCESS}" -ne 1 ]; then
+    echo "❌ [ERROR] Health endpoint did not report healthy status after ${PROBE_ATTEMPTS} attempts."
     echo "Response received: ${HTTP_RESPONSE:-<NO RESPONSE>}"
     exit 1
   fi
