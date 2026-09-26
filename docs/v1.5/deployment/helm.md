@@ -6,7 +6,7 @@ description: Deploy the OpsKnight Helm chart with safe database, networking, sec
 
 # Helm deployment
 
-The chart is shipped at `helm/opsknight`. The chart version and default application image version track the OpsKnight application release; production deployments should still pin a tested immutable image tag or digest explicitly.
+The chart is shipped at `deploy/kubernetes/helm/opsknight`. The chart version and default application image version track the OpsKnight application release; production deployments should still pin a tested immutable image tag or digest explicitly.
 
 The `1.4.0` stable image includes the fail-closed migration entrypoint and is published for amd64 and arm64. The continuously updated test image from `main` remains amd64-only.
 
@@ -16,7 +16,7 @@ The chart defaults to the backward-compatible integrated Deployment. Set `runtim
 
 Integrated mode preserves the historical single-process behavior. The scheduler uses its `full` profile and the in-process worker drains all durable lanes.
 
-For production split mode, start from `helm/opsknight/examples/values-split-runtime.yaml`. Split rendering requires an explicit `image.tag` or `image.digest`, because the chart's backward-compatible integrated default image predates the split roles. Use only an image built from a release containing split-runtime support. Split mode also requires `scheduler.profile: maintenance`; `full` is rejected because it would compete with the dedicated worker lanes. The maintenance scheduler cannot claim background jobs, escalations, notifications, or status snapshots. Those responsibilities are assigned to dedicated workers. The `general-worker` is required: it drains operational jobs such as war-room, external-operation, encryption, and compliance work that do not belong to the critical, bulk, or projector lanes.
+For production split mode, start from `deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml`. Split rendering requires an explicit `image.tag` or `image.digest`, because the chart's backward-compatible integrated default image predates the split roles. Use only an image built from a release containing split-runtime support. Split mode also requires `scheduler.profile: maintenance`; `full` is rejected because it would compete with the dedicated worker lanes. The maintenance scheduler cannot claim background jobs, escalations, notifications, or status snapshots. Those responsibilities are assigned to dedicated workers. The `general-worker` is required: it drains operational jobs such as war-room, external-operation, encryption, and compliance work that do not belong to the critical, bulk, or projector lanes.
 
 Every split role has its own replica count, database pool size, resources, PDB, and topology-spread selector. Only the web tier supports the chart-managed HPA, which is disabled by default until capacity is planned. Size fixed worker fleets together with PostgreSQL connection capacity and notification-provider admission limits.
 
@@ -113,9 +113,9 @@ The bundled PostgreSQL topology is one instance; it is not HA and does not provi
 Always render before install/upgrade:
 
 ```bash
-helm lint helm/opsknight --values values.production.yaml
+helm lint deploy/kubernetes/helm/opsknight --values values.production.yaml
 
-helm template opsknight helm/opsknight \
+helm template opsknight deploy/kubernetes/helm/opsknight \
   --namespace opsknight \
   --values values.production.yaml > /tmp/opsknight-rendered.yaml
 
@@ -127,7 +127,7 @@ Inspect the resolved image, Secret keys, URL configuration, ingress/TLS, probes,
 Install:
 
 ```bash
-helm upgrade --install opsknight helm/opsknight \
+helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \
   --namespace opsknight \
   --create-namespace \
   --values values.production.yaml \
@@ -201,7 +201,7 @@ Before upgrading:
 6. verify authentication, database writes, a controlled incident, and notification/integration delivery.
 
 ```bash
-helm upgrade opsknight helm/opsknight \
+helm upgrade opsknight deploy/kubernetes/helm/opsknight \
   --namespace opsknight \
   --values values.production.yaml \
   --set-string image.digest='sha256:<tested-manifest-digest>' \

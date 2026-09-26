@@ -59,11 +59,11 @@ For a production origin, use the exact public HTTPS URL for both URL settings an
 ### 2. Render, start, and inspect
 
 ```bash
-docker compose config
-docker compose pull
-docker compose up -d
-docker compose ps
-docker compose logs --tail=200 opsknight-app
+docker compose -f deploy/compose/docker-compose.yml config
+docker compose -f deploy/compose/docker-compose.yml pull
+docker compose -f deploy/compose/docker-compose.yml up -d
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml logs --tail=200 opsknight-app
 curl --fail 'http://localhost:3000/api/health?mode=readiness'
 ```
 
@@ -96,8 +96,8 @@ The [15-minute getting-started path](./README) gives the exact UI sequence.
 
 Use one packaging path:
 
-- [Helm](../deployment/helm) for the chart at `helm/opsknight`.
-- [Kustomize](../deployment/kustomize) for overlays based on `k8s/kustomization.yaml`.
+- [Helm](../deployment/helm) for the chart at `deploy/kubernetes/helm/opsknight`.
+- [Kustomize](../deployment/kustomize) for overlays based on `deploy/kubernetes/kustomize/base/kustomization.yaml`.
 
 Both checked-in defaults contain example or placeholder values. Before applying, pin an image, replace every secret, configure the exact public HTTPS origin, choose an owned PostgreSQL topology, render/server-dry-run resources, and define backup/recovery. See [Kubernetes deployment](../deployment/kubernetes) for the shared runtime and scaling boundaries.
 

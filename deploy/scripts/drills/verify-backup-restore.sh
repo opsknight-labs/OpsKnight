@@ -3,7 +3,7 @@ set -euo pipefail
 
 backup_file="${1:-}"
 if [[ -z "$backup_file" || ! -f "$backup_file" ]]; then
-  echo "Usage: scripts/verify-backup-restore.sh /absolute/path/to/backup.sql[.gz]|backup.dump"
+  echo "Usage: deploy/scripts/drills/verify-backup-restore.sh /absolute/path/to/backup.sql[.gz]|backup.dump"
   exit 2
 fi
 if ! command -v docker >/dev/null 2>&1; then

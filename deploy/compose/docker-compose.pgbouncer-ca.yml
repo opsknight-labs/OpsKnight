@@ -1,6 +1,6 @@
 # Overlay for mounting a custom Enterprise CA certificate for database and PgBouncer TLS verification.
 # Apply when using a private/enterprise CA not present in standard root CA bundles:
-# docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml -f docker-compose.external-db.yml -f docker-compose.pgbouncer-ca.yml up -d
+# docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f deploy/compose/docker-compose.external-db.yml -f deploy/compose/docker-compose.pgbouncer-ca.yml up -d
 #
 # NOTE: Node.js HTTPS and fetch use NODE_EXTRA_CA_CERTS=/etc/ssl/certs/custom-ca.crt.
 # Direct Prisma engine database connections (opsknight-migration, workers, scheduler, status-projector)

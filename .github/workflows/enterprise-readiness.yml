@@ -98,7 +98,7 @@ jobs:
           docker run --rm --network host -v "$PWD/reports:/reports" postgres:15-alpine \
             pg_dump --format=custom --file=/reports/opsknight-drill.dump "$DATABASE_URL"
       - name: Restore and verify backup
-        run: scripts/verify-backup-restore.sh "$PWD/reports/opsknight-drill.dump" | tee reports/restore-drill.txt
+        run: deploy/scripts/drills/verify-backup-restore.sh "$PWD/reports/opsknight-drill.dump" | tee reports/restore-drill.txt
       - name: Upload restore evidence
         if: always()
         uses: actions/upload-artifact@v4
