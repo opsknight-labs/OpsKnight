@@ -462,7 +462,7 @@ while true; do
   ELAPSED=$((CURRENT_TIME - START_TIME))
   if [ "${ELAPSED}" -gt "${CONVERGENCE_TIMEOUT_SEC}" ]; then
     echo "💥 [FATAL] Stack convergence timed out after ${CONVERGENCE_TIMEOUT_SEC}s." >&2
-    docker stack ps "${STACK_NAME}" --no-trunc | head -n 25 >&2
+    docker stack ps "${STACK_NAME}" --no-trunc 2>&1 | head -n 25 >&2 || true
     exit 1
   fi
 

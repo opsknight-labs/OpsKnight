@@ -140,8 +140,16 @@ fi
 
 chmod 600 "$CONFIG_FILE"
 
-if [ $# -gt 0 ]; then
-  exec "$@"
-else
+if [ $# -eq 0 ] || [ "$*" = "/usr/bin/pgbouncer /etc/pgbouncer/pgbouncer.ini" ] || [ "$*" = "pgbouncer /etc/pgbouncer/pgbouncer.ini" ] || [ "$1" = "/etc/pgbouncer/pgbouncer.ini" ]; then
   exec /usr/bin/pgbouncer "$CONFIG_FILE"
+elif [ "$1" = "pgbouncer" ] || [ "$1" = "/usr/bin/pgbouncer" ]; then
+  shift
+  if [ "${1:-}" = "/etc/pgbouncer/pgbouncer.ini" ]; then
+    shift
+  fi
+  exec /usr/bin/pgbouncer "$CONFIG_FILE" "$@"
+elif [ "${1#-}" != "$1" ]; then
+  exec /usr/bin/pgbouncer "$CONFIG_FILE" "$@"
+else
+  exec "$@"
 fi
