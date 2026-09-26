@@ -423,7 +423,7 @@ jobs:
           export PGBOUNCER_IMAGE="opsknight-pgbouncer:1.26.0"
           export OPSKNIGHT_PULL_POLICY="if_not_present"
           export APP_PORT=33001
-          export OPSKNIGHT_DATABASE_URL="postgresql://ext_opsknight_user:ext_strong_secret_password@${EXT_DB_CONTAINER}:5432/ext_opsknight_db?sslmode=require"
+          export OPSKNIGHT_DATABASE_URL="postgresql://ext_opsknight_user:ext_strong_secret_password@${EXT_DB_CONTAINER}:5432/ext_opsknight_db?sslmode=verify-full&sslrootcert=/etc/ssl/certs/custom-ca.crt"
           export PGBOUNCER_DB_HOST="$EXT_DB_CONTAINER"
           export PGBOUNCER_DB_PORT="5432"
           export PGBOUNCER_DB_NAME="ext_opsknight_db"
@@ -478,6 +478,17 @@ jobs:
             sleep 2
           done
           curl -s -f "http://127.0.0.1:33001/api/health?mode=readiness" | grep -q 'healthy'
+
+          echo "Verifying split background workers are running with direct external DB TLS..."
+          for worker in scheduler general-worker critical-worker bulk-worker status-projector; do
+            w_state=$(docker compose -f docker-compose.yml -f docker-compose.split.yml ps "opsknight-${worker}" --format '{{.State}}' 2>/dev/null || true)
+            if [ "$w_state" != "running" ]; then
+              echo "Error: opsknight-${worker} is in state '$w_state', expected 'running'" >&2
+              docker compose -f docker-compose.yml -f docker-compose.split.yml logs "opsknight-${worker}" --tail 30 >&2 || true
+              exit 1
+            fi
+            echo "opsknight-${worker} is running."
+          done
 
           echo "External PostgreSQL + PgBouncer + split runtime validation passed successfully!"
 

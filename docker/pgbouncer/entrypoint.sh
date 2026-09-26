@@ -74,7 +74,12 @@ fi
 
 # Handle authentication file (userlist.txt)
 AUTH_FILE_PATH="${PGBOUNCER_AUTH_FILE:-}"
-if [ -z "$AUTH_FILE_PATH" ] || [ ! -f "$AUTH_FILE_PATH" ]; then
+if [ -n "$AUTH_FILE_PATH" ] && [ -f "$AUTH_FILE_PATH" ]; then
+  # Copy mounted secret file to private workdir with 600 permissions to guarantee postgres ownership and read access
+  cp "$AUTH_FILE_PATH" "$WORK_DIR/userlist.txt"
+  chmod 600 "$WORK_DIR/userlist.txt"
+  AUTH_FILE_PATH="$WORK_DIR/userlist.txt"
+else
   AUTH_FILE_PATH="$WORK_DIR/userlist.txt"
   # Write escaped user and password credentials conforming to PgBouncer auth_file syntax:
   # literal double quotes are escaped by doubling (""), backslashes are literal
@@ -90,6 +95,9 @@ if [ -z "$AUTH_FILE_PATH" ] || [ ! -f "$AUTH_FILE_PATH" ]; then
   fi
   chmod 600 "$AUTH_FILE_PATH"
 fi
+
+echo "[opsknight-pgbouncer] Initializing PgBouncer for ${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME} (sslmode: ${TLS_SSLMODE})"
+echo "[opsknight-pgbouncer] Authenticated userlist active at ${AUTH_FILE_PATH}"
 
 # Pool tuning parameters
 POOL_MODE="${PGBOUNCER_POOL_MODE:-transaction}"

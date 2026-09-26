@@ -13,6 +13,9 @@ services:
     secrets:
       - source: opsknight_custom_ca
         target: /etc/ssl/certs/custom-ca.crt
+        uid: '70'
+        gid: '70'
+        mode: 0444
 
 secrets:
   opsknight_custom_ca:

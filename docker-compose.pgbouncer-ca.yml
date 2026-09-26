@@ -1,6 +1,12 @@
 # Overlay for mounting a custom Enterprise CA certificate for database and PgBouncer TLS verification.
 # Apply when using a private/enterprise CA not present in standard root CA bundles:
 # docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml -f docker-compose.external-db.yml -f docker-compose.pgbouncer-ca.yml up -d
+#
+# NOTE: Node.js HTTPS and fetch use NODE_EXTRA_CA_CERTS=/etc/ssl/certs/custom-ca.crt.
+# Direct Prisma engine database connections (opsknight-migration, workers, scheduler, status-projector)
+# connect directly to PostgreSQL via Rust's native TLS stack which does not read NODE_EXTRA_CA_CERTS.
+# When using TLS with a custom CA for direct PostgreSQL connections, ensure your OPSKNIGHT_DATABASE_URL
+# or DIRECT_DATABASE_URL includes sslmode=verify-full&sslrootcert=/etc/ssl/certs/custom-ca.crt
 services:
   opsknight-pgbouncer:
     volumes:

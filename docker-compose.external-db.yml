@@ -11,7 +11,7 @@ services:
     depends_on: !reset {}
     environment:
       DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:?Set OPSKNIGHT_DATABASE_URL to the complete external PostgreSQL URI}
-      DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:?Set OPSKNIGHT_DATABASE_URL to the complete external PostgreSQL URI}
+      DIRECT_DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:?Set OPSKNIGHT_DATABASE_URL to the complete external PostgreSQL URI}}
 
   opsknight-pgbouncer:
     image: ${PGBOUNCER_IMAGE:-ghcr.io/opsknight-labs/opsknight-pgbouncer:1.26.0}

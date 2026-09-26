@@ -37,6 +37,24 @@ else
   STRICT_SECRETS="${STRICT_SECRETS:-false}"
 fi
 
+# Concurrency lock to serialize deployments targeting the same stack on this host
+DEPLOY_LOCK_DIR="/tmp/opsknight_deploy_${STACK_NAME}.lock"
+if ! mkdir "${DEPLOY_LOCK_DIR}" 2>/dev/null; then
+  echo "⚠️  [LOCK] Deployment for stack '${STACK_NAME}' is currently in progress or locked by '${DEPLOY_LOCK_DIR}'."
+  echo "   Waiting for concurrent deployment to complete..."
+  for i in $(seq 1 30); do
+    if mkdir "${DEPLOY_LOCK_DIR}" 2>/dev/null; then
+      break
+    fi
+    sleep 2
+  done
+  if [ ! -d "${DEPLOY_LOCK_DIR}" ]; then
+    echo "❌ [ERROR] Could not acquire deployment lock '${DEPLOY_LOCK_DIR}' after 60s." >&2
+    exit 1
+  fi
+fi
+trap 'rm -rf "${DEPLOY_LOCK_DIR}" >/dev/null 2>&1 || true' EXIT
+
 # --- Early Resolution: Resolve Database URLs and Credentials ---
 DB_USER="${POSTGRES_USER:-opsknight}"
 DB_PASS="${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}"
@@ -299,7 +317,8 @@ hash_string() {
   elif command -v openssl >/dev/null 2>&1; then
     openssl dgst -sha256 | awk '{print $NF}'
   else
-    cksum | awk '{print $1}'
+    echo "❌ [FATAL] No cryptographic SHA-256 tool found (sha256sum, shasum, or openssl required for secret content hashing)." >&2
+    exit 1
   fi
 }
 
@@ -331,8 +350,9 @@ create_versioned_secret() {
     echo "  Secret ${versioned_name} already exists."
   fi
 
-  # Export environment variable used by docker-stack manifests
-  eval "export ${env_override_var}=\"${versioned_name}\""
+  # Export environment variable used by docker-stack manifests without eval
+  printf -v "${env_override_var}" '%s' "${versioned_name}"
+  export "${env_override_var}"
 }
 
 create_versioned_secret "database_url" "${OPSKNIGHT_DATABASE_URL}" "OPSKNIGHT_DATABASE_URL_SECRET"
@@ -463,6 +483,11 @@ while true; do
   if [ "${ELAPSED}" -gt "${CONVERGENCE_TIMEOUT_SEC}" ]; then
     echo "💥 [FATAL] Stack convergence timed out after ${CONVERGENCE_TIMEOUT_SEC}s." >&2
     docker stack ps "${STACK_NAME}" --no-trunc 2>&1 | head -n 25 >&2 || true
+    echo "--- Service Logs for Degraded Services ---" >&2
+    for svc in $(docker stack services "${STACK_NAME}" --format '{{.Name}} {{.Replicas}}' 2>/dev/null | awk '$2 ~ /^0\// {print $1}'); do
+      echo "=== Logs for $svc ===" >&2
+      docker service logs "$svc" 2>&1 | tail -n 30 >&2 || true
+    done
     exit 1
   fi
 

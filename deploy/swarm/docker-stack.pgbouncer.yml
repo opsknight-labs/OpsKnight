@@ -35,8 +35,14 @@ services:
     secrets:
       - source: opsknight_pgbouncer_userlist
         target: /run/secrets/pgbouncer_userlist
+        uid: '70'
+        gid: '70'
+        mode: 0440
       - source: opsknight_pgbouncer_db_password
         target: /run/secrets/pgbouncer_db_password
+        uid: '70'
+        gid: '70'
+        mode: 0440
     healthcheck:
       test:
         [
