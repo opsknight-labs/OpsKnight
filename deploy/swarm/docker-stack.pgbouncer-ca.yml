@@ -1,0 +1,28 @@
+version: '3.8'
+
+# ==============================================================================
+# OpsKnight Docker Swarm Custom CA Overlay for PgBouncer
+#
+# Mounts a custom enterprise CA bundle for verifying external PostgreSQL certificates.
+#
+# Deploy:
+#   docker stack deploy --with-registry-auth \
+#     -c deploy/swarm/docker-stack.yml \
+#     -c deploy/swarm/docker-stack.external-db.yml \
+#     -c deploy/swarm/docker-stack.pgbouncer.yml \
+#     -c deploy/swarm/docker-stack.pgbouncer-ca.yml \
+#     opsknight
+# ==============================================================================
+
+services:
+  opsknight-pgbouncer:
+    environment:
+      PGBOUNCER_SERVER_TLS_CA_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+secrets:
+  opsknight_custom_ca:
+    external: true
+    name: ${OPSKNIGHT_CUSTOM_CA_SECRET:-opsknight_custom_ca}

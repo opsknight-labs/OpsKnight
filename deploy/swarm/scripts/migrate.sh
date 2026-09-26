@@ -11,14 +11,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
-SERVICE_NAME="${MIGRATION_SERVICE_NAME:-opsknight_migration_task}"
-NETWORK_NAME="${SWARM_NETWORK_NAME:-opsknight}"
+STACK_NAME="${SWARM_STACK_NAME:-opsknight}"
+SERVICE_NAME="${MIGRATION_SERVICE_NAME:-${STACK_NAME}_migration_task}"
+NETWORK_NAME="${SWARM_NETWORK_NAME:-${STACK_NAME}_network}"
 OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}"
 TIMEOUT_SEC="${MIGRATION_TIMEOUT_SEC:-300}"
 
 echo "═══════════════════════════════════════════════════════════════════════"
 echo "  OpsKnight Swarm Database Migration"
 echo "═══════════════════════════════════════════════════════════════════════"
+echo "Stack:           ${STACK_NAME}"
+echo "Migration Task:  ${SERVICE_NAME}"
 echo "Target Image:    ${OPSKNIGHT_IMAGE}"
 echo "Overlay Network: ${NETWORK_NAME}"
 echo "Timeout:         ${TIMEOUT_SEC}s"
@@ -39,13 +42,22 @@ fi
 # 3. Clean up any previous migration task
 docker service rm "${SERVICE_NAME}" >/dev/null 2>&1 || true
 
-# Build secret options if secrets exist
+# 4. Resolve secrets to attach
 SECRET_ARGS=()
-for secret_name in opsknight_direct_database_url opsknight_database_url opsknight_nextauth_secret opsknight_encryption_key; do
-  if docker secret inspect "${secret_name}" >/dev/null 2>&1; then
-    SECRET_ARGS+=(--secret "${secret_name}")
+DIRECT_DB_SECRET="${OPSKNIGHT_DIRECT_DATABASE_URL_SECRET:-${STACK_NAME}_direct_database_url}"
+DB_SECRET="${OPSKNIGHT_DATABASE_URL_SECRET:-${STACK_NAME}_database_url}"
+NEXTAUTH_SECRET_NAME="${OPSKNIGHT_NEXTAUTH_SECRET_SECRET:-${STACK_NAME}_nextauth_secret}"
+ENCRYPTION_SECRET_NAME="${OPSKNIGHT_ENCRYPTION_KEY_SECRET:-${STACK_NAME}_encryption_key}"
+
+attach_secret_if_exists() {
+  local sec_name="$1"
+  local target_path="$2"
+  if docker secret inspect "${sec_name}" >/dev/null 2>&1; then
+    SECRET_ARGS+=(--secret "source=${sec_name},target=${target_path}")
+    return 0
   fi
-done
+  return 1
+}
 
 # Build environment arguments
 ENV_ARGS=(
@@ -55,27 +67,38 @@ ENV_ARGS=(
   --env NEXT_PUBLIC_APP_URL="${NEXT_PUBLIC_APP_URL:-http://localhost:3000}"
 )
 
-if docker secret inspect opsknight_direct_database_url >/dev/null 2>&1; then
-  ENV_ARGS+=(--env DIRECT_DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
-  ENV_ARGS+=(--env DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
-elif [ -n "${DIRECT_DATABASE_URL:-}" ]; then
+# Prioritize direct connection URL for migrations (Prisma cannot use transaction poolers)
+if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
   ENV_ARGS+=(--env DIRECT_DATABASE_URL="${DIRECT_DATABASE_URL}")
   ENV_ARGS+=(--env DATABASE_URL="${DIRECT_DATABASE_URL}")
+elif attach_secret_if_exists "${DIRECT_DB_SECRET}" "/run/secrets/opsknight_direct_database_url"; then
+  ENV_ARGS+=(--env DIRECT_DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
+  ENV_ARGS+=(--env DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
+elif attach_secret_if_exists "opsknight_direct_database_url" "/run/secrets/opsknight_direct_database_url"; then
+  ENV_ARGS+=(--env DIRECT_DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
+  ENV_ARGS+=(--env DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
 elif [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
   ENV_ARGS+=(--env DIRECT_DATABASE_URL="${OPSKNIGHT_DATABASE_URL}")
   ENV_ARGS+=(--env DATABASE_URL="${OPSKNIGHT_DATABASE_URL}")
+elif attach_secret_if_exists "${DB_SECRET}" "/run/secrets/opsknight_database_url"; then
+  ENV_ARGS+=(--env DIRECT_DATABASE_URL_FILE=/run/secrets/opsknight_database_url)
+  ENV_ARGS+=(--env DATABASE_URL_FILE=/run/secrets/opsknight_database_url)
 fi
 
-if docker secret inspect opsknight_nextauth_secret >/dev/null 2>&1; then
-  ENV_ARGS+=(--env NEXTAUTH_SECRET_FILE=/run/secrets/opsknight_nextauth_secret)
-elif [ -n "${NEXTAUTH_SECRET:-}" ]; then
+if [ -n "${NEXTAUTH_SECRET:-}" ]; then
   ENV_ARGS+=(--env NEXTAUTH_SECRET="${NEXTAUTH_SECRET}")
+elif attach_secret_if_exists "${NEXTAUTH_SECRET_NAME}" "/run/secrets/opsknight_nextauth_secret"; then
+  ENV_ARGS+=(--env NEXTAUTH_SECRET_FILE=/run/secrets/opsknight_nextauth_secret)
+elif attach_secret_if_exists "opsknight_nextauth_secret" "/run/secrets/opsknight_nextauth_secret"; then
+  ENV_ARGS+=(--env NEXTAUTH_SECRET_FILE=/run/secrets/opsknight_nextauth_secret)
 fi
 
-if docker secret inspect opsknight_encryption_key >/dev/null 2>&1; then
-  ENV_ARGS+=(--env ENCRYPTION_KEY_FILE=/run/secrets/opsknight_encryption_key)
-elif [ -n "${ENCRYPTION_KEY:-}" ]; then
+if [ -n "${ENCRYPTION_KEY:-}" ]; then
   ENV_ARGS+=(--env ENCRYPTION_KEY="${ENCRYPTION_KEY}")
+elif attach_secret_if_exists "${ENCRYPTION_SECRET_NAME}" "/run/secrets/opsknight_encryption_key"; then
+  ENV_ARGS+=(--env ENCRYPTION_KEY_FILE=/run/secrets/opsknight_encryption_key)
+elif attach_secret_if_exists "opsknight_encryption_key" "/run/secrets/opsknight_encryption_key"; then
+  ENV_ARGS+=(--env ENCRYPTION_KEY_FILE=/run/secrets/opsknight_encryption_key)
 fi
 
 echo "🚀 Dispatching migration service task '${SERVICE_NAME}'..."
@@ -83,6 +106,7 @@ docker service create \
   --name "${SERVICE_NAME}" \
   --network "${NETWORK_NAME}" \
   --restart-condition none \
+  --with-registry-auth \
   "${SECRET_ARGS[@]}" \
   "${ENV_ARGS[@]}" \
   "${OPSKNIGHT_IMAGE}" >/dev/null

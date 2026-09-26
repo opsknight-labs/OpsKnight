@@ -92,7 +92,11 @@ function calculateRuntimeCapacity(customEnv) {
     );
   }
   const mode = rawMode;
-  let pgbouncer = parseStrictBoolean('PGBOUNCER_ENABLED', env.PGBOUNCER_ENABLED, false);
+  let pgbouncer = parseStrictBoolean(
+    'PGBOUNCER_ENABLED',
+    env.PGBOUNCER_ENABLED !== undefined ? env.PGBOUNCER_ENABLED : env.ENABLE_PGBOUNCER,
+    false
+  );
   if (!pgbouncer && env.WEB_DATABASE_URL && env.WEB_DATABASE_URL.includes('pgbouncer=true')) {
     pgbouncer = true;
   }

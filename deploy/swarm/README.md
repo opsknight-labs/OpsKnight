@@ -1,6 +1,6 @@
 # OpsKnight Docker Swarm Deployment Guide
 
-Production-grade, declarative Docker Swarm deployment architecture for OpsKnight incident management platform, utilizing native overlay networking, horizontal web scaling, worker lane isolation, distributed lease scheduling, and encrypted Raft secrets.
+Production-grade, declarative Docker Swarm deployment architecture for the OpsKnight incident management platform, utilizing native overlay networking, horizontal web scaling, worker lane isolation, distributed lease scheduling, and encrypted Raft secrets.
 
 ---
 
@@ -32,11 +32,18 @@ OpsKnight on Docker Swarm maps identical runtime contracts from Kubernetes and D
     (2 Replicas, Lease-Fenced) (general, critical, bulk)    (Dedicated Read Projector)
 ```
 
+### Connection Routing Model
+- **`opsknight-web`**: Routes requests through PgBouncer (`:6432`) when enabled, or directly to PostgreSQL (`:5432`).
+- **`opsknight-scheduler` & Background Workers**: Always connect **directly to PostgreSQL** (`:5432`). They bypass PgBouncer to preserve transactional semantics and maintain strict connection budget isolation.
+- **Prisma Migrations (`migrate.sh`)**: Runs ephemeral migration tasks that connect **directly to PostgreSQL** (`:5432`).
+
 ### Supported Runtime Topologies
 
 OpsKnight on Swarm supports two deployment topologies selectable via `SWARM_RUNTIME_MODE`:
 1. **Split Runtime (`SWARM_RUNTIME_MODE=split`, Default)**: Enterprise architecture with separate process containers for HTTP web serving, maintenance scheduling, and dedicated worker lanes (`general`, `critical`, `bulk`).
 2. **Integrated Runtime (`SWARM_RUNTIME_MODE=integrated`)**: Single-container deployment (`opsknight-app`) running web, workers, and schedulers for small-to-medium teams.
+
+Swarm deployment uses `docker stack deploy --prune` to ensure seamless, conflict-free switching between `split` and `integrated` topologies without leaving obsolete ghost services running.
 
 ### Logical Role Breakdown (Split Topology)
 
@@ -68,26 +75,28 @@ Ensure the following ports are open between nodes in your Docker Swarm cluster:
 | **`3000/tcp`** | Inbound from Clients / LB | OpsKnight Web Ingress | Published on the Swarm routing mesh to reach web replicas. |
 
 > [!NOTE]
-> Database (`5432`), PgBouncer (`6432`), and worker ports are attached strictly to the private external Swarm overlay network (`opsknight`) and **never exposed externally**.
+> Database (`5432`), PgBouncer (`6432`), and worker ports are attached strictly to the private external Swarm overlay network (`opsknight_network`) and **never exposed externally**.
 
 ---
 
-## 3. Production Secrets Management
+## 3. Production Secrets Management & Safe Rotation
 
 OpsKnight natively supports Docker Swarm Raft-encrypted secrets via the `*_FILE` convention in `docker-entrypoint.sh`. Production secrets are mounted into `/run/secrets/` as in-memory files rather than passed as cleartext environment variables:
 
 | Secret Name | Container Secret Path | Environment File Variable |
 | :--- | :--- | :--- |
-| `opsknight_database_url` | `/run/secrets/opsknight_database_url` | `DATABASE_URL_FILE` |
-| `opsknight_direct_database_url` | `/run/secrets/opsknight_direct_database_url` | `DIRECT_DATABASE_URL_FILE` |
-| `opsknight_nextauth_secret` | `/run/secrets/opsknight_nextauth_secret` | `NEXTAUTH_SECRET_FILE` |
-| `opsknight_encryption_key` | `/run/secrets/opsknight_encryption_key` | `ENCRYPTION_KEY_FILE` |
-| `opsknight_web_database_url` | `/run/secrets/opsknight_web_database_url` | `WEB_DATABASE_URL_FILE` |
-| `opsknight_pgbouncer_userlist` | `/run/secrets/pgbouncer_userlist` | `PGBOUNCER_AUTH_FILE` |
+| `<stack>_database_url_<hash>` | `/run/secrets/opsknight_database_url` | `DATABASE_URL_FILE` |
+| `<stack>_direct_database_url_<hash>` | `/run/secrets/opsknight_direct_database_url` | `DIRECT_DATABASE_URL_FILE` |
+| `<stack>_nextauth_secret_<hash>` | `/run/secrets/opsknight_nextauth_secret` | `NEXTAUTH_SECRET_FILE` |
+| `<stack>_encryption_key_<hash>` | `/run/secrets/opsknight_encryption_key` | `ENCRYPTION_KEY_FILE` |
+| `<stack>_web_database_url_<hash>` | `/run/secrets/opsknight_web_database_url` | `WEB_DATABASE_URL_FILE` |
+| `<stack>_pgbouncer_userlist_<hash>` | `/run/secrets/pgbouncer_userlist` | `PGBOUNCER_AUTH_FILE` |
 
-All stack manifests reference these as pre-created external secrets (`external: true`), ensuring deterministic secret identity between `deploy.sh` and the Swarm tasks.
+### Automatic Secret Rotation
+`deploy.sh` automatically creates content-hashed secrets (`<stack>_<secret>_<sha256>`). When you rotate a database password, certificate, or encryption key, `deploy.sh` provisions the new versioned Raft secret and triggers a zero-downtime rolling update across your Swarm services.
 
-Example templates are available in [deploy/swarm/secrets.example/](./secrets.example/).
+### Fail-Closed Security Posture
+In production (`ENVIRONMENT=production`, default), `deploy.sh` enforces `STRICT_SECRETS=true` and immediately aborts if placeholder passwords or default encryption keys are detected. For local development or quick testing, explicitly pass `ALLOW_INSECURE_SECRETS=true`.
 
 ---
 
@@ -101,11 +110,12 @@ Docker Swarm lacks Compose's `depends_on: { condition: service_completed_success
 [6. Health Verification] <── [5. Stack Convergence] <── [4. Ephemeral Migration Task]
 ```
 
-1. **Overlay Network & Secrets**: Creates attachable overlay network `opsknight` and verifies Raft secrets.
-2. **Database Readiness**: If bundled PostgreSQL is used, deploys `docker-stack.db.yml` and waits for `pg_isready` before proceeding.
-3. **Standalone Migration**: Runs [`migrate.sh`](./scripts/migrate.sh) to execute schema migrations and online index creation in an ephemeral task (`OPSKNIGHT_MIGRATION_ONLY=true`). Fails closed if migrations do not exit 0.
-4. **Stack Rollout**: Deploys application services (split or integrated) with `OPSKNIGHT_SKIP_MIGRATIONS=true`.
-5. **Convergence & Health**: Awaits replica convergence (fails closed on timeout) and verifies cluster nodes, task states, and HTTP JSON readiness.
+1. **Capacity Pre-flight**: Evaluates replica connection limits against backend capacity (fails closed if demand exceeds pool budget).
+2. **Overlay Network & Secrets**: Creates attachable overlay network and generates content-versioned Raft secrets.
+3. **Database Readiness**: If bundled PostgreSQL is used, deploys `docker-stack.db.yml` and waits for `pg_isready` before proceeding.
+4. **Standalone Migration**: Runs [`migrate.sh`](./scripts/migrate.sh) with `--with-registry-auth` to execute schema migrations and online index creation in an ephemeral task (`OPSKNIGHT_MIGRATION_ONLY=true`). Fails closed if migrations do not exit 0.
+5. **Stack Rollout with Prune**: Deploys application services (split or integrated) using `docker stack deploy --prune` to eliminate obsolete services.
+6. **Convergence & Health**: Awaits replica convergence (fails closed on timeout) and verifies cluster nodes, task states, and HTTP readiness.
 
 ### Quick Start Deployment:
 ```bash
@@ -138,13 +148,21 @@ export EXTERNAL_DB_PORT="5432"
 export EXTERNAL_DB_USER="opsknight_admin"
 export EXTERNAL_DB_PASSWORD="your_secure_db_password"
 export EXTERNAL_DB_NAME="opsknight_db"
+export EXTERNAL_DB_SSLMODE="verify-full"
 export PGBOUNCER_ENABLED="true"
 
 ./deploy/swarm/scripts/deploy.sh
 ```
 
-> [!NOTE]
-> `deploy.sh` automatically URL-encodes credentials, constructs `DIRECT_DATABASE_URL` and `WEB_DATABASE_URL`, writes the Raft secrets, and configures PgBouncer's userlist authentication. Alternatively, you can pre-set `OPSKNIGHT_DATABASE_URL` and `DIRECT_DATABASE_URL` directly.
+### D. External PostgreSQL with Enterprise Private CA
+```bash
+export EXTERNAL_DB="true"
+export EXTERNAL_DB_HOST="postgres.production.internal"
+export PGBOUNCER_ENABLED="true"
+export PGBOUNCER_TLS_CA_CERT="/path/to/corporate-root-ca.crt"
+
+./deploy/swarm/scripts/deploy.sh
+```
 
 ---
 
@@ -155,58 +173,42 @@ OpsKnight uses Swarm spread preferences for high-availability application tiers 
 ```bash
 # Pin bundled PostgreSQL to a dedicated storage node
 docker node update --label-add opsknight.database=true db-node-01
-
-# Optional: Label worker compute nodes
-docker node update --label-add opsknight.workers=true worker-node-01
-docker node update --label-add opsknight.workers=true worker-node-02
 ```
+
+In single-node dev environments, `deploy.sh` automatically labels the active manager node. In multi-node production clusters, `deploy.sh` fails closed with explicit labeling instructions to prevent stateful data corruption.
 
 ---
 
-## 7. Connection Capacity Planning
+## 7. Operational Runbook
 
-Database connection budgets are validated before deployment via `scripts/validate-runtime-capacity.cjs`:
-
-* **Core Split Stack**:
-  * Web (2 × 10) = 20
-  * Scheduler (2 × 3) = 6
-  * General Worker (1 × 5) = 5
-  * Critical Worker (1 × 5) = 5
-  * Bulk Worker (1 × 3) = 3
-  * Status Projector (1 × 3) = 3
-  * **Total Demand: 42 connections** (Safety Headroom: 38 / 80)
-* **Split Stack with PgBouncer**:
-  * PgBouncer (2 replicas × [10 default + 5 reserve]) = 30 backend connections
-  * Direct Workers (2×3 + 1×5 + 1×5 + 1×3 + 1×3) = 22 connections
-  * **Total Demand: 52 connections** (Safety Headroom: 28 / 80)
-
----
-
-## 8. Scaling Operations
-
-Scale application tiers dynamically without taking down the cluster:
-
+### Service Inspection
 ```bash
-# Scale web tier to 4 replicas
-docker service scale opsknight_opsknight-web=4
+# Inspect all stack services and replica states
+docker stack services opsknight
 
-# Scale general workers
-docker service scale opsknight_opsknight-general-worker=3
+# View rolling update and task placement events
+docker stack ps opsknight --no-trunc
 ```
 
----
-
-## 9. Health Verification & Rollback
-
-### Check Status & Convergence:
+### Zero-Downtime Rolling Update
 ```bash
-./deploy/swarm/scripts/health-check.sh
+# Update web tier image with automated rollback on failure
+docker service update \
+  --image ghcr.io/opsknight-labs/opsknight:v1.5.0 \
+  --update-parallelism 1 \
+  --update-delay 10s \
+  --update-failure-action rollback \
+  opsknight_opsknight-web
 ```
 
-### Rollback Application Tier:
+### Topology-Aware Service Rollback
 ```bash
+# Automatically rolls back split or integrated services
 ./deploy/swarm/scripts/rollback.sh
 ```
 
-> [!WARNING]
-> Rolling back container images does **not** revert PostgreSQL schema changes. Schema compatibility must be verified prior to image rollbacks.
+### Tear Down Stack
+```bash
+# Remove application and database services cleanly
+docker stack rm opsknight
+```

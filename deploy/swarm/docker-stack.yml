@@ -44,6 +44,10 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test:
         [
@@ -111,6 +115,10 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test:
         [
@@ -177,6 +185,10 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test:
         [
@@ -243,6 +255,10 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test:
         [
@@ -309,6 +325,10 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test:
         [
@@ -375,6 +395,10 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test:
         [
@@ -417,47 +441,12 @@ services:
     networks:
       - opsknight
 
-  opsknight-db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-opsknight}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}
-      POSTGRES_DB: ${POSTGRES_DB:-opsknight_db}
-    volumes:
-      - opsknight-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          'pg_isready -U ${POSTGRES_USER:-opsknight} -d ${POSTGRES_DB:-opsknight_db}',
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.labels.opsknight.database == true
-      restart_policy:
-        condition: on-failure
-      resources:
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-        limits:
-          cpus: '1.0'
-          memory: 1G
-    networks:
-      - opsknight
+
 
 networks:
   opsknight:
     external: true
     name: ${SWARM_NETWORK_NAME:-opsknight}
-
-volumes:
-  opsknight-db-data:
 
 secrets:
   opsknight_database_url:
