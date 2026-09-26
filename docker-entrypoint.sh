@@ -37,16 +37,27 @@ if [ "${PGBOUNCER_ENABLED:-}" = "true" ] && [ -n "${PGBOUNCER_DB_PASSWORD:-}" ] 
     DATABASE_URL="$WEB_DATABASE_URL"
 fi
 
-# Safely URL-encode credentials for direct bundled opsknight-db connections across all roles
+# Safely URL-encode credentials for direct bundled opsknight-db connections across all roles.
+# IMPORTANT: Only synthesize opsknight-db URLs when DATABASE_URL is empty or already targets
+# the bundled opsknight-db container. If DATABASE_URL points to an external host (RDS, Cloud SQL,
+# separate EC2, etc.), do NOT generate a DIRECT_DATABASE_URL pointing to opsknight-db — the later
+# promotion block would overwrite the valid external DATABASE_URL and cause a crash loop.
 if [ -n "${POSTGRES_PASSWORD:-}" ] && [ -z "${OPSKNIGHT_DATABASE_URL:-}" ]; then
-    ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "${POSTGRES_USER:-opsknight}")
-    ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$POSTGRES_PASSWORD")
-    DB_NAME="${POSTGRES_DB:-opsknight_db}"
-    if [ -z "${DIRECT_DATABASE_URL:-}" ] || echo "${DIRECT_DATABASE_URL:-}" | grep -q "@opsknight-db:5432/"; then
-        export DIRECT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-db:5432/${DB_NAME}?sslmode=prefer&connection_limit=40&pool_timeout=30"
+    _db_targets_bundled=false
+    if [ -z "${DATABASE_URL:-}" ] || echo "${DATABASE_URL:-}" | grep -q "@opsknight-db:"; then
+        _db_targets_bundled=true
     fi
-    if [ "${PGBOUNCER_ENABLED:-}" != "true" ] && ([ -z "${DATABASE_URL:-}" ] || echo "${DATABASE_URL:-}" | grep -q "@opsknight-db:5432/"); then
-        export DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-db:5432/${DB_NAME}?sslmode=prefer&connection_limit=40&pool_timeout=30"
+
+    if [ "$_db_targets_bundled" = "true" ]; then
+        ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "${POSTGRES_USER:-opsknight}")
+        ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$POSTGRES_PASSWORD")
+        DB_NAME="${POSTGRES_DB:-opsknight_db}"
+        if [ -z "${DIRECT_DATABASE_URL:-}" ] || echo "${DIRECT_DATABASE_URL:-}" | grep -q "@opsknight-db:"; then
+            export DIRECT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-db:5432/${DB_NAME}?sslmode=prefer&connection_limit=40&pool_timeout=30"
+        fi
+        if [ "${PGBOUNCER_ENABLED:-}" != "true" ]; then
+            export DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-db:5432/${DB_NAME}?sslmode=prefer&connection_limit=40&pool_timeout=30"
+        fi
     fi
 fi
 
