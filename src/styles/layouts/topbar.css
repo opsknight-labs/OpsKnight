@@ -781,9 +781,14 @@
   }
 }
 
-/* Subtle parallax effect on scroll */
+/* Safari-safe GPU compositing hint — do NOT use will-change: transform here.
+   will-change: transform creates a new stacking context that breaks position: fixed
+   in Safari, causing the header to scroll with the page on scroll events. */
 .topbar-new {
-  will-change: transform;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 /* Enhanced glassmorphism on hover */
