@@ -155,6 +155,7 @@ if [ -n "${DIRECT_DATABASE_URL:-}" ] || [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; th
   if [ -n "${PARSED_HOST}" ] && [ -z "${EXTERNAL_DB_HOST:-}" ] && [ "${PARSED_HOST}" != "opsknight-db" ]; then
     DB_HOST="${PARSED_HOST}"
     USE_EXTERNAL_DB="true"
+    EXTERNAL_DB_HOST="${PARSED_HOST}"
   fi
   if [ -n "${PARSED_PORT}" ] && [ -z "${EXTERNAL_DB_PORT:-}" ]; then
     DB_PORT="${PARSED_PORT}"
@@ -170,6 +171,16 @@ if [ "${USE_EXTERNAL_DB}" = "true" ]; then
   DB_USER="${EXTERNAL_DB_USER:-${DB_USER}}"
   DB_PASS="${EXTERNAL_DB_PASSWORD:-${DB_PASS}}"
   DB_NAME="${EXTERNAL_DB_NAME:-${DB_NAME}}"
+
+  export EXTERNAL_DB_HOST="${DB_HOST}"
+  export EXTERNAL_DB_PORT="${DB_PORT}"
+  export EXTERNAL_DB_USER="${DB_USER}"
+  export EXTERNAL_DB_PASSWORD="${DB_PASS}"
+  export EXTERNAL_DB_NAME="${DB_NAME}"
+  export PGBOUNCER_DB_HOST="${DB_HOST}"
+  export PGBOUNCER_DB_PORT="${DB_PORT}"
+  export PGBOUNCER_DB_NAME="${DB_NAME}"
+  export PGBOUNCER_DB_USER="${DB_USER}"
 
   if [ -z "${DB_HOST}" ] || [ "${DB_HOST}" = "opsknight-db" ]; then
     echo "❌ [FATAL] External database requested but EXTERNAL_DB_HOST is not set." >&2
@@ -254,6 +265,19 @@ fi
 NEXTAUTH_SECRET="${NEXTAUTH_SECRET:-opsknight_super_secret_jwt_and_session_signing_key_change_in_production_min32chars}"
 ENCRYPTION_KEY="${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
 
+# Portable hash helper for Linux/macOS Swarm managers
+hash_string() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 | awk '{print $1}'
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 | awk '{print $NF}'
+  else
+    cksum | awk '{print $1}'
+  fi
+}
+
 # Create content-versioned Raft secrets supporting automatic rotation
 create_versioned_secret() {
   local base_name="$1"
@@ -262,7 +286,7 @@ create_versioned_secret() {
 
   # Compute content hash for immutable Swarm secret rotation
   local content_hash
-  content_hash=$(printf '%s' "${secret_val}" | shasum -a 256 | head -c 8)
+  content_hash=$(printf '%s' "${secret_val}" | hash_string | head -c 8)
   local versioned_name="${STACK_NAME}_${base_name}_${content_hash}"
 
   # If user explicitly overrode the secret name, honor it directly
@@ -308,20 +332,31 @@ else
   exit 1
 fi
 
-if [ "${USE_EXTERNAL_DB}" = "true" ]; then
-  DB_FILE="${SWARM_DIR}/docker-stack.external-db.yml"
-else
-  DB_FILE="${SWARM_DIR}/docker-stack.db.yml"
-fi
+STACK_FILES=("-c" "${RUNTIME_FILE}")
 
-STACK_FILES=("-c" "${RUNTIME_FILE}" "-c" "${DB_FILE}")
+if [ "${USE_EXTERNAL_DB}" != "true" ]; then
+  STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.db.yml")
+else
+  if [ "${SWARM_RUNTIME_MODE}" = "split" ]; then
+    STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.external-db.yml")
+  else
+    STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.external-db.integrated.yml")
+  fi
+fi
 
 if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
   STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.pgbouncer.yml")
 fi
 
 if [ -n "${PGBOUNCER_TLS_CA_CERT:-}" ] && [ -f "${PGBOUNCER_TLS_CA_CERT}" ]; then
-  STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.pgbouncer-ca.yml")
+  if [ "${SWARM_RUNTIME_MODE}" = "split" ]; then
+    STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.ca.split.yml")
+  else
+    STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.ca.integrated.yml")
+  fi
+  if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
+    STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.pgbouncer-ca.yml")
+  fi
 fi
 
 DEPLOY_OPTS=("--with-registry-auth")
@@ -350,6 +385,19 @@ else
       exit 1
     fi
 
+    # Check cluster-wide Swarm task state first (works on multi-node and manager nodes)
+    TASK_STATE=$(docker service ps "${STACK_NAME}_opsknight-db" --filter "desired-state=running" --no-trunc --format '{{.CurrentState}}' 2>/dev/null | head -n 1 || true)
+    if echo "${TASK_STATE}" | grep -q -i 'healthy'; then
+      echo "✅ PostgreSQL service task is healthy across cluster (${ELAPSED}s)."
+      DB_READY=1
+      break
+    elif echo "${TASK_STATE}" | grep -q '^Running' && ! echo "${TASK_STATE}" | grep -q -i 'unhealthy'; then
+      echo "✅ PostgreSQL service task is running across cluster (${ELAPSED}s)."
+      DB_READY=1
+      break
+    fi
+
+    # Fallback to local container inspection if on same node
     TASK_CONTAINER=$(docker ps --filter "label=com.docker.swarm.service.name=${STACK_NAME}_opsknight-db" -q | head -n 1 || true)
     if [ -n "${TASK_CONTAINER}" ]; then
       HEALTH_STATUS=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' "${TASK_CONTAINER}" 2>/dev/null || echo "unknown")

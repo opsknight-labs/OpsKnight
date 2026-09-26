@@ -26,7 +26,8 @@ spec:
           env:
             - { name: OPSKNIGHT_PROCESS_ROLE, value: web }
             - { name: DATABASE_POOL_SIZE_WEB, value: '10' }
-            - { name: DATABASE_URL, value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30' }
+            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
+            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
           resources: { requests: { cpu: 250m, memory: 256Mi }, limits: { cpu: '1', memory: 1Gi } }
           startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
           livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
@@ -63,7 +64,8 @@ spec:
             - { name: OPSKNIGHT_PROCESS_ROLE, value: scheduler }
             - { name: OPSKNIGHT_SCHEDULER_PROFILE, value: maintenance }
             - { name: DATABASE_POOL_SIZE_SCHEDULER, value: '3' }
-            - { name: DATABASE_URL, value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30' }
+            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
+            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
           startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
           livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
@@ -103,7 +105,8 @@ spec:
             - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '15' }
             - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
             - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
-            - { name: DATABASE_URL, value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30' }
+            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
+            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
           startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
           livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
@@ -143,7 +146,8 @@ spec:
             - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '10' }
             - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
             - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
-            - { name: DATABASE_URL, value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30' }
+            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
+            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
           startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
           livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
@@ -183,7 +187,8 @@ spec:
             - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '15' }
             - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
             - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
-            - { name: DATABASE_URL, value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30' }
+            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
+            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
           startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
           livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
@@ -223,7 +228,8 @@ spec:
             - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '15' }
             - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
             - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
-            - { name: DATABASE_URL, value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30' }
+            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
+            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
           startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
           livenessProbe: { httpGet: { path: '/api/health', port: http }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }

@@ -1,15 +1,15 @@
 version: '3.8'
 
 # ==============================================================================
-# OpsKnight Docker Swarm Custom CA Overlay for PgBouncer
+# OpsKnight Docker Swarm Custom CA Overlay (Integrated Runtime)
 #
-# Mounts a custom enterprise CA bundle into the PgBouncer container.
+# Mounts a custom enterprise CA bundle into the integrated application container.
 # ==============================================================================
 
 services:
-  opsknight-pgbouncer:
+  opsknight-app:
     environment:
-      PGBOUNCER_SERVER_TLS_CA_FILE: /etc/ssl/certs/custom-ca.crt
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
     secrets:
       - source: opsknight_custom_ca
         target: /etc/ssl/certs/custom-ca.crt

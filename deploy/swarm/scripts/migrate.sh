@@ -106,10 +106,8 @@ fi
 CUSTOM_CA_SECRET_NAME="${OPSKNIGHT_CUSTOM_CA_SECRET:-${STACK_NAME}_custom_ca}"
 if attach_secret_if_exists "${CUSTOM_CA_SECRET_NAME}" "/etc/ssl/certs/custom-ca.crt"; then
   ENV_ARGS+=(--env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/custom-ca.crt)
-  ENV_ARGS+=(--env SSL_CERT_FILE=/etc/ssl/certs/custom-ca.crt)
 elif attach_secret_if_exists "opsknight_custom_ca" "/etc/ssl/certs/custom-ca.crt"; then
   ENV_ARGS+=(--env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/custom-ca.crt)
-  ENV_ARGS+=(--env SSL_CERT_FILE=/etc/ssl/certs/custom-ca.crt)
 fi
 
 SERVICE_CREATE_OPTS=("--with-registry-auth")
