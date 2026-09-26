@@ -542,5 +542,18 @@ describe('deployment configuration invariants', () => {
     // Swarm deploy.sh enforces fail-closed split image contract
     const deployScript = read('deploy/swarm/scripts/deploy.sh');
     expect(deployScript).toContain('SWARM_RUNTIME_MODE=split requires an explicit OPSKNIGHT_IMAGE');
+
+    // Swarm docker-stack.yml enforces fail-closed split image contract directly against raw stack deploys
+    expect(stack).toContain(
+      '${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}'
+    );
+
+    // Kustomize external database CIDR patch provides targeted egress for split workers
+    const cidrPatch = read('k8s/profiles/split/external-database-cidr-patch.yaml');
+    expect(cidrPatch).toContain('kind: NetworkPolicy');
+    expect(cidrPatch).toContain('cidr: 10.24.0.0/16');
+    expect(cidrPatch).toContain('opsknight-scheduler-network-policy');
+    expect(cidrPatch).toContain('opsknight-general-worker-network-policy');
   });
 });
+

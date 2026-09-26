@@ -34,6 +34,8 @@ jobs:
   swarm-l0-validation:
     name: L0 Syntax, Config & Capacity Validation
     runs-on: ubuntu-latest
+    env:
+      OPSKNIGHT_IMAGE: ghcr.io/opsknight-labs/opsknight:ci-test
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -66,6 +68,15 @@ jobs:
           cd deploy/swarm
           docker stack config -c docker-stack.yml >/dev/null
           echo "Core split docker-stack.yml is valid."
+
+      - name: Validate Core Split Stack Fails Closed Without OPSKNIGHT_IMAGE
+        run: |
+          cd deploy/swarm
+          if env -u OPSKNIGHT_IMAGE docker stack config -c docker-stack.yml >/dev/null 2>&1; then
+            echo "❌ Expected docker stack config to fail when OPSKNIGHT_IMAGE is unset!" >&2
+            exit 1
+          fi
+          echo "Core split docker-stack.yml correctly fails closed without explicit OPSKNIGHT_IMAGE."
 
       - name: Validate PgBouncer Overlay Config
         run: |

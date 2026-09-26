@@ -9,12 +9,12 @@ version: '3.8'
 # Deploy:
 #   ./deploy/swarm/scripts/deploy.sh
 #   OR
-#   docker stack deploy --with-registry-auth -c deploy/swarm/docker-stack.yml opsknight
+#   OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight:<tag>" docker stack deploy --with-registry-auth -c deploy/swarm/docker-stack.yml opsknight
 # ==============================================================================
 
 services:
   opsknight-web:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
     ports:
       - target: 3000
         published: ${APP_PORT:-3000}
@@ -89,7 +89,7 @@ services:
       - opsknight
 
   opsknight-scheduler:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
     environment:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: scheduler
@@ -158,7 +158,7 @@ services:
       - opsknight
 
   opsknight-general-worker:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
     environment:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: general-worker
@@ -226,7 +226,7 @@ services:
       - opsknight
 
   opsknight-critical-worker:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
     environment:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: critical-worker
@@ -294,7 +294,7 @@ services:
       - opsknight
 
   opsknight-bulk-worker:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
     environment:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: bulk-worker
@@ -362,7 +362,7 @@ services:
       - opsknight
 
   opsknight-status-projector:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
     environment:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: status-projector
