@@ -1,9 +1,71 @@
-# Overlay for mounting a custom Enterprise CA certificate for PgBouncer TLS verification.
+# Overlay for mounting a custom Enterprise CA certificate for database and PgBouncer TLS verification.
 # Apply when using a private/enterprise CA not present in standard root CA bundles:
 # docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml -f docker-compose.external-db.yml -f docker-compose.pgbouncer-ca.yml up -d
+#
+# NOTE: Node.js HTTPS and fetch use NODE_EXTRA_CA_CERTS=/etc/ssl/certs/custom-ca.crt.
+# Direct Prisma engine database connections (opsknight-migration, workers, scheduler, status-projector)
+# connect directly to PostgreSQL via Rust's native TLS stack which does not read NODE_EXTRA_CA_CERTS.
+# When using TLS with a custom CA for direct PostgreSQL connections, ensure your OPSKNIGHT_DATABASE_URL
+# or DIRECT_DATABASE_URL includes sslmode=verify-full&sslrootcert=/etc/ssl/certs/custom-ca.crt
 services:
   opsknight-pgbouncer:
     volumes:
       - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
     environment:
       PGBOUNCER_SERVER_TLS_CA_FILE: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-app:
+    volumes:
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-migration:
+    volumes:
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-web:
+    volumes:
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-scheduler:
+    volumes:
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-general-worker:
+    volumes:
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-critical-worker:
+    volumes:
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-bulk-worker:
+    volumes:
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-status-projector:
+    volumes:
+      - ${PGBOUNCER_TLS_CA_CERT:?Set PGBOUNCER_TLS_CA_CERT to the absolute or relative path of the enterprise CA certificate}:/etc/ssl/certs/custom-ca.crt:ro
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt

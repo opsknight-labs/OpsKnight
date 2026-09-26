@@ -31,10 +31,7 @@ patches:
       - op: add
         path: /spec/egress/1
         value:
-          to:
-            - podSelector:
-                matchLabels:
-                  app: opsknight-postgres
+          to: []
           ports:
             - protocol: TCP
               port: 5432

@@ -51,15 +51,17 @@ Swarm deployment uses `docker stack deploy --prune` to ensure seamless, conflict
 | :--- | :--- | :--- | :--- | :--- |
 | **`opsknight-web`** | 2 (Scalable) | Spread across nodes (`node.id`) | `start-first` | Serves UI & API traffic, health checks, authentication. |
 | **`opsknight-scheduler`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Maintenance cron jobs, SLA recalculation. Fenced by DB lease. |
-| **`opsknight-general-worker`** | 1 | Spread across nodes (`node.id`) | `stop-first` | Standard background queues, webhooks, non-urgent syncs. |
-| **`opsknight-critical-worker`** | 1 | Spread across nodes (`node.id`) | `stop-first` | High-priority alerting, SMS, Twilio, push notifications. |
-| **`opsknight-bulk-worker`** | 1 | Spread across nodes (`node.id`) | `stop-first` | Heavy digest emails, compliance rollups, audit purging. |
-| **`opsknight-status-projector`** | 1 | Spread across nodes (`node.id`) | `stop-first` | Real-time incident timeline projection and public status sync. |
+| **`opsknight-general-worker`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Standard background queues, webhooks, non-urgent syncs. |
+| **`opsknight-critical-worker`** | 2 | Spread across nodes (`node.id`) | `stop-first` | High-priority alerting, SMS, Twilio, push notifications. |
+| **`opsknight-bulk-worker`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Heavy digest emails, compliance rollups, audit purging. |
+| **`opsknight-status-projector`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Real-time incident timeline projection and public status sync. |
 | **`opsknight-pgbouncer`** *(Optional)* | 2 | Spread across nodes (`node.id`) | `start-first` | Transaction connection pooler offloading PostgreSQL backend. |
 | **`opsknight-db`** *(Bundled)* | 1 | Pinned: `opsknight.database == true` | `stop-first` | Single-node PostgreSQL persistence (dev/simple deploys). |
 
 > [!IMPORTANT]
-> **Bundled PostgreSQL is Single-Node Persistence**: While Docker Swarm can restart the container upon failure, local volume mounts (`opsknight-db-data`) are pinned to a specific physical node via `node.labels.opsknight.database == true`. For multi-node high availability, connect to an external managed database (AWS RDS, GCP Cloud SQL, or a Patroni HA cluster) using `docker-stack.external-db.yml`.
+> **Database HA Architecture Distinction**:
+> - **Bundled PostgreSQL**: Provides **single-node persistence locality**, pinned to a labeled cluster node via `node.labels.opsknight.database == true`. Intended for single-node development, staging, or simple internal deployments.
+> - **Managed / External PostgreSQL**: For true enterprise multi-node High Availability (automatic failover, multi-AZ replication, continuous WAL archiving), connect OpsKnight to an external HA database cluster (AWS Aurora/RDS, GCP Cloud SQL, Azure Database, or Patroni HA) using `docker-stack.external-db.yml`.
 
 ---
 
@@ -119,10 +121,11 @@ Docker Swarm lacks Compose's `depends_on: { condition: service_completed_success
 
 ### Quick Start Deployment:
 ```bash
-# Automated deployment of split runtime stack
+# Split runtime requires an explicit immutable image tag or digest:
+export OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight@sha256:<tested-manifest-digest>"
 ./deploy/swarm/scripts/deploy.sh
 
-# Or deploy integrated runtime stack
+# Or deploy integrated runtime stack (accepts historical/latest monolithic images):
 SWARM_RUNTIME_MODE=integrated ./deploy/swarm/scripts/deploy.sh
 ```
 
@@ -132,11 +135,13 @@ SWARM_RUNTIME_MODE=integrated ./deploy/swarm/scripts/deploy.sh
 
 ### A. Core Split Stack (Bundled PostgreSQL)
 ```bash
+export OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight@sha256:<tested-manifest-digest>"
 ./deploy/swarm/scripts/deploy.sh
 ```
 
 ### B. Core Split Stack + High-Availability PgBouncer
 ```bash
+export OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight@sha256:<tested-manifest-digest>"
 PGBOUNCER_ENABLED=true ./deploy/swarm/scripts/deploy.sh
 ```
 

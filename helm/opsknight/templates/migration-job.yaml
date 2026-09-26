@@ -58,4 +58,19 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled }}
+          volumeMounts:
+            - name: database-tls
+              mountPath: /etc/opsknight-db-tls
+              readOnly: true
+          {{- end }}
+      {{- if and (not .Values.postgresql.enabled) .Values.postgresql.tls.enabled }}
+      volumes:
+        - name: database-tls
+          secret:
+            secretName: {{ required "postgresql.tls.existingSecret is required when external PostgreSQL TLS is enabled" .Values.postgresql.tls.existingSecret }}
+            items:
+              - key: {{ .Values.postgresql.tls.caKey }}
+                path: ca.crt
+      {{- end }}
 {{- end }}

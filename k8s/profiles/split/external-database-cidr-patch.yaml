@@ -1,0 +1,76 @@
+# Example Kustomize patch to narrow split worker PostgreSQL egress from to: []
+# to specific database CIDR blocks (e.g. AWS RDS / GCP Cloud SQL VPC subnets).
+#
+# To apply in your production overlay kustomization.yaml:
+#   patches:
+#     - path: external-database-cidr-patch.yaml
+#
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opsknight-scheduler-network-policy
+  namespace: opsknight
+spec:
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.24.0.0/16
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opsknight-general-worker-network-policy
+  namespace: opsknight
+spec:
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.24.0.0/16
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opsknight-critical-worker-network-policy
+  namespace: opsknight
+spec:
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.24.0.0/16
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opsknight-bulk-worker-network-policy
+  namespace: opsknight
+spec:
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.24.0.0/16
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opsknight-status-projector-network-policy
+  namespace: opsknight
+spec:
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.24.0.0/16
+      ports:
+        - protocol: TCP
+          port: 5432

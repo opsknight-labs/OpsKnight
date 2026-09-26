@@ -1,0 +1,61 @@
+version: '3.8'
+
+# ==============================================================================
+# OpsKnight Docker Swarm Custom CA Overlay (Split Runtime)
+#
+# Mounts a custom enterprise CA bundle across all direct split runtime application containers.
+# ==============================================================================
+
+services:
+  opsknight-web:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-scheduler:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-general-worker:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-critical-worker:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-bulk-worker:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+  opsknight-status-projector:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
+secrets:
+  opsknight_custom_ca:
+    external: true
+    name: ${OPSKNIGHT_CUSTOM_CA_SECRET:-opsknight_custom_ca}

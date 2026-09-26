@@ -1,0 +1,20 @@
+version: '3.8'
+
+# ==============================================================================
+# OpsKnight Docker Swarm External Database Overlay (Integrated Runtime)
+#
+# Configures integrated runtime service with structured external PostgreSQL connection details.
+# ==============================================================================
+
+services:
+  opsknight-app:
+    environment:
+      POSTGRES_HOST: ${EXTERNAL_DB_HOST:-}
+      POSTGRES_PORT: ${EXTERNAL_DB_PORT:-5432}
+      POSTGRES_DB: ${EXTERNAL_DB_NAME:-opsknight_db}
+      POSTGRES_USER: ${EXTERNAL_DB_USER:-opsknight}
+
+networks:
+  opsknight:
+    external: true
+    name: ${SWARM_NETWORK_NAME:-opsknight}

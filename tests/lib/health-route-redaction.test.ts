@@ -61,4 +61,37 @@ describe('public readiness response', () => {
     expect(body.status).toBe('unhealthy');
     expect(body.checks.worker.status).toBe('unhealthy');
   });
+
+  it('fails readiness (503) when scheduler is unhealthy for scheduler role', async () => {
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'scheduler';
+    queryRaw.mockImplementation(async (strings: TemplateStringsArray) => {
+      const sql = strings.join('');
+      if (sql.includes('cron_scheduler_state')) {
+        // Return stale scheduler state (>600s since success)
+        return [{ secondsSinceSuccess: 9999 }];
+      }
+      return [{ '?column?': 1 }];
+    });
+
+    const response = await GET(new NextRequest('http://localhost/api/health?mode=readiness'));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.status).toBe('unhealthy');
+    expect(body.checks.scheduler.status).toBe('unhealthy');
+    expect(body.checks.scheduler.error).toBe('Scheduler state is missing or stale');
+  });
+
+  it('fails readiness (503) when notification control plane is strict and unhealthy', async () => {
+    process.env.OPSKNIGHT_PROCESS_ROLE = 'web';
+    process.env.NOTIFICATION_CONTROL_PLANE_STRICT = 'true';
+
+    const response = await GET(new NextRequest('http://localhost/api/health?mode=readiness'));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.status).toBe('unhealthy');
+    expect(body.checks.notificationControlPlane.status).toBe('unhealthy');
+    delete process.env.NOTIFICATION_CONTROL_PLANE_STRICT;
+  });
 });

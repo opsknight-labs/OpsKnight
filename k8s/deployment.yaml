@@ -52,7 +52,15 @@ spec:
                 name: opsknight-secrets
           env:
             - name: DATABASE_URL
-              value: 'postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?schema=public&connection_limit=40&pool_timeout=30'
+              valueFrom:
+                secretKeyRef:
+                  name: opsknight-secrets
+                  key: DATABASE_URL
+            - name: DIRECT_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opsknight-secrets
+                  key: DIRECT_DATABASE_URL
           resources:
             requests:
               cpu: '100m'

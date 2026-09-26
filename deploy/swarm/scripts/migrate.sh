@@ -12,10 +12,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 STACK_NAME="${SWARM_STACK_NAME:-opsknight}"
-SERVICE_NAME="${MIGRATION_SERVICE_NAME:-${STACK_NAME}_migration_task}"
+MIGRATION_RUN_ID="${MIGRATION_RUN_ID:-$(date +%s)_$$}"
+SERVICE_NAME="${MIGRATION_SERVICE_NAME:-${STACK_NAME}_migration_${MIGRATION_RUN_ID}}"
 NETWORK_NAME="${SWARM_NETWORK_NAME:-${STACK_NAME}_network}"
 OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}"
 TIMEOUT_SEC="${MIGRATION_TIMEOUT_SEC:-300}"
+
+# Ensure ephemeral migration task cleanup on exit
+trap 'docker service rm "${SERVICE_NAME}" >/dev/null 2>&1 || true' EXIT
 
 echo "═══════════════════════════════════════════════════════════════════════"
 echo "  OpsKnight Swarm Database Migration"
@@ -67,38 +71,52 @@ ENV_ARGS=(
   --env NEXT_PUBLIC_APP_URL="${NEXT_PUBLIC_APP_URL:-http://localhost:3000}"
 )
 
-# Prioritize direct connection URL for migrations (Prisma cannot use transaction poolers)
-if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
-  ENV_ARGS+=(--env DIRECT_DATABASE_URL="${DIRECT_DATABASE_URL}")
-  ENV_ARGS+=(--env DATABASE_URL="${DIRECT_DATABASE_URL}")
-elif attach_secret_if_exists "${DIRECT_DB_SECRET}" "/run/secrets/opsknight_direct_database_url"; then
+# Prioritize versioned Swarm secrets to avoid exposing database credentials in container environment
+if attach_secret_if_exists "${DIRECT_DB_SECRET}" "/run/secrets/opsknight_direct_database_url"; then
   ENV_ARGS+=(--env DIRECT_DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
   ENV_ARGS+=(--env DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
 elif attach_secret_if_exists "opsknight_direct_database_url" "/run/secrets/opsknight_direct_database_url"; then
   ENV_ARGS+=(--env DIRECT_DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
   ENV_ARGS+=(--env DATABASE_URL_FILE=/run/secrets/opsknight_direct_database_url)
-elif [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
-  ENV_ARGS+=(--env DIRECT_DATABASE_URL="${OPSKNIGHT_DATABASE_URL}")
-  ENV_ARGS+=(--env DATABASE_URL="${OPSKNIGHT_DATABASE_URL}")
 elif attach_secret_if_exists "${DB_SECRET}" "/run/secrets/opsknight_database_url"; then
   ENV_ARGS+=(--env DIRECT_DATABASE_URL_FILE=/run/secrets/opsknight_database_url)
   ENV_ARGS+=(--env DATABASE_URL_FILE=/run/secrets/opsknight_database_url)
+elif [ -n "${DIRECT_DATABASE_URL:-}" ]; then
+  # Standalone invocation fallback when Swarm secrets are not used
+  ENV_ARGS+=(--env DIRECT_DATABASE_URL="${DIRECT_DATABASE_URL}")
+  ENV_ARGS+=(--env DATABASE_URL="${DIRECT_DATABASE_URL}")
+elif [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
+  ENV_ARGS+=(--env DIRECT_DATABASE_URL="${OPSKNIGHT_DATABASE_URL}")
+  ENV_ARGS+=(--env DATABASE_URL="${OPSKNIGHT_DATABASE_URL}")
 fi
 
-if [ -n "${NEXTAUTH_SECRET:-}" ]; then
-  ENV_ARGS+=(--env NEXTAUTH_SECRET="${NEXTAUTH_SECRET}")
-elif attach_secret_if_exists "${NEXTAUTH_SECRET_NAME}" "/run/secrets/opsknight_nextauth_secret"; then
+if attach_secret_if_exists "${NEXTAUTH_SECRET_NAME}" "/run/secrets/opsknight_nextauth_secret"; then
   ENV_ARGS+=(--env NEXTAUTH_SECRET_FILE=/run/secrets/opsknight_nextauth_secret)
 elif attach_secret_if_exists "opsknight_nextauth_secret" "/run/secrets/opsknight_nextauth_secret"; then
   ENV_ARGS+=(--env NEXTAUTH_SECRET_FILE=/run/secrets/opsknight_nextauth_secret)
+elif [ -n "${NEXTAUTH_SECRET:-}" ]; then
+  ENV_ARGS+=(--env NEXTAUTH_SECRET="${NEXTAUTH_SECRET}")
 fi
 
-if [ -n "${ENCRYPTION_KEY:-}" ]; then
-  ENV_ARGS+=(--env ENCRYPTION_KEY="${ENCRYPTION_KEY}")
-elif attach_secret_if_exists "${ENCRYPTION_SECRET_NAME}" "/run/secrets/opsknight_encryption_key"; then
+if attach_secret_if_exists "${ENCRYPTION_SECRET_NAME}" "/run/secrets/opsknight_encryption_key"; then
   ENV_ARGS+=(--env ENCRYPTION_KEY_FILE=/run/secrets/opsknight_encryption_key)
 elif attach_secret_if_exists "opsknight_encryption_key" "/run/secrets/opsknight_encryption_key"; then
   ENV_ARGS+=(--env ENCRYPTION_KEY_FILE=/run/secrets/opsknight_encryption_key)
+elif [ -n "${ENCRYPTION_KEY:-}" ]; then
+  ENV_ARGS+=(--env ENCRYPTION_KEY="${ENCRYPTION_KEY}")
+fi
+
+# Attach custom CA certificate if present
+CUSTOM_CA_SECRET_NAME="${OPSKNIGHT_CUSTOM_CA_SECRET:-${STACK_NAME}_custom_ca}"
+if attach_secret_if_exists "${CUSTOM_CA_SECRET_NAME}" "/etc/ssl/certs/custom-ca.crt"; then
+  ENV_ARGS+=(--env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/custom-ca.crt)
+elif attach_secret_if_exists "opsknight_custom_ca" "/etc/ssl/certs/custom-ca.crt"; then
+  ENV_ARGS+=(--env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/custom-ca.crt)
+fi
+
+SERVICE_CREATE_OPTS=("--with-registry-auth" "--detach")
+if [ "${SWARM_RESOLVE_IMAGE_NEVER:-}" = "true" ] || [[ "${OPSKNIGHT_IMAGE:-}" == *local* ]]; then
+  SERVICE_CREATE_OPTS+=("--no-resolve-image")
 fi
 
 echo "🚀 Dispatching migration service task '${SERVICE_NAME}'..."
@@ -106,7 +124,7 @@ docker service create \
   --name "${SERVICE_NAME}" \
   --network "${NETWORK_NAME}" \
   --restart-condition none \
-  --with-registry-auth \
+  "${SERVICE_CREATE_OPTS[@]}" \
   "${SECRET_ARGS[@]}" \
   "${ENV_ARGS[@]}" \
   "${OPSKNIGHT_IMAGE}" >/dev/null
@@ -119,20 +137,23 @@ EXIT_CODE=1
 while true; do
   CURRENT_TIME=$(date +%s)
   ELAPSED=$((CURRENT_TIME - START_TIME))
-  if [ "${ELAPSED}" -gt "${TIMEOUT_SEC}" ]; then
-    echo "❌ [TIMEOUT] Migration task exceeded ${TIMEOUT_SEC}s limit." >&2
-    break
-  fi
-
   # Get the latest task state
   TASK_LINE=$(docker service ps "${SERVICE_NAME}" --no-trunc --format '{{.CurrentState}}' 2>/dev/null | head -n 1 || true)
 
-  if echo "${TASK_LINE}" | grep -q -iE '^Complete'; then
+  if [ "${ELAPSED}" -gt "${TIMEOUT_SEC}" ]; then
+    echo "❌ [TIMEOUT] Migration task exceeded ${TIMEOUT_SEC}s limit (last state: ${TASK_LINE:-unknown})." >&2
+    echo "--- Task Logs ---"
+    docker service logs "${SERVICE_NAME}" 2>&1 | tail -n 50 || true
+    echo "-----------------"
+    break
+  fi
+
+  if echo "${TASK_LINE}" | grep -q -iE '^Complete|Shutdown \(0\)'; then
     echo "✅ Migration task completed successfully in ${ELAPSED}s."
     TASK_COMPLETED=1
     EXIT_CODE=0
     break
-  elif echo "${TASK_LINE}" | grep -q -iE '^Failed|^Rejected'; then
+  elif echo "${TASK_LINE}" | grep -q -iE '^Failed|^Rejected' || echo "${TASK_LINE}" | grep -q -E '\([1-9][0-9]*\)'; then
     echo "❌ Migration task failed with state: ${TASK_LINE}" >&2
     echo "--- Task Logs ---"
     docker service logs "${SERVICE_NAME}" 2>&1 | tail -n 50 || true

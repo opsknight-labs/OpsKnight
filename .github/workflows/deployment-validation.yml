@@ -236,11 +236,11 @@ jobs:
           grep -q 'kind: Job' /tmp/opsknight-helm-migration-job.yaml
           grep -q 'name: opsknight-migration' /tmp/opsknight-helm-migration-job.yaml
           grep -Eq '("helm\.sh/hook"|helm\.sh/hook): pre-install,pre-upgrade' /tmp/opsknight-helm-migration-job.yaml
-          grep -q 'pgbouncer=true' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'name: DIRECT_DATABASE_URL' /tmp/opsknight-helm-split-pgbouncer.yaml
           grep -q 'name: DIRECT_DATABASE_URL' /tmp/opsknight-kustomize-split-pgbouncer.yaml
-          grep -q '@opsknight-pgbouncer:6432' /tmp/opsknight-kustomize-split-pgbouncer.yaml
-          grep -q '@$(POSTGRES_HOST):$(POSTGRES_PORT)' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          grep -q 'key: WEB_DATABASE_URL' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          grep -q 'key: DIRECT_DATABASE_URL' /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          ! grep -q '@\$(POSTGRES_HOST):' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'port: 6432' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'port: 5432' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'kubernetes.io/metadata.name: ingress-nginx' /tmp/opsknight-kustomize.yaml

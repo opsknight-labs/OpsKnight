@@ -4,17 +4,26 @@ on:
   push:
     branches:
       - main
-      - feat/docker-swarm-deployment
     paths:
       - 'deploy/swarm/**'
       - 'docker-entrypoint.sh'
+      - 'docker/pgbouncer/**'
       - 'scripts/validate-runtime-capacity.cjs'
+      - 'Dockerfile'
+      - 'package.json'
+      - 'prisma/**'
       - '.github/workflows/swarm-validation.yml'
   pull_request:
+    branches:
+      - main
     paths:
       - 'deploy/swarm/**'
       - 'docker-entrypoint.sh'
+      - 'docker/pgbouncer/**'
       - 'scripts/validate-runtime-capacity.cjs'
+      - 'Dockerfile'
+      - 'package.json'
+      - 'prisma/**'
       - '.github/workflows/swarm-validation.yml'
 
 concurrency:
@@ -25,6 +34,8 @@ jobs:
   swarm-l0-validation:
     name: L0 Syntax, Config & Capacity Validation
     runs-on: ubuntu-latest
+    env:
+      OPSKNIGHT_IMAGE: ghcr.io/opsknight-labs/opsknight:ci-test
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -58,6 +69,15 @@ jobs:
           docker stack config -c docker-stack.yml >/dev/null
           echo "Core split docker-stack.yml is valid."
 
+      - name: Validate Core Split Stack Fails Closed Without OPSKNIGHT_IMAGE
+        run: |
+          cd deploy/swarm
+          if env -u OPSKNIGHT_IMAGE docker stack config -c docker-stack.yml >/dev/null 2>&1; then
+            echo "❌ Expected docker stack config to fail when OPSKNIGHT_IMAGE is unset!" >&2
+            exit 1
+          fi
+          echo "Core split docker-stack.yml correctly fails closed without explicit OPSKNIGHT_IMAGE."
+
       - name: Validate PgBouncer Overlay Config
         run: |
           cd deploy/swarm
@@ -67,22 +87,26 @@ jobs:
       - name: Validate External DB Overlay Config
         run: |
           cd deploy/swarm
-          EXTERNAL_DB_HOST="postgres.test.internal" docker stack config -c docker-stack.yml -c docker-stack.external-db.yml >/dev/null
-          echo "External DB overlay configuration is valid."
+          docker stack config -c docker-stack.yml -c docker-stack.external-db.yml >/dev/null
+          docker stack config -c docker-stack.integrated.yml -c docker-stack.external-db.integrated.yml >/dev/null
+          echo "External DB overlay configurations are valid."
 
       - name: Validate Custom CA Overlay Config
         run: |
           cd deploy/swarm
-          docker stack config -c docker-stack.pgbouncer-ca.yml >/dev/null
+          docker stack config -c docker-stack.yml -c docker-stack.ca.split.yml >/dev/null
+          docker stack config -c docker-stack.integrated.yml -c docker-stack.ca.integrated.yml >/dev/null
+          docker stack config -c docker-stack.pgbouncer.yml -c docker-stack.pgbouncer-ca.yml >/dev/null
           echo "Custom CA overlay configuration is valid."
 
       - name: Validate All Combined Overlays
         run: |
           cd deploy/swarm
-          EXTERNAL_DB_HOST="postgres.test.internal" docker stack config \
+          docker stack config \
             -c docker-stack.yml \
             -c docker-stack.external-db.yml \
             -c docker-stack.pgbouncer.yml \
+            -c docker-stack.ca.split.yml \
             -c docker-stack.pgbouncer-ca.yml >/dev/null
           echo "All combined overlays are valid."
 
@@ -143,11 +167,16 @@ jobs:
             SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
             BUILD_REVISION=${{ github.sha }}
 
+      - name: Build Swarm PgBouncer Test Container Image
+        run: |
+          docker build -t opsknight-pgbouncer:local docker/pgbouncer
+
       - name: Deploy Core Split Swarm Stack
         run: |
           export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
           export ALLOW_INSECURE_SECRETS="true"
           export ENVIRONMENT="development"
+          export SWARM_RESOLVE_IMAGE_NEVER="true"
           ./deploy/swarm/scripts/deploy.sh
 
       - name: Test Horizontal Dynamic Scaling
@@ -203,3 +232,98 @@ jobs:
           fi
           docker service inspect opsknight_opsknight-web >/dev/null 2>&1
           echo "✅ Successfully transitioned back to split mode; integrated service pruned."
+
+      - name: Test Split Swarm with PgBouncer and Custom CA
+        run: |
+          echo "Deploying Swarm with PgBouncer and Custom CA..."
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/ca.key -out /tmp/ca.crt -days 1 -subj "/CN=test-ca"
+          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
+          export OPSKNIGHT_PGBOUNCER_IMAGE="opsknight-pgbouncer:local"
+          export ALLOW_INSECURE_SECRETS="true"
+          export ENVIRONMENT="development"
+          export SWARM_RUNTIME_MODE="split"
+          export ENABLE_PGBOUNCER="true"
+          export PGBOUNCER_TLS_CA_CERT="/tmp/ca.crt"
+          export SWARM_RESOLVE_IMAGE_NEVER="true"
+          ./deploy/swarm/scripts/deploy.sh
+          ./deploy/swarm/scripts/health-check.sh
+          echo "✅ Swarm with PgBouncer and Custom CA deployed and healthy."
+
+      - name: Test Integrated Runtime with Custom CA
+        run: |
+          echo "Deploying Integrated Runtime with Custom CA..."
+          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
+          export ALLOW_INSECURE_SECRETS="true"
+          export ENVIRONMENT="development"
+          export SWARM_RUNTIME_MODE="integrated"
+          export PGBOUNCER_TLS_CA_CERT="/tmp/ca.crt"
+          export SWARM_RESOLVE_IMAGE_NEVER="true"
+          ./deploy/swarm/scripts/deploy.sh
+          ./deploy/swarm/scripts/health-check.sh
+          echo "✅ Integrated Swarm with Custom CA deployed and healthy."
+
+      - name: Test Live External PostgreSQL with TLS, Custom CA, and PgBouncer verify-full
+        run: |
+          echo "Setting up external TLS-enabled PostgreSQL on Swarm overlay network..."
+          docker network inspect opsknight_network >/dev/null 2>&1 || \
+            docker network create --driver overlay --attachable opsknight_network
+
+          mkdir -p /tmp/swarm-tls
+          openssl req -new -x509 -days 1 -nodes -out /tmp/swarm-tls/ca.crt \
+            -keyout /tmp/swarm-tls/ca.key -subj "/CN=swarm-ca" 2>/dev/null
+          openssl req -new -nodes -out /tmp/swarm-tls/server.csr \
+            -keyout /tmp/swarm-tls/server.key -subj "/CN=swarm-ext-postgres" 2>/dev/null
+          openssl x509 -req -in /tmp/swarm-tls/server.csr -days 1 \
+            -CA /tmp/swarm-tls/ca.crt -CAkey /tmp/swarm-tls/ca.key -CAcreateserial \
+            -out /tmp/swarm-tls/server.crt 2>/dev/null
+          docker run --rm -v /tmp/swarm-tls:/tls:rw alpine sh -c "chown 70:70 /tls/server.key /tls/server.crt && chmod 600 /tls/server.key && chmod 644 /tls/server.crt"
+          chmod 644 /tmp/swarm-tls/ca.crt
+
+          docker rm -f swarm-ext-postgres 2>/dev/null || true
+          docker run -d \
+            --name swarm-ext-postgres \
+            --network opsknight_network \
+            -v /tmp/swarm-tls/server.crt:/var/lib/postgresql/server.crt:ro \
+            -v /tmp/swarm-tls/server.key:/var/lib/postgresql/server.key:ro \
+            -e POSTGRES_USER=ext_swarm_user \
+            -e POSTGRES_PASSWORD=ext_swarm_secret_password_123 \
+            -e POSTGRES_DB=ext_swarm_db \
+            postgres:16-alpine \
+            -c ssl=on \
+            -c ssl_cert_file=/var/lib/postgresql/server.crt \
+            -c ssl_key_file=/var/lib/postgresql/server.key
+
+          cleanup_ext_db() {
+            docker rm -f swarm-ext-postgres 2>/dev/null || true
+            rm -rf /tmp/swarm-tls 2>/dev/null || true
+          }
+          trap cleanup_ext_db EXIT
+
+          for i in $(seq 1 30); do
+            if docker exec swarm-ext-postgres pg_isready -U ext_swarm_user >/dev/null 2>&1; then
+              echo "External TLS PostgreSQL is ready!"
+              break
+            fi
+            sleep 1
+          done
+
+          echo "Deploying Swarm split stack with external TLS DB + PgBouncer verify-full..."
+          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
+          export OPSKNIGHT_PGBOUNCER_IMAGE="opsknight-pgbouncer:local"
+          export SWARM_RUNTIME_MODE="split"
+          export ENABLE_PGBOUNCER="true"
+          export EXTERNAL_DB="true"
+          export EXTERNAL_DB_HOST="swarm-ext-postgres"
+          export EXTERNAL_DB_PORT="5432"
+          export EXTERNAL_DB_USER="ext_swarm_user"
+          export EXTERNAL_DB_PASSWORD="ext_swarm_secret_password_123"
+          export EXTERNAL_DB_NAME="ext_swarm_db"
+          export EXTERNAL_DB_SSLMODE="verify-full"
+          export PGBOUNCER_TLS_CA_CERT="/tmp/swarm-tls/ca.crt"
+          export SWARM_RESOLVE_IMAGE_NEVER="true"
+          export ALLOW_INSECURE_SECRETS="true"
+          export ENVIRONMENT="development"
+
+          ./deploy/swarm/scripts/deploy.sh
+          ./deploy/swarm/scripts/health-check.sh
+          echo "✅ External PostgreSQL with TLS verify-full, Custom CA, and PgBouncer succeeded!"

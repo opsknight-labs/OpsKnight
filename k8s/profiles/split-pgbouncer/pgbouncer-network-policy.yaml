@@ -8,7 +8,7 @@ spec:
     - from: [{ podSelector: { matchLabels: { app: opsknight-app, opsknight-role: web } } }]
       ports: [{ protocol: TCP, port: 6432 }]
   egress:
-    - to: [{ podSelector: { matchLabels: { app: opsknight-postgres } } }]
+    - to: []
       ports: [{ protocol: TCP, port: 5432 }]
     - to: [{ namespaceSelector: {} }]
       ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]

@@ -171,9 +171,20 @@ export async function GET(request: NextRequest) {
       check.status === 'healthy' || check.status === 'disabled' || check.status === 'degraded'
   );
 
+  const schedulerRequired = Boolean(
+    responsibilities?.startScheduler && process.env.ENABLE_INTERNAL_CRON !== 'false'
+  );
+  const workerRequired = Boolean(responsibilities?.startJobWorker);
+  const controlPlaneRequired =
+    process.env.NOTIFICATION_CONTROL_PLANE_STRICT === 'true' &&
+    (getOpsKnightProcessRole() === 'web' || getOpsKnightProcessRole() === 'integrated');
+
   const criticalFailure =
     mode === 'readiness'
-      ? checks.database?.status === 'unhealthy' || checks.worker?.status === 'unhealthy'
+      ? checks.database?.status === 'unhealthy' ||
+        (workerRequired && checks.worker?.status === 'unhealthy') ||
+        (schedulerRequired && checks.scheduler?.status === 'unhealthy') ||
+        (controlPlaneRequired && checks.notificationControlPlane?.status === 'unhealthy')
       : readinessChecks.some(check => check.status === 'unhealthy');
 
   const anyDegraded =

@@ -53,6 +53,10 @@ spec:
             - configMapRef:
                 name: {{ include "opsknight.fullname" . }}-config
           env:
+            {{- if .Values.migrations.job.enabled }}
+            - name: OPSKNIGHT_SKIP_MIGRATIONS
+              value: "true"
+            {{- end }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

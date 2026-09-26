@@ -21,7 +21,6 @@ ROOT_DIR="$(cd "${SWARM_DIR}/../.." && pwd)"
 
 STACK_NAME="${SWARM_STACK_NAME:-opsknight}"
 NETWORK_NAME="${SWARM_NETWORK_NAME:-${STACK_NAME}_network}"
-OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}"
 SWARM_RUNTIME_MODE="${SWARM_RUNTIME_MODE:-split}"
 ENABLE_PGBOUNCER="${PGBOUNCER_ENABLED:-${ENABLE_PGBOUNCER:-false}}"
 USE_EXTERNAL_DB="${EXTERNAL_DB:-${USE_EXTERNAL_DB:-false}}"
@@ -31,10 +30,116 @@ AUTO_LABEL_DATABASE_NODE="${AUTO_LABEL_DATABASE_NODE:-false}"
 CONVERGENCE_TIMEOUT_SEC="${CONVERGENCE_TIMEOUT_SEC:-180}"
 DB_READY_TIMEOUT_SEC="${DB_READY_TIMEOUT_SEC:-60}"
 
+# Fail-closed image validation: prevent split mode from running the incompatible latest release tag (v1.4.0)
+if [ "${SWARM_RUNTIME_MODE}" = "split" ]; then
+  if [ -z "${OPSKNIGHT_IMAGE:-}" ] || [ "${OPSKNIGHT_IMAGE}" = "ghcr.io/opsknight-labs/opsknight:latest" ] || [ "${OPSKNIGHT_IMAGE}" = "opsknight:latest" ]; then
+    echo "❌ [FATAL] SWARM_RUNTIME_MODE=split requires an explicit OPSKNIGHT_IMAGE tag or immutable digest built with split-runtime support." >&2
+    echo "   The default 'latest' image tag points to the v1.4.0 release which predates split-runtime process roles." >&2
+    echo "   Starting split runtime with 'latest' will fail because the image does not recognize role entrypoints." >&2
+    echo "   Please supply a compatible image tag or digest, e.g.:" >&2
+    echo "     export OPSKNIGHT_IMAGE=\"ghcr.io/opsknight-labs/opsknight@sha256:<digest>\"" >&2
+    echo "   Or switch to integrated mode if deploying historical monolithic releases:" >&2
+    echo "     export SWARM_RUNTIME_MODE=integrated" >&2
+    exit 1
+  fi
+else
+  OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}"
+fi
+
 if [ "${ENVIRONMENT}" = "production" ] && [ "${ALLOW_INSECURE_SECRETS}" != "true" ]; then
   STRICT_SECRETS="true"
 else
   STRICT_SECRETS="${STRICT_SECRETS:-false}"
+fi
+
+# Concurrency lock to serialize deployments targeting the same stack on this host
+DEPLOY_LOCK_DIR="/tmp/opsknight_deploy_${STACK_NAME}.lock"
+if ! mkdir "${DEPLOY_LOCK_DIR}" 2>/dev/null; then
+  echo "⚠️  [LOCK] Deployment for stack '${STACK_NAME}' is currently in progress or locked by '${DEPLOY_LOCK_DIR}'."
+  echo "   Waiting for concurrent deployment to complete..."
+  for i in $(seq 1 30); do
+    if mkdir "${DEPLOY_LOCK_DIR}" 2>/dev/null; then
+      break
+    fi
+    sleep 2
+  done
+  if [ ! -d "${DEPLOY_LOCK_DIR}" ]; then
+    echo "❌ [ERROR] Could not acquire deployment lock '${DEPLOY_LOCK_DIR}' after 60s." >&2
+    exit 1
+  fi
+fi
+trap 'rm -rf "${DEPLOY_LOCK_DIR}" >/dev/null 2>&1 || true' EXIT
+
+# --- Early Resolution: Resolve Database URLs and Credentials ---
+DB_USER="${POSTGRES_USER:-opsknight}"
+DB_PASS="${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}"
+DB_NAME="${POSTGRES_DB:-opsknight_db}"
+DB_HOST="opsknight-db"
+DB_PORT="5432"
+
+# Parse structured credentials from supplied database URLs if provided
+if [ -n "${DIRECT_DATABASE_URL:-}" ] || [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
+  SAMPLE_URL="${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL}}"
+  PARSED_CREDS=$(node -e '
+    try {
+      const u = new URL(process.argv[1]);
+      const user = decodeURIComponent(u.username || "");
+      const pass = decodeURIComponent(u.password || "");
+      const host = u.hostname || "";
+      const port = u.port || "5432";
+      const db = (u.pathname || "").replace(/^\//, "");
+      console.log(JSON.stringify({ user, pass, host, port, db }));
+    } catch (e) {
+      console.log("{}");
+    }
+  ' "$SAMPLE_URL" 2>/dev/null || echo "{}")
+
+  PARSED_USER=$(node -e 'console.log(JSON.parse(process.argv[1]).user || "")' "$PARSED_CREDS" 2>/dev/null || true)
+  PARSED_PASS=$(node -e 'console.log(JSON.parse(process.argv[1]).pass || "")' "$PARSED_CREDS" 2>/dev/null || true)
+  PARSED_HOST=$(node -e 'console.log(JSON.parse(process.argv[1]).host || "")' "$PARSED_CREDS" 2>/dev/null || true)
+  PARSED_PORT=$(node -e 'console.log(JSON.parse(process.argv[1]).port || "")' "$PARSED_CREDS" 2>/dev/null || true)
+  PARSED_DB=$(node -e 'console.log(JSON.parse(process.argv[1]).db || "")' "$PARSED_CREDS" 2>/dev/null || true)
+
+  if [ -n "${PARSED_USER}" ] && [ -z "${POSTGRES_USER:-}" ] && [ -z "${EXTERNAL_DB_USER:-}" ]; then
+    DB_USER="${PARSED_USER}"
+  fi
+  if [ -n "${PARSED_PASS}" ] && [ -z "${POSTGRES_PASSWORD:-}" ] && [ -z "${EXTERNAL_DB_PASSWORD:-}" ]; then
+    DB_PASS="${PARSED_PASS}"
+  fi
+  if [ -n "${PARSED_HOST}" ] && [ -z "${EXTERNAL_DB_HOST:-}" ] && [ "${PARSED_HOST}" != "opsknight-db" ]; then
+    DB_HOST="${PARSED_HOST}"
+    USE_EXTERNAL_DB="true"
+    EXTERNAL_DB_HOST="${PARSED_HOST}"
+  fi
+  if [ -n "${PARSED_PORT}" ] && [ -z "${EXTERNAL_DB_PORT:-}" ]; then
+    DB_PORT="${PARSED_PORT}"
+  fi
+  if [ -n "${PARSED_DB}" ] && [ -z "${POSTGRES_DB:-}" ] && [ -z "${EXTERNAL_DB_NAME:-}" ]; then
+    DB_NAME="${PARSED_DB}"
+  fi
+fi
+
+if [ "${USE_EXTERNAL_DB}" = "true" ]; then
+  DB_HOST="${EXTERNAL_DB_HOST:-${DB_HOST}}"
+  DB_PORT="${EXTERNAL_DB_PORT:-${DB_PORT}}"
+  DB_USER="${EXTERNAL_DB_USER:-${DB_USER}}"
+  DB_PASS="${EXTERNAL_DB_PASSWORD:-${DB_PASS}}"
+  DB_NAME="${EXTERNAL_DB_NAME:-${DB_NAME}}"
+
+  export EXTERNAL_DB_HOST="${DB_HOST}"
+  export EXTERNAL_DB_PORT="${DB_PORT}"
+  export EXTERNAL_DB_USER="${DB_USER}"
+  export EXTERNAL_DB_PASSWORD="${DB_PASS}"
+  export EXTERNAL_DB_NAME="${DB_NAME}"
+  export PGBOUNCER_DB_HOST="${DB_HOST}"
+  export PGBOUNCER_DB_PORT="${DB_PORT}"
+  export PGBOUNCER_DB_NAME="${DB_NAME}"
+  export PGBOUNCER_DB_USER="${DB_USER}"
+
+  if [ -z "${DB_HOST}" ] || [ "${DB_HOST}" = "opsknight-db" ]; then
+    echo "❌ [FATAL] External database requested but EXTERNAL_DB_HOST is not set." >&2
+    exit 1
+  fi
 fi
 
 echo "═══════════════════════════════════════════════════════════════════════"
@@ -93,6 +198,10 @@ echo "--- [2/8] Running Connection Capacity Pre-flight ---"
 export SWARM_NETWORK_NAME="${NETWORK_NAME}"
 export SWARM_REPLICAS_WEB="${SWARM_REPLICAS_WEB:-${WEB_REPLICAS:-2}}"
 export SWARM_REPLICAS_SCHEDULER="${SWARM_REPLICAS_SCHEDULER:-${SCHEDULER_REPLICAS:-2}}"
+export SWARM_REPLICAS_GENERAL_WORKER="${SWARM_REPLICAS_GENERAL_WORKER:-${GENERAL_WORKER_REPLICAS:-2}}"
+export SWARM_REPLICAS_CRITICAL_WORKER="${SWARM_REPLICAS_CRITICAL_WORKER:-${CRITICAL_WORKER_REPLICAS:-2}}"
+export SWARM_REPLICAS_BULK_WORKER="${SWARM_REPLICAS_BULK_WORKER:-${BULK_WORKER_REPLICAS:-2}}"
+export SWARM_REPLICAS_STATUS_PROJECTOR="${SWARM_REPLICAS_STATUS_PROJECTOR:-${STATUS_PROJECTOR_REPLICAS:-2}}"
 export SWARM_REPLICAS_PGBOUNCER="${SWARM_REPLICAS_PGBOUNCER:-${PGBOUNCER_REPLICAS:-2}}"
 export SWARM_REPLICAS_INTEGRATED="${SWARM_REPLICAS_INTEGRATED:-${INTEGRATED_REPLICAS:-1}}"
 export PGBOUNCER_ENABLED="${ENABLE_PGBOUNCER}"
@@ -116,78 +225,44 @@ if ! docker network inspect "${NETWORK_NAME}" >/dev/null 2>&1; then
   docker network create --driver overlay --attachable "${NETWORK_NAME}"
 fi
 
-# Resolve dynamic database URLs and credentials
-DB_USER="${POSTGRES_USER:-opsknight}"
-DB_PASS="${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}"
-DB_NAME="${POSTGRES_DB:-opsknight_db}"
-DB_HOST="opsknight-db"
-DB_PORT="5432"
-
-# Parse structured credentials from supplied database URLs if provided
-if [ -n "${DIRECT_DATABASE_URL:-}" ] || [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
-  SAMPLE_URL="${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL}}"
-  PARSED_CREDS=$(node -e '
-    try {
-      const u = new URL(process.argv[1]);
-      const user = decodeURIComponent(u.username || "");
-      const pass = decodeURIComponent(u.password || "");
-      const host = u.hostname || "";
-      const port = u.port || "5432";
-      const db = (u.pathname || "").replace(/^\//, "");
-      console.log(JSON.stringify({ user, pass, host, port, db }));
-    } catch (e) {
-      console.log("{}");
-    }
-  ' "$SAMPLE_URL" 2>/dev/null || echo "{}")
-
-  PARSED_USER=$(node -e 'console.log(JSON.parse(process.argv[1]).user || "")' "$PARSED_CREDS" 2>/dev/null || true)
-  PARSED_PASS=$(node -e 'console.log(JSON.parse(process.argv[1]).pass || "")' "$PARSED_CREDS" 2>/dev/null || true)
-  PARSED_HOST=$(node -e 'console.log(JSON.parse(process.argv[1]).host || "")' "$PARSED_CREDS" 2>/dev/null || true)
-  PARSED_PORT=$(node -e 'console.log(JSON.parse(process.argv[1]).port || "")' "$PARSED_CREDS" 2>/dev/null || true)
-  PARSED_DB=$(node -e 'console.log(JSON.parse(process.argv[1]).db || "")' "$PARSED_CREDS" 2>/dev/null || true)
-
-  if [ -n "${PARSED_USER}" ] && [ -z "${POSTGRES_USER:-}" ] && [ -z "${EXTERNAL_DB_USER:-}" ]; then
-    DB_USER="${PARSED_USER}"
-  fi
-  if [ -n "${PARSED_PASS}" ] && [ -z "${POSTGRES_PASSWORD:-}" ] && [ -z "${EXTERNAL_DB_PASSWORD:-}" ]; then
-    DB_PASS="${PARSED_PASS}"
-  fi
-  if [ -n "${PARSED_HOST}" ] && [ -z "${EXTERNAL_DB_HOST:-}" ] && [ "${PARSED_HOST}" != "opsknight-db" ]; then
-    DB_HOST="${PARSED_HOST}"
-    USE_EXTERNAL_DB="true"
-  fi
-  if [ -n "${PARSED_PORT}" ] && [ -z "${EXTERNAL_DB_PORT:-}" ]; then
-    DB_PORT="${PARSED_PORT}"
-  fi
-  if [ -n "${PARSED_DB}" ] && [ -z "${POSTGRES_DB:-}" ] && [ -z "${EXTERNAL_DB_NAME:-}" ]; then
-    DB_NAME="${PARSED_DB}"
-  fi
-fi
-
+# Configure connection URLs based on database topology
 if [ "${USE_EXTERNAL_DB}" = "true" ]; then
-  DB_HOST="${EXTERNAL_DB_HOST:-${DB_HOST}}"
-  DB_PORT="${EXTERNAL_DB_PORT:-${DB_PORT}}"
-  DB_USER="${EXTERNAL_DB_USER:-${DB_USER}}"
-  DB_PASS="${EXTERNAL_DB_PASSWORD:-${DB_PASS}}"
-  DB_NAME="${EXTERNAL_DB_NAME:-${DB_NAME}}"
-
-  if [ -z "${DB_HOST}" ] || [ "${DB_HOST}" = "opsknight-db" ]; then
-    echo "❌ [FATAL] External database requested but EXTERNAL_DB_HOST is not set." >&2
-    exit 1
-  fi
-
   EXTERNAL_DB_SSLMODE="${EXTERNAL_DB_SSLMODE:-verify-full}"
   export EXTERNAL_DB_SSLMODE
   export PGBOUNCER_SERVER_TLS_SSLMODE="${EXTERNAL_DB_SSLMODE}"
 
   ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$DB_USER")
   ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$DB_PASS")
+  CA_PARAM=""
+  ensure_sslrootcert() {
+    local url="$1"
+    local cert_path="/etc/ssl/certs/custom-ca.crt"
+    if [ -z "${url}" ]; then echo ""; return; fi
+    if [[ "${url}" == *"sslrootcert="* ]]; then echo "${url}"; return; fi
+    if [[ "${url}" == *"?"* ]]; then
+      echo "${url}&sslrootcert=${cert_path}"
+    else
+      echo "${url}?sslrootcert=${cert_path}"
+    fi
+  }
+
+  if [ -n "${PGBOUNCER_TLS_CA_CERT:-}" ] && [ -f "${PGBOUNCER_TLS_CA_CERT}" ]; then
+    CA_PARAM="&sslrootcert=/etc/ssl/certs/custom-ca.crt"
+    if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
+      DIRECT_DATABASE_URL=$(ensure_sslrootcert "${DIRECT_DATABASE_URL}")
+      export DIRECT_DATABASE_URL
+    fi
+    if [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
+      OPSKNIGHT_DATABASE_URL=$(ensure_sslrootcert "${OPSKNIGHT_DATABASE_URL}")
+      export OPSKNIGHT_DATABASE_URL
+    fi
+  fi
 
   if [ -z "${DIRECT_DATABASE_URL:-}" ]; then
-    export DIRECT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${EXTERNAL_DB_SSLMODE}&connection_limit=10&pool_timeout=30"
+    export DIRECT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${EXTERNAL_DB_SSLMODE}&connection_limit=10&pool_timeout=30${CA_PARAM}"
   fi
   if [ -z "${OPSKNIGHT_DATABASE_URL:-}" ]; then
-    export OPSKNIGHT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${EXTERNAL_DB_SSLMODE}&connection_limit=40&pool_timeout=30"
+    export OPSKNIGHT_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${EXTERNAL_DB_SSLMODE}&connection_limit=40&pool_timeout=30${CA_PARAM}"
   fi
   if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
     export WEB_DATABASE_URL="postgresql://${ENCODED_USER}:${ENCODED_PASS}@opsknight-pgbouncer:6432/${DB_NAME}?sslmode=disable&pgbouncer=true"
@@ -212,9 +287,10 @@ else
   fi
 fi
 
-# Robustly escape PgBouncer userlist credentials
-CLEAN_USER=$(printf '%s' "${DB_USER}" | sed 's/\\/\\\\/g; s/"/\\"/g')
-CLEAN_PASS=$(printf '%s' "${DB_PASS}" | sed 's/\\/\\\\/g; s/"/\\"/g')
+# Robustly escape PgBouncer userlist credentials per PgBouncer auth_file spec:
+# Literal double quotes inside quoted strings are doubled (""), backslashes are literal
+CLEAN_USER=$(printf '%s' "${DB_USER}" | sed 's/"/""/g')
+CLEAN_PASS=$(printf '%s' "${DB_PASS}" | sed 's/"/""/g')
 PGBOUNCER_USERLIST_CONTENT=$(printf '"%s" "%s"\n' "${CLEAN_USER}" "${CLEAN_PASS}")
 
 # Export credentials for child processes & stack environment
@@ -234,19 +310,36 @@ if [ "${STRICT_SECRETS}" = "true" ]; then
     echo "   Provide a 64-hex-char encryption key with: export ENCRYPTION_KEY='...'" >&2
     exit 1
   fi
-  if [ "${USE_EXTERNAL_DB}" = "true" ] && [ -z "${DB_PASS}" ]; then
-    echo "❌ [FATAL] STRICT_SECRETS enforced: External database password cannot be empty." >&2
-    exit 1
-  fi
-  if [ "${USE_EXTERNAL_DB}" != "true" ] && [ "${DB_PASS}" = "opsknight_secure_password_change_me" ]; then
-    echo "❌ [FATAL] STRICT_SECRETS enforced: POSTGRES_PASSWORD must be changed from the default placeholder." >&2
-    exit 1
+  if [ "${USE_EXTERNAL_DB}" = "true" ]; then
+    if [ -z "${DB_PASS}" ] || [ "${DB_PASS}" = "opsknight_secure_password_change_me" ]; then
+      echo "❌ [FATAL] STRICT_SECRETS enforced: External database password cannot be empty or use known default placeholder." >&2
+      exit 1
+    fi
+  else
+    if [ "${DB_PASS}" = "opsknight_secure_password_change_me" ]; then
+      echo "❌ [FATAL] STRICT_SECRETS enforced: POSTGRES_PASSWORD must be changed from the default placeholder." >&2
+      exit 1
+    fi
   fi
 fi
 
 # Fallback values for development / evaluation
 NEXTAUTH_SECRET="${NEXTAUTH_SECRET:-opsknight_super_secret_jwt_and_session_signing_key_change_in_production_min32chars}"
 ENCRYPTION_KEY="${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
+
+# Portable hash helper for Linux/macOS Swarm managers
+hash_string() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 | awk '{print $1}'
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 | awk '{print $NF}'
+  else
+    echo "❌ [FATAL] No cryptographic SHA-256 tool found (sha256sum, shasum, or openssl required for secret content hashing)." >&2
+    exit 1
+  fi
+}
 
 # Create content-versioned Raft secrets supporting automatic rotation
 create_versioned_secret() {
@@ -256,13 +349,17 @@ create_versioned_secret() {
 
   # Compute content hash for immutable Swarm secret rotation
   local content_hash
-  content_hash=$(printf '%s' "${secret_val}" | shasum -a 256 | head -c 8)
+  content_hash=$(printf '%s' "${secret_val}" | hash_string | head -c 8)
   local versioned_name="${STACK_NAME}_${base_name}_${content_hash}"
 
-  # If user explicitly overrode the secret name, honor it directly
+  # If user explicitly overrode the secret name, guarantee immutability & rotation by attaching hash
   local current_env_val="${!env_override_var:-}"
   if [ -n "${current_env_val}" ]; then
-    versioned_name="${current_env_val}"
+    if [[ "${current_env_val}" != *"${content_hash}"* ]]; then
+      versioned_name="${current_env_val}_${content_hash}"
+    else
+      versioned_name="${current_env_val}"
+    fi
   fi
 
   if ! docker secret inspect "${versioned_name}" >/dev/null 2>&1; then
@@ -272,8 +369,9 @@ create_versioned_secret() {
     echo "  Secret ${versioned_name} already exists."
   fi
 
-  # Export environment variable used by docker-stack manifests
-  eval "export ${env_override_var}=\"${versioned_name}\""
+  # Export environment variable used by docker-stack manifests without eval
+  printf -v "${env_override_var}" '%s' "${versioned_name}"
+  export "${env_override_var}"
 }
 
 create_versioned_secret "database_url" "${OPSKNIGHT_DATABASE_URL}" "OPSKNIGHT_DATABASE_URL_SECRET"
@@ -283,6 +381,7 @@ create_versioned_secret "encryption_key" "${ENCRYPTION_KEY}" "OPSKNIGHT_ENCRYPTI
 
 if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
   create_versioned_secret "pgbouncer_userlist" "${PGBOUNCER_USERLIST_CONTENT}" "OPSKNIGHT_PGBOUNCER_USERLIST_SECRET"
+  create_versioned_secret "pgbouncer_db_password" "${DB_PASS}" "OPSKNIGHT_PGBOUNCER_DB_PASSWORD_SECRET"
   create_versioned_secret "web_database_url" "${WEB_DATABASE_URL}" "OPSKNIGHT_WEB_DATABASE_URL_SECRET"
 fi
 
@@ -301,20 +400,36 @@ else
   exit 1
 fi
 
-if [ "${USE_EXTERNAL_DB}" = "true" ]; then
-  DB_FILE="${SWARM_DIR}/docker-stack.external-db.yml"
-else
-  DB_FILE="${SWARM_DIR}/docker-stack.db.yml"
-fi
+STACK_FILES=("-c" "${RUNTIME_FILE}")
 
-STACK_FILES=("-c" "${RUNTIME_FILE}" "-c" "${DB_FILE}")
+if [ "${USE_EXTERNAL_DB}" != "true" ]; then
+  STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.db.yml")
+else
+  if [ "${SWARM_RUNTIME_MODE}" = "split" ]; then
+    STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.external-db.yml")
+  else
+    STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.external-db.integrated.yml")
+  fi
+fi
 
 if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
   STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.pgbouncer.yml")
 fi
 
 if [ -n "${PGBOUNCER_TLS_CA_CERT:-}" ] && [ -f "${PGBOUNCER_TLS_CA_CERT}" ]; then
-  STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.pgbouncer-ca.yml")
+  if [ "${SWARM_RUNTIME_MODE}" = "split" ]; then
+    STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.ca.split.yml")
+  else
+    STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.ca.integrated.yml")
+  fi
+  if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
+    STACK_FILES+=("-c" "${SWARM_DIR}/docker-stack.pgbouncer-ca.yml")
+  fi
+fi
+
+DEPLOY_OPTS=("--with-registry-auth")
+if [ "${SWARM_RESOLVE_IMAGE_NEVER:-}" = "true" ] || [[ "${OPSKNIGHT_IMAGE:-}" == *local* ]]; then
+  DEPLOY_OPTS+=("--resolve-image=never")
 fi
 
 # --- Step 4: Bootstrap / Ensure Database Readiness ---
@@ -323,7 +438,7 @@ if [ "${USE_EXTERNAL_DB}" = "true" ]; then
   echo "ℹ️  Using external database; skipping bundled PostgreSQL startup."
 else
   echo "  Deploying bundled PostgreSQL service manifest..."
-  docker stack deploy --with-registry-auth -c "${SWARM_DIR}/docker-stack.db.yml" "${STACK_NAME}"
+  docker stack deploy "${DEPLOY_OPTS[@]}" -c "${SWARM_DIR}/docker-stack.db.yml" "${STACK_NAME}"
 
   echo "⏳ Waiting for bundled PostgreSQL readiness (timeout: ${DB_READY_TIMEOUT_SEC}s)..."
   START_TIME=$(date +%s)
@@ -338,15 +453,23 @@ else
       exit 1
     fi
 
+    # 1. Direct container probe if PostgreSQL task container is on the current node
     TASK_CONTAINER=$(docker ps --filter "label=com.docker.swarm.service.name=${STACK_NAME}_opsknight-db" -q | head -n 1 || true)
     if [ -n "${TASK_CONTAINER}" ]; then
-      HEALTH_STATUS=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' "${TASK_CONTAINER}" 2>/dev/null || echo "unknown")
-      if [ "${HEALTH_STATUS}" = "healthy" ]; then
-        echo "✅ PostgreSQL is healthy and accepting connections (${ELAPSED}s)."
+      if docker exec "${TASK_CONTAINER}" pg_isready -U "${DB_USER}" -d "${DB_NAME}" >/dev/null 2>&1; then
+        echo "✅ PostgreSQL is accepting connections on local node (${ELAPSED}s)."
+        DB_READY=1
+        break
+      fi
+    else
+      # 2. Network probe over Swarm overlay network for multi-node clusters
+      if docker run --rm --network "${NETWORK_NAME}" postgres:15-alpine pg_isready -h opsknight-db -p 5432 -U "${DB_USER}" -d "${DB_NAME}" >/dev/null 2>&1; then
+        echo "✅ PostgreSQL is accepting connections across Swarm overlay network (${ELAPSED}s)."
         DB_READY=1
         break
       fi
     fi
+
     sleep 2
   done
 fi
@@ -356,13 +479,17 @@ echo "--- [5/8] Running Ephemeral Schema Migration ---"
 export OPSKNIGHT_IMAGE
 export SWARM_NETWORK_NAME="${NETWORK_NAME}"
 export SWARM_STACK_NAME="${STACK_NAME}"
-export DIRECT_DATABASE_URL
-export OPSKNIGHT_DATABASE_URL
+export OPSKNIGHT_DIRECT_DATABASE_URL_SECRET
+export OPSKNIGHT_DATABASE_URL_SECRET
+export OPSKNIGHT_NEXTAUTH_SECRET_SECRET
+export OPSKNIGHT_ENCRYPTION_KEY_SECRET
+export OPSKNIGHT_CUSTOM_CA_SECRET
+unset DIRECT_DATABASE_URL OPSKNIGHT_DATABASE_URL
 "${SCRIPT_DIR}/migrate.sh"
 
 # --- Step 6: Deploy Application Stack with Prune ---
 echo "--- [6/8] Deploying OpsKnight Swarm Stack (${SWARM_RUNTIME_MODE} mode with --prune) ---"
-docker stack deploy --with-registry-auth "${STACK_FILES[@]}" --prune "${STACK_NAME}"
+docker stack deploy "${DEPLOY_OPTS[@]}" "${STACK_FILES[@]}" --prune "${STACK_NAME}"
 
 # --- Step 7: Service Convergence Verification ---
 echo "--- [7/8] Waiting for Service Convergence (timeout: ${CONVERGENCE_TIMEOUT_SEC}s) ---"
@@ -374,13 +501,20 @@ while true; do
   ELAPSED=$((CURRENT_TIME - START_TIME))
   if [ "${ELAPSED}" -gt "${CONVERGENCE_TIMEOUT_SEC}" ]; then
     echo "💥 [FATAL] Stack convergence timed out after ${CONVERGENCE_TIMEOUT_SEC}s." >&2
-    docker stack ps "${STACK_NAME}" --no-trunc | head -n 25 >&2
+    docker stack ps "${STACK_NAME}" --no-trunc 2>&1 | head -n 25 >&2 || true
+    echo "--- Service Logs for Degraded Services ---" >&2
+    for svc in $(docker stack services "${STACK_NAME}" --format '{{.Name}} {{.Replicas}}' 2>/dev/null | awk '$2 ~ /^0\// {print $1}'); do
+      echo "=== Logs for $svc ===" >&2
+      docker service logs "$svc" 2>&1 | tail -n 30 >&2 || true
+    done
     exit 1
   fi
 
+  TOTAL_SERVICES=0
   PENDING=0
   while read -r name image replicas ports; do
     [ -z "${replicas}" ] && continue
+    TOTAL_SERVICES=$((TOTAL_SERVICES + 1))
     current=$(echo "${replicas}" | cut -d'/' -f1)
     desired=$(echo "${replicas}" | cut -d'/' -f2)
     if [ "${current}" != "${desired}" ]; then
@@ -388,7 +522,7 @@ while true; do
     fi
   done < <(docker stack services "${STACK_NAME}" --format '{{.Name}} {{.Image}} {{.Replicas}} {{.Ports}}' 2>/dev/null || true)
 
-  if [ "${PENDING}" -eq 0 ]; then
+  if [ "${TOTAL_SERVICES}" -gt 0 ] && [ "${PENDING}" -eq 0 ]; then
     echo "✅ All services converged successfully in ${ELAPSED}s."
     CONVERGED=1
     break
@@ -401,6 +535,43 @@ done
 # --- Step 8: Health Verification ---
 echo "--- [8/8] Verifying System Health ---"
 "${SCRIPT_DIR}/health-check.sh"
+
+# --- Step 9: Cleanup Stale Unreferenced Versioned Secrets ---
+echo "🧹 Pruning stale unreferenced Raft secrets for stack '${STACK_NAME}'..."
+CURRENT_RUN_SECRETS=(
+  "${OPSKNIGHT_DATABASE_URL_SECRET:-}"
+  "${OPSKNIGHT_DIRECT_DATABASE_URL_SECRET:-}"
+  "${OPSKNIGHT_NEXTAUTH_SECRET_SECRET:-}"
+  "${OPSKNIGHT_ENCRYPTION_KEY_SECRET:-}"
+  "${OPSKNIGHT_PGBOUNCER_USERLIST_SECRET:-}"
+  "${OPSKNIGHT_PGBOUNCER_DB_PASSWORD_SECRET:-}"
+  "${OPSKNIGHT_WEB_DATABASE_URL_SECRET:-}"
+  "${OPSKNIGHT_CUSTOM_CA_SECRET:-}"
+)
+
+# Collect all secret names currently mounted across active stack services
+ACTIVE_TASK_SECRETS=$(docker service ls --filter "label=com.docker.stack.namespace=${STACK_NAME}" -q 2>/dev/null | while read -r s_id; do
+  docker service inspect "$s_id" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{.SecretName}} {{end}}' 2>/dev/null || true
+done | tr ' ' '\n' | grep -v '^$' | sort -u || true)
+
+# Prune unreferenced secrets matching stack prefix
+for sec in $(docker secret ls --format '{{.Name}}' 2>/dev/null | grep -E "^${STACK_NAME}_" || true); do
+  IS_PROTECTED=0
+  for cur_sec in "${CURRENT_RUN_SECRETS[@]}"; do
+    if [ -n "${cur_sec}" ] && [ "${sec}" = "${cur_sec}" ]; then
+      IS_PROTECTED=1
+      break
+    fi
+  done
+  [ "${IS_PROTECTED}" -eq 1 ] && continue
+
+  if echo "${ACTIVE_TASK_SECRETS}" | grep -Fxq "${sec}"; then
+    continue
+  fi
+
+  echo "  Pruned stale secret: ${sec}"
+  docker secret rm "${sec}" >/dev/null 2>&1 || true
+done
 
 echo ""
 echo "🎉 OpsKnight Swarm deployment finished successfully!"

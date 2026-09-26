@@ -92,6 +92,10 @@ spec:
             - configMapRef:
                 name: {{ include "opsknight.fullname" $root }}-config
           env:
+            {{- if $root.Values.migrations.job.enabled }}
+            - name: OPSKNIGHT_SKIP_MIGRATIONS
+              value: "true"
+            {{- end }}
             - name: OPSKNIGHT_PROCESS_ROLE
               value: {{ $role.processRole | quote }}
             {{- if eq $role.name "scheduler" }}
@@ -157,13 +161,13 @@ spec:
                   - "3"
             {{- end }}
           {{- end }}
-          {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled (or (ne $role.name "web") (not $root.Values.pgbouncer.enabled)) }}
+          {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled }}
           volumeMounts:
             - name: database-tls
               mountPath: /etc/opsknight-db-tls
               readOnly: true
           {{- end }}
-      {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled (or (ne $role.name "web") (not $root.Values.pgbouncer.enabled)) }}
+      {{- if and (not $root.Values.postgresql.enabled) $root.Values.postgresql.tls.enabled }}
       volumes:
         - name: database-tls
           secret:

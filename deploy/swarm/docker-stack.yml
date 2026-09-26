@@ -9,12 +9,12 @@ version: '3.8'
 # Deploy:
 #   ./deploy/swarm/scripts/deploy.sh
 #   OR
-#   docker stack deploy --with-registry-auth -c deploy/swarm/docker-stack.yml opsknight
+#   OPSKNIGHT_IMAGE="ghcr.io/opsknight-labs/opsknight:<tag>" docker stack deploy --with-registry-auth -c deploy/swarm/docker-stack.yml opsknight
 # ==============================================================================
 
 services:
   opsknight-web:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
     ports:
       - target: 3000
         published: ${APP_PORT:-3000}
@@ -44,8 +44,6 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     healthcheck:
@@ -59,7 +57,7 @@ services:
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 2
+      replicas: ${SWARM_REPLICAS_WEB:-2}
       placement:
         preferences:
           - spread: node.id
@@ -91,7 +89,7 @@ services:
       - opsknight
 
   opsknight-scheduler:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
     environment:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: scheduler
@@ -115,8 +113,6 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     healthcheck:
@@ -130,7 +126,7 @@ services:
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 2
+      replicas: ${SWARM_REPLICAS_SCHEDULER:-2}
       placement:
         preferences:
           - spread: node.id
@@ -162,7 +158,7 @@ services:
       - opsknight
 
   opsknight-general-worker:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
     environment:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: general-worker
@@ -185,8 +181,6 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     healthcheck:
@@ -200,7 +194,7 @@ services:
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 1
+      replicas: ${SWARM_REPLICAS_GENERAL_WORKER:-2}
       placement:
         preferences:
           - spread: node.id
@@ -232,7 +226,7 @@ services:
       - opsknight
 
   opsknight-critical-worker:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
     environment:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: critical-worker
@@ -255,8 +249,6 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     healthcheck:
@@ -270,7 +262,7 @@ services:
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 1
+      replicas: ${SWARM_REPLICAS_CRITICAL_WORKER:-2}
       placement:
         preferences:
           - spread: node.id
@@ -302,7 +294,7 @@ services:
       - opsknight
 
   opsknight-bulk-worker:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
     environment:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: bulk-worker
@@ -325,8 +317,6 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     healthcheck:
@@ -340,7 +330,7 @@ services:
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 1
+      replicas: ${SWARM_REPLICAS_BULK_WORKER:-2}
       placement:
         preferences:
           - spread: node.id
@@ -372,7 +362,7 @@ services:
       - opsknight
 
   opsknight-status-projector:
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}
+    image: ${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}
     environment:
       NODE_ENV: production
       OPSKNIGHT_PROCESS_ROLE: status-projector
@@ -395,8 +385,6 @@ services:
         target: /run/secrets/opsknight_nextauth_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
     healthcheck:
@@ -410,7 +398,7 @@ services:
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 1
+      replicas: ${SWARM_REPLICAS_STATUS_PROJECTOR:-2}
       placement:
         preferences:
           - spread: node.id

@@ -192,9 +192,9 @@ describe('deployment configuration invariants', () => {
     expect(read('helm/opsknight/templates/split-deployments.yaml')).toContain(
       '(eq $role.name "web") $root.Values.pgbouncer.enabled'
     );
-    expect(rawWebPatch).toContain('@opsknight-pgbouncer:6432');
+    expect(rawWebPatch).toContain('key: WEB_DATABASE_URL');
     expect(rawWebPatch).toContain('DIRECT_DATABASE_URL');
-    expect(rawWebPatch).toContain('@$(POSTGRES_HOST):$(POSTGRES_PORT)');
+    expect(rawWebPatch).toContain('key: DIRECT_DATABASE_URL');
     expect(read('helm/opsknight/templates/split-deployments.yaml')).toContain(
       'name: DIRECT_DATABASE_URL'
     );
@@ -405,7 +405,9 @@ describe('deployment configuration invariants', () => {
     expect(pgbouncer).toContain('SELECT 1');
     expect(pgbouncer).toContain('@opsknight-pgbouncer:6432/${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}?sslmode=disable&pgbouncer=true');
     expect(pgbouncer).toContain('DIRECT_DATABASE_URL:');
-    expect(split).toContain('DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://');
+    expect(split).toContain(
+      'DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://'
+    );
 
     // Helm PgBouncer aligns on 1.26.0 security update
     const helm = read('helm/opsknight/values.yaml');
@@ -497,4 +499,61 @@ describe('deployment configuration invariants', () => {
       }
     }
   });
+
+  it('enforces redundant 2-replica HA worker defaults and safe connection budgets for Swarm', () => {
+    const stack = read('deploy/swarm/docker-stack.yml');
+    expect(stack).toContain('replicas: ${SWARM_REPLICAS_WEB:-2}');
+    expect(stack).toContain('replicas: ${SWARM_REPLICAS_SCHEDULER:-2}');
+    expect(stack).toContain('replicas: ${SWARM_REPLICAS_GENERAL_WORKER:-2}');
+    expect(stack).toContain('replicas: ${SWARM_REPLICAS_CRITICAL_WORKER:-2}');
+    expect(stack).toContain('replicas: ${SWARM_REPLICAS_BULK_WORKER:-2}');
+    expect(stack).toContain('replicas: ${SWARM_REPLICAS_STATUS_PROJECTOR:-2}');
+
+    // HA Swarm capacity preflight without PgBouncer (2 replicas each)
+    const swarmHa = calculateRuntimeCapacity({
+      OPSKNIGHT_RUNTIME_MODE: 'split',
+      SWARM_REPLICAS_WEB: '2',
+      SWARM_REPLICAS_SCHEDULER: '2',
+      SWARM_REPLICAS_GENERAL_WORKER: '2',
+      SWARM_REPLICAS_CRITICAL_WORKER: '2',
+      SWARM_REPLICAS_BULK_WORKER: '2',
+      SWARM_REPLICAS_STATUS_PROJECTOR: '2',
+    });
+    expect(swarmHa.safe).toBe(true);
+    expect(swarmHa.totalDemand).toBe(58);
+    expect(swarmHa.headroom).toBe(22);
+
+    // HA Swarm capacity preflight with PgBouncer (2 replicas each)
+    const swarmHaPgBouncer = calculateRuntimeCapacity({
+      OPSKNIGHT_RUNTIME_MODE: 'split',
+      PGBOUNCER_ENABLED: 'true',
+      SWARM_REPLICAS_WEB: '2',
+      SWARM_REPLICAS_PGBOUNCER: '2',
+      SWARM_REPLICAS_SCHEDULER: '2',
+      SWARM_REPLICAS_GENERAL_WORKER: '2',
+      SWARM_REPLICAS_CRITICAL_WORKER: '2',
+      SWARM_REPLICAS_BULK_WORKER: '2',
+      SWARM_REPLICAS_STATUS_PROJECTOR: '2',
+    });
+    expect(swarmHaPgBouncer.safe).toBe(true);
+    expect(swarmHaPgBouncer.totalDemand).toBe(68);
+    expect(swarmHaPgBouncer.headroom).toBe(12);
+
+    // Swarm deploy.sh enforces fail-closed split image contract
+    const deployScript = read('deploy/swarm/scripts/deploy.sh');
+    expect(deployScript).toContain('SWARM_RUNTIME_MODE=split requires an explicit OPSKNIGHT_IMAGE');
+
+    // Swarm docker-stack.yml enforces fail-closed split image contract directly against raw stack deploys
+    expect(stack).toContain(
+      '${OPSKNIGHT_IMAGE:?Set OPSKNIGHT_IMAGE to an explicit release image or immutable digest with split runtime support}'
+    );
+
+    // Kustomize external database CIDR patch provides targeted egress for split workers
+    const cidrPatch = read('k8s/profiles/split/external-database-cidr-patch.yaml');
+    expect(cidrPatch).toContain('kind: NetworkPolicy');
+    expect(cidrPatch).toContain('cidr: 10.24.0.0/16');
+    expect(cidrPatch).toContain('opsknight-scheduler-network-policy');
+    expect(cidrPatch).toContain('opsknight-general-worker-network-policy');
+  });
 });
+

@@ -15,11 +15,12 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-opsknight}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}
       POSTGRES_DB: ${POSTGRES_DB:-opsknight_db}
-      PGBOUNCER_DB_HOST: ${PGBOUNCER_DB_HOST:-${POSTGRES_HOST:-opsknight-db}}
+      PGBOUNCER_DB_HOST: ${PGBOUNCER_DB_HOST:-${EXTERNAL_DB_HOST:-}}
       PGBOUNCER_DB_PORT: ${PGBOUNCER_DB_PORT:-5432}
       PGBOUNCER_DB_NAME: ${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}
       PGBOUNCER_DB_USER: ${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}
-      PGBOUNCER_DB_PASSWORD: ${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}
+      PGBOUNCER_DB_PASSWORD: ${PGBOUNCER_DB_PASSWORD:-${EXTERNAL_DB_PASSWORD:-}}
+      PGBOUNCER_DB_PASSWORD_FILE: ${PGBOUNCER_DB_PASSWORD_FILE:-}
       PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-10}
       PGBOUNCER_RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-5}
       PGBOUNCER_MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-1000}
@@ -36,7 +37,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "PGPASSWORD=\"$${PGBOUNCER_DB_PASSWORD:-$${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}\" /usr/bin/psql -h 127.0.0.1 -p 6432 -U \"$${PGBOUNCER_DB_USER:-$${POSTGRES_USER:-opsknight}}\" -d \"$${PGBOUNCER_DB_NAME:-$${POSTGRES_DB:-opsknight_db}}\" -c \"SELECT 1\" -t -A -q || exit 1"
+          "if [ -f /run/secrets/pgbouncer_db_password ]; then PASS=$$(cat /run/secrets/pgbouncer_db_password); elif [ -n \"$${PGBOUNCER_DB_PASSWORD_FILE}\" ] && [ -f \"$${PGBOUNCER_DB_PASSWORD_FILE}\" ]; then PASS=$$(cat \"$${PGBOUNCER_DB_PASSWORD_FILE}\"); else PASS=\"$${PGBOUNCER_DB_PASSWORD:-$${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}\"; fi; PGPASSWORD=\"$$PASS\" /usr/bin/psql -h 127.0.0.1 -p 6432 -U \"$${PGBOUNCER_DB_USER:-$${POSTGRES_USER:-opsknight}}\" -d \"$${PGBOUNCER_DB_NAME:-$${POSTGRES_DB:-opsknight_db}}\" -c \"SELECT 1\" -t -A -q || exit 1"
         ]
       interval: 10s
       timeout: 5s
@@ -57,7 +58,7 @@ services:
       PGBOUNCER_DB_NAME: ${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}
       WEB_DATABASE_URL: ${WEB_DATABASE_URL:-}
       DATABASE_URL: ${WEB_DATABASE_URL:-postgresql://${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}:${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}}@opsknight-pgbouncer:6432/${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}?sslmode=disable&pgbouncer=true}
-      DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=40&pool_timeout=30}
+      DIRECT_DATABASE_URL: ${DIRECT_DATABASE_URL:-${OPSKNIGHT_DATABASE_URL:-postgresql://${POSTGRES_USER:-opsknight}:${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}@opsknight-db:5432/${POSTGRES_DB:-opsknight_db}?sslmode=prefer&connection_limit=40&pool_timeout=30}}
     depends_on:
       opsknight-migration:
         condition: service_completed_successfully

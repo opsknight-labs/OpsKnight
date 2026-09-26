@@ -14,12 +14,12 @@ TLS_CA_FILE="${PGBOUNCER_SERVER_TLS_CA_FILE:-/etc/ssl/certs/ca-certificates.crt}
 # Fail-closed validation for external database without PgBouncer configuration
 if [ -z "$DB_HOST" ]; then
   if [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
-    echo "[FATAL] External PostgreSQL (OPSKNIGHT_DATABASE_URL) requires explicit structured PgBouncer parameters:" >&2
-    echo "  - PGBOUNCER_DB_HOST" >&2
+    echo "[FATAL] External PostgreSQL + PgBouncer requires explicit PGBOUNCER_DB_HOST (or EXTERNAL_DB_HOST) and credentials:" >&2
+    echo "  - PGBOUNCER_DB_HOST or EXTERNAL_DB_HOST" >&2
     echo "  - PGBOUNCER_DB_PORT (default: 5432)" >&2
     echo "  - PGBOUNCER_DB_NAME (default: \${POSTGRES_DB:-opsknight_db})" >&2
     echo "  - PGBOUNCER_DB_USER (default: \${POSTGRES_USER:-opsknight})" >&2
-    echo "  - PGBOUNCER_DB_PASSWORD" >&2
+    echo "  - PGBOUNCER_DB_PASSWORD, PGBOUNCER_DB_PASSWORD_FILE, or EXTERNAL_DB_PASSWORD" >&2
     echo "  - PGBOUNCER_SERVER_TLS_SSLMODE (default: verify-full)" >&2
     exit 1
   fi
@@ -37,6 +37,21 @@ else
   DB_NAME="${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}"
   DB_USER="${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}"
   DB_PASS="${PGBOUNCER_DB_PASSWORD:-${POSTGRES_PASSWORD:-}}"
+
+  # Support file-based password sources and secret mounts for external DB
+  if [ -z "$DB_PASS" ]; then
+    if [ -n "${PGBOUNCER_DB_PASSWORD_FILE:-}" ] && [ -f "$PGBOUNCER_DB_PASSWORD_FILE" ]; then
+      DB_PASS="$(cat "$PGBOUNCER_DB_PASSWORD_FILE")"
+    elif [ -n "${PGBOUNCER_AUTH_FILE:-}" ] && [ -f "$PGBOUNCER_AUTH_FILE" ]; then
+      # Extract password from userlist: "username" "password"
+      # In PgBouncer auth_file, double quotes inside the string are escaped as ""
+      DB_PASS=$(sed -n 's/^"[^"]*" "\(.*\)"$/\1/p' "$PGBOUNCER_AUTH_FILE" | head -n1 | sed 's/""/"/g' || true)
+    elif [ -f "/run/secrets/pgbouncer_userlist" ]; then
+      DB_PASS=$(sed -n 's/^"[^"]*" "\(.*\)"$/\1/p' /run/secrets/pgbouncer_userlist | head -n1 | sed 's/""/"/g' || true)
+    elif [ -f "/run/secrets/pgbouncer_db_password" ]; then
+      DB_PASS="$(cat /run/secrets/pgbouncer_db_password)"
+    fi
+  fi
 
   if [ "$DB_HOST" = "opsknight-db" ] || [ "$DB_HOST" = "localhost" ] || [ "$DB_HOST" = "127.0.0.1" ]; then
     TLS_SSLMODE="${PGBOUNCER_SERVER_TLS_SSLMODE:-disable}"
@@ -57,23 +72,38 @@ else
   fi
 fi
 
+# Defensively sanitize DB_NAME and DB_USER against unexpanded nested variable artifacts (e.g. from Swarm)
+DB_NAME=$(printf '%s' "$DB_NAME" | sed -e 's/^[${]*//' -e 's/[-:}]*$//' -e 's/.*:-//')
+DB_USER=$(printf '%s' "$DB_USER" | sed -e 's/^[${]*//' -e 's/[-:}]*$//' -e 's/.*:-//')
+[ -z "$DB_NAME" ] && DB_NAME="opsknight_db"
+[ -z "$DB_USER" ] && DB_USER="opsknight"
+
 # Handle authentication file (userlist.txt)
 AUTH_FILE_PATH="${PGBOUNCER_AUTH_FILE:-}"
-if [ -z "$AUTH_FILE_PATH" ] || [ ! -f "$AUTH_FILE_PATH" ]; then
+if [ -n "$AUTH_FILE_PATH" ] && [ -f "$AUTH_FILE_PATH" ]; then
+  # Copy mounted secret file to private workdir with 600 permissions to guarantee postgres ownership and read access
+  cp "$AUTH_FILE_PATH" "$WORK_DIR/userlist.txt"
+  chmod 600 "$WORK_DIR/userlist.txt"
   AUTH_FILE_PATH="$WORK_DIR/userlist.txt"
-  # Write escaped user and password credentials
-  CLEAN_USER=$(printf '%s' "$DB_USER" | sed 's/\\/\\\\/g; s/"/\\"/g')
-  CLEAN_PASS=$(printf '%s' "$DB_PASS" | sed 's/\\/\\\\/g; s/"/\\"/g')
+else
+  AUTH_FILE_PATH="$WORK_DIR/userlist.txt"
+  # Write escaped user and password credentials conforming to PgBouncer auth_file syntax:
+  # literal double quotes are escaped by doubling (""), backslashes are literal
+  CLEAN_USER=$(printf '%s' "$DB_USER" | sed 's/"/""/g')
+  CLEAN_PASS=$(printf '%s' "$DB_PASS" | sed 's/"/""/g')
   printf '"%s" "%s"\n' "$CLEAN_USER" "$CLEAN_PASS" > "$AUTH_FILE_PATH"
 
   # Optional dedicated admin user (isolated from application credentials)
   if [ -n "${PGBOUNCER_ADMIN_USER:-}" ] && [ -n "${PGBOUNCER_ADMIN_PASSWORD:-}" ]; then
-    ADMIN_USER=$(printf '%s' "$PGBOUNCER_ADMIN_USER" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    ADMIN_PASS=$(printf '%s' "$PGBOUNCER_ADMIN_PASSWORD" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    ADMIN_USER=$(printf '%s' "$PGBOUNCER_ADMIN_USER" | sed 's/"/""/g')
+    ADMIN_PASS=$(printf '%s' "$PGBOUNCER_ADMIN_PASSWORD" | sed 's/"/""/g')
     printf '"%s" "%s"\n' "$ADMIN_USER" "$ADMIN_PASS" >> "$AUTH_FILE_PATH"
   fi
   chmod 600 "$AUTH_FILE_PATH"
 fi
+
+echo "[opsknight-pgbouncer] Initializing PgBouncer for ${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME} (sslmode: ${TLS_SSLMODE})"
+echo "[opsknight-pgbouncer] Authenticated userlist active at ${AUTH_FILE_PATH}"
 
 # Pool tuning parameters
 POOL_MODE="${PGBOUNCER_POOL_MODE:-transaction}"
@@ -124,8 +154,16 @@ fi
 
 chmod 600 "$CONFIG_FILE"
 
-if [ $# -gt 0 ]; then
-  exec "$@"
-else
+if [ $# -eq 0 ] || [ "$*" = "/usr/bin/pgbouncer /etc/pgbouncer/pgbouncer.ini" ] || [ "$*" = "pgbouncer /etc/pgbouncer/pgbouncer.ini" ] || [ "$1" = "/etc/pgbouncer/pgbouncer.ini" ]; then
   exec /usr/bin/pgbouncer "$CONFIG_FILE"
+elif [ "$1" = "pgbouncer" ] || [ "$1" = "/usr/bin/pgbouncer" ]; then
+  shift
+  if [ "${1:-}" = "/etc/pgbouncer/pgbouncer.ini" ]; then
+    shift
+  fi
+  exec /usr/bin/pgbouncer "$CONFIG_FILE" "$@"
+elif [ "${1#-}" != "$1" ]; then
+  exec /usr/bin/pgbouncer "$CONFIG_FILE" "$@"
+else
+  exec "$@"
 fi
