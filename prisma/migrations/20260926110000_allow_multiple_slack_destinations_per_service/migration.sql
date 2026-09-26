@@ -51,17 +51,29 @@ ALTER TABLE "SlackDestination" ADD CONSTRAINT "SlackDestination_updatedBy_fkey" 
 -- Backfill existing single service.slackChannel entries into SlackDestination
 INSERT INTO "SlackDestination" ("id", "serviceId", "workspaceId", "channelId", "channelName", "enabled", "integrationId", "createdAt", "updatedAt")
 SELECT
-    'slack_dest_' || SUBSTRING(MD5(s."id" || '_' || s."slackChannel"), 1, 20),
+    'slack_dest_' || SUBSTRING(MD5(s."id" || '_' || TRIM(s."slackChannel")), 1, 20),
     s."id",
-    COALESCE(s."slackWorkspaceId", si."workspaceId", 'default_workspace'),
-    s."slackChannel",
-    s."slackChannel",
+    COALESCE(
+      s."slackWorkspaceId",
+      si_direct."workspaceId",
+      si_global."workspaceId",
+      'default_workspace'
+    ),
+    TRIM(s."slackChannel"),
+    TRIM(s."slackChannel"),
     true,
-    s."slackIntegrationId",
+    COALESCE(s."slackIntegrationId", si_global."id"),
     NOW(),
     NOW()
 FROM "Service" s
-LEFT JOIN "SlackIntegration" si ON (s."slackIntegrationId" = si."id" OR (si."enabled" = true AND si."workspaceId" IS NOT NULL))
+LEFT JOIN "SlackIntegration" si_direct ON s."slackIntegrationId" = si_direct."id"
+LEFT JOIN LATERAL (
+    SELECT "id", "workspaceId"
+    FROM "SlackIntegration"
+    WHERE "enabled" = true AND "workspaceId" IS NOT NULL
+    ORDER BY "createdAt" ASC
+    LIMIT 1
+) si_global ON s."slackIntegrationId" IS NULL
 WHERE s."slackChannel" IS NOT NULL
   AND TRIM(s."slackChannel") <> ''
-ON CONFLICT ("serviceId", "workspaceId", "channelId") DO NOTHING;
+ON CONFLICT DO NOTHING;

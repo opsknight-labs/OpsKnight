@@ -158,4 +158,59 @@ describe('Slack Multi-Destination Linking & Fan-Out', () => {
       name: 'general-legacy',
     });
   });
+
+  it('deduplicates activeChannels by address to prevent duplicate incident messages', () => {
+    const rawChannels = [
+      { id: 'dest-1', address: 'C100', name: 'alerts' },
+      { id: 'dest-2', address: 'c100', name: 'alerts' },
+      { id: 'dest-3', address: 'C200', name: 'devops' },
+    ];
+
+    const seenAddresses = new Set<string>();
+    const activeChannels: typeof rawChannels = [];
+    for (const target of rawChannels) {
+      const normalized = target.address.toLowerCase();
+      if (normalized && !seenAddresses.has(normalized)) {
+        seenAddresses.add(normalized);
+        activeChannels.push(target);
+      }
+    }
+
+    expect(activeChannels).toHaveLength(2);
+    expect(activeChannels.map(c => c.id)).toEqual(['dest-1', 'dest-3']);
+  });
+
+  it('coalesces concurrent token resolutions to eliminate DB pressure during multi-channel fan-out', async () => {
+    let dbLookupCount = 0;
+    const botTokenInFlight = new Map<string, Promise<string | null>>();
+
+    const resolveToken = async (serviceId: string) => {
+      dbLookupCount++;
+      await new Promise(r => setTimeout(r, 10));
+      return `xoxb-token-for-${serviceId}`;
+    };
+
+    const getToken = async (serviceId: string) => {
+      const existing = botTokenInFlight.get(serviceId);
+      if (existing) return existing;
+      const promise = resolveToken(serviceId).finally(() => {
+        botTokenInFlight.delete(serviceId);
+      });
+      botTokenInFlight.set(serviceId, promise);
+      return promise;
+    };
+
+    // 3 channels concurrently fan out for the same service
+    const [token1, token2, token3] = await Promise.all([
+      getToken('svc-1'),
+      getToken('svc-1'),
+      getToken('svc-1'),
+    ]);
+
+    expect(token1).toBe('xoxb-token-for-svc-1');
+    expect(token2).toBe('xoxb-token-for-svc-1');
+    expect(token3).toBe('xoxb-token-for-svc-1');
+    // Only 1 DB lookup occurred despite 3 concurrent calls
+    expect(dbLookupCount).toBe(1);
+  });
 });

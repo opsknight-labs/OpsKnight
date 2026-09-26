@@ -115,7 +115,12 @@ export async function POST(request: NextRequest) {
     }
 
     const dest = await prisma.$transaction(async tx => {
-      const existingTuple = await tx.slackDestination.findUnique({
+      // Row lock to serialize concurrent link requests for the same service
+      if (typeof (tx as unknown as { $executeRaw?: unknown }).$executeRaw === 'function') {
+        await tx.$executeRaw`SELECT 1 FROM "Service" WHERE "id" = ${serviceId} FOR UPDATE`;
+      }
+
+      let existingTuple = await tx.slackDestination.findUnique({
         where: {
           serviceId_workspaceId_channelId: {
             serviceId,
@@ -125,11 +130,33 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // If not found by exact tuple, check for legacy backfilled record where channelId was set to channelName
+      if (!existingTuple) {
+        existingTuple = await tx.slackDestination.findFirst({
+          where: {
+            serviceId,
+            OR: [
+              { channelId, workspaceId: 'default_workspace' },
+              ...(channelName
+                ? [
+                    {
+                      channelId: channelName,
+                      workspaceId: { in: [workspaceId, 'default_workspace'] },
+                    },
+                  ]
+                : []),
+            ],
+          },
+        });
+      }
+
       if (existingTuple?.enabled) {
-        // Already active: refresh channel metadata
+        // Already active: refresh channel metadata and upgrade workspace/channel IDs if needed
         const updated = await tx.slackDestination.update({
           where: { id: existingTuple.id },
           data: {
+            workspaceId,
+            channelId,
             channelName: channelName ?? existingTuple.channelName,
             isPrivate: isPrivate !== undefined ? isPrivate : existingTuple.isPrivate,
             integrationId: integrationId ?? existingTuple.integrationId,
@@ -154,12 +181,14 @@ export async function POST(request: NextRequest) {
 
       let row;
       if (existingTuple && !existingTuple.enabled) {
-        // Revive tombstoned tuple
+        // Revive tombstoned tuple and upgrade identifiers
         row = await tx.slackDestination.update({
           where: { id: existingTuple.id },
           data: {
-            channelName: channelName ?? null,
-            isPrivate: isPrivate ?? false,
+            workspaceId,
+            channelId,
+            channelName: channelName ?? existingTuple.channelName,
+            isPrivate: isPrivate ?? existingTuple.isPrivate,
             integrationId,
             enabled: true,
             updatedBy: actorId,
@@ -181,8 +210,12 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Ensure service notification channels has SLACK enabled
-      const serviceChannels = service.serviceNotificationChannels || [];
+      // Ensure service notification channels has SLACK enabled using fresh transaction state
+      const currentService = await tx.service.findUnique({
+        where: { id: serviceId },
+        select: { serviceNotificationChannels: true, slackChannel: true },
+      });
+      const serviceChannels = currentService?.serviceNotificationChannels || [];
       const updates: {
         serviceNotificationChannels?: typeof serviceChannels;
         slackChannel?: string;
@@ -192,7 +225,7 @@ export async function POST(request: NextRequest) {
         updates.serviceNotificationChannels = [...serviceChannels, 'SLACK' as never];
       }
       // Keep legacy service.slackChannel in sync with first active channel
-      if (!service.slackChannel || !serviceChannels.includes('SLACK' as never)) {
+      if (!currentService?.slackChannel || !serviceChannels.includes('SLACK' as never)) {
         updates.slackChannel = channelName || channelId;
       }
 

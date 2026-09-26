@@ -165,18 +165,18 @@ export default function ServiceNotificationSettings({
   useEffect(() => {
     if (!selectRef.current) return;
 
-    if (!channels.includes('SLACK') || !selectedSlackChannel) {
+    if (!channels.includes('SLACK') || existingSlackDests.length > 0 || !selectedSlackChannel) {
       selectRef.current.setCustomValidity('');
       return;
     }
 
     const channel = slackChannels.find(ch => ch.name === selectedSlackChannel);
-    if (channel && !channel.isMember) {
+    if (channel && !channel.isMember && !channel.isPrivate) {
       selectRef.current.setCustomValidity('Bot must be connected to this channel before saving.');
     } else {
       selectRef.current.setCustomValidity('');
     }
-  }, [selectedSlackChannel, slackChannels, channels]);
+  }, [selectedSlackChannel, slackChannels, channels, existingSlackDests.length]);
 
   const refreshChannels = () => {
     if (!slackIntegration) return;
@@ -504,13 +504,34 @@ export default function ServiceNotificationSettings({
           name="serviceNotificationChannelsJson"
           value={JSON.stringify(channels)}
         />
+        <input
+          type="hidden"
+          name="slackChannel"
+          value={
+            existingSlackDests[0]?.channelName ||
+            existingSlackDests[0]?.channelId ||
+            selectedSlackChannel ||
+            ''
+          }
+        />
         {/* Hidden input for validation */}
         <input
           ref={selectRef}
           style={{ opacity: 0, height: 1, position: 'absolute' }}
           tabIndex={-1}
-          required={channels.includes('SLACK')}
-          value={channels.includes('SLACK') ? selectedSlackChannel || '' : ''}
+          required={
+            channels.includes('SLACK') &&
+            existingSlackDests.length === 0 &&
+            !slackWebhookUrl?.trim()
+          }
+          value={
+            channels.includes('SLACK')
+              ? existingSlackDests[0]?.channelName ||
+                existingSlackDests[0]?.channelId ||
+                selectedSlackChannel ||
+                (slackWebhookUrl?.trim() ? 'webhook' : '')
+              : ''
+          }
           readOnly
           onChange={() => {}}
         />
@@ -886,12 +907,6 @@ export default function ServiceNotificationSettings({
                           </span>
                         </div>
 
-                        <input
-                          type="hidden"
-                          name="slackChannel"
-                          value={existingSlackDests[0]?.channelName || selectedSlackChannel}
-                        />
-
                         {loadingChannels ? (
                           <div className="flex items-center gap-2 text-xs text-muted-foreground p-2">
                             <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
@@ -913,7 +928,6 @@ export default function ServiceNotificationSettings({
                               <Select
                                 value={selectedSlackChannel}
                                 onValueChange={handleSlackChannelChange}
-                                name="slackChannel"
                               >
                                 <SelectTrigger className="w-full text-xs h-9">
                                   <SelectValue placeholder="Choose a channel..." />

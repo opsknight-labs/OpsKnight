@@ -136,31 +136,27 @@ export async function sendServiceNotifications(
         (await (
           prisma as unknown as {
             slackDestination?: {
-              findMany: (
-                a: unknown
-              ) => Promise<
+              findMany: (a: unknown) => Promise<
                 Array<{
                   id: string;
                   channelId: string;
                   channelName: string | null;
-                  enabled: boolean;
                 }>
               >;
             };
           }
-        ).slackDestination
-          ?.findMany({
-            where: { serviceId: service.id, enabled: true },
-            orderBy: { createdAt: 'asc' },
-          })
-          .catch(() => [])) ?? [];
+        ).slackDestination?.findMany({
+          where: { serviceId: service.id, enabled: true },
+          select: { id: true, channelId: true, channelName: true },
+          orderBy: { createdAt: 'asc' },
+        })) ?? [];
 
-      const activeChannels: Array<{ id: string; address: string; name: string | null }> =
+      const rawChannels: Array<{ id: string; address: string; name: string | null }> =
         slackDestinations.length > 0
           ? slackDestinations.map(d => ({
               id: d.id,
-              address: d.channelId || d.channelName || '',
-              name: d.channelName,
+              address: (d.channelId || d.channelName || '').trim(),
+              name: d.channelName?.trim() || null,
             }))
           : service.slackChannel?.trim()
             ? [
@@ -171,6 +167,17 @@ export async function sendServiceNotifications(
                 },
               ]
             : [];
+
+      // Filter empty addresses and deduplicate by address
+      const seenAddresses = new Set<string>();
+      const activeChannels: Array<{ id: string; address: string; name: string | null }> = [];
+      for (const target of rawChannels) {
+        const normalized = target.address.toLowerCase();
+        if (normalized && !seenAddresses.has(normalized)) {
+          seenAddresses.add(normalized);
+          activeChannels.push(target);
+        }
+      }
 
       const slackWebhookUrl = service.slackWebhookUrl?.trim();
       if (activeChannels.length > 0 && eventType !== 'updated') {
@@ -207,7 +214,7 @@ export async function sendServiceNotifications(
                   lifecyclePolicy: {
                     ...lifecyclePolicy,
                     targetKind: 'SERVICE_SLACK_CHANNEL',
-                    targetId: service.id,
+                    targetId: target.id,
                     targetAddress: channelAddress,
                   },
                 },
