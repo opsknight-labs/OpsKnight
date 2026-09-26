@@ -92,6 +92,10 @@ spec:
             - configMapRef:
                 name: {{ include "opsknight.fullname" $root }}-config
           env:
+            {{- if $root.Values.migrations.job.enabled }}
+            - name: OPSKNIGHT_SKIP_MIGRATIONS
+              value: "true"
+            {{- end }}
             - name: OPSKNIGHT_PROCESS_ROLE
               value: {{ $role.processRole | quote }}
             {{- if eq $role.name "scheduler" }}

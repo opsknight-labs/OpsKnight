@@ -12,10 +12,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 STACK_NAME="${SWARM_STACK_NAME:-opsknight}"
-SERVICE_NAME="${MIGRATION_SERVICE_NAME:-${STACK_NAME}_migration_task}"
+MIGRATION_RUN_ID="${MIGRATION_RUN_ID:-$(date +%s)_$$}"
+SERVICE_NAME="${MIGRATION_SERVICE_NAME:-${STACK_NAME}_migration_${MIGRATION_RUN_ID}}"
 NETWORK_NAME="${SWARM_NETWORK_NAME:-${STACK_NAME}_network}"
 OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}"
 TIMEOUT_SEC="${MIGRATION_TIMEOUT_SEC:-300}"
+
+# Ensure ephemeral migration task cleanup on exit
+trap 'docker service rm "${SERVICE_NAME}" >/dev/null 2>&1 || true' EXIT
 
 echo "═══════════════════════════════════════════════════════════════════════"
 echo "  OpsKnight Swarm Database Migration"

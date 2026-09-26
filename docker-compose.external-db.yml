@@ -12,3 +12,14 @@ services:
     environment:
       DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:?Set OPSKNIGHT_DATABASE_URL to the complete external PostgreSQL URI}
       DIRECT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:?Set OPSKNIGHT_DATABASE_URL to the complete external PostgreSQL URI}
+
+  opsknight-pgbouncer:
+    image: ${PGBOUNCER_IMAGE:-ghcr.io/opsknight-labs/opsknight-pgbouncer:1.26.0}
+    depends_on: !reset {}
+    environment:
+      PGBOUNCER_DB_HOST: ${PGBOUNCER_DB_HOST:-${EXTERNAL_DB_HOST:-}}
+      PGBOUNCER_DB_PORT: ${PGBOUNCER_DB_PORT:-${EXTERNAL_DB_PORT:-5432}}
+      PGBOUNCER_DB_NAME: ${PGBOUNCER_DB_NAME:-${EXTERNAL_DB_NAME:-${POSTGRES_DB:-opsknight_db}}}
+      PGBOUNCER_DB_USER: ${PGBOUNCER_DB_USER:-${EXTERNAL_DB_USER:-${POSTGRES_USER:-opsknight}}}
+      PGBOUNCER_DB_PASSWORD: ${PGBOUNCER_DB_PASSWORD:-${EXTERNAL_DB_PASSWORD:-${POSTGRES_PASSWORD:-}}}
+      PGBOUNCER_DB_PASSWORD_FILE: ${PGBOUNCER_DB_PASSWORD_FILE:-}

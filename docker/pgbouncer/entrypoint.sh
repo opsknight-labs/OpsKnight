@@ -14,12 +14,12 @@ TLS_CA_FILE="${PGBOUNCER_SERVER_TLS_CA_FILE:-/etc/ssl/certs/ca-certificates.crt}
 # Fail-closed validation for external database without PgBouncer configuration
 if [ -z "$DB_HOST" ]; then
   if [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
-    echo "[FATAL] External PostgreSQL (OPSKNIGHT_DATABASE_URL) requires explicit structured PgBouncer parameters:" >&2
-    echo "  - PGBOUNCER_DB_HOST" >&2
+    echo "[FATAL] External PostgreSQL + PgBouncer requires explicit PGBOUNCER_DB_HOST (or EXTERNAL_DB_HOST) and credentials:" >&2
+    echo "  - PGBOUNCER_DB_HOST or EXTERNAL_DB_HOST" >&2
     echo "  - PGBOUNCER_DB_PORT (default: 5432)" >&2
     echo "  - PGBOUNCER_DB_NAME (default: \${POSTGRES_DB:-opsknight_db})" >&2
     echo "  - PGBOUNCER_DB_USER (default: \${POSTGRES_USER:-opsknight})" >&2
-    echo "  - PGBOUNCER_DB_PASSWORD" >&2
+    echo "  - PGBOUNCER_DB_PASSWORD, PGBOUNCER_DB_PASSWORD_FILE, or EXTERNAL_DB_PASSWORD" >&2
     echo "  - PGBOUNCER_SERVER_TLS_SSLMODE (default: verify-full)" >&2
     exit 1
   fi

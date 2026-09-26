@@ -8,6 +8,10 @@ on:
       - 'deploy/swarm/**'
       - 'docker-entrypoint.sh'
       - 'docker/pgbouncer/**'
+      - 'scripts/validate-runtime-capacity.cjs'
+      - 'Dockerfile'
+      - 'package.json'
+      - 'prisma/**'
       - '.github/workflows/swarm-validation.yml'
   pull_request:
     branches:
@@ -16,6 +20,10 @@ on:
       - 'deploy/swarm/**'
       - 'docker-entrypoint.sh'
       - 'docker/pgbouncer/**'
+      - 'scripts/validate-runtime-capacity.cjs'
+      - 'Dockerfile'
+      - 'package.json'
+      - 'prisma/**'
       - '.github/workflows/swarm-validation.yml'
 
 concurrency:

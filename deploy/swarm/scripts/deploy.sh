@@ -196,10 +196,29 @@ if [ "${USE_EXTERNAL_DB}" = "true" ]; then
 
   ENCODED_USER=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$DB_USER")
   ENCODED_PASS=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$DB_PASS")
-
   CA_PARAM=""
+  ensure_sslrootcert() {
+    local url="$1"
+    local cert_path="/etc/ssl/certs/custom-ca.crt"
+    if [ -z "${url}" ]; then echo ""; return; fi
+    if [[ "${url}" == *"sslrootcert="* ]]; then echo "${url}"; return; fi
+    if [[ "${url}" == *"?"* ]]; then
+      echo "${url}&sslrootcert=${cert_path}"
+    else
+      echo "${url}?sslrootcert=${cert_path}"
+    fi
+  }
+
   if [ -n "${PGBOUNCER_TLS_CA_CERT:-}" ] && [ -f "${PGBOUNCER_TLS_CA_CERT}" ]; then
     CA_PARAM="&sslrootcert=/etc/ssl/certs/custom-ca.crt"
+    if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
+      DIRECT_DATABASE_URL=$(ensure_sslrootcert "${DIRECT_DATABASE_URL}")
+      export DIRECT_DATABASE_URL
+    fi
+    if [ -n "${OPSKNIGHT_DATABASE_URL:-}" ]; then
+      OPSKNIGHT_DATABASE_URL=$(ensure_sslrootcert "${OPSKNIGHT_DATABASE_URL}")
+      export OPSKNIGHT_DATABASE_URL
+    fi
   fi
 
   if [ -z "${DIRECT_DATABASE_URL:-}" ]; then
@@ -470,6 +489,43 @@ done
 # --- Step 8: Health Verification ---
 echo "--- [8/8] Verifying System Health ---"
 "${SCRIPT_DIR}/health-check.sh"
+
+# --- Step 9: Cleanup Stale Unreferenced Versioned Secrets ---
+echo "🧹 Pruning stale unreferenced Raft secrets for stack '${STACK_NAME}'..."
+CURRENT_RUN_SECRETS=(
+  "${OPSKNIGHT_DATABASE_URL_SECRET:-}"
+  "${OPSKNIGHT_DIRECT_DATABASE_URL_SECRET:-}"
+  "${OPSKNIGHT_NEXTAUTH_SECRET_SECRET:-}"
+  "${OPSKNIGHT_ENCRYPTION_KEY_SECRET:-}"
+  "${OPSKNIGHT_PGBOUNCER_USERLIST_SECRET:-}"
+  "${OPSKNIGHT_PGBOUNCER_DB_PASSWORD_SECRET:-}"
+  "${OPSKNIGHT_WEB_DATABASE_URL_SECRET:-}"
+  "${OPSKNIGHT_CUSTOM_CA_SECRET:-}"
+)
+
+# Collect all secret names currently mounted across active stack services
+ACTIVE_TASK_SECRETS=$(docker service ls --filter "label=com.docker.stack.namespace=${STACK_NAME}" -q 2>/dev/null | while read -r s_id; do
+  docker service inspect "$s_id" --format '{{range .Spec.TaskTemplate.ContainerSpec.Secrets}}{{.SecretName}} {{end}}' 2>/dev/null || true
+done | tr ' ' '\n' | grep -v '^$' | sort -u || true)
+
+# Prune unreferenced secrets matching stack prefix
+for sec in $(docker secret ls --format '{{.Name}}' 2>/dev/null | grep -E "^${STACK_NAME}_" || true); do
+  IS_PROTECTED=0
+  for cur_sec in "${CURRENT_RUN_SECRETS[@]}"; do
+    if [ -n "${cur_sec}" ] && [ "${sec}" = "${cur_sec}" ]; then
+      IS_PROTECTED=1
+      break
+    fi
+  done
+  [ "${IS_PROTECTED}" -eq 1 ] && continue
+
+  if echo "${ACTIVE_TASK_SECRETS}" | grep -Fxq "${sec}"; then
+    continue
+  fi
+
+  echo "  Pruned stale secret: ${sec}"
+  docker secret rm "${sec}" >/dev/null 2>&1 || true
+done
 
 echo ""
 echo "🎉 OpsKnight Swarm deployment finished successfully!"
