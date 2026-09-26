@@ -8,6 +8,10 @@ import { logAudit } from '@/lib/audit';
 import prisma from '@/lib/prisma';
 import { getSlackBotToken } from '@/lib/slack';
 
+const getQuerySchema = z.object({
+  serviceId: z.string().trim().min(1, 'serviceId is required.').max(191),
+});
+
 const upsertSchema = z.object({
   serviceId: z.string().trim().min(1).max(191),
   channelId: z.string().trim().min(1).max(255),
@@ -25,16 +29,21 @@ const deleteSchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    const serviceId = new URL(request.url).searchParams.get('serviceId');
-    if (!serviceId?.trim()) {
+    const rawServiceId = new URL(request.url).searchParams.get('serviceId');
+    const parsed = getQuerySchema.safeParse({ serviceId: rawServiceId });
+    if (!parsed.success) {
       return jsonError(
-        new AppError({ code: 'VALIDATION_FAILED', userMessage: 'serviceId is required.' })
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: parsed.error.issues[0]?.message ?? 'serviceId is required.',
+        })
       );
     }
-    await assertCanModifyService(serviceId.trim());
+    const { serviceId } = parsed.data;
+    await assertCanModifyService(serviceId);
 
     const destinations = await prisma.slackDestination.findMany({
-      where: { serviceId: serviceId.trim(), enabled: true },
+      where: { serviceId, enabled: true },
       orderBy: { createdAt: 'asc' },
     });
 

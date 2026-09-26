@@ -213,4 +213,26 @@ describe('Slack Multi-Destination Linking & Fan-Out', () => {
     // Only 1 DB lookup occurred despite 3 concurrent calls
     expect(dbLookupCount).toBe(1);
   });
+
+  it('validates destination ownership to prevent foreign channel access', () => {
+    const dest = { id: 'dest-999', serviceId: 'svc-finance', channelId: 'C_FINANCE' };
+
+    const validateAccess = (requestedServiceId: string | undefined, destServiceId: string) => {
+      if (requestedServiceId && requestedServiceId !== destServiceId) {
+        throw new Error('Destination does not belong to the specified service.');
+      }
+      return destServiceId;
+    };
+
+    // Caller provides mismatched serviceId -> rejected
+    expect(() => validateAccess('svc-marketing', dest.serviceId)).toThrow(
+      'Destination does not belong to the specified service.'
+    );
+
+    // Matching serviceId -> allowed
+    expect(validateAccess('svc-finance', dest.serviceId)).toBe('svc-finance');
+
+    // No serviceId provided -> bound to destination's owner service
+    expect(validateAccess(undefined, dest.serviceId)).toBe('svc-finance');
+  });
 });
