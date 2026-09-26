@@ -4,11 +4,11 @@ import { isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getCachedDashboardMetrics, getCachedRecentIncidents } from '@/lib/realtime-cache';
 import {
+  getRequestSessionJti,
   hasSameStreamAuthorizationScope,
   resolveStreamAuthorization,
   type StreamAuthorization,
 } from '@/lib/realtime-stream-authorization';
-import { recordSessionHeartbeat } from '@/lib/active-sessions';
 import {
   getRealtimeChangeGeneration,
   subscribeToRealtimeChanges,
@@ -23,19 +23,16 @@ export async function GET(req: NextRequest) {
     // Get current user for authorization
     const user = await getCurrentUser();
     const expectedTokenVersion = user.tokenVersion ?? 0;
-    const initialAuthorization = await resolveStreamAuthorization(user.id, expectedTokenVersion);
+    const sessionJti = await getRequestSessionJti(req);
+    const initialAuthorization = await resolveStreamAuthorization(
+      user.id,
+      expectedTokenVersion,
+      sessionJti
+    );
     if (!initialAuthorization) {
       return new Response('Unauthorized', { status: 401 });
     }
     let streamAuthorization: StreamAuthorization = initialAuthorization;
-
-    // Record session heartbeat on realtime stream connect
-    const userAgent = req.headers.get('user-agent') || '';
-    const ip =
-      req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
-      req.headers.get('x-real-ip') ||
-      '127.0.0.1';
-    void recordSessionHeartbeat({ userId: user.id, userAgent, ip }).catch(() => {});
 
     let cleanup: () => void = () => {};
 
@@ -67,7 +64,6 @@ export async function GET(req: NextRequest) {
         // Track last sent metrics for change detection to reduce bandwidth
         let lastMetricsHash = '';
         let lastIncidentHash = '';
-        let authorizationCounter = 0;
 
         // Send initial connection message
         const send = (data: string) => {
@@ -180,19 +176,16 @@ export async function GET(req: NextRequest) {
           generation => refreshProjection(generation, true)
         );
 
-        // Heartbeats keep proxies and session presence alive. Authorization is
-        // independently revalidated every minute even when no incidents change.
+        // Heartbeats keep proxies and session presence alive. Authorization and session
+        // revocation are revalidated on every 15s heartbeat interval (bounded delay <= 15s).
         heartbeatInterval = setInterval(async () => {
           if (isClosed) return;
           send(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }));
-          void recordSessionHeartbeat({ userId: user.id, userAgent, ip }).catch(() => {});
-          authorizationCounter += 1;
-          if (authorizationCounter < 2) return;
-          authorizationCounter = 0;
           try {
             const nextAuthorization = await resolveStreamAuthorization(
               user.id,
-              expectedTokenVersion
+              expectedTokenVersion,
+              sessionJti
             );
             if (
               !nextAuthorization ||
@@ -208,8 +201,12 @@ export async function GET(req: NextRequest) {
               userId: user.id,
               error: error instanceof Error ? error.message : String(error),
             });
+            // Fail closed: terminate stream on authorization recheck failure
+            send(JSON.stringify({ type: 'authorization_revoked' }));
+            cleanup();
+            return;
           }
-        }, 30_000);
+        }, 15_000);
 
         // Clean up on client disconnect
       },

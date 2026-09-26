@@ -62,11 +62,19 @@ export async function customJwtEncode(params: JWTEncodeParams): Promise<string> 
 }
 
 /**
- * Decrypts and validates the encrypted Auth.js JWT. Ordinary and OIDC sessions
- * stay cryptographically pure here; their revocation remains enforced by the
- * existing tokenVersion/user-status check in auth.ts. Explicit extended
- * credential sessions additionally carry a durable per-session revocation
- * fence because their long lifetime requires device-level revocability.
+ * Decrypts and validates the encrypted Auth.js JWT.
+ *
+ * Registry enforcement is now universal — every authenticated session (STANDARD,
+ * TRUSTED_PWA, OIDC) registers its JTI and is checked against the registry on
+ * each decode. This replaces the previous rememberMe-only gate.
+ *
+ * Security & fault-tolerance model:
+ *   'denied'      → session is explicitly revoked or invalid  → reject (null)
+ *   'unavailable' → registry DB unreachable                   → fail-closed, reject (null)
+ *                   for immediate revocation safety
+ *   'allowed'     → session is active                         → continue
+ *
+ * Activity touch is fire-and-forget — an activity write failure never aborts the request.
  */
 export async function customJwtDecode(params: JWTDecodeParams): Promise<JWT | null> {
   const { token, secret, salt = '' } = params;
@@ -75,44 +83,63 @@ export async function customJwtDecode(params: JWTDecodeParams): Promise<JWT | nu
   try {
     const { payload } = await jwtDecrypt(token, encryptionSecret, { clockTolerance: 15 });
 
+    // Enforce absolute maximum age for trusted PWA (extended credential) sessions.
     if (
       payload.rememberMe === true &&
       typeof payload.oidcAuthenticatedAt !== 'number' &&
       typeof payload.trustedSessionStartedAt === 'number'
     ) {
       const { getTrustedPwaSessionMaxAgeSeconds } = await import('@/lib/pwa-session-policy');
-      if (
-        nowSeconds() >=
-        payload.trustedSessionStartedAt + getTrustedPwaSessionMaxAgeSeconds()
-      ) {
+      if (nowSeconds() >= payload.trustedSessionStartedAt + getTrustedPwaSessionMaxAgeSeconds()) {
         return null;
       }
     }
 
-    if (
-      payload.rememberMe === true &&
-      typeof payload.oidcAuthenticatedAt !== 'number' &&
-      typeof payload.sub === 'string' &&
-      typeof payload.jti === 'string'
-    ) {
-      try {
-        const { ensureRegisteredSession } = await import('@/lib/session-registry');
-        const allowed = await ensureRegisteredSession({
-          sessionId: payload.jti,
-          userId: payload.sub,
-          policy: 'STANDARD',
-          expiresAtSeconds: typeof payload.exp === 'number' ? payload.exp : null,
-        });
-        if (!allowed) return null;
-      } catch (error) {
-        logger.error('auth.extended_session_registry_lookup_failed', {
+    // Universal registry check — applies to every authenticated session.
+    if (typeof payload.sub === 'string') {
+      if (typeof payload.jti !== 'string' || !payload.jti) {
+        // Enforce universal session registry coverage: reject legacy tokens lacking a canonical JTI.
+        logger.warn('auth.session_registry.missing_jti', {
           component: 'auth-jwt-encoder',
-          sessionId: payload.jti,
           userId: payload.sub,
-          error,
         });
         return null;
       }
+
+      const { ensureRegisteredSession, touchSessionActivity } =
+        await import('@/lib/session-registry');
+
+      const policy = typeof payload.oidcAuthenticatedAt === 'number' ? 'OIDC' : 'STANDARD';
+
+      const result = await ensureRegisteredSession({
+        sessionId: payload.jti,
+        userId: payload.sub,
+        policy,
+        expiresAtSeconds: typeof payload.exp === 'number' ? payload.exp : null,
+        // userAgent is not available in JWTDecodeParams; captured during
+        // first authenticated HTTP request via touchSessionActivity instead.
+      });
+
+      if (result !== 'allowed') {
+        // Enforce fail-closed security: if the session is explicitly revoked ('denied')
+        // or the registry database cannot be reached ('unavailable'), reject the session.
+        logger.warn('auth.session_registry.rejected', {
+          component: 'auth-jwt-encoder',
+          userId: payload.sub,
+          sessionId: payload.jti,
+          reason: result,
+        });
+        return null;
+      }
+
+      // Allowed — fire-and-forget activity touch. Never awaited so registry
+      // write latency never adds to the critical authentication path.
+      void touchSessionActivity({
+        userId: payload.sub,
+        sessionId: payload.jti,
+        // userAgent unavailable here; updated via HTTP request headers in
+        // touchSessionActivity calls from API routes.
+      });
     }
 
     return payload as JWT;

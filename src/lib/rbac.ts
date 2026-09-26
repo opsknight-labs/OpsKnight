@@ -82,6 +82,27 @@ export async function getCurrentUser() {
       userId: user.id,
     });
   }
+
+  const sessionId = session.user?.sessionId || session.sessionId;
+  if (sessionId) {
+    void (async () => {
+      let userAgent: string | null = null;
+      try {
+        const { headers } = await import('next/headers');
+        const headerStore = await headers();
+        userAgent = headerStore.get('user-agent');
+      } catch {
+        // Ignored outside request context
+      }
+      const { touchAuthenticatedSession } = await import('@/lib/session-registry');
+      await touchAuthenticatedSession({
+        userId: user.id,
+        sessionId,
+        userAgent,
+      });
+    })();
+  }
+
   return user;
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
@@ -20,18 +20,24 @@ import {
   AlertCircle,
   CheckCircle2,
   Laptop,
+  Loader2,
   LogOut,
+  RefreshCw,
   ShieldCheck,
   Smartphone,
   Tablet,
   Trash2,
 } from 'lucide-react';
-import type { ActiveSession } from '@/lib/active-sessions';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type SessionState = 'ACTIVE' | 'REVOKED' | 'EXPIRED';
 
 type RegisteredSession = {
   id: string;
+  displayId: string;
   policy: 'STANDARD' | 'TRUSTED_PWA' | 'OIDC';
-  state: 'ACTIVE' | 'REVOKED';
+  state: SessionState;
   browser: string;
   os: string;
   deviceType: 'desktop' | 'mobile' | 'tablet';
@@ -41,10 +47,18 @@ type RegisteredSession = {
   isCurrent: boolean;
 };
 
+type SessionsApiResponse = {
+  sessions?: RegisteredSession[];
+  nextCursor?: string | null;
+  hasMore?: boolean;
+  error?: string;
+};
+
 type Props = {
   tokenVersion?: number;
-  sessions?: ActiveSession[];
 };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatRelativeTime(isoString: string): string {
   const time = new Date(isoString).getTime();
@@ -59,10 +73,16 @@ function formatRelativeTime(isoString: string): string {
 }
 
 function formatExpiry(value: string | null) {
-  if (!value) return 'Session expiry managed by provider';
+  if (!value) return 'No fixed expiry';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Session expiry unavailable';
-  return `Expires ${date.toLocaleString()}`;
+  if (Number.isNaN(date.getTime())) return 'Expiry unavailable';
+  const diffMs = date.getTime() - Date.now();
+  if (diffMs < 0) return 'Expired';
+  const days = Math.floor(diffMs / 86_400_000);
+  if (days === 0) return 'Expires today';
+  if (days === 1) return 'Expires tomorrow';
+  if (days < 30) return `Expires in ${days}d`;
+  return `Expires ${date.toLocaleDateString()}`;
 }
 
 function deviceIcon(deviceType: RegisteredSession['deviceType']) {
@@ -71,50 +91,73 @@ function deviceIcon(deviceType: RegisteredSession['deviceType']) {
   return <Laptop className="h-5 w-5" />;
 }
 
-export default function ActiveSessionsSection({ tokenVersion = 1, sessions = [] }: Props) {
-  const [registered, setRegistered] = useState<RegisteredSession[] | null>(null);
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function ActiveSessionsSection({ tokenVersion = 1 }: Props) {
+  const [sessions, setSessions] = useState<RegisteredSession[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'error'>('loading');
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const [isPending, startTransition] = useTransition();
   const [revokingId, setRevokingId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
-  const refresh = async () => {
+  // Abort controller ref so in-flight fetches are cancelled on unmount.
+  const abortRef = useRef<AbortController | null>(null);
+
+  const fetchSessions = useCallback(async (cursor: string | null = null, append = false) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    if (!append) setLoadState('loading');
+    else setLoadingMore(true);
+
     try {
-      const response = await fetch('/api/user/sessions', { cache: 'no-store' });
-      if (!response.ok) throw new Error('Unable to load registered sessions.');
-      const payload = (await response.json()) as { sessions?: RegisteredSession[] };
-      setRegistered(Array.isArray(payload.sessions) ? payload.sessions : []);
-      setError(null);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Unable to load registered sessions.');
-    }
-  };
+      const url = new URL('/api/user/sessions', window.location.origin);
+      if (cursor) url.searchParams.set('cursor', cursor);
+      url.searchParams.set('limit', '50');
 
-  useEffect(() => {
-    void refresh();
+      const response = await fetch(url.toString(), {
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? `Failed to load sessions (${response.status})`);
+      }
+
+      const payload = (await response.json()) as SessionsApiResponse;
+      const incoming = Array.isArray(payload.sessions) ? payload.sessions : [];
+
+      setSessions(prev => (append ? [...prev, ...incoming] : incoming));
+      setNextCursor(payload.nextCursor ?? null);
+      setHasMore(Boolean(payload.hasMore));
+      setLoadError(null);
+      setLoadState('idle');
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+      const msg = err instanceof Error ? err.message : 'Unable to load signed-in sessions.';
+      setLoadError(msg);
+      setLoadState('error');
+    } finally {
+      setLoadingMore(false);
+    }
   }, []);
 
-  const fallback: RegisteredSession[] = useMemo(
-    () =>
-      sessions.map(session => ({
-        id: session.id,
-        policy: 'STANDARD',
-        state: 'ACTIVE',
-        browser: session.browser,
-        os: session.os,
-        deviceType: session.deviceType,
-        createdAt: session.lastActive,
-        lastActive: session.lastActive,
-        expiresAt: null,
-        isCurrent: session.isCurrent,
-      })),
-    [sessions]
-  );
-  const displaySessions = registered ?? fallback;
+  useEffect(() => {
+    void fetchSessions(null, false);
+    return () => abortRef.current?.abort();
+  }, [fetchSessions]);
 
   const revokeSession = (session: RegisteredSession) => {
-    setError(null);
-    setSuccess(null);
+    setActionError(null);
+    setActionSuccess(null);
     setRevokingId(session.id);
     startTransition(async () => {
       try {
@@ -132,10 +175,10 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions = [] 
           await signOut({ callbackUrl: '/login?error=SessionExpired' });
           return;
         }
-        setSuccess('Session revoked. That browser will be rejected on its next authenticated request.');
-        await refresh();
-      } catch (revokeError) {
-        setError(revokeError instanceof Error ? revokeError.message : 'Unable to revoke session.');
+        setActionSuccess('Session revoked. That browser will be rejected on its next request.');
+        await fetchSessions(null, false);
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'Unable to revoke session.');
       } finally {
         setRevokingId(null);
       }
@@ -143,8 +186,8 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions = [] 
   };
 
   const revokeAll = () => {
-    setError(null);
-    setSuccess(null);
+    setActionError(null);
+    setActionSuccess(null);
     startTransition(async () => {
       try {
         const response = await fetch('/api/user/sessions', {
@@ -154,23 +197,54 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions = [] 
         });
         const payload = (await response.json().catch(() => ({}))) as { error?: string };
         if (!response.ok) throw new Error(payload.error || 'Unable to revoke sessions.');
-        setSuccess('All sessions revoked. Redirecting to sign in…');
+        setActionSuccess('All sessions revoked. Redirecting to sign in…');
         await signOut({ callbackUrl: '/login' });
-      } catch (revokeError) {
-        setError(revokeError instanceof Error ? revokeError.message : 'Unable to revoke sessions.');
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'Unable to revoke sessions.');
       }
     });
   };
 
+  // ─── Render states ──────────────────────────────────────────────────────────
+
+  if (loadState === 'loading') {
+    return (
+      <div className="flex items-center justify-center py-10 text-muted-foreground gap-2 text-sm">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading signed-in sessions…
+      </div>
+    );
+  }
+
+  if (loadState === 'error') {
+    return (
+      <div className="space-y-3">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{loadError ?? 'Unable to load signed-in sessions.'}</AlertDescription>
+        </Alert>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={() => void fetchSessions(null, false)}
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="space-y-3" aria-live="polite">
-        {displaySessions.length === 0 ? (
+        {sessions.length === 0 ? (
           <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-            No registered browser sessions were found. This device will register on its next session check.
+            No active signed-in sessions found.
           </div>
         ) : (
-          displaySessions.map(session => {
+          sessions.map(session => {
             const revoked = session.state === 'REVOKED';
             return (
               <div
@@ -193,8 +267,11 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions = [] 
                         {session.browser} on {session.os}
                       </h4>
                       {session.isCurrent && !revoked ? (
-                        <Badge variant="outline" className="border-emerald-500/20 bg-emerald-500/10 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
-                          This device
+                        <Badge
+                          variant="outline"
+                          className="border-emerald-500/20 bg-emerald-500/10 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300"
+                        >
+                          This session
                         </Badge>
                       ) : null}
                       <Badge variant="outline" className="text-[10px]">
@@ -204,13 +281,17 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions = [] 
                             ? 'Enterprise SSO'
                             : 'Standard'}
                       </Badge>
-                      {revoked ? <Badge variant="destructive" className="text-[10px]">Revoked</Badge> : null}
+                      {revoked ? (
+                        <Badge variant="destructive" className="text-[10px]">
+                          Revoked
+                        </Badge>
+                      ) : null}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {formatRelativeTime(session.lastActive)} · {formatExpiry(session.expiresAt)}
                     </p>
-                    <p className="mt-0.5 text-[10px] text-muted-foreground">
-                      Session {session.id.slice(0, 8)}… · account security token v{tokenVersion}
+                    <p className="mt-0.5 text-[10px] text-muted-foreground font-mono">
+                      Session •••• {session.displayId} · token v{tokenVersion}
                     </p>
                   </div>
                 </div>
@@ -229,17 +310,18 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions = [] 
                         {isPending && revokingId === session.id
                           ? 'Revoking…'
                           : session.isCurrent
-                            ? 'Sign out this device'
+                            ? 'Sign out this session'
                             : 'Revoke'}
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
                         <AlertDialogTitle>
-                          {session.isCurrent ? 'Sign out this device?' : 'Revoke this session?'}
+                          {session.isCurrent ? 'Sign out this session?' : 'Revoke this session?'}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                          This revokes only this browser session. Push delivery is managed separately and is not silently disabled by session expiry or revocation.
+                          This revokes only this authentication session. Push delivery is managed
+                          separately and is not affected by session revocation.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
@@ -257,21 +339,38 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions = [] 
         )}
       </div>
 
+      {/* Pagination */}
+      {hasMore && (
+        <div className="flex justify-center pt-1">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loadingMore}
+            className="gap-2"
+            onClick={() => void fetchSessions(nextCursor, true)}
+          >
+            {loadingMore ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {loadingMore ? 'Loading…' : 'Load more sessions'}
+          </Button>
+        </div>
+      )}
+
       <p className="text-xs text-muted-foreground">
-        These are durable JWT session registrations keyed by the encrypted session&apos;s stable ID. Individual revocation is enforced server-side; Push subscriptions have an independent lifecycle.
+        Each entry is a distinct authentication session identified by its encrypted session token.
+        Individual revocation is enforced server-side.
       </p>
 
-      {error ? (
+      {actionError ? (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{actionError}</AlertDescription>
         </Alert>
       ) : null}
 
-      {success ? (
+      {actionSuccess ? (
         <Alert className="border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
           <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <AlertDescription>{success}</AlertDescription>
+          <AlertDescription>{actionSuccess}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -295,12 +394,17 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions = [] 
             <AlertDialogHeader>
               <AlertDialogTitle>Revoke every active session?</AlertDialogTitle>
               <AlertDialogDescription>
-                This revokes the registered session rows and increments your account token version, invalidating every existing OpsKnight browser session. Push subscriptions remain a separate delivery channel.
+                This revokes all registered session records and increments your account token
+                version, invalidating every existing OpsKnight browser session. Push subscriptions
+                remain a separate delivery channel.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={revokeAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              <AlertDialogAction
+                onClick={revokeAll}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
                 Revoke all sessions
               </AlertDialogAction>
             </AlertDialogFooter>
