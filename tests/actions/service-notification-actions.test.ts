@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   assertCanModifyService: vi.fn(),
   serviceUpdate: vi.fn(),
+  slackDestinationUpdateMany: vi.fn(),
   logAudit: vi.fn(),
   revalidatePath: vi.fn(),
   redirect: vi.fn(),
@@ -17,6 +18,9 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     service: {
       update: mocks.serviceUpdate,
+    },
+    slackDestination: {
+      updateMany: mocks.slackDestinationUpdateMany,
     },
   },
 }));
