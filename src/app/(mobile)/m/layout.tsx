@@ -30,18 +30,6 @@ export default async function MobileLayout({ children }: { children: React.React
   const shell = await getAppShellContext(requestContext);
   if (!shell) redirect(forcedSignOutUrl('mobile', { error: 'SessionExpired', callbackUrl: '/m' }));
 
-  try {
-    const { headers } = await import('next/headers');
-    const headerList = await headers();
-    const userAgent = headerList.get('user-agent') || '';
-    const ip =
-      headerList.get('x-forwarded-for')?.split(',')[0].trim() ||
-      headerList.get('x-real-ip') ||
-      '127.0.0.1';
-    const { recordSessionHeartbeat } = await import('@/lib/active-sessions');
-    void recordSessionHeartbeat({ userId: shell.user.id, userAgent, ip }).catch(() => {});
-  } catch {}
-
   const authGeneration = String(shell.user.tokenVersion);
   const refreshEpoch = randomUUID();
 

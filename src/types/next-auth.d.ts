@@ -8,7 +8,10 @@ declare module 'next-auth' {
       tokenVersion?: number;
       avatarUrl?: string | null;
       gender?: string | null;
+      sessionId?: string;
     };
+    /** Canonical JWT JTI backing this active session */
+    sessionId?: string;
     /** Error code if token validation failed or security lookup was unavailable */
     error?: string;
     /** Unix epoch seconds of the session's absolute expiry (Remember-Me hard cap). */

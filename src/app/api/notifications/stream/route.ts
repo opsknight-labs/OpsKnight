@@ -6,6 +6,8 @@ import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
 import { getNotificationUserChangeVersion } from '@/lib/notification-change-clock';
 import { isAppError } from '@/lib/errors';
+import { getRequestSessionJti } from '@/lib/realtime-stream-authorization';
+import { isSessionActive } from '@/lib/session-registry';
 
 /**
  * Server-Sent Events endpoint for real-time notification updates
@@ -33,6 +35,15 @@ export async function GET(req: NextRequest) {
     const sessionTokenVersion = session.user.tokenVersion ?? 0;
     const expectedTokenVersion = user.tokenVersion ?? 0;
     if (sessionTokenVersion !== expectedTokenVersion) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+
+    const sessionJti = await getRequestSessionJti(req);
+    if (!sessionJti) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+    const active = await isSessionActive(user.id, sessionJti);
+    if (!active) {
       return new Response('Unauthorized', { status: 401 });
     }
 
@@ -298,16 +309,34 @@ export async function GET(req: NextRequest) {
               );
             }
 
-            if (pollCount % 6 === 0) {
-              const freshUser = await prisma.user.findUnique({
-                where: { id: user.id },
-                select: { status: true, tokenVersion: true },
-              });
-              if (
-                !freshUser ||
-                freshUser.status === 'DISABLED' ||
-                (freshUser.tokenVersion ?? 0) !== expectedTokenVersion
-              ) {
+            if (pollCount % 3 === 0) {
+              try {
+                const freshUser = await prisma.user.findUnique({
+                  where: { id: user.id },
+                  select: { status: true, tokenVersion: true },
+                });
+                if (
+                  !freshUser ||
+                  freshUser.status === 'DISABLED' ||
+                  (freshUser.tokenVersion ?? 0) !== expectedTokenVersion
+                ) {
+                  send(JSON.stringify({ type: 'authorization_revoked' }));
+                  cleanup();
+                  return;
+                }
+
+                const active = await isSessionActive(user.id, sessionJti);
+                if (!active) {
+                  send(JSON.stringify({ type: 'authorization_revoked' }));
+                  cleanup();
+                  return;
+                }
+              } catch (authError) {
+                logger.warn('notifications.authorization_recheck_failed', {
+                  userId: user.id,
+                  error: authError instanceof Error ? authError.message : String(authError),
+                });
+                // Fail closed: terminate stream on authorization recheck failure
                 send(JSON.stringify({ type: 'authorization_revoked' }));
                 cleanup();
                 return;

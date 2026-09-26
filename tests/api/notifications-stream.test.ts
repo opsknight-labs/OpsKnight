@@ -17,6 +17,14 @@ vi.mock('@/lib/notification-change-clock', () => ({
   getNotificationUserChangeVersion: vi.fn(),
 }));
 
+vi.mock('@/lib/realtime-stream-authorization', () => ({
+  getRequestSessionJti: vi.fn().mockResolvedValue('test-jti'),
+}));
+
+vi.mock('@/lib/session-registry', () => ({
+  isSessionActive: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {

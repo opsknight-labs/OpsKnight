@@ -11,9 +11,7 @@ import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import Link from 'next/link';
-import { headers } from 'next/headers';
-import { ShieldCheck, KeyRound, Fingerprint, ExternalLink, Laptop } from 'lucide-react';
-import { getUserActiveSessions, recordSessionHeartbeat } from '@/lib/active-sessions';
+import { ShieldCheck, KeyRound, Fingerprint, ExternalLink } from 'lucide-react';
 
 export default async function SecuritySettingsPage() {
   const session = await getServerSession(await getAuthOptions());
@@ -80,33 +78,6 @@ export default async function SecuritySettingsPage() {
     }
   }
 
-  // This is recent device activity inferred from login/heartbeat audit events.
-  // It is intentionally not presented as a cryptographic per-browser registry;
-  // tokenVersion remains the authoritative immediate revoke-all boundary.
-  const headerList = await headers();
-  const currentUserAgent = headerList.get('user-agent') || '';
-  const currentIp =
-    headerList.get('x-forwarded-for')?.split(',')[0].trim() ||
-    headerList.get('x-real-ip') ||
-    '127.0.0.1';
-
-  if (user?.id) {
-    await recordSessionHeartbeat({
-      userId: user.id,
-      userAgent: currentUserAgent,
-      ip: currentIp,
-    });
-  }
-
-  const activeSessions = user?.id
-    ? await getUserActiveSessions({
-        userId: user.id,
-        currentIp,
-        currentUserAgent,
-        tokenVersion: user.tokenVersion ?? 0,
-      })
-    : [];
-
   // Format issuer for clean presentation (e.g., https://accounts.google.com -> Google)
   const formatIssuerName = (issuerUrl: string) => {
     try {
@@ -128,7 +99,7 @@ export default async function SecuritySettingsPage() {
       <DetailHeroBanner
         tag="Identity & Protection"
         title="Security & Authentication"
-        subtitle="Control how you sign in, manage credentials, and review recent device activity across your account."
+        subtitle="Control how you sign in, manage credentials, and review signed-in sessions across your account."
         icon={
           <div className="p-3.5 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/25 shadow-inner">
             <ShieldCheck className="h-8 w-8" />
@@ -164,16 +135,6 @@ export default async function SecuritySettingsPage() {
             subtext: 'Session state',
           },
           {
-            label: 'Recent Devices',
-            value: `${activeSessions.length} ${activeSessions.length === 1 ? 'Device' : 'Devices'}`,
-            icon: <Laptop className="h-3.5 w-3.5" />,
-            subtext:
-              activeSessions.length === 1
-                ? 'Current browser'
-                : `${activeSessions.length} recently active devices`,
-            tooltip: 'Inferred from recent sign-in and session-heartbeat audit activity',
-          },
-          {
             label: 'Auth Method',
             value: isSsoLinked ? 'SSO Link' : 'Password',
             icon: <Fingerprint className="h-3.5 w-3.5" />,
@@ -202,10 +163,10 @@ export default async function SecuritySettingsPage() {
         <SecurityForm hasPassword={hasPassword} />
       </SettingsSection>
 
-      {/* Section 2: Recent Device Activity */}
+      {/* Section 2: Signed-in Sessions */}
       <SettingsSection
-        title="Recent Device Activity"
-        description="Review browsers and device profiles seen in recent authenticated activity. This is an audit-derived view, not a per-device revocation registry."
+        title="Signed-in Sessions"
+        description="Every active browser and device session authenticated to your account. Each entry represents an individual authentication session, not just a device profile."
         footer={
           <p className="text-xs text-muted-foreground">
             Revoke all sessions is the authoritative emergency control: it increments your identity
@@ -213,7 +174,7 @@ export default async function SecuritySettingsPage() {
           </p>
         }
       >
-        <ActiveSessionsSection tokenVersion={user?.tokenVersion ?? 1} sessions={activeSessions} />
+        <ActiveSessionsSection tokenVersion={user?.tokenVersion ?? 1} />
       </SettingsSection>
 
       {/* Section 3: Identity & Single Sign-On */}

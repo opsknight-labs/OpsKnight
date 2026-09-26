@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
+  getRequestSessionJti,
   hasSameStreamAuthorizationScope,
   resolveStreamAuthorization,
   type StreamAuthorization,
@@ -12,6 +13,7 @@ import {
   getCachedServiceIncidents,
   getCachedIncidentDetails,
 } from '@/lib/realtime-cache';
+import { logger } from '@/lib/logger';
 
 /**
  * Server-Sent Events (SSE) endpoint for real-time incident updates
@@ -52,16 +54,18 @@ export async function GET(req: NextRequest) {
   const incidentId = searchParams.get('incidentId');
   const serviceId = searchParams.get('serviceId');
 
-  const initialAuthorization = await resolveStreamAuthorization(user.id, sessionTokenVersion);
+  const sessionJti = await getRequestSessionJti(req);
+  const initialAuthorization = await resolveStreamAuthorization(
+    user.id,
+    sessionTokenVersion,
+    sessionJti
+  );
   if (!initialAuthorization) {
     return new Response('Unauthorized', { status: 401 });
   }
   let streamAuthorization: StreamAuthorization = initialAuthorization;
 
-  let isPrivileged = hasCapability(
-    streamAuthorization.role,
-    CAPABILITIES.INCIDENT_READ_ALL
-  );
+  let isPrivileged = hasCapability(streamAuthorization.role, CAPABILITIES.INCIDENT_READ_ALL);
   const hasTeamAccess = (teamId?: string | null) => {
     if (isPrivileged) return true;
     if (!teamId) return false;
@@ -142,55 +146,73 @@ export async function GET(req: NextRequest) {
         isChecking = true;
         tickCount++;
         try {
-          if (tickCount % 12 === 0) {
-            const nextAuthorization = await resolveStreamAuthorization(
-              user.id,
-              sessionTokenVersion
-            );
-            if (
-              !nextAuthorization ||
-              !hasSameStreamAuthorizationScope(streamAuthorization, nextAuthorization)
-            ) {
+          if (tickCount % 3 === 0) {
+            try {
+              const nextAuthorization = await resolveStreamAuthorization(
+                user.id,
+                sessionTokenVersion,
+                sessionJti
+              );
+              if (
+                !nextAuthorization ||
+                !hasSameStreamAuthorizationScope(streamAuthorization, nextAuthorization)
+              ) {
+                send({ type: 'authorization_revoked' });
+                cleanup();
+                try {
+                  controller.close();
+                } catch {}
+                return;
+              }
+              streamAuthorization = nextAuthorization;
+              isPrivileged = hasCapability(
+                streamAuthorization.role,
+                CAPABILITIES.INCIDENT_READ_ALL
+              );
+
+              if (!isPrivileged && incidentId) {
+                const target = await prisma.incident.findUnique({
+                  where: { id: incidentId },
+                  select: { service: { select: { teamId: true } } },
+                });
+                if (
+                  !target?.service.teamId ||
+                  !streamAuthorization.teamIds.includes(target.service.teamId)
+                ) {
+                  send({ type: 'authorization_revoked' });
+                  cleanup();
+                  try {
+                    controller.close();
+                  } catch {}
+                  return;
+                }
+              }
+              if (!isPrivileged && serviceId) {
+                const target = await prisma.service.findUnique({
+                  where: { id: serviceId },
+                  select: { teamId: true },
+                });
+                if (!target?.teamId || !streamAuthorization.teamIds.includes(target.teamId)) {
+                  send({ type: 'authorization_revoked' });
+                  cleanup();
+                  try {
+                    controller.close();
+                  } catch {}
+                  return;
+                }
+              }
+            } catch (authError) {
+              logger.warn('events.authorization_recheck_failed', {
+                userId: user.id,
+                error: authError instanceof Error ? authError.message : String(authError),
+              });
+              // Fail closed: terminate stream on authorization recheck failure
               send({ type: 'authorization_revoked' });
               cleanup();
               try {
                 controller.close();
               } catch {}
               return;
-            }
-            streamAuthorization = nextAuthorization;
-            isPrivileged = hasCapability(
-              streamAuthorization.role,
-              CAPABILITIES.INCIDENT_READ_ALL
-            );
-
-            if (!isPrivileged && incidentId) {
-              const target = await prisma.incident.findUnique({
-                where: { id: incidentId },
-                select: { service: { select: { teamId: true } } },
-              });
-              if (!target?.service.teamId || !streamAuthorization.teamIds.includes(target.service.teamId)) {
-                send({ type: 'authorization_revoked' });
-                cleanup();
-                try {
-                  controller.close();
-                } catch {}
-                return;
-              }
-            }
-            if (!isPrivileged && serviceId) {
-              const target = await prisma.service.findUnique({
-                where: { id: serviceId },
-                select: { teamId: true },
-              });
-              if (!target?.teamId || !streamAuthorization.teamIds.includes(target.teamId)) {
-                send({ type: 'authorization_revoked' });
-                cleanup();
-                try {
-                  controller.close();
-                } catch {}
-                return;
-              }
             }
           }
           let sentUpdate = false;
