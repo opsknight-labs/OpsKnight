@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opsknight.com/schemas/docs/v2.0.0-metadata.schema.json",
+  "title": "OpsKnight 2.0.0 documentation frontmatter",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["title", "description", "type", "product_area", "audience", "verified"],
+  "properties": {
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+    "type": {
+      "enum": [
+        "tutorial",
+        "concept",
+        "how-to",
+        "reference",
+        "troubleshooting",
+        "deployment",
+        "integration",
+        "developer"
+      ]
+    },
+    "product_area": { "type": "string", "minLength": 1 },
+    "audience": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["responder", "administrator", "operator", "developer", "viewer"]
+      }
+    },
+    "verified": { "type": "boolean" },
+    "verified_at": { "type": "string", "format": "date" },
+    "evidence": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "verified": { "const": true } } },
+      "then": { "required": ["verified_at", "evidence"] }
+    }
+  ]
+}
+
