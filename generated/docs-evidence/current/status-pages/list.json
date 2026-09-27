@@ -1,6 +1,11 @@
 {
   "release": "current",
-  "commit": "d77409ec13633a10e76fdc3208e48bd107f2d5b3",
+  "sourceRevision": "75cde5c1cd1e042b0d3086b0948cabc35c1b6ae7",
+  "runtime": {
+    "requestedImage": "ghcr.io/opsknight-labs/opsknight-test@sha256:4364470f96e793e24a3c85cad62ed429cfe179f23aa5eb8a26ddcc864e2303dd",
+    "digest": "ghcr.io/opsknight-labs/opsknight-test@sha256:4364470f96e793e24a3c85cad62ed429cfe179f23aa5eb8a26ddcc864e2303dd",
+    "sourceRevision": "4359915fb530fe2c8dc89c89a58877d90c44cd2d"
+  },
   "route": "/settings/status-pages",
   "journey": "status-pages",
   "browser": "docs-chromium",
@@ -8,5 +13,5 @@
     "width": 1440,
     "height": 900
   },
-  "capturedAt": "2026-09-27T17:31:54.193Z"
+  "capturedAt": "2026-09-27T17:50:33.093Z"
 }
