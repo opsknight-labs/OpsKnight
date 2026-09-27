@@ -2390,14 +2390,24 @@ export async function deliverCentralNotification(
       };
       let committed: { count: number };
       const attemptFinishedAt = isVoicePayload ? null : finishedAt;
+      // ACTIVE_OUTCOMES: states that the success-persistence path is permitted to update.
+      // Any attempt that has already reached a terminal state via a concurrent Twilio
+      // callback (finishedAt IS NOT NULL) must not be touched — the CAS guard enforces this.
+      const VOICE_ACTIVE_OUTCOMES = ['IN_FLIGHT', 'ACCEPTED', 'RINGING', 'IN-PROGRESS', 'ANSWERED'];
       const attemptOperation = preCreatedAttemptId
         ? prisma.notificationDeliveryAttempt.updateMany({
-            where: { id: preCreatedAttemptId },
+            where: {
+              id: preCreatedAttemptId,
+              // CAS guard: only update if the attempt has not yet been completed by a
+              // concurrent Twilio callback. Prevents overwriting a terminal finishedAt.
+              finishedAt: null,
+              outcome: { in: VOICE_ACTIVE_OUTCOMES },
+            },
             data: {
               provider:
                 (result as { selectedProvider?: string }).selectedProvider || currentProvider,
               providerMessageId: result.providerMessageId,
-              finishedAt: attemptFinishedAt,
+              finishedAt: attemptFinishedAt, // always null for voice (set by Twilio callback)
               latencyMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
             },
           })
@@ -2438,12 +2448,17 @@ export async function deliverCentralNotification(
         if (preCreatedAttemptId) {
           await prisma.notificationDeliveryAttempt
             .updateMany({
-              where: { id: preCreatedAttemptId },
+              where: {
+                id: preCreatedAttemptId,
+                // Same CAS guard as primary path — never overwrite a terminal attempt.
+                finishedAt: null,
+                outcome: { in: VOICE_ACTIVE_OUTCOMES },
+              },
               data: {
                 provider:
                   (result as { selectedProvider?: string }).selectedProvider || currentProvider,
                 providerMessageId: result.providerMessageId,
-                finishedAt: attemptFinishedAt,
+                finishedAt: attemptFinishedAt, // always null for voice
                 latencyMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
               },
             })
