@@ -1,0 +1,4780 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-27T16:27:19.319Z",
+  "sourceRevision": null,
+  "uiRoutes": [
+    {
+      "route": "/action-items",
+      "file": "src/app/(app)/action-items/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/analytics",
+      "file": "src/app/(app)/analytics/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/audit",
+      "file": "src/app/(app)/audit/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/events",
+      "file": "src/app/(app)/events/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/events/test",
+      "file": "src/app/(app)/events/test/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/help",
+      "file": "src/app/(app)/help/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/incidents/[id]",
+      "file": "src/app/(app)/incidents/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/incidents/create",
+      "file": "src/app/(app)/incidents/create/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/incidents",
+      "file": "src/app/(app)/incidents/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/incidents/templates/create",
+      "file": "src/app/(app)/incidents/templates/create/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/incidents/templates",
+      "file": "src/app/(app)/incidents/templates/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/",
+      "file": "src/app/(app)/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/policies/[id]",
+      "file": "src/app/(app)/policies/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/policies/create",
+      "file": "src/app/(app)/policies/create/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/policies",
+      "file": "src/app/(app)/policies/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/postmortems/[incidentId]",
+      "file": "src/app/(app)/postmortems/[incidentId]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/postmortems/create",
+      "file": "src/app/(app)/postmortems/create/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/postmortems",
+      "file": "src/app/(app)/postmortems/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/reports/executive/[id]",
+      "file": "src/app/(app)/reports/executive/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/reports/executive/new",
+      "file": "src/app/(app)/reports/executive/new/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/reports/executive",
+      "file": "src/app/(app)/reports/executive/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/reports",
+      "file": "src/app/(app)/reports/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/schedules/[id]",
+      "file": "src/app/(app)/schedules/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/schedules",
+      "file": "src/app/(app)/schedules/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/services/[id]/integrations",
+      "file": "src/app/(app)/services/[id]/integrations/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/services/[id]/notifications",
+      "file": "src/app/(app)/services/[id]/notifications/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/services/[id]",
+      "file": "src/app/(app)/services/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/services/[id]/settings",
+      "file": "src/app/(app)/services/[id]/settings/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/services/[id]/webhooks/[webhookId]/edit",
+      "file": "src/app/(app)/services/[id]/webhooks/[webhookId]/edit/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/services/[id]/webhooks/new",
+      "file": "src/app/(app)/services/[id]/webhooks/new/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/services",
+      "file": "src/app/(app)/services/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/api-keys",
+      "file": "src/app/(app)/settings/api-keys/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/chatops/link",
+      "file": "src/app/(app)/settings/chatops/link/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/custom-fields",
+      "file": "src/app/(app)/settings/custom-fields/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/incident-sla",
+      "file": "src/app/(app)/settings/incident-sla/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/integrations/chatops",
+      "file": "src/app/(app)/settings/integrations/chatops/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/integrations/jira",
+      "file": "src/app/(app)/settings/integrations/jira/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/integrations/microsoft-teams",
+      "file": "src/app/(app)/settings/integrations/microsoft-teams/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/integrations",
+      "file": "src/app/(app)/settings/integrations/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/integrations/slack",
+      "file": "src/app/(app)/settings/integrations/slack/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/notifications/history",
+      "file": "src/app/(app)/settings/notifications/history/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/notifications/operations",
+      "file": "src/app/(app)/settings/notifications/operations/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/notifications",
+      "file": "src/app/(app)/settings/notifications/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings",
+      "file": "src/app/(app)/settings/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/privacy-requests",
+      "file": "src/app/(app)/settings/privacy-requests/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/profile",
+      "file": "src/app/(app)/settings/profile/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/security-compliance",
+      "file": "src/app/(app)/settings/security-compliance/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/security",
+      "file": "src/app/(app)/settings/security/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/service-objectives",
+      "file": "src/app/(app)/settings/service-objectives/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/status-page",
+      "file": "src/app/(app)/settings/status-page/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/status-pages/[pageId]",
+      "file": "src/app/(app)/settings/status-pages/[pageId]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/status-pages",
+      "file": "src/app/(app)/settings/status-pages/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/system/health",
+      "file": "src/app/(app)/settings/system/health/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/system",
+      "file": "src/app/(app)/settings/system/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/settings/system/performance",
+      "file": "src/app/(app)/settings/system/performance/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/shortcuts",
+      "file": "src/app/(app)/shortcuts/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/system-logs",
+      "file": "src/app/(app)/system-logs/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/teams/[id]",
+      "file": "src/app/(app)/teams/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/teams",
+      "file": "src/app/(app)/teams/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/users/[id]",
+      "file": "src/app/(app)/users/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/users",
+      "file": "src/app/(app)/users/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/analytics",
+      "file": "src/app/(mobile)/m/analytics/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/help",
+      "file": "src/app/(mobile)/m/help/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/incidents/[id]",
+      "file": "src/app/(mobile)/m/incidents/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/incidents/create",
+      "file": "src/app/(mobile)/m/incidents/create/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/incidents",
+      "file": "src/app/(mobile)/m/incidents/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/more",
+      "file": "src/app/(mobile)/m/more/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/notifications",
+      "file": "src/app/(mobile)/m/notifications/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m",
+      "file": "src/app/(mobile)/m/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/policies/[id]",
+      "file": "src/app/(mobile)/m/policies/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/policies",
+      "file": "src/app/(mobile)/m/policies/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/postmortems/[id]",
+      "file": "src/app/(mobile)/m/postmortems/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/postmortems",
+      "file": "src/app/(mobile)/m/postmortems/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/schedules/[id]",
+      "file": "src/app/(mobile)/m/schedules/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/schedules",
+      "file": "src/app/(mobile)/m/schedules/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/services/[id]",
+      "file": "src/app/(mobile)/m/services/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/services",
+      "file": "src/app/(mobile)/m/services/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/status",
+      "file": "src/app/(mobile)/m/status/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/teams/[id]",
+      "file": "src/app/(mobile)/m/teams/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/teams",
+      "file": "src/app/(mobile)/m/teams/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/users/[id]",
+      "file": "src/app/(mobile)/m/users/[id]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/users",
+      "file": "src/app/(mobile)/m/users/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/logs",
+      "file": "src/app/(public)/logs/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/forgot-password",
+      "file": "src/app/(public)/m/forgot-password/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/m/login",
+      "file": "src/app/(public)/m/login/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/status/[slug]",
+      "file": "src/app/(public)/status/[slug]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/status/[slug]/postmortems/[incidentId]",
+      "file": "src/app/(public)/status/[slug]/postmortems/[incidentId]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/status/[slug]/unsubscribe/[token]",
+      "file": "src/app/(public)/status/[slug]/unsubscribe/[token]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/status/[slug]/verify/[token]",
+      "file": "src/app/(public)/status/[slug]/verify/[token]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/status",
+      "file": "src/app/(public)/status/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/status/postmortems/[incidentId]",
+      "file": "src/app/(public)/status/postmortems/[incidentId]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/status/unsubscribe/[token]",
+      "file": "src/app/(public)/status/unsubscribe/[token]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/status/verify/[token]",
+      "file": "src/app/(public)/status/verify/[token]/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/auth/signout",
+      "file": "src/app/auth/signout/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/clear-desktop-preference",
+      "file": "src/app/clear-desktop-preference/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/debug-mobile",
+      "file": "src/app/debug-mobile/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/forgot-password",
+      "file": "src/app/forgot-password/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/login",
+      "file": "src/app/login/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/reset-password",
+      "file": "src/app/reset-password/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/set-password",
+      "file": "src/app/set-password/page.tsx",
+      "kind": "ui"
+    },
+    {
+      "route": "/setup",
+      "file": "src/app/setup/page.tsx",
+      "kind": "ui"
+    }
+  ],
+  "apiRoutes": [
+    {
+      "route": "/api/admin/generate-reset-link",
+      "file": "src/app/api/admin/generate-reset-link/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/admin/incident-collaboration/meetings/[meetingId]/retry-cleanup",
+      "file": "src/app/api/admin/incident-collaboration/meetings/[meetingId]/retry-cleanup/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/admin/incident-collaboration",
+      "file": "src/app/api/admin/incident-collaboration/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/admin/notifications/capacity",
+      "file": "src/app/api/admin/notifications/capacity/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ]
+    },
+    {
+      "route": "/api/admin/notifications/operations/[id]/retry",
+      "file": "src/app/api/admin/notifications/operations/[id]/retry/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/admin/notifications/operations",
+      "file": "src/app/api/admin/notifications/operations/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/admin/notifications/providers/[key]/test",
+      "file": "src/app/api/admin/notifications/providers/[key]/test/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/admin/rollups/backfill",
+      "file": "src/app/api/admin/rollups/backfill/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/admin/rollups/health",
+      "file": "src/app/api/admin/rollups/health/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/admin/rollups",
+      "file": "src/app/api/admin/rollups/route.ts",
+      "methods": [
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/admin/sla-drift",
+      "file": "src/app/api/admin/sla-drift/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/admin/sla-performance",
+      "file": "src/app/api/admin/sla-performance/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/admin/war-rooms/[warRoomId]/repair",
+      "file": "src/app/api/admin/war-rooms/[warRoomId]/repair/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/admin/war-rooms/[warRoomId]",
+      "file": "src/app/api/admin/war-rooms/[warRoomId]/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/admin/war-rooms",
+      "file": "src/app/api/admin/war-rooms/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/analytics/export",
+      "file": "src/app/api/analytics/export/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/auth/[...nextauth]",
+      "file": "src/app/api/auth/[...nextauth]/route.ts",
+      "methods": []
+    },
+    {
+      "route": "/api/auth/forgot-password",
+      "file": "src/app/api/auth/forgot-password/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/auth/oidc/logout-url",
+      "file": "src/app/api/auth/oidc/logout-url/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/auth/reset-password",
+      "file": "src/app/api/auth/reset-password/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/avatar",
+      "file": "src/app/api/avatar/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/control-center",
+      "file": "src/app/api/compliance/control-center/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/controls/[id]/evaluations",
+      "file": "src/app/api/compliance/controls/[id]/evaluations/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/controls/[id]/evidence",
+      "file": "src/app/api/compliance/controls/[id]/evidence/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/controls/[id]/framework-mappings",
+      "file": "src/app/api/compliance/controls/[id]/framework-mappings/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/controls",
+      "file": "src/app/api/compliance/controls/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/drift/[id]/acknowledge",
+      "file": "src/app/api/compliance/drift/[id]/acknowledge/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/compliance/drift/[id]",
+      "file": "src/app/api/compliance/drift/[id]/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/drift",
+      "file": "src/app/api/compliance/drift/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/encryption/retirement-readiness",
+      "file": "src/app/api/compliance/encryption/retirement-readiness/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/encryption/runs/[id]",
+      "file": "src/app/api/compliance/encryption/runs/[id]/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/compliance/encryption/runs",
+      "file": "src/app/api/compliance/encryption/runs/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/compliance/encryption/status",
+      "file": "src/app/api/compliance/encryption/status/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/evaluations/[id]/evidence",
+      "file": "src/app/api/compliance/evaluations/[id]/evidence/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/evaluations",
+      "file": "src/app/api/compliance/evaluations/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/compliance/evidence",
+      "file": "src/app/api/compliance/evidence/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/exports/preview",
+      "file": "src/app/api/compliance/exports/preview/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/compliance/exports",
+      "file": "src/app/api/compliance/exports/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/compliance/frameworks/[id]/requirements/[requirementId]",
+      "file": "src/app/api/compliance/frameworks/[id]/requirements/[requirementId]/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/frameworks/[id]/requirements",
+      "file": "src/app/api/compliance/frameworks/[id]/requirements/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/frameworks/[id]",
+      "file": "src/app/api/compliance/frameworks/[id]/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/frameworks",
+      "file": "src/app/api/compliance/frameworks/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/monitoring",
+      "file": "src/app/api/compliance/monitoring/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/monitoring/runs",
+      "file": "src/app/api/compliance/monitoring/runs/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/compliance/privacy-discovery",
+      "file": "src/app/api/compliance/privacy-discovery/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/privacy-requests/[id]/assign",
+      "file": "src/app/api/compliance/privacy-requests/[id]/assign/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/compliance/privacy-requests/[id]/erasure/execute",
+      "file": "src/app/api/compliance/privacy-requests/[id]/erasure/execute/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/compliance/privacy-requests/[id]/erasure/preview",
+      "file": "src/app/api/compliance/privacy-requests/[id]/erasure/preview/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/privacy-requests/[id]/export/[artifactId]/download",
+      "file": "src/app/api/compliance/privacy-requests/[id]/export/[artifactId]/download/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/privacy-requests/[id]/export",
+      "file": "src/app/api/compliance/privacy-requests/[id]/export/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/compliance/privacy-requests/[id]",
+      "file": "src/app/api/compliance/privacy-requests/[id]/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/privacy-requests/[id]/transition",
+      "file": "src/app/api/compliance/privacy-requests/[id]/transition/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/compliance/privacy-requests",
+      "file": "src/app/api/compliance/privacy-requests/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/compliance/privacy-requests/subjects",
+      "file": "src/app/api/compliance/privacy-requests/subjects/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/retention-holds/[id]/release",
+      "file": "src/app/api/compliance/retention-holds/[id]/release/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/compliance/retention-holds/[id]",
+      "file": "src/app/api/compliance/retention-holds/[id]/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/compliance/retention-holds",
+      "file": "src/app/api/compliance/retention-holds/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/dashboard/analytics",
+      "file": "src/app/api/dashboard/analytics/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/dashboard/metrics",
+      "file": "src/app/api/dashboard/metrics/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/dashboards/[id]",
+      "file": "src/app/api/dashboards/[id]/route.ts",
+      "methods": [
+        "GET",
+        "PUT",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/dashboards",
+      "file": "src/app/api/dashboards/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/events",
+      "file": "src/app/api/events/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/events/stream",
+      "file": "src/app/api/events/stream/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/health/deep",
+      "file": "src/app/api/health/deep/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/health",
+      "file": "src/app/api/health/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/incidents/[id]/collaboration",
+      "file": "src/app/api/incidents/[id]/collaboration/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/incidents/[id]/context",
+      "file": "src/app/api/incidents/[id]/context/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/incidents/[id]/custom-fields",
+      "file": "src/app/api/incidents/[id]/custom-fields/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/incidents/[id]/meeting",
+      "file": "src/app/api/incidents/[id]/meeting/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/incidents/[id]",
+      "file": "src/app/api/incidents/[id]/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ]
+    },
+    {
+      "route": "/api/incidents/[id]/status",
+      "file": "src/app/api/incidents/[id]/status/route.ts",
+      "methods": [
+        "POST",
+        "PATCH"
+      ]
+    },
+    {
+      "route": "/api/incidents/[id]/war-rooms/[roomId]/abandon",
+      "file": "src/app/api/incidents/[id]/war-rooms/[roomId]/abandon/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/incidents/[id]/war-rooms/[roomId]/close",
+      "file": "src/app/api/incidents/[id]/war-rooms/[roomId]/close/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/incidents/[id]/war-rooms/[roomId]/project",
+      "file": "src/app/api/incidents/[id]/war-rooms/[roomId]/project/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/incidents/[id]/war-rooms/[roomId]/reconcile",
+      "file": "src/app/api/incidents/[id]/war-rooms/[roomId]/reconcile/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/incidents/[id]/war-rooms/[roomId]/sync",
+      "file": "src/app/api/incidents/[id]/war-rooms/[roomId]/sync/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/incidents/[id]/war-rooms/microsoft-teams",
+      "file": "src/app/api/incidents/[id]/war-rooms/microsoft-teams/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/incidents/[id]/war-rooms",
+      "file": "src/app/api/incidents/[id]/war-rooms/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/incidents/create",
+      "file": "src/app/api/incidents/create/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/incidents/export",
+      "file": "src/app/api/incidents/export/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/incidents",
+      "file": "src/app/api/incidents/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/appdynamics",
+      "file": "src/app/api/integrations/appdynamics/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/azure",
+      "file": "src/app/api/integrations/azure/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/better-uptime",
+      "file": "src/app/api/integrations/better-uptime/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/bitbucket",
+      "file": "src/app/api/integrations/bitbucket/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/cloudwatch",
+      "file": "src/app/api/integrations/cloudwatch/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/datadog",
+      "file": "src/app/api/integrations/datadog/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/dynatrace",
+      "file": "src/app/api/integrations/dynatrace/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/elastic",
+      "file": "src/app/api/integrations/elastic/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/failures",
+      "file": "src/app/api/integrations/failures/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/github",
+      "file": "src/app/api/integrations/github/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/gitlab",
+      "file": "src/app/api/integrations/gitlab/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/google-cloud-monitoring",
+      "file": "src/app/api/integrations/google-cloud-monitoring/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/grafana",
+      "file": "src/app/api/integrations/grafana/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/health",
+      "file": "src/app/api/integrations/health/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/honeycomb",
+      "file": "src/app/api/integrations/honeycomb/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/icinga",
+      "file": "src/app/api/integrations/icinga/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/manageengine",
+      "file": "src/app/api/integrations/manageengine/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/nagios",
+      "file": "src/app/api/integrations/nagios/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/newrelic",
+      "file": "src/app/api/integrations/newrelic/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/pagerduty",
+      "file": "src/app/api/integrations/pagerduty/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/pagerduty/v2/enqueue",
+      "file": "src/app/api/integrations/pagerduty/v2/enqueue/route.ts",
+      "methods": []
+    },
+    {
+      "route": "/api/integrations/pingdom",
+      "file": "src/app/api/integrations/pingdom/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/prometheus",
+      "file": "src/app/api/integrations/prometheus/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/sentry",
+      "file": "src/app/api/integrations/sentry/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/splunk-observability",
+      "file": "src/app/api/integrations/splunk-observability/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/splunk-oncall",
+      "file": "src/app/api/integrations/splunk-oncall/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/uptime-kuma",
+      "file": "src/app/api/integrations/uptime-kuma/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/uptimerobot",
+      "file": "src/app/api/integrations/uptimerobot/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/vercel",
+      "file": "src/app/api/integrations/vercel/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/webhook",
+      "file": "src/app/api/integrations/webhook/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/integrations/zabbix",
+      "file": "src/app/api/integrations/zabbix/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/jira/test",
+      "file": "src/app/api/jira/test/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/jira/webhook",
+      "file": "src/app/api/jira/webhook/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/logs/ingest",
+      "file": "src/app/api/logs/ingest/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/metrics",
+      "file": "src/app/api/metrics/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/microsoft-teams/destinations",
+      "file": "src/app/api/microsoft-teams/destinations/route.ts",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/microsoft-teams/discovery/channels",
+      "file": "src/app/api/microsoft-teams/discovery/channels/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/microsoft-teams/discovery/teams",
+      "file": "src/app/api/microsoft-teams/discovery/teams/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/microsoft-teams/messages",
+      "file": "src/app/api/microsoft-teams/messages/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/microsoft-teams/package",
+      "file": "src/app/api/microsoft-teams/package/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/microsoft-teams/test",
+      "file": "src/app/api/microsoft-teams/test/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/mobile/incidents/[id]/status",
+      "file": "src/app/api/mobile/incidents/[id]/status/route.ts",
+      "methods": [
+        "POST",
+        "PATCH"
+      ]
+    },
+    {
+      "route": "/api/mobile/refresh",
+      "file": "src/app/api/mobile/refresh/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/notifications/history",
+      "file": "src/app/api/notifications/history/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/notifications",
+      "file": "src/app/api/notifications/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ]
+    },
+    {
+      "route": "/api/notifications/stream",
+      "file": "src/app/api/notifications/stream/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/notifications/test-push",
+      "file": "src/app/api/notifications/test-push/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/prefer-desktop",
+      "file": "src/app/api/prefer-desktop/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/public-logs",
+      "file": "src/app/api/public-logs/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/realtime/stream",
+      "file": "src/app/api/realtime/stream/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/reports/metrics",
+      "file": "src/app/api/reports/metrics/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/schedules/[id]/calendar.ics",
+      "file": "src/app/api/schedules/[id]/calendar.ics/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/schedules/[id]/oncall",
+      "file": "src/app/api/schedules/[id]/oncall/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/schedules/[id]",
+      "file": "src/app/api/schedules/[id]/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/schedules",
+      "file": "src/app/api/schedules/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/scim/v2/Users/[id]",
+      "file": "src/app/api/scim/v2/Users/[id]/route.ts",
+      "methods": [
+        "GET",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/scim/v2/Users",
+      "file": "src/app/api/scim/v2/Users/route.ts",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ]
+    },
+    {
+      "route": "/api/search",
+      "file": "src/app/api/search/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/services/[id]",
+      "file": "src/app/api/services/[id]/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/services",
+      "file": "src/app/api/services/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/settings/app-url",
+      "file": "src/app/api/settings/app-url/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/settings/chatops/identities",
+      "file": "src/app/api/settings/chatops/identities/route.ts",
+      "methods": [
+        "GET",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/settings/custom-fields/[id]",
+      "file": "src/app/api/settings/custom-fields/[id]/route.ts",
+      "methods": [
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/settings/custom-fields",
+      "file": "src/app/api/settings/custom-fields/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/settings/email-providers",
+      "file": "src/app/api/settings/email-providers/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/settings/microsoft-teams",
+      "file": "src/app/api/settings/microsoft-teams/route.ts",
+      "methods": [
+        "POST",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/settings/notifications",
+      "file": "src/app/api/settings/notifications/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/settings/retention",
+      "file": "src/app/api/settings/retention/route.ts",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT"
+      ]
+    },
+    {
+      "route": "/api/settings/slack-oauth",
+      "file": "src/app/api/settings/slack-oauth/route.ts",
+      "methods": [
+        "POST",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/settings/status-page/announcements",
+      "file": "src/app/api/settings/status-page/announcements/route.ts",
+      "methods": [
+        "POST",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/settings/status-page/api-tokens",
+      "file": "src/app/api/settings/status-page/api-tokens/route.ts",
+      "methods": [
+        "POST",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/settings/status-page",
+      "file": "src/app/api/settings/status-page/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/settings/status-pages/[pageId]/[section]",
+      "file": "src/app/api/settings/status-pages/[pageId]/[section]/route.ts",
+      "methods": [
+        "PATCH"
+      ]
+    },
+    {
+      "route": "/api/settings/status-pages/[pageId]/make-default",
+      "file": "src/app/api/settings/status-pages/[pageId]/make-default/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/settings/status-pages/[pageId]/publish",
+      "file": "src/app/api/settings/status-pages/[pageId]/publish/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/settings/status-pages",
+      "file": "src/app/api/settings/status-pages/route.ts",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/sidebar-stats",
+      "file": "src/app/api/sidebar-stats/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/sla-definitions/[id]",
+      "file": "src/app/api/sla-definitions/[id]/route.ts",
+      "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/sla-definitions",
+      "file": "src/app/api/sla-definitions/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/sla/compliance",
+      "file": "src/app/api/sla/compliance/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/sla/stream",
+      "file": "src/app/api/sla/stream/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/slack/actions",
+      "file": "src/app/api/slack/actions/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/slack/channels/leave",
+      "file": "src/app/api/slack/channels/leave/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/slack/channels",
+      "file": "src/app/api/slack/channels/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/slack/commands",
+      "file": "src/app/api/slack/commands/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/slack/destinations",
+      "file": "src/app/api/slack/destinations/route.ts",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/slack/disconnect",
+      "file": "src/app/api/slack/disconnect/route.ts",
+      "methods": [
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/slack/events",
+      "file": "src/app/api/slack/events/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/slack/oauth/callback",
+      "file": "src/app/api/slack/oauth/callback/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/slack/oauth",
+      "file": "src/app/api/slack/oauth/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/slack/test",
+      "file": "src/app/api/slack/test/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/slack/war-room",
+      "file": "src/app/api/slack/war-room/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/status-page/domains",
+      "file": "src/app/api/status-page/domains/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/status-page/logo/[id]",
+      "file": "src/app/api/status-page/logo/[id]/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/status-page/subscribe",
+      "file": "src/app/api/status-page/subscribe/route.ts",
+      "methods": []
+    },
+    {
+      "route": "/api/status-page/subscribers",
+      "file": "src/app/api/status-page/subscribers/route.ts",
+      "methods": [
+        "GET",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/status-page/webhooks",
+      "file": "src/app/api/status-page/webhooks/route.ts",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/status-page/webhooks/test",
+      "file": "src/app/api/status-page/webhooks/test/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/status/[slug]/history",
+      "file": "src/app/api/status/[slug]/history/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/status/[slug]",
+      "file": "src/app/api/status/[slug]/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/status/[slug]/rss",
+      "file": "src/app/api/status/[slug]/rss/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/status/[slug]/subscribe",
+      "file": "src/app/api/status/[slug]/subscribe/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/status/[slug]/uptime-export",
+      "file": "src/app/api/status/[slug]/uptime-export/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/status/history",
+      "file": "src/app/api/status/history/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/status",
+      "file": "src/app/api/status/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/status/rss",
+      "file": "src/app/api/status/rss/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/status/subscribe",
+      "file": "src/app/api/status/subscribe/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/status/subscriptions/unsubscribe",
+      "file": "src/app/api/status/subscriptions/unsubscribe/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/status/subscriptions/verify",
+      "file": "src/app/api/status/subscriptions/verify/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/status/uptime-export",
+      "file": "src/app/api/status/uptime-export/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/system/vapid-public-key",
+      "file": "src/app/api/system/vapid-public-key/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/teams/[id]/available-users",
+      "file": "src/app/api/teams/[id]/available-users/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/user/push-subscription",
+      "file": "src/app/api/user/push-subscription/route.ts",
+      "methods": [
+        "POST",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/user/push-subscription/status",
+      "file": "src/app/api/user/push-subscription/status/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/user/sessions",
+      "file": "src/app/api/user/sessions/route.ts",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/users/[id]/avatar",
+      "file": "src/app/api/users/[id]/avatar/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/v1/integrations/[id]/response-policy",
+      "file": "src/app/api/v1/integrations/[id]/response-policy/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ]
+    },
+    {
+      "route": "/api/v1/response-policy/classification",
+      "file": "src/app/api/v1/response-policy/classification/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ]
+    },
+    {
+      "route": "/api/v1/response-policy/diff",
+      "file": "src/app/api/v1/response-policy/diff/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/v1/response-policy/history",
+      "file": "src/app/api/v1/response-policy/history/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/v1/response-policy/preview",
+      "file": "src/app/api/v1/response-policy/preview/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/v1/response-policy/restore",
+      "file": "src/app/api/v1/response-policy/restore/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/v1/response-policy/sla",
+      "file": "src/app/api/v1/response-policy/sla/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ]
+    },
+    {
+      "route": "/api/v1/response-policy/support-hours",
+      "file": "src/app/api/v1/response-policy/support-hours/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ]
+    },
+    {
+      "route": "/api/v1/response-policy/workspace",
+      "file": "src/app/api/v1/response-policy/workspace/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ]
+    },
+    {
+      "route": "/api/v1/service-objectives/[id]/evaluate",
+      "file": "src/app/api/v1/service-objectives/[id]/evaluate/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/v1/service-objectives/[id]/history",
+      "file": "src/app/api/v1/service-objectives/[id]/history/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/v1/service-objectives/[id]",
+      "file": "src/app/api/v1/service-objectives/[id]/route.ts",
+      "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ]
+    },
+    {
+      "route": "/api/v1/service-objectives/[id]/snapshots",
+      "file": "src/app/api/v1/service-objectives/[id]/snapshots/route.ts",
+      "methods": []
+    },
+    {
+      "route": "/api/v1/service-objectives/[id]/versions",
+      "file": "src/app/api/v1/service-objectives/[id]/versions/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/v1/service-objectives",
+      "file": "src/app/api/v1/service-objectives/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/v1/services/[id]/response-policy",
+      "file": "src/app/api/v1/services/[id]/response-policy/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ]
+    },
+    {
+      "route": "/api/webhooks/notifications/provider-feedback",
+      "file": "src/app/api/webhooks/notifications/provider-feedback/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/webhooks/notifications/twilio",
+      "file": "src/app/api/webhooks/notifications/twilio/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/webhooks/notifications/twilio/voice/gather",
+      "file": "src/app/api/webhooks/notifications/twilio/voice/gather/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/webhooks/notifications/twilio/voice/status",
+      "file": "src/app/api/webhooks/notifications/twilio/voice/status/route.ts",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "route": "/api/widgets/data",
+      "file": "src/app/api/widgets/data/route.ts",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "route": "/api/widgets/stream",
+      "file": "src/app/api/widgets/stream/route.ts",
+      "methods": [
+        "GET"
+      ]
+    }
+  ],
+  "configuration": [
+    {
+      "name": "API_KEY_SECRET",
+      "sources": [
+        "src/lib/api-keys.ts"
+      ]
+    },
+    {
+      "name": "APP_HOST_ALIASES",
+      "sources": [
+        "src/middleware.ts"
+      ]
+    },
+    {
+      "name": "APP_PORT",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "APP_VERSION",
+      "sources": [
+        "src/components/Sidebar.tsx",
+        "src/lib/admin-health.ts",
+        "src/lib/version.ts"
+      ]
+    },
+    {
+      "name": "AUTH_BREAK_GLASS_EMAIL",
+      "sources": [
+        "src/lib/local-auth-policy.ts"
+      ]
+    },
+    {
+      "name": "AUTH_BREAK_GLASS_ENABLED",
+      "sources": [
+        "src/lib/local-auth-policy.ts"
+      ]
+    },
+    {
+      "name": "AUTH_LOCAL_LOGIN_ENABLED",
+      "sources": [
+        "src/lib/local-auth-policy.ts"
+      ]
+    },
+    {
+      "name": "AUTH_OPTIONS_CACHE_TTL_MS",
+      "sources": [
+        "src/lib/auth.ts"
+      ]
+    },
+    {
+      "name": "AUTH_SSO_REAUTH_AFTER_SECONDS",
+      "sources": [
+        "src/lib/local-auth-policy.ts"
+      ]
+    },
+    {
+      "name": "AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS",
+      "sources": [
+        "src/lib/local-auth-policy.ts"
+      ]
+    },
+    {
+      "name": "AUTH_SSO_SESSION_MAX_AGE_SECONDS",
+      "sources": [
+        "src/lib/local-auth-policy.ts"
+      ]
+    },
+    {
+      "name": "AUTH_SSO_SESSION_UPDATE_AGE_SECONDS",
+      "sources": [
+        "src/lib/local-auth-policy.ts"
+      ]
+    },
+    {
+      "name": "AUTH_TRUST_HOST",
+      "sources": [
+        "src/lib/auth.ts"
+      ]
+    },
+    {
+      "name": "AWS_ACCESS_KEY_ID",
+      "sources": [
+        "src/lib/email.ts"
+      ]
+    },
+    {
+      "name": "BASE_APP_VERSION",
+      "sources": [
+        "src/lib/constants.ts"
+      ]
+    },
+    {
+      "name": "BOOTSTRAP_SECRET",
+      "sources": [
+        "src/app/setup/actions.ts",
+        "src/app/setup/page.tsx"
+      ]
+    },
+    {
+      "name": "BUSINESS_HOURS_END",
+      "sources": [
+        "src/lib/sla-server.ts"
+      ]
+    },
+    {
+      "name": "BUSINESS_HOURS_START",
+      "sources": [
+        "src/lib/sla-server.ts"
+      ]
+    },
+    {
+      "name": "CALLBACK_URL_COOKIE_NAME",
+      "sources": [
+        "src/lib/auth.ts"
+      ]
+    },
+    {
+      "name": "CLAIM_TIMEOUT_MS",
+      "sources": [
+        "src/lib/notification-control-plane.ts"
+      ]
+    },
+    {
+      "name": "CLEANUP_MUTEX_KEY",
+      "sources": [
+        "src/lib/data-cleanup.ts"
+      ]
+    },
+    {
+      "name": "COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
+      "sources": [
+        "src/lib/compliance/monitoring/config.ts"
+      ]
+    },
+    {
+      "name": "COMPLIANCE_DRIFT_RENOTIFY_COOLDOWN_MINUTES",
+      "sources": [
+        "src/lib/compliance/monitoring/config.ts"
+      ]
+    },
+    {
+      "name": "COMPLIANCE_EVIDENCE_TYPES",
+      "sources": [
+        "src/app/api/compliance/controls/[id]/evidence/route.ts",
+        "src/app/api/compliance/evidence/route.ts"
+      ]
+    },
+    {
+      "name": "COMPLIANCE_MONITOR_INTERVAL_MINUTES",
+      "sources": [
+        "src/lib/compliance/monitoring/config.ts"
+      ]
+    },
+    {
+      "name": "COMPLIANCE_MONITORING_ENABLED",
+      "sources": [
+        "src/lib/compliance/monitoring/config.ts"
+      ]
+    },
+    {
+      "name": "CONTENT_WIDTH",
+      "sources": [
+        "src/lib/status-pages/reports/uptime-report-generator.ts"
+      ]
+    },
+    {
+      "name": "CORS_ALLOWED_ORIGINS",
+      "sources": [
+        "src/middleware.ts"
+      ]
+    },
+    {
+      "name": "CSRF_TOKEN_COOKIE_NAME",
+      "sources": [
+        "src/lib/auth.ts"
+      ]
+    },
+    {
+      "name": "CUSTOM_FIELD_ORDER_LOCK",
+      "sources": [
+        "src/app/api/settings/custom-fields/route.ts"
+      ]
+    },
+    {
+      "name": "DATABASE_POOL_SIZE",
+      "sources": [
+        "src/lib/prisma.ts"
+      ]
+    },
+    {
+      "name": "DATABASE_POOL_SIZE_BULK_WORKER",
+      "sources": [
+        "src/lib/prisma.ts",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "DATABASE_POOL_SIZE_CRITICAL_WORKER",
+      "sources": [
+        "src/lib/prisma.ts",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "DATABASE_POOL_SIZE_GENERAL_WORKER",
+      "sources": [
+        "src/lib/prisma.ts",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "DATABASE_POOL_SIZE_INTEGRATED",
+      "sources": [
+        "src/lib/prisma.ts"
+      ]
+    },
+    {
+      "name": "DATABASE_POOL_SIZE_SCHEDULER",
+      "sources": [
+        "src/lib/prisma.ts",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "DATABASE_POOL_SIZE_STATUS_PROJECTOR",
+      "sources": [
+        "src/lib/prisma.ts",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "DATABASE_POOL_SIZE_WEB",
+      "sources": [
+        "src/lib/prisma.ts",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "DATABASE_POOL_SIZE_WORKER",
+      "sources": [
+        "src/lib/prisma.ts"
+      ]
+    },
+    {
+      "name": "DATABASE_URL",
+      "sources": [
+        "src/app/(app)/settings/system/page.tsx",
+        "src/components/DatabaseOffline.tsx",
+        "src/lib/prisma-datasource.ts",
+        "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+        "deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml",
+        "deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+      ]
+    },
+    {
+      "name": "DEFAULT_LIMIT",
+      "sources": [
+        "src/app/(public)/logs/LogsClient.tsx"
+      ]
+    },
+    {
+      "name": "DIRECT_DATABASE_URL",
+      "sources": [
+        "deploy/compose/docker-compose.external-db.yml",
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+        "deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml",
+        "deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+      ]
+    },
+    {
+      "name": "DOC_TOPICS",
+      "sources": [
+        "src/app/(app)/help/page.tsx"
+      ]
+    },
+    {
+      "name": "EMAIL_FROM",
+      "sources": [
+        "src/lib/env-validation.ts"
+      ]
+    },
+    {
+      "name": "ENABLE_INTERNAL_CRON",
+      "sources": [
+        "src/app/api/health/route.ts",
+        "src/lib/admin-health.ts",
+        "src/lib/cron-scheduler.ts"
+      ]
+    },
+    {
+      "name": "ENCRYPTION_KEY",
+      "sources": [
+        "src/app/(app)/settings/system/page.tsx",
+        "src/lib/__tests__/encryption.test.ts",
+        "src/lib/admin-health.ts",
+        "src/lib/encryption.ts",
+        "src/lib/env-validation.ts",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml"
+      ]
+    },
+    {
+      "name": "ENCRYPTION_KEYS",
+      "sources": [
+        "src/app/(app)/settings/system/page.tsx",
+        "src/lib/admin-health.ts",
+        "src/lib/encryption.ts",
+        "src/lib/env-validation.ts"
+      ]
+    },
+    {
+      "name": "ENCRYPTION_TARGETS",
+      "sources": [
+        "src/lib/compliance/evaluators/encryption.ts"
+      ]
+    },
+    {
+      "name": "ESCALATION_LOCK_TIMEOUT_MS",
+      "sources": [
+        "src/lib/config.ts"
+      ]
+    },
+    {
+      "name": "EVENT_TRANSACTION_MAX_ATTEMPTS",
+      "sources": [
+        "src/lib/config.ts"
+      ]
+    },
+    {
+      "name": "EXTERNAL_DB_HOST",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/swarm/docker-stack.external-db.integrated.yml",
+        "deploy/swarm/docker-stack.external-db.yml"
+      ]
+    },
+    {
+      "name": "EXTERNAL_DB_NAME",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/swarm/docker-stack.external-db.integrated.yml",
+        "deploy/swarm/docker-stack.external-db.yml"
+      ]
+    },
+    {
+      "name": "EXTERNAL_DB_PASSWORD",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "EXTERNAL_DB_PORT",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/swarm/docker-stack.external-db.integrated.yml",
+        "deploy/swarm/docker-stack.external-db.yml"
+      ]
+    },
+    {
+      "name": "EXTERNAL_DB_USER",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/swarm/docker-stack.external-db.integrated.yml",
+        "deploy/swarm/docker-stack.external-db.yml"
+      ]
+    },
+    {
+      "name": "FADE_MS",
+      "sources": [
+        "src/components/auth/HelloGreeting.tsx"
+      ]
+    },
+    {
+      "name": "FAQS",
+      "sources": [
+        "src/app/(app)/help/page.tsx"
+      ]
+    },
+    {
+      "name": "GIT_COMMIT_SHA",
+      "sources": [
+        "src/lib/version.ts"
+      ]
+    },
+    {
+      "name": "GITHUB_SHA",
+      "sources": [
+        "src/lib/version.ts"
+      ]
+    },
+    {
+      "name": "IMAGE_DIGEST",
+      "sources": [
+        "src/lib/version.ts"
+      ]
+    },
+    {
+      "name": "INTEGRATED_REPLICAS",
+      "sources": [
+        "deploy/swarm/docker-stack.integrated.yml"
+      ]
+    },
+    {
+      "name": "INTEGRATION_RATE_LIMIT",
+      "sources": [
+        "src/lib/integrations/handler.ts"
+      ]
+    },
+    {
+      "name": "INTEGRATION_VERIFY_SIGNATURES",
+      "sources": [
+        "src/app/api/integrations/github/route.ts",
+        "src/app/api/integrations/grafana/route.ts",
+        "src/app/api/integrations/sentry/route.ts",
+        "src/lib/integrations/handler.ts"
+      ]
+    },
+    {
+      "name": "INTERNAL_API_BASE",
+      "sources": [
+        "src/middleware.ts"
+      ]
+    },
+    {
+      "name": "INTERNAL_API_URL",
+      "sources": [
+        "src/middleware.ts"
+      ]
+    },
+    {
+      "name": "JIRA_REQUEST_TIMEOUT_MS",
+      "sources": [
+        "src/lib/jira.ts"
+      ]
+    },
+    {
+      "name": "JSON",
+      "sources": [
+        "src/app/api/events/stream/route.ts",
+        "src/app/api/sla/stream/route.ts",
+        "src/app/api/widgets/stream/route.ts",
+        "src/lib/idempotency.ts",
+        "src/lib/logger.ts",
+        "src/lib/status-pages/publication-policy.ts"
+      ]
+    },
+    {
+      "name": "KEY_PREFIX",
+      "sources": [
+        "src/lib/mobile-cache.ts"
+      ]
+    },
+    {
+      "name": "LOCK_TIMEOUT_MS",
+      "sources": [
+        "src/lib/cron-scheduler.ts"
+      ]
+    },
+    {
+      "name": "LOG_BUFFER_MAX",
+      "sources": [
+        "src/lib/logger.ts"
+      ]
+    },
+    {
+      "name": "LOG_FORMAT",
+      "sources": [
+        "src/lib/logger.ts"
+      ]
+    },
+    {
+      "name": "LOG_LEVEL",
+      "sources": [
+        "src/lib/logger.ts"
+      ]
+    },
+    {
+      "name": "MARGIN_X",
+      "sources": [
+        "src/lib/status-pages/reports/uptime-report-generator.ts"
+      ]
+    },
+    {
+      "name": "MAX_ARRAY_LENGTH",
+      "sources": [
+        "src/lib/compliance/evidence/validate.ts"
+      ]
+    },
+    {
+      "name": "MAX_BATCH_SIZE",
+      "sources": [
+        "src/lib/incidents/lifecycle.ts"
+      ]
+    },
+    {
+      "name": "MAX_DAYS_PER_CALL",
+      "sources": [
+        "src/app/api/admin/rollups/backfill/route.ts"
+      ]
+    },
+    {
+      "name": "MAX_DEDUP_KEY_LENGTH",
+      "sources": [
+        "src/lib/incidents/creation.ts"
+      ]
+    },
+    {
+      "name": "MAX_ESCALATION_DELAY_MINUTES",
+      "sources": [
+        "src/lib/escalation/policy-validation.ts"
+      ]
+    },
+    {
+      "name": "MAX_EVENT_MESSAGE_LENGTH",
+      "sources": [
+        "src/lib/incidents/lifecycle.ts"
+      ]
+    },
+    {
+      "name": "MAX_EVIDENCE_DRAFTS_PER_EVALUATION",
+      "sources": [
+        "src/lib/compliance/evidence/validate.ts"
+      ]
+    },
+    {
+      "name": "MAX_HISTORICAL_DAYS",
+      "sources": [
+        "src/lib/compliance/export/validation.ts"
+      ]
+    },
+    {
+      "name": "MAX_IDEMPOTENCY_KEY_LENGTH",
+      "sources": [
+        "src/lib/idempotency.ts"
+      ]
+    },
+    {
+      "name": "MAX_INTEGRATION_BODY_BYTES",
+      "sources": [
+        "src/lib/integrations/request-security.ts"
+      ]
+    },
+    {
+      "name": "MAX_METADATA_BYTES",
+      "sources": [
+        "src/lib/compliance/evidence/validate.ts"
+      ]
+    },
+    {
+      "name": "MAX_METADATA_DEPTH",
+      "sources": [
+        "src/lib/compliance/evidence/validate.ts"
+      ]
+    },
+    {
+      "name": "MAX_RECONNECT_ATTEMPTS",
+      "sources": [
+        "src/components/dashboard/WidgetProvider.tsx"
+      ]
+    },
+    {
+      "name": "MAX_RESOLUTION_LENGTH",
+      "sources": [
+        "src/components/incident/ResolveIncidentModal.tsx"
+      ]
+    },
+    {
+      "name": "MAX_RESOLUTION_NOTE_LENGTH",
+      "sources": [
+        "src/lib/incidents/lifecycle.ts"
+      ]
+    },
+    {
+      "name": "MAX_RESPONSE_BODY_BYTES",
+      "sources": [
+        "src/lib/webhooks.ts"
+      ]
+    },
+    {
+      "name": "MAX_SELECTED_CONTROLS",
+      "sources": [
+        "src/lib/compliance/export/validation.ts"
+      ]
+    },
+    {
+      "name": "MAX_SNOOZE_REASON_LENGTH",
+      "sources": [
+        "src/lib/incidents/lifecycle.ts"
+      ]
+    },
+    {
+      "name": "MAX_STRING_LENGTH",
+      "sources": [
+        "src/lib/compliance/evidence/validate.ts"
+      ]
+    },
+    {
+      "name": "MICROSOFT_TEAMS_APPLICATION_ID_URI",
+      "sources": [
+        "src/app/(app)/settings/integrations/microsoft-teams/page.tsx",
+        "src/app/api/microsoft-teams/package/route.ts"
+      ]
+    },
+    {
+      "name": "MICROSOFT_TEAMS_INCLUDE_OPTIONAL_RSC",
+      "sources": [
+        "src/app/(app)/settings/integrations/microsoft-teams/page.tsx"
+      ]
+    },
+    {
+      "name": "MICROSOFT_TEAMS_VALID_DOMAINS",
+      "sources": [
+        "src/app/(app)/settings/integrations/microsoft-teams/page.tsx",
+        "src/app/api/microsoft-teams/package/route.ts"
+      ]
+    },
+    {
+      "name": "MIN_CLEAN_SHADOW_CHECKS",
+      "sources": [
+        "src/app/(app)/settings/incident-sla/actions.ts"
+      ]
+    },
+    {
+      "name": "MIN_RESOLUTION_NOTE_LENGTH",
+      "sources": [
+        "src/lib/incidents/lifecycle.ts"
+      ]
+    },
+    {
+      "name": "MOBILE_CACHE_PREFIX",
+      "sources": [
+        "src/lib/mobile-cache-status.ts",
+        "src/lib/mobile-cache.principal-isolation.test.tsx",
+        "src/lib/mobile-cache.ts"
+      ]
+    },
+    {
+      "name": "NEXT_PHASE",
+      "sources": [
+        "src/instrumentation.ts",
+        "src/lib/cron-scheduler.ts"
+      ]
+    },
+    {
+      "name": "NEXT_PUBLIC_APP_URL",
+      "sources": [
+        "src/app/(app)/services/[id]/page.tsx",
+        "src/app/(app)/settings/system/page.tsx",
+        "src/app/api/settings/app-url/route.ts",
+        "src/app/api/slack/oauth/callback/route.ts",
+        "src/app/robots.ts",
+        "src/app/setup/actions.ts",
+        "src/app/setup/page.tsx",
+        "src/lib/admin-health.ts",
+        "src/lib/app-url.ts",
+        "src/lib/auth-cookies.ts",
+        "src/lib/auth-public-origin.ts",
+        "src/lib/email-components.ts",
+        "src/lib/env-validation.ts",
+        "src/lib/notification-providers.ts",
+        "src/lib/request-host.ts",
+        "src/lib/status-page-resolver.ts",
+        "src/lib/status-pages/status-auth.ts",
+        "src/middleware.ts",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "NEXT_PUBLIC_APP_VERSION",
+      "sources": [
+        "src/lib/version.ts"
+      ]
+    },
+    {
+      "name": "NEXT_PUBLIC_ENABLE_WEB_VITALS",
+      "sources": [
+        "src/components/WebVitalsReporter.tsx"
+      ]
+    },
+    {
+      "name": "NEXT_PUBLIC_SOURCE_CODE_URL",
+      "sources": [
+        "src/components/LegalSourceNotice.tsx"
+      ]
+    },
+    {
+      "name": "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
+      "sources": [
+        "src/app/api/system/vapid-public-key/route.ts",
+        "src/lib/push.ts"
+      ]
+    },
+    {
+      "name": "NEXT_RUNTIME",
+      "sources": [
+        "src/instrumentation.ts"
+      ]
+    },
+    {
+      "name": "NEXTAUTH_COOKIE_SECURE",
+      "sources": [
+        "src/lib/auth-cookies.ts",
+        "src/lib/request-host.ts"
+      ]
+    },
+    {
+      "name": "NEXTAUTH_SECRET",
+      "sources": [
+        "src/app/(app)/settings/system/page.tsx",
+        "src/lib/secret-manager.ts",
+        "src/lib/user-notification-endpoints.ts",
+        "src/lib/voice/token.ts",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml"
+      ]
+    },
+    {
+      "name": "NEXTAUTH_URL",
+      "sources": [
+        "src/app/(app)/services/[id]/page.tsx",
+        "src/app/(app)/settings/system/page.tsx",
+        "src/app/api/prefer-desktop/route.ts",
+        "src/app/api/settings/app-url/route.ts",
+        "src/app/api/slack/oauth/callback/route.ts",
+        "src/app/setup/actions.ts",
+        "src/app/setup/page.tsx",
+        "src/lib/admin-health.ts",
+        "src/lib/app-config.ts",
+        "src/lib/app-url.ts",
+        "src/lib/auth-cookies.ts",
+        "src/lib/auth-public-origin.ts",
+        "src/lib/email-components.ts",
+        "src/lib/env-validation.ts",
+        "src/lib/notification-providers.ts",
+        "src/lib/request-host.ts",
+        "src/lib/sla-breach-monitor.ts",
+        "src/lib/status-page-resolver.ts",
+        "src/lib/status-pages/status-auth.ts",
+        "src/middleware.ts",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "NODE_ENV",
+      "sources": [
+        "src/app/(app)/settings/system/page.tsx",
+        "src/app/api/health/route.ts",
+        "src/app/api/jira/webhook/route.ts",
+        "src/app/api/microsoft-teams/messages/route.ts",
+        "src/app/api/search/route.ts",
+        "src/app/api/slack/oauth/route.ts",
+        "src/app/providers.tsx",
+        "src/app/setup/page.tsx",
+        "src/components/DashboardRealtimeWrapper.tsx",
+        "src/components/WebVitalsReporter.tsx",
+        "src/components/ui/ErrorBoundary.tsx",
+        "src/lib/admin-health.ts",
+        "src/lib/api-keys.ts",
+        "src/lib/app-url.ts",
+        "src/lib/auth-cookies.ts",
+        "src/lib/auth-public-origin.ts",
+        "src/lib/encryption.ts",
+        "src/lib/env-validation.ts",
+        "src/lib/incident-collaboration/meeting-store.ts",
+        "src/lib/logger.ts",
+        "src/lib/microsoft-teams/auth.ts",
+        "src/lib/monitoring/sentry.ts",
+        "src/lib/provider-admission.ts",
+        "src/lib/retention-policy.ts",
+        "src/lib/secret-manager.ts",
+        "src/middleware.ts"
+      ]
+    },
+    {
+      "name": "NONCE_COOKIE_NAME",
+      "sources": [
+        "src/lib/auth.ts"
+      ]
+    },
+    {
+      "name": "NOTIFICATION_AGING_FLOOR",
+      "sources": [
+        "src/lib/notification-control-plane.ts"
+      ]
+    },
+    {
+      "name": "NOTIFICATION_CONTROL_PLANE_PERSONAL",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "NOTIFICATION_CONTROL_PLANE_STRICT",
+      "sources": [
+        "src/app/api/health/route.ts"
+      ]
+    },
+    {
+      "name": "NOTIFICATION_PROVIDER_FEEDBACK_SECRET",
+      "sources": [
+        "src/app/api/webhooks/notifications/provider-feedback/route.ts"
+      ]
+    },
+    {
+      "name": "OIDC_CONFIG_CACHE_TTL_MS",
+      "sources": [
+        "src/lib/oidc-config.ts"
+      ]
+    },
+    {
+      "name": "OIDC_CONFIG_RECORD_CACHE_TTL_MS",
+      "sources": [
+        "src/lib/oidc-config.ts"
+      ]
+    },
+    {
+      "name": "OIDC_REQUIRE_EMAIL_VERIFIED_STRICT",
+      "sources": [
+        "src/lib/auth.ts"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_CUSTOM_CA_SECRET",
+      "sources": [
+        "deploy/swarm/docker-stack.ca.integrated.yml",
+        "deploy/swarm/docker-stack.ca.split.yml",
+        "deploy/swarm/docker-stack.pgbouncer-ca.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_DATABASE_URL",
+      "sources": [
+        "deploy/compose/docker-compose.external-db.yml",
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_DATABASE_URL_SECRET",
+      "sources": [
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_DEPLOYMENT_ID",
+      "sources": [
+        "src/lib/version.ts"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_DIRECT_DATABASE_URL_SECRET",
+      "sources": [
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_ENCRYPTION_KEY_SECRET",
+      "sources": [
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_IMAGE",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_NEXTAUTH_SECRET_SECRET",
+      "sources": [
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_PGBOUNCER_DB_PASSWORD_SECRET",
+      "sources": [
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_PGBOUNCER_IMAGE",
+      "sources": [
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_PGBOUNCER_USERLIST_SECRET",
+      "sources": [
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_PROCESS_ROLE",
+      "sources": [
+        "src/lib/runtime-role.ts",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_PROCESS_ROLES",
+      "sources": [
+        "src/lib/runtime-role.ts"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_PULL_POLICY",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_SCHEDULER_PROFILE",
+      "sources": [
+        "src/lib/runtime-role.ts",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_SCHEDULER_PROFILES",
+      "sources": [
+        "src/lib/runtime-role.ts"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_SKIP_MIGRATIONS",
+      "sources": [
+        "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WEB_DATABASE_URL_SECRET",
+      "sources": [
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_BATCH_SIZE",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_BATCH_SIZE_BULK",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_BATCH_SIZE_CRITICAL",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_BATCH_SIZE_PROJECTOR",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_BUSY_POLL_MS",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_BUSY_POLL_MS_BULK",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_BUSY_POLL_MS_CRITICAL",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_BUSY_POLL_MS_PROJECTOR",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_CONCURRENCY",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_CONCURRENCY_BULK",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_CONCURRENCY_CRITICAL",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_CONCURRENCY_PROJECTOR",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_ID",
+      "sources": [
+        "src/lib/notification-control-plane.ts",
+        "src/lib/provider-admission.ts"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_IDLE_POLL_MS",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_IDLE_POLL_MS_BULK",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_IDLE_POLL_MS_CRITICAL",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "OPSKNIGHT_WORKER_IDLE_POLL_MS_PROJECTOR",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "PAGE_HEIGHT",
+      "sources": [
+        "src/lib/status-pages/reports/uptime-report-generator.ts"
+      ]
+    },
+    {
+      "name": "PAGE_WIDTH",
+      "sources": [
+        "src/lib/status-pages/reports/uptime-report-generator.ts"
+      ]
+    },
+    {
+      "name": "PANEL_GLOBE_WIDTH",
+      "sources": [
+        "src/components/auth/LoginAnimation.tsx"
+      ]
+    },
+    {
+      "name": "PASSWORD_MAX_LENGTH",
+      "sources": [
+        "src/lib/__tests__/passwords.test.ts",
+        "src/lib/password-strength.ts",
+        "src/lib/passwords.ts"
+      ]
+    },
+    {
+      "name": "PASSWORD_MAX_UTF8_BYTES",
+      "sources": [
+        "src/lib/password-strength.ts",
+        "src/lib/passwords.ts"
+      ]
+    },
+    {
+      "name": "PASSWORD_MIN_LENGTH",
+      "sources": [
+        "src/lib/__tests__/passwords.test.ts",
+        "src/lib/password-strength.ts",
+        "src/lib/passwords.ts"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_DB_HOST",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_DB_NAME",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_DB_PASSWORD",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_DB_PASSWORD_FILE",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_DB_PORT",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_DB_USER",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_DEFAULT_POOL_SIZE",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_IMAGE",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_MAX_CLIENT_CONN",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_POOL_MODE",
+      "sources": [
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_RESERVE_POOL_SIZE",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_SERVER_TLS_CA_FILE",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_SERVER_TLS_SSLMODE",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/swarm/docker-stack.pgbouncer.yml"
+      ]
+    },
+    {
+      "name": "PGBOUNCER_TLS_CA_CERT",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer-ca.yml"
+      ]
+    },
+    {
+      "name": "PGDATA",
+      "sources": [
+        "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
+        "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml"
+      ]
+    },
+    {
+      "name": "PKCE_CODE_VERIFIER_COOKIE_NAME",
+      "sources": [
+        "src/lib/auth.ts"
+      ]
+    },
+    {
+      "name": "PORT",
+      "sources": [
+        "src/middleware.ts"
+      ]
+    },
+    {
+      "name": "POSTGRES_DB",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
+        "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml",
+        "deploy/swarm/docker-stack.db.yml"
+      ]
+    },
+    {
+      "name": "POSTGRES_INITDB_ARGS",
+      "sources": [
+        "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
+        "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml"
+      ]
+    },
+    {
+      "name": "POSTGRES_PASSWORD",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
+        "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml",
+        "deploy/swarm/docker-stack.db.yml"
+      ]
+    },
+    {
+      "name": "POSTGRES_PORT",
+      "sources": [
+        "deploy/compose/docker-compose.yml"
+      ]
+    },
+    {
+      "name": "POSTGRES_USER",
+      "sources": [
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
+        "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml",
+        "deploy/swarm/docker-stack.db.yml"
+      ]
+    },
+    {
+      "name": "PRISMA_SLOW_QUERY_MS",
+      "sources": [
+        "src/lib/prisma.ts"
+      ]
+    },
+    {
+      "name": "PROMETHEUS_SCRAPE_TOKEN",
+      "sources": [
+        "src/app/api/health/deep/route.ts",
+        "src/app/api/metrics/route.ts",
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml"
+      ]
+    },
+    {
+      "name": "RECENT_DISPLAY_DAYS",
+      "sources": [
+        "src/components/status-page/v3/IncidentsV3.tsx"
+      ]
+    },
+    {
+      "name": "REDIRECT_TO_CANONICAL_HOST",
+      "sources": [
+        "src/middleware.ts"
+      ]
+    },
+    {
+      "name": "RENDER_GIT_COMMIT",
+      "sources": [
+        "src/lib/version.ts"
+      ]
+    },
+    {
+      "name": "RESERVED_PREFIX",
+      "sources": [
+        "src/lib/microsoft-teams/delivery.ts"
+      ]
+    },
+    {
+      "name": "REVOKED_PLATFORM_PREFIX",
+      "sources": [
+        "src/lib/session-registry.ts"
+      ]
+    },
+    {
+      "name": "ROW_HEIGHT",
+      "sources": [
+        "src/lib/status-pages/reports/uptime-report-generator.ts"
+      ]
+    },
+    {
+      "name": "SCHEDULER_HEALTH_MAX_INTERVAL_SECONDS",
+      "sources": [
+        "src/app/api/health/route.ts"
+      ]
+    },
+    {
+      "name": "SCIM_BEARER_TOKEN",
+      "sources": [
+        "src/lib/scim.ts"
+      ]
+    },
+    {
+      "name": "SENTRY_DSN",
+      "sources": [
+        "src/lib/monitoring/sentry.ts"
+      ]
+    },
+    {
+      "name": "SENTRY_ENVIRONMENT",
+      "sources": [
+        "src/lib/monitoring/sentry.ts"
+      ]
+    },
+    {
+      "name": "SENTRY_FORCE_ENABLE",
+      "sources": [
+        "src/lib/monitoring/sentry.ts"
+      ]
+    },
+    {
+      "name": "SERVICE_WAR_ROOM_POLICY_PREFIX",
+      "sources": [
+        "src/lib/incident-collaboration/policy.ts"
+      ]
+    },
+    {
+      "name": "SESSION_ACTIVITY_THROTTLE_MS",
+      "sources": [
+        "src/lib/session-registry.ts"
+      ]
+    },
+    {
+      "name": "SESSION_DEVICE_PREFIX",
+      "sources": [
+        "src/lib/session-registry.ts"
+      ]
+    },
+    {
+      "name": "SESSION_PLATFORM_PREFIX",
+      "sources": [
+        "src/lib/session-registry.ts"
+      ]
+    },
+    {
+      "name": "SESSION_SECURITY_CACHE_TTL_MS",
+      "sources": [
+        "src/lib/session-security-projection.ts"
+      ]
+    },
+    {
+      "name": "SESSION_TOKEN_COOKIE_NAME",
+      "sources": [
+        "src/lib/auth.ts"
+      ]
+    },
+    {
+      "name": "SETUP_SECRET",
+      "sources": [
+        "src/app/setup/actions.ts",
+        "src/app/setup/page.tsx"
+      ]
+    },
+    {
+      "name": "SINGLETON_ID",
+      "sources": [
+        "src/lib/cron-scheduler.ts"
+      ]
+    },
+    {
+      "name": "SKIP_ENV_VALIDATION",
+      "sources": [
+        "src/lib/env-validation.ts"
+      ]
+    },
+    {
+      "name": "SLA_ALERT_EMAIL",
+      "sources": [
+        "src/lib/sla-breach-monitor.ts"
+      ]
+    },
+    {
+      "name": "SLACK_BOT_TOKEN",
+      "sources": [
+        "src/lib/slack.ts"
+      ]
+    },
+    {
+      "name": "SLACK_CLIENT_ID",
+      "sources": [
+        "src/app/(app)/settings/slack-oauth/actions.ts",
+        "src/app/api/slack/oauth/callback/route.ts",
+        "src/app/api/slack/oauth/route.ts"
+      ]
+    },
+    {
+      "name": "SLACK_CLIENT_SECRET",
+      "sources": [
+        "src/app/(app)/settings/slack-oauth/actions.ts",
+        "src/app/api/slack/oauth/callback/route.ts",
+        "src/app/api/slack/oauth/route.ts"
+      ]
+    },
+    {
+      "name": "SLACK_REDIRECT_URI",
+      "sources": [
+        "src/app/api/slack/oauth/callback/route.ts",
+        "src/app/api/slack/oauth/route.ts"
+      ]
+    },
+    {
+      "name": "SLACK_RESPONSE_ORIGIN",
+      "sources": [
+        "src/lib/slack-signature.ts"
+      ]
+    },
+    {
+      "name": "SLACK_SIGNING_SECRET",
+      "sources": [
+        "src/app/(app)/settings/integrations/slack/page.tsx",
+        "src/lib/slack-signature.ts"
+      ]
+    },
+    {
+      "name": "SLACK_WEBHOOK_URL",
+      "sources": [
+        "src/lib/slack.ts"
+      ]
+    },
+    {
+      "name": "SOURCE_VERSION",
+      "sources": [
+        "src/lib/version.ts"
+      ]
+    },
+    {
+      "name": "STATE_COOKIE_NAME",
+      "sources": [
+        "src/lib/auth.ts"
+      ]
+    },
+    {
+      "name": "STATUS_BADGE_CLASS",
+      "sources": [
+        "src/components/settings/privacy/PrivacyRequestsBoard.tsx"
+      ]
+    },
+    {
+      "name": "STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1",
+      "sources": [
+        "src/app/api/settings/status-page/announcements/route.ts"
+      ]
+    },
+    {
+      "name": "STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2",
+      "sources": [
+        "src/app/api/settings/status-page/announcements/route.ts"
+      ]
+    },
+    {
+      "name": "STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING",
+      "sources": [
+        "src/app/api/settings/status-page/announcements/route.ts"
+      ]
+    },
+    {
+      "name": "STATUS_PAGE_DOMAIN_CACHE_TTL",
+      "sources": [
+        "src/middleware.ts"
+      ]
+    },
+    {
+      "name": "STATUS_PAGE_EXTERNAL_SERVING_STORE",
+      "sources": [
+        "src/middleware.ts"
+      ]
+    },
+    {
+      "name": "STATUS_PAGE_LIFECYCLE_LOCK",
+      "sources": [
+        "src/lib/status-pages/admin.ts"
+      ]
+    },
+    {
+      "name": "STATUS_PAGE_PUBLIC_CSS",
+      "sources": [
+        "src/lib/status-page-preview-css.ts"
+      ]
+    },
+    {
+      "name": "STATUS_PAGE_SERVING_STORE_TOKEN",
+      "sources": [
+        "src/lib/status-pages/serving-store.ts",
+        "src/middleware.ts"
+      ]
+    },
+    {
+      "name": "STATUS_PAGE_SERVING_STORE_URL",
+      "sources": [
+        "src/lib/status-pages/serving-store.ts",
+        "src/middleware.ts"
+      ]
+    },
+    {
+      "name": "STATUS_PAGE_SNAPSHOT_MAX_BYTES",
+      "sources": [
+        "src/lib/status-pages/snapshot.ts"
+      ]
+    },
+    {
+      "name": "STATUS_PAGE_SURFACE_CLASS",
+      "sources": [
+        "src/lib/status-pages/public-css.ts"
+      ]
+    },
+    {
+      "name": "STATUS_PAGE_SYNC_PUBLISH_BUDGET_MS",
+      "sources": [
+        "src/lib/status-pages/publish-configuration.ts"
+      ]
+    },
+    {
+      "name": "STATUS_SESSION_COOKIE_NAME",
+      "sources": [
+        "src/app/status-auth/callback/route.ts"
+      ]
+    },
+    {
+      "name": "STORAGE_KEY_PREFIX",
+      "sources": [
+        "src/components/DashboardWidgetToggle.tsx"
+      ]
+    },
+    {
+      "name": "STORAGE_PREFIX",
+      "sources": [
+        "src/lib/mobile-principal-state.ts"
+      ]
+    },
+    {
+      "name": "SWARM_NETWORK_NAME",
+      "sources": [
+        "deploy/swarm/docker-stack.db.yml",
+        "deploy/swarm/docker-stack.external-db.integrated.yml",
+        "deploy/swarm/docker-stack.external-db.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.pgbouncer.yml",
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "SWARM_REPLICAS_BULK_WORKER",
+      "sources": [
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "SWARM_REPLICAS_CRITICAL_WORKER",
+      "sources": [
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "SWARM_REPLICAS_GENERAL_WORKER",
+      "sources": [
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "SWARM_REPLICAS_SCHEDULER",
+      "sources": [
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "SWARM_REPLICAS_STATUS_PROJECTOR",
+      "sources": [
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "SWARM_REPLICAS_WEB",
+      "sources": [
+        "deploy/swarm/docker-stack.yml"
+      ]
+    },
+    {
+      "name": "TILE_W",
+      "sources": [
+        "src/components/auth/LoginAnimation.tsx"
+      ]
+    },
+    {
+      "name": "TRUST_PROXY_HEADERS",
+      "sources": [
+        "src/lib/request-host.ts",
+        "src/middleware.ts"
+      ]
+    },
+    {
+      "name": "TRUSTED_PROXY_HOPS",
+      "sources": [
+        "src/lib/client-ip.ts"
+      ]
+    },
+    {
+      "name": "TRUSTED_PWA_SESSION_DAYS",
+      "sources": [
+        "src/lib/pwa-session-policy.ts"
+      ]
+    },
+    {
+      "name": "VAPID_PRIVATE_KEY",
+      "sources": [
+        "src/lib/push.ts"
+      ]
+    },
+    {
+      "name": "VAPID_SUBJECT",
+      "sources": [
+        "src/lib/push.ts"
+      ]
+    },
+    {
+      "name": "VERCEL_GIT_COMMIT_SHA",
+      "sources": [
+        "src/lib/version.ts"
+      ]
+    },
+    {
+      "name": "VITEST",
+      "sources": [
+        "src/lib/provider-admission.ts"
+      ]
+    },
+    {
+      "name": "VITEST_USE_REAL_DB",
+      "sources": [
+        "src/lib/incident-collaboration/meeting-store.ts"
+      ]
+    },
+    {
+      "name": "VITEST_WORKER_ID",
+      "sources": [
+        "src/lib/provider-admission.ts"
+      ]
+    },
+    {
+      "name": "VOICE_CALLBACK_SIGNING_SECRET",
+      "sources": [
+        "src/lib/voice/token.ts"
+      ]
+    },
+    {
+      "name": "WEB_DATABASE_URL",
+      "sources": [
+        "src/lib/prisma-datasource.ts",
+        "deploy/compose/docker-compose.pgbouncer.yml",
+        "deploy/compose/docker-compose.split.yml"
+      ]
+    },
+    {
+      "name": "WORKER_ID",
+      "sources": [
+        "src/lib/cron-scheduler.ts",
+        "src/lib/provider-admission.ts"
+      ]
+    }
+  ],
+  "integrations": [
+    {
+      "provider": "app-error",
+      "sources": [
+        "src/lib/integrations/app-error.ts"
+      ]
+    },
+    {
+      "provider": "appdynamics",
+      "sources": [
+        "src/lib/integrations/appdynamics.ts",
+        "src/app/api/integrations/appdynamics/route.ts"
+      ]
+    },
+    {
+      "provider": "auth",
+      "sources": [
+        "src/lib/integrations/auth.ts"
+      ]
+    },
+    {
+      "provider": "aws-sns-verification",
+      "sources": [
+        "src/lib/integrations/aws-sns-verification.ts"
+      ]
+    },
+    {
+      "provider": "azure",
+      "sources": [
+        "src/lib/integrations/azure.ts",
+        "src/app/api/integrations/azure/route.ts"
+      ]
+    },
+    {
+      "provider": "better-uptime",
+      "sources": [
+        "src/lib/integrations/better-uptime.ts",
+        "src/app/api/integrations/better-uptime/route.ts"
+      ]
+    },
+    {
+      "provider": "bitbucket",
+      "sources": [
+        "src/lib/integrations/bitbucket.ts",
+        "src/app/api/integrations/bitbucket/route.ts"
+      ]
+    },
+    {
+      "provider": "chatops",
+      "sources": [
+        "src/app/(app)/settings/integrations/chatops/page.tsx"
+      ]
+    },
+    {
+      "provider": "cloudwatch",
+      "sources": [
+        "src/lib/integrations/cloudwatch.ts",
+        "src/app/api/integrations/cloudwatch/route.ts"
+      ]
+    },
+    {
+      "provider": "datadog",
+      "sources": [
+        "src/lib/integrations/datadog.ts",
+        "src/app/api/integrations/datadog/route.ts"
+      ]
+    },
+    {
+      "provider": "dynatrace",
+      "sources": [
+        "src/lib/integrations/dynatrace.ts",
+        "src/app/api/integrations/dynatrace/route.ts"
+      ]
+    },
+    {
+      "provider": "elastic",
+      "sources": [
+        "src/lib/integrations/elastic.ts",
+        "src/app/api/integrations/elastic/route.ts"
+      ]
+    },
+    {
+      "provider": "errors",
+      "sources": [
+        "src/lib/integrations/errors.ts"
+      ]
+    },
+    {
+      "provider": "failures",
+      "sources": [
+        "src/app/api/integrations/failures/route.ts"
+      ]
+    },
+    {
+      "provider": "github",
+      "sources": [
+        "src/lib/integrations/github.ts",
+        "src/app/api/integrations/github/route.ts"
+      ]
+    },
+    {
+      "provider": "gitlab",
+      "sources": [
+        "src/lib/integrations/gitlab.ts",
+        "src/app/api/integrations/gitlab/route.ts"
+      ]
+    },
+    {
+      "provider": "google-cloud-monitoring",
+      "sources": [
+        "src/lib/integrations/google-cloud-monitoring.ts",
+        "src/app/api/integrations/google-cloud-monitoring/route.ts"
+      ]
+    },
+    {
+      "provider": "grafana",
+      "sources": [
+        "src/lib/integrations/grafana.ts",
+        "src/app/api/integrations/grafana/route.ts"
+      ]
+    },
+    {
+      "provider": "handler",
+      "sources": [
+        "src/lib/integrations/handler.ts"
+      ]
+    },
+    {
+      "provider": "health",
+      "sources": [
+        "src/app/api/integrations/health/route.ts"
+      ]
+    },
+    {
+      "provider": "honeycomb",
+      "sources": [
+        "src/lib/integrations/honeycomb.ts",
+        "src/app/api/integrations/honeycomb/route.ts"
+      ]
+    },
+    {
+      "provider": "icinga",
+      "sources": [
+        "src/lib/integrations/icinga.ts",
+        "src/app/api/integrations/icinga/route.ts"
+      ]
+    },
+    {
+      "provider": "jira",
+      "sources": [
+        "src/app/(app)/settings/integrations/jira/page.tsx"
+      ]
+    },
+    {
+      "provider": "manageengine",
+      "sources": [
+        "src/lib/integrations/manageengine.ts",
+        "src/app/api/integrations/manageengine/route.ts"
+      ]
+    },
+    {
+      "provider": "metrics",
+      "sources": [
+        "src/lib/integrations/metrics.ts"
+      ]
+    },
+    {
+      "provider": "microsoft-teams",
+      "sources": [
+        "src/app/(app)/settings/integrations/microsoft-teams/page.tsx"
+      ]
+    },
+    {
+      "provider": "nagios",
+      "sources": [
+        "src/lib/integrations/nagios.ts",
+        "src/app/api/integrations/nagios/route.ts"
+      ]
+    },
+    {
+      "provider": "newrelic",
+      "sources": [
+        "src/lib/integrations/newrelic.ts",
+        "src/app/api/integrations/newrelic/route.ts"
+      ]
+    },
+    {
+      "provider": "normalization",
+      "sources": [
+        "src/lib/integrations/normalization.ts"
+      ]
+    },
+    {
+      "provider": "pagerduty",
+      "sources": [
+        "src/lib/integrations/pagerduty.ts",
+        "src/app/api/integrations/pagerduty/route.ts",
+        "src/app/api/integrations/pagerduty/v2/enqueue/route.ts"
+      ]
+    },
+    {
+      "provider": "pingdom",
+      "sources": [
+        "src/lib/integrations/pingdom.ts",
+        "src/app/api/integrations/pingdom/route.ts"
+      ]
+    },
+    {
+      "provider": "prometheus",
+      "sources": [
+        "src/lib/integrations/prometheus.ts",
+        "src/app/api/integrations/prometheus/route.ts"
+      ]
+    },
+    {
+      "provider": "rate-limiter",
+      "sources": [
+        "src/lib/integrations/rate-limiter.ts"
+      ]
+    },
+    {
+      "provider": "reconciliation",
+      "sources": [
+        "src/lib/integrations/reconciliation.ts"
+      ]
+    },
+    {
+      "provider": "request-security",
+      "sources": [
+        "src/lib/integrations/request-security.ts"
+      ]
+    },
+    {
+      "provider": "route-helpers",
+      "sources": [
+        "src/lib/integrations/route-helpers.ts"
+      ]
+    },
+    {
+      "provider": "schemas",
+      "sources": [
+        "src/lib/integrations/schemas/index.ts"
+      ]
+    },
+    {
+      "provider": "sentry",
+      "sources": [
+        "src/lib/integrations/sentry.ts",
+        "src/app/api/integrations/sentry/route.ts"
+      ]
+    },
+    {
+      "provider": "signature-verification",
+      "sources": [
+        "src/lib/integrations/signature-verification.ts"
+      ]
+    },
+    {
+      "provider": "slack",
+      "sources": [
+        "src/app/(app)/settings/integrations/slack/page.tsx"
+      ]
+    },
+    {
+      "provider": "splunk-observability",
+      "sources": [
+        "src/lib/integrations/splunk-observability.ts",
+        "src/app/api/integrations/splunk-observability/route.ts"
+      ]
+    },
+    {
+      "provider": "splunk-oncall",
+      "sources": [
+        "src/lib/integrations/splunk-oncall.ts",
+        "src/app/api/integrations/splunk-oncall/route.ts"
+      ]
+    },
+    {
+      "provider": "uptime-kuma",
+      "sources": [
+        "src/lib/integrations/uptime-kuma.ts",
+        "src/app/api/integrations/uptime-kuma/route.ts"
+      ]
+    },
+    {
+      "provider": "uptimerobot",
+      "sources": [
+        "src/lib/integrations/uptimerobot.ts",
+        "src/app/api/integrations/uptimerobot/route.ts"
+      ]
+    },
+    {
+      "provider": "vercel",
+      "sources": [
+        "src/lib/integrations/vercel.ts",
+        "src/app/api/integrations/vercel/route.ts"
+      ]
+    },
+    {
+      "provider": "webhook",
+      "sources": [
+        "src/lib/integrations/webhook.ts",
+        "src/app/api/integrations/webhook/route.ts"
+      ]
+    },
+    {
+      "provider": "zabbix",
+      "sources": [
+        "src/lib/integrations/zabbix.ts",
+        "src/app/api/integrations/zabbix/route.ts"
+      ]
+    }
+  ],
+  "permissions": {
+    "roles": [
+      "ADMIN",
+      "RESPONDER",
+      "AUDITOR",
+      "USER"
+    ],
+    "capabilities": [
+      "admin.manage",
+      "audit.read",
+      "compliance.drift.manage",
+      "compliance.evaluate",
+      "compliance.evidence.read",
+      "compliance.export",
+      "compliance.read",
+      "encryption.manage",
+      "encryption.read",
+      "incident.acknowledge.scoped",
+      "incident.create.all",
+      "incident.create.scoped",
+      "incident.escalate.scoped",
+      "incident.export",
+      "incident.note.scoped",
+      "incident.read.all",
+      "incident.read.scoped",
+      "incident.sensitive.read",
+      "metrics.read.all",
+      "metrics.read.scoped",
+      "operations.manage",
+      "policy.read.all",
+      "postmortem.draft.read",
+      "privacy.erasure",
+      "privacy.export",
+      "privacy.read",
+      "privacy.requests.manage",
+      "report.export",
+      "report.read",
+      "retention.holds.manage",
+      "retention.manage",
+      "retention.read",
+      "schedule.read.all",
+      "schedule.read.scoped",
+      "service.read.all",
+      "service.read.scoped",
+      "user.read.all"
+    ],
+    "apiScopes": [
+      "events:write",
+      "incidents:read",
+      "incidents:write",
+      "response-policy:read",
+      "response-policy:write",
+      "schedules:read",
+      "services:read"
+    ],
+    "source": "src/lib/authorization.ts"
+  },
+  "deployment": {
+    "topologies": [
+      {
+        "name": "compose",
+        "root": "deploy/compose",
+        "files": [
+          "deploy/compose/README.md",
+          "deploy/compose/docker-compose.dev.yml",
+          "deploy/compose/docker-compose.external-db.yml",
+          "deploy/compose/docker-compose.pgbouncer-ca.yml",
+          "deploy/compose/docker-compose.pgbouncer.yml",
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/compose/docker-compose.yml"
+        ]
+      },
+      {
+        "name": "helm",
+        "root": "deploy/kubernetes/helm",
+        "files": [
+          "deploy/kubernetes/helm/opsknight/.helmignore",
+          "deploy/kubernetes/helm/opsknight/Chart.yaml",
+          "deploy/kubernetes/helm/opsknight/examples/values-aws-alb.yaml",
+          "deploy/kubernetes/helm/opsknight/examples/values-azure-agic.yaml",
+          "deploy/kubernetes/helm/opsknight/examples/values-enterprise-ha.yaml",
+          "deploy/kubernetes/helm/opsknight/examples/values-gce.yaml",
+          "deploy/kubernetes/helm/opsknight/examples/values-nginx.yaml",
+          "deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml",
+          "deploy/kubernetes/helm/opsknight/examples/values-traefik.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/_helpers.tpl",
+          "deploy/kubernetes/helm/opsknight/templates/configmap.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/hpa.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/ingress.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/networkpolicy.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pdb.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-configmap.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-pdb.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-secret.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-service.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/postgres-service.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/secret.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/service.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/serviceaccount.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/servicemonitor.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-pdbs.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-worker-networkpolicies.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/tests/test-connection.yaml",
+          "deploy/kubernetes/helm/opsknight/values.schema.json",
+          "deploy/kubernetes/helm/opsknight/values.yaml"
+        ]
+      },
+      {
+        "name": "kustomize",
+        "root": "deploy/kubernetes/kustomize",
+        "files": [
+          "deploy/kubernetes/kustomize/base/configmap.yaml",
+          "deploy/kubernetes/kustomize/base/ingress.yaml",
+          "deploy/kubernetes/kustomize/base/kustomization.yaml",
+          "deploy/kubernetes/kustomize/base/namespace.yaml",
+          "deploy/kubernetes/kustomize/base/network-policy.yaml",
+          "deploy/kubernetes/kustomize/base/pod-disruption-budget.yaml",
+          "deploy/kubernetes/kustomize/base/postgres-service.yaml",
+          "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml",
+          "deploy/kubernetes/kustomize/base/secret.yaml",
+          "deploy/kubernetes/kustomize/base/service-account.yaml",
+          "deploy/kubernetes/kustomize/base/service.yaml",
+          "deploy/kubernetes/kustomize/monitoring/servicemonitor.yaml",
+          "deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml",
+          "deploy/kubernetes/kustomize/profiles/integrated/hpa.yaml",
+          "deploy/kubernetes/kustomize/profiles/integrated/kustomization.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/kustomization.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-configmap.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-deployment.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-network-policy.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-pdb.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-secret.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-service.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/external-database-cidr-patch.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/kustomization.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/remove-integrated-pdb.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-pdbs.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/web-hpa.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/web-network-policy.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/web-service.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/worker-network-policies.yaml"
+        ]
+      },
+      {
+        "name": "swarm",
+        "root": "deploy/swarm",
+        "files": [
+          "deploy/swarm/README.md",
+          "deploy/swarm/docker-stack.ca.integrated.yml",
+          "deploy/swarm/docker-stack.ca.split.yml",
+          "deploy/swarm/docker-stack.db.yml",
+          "deploy/swarm/docker-stack.external-db.integrated.yml",
+          "deploy/swarm/docker-stack.external-db.yml",
+          "deploy/swarm/docker-stack.integrated.yml",
+          "deploy/swarm/docker-stack.pgbouncer-ca.yml",
+          "deploy/swarm/docker-stack.pgbouncer.yml",
+          "deploy/swarm/docker-stack.yml",
+          "deploy/swarm/scripts/deploy.sh",
+          "deploy/swarm/scripts/health-check.sh",
+          "deploy/swarm/scripts/migrate.sh",
+          "deploy/swarm/scripts/rollback.sh",
+          "deploy/swarm/secrets.example/database-url.txt.example",
+          "deploy/swarm/secrets.example/direct-database-url.txt.example",
+          "deploy/swarm/secrets.example/encryption-key.txt.example",
+          "deploy/swarm/secrets.example/nextauth-secret.txt.example",
+          "deploy/swarm/secrets.example/pgbouncer-userlist.txt.example",
+          "deploy/swarm/secrets.example/prometheus-scrape-token.txt.example",
+          "deploy/swarm/secrets.example/web-database-url.txt.example"
+        ]
+      }
+    ],
+    "runtimeRoles": [
+      {
+        "name": "web",
+        "sources": [
+          "deploy/compose/README.md",
+          "deploy/compose/docker-compose.pgbouncer-ca.yml",
+          "deploy/compose/docker-compose.pgbouncer.yml",
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml",
+          "deploy/kubernetes/helm/opsknight/examples/values-traefik.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/_helpers.tpl",
+          "deploy/kubernetes/helm/opsknight/templates/hpa.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/networkpolicy.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/secret.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/service.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-pdbs.yaml",
+          "deploy/kubernetes/helm/opsknight/values.schema.json",
+          "deploy/kubernetes/helm/opsknight/values.yaml",
+          "deploy/kubernetes/kustomize/base/secret.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/kustomization.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-network-policy.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/kustomization.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-pdbs.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/web-hpa.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/web-network-policy.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/web-service.yaml",
+          "deploy/swarm/README.md",
+          "deploy/swarm/docker-stack.ca.split.yml",
+          "deploy/swarm/docker-stack.external-db.yml",
+          "deploy/swarm/docker-stack.integrated.yml",
+          "deploy/swarm/docker-stack.pgbouncer.yml",
+          "deploy/swarm/docker-stack.yml",
+          "deploy/swarm/scripts/deploy.sh",
+          "deploy/swarm/scripts/health-check.sh",
+          "deploy/swarm/scripts/rollback.sh"
+        ]
+      },
+      {
+        "name": "scheduler",
+        "sources": [
+          "deploy/compose/README.md",
+          "deploy/compose/docker-compose.pgbouncer-ca.yml",
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-configmap.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-pdbs.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-worker-networkpolicies.yaml",
+          "deploy/kubernetes/helm/opsknight/values.schema.json",
+          "deploy/kubernetes/helm/opsknight/values.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/external-database-cidr-patch.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/kustomization.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-pdbs.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/worker-network-policies.yaml",
+          "deploy/swarm/README.md",
+          "deploy/swarm/docker-stack.ca.split.yml",
+          "deploy/swarm/docker-stack.external-db.yml",
+          "deploy/swarm/docker-stack.integrated.yml",
+          "deploy/swarm/docker-stack.yml",
+          "deploy/swarm/scripts/deploy.sh",
+          "deploy/swarm/scripts/rollback.sh"
+        ]
+      },
+      {
+        "name": "general-worker",
+        "sources": [
+          "deploy/compose/README.md",
+          "deploy/compose/docker-compose.pgbouncer-ca.yml",
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-pdbs.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-worker-networkpolicies.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/external-database-cidr-patch.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/kustomization.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-pdbs.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/worker-network-policies.yaml",
+          "deploy/swarm/README.md",
+          "deploy/swarm/docker-stack.ca.split.yml",
+          "deploy/swarm/docker-stack.external-db.yml",
+          "deploy/swarm/docker-stack.yml",
+          "deploy/swarm/scripts/rollback.sh"
+        ]
+      },
+      {
+        "name": "critical-worker",
+        "sources": [
+          "deploy/compose/README.md",
+          "deploy/compose/docker-compose.pgbouncer-ca.yml",
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-pdbs.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-worker-networkpolicies.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/external-database-cidr-patch.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/kustomization.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-pdbs.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/worker-network-policies.yaml",
+          "deploy/swarm/README.md",
+          "deploy/swarm/docker-stack.ca.split.yml",
+          "deploy/swarm/docker-stack.external-db.yml",
+          "deploy/swarm/docker-stack.yml",
+          "deploy/swarm/scripts/rollback.sh"
+        ]
+      },
+      {
+        "name": "bulk-worker",
+        "sources": [
+          "deploy/compose/README.md",
+          "deploy/compose/docker-compose.pgbouncer-ca.yml",
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-pdbs.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-worker-networkpolicies.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/external-database-cidr-patch.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/kustomization.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-pdbs.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/worker-network-policies.yaml",
+          "deploy/swarm/README.md",
+          "deploy/swarm/docker-stack.ca.split.yml",
+          "deploy/swarm/docker-stack.external-db.yml",
+          "deploy/swarm/docker-stack.yml",
+          "deploy/swarm/scripts/rollback.sh"
+        ]
+      },
+      {
+        "name": "status-projector",
+        "sources": [
+          "deploy/compose/README.md",
+          "deploy/compose/docker-compose.pgbouncer-ca.yml",
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-pdbs.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-worker-networkpolicies.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/external-database-cidr-patch.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/kustomization.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/runtime-pdbs.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/worker-network-policies.yaml",
+          "deploy/swarm/README.md",
+          "deploy/swarm/docker-stack.ca.split.yml",
+          "deploy/swarm/docker-stack.external-db.yml",
+          "deploy/swarm/docker-stack.yml",
+          "deploy/swarm/scripts/rollback.sh"
+        ]
+      },
+      {
+        "name": "postgres",
+        "sources": [
+          "deploy/compose/README.md",
+          "deploy/compose/docker-compose.dev.yml",
+          "deploy/compose/docker-compose.external-db.yml",
+          "deploy/compose/docker-compose.pgbouncer-ca.yml",
+          "deploy/compose/docker-compose.pgbouncer.yml",
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/compose/docker-compose.yml",
+          "deploy/kubernetes/helm/opsknight/examples/values-enterprise-ha.yaml",
+          "deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/_helpers.tpl",
+          "deploy/kubernetes/helm/opsknight/templates/configmap.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/networkpolicy.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-configmap.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-secret.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/postgres-service.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/secret.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-worker-networkpolicies.yaml",
+          "deploy/kubernetes/helm/opsknight/values.schema.json",
+          "deploy/kubernetes/helm/opsknight/values.yaml",
+          "deploy/kubernetes/kustomize/base/configmap.yaml",
+          "deploy/kubernetes/kustomize/base/kustomization.yaml",
+          "deploy/kubernetes/kustomize/base/network-policy.yaml",
+          "deploy/kubernetes/kustomize/base/pod-disruption-budget.yaml",
+          "deploy/kubernetes/kustomize/base/postgres-service.yaml",
+          "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml",
+          "deploy/kubernetes/kustomize/base/secret.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-configmap.yaml",
+          "deploy/kubernetes/kustomize/profiles/split/external-database-cidr-patch.yaml",
+          "deploy/swarm/README.md",
+          "deploy/swarm/docker-stack.db.yml",
+          "deploy/swarm/docker-stack.external-db.integrated.yml",
+          "deploy/swarm/docker-stack.external-db.yml",
+          "deploy/swarm/docker-stack.pgbouncer.yml",
+          "deploy/swarm/scripts/deploy.sh",
+          "deploy/swarm/secrets.example/database-url.txt.example",
+          "deploy/swarm/secrets.example/direct-database-url.txt.example",
+          "deploy/swarm/secrets.example/web-database-url.txt.example"
+        ]
+      },
+      {
+        "name": "pgbouncer",
+        "sources": [
+          "deploy/compose/README.md",
+          "deploy/compose/docker-compose.external-db.yml",
+          "deploy/compose/docker-compose.pgbouncer-ca.yml",
+          "deploy/compose/docker-compose.pgbouncer.yml",
+          "deploy/compose/docker-compose.yml",
+          "deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/_helpers.tpl",
+          "deploy/kubernetes/helm/opsknight/templates/networkpolicy.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-configmap.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-pdb.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-secret.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/pgbouncer-service.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+          "deploy/kubernetes/helm/opsknight/values.schema.json",
+          "deploy/kubernetes/helm/opsknight/values.yaml",
+          "deploy/kubernetes/kustomize/base/secret.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/kustomization.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-configmap.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-deployment.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-network-policy.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-pdb.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-secret.yaml",
+          "deploy/kubernetes/kustomize/profiles/split-pgbouncer/pgbouncer-service.yaml",
+          "deploy/swarm/README.md",
+          "deploy/swarm/docker-stack.pgbouncer-ca.yml",
+          "deploy/swarm/docker-stack.pgbouncer.yml",
+          "deploy/swarm/scripts/deploy.sh",
+          "deploy/swarm/scripts/rollback.sh",
+          "deploy/swarm/secrets.example/web-database-url.txt.example"
+        ]
+      }
+    ]
+  },
+  "database": {
+    "source": "prisma/schema.prisma",
+    "models": [
+      "ActionItem",
+      "Alert",
+      "ApiKey",
+      "AuditLog",
+      "BackgroundJob",
+      "ChatIdentityChallenge",
+      "ChatIdentityLink",
+      "ChatOpsConfig",
+      "ChatOpsIntent",
+      "ComplianceControlState",
+      "ComplianceDriftBaseline",
+      "ComplianceDriftEvent",
+      "ComplianceEvaluation",
+      "ComplianceEvidence",
+      "ComplianceMonitoringRun",
+      "CronSchedulerState",
+      "CustomField",
+      "CustomFieldValue",
+      "Dashboard",
+      "DashboardWidget",
+      "DataRetentionHold",
+      "EncryptionMigrationIssue",
+      "EncryptionMigrationRun",
+      "EncryptionMigrationTargetState",
+      "EscalationPolicy",
+      "EscalationRule",
+      "EscalationRuleCondition",
+      "ExternalIssueLink",
+      "ExternalOperation",
+      "InAppNotification",
+      "InboundDelivery",
+      "Incident",
+      "IncidentClassificationPolicy",
+      "IncidentClassificationPolicyRule",
+      "IncidentEvent",
+      "IncidentMeeting",
+      "IncidentMetricRollup",
+      "IncidentMetricRollupByPriority",
+      "IncidentNote",
+      "IncidentSlaLegacyAckMutation",
+      "IncidentSlaLegacyCapture",
+      "IncidentSlaPause",
+      "IncidentSlaPolicy",
+      "IncidentSlaPolicyRule",
+      "IncidentTag",
+      "IncidentTemplate",
+      "IncidentWarRoom",
+      "IncidentWatcher",
+      "Integration",
+      "JiraConfig",
+      "JiraServiceMapping",
+      "LogEntry",
+      "MetricRollup",
+      "MicrosoftTeamsConfig",
+      "MicrosoftTeamsDestination",
+      "MicrosoftTeamsIncidentMessage",
+      "MicrosoftTeamsInstallation",
+      "Notification",
+      "NotificationContent",
+      "NotificationDeliveryAttempt",
+      "NotificationFanout",
+      "NotificationProvider",
+      "NotificationProviderCapacity",
+      "NotificationProviderFeedback",
+      "NotificationRuntimeSettings",
+      "OidcConfig",
+      "OidcIdentity",
+      "OidcLinkingApproval",
+      "OnCallLayer",
+      "OnCallLayerUser",
+      "OnCallOverride",
+      "OnCallSchedule",
+      "OnCallShift",
+      "Postmortem",
+      "PrivacyErasureExecution",
+      "PrivacyExportArtifact",
+      "PrivacyRequest",
+      "ProviderAdmission",
+      "ProviderQuotaWindow",
+      "ProviderWorkerLease",
+      "RateLimit",
+      "RealtimeChange",
+      "ResponseSupportException",
+      "ResponseSupportHoursPolicy",
+      "ResponseSupportWindow",
+      "SLADefinition",
+      "SLAPerformanceLog",
+      "SLASnapshot",
+      "Service",
+      "ServiceObjective",
+      "ServiceObjectiveSnapshot",
+      "SlackDestination",
+      "SlackIntegration",
+      "SlackOAuthConfig",
+      "SlackPinnedMessage",
+      "StatusPage",
+      "StatusPageAnnouncement",
+      "StatusPageApiToken",
+      "StatusPageAsset",
+      "StatusPageRouteOperation",
+      "StatusPageService",
+      "StatusPageSnapshot",
+      "StatusPageSubscription",
+      "StatusPageSubscriptionService",
+      "StatusPageSubscriptionToken",
+      "StatusPageWebhook",
+      "SystemConfig",
+      "SystemSettings",
+      "Tag",
+      "Team",
+      "TeamMember",
+      "User",
+      "UserAvatar",
+      "UserDevice",
+      "UserNotificationEndpoint",
+      "UserToken",
+      "WarRoomParticipant",
+      "WarRoomProviderEventDelivery",
+      "WarRoomProviderEventStage",
+      "WebhookIntegration"
+    ],
+    "enums": [
+      "ActionItemPriority",
+      "ActionItemSource",
+      "ActionItemStatus",
+      "AuditEntityType",
+      "ChatIdentityVerificationMethod",
+      "ChatOpsIntentKind",
+      "ChatOpsIntentStatus",
+      "ChatOpsResponseMode",
+      "ChatProvider",
+      "ComplianceDriftImpact",
+      "ComplianceDriftKind",
+      "ComplianceDriftStatus",
+      "ComplianceEvaluationStatus",
+      "ComplianceEvaluationTrigger",
+      "ComplianceEvidenceType",
+      "ComplianceMonitoringRunStatus",
+      "CustomFieldType",
+      "DashboardVisibility",
+      "EncryptionMigrationMode",
+      "EncryptionMigrationStatus",
+      "EscalationTargetType",
+      "ExternalIssueProvider",
+      "ExternalIssueSyncState",
+      "ExternalOperationStatus",
+      "InAppNotificationType",
+      "InboundDeliveryStatus",
+      "IncidentEventType",
+      "IncidentMeetingHealth",
+      "IncidentMeetingProvider",
+      "IncidentMeetingState",
+      "IncidentResolutionKind",
+      "IncidentStatus",
+      "IncidentUrgency",
+      "IncidentVisibility",
+      "JobStatus",
+      "JobType",
+      "MicrosoftTeamsTenantMode",
+      "NotificationCapacityMode",
+      "NotificationCategory",
+      "NotificationChannel",
+      "NotificationEndpointStatus",
+      "NotificationRecipientType",
+      "NotificationStatus",
+      "NotificationTrafficClass",
+      "ObjectiveComparator",
+      "ObjectiveDataState",
+      "ObjectiveWindow",
+      "PrivacyErasureExecutionStatus",
+      "PrivacyExportArtifactStatus",
+      "PrivacyRequestStatus",
+      "PrivacyRequestSubjectType",
+      "PrivacyRequestType",
+      "PrivacyVerificationMethod",
+      "PrivacyVerificationStatus",
+      "RetentionHoldScopeType",
+      "Role",
+      "RoleSource",
+      "ServiceObjectiveMetric",
+      "ServiceStatus",
+      "StatusPageAnnouncementNotificationTiming",
+      "StatusPageSubscriptionState",
+      "TeamRole",
+      "UserStatus",
+      "UserTokenType",
+      "WarRoomHealthState",
+      "WarRoomMembershipType",
+      "WarRoomParticipantSource",
+      "WarRoomParticipantState",
+      "WarRoomProvider",
+      "WarRoomProviderEventDeliveryStatus",
+      "WarRoomProviderEventStageStatus",
+      "WarRoomProvisioningStatus",
+      "WarRoomState"
+    ]
+  },
+  "runtime": {
+    "jobs": [
+      "src/jobs/service-objective-scheduler.ts",
+      "src/jobs/sla-scheduler.ts"
+    ],
+    "queueSources": [
+      "src/lib/cron-scheduler.ts",
+      "src/lib/encryption/worker.ts",
+      "src/lib/escalation/worker.ts",
+      "src/lib/job-worker.ts",
+      "src/lib/jobs/queue.ts",
+      "src/lib/offline-queue.ts"
+    ],
+    "queueNames": [
+      "BackgroundJob",
+      "BulkQueueBackpressureError",
+      "OPSKNIGHT_WORKER_BATCH_SIZE",
+      "OPSKNIGHT_WORKER_BUSY_POLL_MS",
+      "OPSKNIGHT_WORKER_CONCURRENCY",
+      "OPSKNIGHT_WORKER_IDLE_POLL_MS",
+      "cron-scheduler",
+      "cron_scheduler_state",
+      "request-queue",
+      "serviceWorker"
+    ]
+  }
+}
