@@ -5,13 +5,13 @@ capabilities:
     title: Manage the incident lifecycle
     product_area: incidents
     status: documented
-    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: true }
     concepts: [concepts/incidents.md, concepts/incident-response.md, concepts/incident-sla.md]
     guides: [guides/incidents/create.md, guides/incidents/acknowledge.md, guides/incidents/assign.md, guides/incidents/escalate.md, guides/incidents/resolve.md]
     reference: [reference/api/README.md]
     tests: [tests/docs/journeys/incident-lifecycle.spec.ts, tests/lib/incidents/lifecycle.test.ts]
     sources: [src/lib/incidents/lifecycle.ts, src/app/(app)/incidents/actions.ts]
-    evidence: []
+    evidence: [generated/docs-evidence/current/incidents/list.png, generated/docs-evidence/current/incidents/detail.png, generated/docs-evidence/current/incidents/acknowledge.png]
     roles: [responder, administrator]
   services_and_teams:
     title: Organize services and ownership teams
@@ -29,49 +29,49 @@ capabilities:
     title: Build schedules and temporary overrides
     product_area: on-call
     status: documented
-    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: true }
     concepts: [concepts/schedules.md]
     guides: [guides/on-call/build-schedule.md, guides/on-call/overrides.md]
     reference: [reference/api/README.md]
     tests: [tests/integration/schedule-assignment-concurrency.test.ts]
     sources: [src/lib/schedules]
-    evidence: []
+    evidence: [generated/docs-evidence/current/on-call/schedules.png]
     roles: [responder, administrator]
   escalation:
     title: Configure and execute escalation policies
     product_area: escalation
     status: documented
-    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: true }
     concepts: [concepts/escalation-policies.md]
     guides: [guides/escalation/configure-policy.md, guides/incidents/escalate.md]
     reference: [reference/api/README.md]
     tests: [tests/integration/escalation-lifecycle-invariant.test.ts]
     sources: [src/lib/escalation]
-    evidence: []
+    evidence: [generated/docs-evidence/current/escalation/policies.png]
     roles: [responder, administrator]
   notifications:
     title: Route and inspect multi-channel notifications
     product_area: notifications
     status: documented
-    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: true }
     concepts: [concepts/notifications.md]
     guides: [guides/notifications/configure-routing.md, guides/notifications/inspect-delivery.md]
     reference: [reference/api/README.md]
     tests: [tests/integration/notification-flow.test.ts, tests/integration/notification-policy-outcomes.test.ts]
     sources: [src/lib/user-notifications.ts, src/lib/notification-providers.ts]
-    evidence: []
+    evidence: [generated/docs-evidence/current/notifications/settings.png]
     roles: [responder, administrator, operator]
   status_pages:
     title: Publish scoped service status
     product_area: status-pages
     status: documented
-    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: true }
     concepts: [concepts/status-pages.md]
     guides: [guides/status-pages/publish-update.md]
     reference: [reference/api/README.md]
     tests: [tests/integration/status-page-publication.test.ts, tests/integration/status-page-privacy-matrix.test.ts]
     sources: [src/lib/status-page-projection.ts, src/lib/status-page-public-data.ts]
-    evidence: []
+    evidence: [generated/docs-evidence/current/status-pages/list.png]
     roles: [responder, administrator]
   chatops:
     title: Coordinate incidents in Slack and Microsoft Teams
@@ -89,13 +89,13 @@ capabilities:
     title: Ingest provider webhook events
     product_area: integrations
     status: documented
-    required: { concepts: false, guides: false, reference: true, tests: true, evidence: false }
+    required: { concepts: false, guides: false, reference: true, tests: true, evidence: true }
     concepts: []
     guides: []
     reference: [integrations/README.md, integrations/catalog.yaml]
     tests: [tests/integration/event-resilience.test.ts, tests/integration/event-dedup-semantics.test.ts]
     sources: [src/lib/integrations, src/app/api/integrations]
-    evidence: []
+    evidence: [generated/docs-evidence/current/integrations/settings.png]
     roles: [administrator, operator]
   jira:
     title: Link incident work to Jira
@@ -149,13 +149,13 @@ capabilities:
     title: Manage user lifecycle and ownership
     product_area: users
     status: documented
-    required: { concepts: false, guides: true, reference: true, tests: true, evidence: false }
+    required: { concepts: false, guides: true, reference: true, tests: true, evidence: true }
     concepts: []
     guides: [guides/administration/manage-users.md]
     reference: [reference/api/README.md]
     tests: [tests/lib/user-deletion.test.ts]
     sources: [src/lib/users]
-    evidence: []
+    evidence: [generated/docs-evidence/current/administration/users.png]
     roles: [administrator]
   analytics_and_reports:
     title: Analyze incident and service performance
