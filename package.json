@@ -71,6 +71,7 @@
     "docs:integrations": "node scripts/docs/generate-integrations.mjs",
     "docs:frontmatter": "node scripts/docs/check-frontmatter.mjs",
     "docs:evidence": "node scripts/docs/check-evidence.mjs",
+    "docs:impact": "node scripts/docs/check-impact.mjs",
     "docs:links": "node scripts/check-docs-links.cjs",
     "docs:capabilities": "node scripts/check-docs-capabilities.cjs",
     "docs:lint": "npm run docs:frontmatter && npm run docs:links && npm run docs:capabilities && npm run docs:evidence",
