@@ -12,6 +12,8 @@ export function defaultRate(channel: NotificationChannel): number {
       return 8;
     case 'SMS':
       return 20;
+    case 'VOICE':
+      return 1;
     case 'WHATSAPP':
       return 50;
     case 'PUSH':
@@ -33,6 +35,8 @@ export function defaultInFlight(channel: NotificationChannel): number {
       return 5;
     case 'SMS':
       return 10;
+    case 'VOICE':
+      return 2;
     case 'WHATSAPP':
       return 10;
     case 'PUSH':

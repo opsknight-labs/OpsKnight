@@ -13,8 +13,8 @@ interface SystemNotificationSettingsProps {
 const providerConfigs: ProviderConfigSchema[] = [
   {
     key: 'twilio',
-    name: 'Twilio (SMS)',
-    description: 'Send SMS notifications via Twilio',
+    name: 'Twilio (SMS & Voice)',
+    description: 'Send SMS notifications and outbound incident voice calls via Twilio',
     fields: [
       {
         name: 'accountSid',
@@ -36,6 +36,12 @@ const providerConfigs: ProviderConfigSchema[] = [
         type: 'tel',
         required: true,
         placeholder: '+1234567890',
+      },
+      {
+        name: 'voiceEnabled',
+        label: 'Enable Voice Calling',
+        type: 'checkbox',
+        required: false,
       },
     ],
   },

@@ -27,6 +27,7 @@ import { getUserNotificationChannels } from '../user-notifications';
 const PERSONAL_CHANNELS: readonly NotificationDeliveryChannel[] = [
   'EMAIL',
   'SMS',
+  'VOICE',
   'PUSH',
   'WHATSAPP',
 ];
@@ -110,7 +111,8 @@ function recipientAddressFor(
   recipient: { userId: string; email: string | null; phoneNumber: string | null }
 ): string | null {
   if (channel === 'EMAIL') return recipient.email;
-  if (channel === 'SMS' || channel === 'WHATSAPP') return recipient.phoneNumber;
+  if (channel === 'SMS' || channel === 'VOICE' || channel === 'WHATSAPP')
+    return recipient.phoneNumber;
   if (channel === 'PUSH') return recipient.userId;
   return null;
 }

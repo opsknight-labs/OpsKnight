@@ -76,7 +76,7 @@ describe('Notification Provider Settings UI & Hero Hardening', () => {
       render(<SystemNotificationSettings providers={providers} />);
 
       expect(screen.getByText('SMS Messaging')).toBeDefined();
-      expect(screen.getByText('Twilio (SMS)')).toBeDefined();
+      expect(screen.getByText('Twilio (SMS & Voice)')).toBeDefined();
       expect(screen.getByText('Amazon SNS (SMS)')).toBeDefined();
     });
 

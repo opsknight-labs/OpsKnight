@@ -164,6 +164,7 @@ enum InboundDeliveryStatus {
 enum NotificationChannel {
   EMAIL
   SMS
+  VOICE
   PUSH
   SLACK
   WEBHOOK
@@ -462,6 +463,7 @@ model User {
   timeZone                     String     @default("UTC")
   emailNotificationsEnabled    Boolean    @default(false)
   smsNotificationsEnabled      Boolean    @default(false)
+  voiceNotificationsEnabled    Boolean    @default(false)
   pushNotificationsEnabled     Boolean    @default(false)
   whatsappNotificationsEnabled Boolean    @default(false)
   phoneNumber                  String?

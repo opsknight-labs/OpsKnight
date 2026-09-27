@@ -337,6 +337,13 @@ export const CircuitBreakers = {
       timeout: 10000, // 10 seconds for SMS
     }),
 
+  voice: () =>
+    getCircuitBreaker('voice:twilio', {
+      failureThreshold: 3,
+      resetTimeout: 30000,
+      timeout: 15000,
+    }),
+
   slack: () =>
     getCircuitBreaker('slack', {
       failureThreshold: 5,
@@ -409,18 +416,12 @@ export function getAllCircuitStats(): Record<
   string,
   { state: CircuitState; failures: number; successes: number }
 > {
-  const stats: Record<string, { state: CircuitState; failures: number; successes: number }> = {};
-
-  for (const [name, breaker] of breakers) {
-    const s = breaker.getStats();
-    stats[name] = {
-      state: s.state,
-      failures: s.failures,
-      successes: s.successes,
-    };
-  }
-
-  return stats;
+  return Object.fromEntries(
+    Array.from(breakers, ([name, breaker]) => {
+      const stats = breaker.getStats();
+      return [name, { state: stats.state, failures: stats.failures, successes: stats.successes }];
+    })
+  );
 }
 
 /**

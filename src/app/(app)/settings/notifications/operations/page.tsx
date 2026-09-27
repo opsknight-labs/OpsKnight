@@ -23,7 +23,7 @@ export default async function NotificationOperationsRoute() {
     redirect('/settings');
   }
 
-  const channels = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH', 'SLACK', 'WEBHOOK'] as const;
+  const channels = ['EMAIL', 'SMS', 'VOICE', 'WHATSAPP', 'PUSH', 'SLACK', 'WEBHOOK'] as const;
   const [
     leases,
     campaigns,

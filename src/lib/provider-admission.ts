@@ -17,6 +17,7 @@ export const EMERGENCY_CONCURRENCY: Record<string, number> = {
   PUSH: 2,
   EMAIL: 1,
   SMS: 1,
+  VOICE: 1,
   SLACK: 1,
   WEBHOOK: 2,
   WHATSAPP: 1,
@@ -32,6 +33,7 @@ export const EMERGENCY_RATE_PER_SECOND: Record<string, number> = {
   PUSH: 5,
   EMAIL: 2,
   SMS: 5,
+  VOICE: 1,
   SLACK: 1,
   WEBHOOK: 5,
   WHATSAPP: 5,
@@ -58,6 +60,7 @@ export const MAX_SLOTS_PER_WORKER = 5;
 export type ProviderAdmissionScope =
   | 'EMAIL'
   | 'SMS'
+  | 'VOICE'
   | 'WHATSAPP'
   | 'PUSH'
   | 'SLACK'

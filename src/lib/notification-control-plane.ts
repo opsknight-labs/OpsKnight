@@ -57,7 +57,10 @@ export function deliveryReconciliationCapability(
   provider?: string | null
 ): DeliveryReconciliationCapability {
   const normalized = provider?.toLowerCase() ?? '';
-  if ((channel === 'SMS' || channel === 'WHATSAPP') && normalized.includes('twilio'))
+  if (
+    (channel === 'SMS' || channel === 'VOICE' || channel === 'WHATSAPP') &&
+    normalized.includes('twilio')
+  )
     return 'CALLBACK';
   // Push dispatches are keyed by the durable notification id, which providers
   // supporting collapse/idempotency can safely receive again.
@@ -92,7 +95,12 @@ type LifecycleDeliveryPolicy = {
 
 export type CentralNotificationPayload =
   | {
-      kind: 'INCIDENT_EMAIL' | 'INCIDENT_SMS' | 'INCIDENT_PUSH' | 'INCIDENT_WHATSAPP';
+      kind:
+        | 'INCIDENT_EMAIL'
+        | 'INCIDENT_SMS'
+        | 'INCIDENT_VOICE'
+        | 'INCIDENT_PUSH'
+        | 'INCIDENT_WHATSAPP';
       userId: string;
       incidentId: string;
       eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated';
@@ -126,6 +134,7 @@ export type CentralNotificationPayload =
       emailRoute?: string[];
     }
   | { kind: 'SMS'; to: string; message: string; providerKey?: string }
+  | { kind: 'VOICE'; to: string; message: string; providerKey?: string }
   | { kind: 'WHATSAPP'; to: string; message: string; from?: string; providerKey?: string }
   | {
       kind: 'PUSH';
@@ -197,7 +206,14 @@ export type CentralNotificationPayload =
 
 type IncidentCentralPayload = Extract<
   CentralNotificationPayload,
-  { kind: 'INCIDENT_EMAIL' | 'INCIDENT_SMS' | 'INCIDENT_PUSH' | 'INCIDENT_WHATSAPP' }
+  {
+    kind:
+      | 'INCIDENT_EMAIL'
+      | 'INCIDENT_SMS'
+      | 'INCIDENT_VOICE'
+      | 'INCIDENT_PUSH'
+      | 'INCIDENT_WHATSAPP';
+  }
 >;
 
 export type CentralNotificationInput = {
@@ -228,7 +244,16 @@ export type CentralNotificationInput = {
 const centralNotificationInputSchema = z
   .object({
     category: z.enum(['INCIDENT', 'SECURITY', 'STATUS_PAGE', 'SLA', 'ADMINISTRATION', 'SYSTEM']),
-    channel: z.enum(['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP', 'MICROSOFT_TEAMS']),
+    channel: z.enum([
+      'EMAIL',
+      'SMS',
+      'VOICE',
+      'PUSH',
+      'SLACK',
+      'WEBHOOK',
+      'WHATSAPP',
+      'MICROSOFT_TEAMS',
+    ]),
     recipientType: z.enum([
       'USER',
       'EMAIL',
@@ -275,7 +300,8 @@ type DeliveryResult = {
 function normalizedRecipient(channel: NotificationChannel, recipient: string): string {
   const value = recipient.trim();
   if (channel === 'EMAIL') return value.toLowerCase();
-  if (channel === 'SMS' || channel === 'WHATSAPP') return value.replace(/[\s().-]/g, '');
+  if (channel === 'SMS' || channel === 'VOICE' || channel === 'WHATSAPP')
+    return value.replace(/[\s().-]/g, '');
   return value;
 }
 
@@ -290,7 +316,7 @@ export function maskedNotificationRecipient(
     const local = value.slice(0, separator);
     return `${local.slice(0, 1)}***@${value.slice(separator + 1)}`;
   }
-  if (channel === 'SMS' || channel === 'WHATSAPP') {
+  if (channel === 'SMS' || channel === 'VOICE' || channel === 'WHATSAPP') {
     return value.length > 4 ? `***${value.slice(-4)}` : '***';
   }
   if (channel === 'WEBHOOK') {
@@ -318,6 +344,7 @@ function intentId(deliveryKey: string): string {
 function channelForPayload(payload: CentralNotificationPayload): NotificationChannel {
   if (payload.kind === 'INCIDENT_EMAIL') return 'EMAIL';
   if (payload.kind === 'INCIDENT_SMS') return 'SMS';
+  if (payload.kind === 'INCIDENT_VOICE') return 'VOICE';
   if (payload.kind === 'INCIDENT_PUSH') return 'PUSH';
   if (payload.kind === 'INCIDENT_WHATSAPP') return 'WHATSAPP';
   if (payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK') return 'SLACK';
@@ -339,6 +366,7 @@ function isCentralNotificationPayload(value: unknown): value is CentralNotificat
   switch (value.kind) {
     case 'INCIDENT_EMAIL':
     case 'INCIDENT_SMS':
+    case 'INCIDENT_VOICE':
     case 'INCIDENT_PUSH':
     case 'INCIDENT_WHATSAPP':
       return (
@@ -355,6 +383,7 @@ function isCentralNotificationPayload(value: unknown): value is CentralNotificat
         (hasText(value.html) || hasText(value.contentId))
       );
     case 'SMS':
+    case 'VOICE':
     case 'WHATSAPP':
       return hasText(value.to) && hasText(value.message);
     case 'PUSH':
@@ -715,6 +744,9 @@ export async function pinNotificationProviderKeys(
   if (wanted.has('SMS')) {
     pinned.set('SMS', (await providers.getSMSConfig()).provider || undefined);
   }
+  if (wanted.has('VOICE')) {
+    pinned.set('VOICE', (await providers.getVoiceConfig()).provider || undefined);
+  }
   if (wanted.has('WHATSAPP')) {
     pinned.set('WHATSAPP', (await providers.getWhatsAppConfig()).provider || undefined);
   }
@@ -784,6 +816,14 @@ export async function enqueueCentralNotification(
   ) {
     const providerKey = await import('./notification-providers').then(module =>
       module.getSMSConfig().then(config => config.provider || undefined)
+    );
+    if (providerKey) pinnedInput = { ...input, payload: { ...input.payload, providerKey } };
+  } else if (
+    (input.payload.kind === 'VOICE' || input.payload.kind === 'INCIDENT_VOICE') &&
+    !input.payload.providerKey
+  ) {
+    const providerKey = await import('./notification-providers').then(module =>
+      module.getVoiceConfig().then(config => config.provider || undefined)
     );
     if (providerKey) pinnedInput = { ...input, payload: { ...input.payload, providerKey } };
   } else if (
@@ -967,6 +1007,30 @@ async function dispatchPayload(
         return { ...result, providerMessageId: result.messageSid };
       });
     }
+    case 'INCIDENT_VOICE': {
+      const current = await import('./notification-providers').then(module =>
+        module.getVoiceConfig()
+      );
+      if (payload.providerKey && current.provider !== payload.providerKey) {
+        return {
+          success: false,
+          statusCode: 409,
+          errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
+          error: `Pinned Voice provider ${payload.providerKey} is unavailable`,
+        };
+      }
+      const { sendIncidentVoice } = await import('./voice');
+      return executeProvider(CircuitBreakers.voice(), async () => {
+        const result = await sendIncidentVoice(
+          payload.userId,
+          payload.incidentId,
+          notificationId,
+          payload.durableMessage,
+          payload.escalationGeneration
+        );
+        return { ...result, providerMessageId: result.callSid };
+      });
+    }
     case 'INCIDENT_PUSH': {
       const { sendNotificationIntentPush } = await import('./incident-push-delivery');
       if (payload.providerKey) {
@@ -1085,6 +1149,24 @@ async function dispatchPayload(
           providerKey: payload.providerKey as 'twilio' | 'aws-sns' | undefined,
         });
         return { ...result, providerMessageId: result.messageSid };
+      });
+    }
+    case 'VOICE': {
+      const current = await import('./notification-providers').then(module =>
+        module.getVoiceConfig()
+      );
+      if (payload.providerKey && current.provider !== payload.providerKey) {
+        return {
+          success: false,
+          statusCode: 409,
+          errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
+          error: `Pinned Voice provider ${payload.providerKey} is unavailable`,
+        };
+      }
+      const { sendTestVoice } = await import('./voice');
+      return executeProvider(CircuitBreakers.voice(), async () => {
+        const result = await sendTestVoice(payload.to, notificationId, payload.message);
+        return { ...result, providerMessageId: result.callSid };
       });
     }
     case 'WHATSAPP': {
@@ -1370,6 +1452,7 @@ async function incidentPayloadSuperseded(
   if (
     payload.kind !== 'INCIDENT_EMAIL' &&
     payload.kind !== 'INCIDENT_SMS' &&
+    payload.kind !== 'INCIDENT_VOICE' &&
     payload.kind !== 'INCIDENT_PUSH' &&
     payload.kind !== 'INCIDENT_WHATSAPP'
   ) {

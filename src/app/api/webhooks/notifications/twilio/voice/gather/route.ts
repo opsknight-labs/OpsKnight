@@ -1,0 +1,128 @@
+import { Prisma } from '@prisma/client';
+import { NextRequest, NextResponse } from 'next/server';
+import { getBaseUrl } from '@/lib/env-validation';
+import { executeIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
+import { readIntegrationBody } from '@/lib/integrations/request-security';
+import { logger } from '@/lib/logger';
+import { getVoiceConfig } from '@/lib/notification-providers';
+import prisma from '@/lib/prisma';
+import { validateTwilioRequest } from '@/lib/twilio/signature';
+import { verifyVoiceCallbackToken } from '@/lib/voice/token';
+import { voiceCallbackTwiml } from '@/lib/voice/twiml';
+
+function xml(message: string, status = 200) {
+  return new NextResponse(voiceCallbackTwiml(message), {
+    status,
+    headers: { 'content-type': 'text/xml; charset=utf-8' },
+  });
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const rawBody = await readIntegrationBody(request, 64 * 1024);
+    const params = new URLSearchParams(rawBody);
+    const config = await getVoiceConfig();
+    const callbackUrl = `${getBaseUrl()}${request.nextUrl.pathname}${request.nextUrl.search}`;
+    if (
+      !config.authToken ||
+      !validateTwilioRequest(
+        callbackUrl,
+        params,
+        request.headers.get('x-twilio-signature') || '',
+        config.authToken
+      )
+    ) {
+      return xml('This request could not be verified.', 401);
+    }
+    const claims = verifyVoiceCallbackToken(request.nextUrl.searchParams.get('token') || '');
+    if (!claims) return xml('This acknowledgement link has expired or is invalid.', 401);
+    const callSid = params.get('CallSid');
+    if (!callSid) return xml('The call could not be identified.', 400);
+
+    const notification = await prisma.notification.findFirst({
+      where: {
+        id: claims.notificationId,
+        userId: claims.userId,
+        incidentId: claims.incidentId,
+        channel: 'VOICE',
+        OR: [{ providerMessageId: callSid }, { providerMessageId: null }],
+      },
+      select: {
+        id: true,
+        user: { select: { id: true, name: true } },
+        incident: { select: { status: true, escalationGeneration: true } },
+      },
+    });
+    if (!notification?.user || !notification.incident) {
+      return xml('This call is no longer actionable.', 404);
+    }
+    const callBound = await prisma.notification.updateMany({
+      where: {
+        id: notification.id,
+        OR: [{ providerMessageId: callSid }, { providerMessageId: null }],
+      },
+      data: { providerMessageId: callSid },
+    });
+    if (callBound.count === 0) return xml('This call is no longer actionable.', 409);
+    if (notification.incident.escalationGeneration !== claims.escalationGeneration) {
+      return xml('This page belongs to an earlier escalation and is no longer actionable.');
+    }
+    if (notification.incident.status === 'RESOLVED') {
+      return xml('This incident is already resolved.');
+    }
+    if (params.get('Digits') !== '1') {
+      return xml('No acknowledgement was received. The incident remains active.');
+    }
+
+    const providerEventId = `${callSid}:voice-ack:${claims.nonce}`;
+    try {
+      await prisma.notificationProviderFeedback.create({
+        data: {
+          provider: 'twilio-voice',
+          providerEventId,
+          providerMessageId: callSid,
+          eventType: 'acknowledged',
+          occurredAt: new Date(),
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return xml('This incident acknowledgement was already received.');
+      }
+      throw error;
+    }
+
+    try {
+      await executeIncidentLifecycleCommand({
+        incidentId: claims.incidentId,
+        command: 'ACKNOWLEDGE',
+        source: 'VOICE',
+        actor: { id: notification.user.id, name: notification.user.name },
+        expectedStatus: 'OPEN',
+        eventMessage: `Incident acknowledged by ${notification.user.name} via voice call`,
+      });
+    } catch (error) {
+      // The feedback row makes a concurrent/replayed callback harmless. If state
+      // moved after validation, return a truthful message and never regress it.
+      const current = await prisma.incident.findUnique({
+        where: { id: claims.incidentId },
+        select: { status: true },
+      });
+      if (current?.status === 'ACKNOWLEDGED') return xml('This incident is already acknowledged.');
+      if (current?.status === 'RESOLVED') return xml('This incident is already resolved.');
+      await prisma.notificationProviderFeedback.deleteMany({
+        where: { provider: 'twilio-voice', providerEventId },
+      });
+      throw error;
+    }
+
+    await prisma.notificationDeliveryAttempt.updateMany({
+      where: { notificationId: notification.id, providerMessageId: callSid },
+      data: { outcome: 'ACKNOWLEDGED', finishedAt: new Date() },
+    });
+    return xml('Thank you. The incident has been acknowledged.');
+  } catch (error) {
+    logger.error('voice.twilio_gather_failed', { error });
+    return xml('The acknowledgement could not be processed. Please use OpsKnight.', 500);
+  }
+}

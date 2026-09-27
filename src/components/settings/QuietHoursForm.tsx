@@ -81,7 +81,11 @@ export default function QuietHoursForm({
     weekend: weekendChecked,
   };
 
-  const { status: saveStatus, error: saveError, retry } = useAutosave({
+  const {
+    status: saveStatus,
+    error: saveError,
+    retry,
+  } = useAutosave({
     data: currentSettings,
     onSave: handleAutoSave,
     delay: 500,
@@ -100,7 +104,7 @@ export default function QuietHoursForm({
 
       <SettingsRow
         label="Enable Quiet Hours"
-        description="Silence low-urgency alerts (SMS, Push, WhatsApp) during specified hours"
+        description="Silence low-urgency alerts (SMS, Voice, Push, WhatsApp) during specified hours"
       >
         <Switch checked={enabledChecked} onCheckedChange={setEnabledChecked} />
       </SettingsRow>

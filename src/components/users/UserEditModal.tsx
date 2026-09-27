@@ -35,6 +35,7 @@ export type UserEditData = {
   phoneNumber?: string | null;
   emailNotificationsEnabled?: boolean;
   smsNotificationsEnabled?: boolean;
+  voiceNotificationsEnabled?: boolean;
   pushNotificationsEnabled?: boolean;
   whatsappNotificationsEnabled?: boolean;
 };
@@ -88,6 +89,9 @@ export default function UserEditModal({
     Boolean(user.emailNotificationsEnabled)
   );
   const [smsNotifications, setSmsNotifications] = useState(Boolean(user.smsNotificationsEnabled));
+  const [voiceNotifications, setVoiceNotifications] = useState(
+    Boolean(user.voiceNotificationsEnabled)
+  );
   const [pushNotifications, setPushNotifications] = useState(
     Boolean(user.pushNotificationsEnabled)
   );
@@ -109,6 +113,7 @@ export default function UserEditModal({
     formData.append('phoneNumber', phoneNumber);
     formData.append('emailNotificationsEnabled', emailNotifications ? 'true' : 'false');
     formData.append('smsNotificationsEnabled', smsNotifications ? 'true' : 'false');
+    formData.append('voiceNotificationsEnabled', voiceNotifications ? 'true' : 'false');
     formData.append('pushNotificationsEnabled', pushNotifications ? 'true' : 'false');
     formData.append('whatsappNotificationsEnabled', whatsappNotifications ? 'true' : 'false');
 
@@ -302,6 +307,17 @@ export default function UserEditModal({
                 />
                 <label htmlFor="notif-sms" className="cursor-pointer text-xs">
                   SMS Text Messages
+                </label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="notif-voice"
+                  checked={voiceNotifications}
+                  onCheckedChange={c => setVoiceNotifications(Boolean(c))}
+                  disabled={isPending}
+                />
+                <label htmlFor="notif-voice" className="cursor-pointer text-xs">
+                  Voice Calls
                 </label>
               </div>
               <div className="flex items-center space-x-2">

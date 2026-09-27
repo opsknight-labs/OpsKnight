@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
   getEmailConfig: vi.fn(),
   getSMSConfig: vi.fn(),
+  getVoiceConfig: vi.fn(),
   getPushConfig: vi.fn(),
   getWhatsAppConfig: vi.fn(),
 }));
@@ -60,6 +61,7 @@ vi.mock('next/cache', () => ({
 vi.mock('@/lib/notification-providers', () => ({
   getEmailConfig: mocks.getEmailConfig,
   getSMSConfig: mocks.getSMSConfig,
+  getVoiceConfig: mocks.getVoiceConfig,
   getPushConfig: mocks.getPushConfig,
   getWhatsAppConfig: mocks.getWhatsAppConfig,
 }));
@@ -96,6 +98,7 @@ describe('settings persistence contracts', () => {
     mocks.txUserAvatarDeleteMany.mockResolvedValue({ count: 1 });
     mocks.getEmailConfig.mockResolvedValue({ enabled: true });
     mocks.getSMSConfig.mockResolvedValue({ enabled: true });
+    mocks.getVoiceConfig.mockResolvedValue({ enabled: true });
     mocks.getPushConfig.mockResolvedValue({ enabled: true });
     mocks.getWhatsAppConfig.mockResolvedValue({ enabled: true });
   });
@@ -112,6 +115,7 @@ describe('settings persistence contracts', () => {
       data: {
         emailNotificationsEnabled: false,
         smsNotificationsEnabled: true,
+        voiceNotificationsEnabled: false,
         pushNotificationsEnabled: false,
         whatsappNotificationsEnabled: false,
       },
@@ -132,6 +136,23 @@ describe('settings persistence contracts', () => {
     );
   });
 
+  it('persists voice independently from SMS when Twilio Voice is configured', async () => {
+    const formData = new FormData();
+    formData.set('voiceNotificationsEnabled', 'true');
+
+    const result = await updateNotificationPreferences({}, formData);
+
+    expect(result).toEqual({ success: true });
+    expect(mocks.getVoiceConfig).toHaveBeenCalled();
+    expect(mocks.txUserUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: expect.objectContaining({
+        smsNotificationsEnabled: false,
+        voiceNotificationsEnabled: true,
+      }),
+    });
+  });
+
   it('validates channel enablement against the effective stored phone', async () => {
     mocks.getCurrentUser.mockResolvedValue({
       id: 'user-1',
@@ -146,7 +167,8 @@ describe('settings persistence contracts', () => {
     const result = await updateNotificationPreferences({}, formData);
 
     expect(result).toEqual({
-      error: 'A valid phone number is required when SMS or WhatsApp notifications are enabled.',
+      error:
+        'A valid phone number is required when SMS, Voice, or WhatsApp notifications are enabled.',
     });
     expect(mocks.userUpdate).not.toHaveBeenCalled();
   });

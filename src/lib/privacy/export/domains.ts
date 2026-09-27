@@ -56,6 +56,7 @@ export async function fetchProfile(userId: string) {
       jobTitle: true,
       emailNotificationsEnabled: true,
       smsNotificationsEnabled: true,
+      voiceNotificationsEnabled: true,
       pushNotificationsEnabled: true,
       whatsappNotificationsEnabled: true,
       createdAt: true,

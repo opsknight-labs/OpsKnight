@@ -9,6 +9,7 @@ import { validatePasswordStrength } from '@/lib/passwords';
 import {
   getEmailConfig,
   getSMSConfig,
+  getVoiceConfig,
   getPushConfig,
   getWhatsAppConfig,
 } from '@/lib/notification-providers';
@@ -251,6 +252,9 @@ export async function updateNotificationPreferences(
     const pushEnabled =
       formData.get('pushNotificationsEnabled') === 'on' ||
       formData.get('pushNotificationsEnabled') === 'true';
+    const voiceEnabled =
+      formData.get('voiceNotificationsEnabled') === 'on' ||
+      formData.get('voiceNotificationsEnabled') === 'true';
     const whatsappEnabled =
       formData.get('whatsappNotificationsEnabled') === 'on' ||
       formData.get('whatsappNotificationsEnabled') === 'true';
@@ -263,9 +267,10 @@ export async function updateNotificationPreferences(
         : undefined;
     const effectivePhone = hasPhoneField ? (submittedPhone ?? null) : (user.phoneNumber ?? null);
 
-    if ((smsEnabled || whatsappEnabled) && !effectivePhone) {
+    if ((smsEnabled || voiceEnabled || whatsappEnabled) && !effectivePhone) {
       return {
-        error: 'A valid phone number is required when SMS or WhatsApp notifications are enabled.',
+        error:
+          'A valid phone number is required when SMS, Voice, or WhatsApp notifications are enabled.',
       };
     }
 
@@ -290,6 +295,15 @@ export async function updateNotificationPreferences(
       if (!smsConfig.enabled) {
         return {
           error: 'SMS notifications cannot be enabled because no SMS provider is configured.',
+        };
+      }
+    }
+
+    if (voiceEnabled) {
+      const voiceConfig = await getVoiceConfig();
+      if (!voiceConfig.enabled) {
+        return {
+          error: 'Voice notifications cannot be enabled because Twilio Voice is not configured.',
         };
       }
     }
@@ -320,6 +334,7 @@ export async function updateNotificationPreferences(
         data: {
           emailNotificationsEnabled: emailEnabled,
           smsNotificationsEnabled: smsEnabled,
+          voiceNotificationsEnabled: voiceEnabled,
           pushNotificationsEnabled: pushEnabled,
           whatsappNotificationsEnabled: whatsappEnabled,
           ...(hasPhoneField ? { phoneNumber: submittedPhone ?? null } : {}),
@@ -334,6 +349,7 @@ export async function updateNotificationPreferences(
           oldValue: {
             emailNotificationsEnabled: user.emailNotificationsEnabled,
             smsNotificationsEnabled: user.smsNotificationsEnabled,
+            voiceNotificationsEnabled: user.voiceNotificationsEnabled,
             pushNotificationsEnabled: user.pushNotificationsEnabled,
             whatsappNotificationsEnabled: user.whatsappNotificationsEnabled,
             hasPhoneNumber: Boolean(user.phoneNumber),
@@ -341,6 +357,7 @@ export async function updateNotificationPreferences(
           newValue: {
             emailNotificationsEnabled: emailEnabled,
             smsNotificationsEnabled: smsEnabled,
+            voiceNotificationsEnabled: voiceEnabled,
             pushNotificationsEnabled: pushEnabled,
             whatsappNotificationsEnabled: whatsappEnabled,
             hasPhoneNumber: Boolean(effectivePhone),
@@ -364,7 +381,7 @@ export async function updateNotificationPreferences(
 }
 
 export async function sendTestNotification(
-  channel: 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH'
+  channel: 'EMAIL' | 'SMS' | 'VOICE' | 'WHATSAPP' | 'PUSH'
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await getCurrentUser();
@@ -424,6 +441,37 @@ export async function sendTestNotification(
           to: user.phoneNumber,
           message:
             '🔔 OpsKnight Test Alert: Your SMS channel is active and receiving incident notifications.',
+        },
+      });
+      return { success: true };
+    }
+
+    if (channel === 'VOICE') {
+      if (!user.phoneNumber) {
+        return {
+          success: false,
+          error: 'Please enter and save a valid phone number in E.164 format first.',
+        };
+      }
+      await enqueueCentralNotification({
+        category: 'SYSTEM',
+        channel: 'VOICE',
+        recipientType: 'USER',
+        recipientId: user.id,
+        recipientAddress: user.phoneNumber,
+        userId: user.id,
+        templateKey: 'test-voice',
+        sourceType: 'USER',
+        sourceId: user.id,
+        eventKey: `manual-test-voice:${crypto.randomUUID()}`,
+        displayMessage: 'Test voice notification',
+        priority: 2,
+        expiresAt: new Date(Date.now() + 10 * 60_000),
+        payload: {
+          kind: 'VOICE',
+          to: user.phoneNumber,
+          message:
+            'This is a test voice call from OpsKnight. Your Twilio voice configuration is working.',
         },
       });
       return { success: true };

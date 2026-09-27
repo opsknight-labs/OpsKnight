@@ -64,6 +64,7 @@ type Props = {
 const CHANNELS = [
   'EMAIL',
   'SMS',
+  'VOICE',
   'PUSH',
   'SLACK',
   'MICROSOFT_TEAMS',
@@ -115,6 +116,7 @@ function getChannelIcon(channel: string) {
     case 'EMAIL':
       return <SmtpLogo size={14} />;
     case 'SMS':
+    case 'VOICE':
       return <TwilioLogo size={14} />;
     case 'PUSH':
       return <WebPushLogo size={14} />;

@@ -50,6 +50,7 @@ type EscalationStep = {
   } | null;
   targetSchedule?: { id: string; name: string } | null;
   notifyOnlyTeamLead: boolean;
+  notificationChannels: string[];
   conditions?: EditableEscalationCondition[];
 };
 
@@ -70,6 +71,7 @@ type EscalationStepEditModalProps = {
 };
 
 const DELAY_PRESETS = [0, 5, 10, 15, 20, 30];
+const PERSONAL_NOTIFICATION_CHANNELS = ['EMAIL', 'SMS', 'VOICE', 'PUSH', 'WHATSAPP'] as const;
 
 export default function EscalationStepEditModal({
   step,
@@ -96,6 +98,11 @@ export default function EscalationStepEditModal({
   );
   const [delayMinutes, setDelayMinutes] = useState<number>(step.delayMinutes);
   const [notifyOnlyTeamLead, setNotifyOnlyTeamLead] = useState<boolean>(step.notifyOnlyTeamLead);
+  const [notificationChannels, setNotificationChannels] = useState<string[]>(
+    step.notificationChannels?.length > 0
+      ? step.notificationChannels
+      : [...PERSONAL_NOTIFICATION_CHANNELS]
+  );
   const [conditions, setConditions] = useState<EditableEscalationCondition[]>(
     step.conditions ?? []
   );
@@ -111,6 +118,8 @@ export default function EscalationStepEditModal({
     }
     if (targetType === 'SCHEDULE') formData.append('targetScheduleId', targetScheduleId);
     formData.append('delayMinutes', String(delayMinutes));
+    formData.append('notificationChannelsSubmitted', 'true');
+    notificationChannels.forEach(channel => formData.append('notificationChannels', channel));
     formData.append('conditionsSubmitted', 'true');
     formData.append('conditions', JSON.stringify(conditions));
 
@@ -238,6 +247,32 @@ export default function EscalationStepEditModal({
                 required
               />
             )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Notification Channels</Label>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {PERSONAL_NOTIFICATION_CHANNELS.map(value => (
+                <label key={value} className="flex items-center gap-2">
+                  <Checkbox
+                    checked={notificationChannels.includes(value)}
+                    onCheckedChange={checked =>
+                      setNotificationChannels(current =>
+                        checked
+                          ? [...new Set([...current, value])]
+                          : current.filter(item => item !== value)
+                      )
+                    }
+                    disabled={isPending}
+                  />
+                  {value === 'VOICE'
+                    ? 'Voice Call'
+                    : value === 'WHATSAPP'
+                      ? 'WhatsApp'
+                      : value[0] + value.slice(1).toLowerCase()}
+                </label>
+              ))}
+            </div>
           </div>
 
           {/* Delay Minutes & Quick Presets */}

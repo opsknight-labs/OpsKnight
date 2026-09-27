@@ -16,6 +16,7 @@ import { Send, Loader2 } from 'lucide-react';
 type Props = {
   emailEnabled: boolean;
   smsEnabled: boolean;
+  voiceEnabled: boolean;
   pushEnabled: boolean;
   whatsappEnabled: boolean;
   phoneNumber: string | null;
@@ -24,6 +25,7 @@ type Props = {
 export default function NotificationPreferencesForm({
   emailEnabled,
   smsEnabled,
+  voiceEnabled,
   pushEnabled,
   whatsappEnabled,
   phoneNumber: initialPhoneNumber,
@@ -32,6 +34,7 @@ export default function NotificationPreferencesForm({
 
   const [emailChecked, setEmailChecked] = useState(emailEnabled);
   const [smsChecked, setSmsChecked] = useState(smsEnabled);
+  const [voiceChecked, setVoiceChecked] = useState(voiceEnabled);
   const [pushChecked, setPushChecked] = useState(pushEnabled);
   const [whatsappChecked, setWhatsappChecked] = useState(whatsappEnabled);
   const [phone, setPhone] = useState(initialPhoneNumber || '');
@@ -41,6 +44,7 @@ export default function NotificationPreferencesForm({
     async (data: {
       email: boolean;
       sms: boolean;
+      voice: boolean;
       push: boolean;
       whatsapp: boolean;
       phoneNumber: string;
@@ -48,6 +52,7 @@ export default function NotificationPreferencesForm({
       const formData = new FormData();
       formData.append('emailNotificationsEnabled', data.email ? 'on' : 'off');
       formData.append('smsNotificationsEnabled', data.sms ? 'on' : 'off');
+      formData.append('voiceNotificationsEnabled', data.voice ? 'on' : 'off');
       formData.append('pushNotificationsEnabled', data.push ? 'on' : 'off');
       formData.append('whatsappNotificationsEnabled', data.whatsapp ? 'on' : 'off');
       formData.append('phoneNumber', data.phoneNumber.trim());
@@ -71,6 +76,7 @@ export default function NotificationPreferencesForm({
   const currentSettings = {
     email: emailChecked,
     sms: smsChecked,
+    voice: voiceChecked,
     push: pushChecked,
     whatsapp: whatsappChecked,
     phoneNumber: phone,
@@ -91,7 +97,7 @@ export default function NotificationPreferencesForm({
 
   const testBlocked = hasPendingChanges || isSaving || saveStatus === 'error';
 
-  const handleSendTest = async (channel: 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH') => {
+  const handleSendTest = async (channel: 'EMAIL' | 'SMS' | 'VOICE' | 'WHATSAPP' | 'PUSH') => {
     if (testBlocked) {
       toast.error('Finish saving these notification changes before sending a test.');
       return;
@@ -194,6 +200,34 @@ export default function NotificationPreferencesForm({
         {smsChecked && phoneRow}
 
         <SettingsRow
+          label="Voice Calls"
+          description="Receive phone calls for incidents when voice paging is selected by your escalation policy"
+        >
+          <div className="flex items-center gap-3">
+            {voiceChecked && !!phone && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleSendTest('VOICE')}
+                disabled={testButtonDisabled('VOICE')}
+                className="h-7 text-xs gap-1.5 px-2.5 font-medium"
+              >
+                {testingChannel === 'VOICE' ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Send className="h-3 w-3" />
+                )}
+                Send Test
+              </Button>
+            )}
+            <Switch checked={voiceChecked} onCheckedChange={setVoiceChecked} />
+          </div>
+        </SettingsRow>
+
+        {voiceChecked && !smsChecked && phoneRow}
+
+        <SettingsRow
           label="Push Notifications"
           description="Receive real-time incident alerts and paging on your registered devices"
         >
@@ -245,7 +279,7 @@ export default function NotificationPreferencesForm({
           </div>
         </SettingsRow>
 
-        {whatsappChecked && !smsChecked && phoneRow}
+        {whatsappChecked && !smsChecked && !voiceChecked && phoneRow}
       </div>
     </SettingsSection>
   );

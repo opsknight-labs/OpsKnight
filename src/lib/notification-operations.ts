@@ -11,6 +11,7 @@ import prisma from './prisma';
 export const OPERATIONS_CHANNELS = [
   'EMAIL',
   'SMS',
+  'VOICE',
   'PUSH',
   'SLACK',
   'WEBHOOK',

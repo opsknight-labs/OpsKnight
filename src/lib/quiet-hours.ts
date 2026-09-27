@@ -10,7 +10,7 @@ export type QuietHoursPreferences = {
 
 type IncidentUrgency = 'LOW' | 'MEDIUM' | 'HIGH' | string | null | undefined;
 
-const DISRUPTIVE_CHANNELS = new Set<NotificationChannel>(['PUSH', 'SMS', 'WHATSAPP']);
+const DISRUPTIVE_CHANNELS = new Set<NotificationChannel>(['PUSH', 'SMS', 'VOICE', 'WHATSAPP']);
 const WEEKEND_DAYS = new Set(['Sat', 'Sun']);
 
 function isValidMinuteOfDay(value: number): boolean {

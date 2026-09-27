@@ -53,6 +53,7 @@ type UserDetailProfile = {
   timeZone: string;
   emailNotificationsEnabled: boolean;
   smsNotificationsEnabled: boolean;
+  voiceNotificationsEnabled: boolean;
   pushNotificationsEnabled: boolean;
   whatsappNotificationsEnabled: boolean;
   createdAt: Date | string;
@@ -359,7 +360,34 @@ export default function UserDetailTabs({
                 )}
               </div>
 
-              {/* Channel 3: Browser / Mobile Push */}
+              {/* Channel 3: Voice */}
+              <div className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-card hover:bg-muted/20 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400">
+                    <Phone className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs">Voice Calls</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Incident paging with press-1 acknowledgement
+                    </div>
+                  </div>
+                </div>
+                {user.voiceNotificationsEnabled && user.phoneNumber ? (
+                  <Badge
+                    variant="outline"
+                    className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] font-bold gap-1"
+                  >
+                    <CheckCircle2 className="h-3 w-3" /> Active
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                    {user.phoneNumber ? 'Disabled' : 'Unconfigured'}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Channel 4: Browser / Mobile Push */}
               <div className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-card hover:bg-muted/20 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400">
@@ -386,7 +414,7 @@ export default function UserDetailTabs({
                 )}
               </div>
 
-              {/* Channel 4: WhatsApp */}
+              {/* Channel 5: WhatsApp */}
               <div className="flex items-center justify-between p-3 rounded-xl border border-border/60 bg-card hover:bg-muted/20 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-green-50 text-green-600 dark:bg-green-950/50 dark:text-green-400">

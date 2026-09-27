@@ -42,7 +42,6 @@ import {
   ExternalLink,
   AlertTriangle,
   Radio,
-  MessageSquare,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -311,6 +310,7 @@ export default function NotificationHistory() {
       case 'EMAIL':
         return <SmtpLogo size={14} />;
       case 'SMS':
+      case 'VOICE':
         return <TwilioLogo size={14} />;
       case 'PUSH':
         return <WebPushLogo size={14} />;
@@ -525,6 +525,7 @@ export default function NotificationHistory() {
                 <SelectItem value="all">All Channels</SelectItem>
                 <SelectItem value="EMAIL">Email</SelectItem>
                 <SelectItem value="SMS">SMS</SelectItem>
+                <SelectItem value="VOICE">Voice</SelectItem>
                 <SelectItem value="PUSH">Web Push</SelectItem>
                 <SelectItem value="WHATSAPP">WhatsApp</SelectItem>
                 <SelectItem value="SLACK">Slack</SelectItem>
@@ -662,6 +663,8 @@ export default function NotificationHistory() {
                       return 'bg-blue-500';
                     case 'SMS':
                       return 'bg-red-500';
+                    case 'VOICE':
+                      return 'bg-rose-700';
                     case 'PUSH':
                       return 'bg-violet-500';
                     case 'WHATSAPP':

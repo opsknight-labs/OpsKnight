@@ -961,6 +961,9 @@ export async function updateUserProfile(
       ...(formData.has('smsNotificationsEnabled')
         ? { smsNotificationsEnabled: formData.get('smsNotificationsEnabled') === 'true' }
         : {}),
+      ...(formData.has('voiceNotificationsEnabled')
+        ? { voiceNotificationsEnabled: formData.get('voiceNotificationsEnabled') === 'true' }
+        : {}),
       ...(formData.has('pushNotificationsEnabled')
         ? { pushNotificationsEnabled: formData.get('pushNotificationsEnabled') === 'true' }
         : {}),
