@@ -1,0 +1,12 @@
+{
+  "release": "current",
+  "commit": "02d35c11a06f1fdd4cf13df6dcab6c566ec1b0b9",
+  "route": "/settings/notifications",
+  "journey": "notifications",
+  "browser": "docs-chromium",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "capturedAt": "2026-09-27T17:20:51.451Z"
+}

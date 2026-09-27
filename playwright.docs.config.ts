@@ -16,28 +16,25 @@ export default defineConfig({
   expect: { timeout: 30_000 },
   reporter: [['line'], ['html', { outputFolder: 'generated/docs-test-report', open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:3200',
+    baseURL: 'http://localhost:3200',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     serviceWorkers: 'block',
     viewport: { width: 1440, height: 900 },
   },
-  projects: [{ name: 'docs-chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
-    command: 'npm run dev -- --hostname 0.0.0.0 --port 3200',
-    url: 'http://127.0.0.1:3200/login',
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-    env: {
-      DATABASE_URL: databaseUrl,
-      DIRECT_DATABASE_URL: databaseUrl,
-      NEXTAUTH_URL: 'http://127.0.0.1:3200',
-      NEXT_PUBLIC_APP_URL: 'http://127.0.0.1:3200',
-      NEXTAUTH_SECRET: 'docs-runtime-only-nextauth-secret',
-      ENCRYPTION_KEY: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-      NEXTAUTH_COOKIE_SECURE: 'false',
-      PORT: '3200',
-      HOSTNAME: '0.0.0.0',
+  projects: [
+    { name: 'docs-auth', testMatch: /auth\.setup\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+    {
+      name: 'docs-chromium',
+      testIgnore: /auth\.setup\.ts/,
+      dependencies: ['docs-auth'],
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 }, storageState: 'test-results/docs-auth.json' },
     },
+  ],
+  webServer: {
+    command: 'sh scripts/docs/serve-test-image.sh',
+    url: 'http://localhost:3200/login',
+    reuseExistingServer: !process.env.CI,
+    timeout: 300_000,
   },
 });
