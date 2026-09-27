@@ -14,6 +14,7 @@ export const OPERATIONS_CHANNELS = [
   'VOICE',
   'PUSH',
   'SLACK',
+  'MICROSOFT_TEAMS',
   'WEBHOOK',
   'WHATSAPP',
 ] as const satisfies readonly NotificationChannel[];

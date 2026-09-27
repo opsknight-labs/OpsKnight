@@ -7,10 +7,7 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   let user: Awaited<ReturnType<typeof getCurrentUser>>;
   try {
     user = await getCurrentUser();
@@ -26,7 +23,7 @@ export async function POST(
   }
 
   const { id } = await context.params;
-  if (!/^notification_[A-Za-z0-9_-]{1,64}$/.test(id)) {
+  if (!/^(notification|notif_eo)_[A-Za-z0-9_-]{1,64}$/.test(id)) {
     return jsonError('Invalid notification ID', 400);
   }
 

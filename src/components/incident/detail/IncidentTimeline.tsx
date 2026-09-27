@@ -6,7 +6,15 @@ import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
-import { Clock, AlertCircle, CheckCircle2, Target, Activity, MessageSquare } from 'lucide-react';
+import {
+  Clock,
+  AlertCircle,
+  CheckCircle2,
+  Target,
+  Activity,
+  MessageSquare,
+  BellRing,
+} from 'lucide-react';
 
 type TimelineFilter =
   | 'ALL'
@@ -33,14 +41,81 @@ const FILTERS: Array<{ id: TimelineFilter; label: string }> = [
 export function categorize(type: string, message: string): TimelineFilter {
   if (type === 'NOTE' || type === 'COMMENT') return 'NOTES';
   if (type === 'CREATED' || type === 'ACKNOWLEDGED' || type === 'RESOLVED') return 'LIFECYCLE';
+  if (type === 'NOTIFICATION') return 'NOTIFICATIONS';
   if (/\bnote\b|pinned message|comment/i.test(message)) return 'NOTES';
   if (/escalat/i.test(message)) return 'ESCALATION';
   if (/assign|unassigned/i.test(message)) return 'ASSIGNMENT';
-  if (/notif|paged?\b|alert sent|sms|call attempt/i.test(message)) return 'NOTIFICATIONS';
+  if (/notif|paged?\b|alert sent|sms|call|whatsapp|push|teams/i.test(message))
+    return 'NOTIFICATIONS';
   if (/jira|slack|webhook|integration|war.?room/i.test(message)) return 'INTEGRATIONS';
   if (/triggered|created|resolved|acknowledged|snooz|suppress|reopen/i.test(message))
     return 'LIFECYCLE';
   return 'ALL';
+}
+
+function formatNotificationChannel(channel: string): string {
+  switch (channel.toUpperCase()) {
+    case 'SMS':
+      return 'SMS';
+    case 'VOICE':
+      return 'Voice call';
+    case 'WHATSAPP':
+      return 'WhatsApp';
+    case 'PUSH':
+      return 'Push';
+    case 'SLACK':
+      return 'Slack';
+    case 'MICROSOFT_TEAMS':
+      return 'Microsoft Teams';
+    case 'EMAIL':
+      return 'Email';
+    case 'WEBHOOK':
+      return 'Webhook';
+    default:
+      return channel;
+  }
+}
+
+export type IncidentTimelineNotification = {
+  id: string;
+  channel: string;
+  status: string;
+  recipientDisplay?: string | null;
+  errorMsg?: string | null;
+  createdAt: Date;
+  sentAt?: Date | null;
+  deliveredAt?: Date | null;
+  failedAt?: Date | null;
+  user?: {
+    id?: string;
+    name?: string | null;
+    email?: string | null;
+  } | null;
+};
+
+function formatNotificationMessage(notification: IncidentTimelineNotification): string {
+  const channel = formatNotificationChannel(notification.channel);
+  const target =
+    notification.user?.name ||
+    notification.user?.email ||
+    notification.recipientDisplay ||
+    'responder';
+
+  switch (notification.status.toUpperCase()) {
+    case 'DELIVERED':
+      return `${channel} notification delivered to ${target}`;
+    case 'SENT':
+      return `${channel} notification sent to ${target}`;
+    case 'FAILED':
+      return `${channel} notification to ${target} failed${notification.errorMsg ? `: ${notification.errorMsg}` : ''}`;
+    case 'SKIPPED':
+      return `${channel} notification to ${target} skipped`;
+    case 'UNKNOWN':
+      return `${channel} notification to ${target} delivery uncertain (provider reconciliation pending)${notification.errorMsg ? `: ${notification.errorMsg}` : ''}`;
+    case 'PENDING':
+    default:
+      return `${channel} notification queued for ${target}`;
+  }
 }
 
 export type Event = {
@@ -64,6 +139,7 @@ export type Note = {
 export type IncidentTimelineProps = {
   events: Event[];
   notes?: Note[];
+  notifications?: IncidentTimelineNotification[];
   incidentCreatedAt?: Date;
   incidentAcknowledgedAt?: Date | null;
   incidentResolvedAt?: Date | null;
@@ -72,6 +148,7 @@ export type IncidentTimelineProps = {
 export default function IncidentTimeline({
   events,
   notes = [],
+  notifications = [],
   incidentCreatedAt,
   incidentAcknowledgedAt,
   incidentResolvedAt,
@@ -195,6 +272,72 @@ export default function IncidentTimeline({
     });
   }
 
+  // Track matched voice call events to deduplicate synthesized voice deliveries
+  const matchedVoiceEventIds = new Set<string>();
+
+  // Synthesize timeline events for incident notifications
+  if (notifications && notifications.length > 0) {
+    notifications.forEach(notif => {
+      let timestamp: string | Date | undefined;
+      switch (notif.status) {
+        case 'FAILED':
+        case 'UNKNOWN':
+          timestamp = notif.failedAt || notif.sentAt || notif.createdAt;
+          break;
+        case 'DELIVERED':
+          timestamp = notif.deliveredAt || notif.sentAt || notif.createdAt;
+          break;
+        case 'SENT':
+          timestamp = notif.sentAt || notif.deliveredAt || notif.createdAt;
+          break;
+        default:
+          timestamp = notif.deliveredAt || notif.failedAt || notif.sentAt || notif.createdAt;
+          break;
+      }
+
+      // Suppress synthesized entry when an equivalent persisted voice call connected event exists for this responder
+      if (notif.channel?.toUpperCase() === 'VOICE' && notif.status?.toUpperCase() === 'DELIVERED') {
+        const notifTime = timestamp ? new Date(timestamp).getTime() : 0;
+        const recipientName = notif.user?.name?.trim().toLowerCase();
+        const recipientEmail = notif.user?.email?.trim().toLowerCase();
+        const recipientPhone = notif.recipientDisplay?.trim().toLowerCase();
+
+        const matchingEvent = events.find(e => {
+          if (matchedVoiceEventIds.has(e.id)) return false;
+          if (!/voice call connected/i.test(e.message)) return false;
+          const eventTime = new Date(e.createdAt).getTime();
+          if (Math.abs(eventTime - notifTime) > 120_000) return false;
+
+          const msgLower = e.message.toLowerCase();
+          if (recipientName && msgLower.includes(recipientName)) return true;
+          if (recipientEmail && msgLower.includes(recipientEmail)) return true;
+          if (recipientPhone && msgLower.includes(recipientPhone)) return true;
+          if (
+            !recipientName &&
+            !recipientEmail &&
+            !recipientPhone &&
+            msgLower.includes('responder')
+          ) {
+            return true;
+          }
+          return false;
+        });
+        if (matchingEvent) {
+          matchedVoiceEventIds.add(matchingEvent.id);
+          return;
+        }
+      }
+
+      timelineEvents.push({
+        id: `notif-${notif.id}`,
+        message: formatNotificationMessage(notif),
+        createdAt: timestamp ? new Date(timestamp) : new Date(),
+        type: 'NOTIFICATION',
+        sortPriority: 3,
+      });
+    });
+  }
+
   // Sort by date (oldest first for timeline) with secondary ID tie-breaker for same-millisecond events
   timelineEvents.sort((a, b) => {
     const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
@@ -244,6 +387,14 @@ export default function IncidentTimeline({
           label: 'Note',
           avatarBg: 'bg-blue-100 dark:bg-blue-950/40',
           avatarText: 'text-blue-600 dark:text-blue-400',
+        };
+      case 'NOTIFICATION':
+        return {
+          variant: 'info' as const,
+          icon: <BellRing className="h-4 w-4" />,
+          label: 'Notification',
+          avatarBg: 'bg-purple-100 dark:bg-purple-950/40',
+          avatarText: 'text-purple-600 dark:text-purple-400',
         };
       default:
         return {
