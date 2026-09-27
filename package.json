@@ -62,6 +62,8 @@
     "security:check": "npm audit && npm run lint:check",
     "lint:report": "eslint . --format @microsoft/eslint-formatter-sarif --output-file reports/security.sarif",
     "docs:sync": "scripts/sync-docs-to-website.sh",
+    "docs:discover": "node scripts/docs/discover-capabilities.mjs",
+    "docs:map": "node scripts/docs/build-doc-map.mjs",
     "docs:links": "node scripts/check-docs-links.cjs",
     "docs:capabilities": "node scripts/check-docs-capabilities.cjs",
     "load:seed": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/seed.ts",
