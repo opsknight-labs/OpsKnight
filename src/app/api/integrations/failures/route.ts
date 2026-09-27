@@ -171,6 +171,8 @@ export async function POST(request: NextRequest) {
                 status: 'DELIVERED',
                 sentAt: new Date(),
                 deliveredAt: new Date(),
+                errorMsg: null,
+                failedAt: null,
                 providerMessageId: `teams:${existing.id}`,
               },
             })

@@ -178,4 +178,41 @@ describe('IncidentTimeline notification integration', () => {
       )
     ).toBeInTheDocument();
   });
+
+  it('deduplicates synthesized voice delivery events when a matching voice call connected event exists', () => {
+    const propsWithVoice = {
+      events: [
+        {
+          id: 'voice-event-1',
+          message: 'Voice call connected to OpsKnight Admin (+917720833966)',
+          type: 'STATUS_CHANGE',
+          createdAt: new Date('2026-09-27T10:01:00Z'),
+        },
+      ],
+      notes: [],
+      notifications: [
+        {
+          id: 'notif-voice-1',
+          channel: 'VOICE',
+          status: 'DELIVERED',
+          recipientDisplay: '+917720833966',
+          createdAt: new Date('2026-09-27T10:00:50Z'),
+          deliveredAt: new Date('2026-09-27T10:01:02Z'),
+          user: { id: 'u1', name: 'OpsKnight Admin', email: 'admin@opsknight.com' },
+        },
+      ],
+      incidentCreatedAt: new Date('2026-09-27T10:00:00Z'),
+    };
+
+    render(<IncidentTimeline {...propsWithVoice} />);
+
+    // Persisted event should be visible
+    expect(
+      screen.getByText('Voice call connected to OpsKnight Admin (+917720833966)')
+    ).toBeInTheDocument();
+    // Synthesized redundant event should NOT be rendered
+    expect(
+      screen.queryByText('Voice call notification delivered to OpsKnight Admin')
+    ).not.toBeInTheDocument();
+  });
 });

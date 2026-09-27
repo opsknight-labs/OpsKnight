@@ -272,6 +272,9 @@ export default function IncidentTimeline({
     });
   }
 
+  // Track matched voice call events to deduplicate synthesized voice deliveries
+  const matchedVoiceEventIds = new Set<string>();
+
   // Synthesize timeline events for incident notifications
   if (notifications && notifications.length > 0) {
     notifications.forEach(notif => {
@@ -291,6 +294,22 @@ export default function IncidentTimeline({
           timestamp = notif.deliveredAt || notif.failedAt || notif.sentAt || notif.createdAt;
           break;
       }
+
+      // Suppress synthesized entry when an equivalent persisted voice call connected event exists
+      if (notif.channel?.toUpperCase() === 'VOICE' && notif.status?.toUpperCase() === 'DELIVERED') {
+        const notifTime = timestamp ? new Date(timestamp).getTime() : 0;
+        const matchingEvent = events.find(e => {
+          if (matchedVoiceEventIds.has(e.id)) return false;
+          if (!/voice call connected/i.test(e.message)) return false;
+          const eventTime = new Date(e.createdAt).getTime();
+          return Math.abs(eventTime - notifTime) <= 120_000;
+        });
+        if (matchingEvent) {
+          matchedVoiceEventIds.add(matchingEvent.id);
+          return;
+        }
+      }
+
       timelineEvents.push({
         id: `notif-${notif.id}`,
         message: formatNotificationMessage(notif),

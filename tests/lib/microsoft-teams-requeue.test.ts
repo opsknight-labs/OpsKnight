@@ -5,11 +5,11 @@ const { prismaMock } = vi.hoisted(() => {
   const mock: any = {
     notification: {
       findFirst: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
     },
     externalOperation: {
       findUnique: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
     },
     backgroundJob: {
       create: vi.fn(),
@@ -30,6 +30,8 @@ vi.mock('@/lib/prisma', () => ({ default: prismaMock }));
 describe('requeueMicrosoftTeamsNotification', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prismaMock.externalOperation.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.notification.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it('requeues a failed Teams notification and schedules its ExternalOperation background job', async () => {
@@ -47,9 +49,9 @@ describe('requeueMicrosoftTeamsNotification', () => {
     const result = await requeueMicrosoftTeamsNotification('notification_teams_123');
 
     expect(result).toBe(true);
-    expect(prismaMock.externalOperation.update).toHaveBeenCalledWith(
+    expect(prismaMock.externalOperation.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'op-teams-1' },
+        where: { id: 'op-teams-1', status: 'FAILED' },
         data: expect.objectContaining({
           status: 'PENDING',
           lastError: null,
@@ -65,9 +67,9 @@ describe('requeueMicrosoftTeamsNotification', () => {
         }),
       })
     );
-    expect(prismaMock.notification.update).toHaveBeenCalledWith(
+    expect(prismaMock.notification.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'notification_teams_123' },
+        where: { id: 'notification_teams_123', status: 'FAILED' },
         data: expect.objectContaining({
           status: 'PENDING',
           failedAt: null,
@@ -92,9 +94,9 @@ describe('requeueMicrosoftTeamsNotification', () => {
     const result = await requeueMicrosoftTeamsNotification('notif_eo_op-teams-hist');
 
     expect(result).toBe(true);
-    expect(prismaMock.externalOperation.update).toHaveBeenCalledWith(
+    expect(prismaMock.externalOperation.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'op-teams-hist' },
+        where: { id: 'op-teams-hist', status: 'FAILED' },
       })
     );
   });
@@ -103,6 +105,24 @@ describe('requeueMicrosoftTeamsNotification', () => {
     prismaMock.notification.findFirst.mockResolvedValue(null);
 
     const result = await requeueMicrosoftTeamsNotification('notification_missing');
+    expect(result).toBe(false);
+    expect(prismaMock.backgroundJob.create).not.toHaveBeenCalled();
+  });
+
+  it('fences against concurrent state changes when operation is no longer FAILED', async () => {
+    prismaMock.notification.findFirst.mockResolvedValue({
+      id: 'notification_teams_123',
+      deliveryKey: 'teams:delivery:inc1:dest1:triggered:g0',
+      attempts: 1,
+      maxAttempts: 3,
+    });
+    prismaMock.externalOperation.findUnique.mockResolvedValue({
+      id: 'op-teams-1',
+      attempts: 1,
+    });
+    prismaMock.externalOperation.updateMany.mockResolvedValue({ count: 0 });
+
+    const result = await requeueMicrosoftTeamsNotification('notification_teams_123');
     expect(result).toBe(false);
     expect(prismaMock.backgroundJob.create).not.toHaveBeenCalled();
   });

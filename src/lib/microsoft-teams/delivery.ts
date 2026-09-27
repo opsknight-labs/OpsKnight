@@ -242,42 +242,50 @@ export async function requeueMicrosoftTeamsNotification(notificationId: string):
   const maxAttempts = Math.min(20, Math.max(notif.maxAttempts, notif.attempts + 1));
   const now = new Date();
 
-  await prisma.$transaction(async tx => {
-    await tx.externalOperation.update({
-      where: { id: op!.id },
-      data: {
-        status: 'PENDING',
-        nextAttemptAt: now,
-        leaseToken: null,
-        leaseExpiresAt: null,
-        lastError: null,
-      },
-    });
+  const requeued = await prisma
+    .$transaction(async tx => {
+      const opUpdated = await tx.externalOperation.updateMany({
+        where: { id: op!.id, status: 'FAILED' },
+        data: {
+          status: 'PENDING',
+          nextAttemptAt: now,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          lastError: null,
+        },
+      });
+      if (opUpdated.count === 0) return false;
 
-    await tx.backgroundJob.create({
-      data: {
-        type: 'EXTERNAL_OPERATION',
-        status: 'PENDING',
-        scheduledAt: now,
-        maxAttempts: MAX_TEAMS_OPERATION_ATTEMPTS,
-        payload: { operationId: op!.id },
-      },
-    });
+      const notifUpdated = await tx.notification.updateMany({
+        where: { id: notif.id, status: 'FAILED' },
+        data: {
+          status: 'PENDING',
+          maxAttempts,
+          failedAt: null,
+          errorMsg: null,
+          lastAttemptAt: null,
+          nextAttemptAt: now,
+        },
+      });
+      if (notifUpdated.count === 0) {
+        throw new Error('Notification is no longer FAILED');
+      }
 
-    await tx.notification.update({
-      where: { id: notif.id },
-      data: {
-        status: 'PENDING',
-        maxAttempts,
-        failedAt: null,
-        errorMsg: null,
-        lastAttemptAt: null,
-        nextAttemptAt: now,
-      },
-    });
-  });
+      await tx.backgroundJob.create({
+        data: {
+          type: 'EXTERNAL_OPERATION',
+          status: 'PENDING',
+          scheduledAt: now,
+          maxAttempts: MAX_TEAMS_OPERATION_ATTEMPTS,
+          payload: { operationId: op!.id },
+        },
+      });
 
-  return true;
+      return true;
+    })
+    .catch(() => false);
+
+  return requeued;
 }
 
 /**
@@ -304,6 +312,8 @@ async function syncTeamsNotificationDelivered(
         status: 'DELIVERED',
         sentAt: new Date(),
         deliveredAt: new Date(),
+        errorMsg: null,
+        failedAt: null,
         ...(providerMessageId ? { providerMessageId } : {}),
         attempts: { increment: 1 },
       },
@@ -1774,6 +1784,8 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
                 status: 'DELIVERED',
                 sentAt: new Date(),
                 deliveredAt: new Date(),
+                errorMsg: null,
+                failedAt: null,
                 providerMessageId: `teams:${id}`,
                 attempts: { increment: 1 },
               },
