@@ -59,11 +59,12 @@ description: Connect ${provider.title} alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-verified: true
-verified_at: ${new Date().toISOString().slice(0, 10)}
-evidence:
-  - ${provider.source}
-  - ${provider.route}
+verification:
+  level: source
+  verified_at: ${new Date().toISOString().slice(0, 10)}
+  evidence:
+    - ${provider.source}
+    - ${provider.route}
 ---
 
 # ${provider.title}

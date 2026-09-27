@@ -4,11 +4,12 @@ description: Connect Splunk On-Call alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-verified: true
-verified_at: 2026-09-27
-evidence:
-  - src/lib/integrations/splunk-oncall.ts
-  - src/app/api/integrations/splunk-oncall/route.ts
+verification:
+  level: source
+  verified_at: 2026-09-27
+  evidence:
+    - src/lib/integrations/splunk-oncall.ts
+    - src/app/api/integrations/splunk-oncall/route.ts
 ---
 
 # Splunk On-Call

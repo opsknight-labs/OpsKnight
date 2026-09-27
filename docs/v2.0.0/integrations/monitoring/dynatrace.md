@@ -4,11 +4,12 @@ description: Connect Dynatrace alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-verified: true
-verified_at: 2026-09-27
-evidence:
-  - src/lib/integrations/dynatrace.ts
-  - src/app/api/integrations/dynatrace/route.ts
+verification:
+  level: source
+  verified_at: 2026-09-27
+  evidence:
+    - src/lib/integrations/dynatrace.ts
+    - src/app/api/integrations/dynatrace/route.ts
 ---
 
 # Dynatrace

@@ -15,7 +15,8 @@ product_area: incidents
 audience:
   - responder
   - administrator
-verified: false
+verification:
+  level: draft
 ---
 ```
 
@@ -23,10 +24,11 @@ verified: false
 stable capability-map key. `audience` identifies the roles the page is written
 for.
 
-`verified: true` is allowed only when `verified_at` and at least one `evidence`
-entry identify current source, tests, configuration, or generated runtime
-evidence. A page must return to `verified: false` when its claims materially
-change and have not been recertified.
+`verification.level` is `draft`, `source`, `test`, or `runtime`. Every level
+other than `draft` requires `verified_at` and at least one evidence entry.
+Source verification proves that a contract exists in source; test verification
+proves an executable test; runtime verification requires captured browser or
+runtime evidence. A materially changed page returns to `draft` until recertified.
 
 Generated files such as `capabilities.yaml`, JSON schemas, and evidence metadata
 do not use page frontmatter.

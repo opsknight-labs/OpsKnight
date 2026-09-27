@@ -4,7 +4,8 @@ description: Run an isolated OpsKnight development environment.
 type: developer
 product_area: engineering
 audience: [developer]
-verified: false
+verification:
+  level: draft
 ---
 
 # Local development

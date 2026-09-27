@@ -4,7 +4,8 @@ description: Structured learning after incidents.
 type: concept
 product_area: postmortems
 audience: [responder, administrator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Postmortems

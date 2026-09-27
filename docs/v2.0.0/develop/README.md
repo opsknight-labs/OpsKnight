@@ -4,7 +4,8 @@ description: Architecture, local development, testing, and contribution guidance
 type: developer
 product_area: engineering
 audience: [developer]
-verified: false
+verification:
+  level: draft
 ---
 
 # Develop OpsKnight

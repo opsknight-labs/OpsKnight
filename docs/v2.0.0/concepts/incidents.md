@@ -4,7 +4,8 @@ description: The incident lifecycle and response record.
 type: concept
 product_area: incidents
 audience: [responder, administrator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Incidents

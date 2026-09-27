@@ -6,7 +6,8 @@ product_area: documentation
 audience:
   - operator
   - administrator
-verified: false
+verification:
+  level: draft
 ---
 
 # OpsKnight 2.0.0 documentation

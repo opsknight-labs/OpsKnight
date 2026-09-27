@@ -4,7 +4,8 @@ description: Controlled public or private communication about service health.
 type: concept
 product_area: status-pages
 audience: [administrator, responder]
-verified: false
+verification:
+  level: draft
 ---
 
 # Status pages

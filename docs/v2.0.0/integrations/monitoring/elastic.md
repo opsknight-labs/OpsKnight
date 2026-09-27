@@ -4,11 +4,12 @@ description: Connect Elastic alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-verified: true
-verified_at: 2026-09-27
-evidence:
-  - src/lib/integrations/elastic.ts
-  - src/app/api/integrations/elastic/route.ts
+verification:
+  level: source
+  verified_at: 2026-09-27
+  evidence:
+    - src/lib/integrations/elastic.ts
+    - src/app/api/integrations/elastic/route.ts
 ---
 
 # Elastic

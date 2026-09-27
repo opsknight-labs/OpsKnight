@@ -4,7 +4,8 @@ description: Understand the OpsKnight incident-operations model.
 type: concept
 product_area: platform
 audience: [responder, administrator, operator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Concepts

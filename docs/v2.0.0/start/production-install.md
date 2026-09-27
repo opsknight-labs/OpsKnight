@@ -4,7 +4,8 @@ description: Choose and validate an OpsKnight deployment topology.
 type: deployment
 product_area: deployment
 audience: [operator, administrator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Plan a production installation

@@ -4,11 +4,12 @@ description: Connect PagerDuty Events API alerts to OpsKnight incident ingestion
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-verified: true
-verified_at: 2026-09-27
-evidence:
-  - src/lib/integrations/pagerduty.ts
-  - src/app/api/integrations/pagerduty/route.ts
+verification:
+  level: source
+  verified_at: 2026-09-27
+  evidence:
+    - src/lib/integrations/pagerduty.ts
+    - src/app/api/integrations/pagerduty/route.ts
 ---
 
 # PagerDuty Events API

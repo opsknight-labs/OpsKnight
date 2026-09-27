@@ -4,7 +4,8 @@ description: Operational metrics, dimensions, and interpretation boundaries.
 type: concept
 product_area: analytics
 audience: [administrator, responder]
-verified: false
+verification:
+  level: draft
 ---
 
 # Analytics

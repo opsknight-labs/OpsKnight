@@ -4,7 +4,8 @@ description: Rotations, layers, overrides, and effective on-call coverage.
 type: concept
 product_area: on-call
 audience: [administrator, responder]
-verified: false
+verification:
+  level: draft
 ---
 
 # On-call schedules

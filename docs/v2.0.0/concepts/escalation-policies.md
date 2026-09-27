@@ -4,7 +4,8 @@ description: Ordered response targets, timing, and fallback behavior.
 type: concept
 product_area: escalation
 audience: [administrator, responder]
-verified: false
+verification:
+  level: draft
 ---
 
 # Escalation policies

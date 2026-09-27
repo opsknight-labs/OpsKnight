@@ -4,7 +4,8 @@ description: Notification intent, routing, delivery, and provider feedback.
 type: concept
 product_area: notifications
 audience: [administrator, responder, operator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Notifications

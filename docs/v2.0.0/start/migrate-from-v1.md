@@ -4,7 +4,8 @@ description: Prepare and validate a supported upgrade from OpsKnight 1.x.
 type: how-to
 product_area: upgrades
 audience: [operator, administrator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Migrate from OpsKnight 1.x

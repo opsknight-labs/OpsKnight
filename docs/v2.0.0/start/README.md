@@ -4,7 +4,8 @@ description: Install OpsKnight and complete your first incident workflow.
 type: tutorial
 product_area: getting-started
 audience: [operator, administrator, responder]
-verified: false
+verification:
+  level: draft
 ---
 
 # Start here

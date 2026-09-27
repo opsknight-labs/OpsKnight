@@ -4,7 +4,8 @@ description: Exact technical contracts for OpsKnight.
 type: reference
 product_area: platform
 audience: [developer, operator, administrator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Reference

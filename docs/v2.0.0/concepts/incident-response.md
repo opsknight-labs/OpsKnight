@@ -4,7 +4,8 @@ description: Acknowledgement, assignment, escalation, coordination, and resoluti
 type: concept
 product_area: incidents
 audience: [responder, administrator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Incident response

@@ -4,7 +4,8 @@ description: Verify the basic incident response lifecycle in a test service.
 type: tutorial
 product_area: incidents
 audience: [responder, administrator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Create and resolve your first incident

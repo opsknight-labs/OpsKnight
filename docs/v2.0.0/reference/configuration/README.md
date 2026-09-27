@@ -4,11 +4,12 @@ description: Generated inventory of environment configuration used by source and
 type: reference
 product_area: configuration
 audience: [developer, operator, administrator]
-verified: true
-verified_at: 2026-09-27
-evidence:
-  - src/
-  - deploy/
+verification:
+  level: source
+  verified_at: 2026-09-27
+  evidence:
+    - src/
+    - deploy/
 ---
 
 # Configuration reference

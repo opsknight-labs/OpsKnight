@@ -4,7 +4,8 @@ description: Local sessions and external identity boundaries.
 type: concept
 product_area: identity
 audience: [administrator, operator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Authentication

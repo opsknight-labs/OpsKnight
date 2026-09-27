@@ -4,7 +4,8 @@ description: Operational ownership and membership boundaries.
 type: concept
 product_area: teams
 audience: [administrator, responder]
-verified: false
+verification:
+  level: draft
 ---
 
 # Teams
