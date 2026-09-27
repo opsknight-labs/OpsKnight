@@ -1,6 +1,6 @@
 {
   "release": "current",
-  "commit": "02d35c11a06f1fdd4cf13df6dcab6c566ec1b0b9",
+  "commit": "d77409ec13633a10e76fdc3208e48bd107f2d5b3",
   "route": "/users",
   "journey": "administration",
   "browser": "docs-chromium",
@@ -8,5 +8,5 @@
     "width": 1440,
     "height": 900
   },
-  "capturedAt": "2026-09-27T17:20:53.816Z"
+  "capturedAt": "2026-09-27T17:31:55.870Z"
 }
