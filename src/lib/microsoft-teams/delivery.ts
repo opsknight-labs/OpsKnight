@@ -378,6 +378,31 @@ async function syncTeamsNotificationFailure(
     .catch(() => undefined);
 }
 
+async function syncTeamsNotificationAmbiguous(
+  idempotencyKey: string | null | undefined,
+  errorMsg: string,
+  tx?: unknown
+) {
+  if (!idempotencyKey) return;
+  const client = (
+    tx as unknown as { notification?: { updateMany: (a: unknown) => Promise<unknown> } }
+  )?.notification
+    ? (tx as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } })
+    : (prisma as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } });
+
+  await client.notification
+    .updateMany({
+      where: { deliveryKey: idempotencyKey, status: { not: 'DELIVERED' } },
+      data: {
+        status: 'UNKNOWN',
+        failedAt: new Date(),
+        errorMsg: errorMsg.slice(0, 1000),
+        attempts: { increment: 1 },
+      },
+    })
+    .catch(() => undefined);
+}
+
 export async function enqueueMicrosoftTeamsDelivery(
   input: TeamsDeliveryEnqueueInput
 ): Promise<string> {
@@ -1490,6 +1515,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
             } as Prisma.InputJsonObject,
           },
         });
+        await syncTeamsNotificationAmbiguous(operation.idempotencyKey, result.error);
         throw new Error(result.error);
       }
       const code = categorizeTeamsErrorCode(result.errorCode);
@@ -1499,12 +1525,13 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       // not occur. Preserve the reservation and require reconciliation.
       if (createAttemptStarted && statusCode != null && statusCode >= 500) {
         await markCardCreateAmbiguous();
+        const ambigMsg = `Teams create returned HTTP ${statusCode}; external outcome is uncertain: ${result.error.slice(0, 800)}`;
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: {
             status: 'AMBIGUOUS',
             nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
-            lastError: `Teams create returned HTTP ${statusCode}; external outcome is uncertain: ${result.error.slice(0, 800)}`,
+            lastError: ambigMsg,
             leaseToken: null,
             leaseExpiresAt: null,
             resultPayload: {
@@ -1514,6 +1541,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
             } as Prisma.InputJsonObject,
           },
         });
+        await syncTeamsNotificationAmbiguous(operation.idempotencyKey, ambigMsg);
         throw new Error(result.error);
       }
       // An explicit non-5xx HTTP response proves the create was rejected. Clear
@@ -1722,12 +1750,13 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         // Re-sending could duplicate the card, so stop for explicit reconciliation.
         const msg = txErr instanceof Error ? txErr.message : String(txErr);
         await markCardCreateAmbiguous();
+        const ambigMsg = `Teams provider succeeded but ledger commit failed; manual reconciliation required: ${msg.slice(0, 400)}`;
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: {
             status: 'AMBIGUOUS',
             nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
-            lastError: `Teams provider succeeded but ledger commit failed; manual reconciliation required: ${msg.slice(0, 400)}`,
+            lastError: ambigMsg,
             leaseToken: null,
             leaseExpiresAt: null,
             resultPayload: {
@@ -1737,6 +1766,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
             } as Prisma.InputJsonObject,
           },
         });
+        await syncTeamsNotificationAmbiguous(operation.idempotencyKey, ambigMsg);
         await releaseTeamsConcurrency();
         logger.warn('[MicrosoftTeams] Ledger transaction failed — manual reconciliation required', {
           incidentId,

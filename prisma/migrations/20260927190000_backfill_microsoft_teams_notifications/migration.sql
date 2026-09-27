@@ -36,6 +36,7 @@ SELECT
   CASE
     WHEN status = 'COMPLETED' THEN 'DELIVERED'::"NotificationStatus"
     WHEN status = 'FAILED' THEN 'FAILED'::"NotificationStatus"
+    WHEN status = 'AMBIGUOUS' THEN 'UNKNOWN'::"NotificationStatus"
     ELSE 'PENDING'::"NotificationStatus"
   END,
   'INCIDENT'::"NotificationCategory",

@@ -33,6 +33,7 @@ import { projectIncidentSlaState } from '@/lib/incident-sla/state';
 import { Badge } from '@/components/ui/shadcn/badge';
 import CopyButton from '@/components/common/CopyButton';
 import { getAppUrl } from '@/lib/app-url';
+import { redactNotificationError } from '@/lib/notification-operations';
 import { AlertCircle, ArrowLeft, CheckCircle2, ChevronDown, Pause, Volume2 } from 'lucide-react';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
@@ -192,7 +193,7 @@ export default async function IncidentDetailScreen({
         channel: notif.channel,
         status: notif.status,
         recipientDisplay: notif.recipientDisplay,
-        errorMsg: notif.errorMsg,
+        errorMsg: redactNotificationError(notif.errorMsg),
         createdAt: notif.createdAt,
         sentAt: notif.sentAt,
         deliveredAt: notif.deliveredAt,

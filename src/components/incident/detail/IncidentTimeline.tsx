@@ -110,6 +110,8 @@ function formatNotificationMessage(notification: IncidentTimelineNotification): 
       return `${channel} notification to ${target} failed${notification.errorMsg ? `: ${notification.errorMsg}` : ''}`;
     case 'SKIPPED':
       return `${channel} notification to ${target} skipped`;
+    case 'UNKNOWN':
+      return `${channel} notification to ${target} delivery uncertain (provider reconciliation pending)${notification.errorMsg ? `: ${notification.errorMsg}` : ''}`;
     case 'PENDING':
     default:
       return `${channel} notification queued for ${target}`;
@@ -276,6 +278,7 @@ export default function IncidentTimeline({
       let timestamp: string | Date | undefined;
       switch (notif.status) {
         case 'FAILED':
+        case 'UNKNOWN':
           timestamp = notif.failedAt || notif.sentAt || notif.createdAt;
           break;
         case 'DELIVERED':

@@ -152,4 +152,30 @@ describe('IncidentTimeline notification integration', () => {
       interveningEl.compareDocumentPosition(failedNotifEl) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
   });
+
+  it('renders UNKNOWN notifications as delivery uncertain rather than queued', () => {
+    const propsWithUnknown = {
+      events: [],
+      notes: [],
+      notifications: [
+        {
+          id: 'notif-unk-1',
+          channel: 'MICROSOFT_TEAMS',
+          status: 'UNKNOWN',
+          recipientDisplay: 'War Room #outages',
+          createdAt: new Date('2026-09-27T10:01:00Z'),
+          failedAt: new Date('2026-09-27T10:01:30Z'),
+        },
+      ],
+      incidentCreatedAt: new Date('2026-09-27T10:00:00Z'),
+    };
+
+    render(<IncidentTimeline {...propsWithUnknown} />);
+
+    expect(
+      screen.getByText(
+        'Microsoft Teams notification to War Room #outages delivery uncertain (provider reconciliation pending)'
+      )
+    ).toBeInTheDocument();
+  });
 });
