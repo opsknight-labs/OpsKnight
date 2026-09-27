@@ -1,5 +1,6 @@
 ---
 title: Operate OpsKnight
+order: 5
 description: Deploy, configure, secure, scale, protect, and upgrade OpsKnight.
 type: deployment
 product_area: operations

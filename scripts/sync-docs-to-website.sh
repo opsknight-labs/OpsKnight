@@ -49,7 +49,11 @@ if [ -f "$VERSIONS_FILE" ] && command -v node >/dev/null 2>&1; then
     try {
       const v = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
       if (Array.isArray(v.releasedVersions)) {
-        console.log(v.releasedVersions.join(" "));
+        const versions = [...v.releasedVersions];
+        if (process.env.DOCS_SYNC_INCLUDE_UPCOMING === "true" && v.upcomingVersion) {
+          versions.push(v.upcomingVersion);
+        }
+        console.log([...new Set(versions)].join(" "));
       }
     } catch (e) {
       process.exit(1);
@@ -60,7 +64,7 @@ fi
 found_versions=0
 
 if [ -n "$ALLOWED_VERSIONS" ]; then
-  echo "Enforcing release-gated versions from docs/versions.json: $ALLOWED_VERSIONS"
+  echo "Syncing versions selected from docs/versions.json: $ALLOWED_VERSIONS"
   for version in $ALLOWED_VERSIONS; do
     version_dir="$SRC_DIR/$version"
     if [ -d "$version_dir" ]; then
@@ -96,4 +100,3 @@ if [ "$found_versions" -eq 0 ]; then
 fi
 
 echo "Done."
-

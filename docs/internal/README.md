@@ -1,5 +1,18 @@
 # Internal documentation
 
+## Website preview
+
+The website remains downstream. To stage the upcoming documentation tree in a
+local website checkout without declaring it released, run:
+
+```sh
+DOCS_SYNC_INCLUDE_UPCOMING=true npm run docs:sync -- ../opsknight-website
+```
+
+Top-level section indexes carry numeric `order` metadata understood by the
+website sidebar generator. Normal CI sync remains release-gated and ignores the
+upcoming tree until `docs/versions.json` changes at formal release.
+
 This tree indexes engineering, compliance, certification, and release material
 that is not part of the public product documentation navigation.
 
