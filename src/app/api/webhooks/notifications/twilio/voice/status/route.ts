@@ -142,7 +142,7 @@ async function processStatusCallback(
   const now = new Date();
   await prisma.$transaction(async tx => {
     // If a newer attempt exists, this callback is for a stale attempt and must NOT
-    // mutate the parent notification state.
+    // mutate the parent notification state OR the endpoint health accounting.
     const newerAttempt =
       attempt?.startedAt && tx.notificationDeliveryAttempt?.findFirst
         ? await tx.notificationDeliveryAttempt.findFirst({
@@ -176,6 +176,18 @@ async function processStatusCallback(
             },
           });
         }
+        // Record endpoint health only when this callback belongs to the current attempt
+        // (guarded by !newerAttempt above). A stale "failed" callback for a superseded
+        // attempt can no longer degrade a healthy phone endpoint.
+        if (notification.userId) {
+          await recordUserNotificationEndpointOutcome(tx, {
+            userId: notification.userId,
+            channel: 'VOICE',
+            addressHash: notification.recipientHash,
+            delivered: true,
+            occurredAt: now,
+          });
+        }
       } else if (failed && notification.status !== 'DELIVERED') {
         await tx.notification.updateMany({
           where: { id: notification.id, status: { in: ['PENDING', 'SENT', 'UNKNOWN'] } },
@@ -187,6 +199,20 @@ async function processStatusCallback(
             reconciliationDeadline: null,
           },
         });
+        // Only mark endpoint degraded for actual technical/provider failures,
+        // NOT for human non-responsiveness (busy, no-answer, canceled).
+        // Also guarded by !newerAttempt: a late failure from a superseded attempt
+        // cannot mark an endpoint degraded after a successful retry.
+        if (notification.userId && callStatus === 'failed') {
+          await recordUserNotificationEndpointOutcome(tx, {
+            userId: notification.userId,
+            channel: 'VOICE',
+            addressHash: notification.recipientHash,
+            delivered: false,
+            errorCode: callStatus,
+            occurredAt: now,
+          });
+        }
       } else {
         await tx.notification.updateMany({
           where: { id: notification.id, status: { in: ['PENDING', 'UNKNOWN'] } },
@@ -204,6 +230,8 @@ async function processStatusCallback(
     //
     // Transitions can ONLY move forward in rank, and ANY attempt with finishedAt != null
     // or an existing terminal outcome is completely immutable.
+    // NOTE: The attempt state machine runs regardless of newerAttempt so that even a
+    // stale callback still advances its OWN attempt record monotonically.
     let targetOutcome: string;
     let allowedPreviousOutcomes: string[];
 
@@ -243,29 +271,6 @@ async function processStatusCallback(
           : {}),
       },
     });
-
-    if (notification.userId) {
-      if (delivered) {
-        await recordUserNotificationEndpointOutcome(tx, {
-          userId: notification.userId,
-          channel: 'VOICE',
-          addressHash: notification.recipientHash,
-          delivered: true,
-          occurredAt: now,
-        });
-      } else if (failed && callStatus === 'failed') {
-        // Only mark endpoint degraded for actual technical/provider failures,
-        // NOT for human non-responsiveness (busy, no-answer, canceled).
-        await recordUserNotificationEndpointOutcome(tx, {
-          userId: notification.userId,
-          channel: 'VOICE',
-          addressHash: notification.recipientHash,
-          delivered: false,
-          errorCode: callStatus,
-          occurredAt: now,
-        });
-      }
-    }
   });
   return new NextResponse(null, { status: 204 });
 }

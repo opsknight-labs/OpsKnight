@@ -1775,10 +1775,13 @@ model NotificationDeliveryAttempt {
   @@unique([notificationId, ordinal])
   @@index([notificationId, startedAt])
   @@index([outcome, startedAt])
-  // Partial index: open voice attempts (finishedAt IS NULL) — speeds up reconciliation scan.
-  @@index([notificationId, outcome], name: "idx_attempt_open_voice")
-  // Partial index: attempt-level providerMessageId (IS NOT NULL) — speeds up status-route SID lookup.
-  @@index([providerMessageId], name: "idx_attempt_provider_msg_id")
+  // Two additional partial indexes are managed as raw SQL (Prisma 5.x cannot express
+  // WHERE predicates in @@index declarations). They are applied via migration
+  // 20260927120200_add_voice_attempt_indexes/migration.sql using CREATE INDEX CONCURRENTLY:
+  //   idx_attempt_open_voice      — (notificationId, outcome) WHERE finishedAt IS NULL
+  //   idx_attempt_provider_msg_id — (providerMessageId) WHERE providerMessageId IS NOT NULL
+  // Do NOT add @@index entries for these here; doing so would generate a conflicting
+  // prisma migrate diff that drops the partial indexes and recreates them as full ones.
 }
 
 model NotificationProviderFeedback {

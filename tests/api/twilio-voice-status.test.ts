@@ -170,6 +170,52 @@ describe('Twilio voice status callback', () => {
     );
   });
 
+  it('stale failed callback does not degrade endpoint health after a newer attempt succeeded', async () => {
+    // Scenario: Attempt A failed → late callback arrives after Attempt B succeeded.
+    // The endpoint health must NOT be decremented for the stale Attempt A callback.
+    const startedAt = new Date('2026-09-27T10:00:00Z');
+    mocks.findUniqueAttempt.mockResolvedValue({
+      id: 'attempt-a',
+      notificationId: 'notification-1',
+      providerMessageId: 'CA_OLD',
+      startedAt,
+      finishedAt: null,
+      outcome: 'ACCEPTED',
+      notification: {
+        id: 'notification-1',
+        status: 'DELIVERED', // Attempt B already succeeded
+        maxAttempts: 3,
+        incidentId: 'incident-1',
+        userId: 'user-1',
+        user: { name: 'Jane' },
+        recipientHash: 'recipient-hash',
+      },
+    });
+    // Newer attempt exists — the newerAttempt guard fires
+    mocks.findFirstAttempt.mockResolvedValue({ id: 'attempt-b' });
+
+    const response = await POST(
+      signedRequest(
+        'CallSid=CA_OLD&CallStatus=failed',
+        undefined,
+        'notificationId=notification-1&attemptId=attempt-a'
+      )
+    );
+    expect(response.status).toBe(204);
+    // Parent notification must NOT be updated
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+    // Endpoint health must NOT be updated (no create, no updateMany on endpoint)
+    expect(mocks.endpointCreate).not.toHaveBeenCalled();
+    expect(mocks.endpointUpdateMany).not.toHaveBeenCalled();
+    // But the attempt itself is still advanced monotonically
+    expect(mocks.updateAttemptMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'attempt-a', finishedAt: null }),
+        data: expect.objectContaining({ outcome: 'FAILED' }),
+      })
+    );
+  });
+
   it('rejects unsigned state changes', async () => {
     const response = await POST(
       signedRequest('CallSid=CA123&CallStatus=completed', 'invalid-signature')
