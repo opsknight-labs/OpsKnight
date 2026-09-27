@@ -19,6 +19,54 @@ release. It is not published by the release-gated documentation sync until
 The 2.0.0 documentation is rebuilt from current product evidence. Historical
 documentation can help locate a topic, but it is never authoritative.
 
+## Start here
+
+- [Evaluate with Docker Compose](./start/quickstart)
+- [Create and resolve a first incident](./start/first-incident)
+- [Plan a production installation](./start/production-install)
+- [Migrate from a 1.x deployment](./start/migrate-from-v1)
+
+## Respond and operate
+
+- [Create](./guides/incidents/create), [acknowledge](./guides/incidents/acknowledge),
+  [assign](./guides/incidents/assign), and [resolve](./guides/incidents/resolve)
+  incidents.
+- [Build an on-call schedule](./guides/on-call/build-schedule) and manage
+  [temporary overrides](./guides/on-call/overrides).
+- [Configure escalation](./guides/escalation/configure-policy) and
+  [notification routing](./guides/notifications/configure-routing).
+- [Publish a status update](./guides/status-pages/publish-update) and create a
+  [ChatOps war room](./guides/chatops/create-war-room).
+
+## Connect systems
+
+- Browse the [integration catalog](./integrations/) for monitoring, cloud,
+  uptime, source-control, communication, issue-tracking, and generic webhook
+  providers.
+- Configure [Slack](./integrations/communication/slack),
+  [Microsoft Teams](./integrations/communication/microsoft-teams), or
+  [Jira](./integrations/issue-tracking/jira).
+
+## Run in production
+
+- Deploy with [Compose](./operate/deploy/compose),
+  [Kubernetes](./operate/deploy/kubernetes), or the
+  [split runtime](./operate/deploy/split-runtime).
+- Plan [scaling](./operate/reliability/scaling),
+  [hardening](./operate/security/hardening),
+  [backup and restore](./operate/data/backup-and-restore), and
+  [upgrades](./operate/upgrades/upgrade).
+
+## Exact contracts
+
+- [API inventory](./reference/api/)
+- [Configuration](./reference/configuration/)
+- [Permissions](./reference/permissions)
+- [Notification delivery](./reference/notifications/)
+- [Webhooks](./reference/webhooks)
+- [Health](./reference/health), [metrics](./reference/metrics), and
+  [runtime limits](./reference/limits)
+
 ## Evidence order
 
 When sources conflict, use this order:
@@ -31,7 +79,7 @@ When sources conflict, use this order:
 Documentation must not claim behavior that cannot be verified against one of
 the first three sources.
 
-## Planned sections
+## Documentation sections
 
 - **Start** — install OpsKnight and complete a first incident.
 - **Concepts** — understand the product model and why it behaves as it does.
