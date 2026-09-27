@@ -12,11 +12,39 @@ export async function captureEvidence(page: Page, testInfo: TestInfo, journey: s
   // Viewport captures preserve fixed navigation chrome. Full-page stitching can
   // omit the fixed sidebar while retaining its content gutter.
   await page.screenshot({ path: image, fullPage: false });
-  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const sourceRevision = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const requestedImage = process.env.DOCS_OPSKNIGHT_IMAGE;
+  if (!requestedImage?.includes('@sha256:')) {
+    throw new Error('DOCS_OPSKNIGHT_IMAGE must be an immutable digest reference');
+  }
+  const imageInspection = JSON.parse(execFileSync(
+    'docker',
+    ['image', 'inspect', requestedImage],
+    { encoding: 'utf8' }
+  ))[0] as { RepoDigests?: string[]; Config?: { Labels?: Record<string, string> } };
+  const runtimeSourceRevision = imageInspection.Config?.Labels?.['org.opencontainers.image.revision'];
+  const runtimeDigest = imageInspection.RepoDigests?.find(value => value.includes('@sha256:'));
+  if (!runtimeSourceRevision || !runtimeDigest) {
+    throw new Error('Runtime image must expose an OCI source revision and repository digest');
+  }
+  execFileSync('git', ['merge-base', '--is-ancestor', runtimeSourceRevision, sourceRevision]);
+  const productChanges = execFileSync(
+    'git',
+    ['diff', '--name-only', `${runtimeSourceRevision}..${sourceRevision}`, '--', 'src', 'prisma', 'deploy', 'Dockerfile', 'next.config.ts'],
+    { encoding: 'utf8' }
+  ).trim();
+  if (productChanges) {
+    throw new Error(`Runtime image does not contain product changes:\n${productChanges}`);
+  }
   // eslint-disable-next-line security/detect-non-literal-fs-filename
   await writeFile(resolve(directory, `${name}.json`), `${JSON.stringify({
     release: 'current',
-    commit,
+    sourceRevision,
+    runtime: {
+      requestedImage,
+      digest: runtimeDigest,
+      sourceRevision: runtimeSourceRevision,
+    },
     route: new URL(page.url()).pathname,
     journey,
     browser: testInfo.project.name,

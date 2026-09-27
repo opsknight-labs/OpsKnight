@@ -6,12 +6,30 @@ import YAML from 'yaml';
 
 const root = resolve(import.meta.dirname, '../..');
 const run = (file, args) => execFileSync(file, args, { cwd: root, stdio: 'inherit' });
+const fullRuntime = !process.argv.includes('--static');
+const composeArgs = ['compose', '-f', 'tests/docs/environment/compose.yaml'];
 
+run('node', ['scripts/docs/discover-capabilities.mjs', '--output', 'generated/docs-discovery/current.json']);
+run('node', ['scripts/docs/generate-reference.mjs']);
+run('node', ['scripts/docs/generate-integrations.mjs']);
 run('node', ['scripts/docs/check-frontmatter.mjs']);
 run('node', ['scripts/check-docs-links.cjs']);
 run('node', ['scripts/check-docs-capabilities.cjs']);
 run('node', ['scripts/docs/check-evidence.mjs']);
 run('node', ['--test', ...readdirSync(join(root, 'tests/docs/tooling')).filter(name => name.endsWith('.test.mjs')).map(name => `tests/docs/tooling/${name}`)]);
+if (fullRuntime) {
+  run('docker', [...composeArgs, 'down', '--volumes', '--remove-orphans']);
+  try {
+    execFileSync('npx', ['playwright', 'test', '-c', 'playwright.docs.config.ts'], {
+      cwd: root,
+      stdio: 'inherit',
+      env: { ...process.env, CI: '1' },
+    });
+    run('node', ['scripts/docs/check-evidence.mjs']);
+  } finally {
+    run('docker', [...composeArgs, 'down', '--volumes', '--remove-orphans']);
+  }
+}
 
 const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
   const path = join(directory, entry.name);
@@ -36,7 +54,7 @@ const report = {
     capabilityCoverage: 'passed',
     evidenceContract: 'passed',
     toolingTests: 'passed',
-    runtimeJourneys: 'passed',
+    runtimeJourneys: fullRuntime ? 'passed' : 'not-run',
     websiteBuild: 'release-gated',
   },
   counts: {

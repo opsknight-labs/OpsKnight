@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { inspectApi } from './inspect-api.mjs';
 import { inspectConfig } from './inspect-config.mjs';
@@ -11,10 +12,21 @@ import { inspectRoutes } from './inspect-routes.mjs';
 import { inspectRuntime } from './inspect-runtime.mjs';
 import { repositoryRoot } from './discovery-lib.mjs';
 
+const sourceRevision = process.env.GITHUB_SHA ?? execFileSync(
+  'git',
+  ['log', '-1', '--format=%H', '--', 'src', 'prisma', 'deploy', 'package.json'],
+  { cwd: repositoryRoot, encoding: 'utf8' }
+).trim();
+const generatedAt = execFileSync(
+  'git',
+  ['show', '-s', '--format=%cI', sourceRevision],
+  { cwd: repositoryRoot, encoding: 'utf8' }
+).trim();
+
 const report = {
   schemaVersion: 1,
-  generatedAt: new Date().toISOString(),
-  sourceRevision: process.env.GITHUB_SHA ?? null,
+  generatedAt,
+  sourceRevision,
   uiRoutes: inspectRoutes(),
   apiRoutes: inspectApi(),
   configuration: inspectConfig(),

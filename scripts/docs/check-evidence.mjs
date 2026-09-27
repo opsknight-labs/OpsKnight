@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import YAML from 'yaml';
 import { exists, filesUnder, readRepositoryFile, repositoryRoot } from './discovery-lib.mjs';
@@ -18,7 +19,17 @@ if (exists('generated/docs-evidence')) {
     let metadata;
     try { metadata = JSON.parse(readRepositoryFile(file)); }
     catch (error) { failures.push(`${file}: invalid JSON (${error.message})`); continue; }
-    for (const field of ['release', 'commit', 'route', 'journey', 'browser', 'viewport']) if (!metadata[field]) failures.push(`${file}: missing ${field}`);
+    for (const field of ['release', 'sourceRevision', 'route', 'journey', 'browser', 'viewport', 'runtime']) if (!metadata[field]) failures.push(`${file}: missing ${field}`);
+    if (metadata.runtime) {
+      for (const field of ['requestedImage', 'digest', 'sourceRevision']) if (!metadata.runtime[field]) failures.push(`${file}: missing runtime.${field}`);
+      if (!metadata.runtime.requestedImage?.includes('@sha256:')) failures.push(`${file}: runtime image is not immutable`);
+      if (!metadata.runtime.digest?.includes('@sha256:')) failures.push(`${file}: runtime digest is not immutable`);
+      try {
+        execFileSync('git', ['merge-base', '--is-ancestor', metadata.runtime.sourceRevision, 'HEAD'], { cwd: repositoryRoot });
+      } catch {
+        failures.push(`${file}: runtime source revision is not an ancestor of HEAD`);
+      }
+    }
   }
 }
 if (failures.length) {
