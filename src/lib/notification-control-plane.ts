@@ -2843,6 +2843,12 @@ export async function processCentralNotificationQueue(
   const now = new Date();
   await reconcileUnknownNotifications(now);
   await cleanupExpiredNotifications(now);
+  try {
+    const { reconcileStaleVoiceCalls } = await import('./voice/reconciliation');
+    await reconcileStaleVoiceCalls(now);
+  } catch {
+    // Non-blocking voice call status reconciliation
+  }
   const { isBulkNotificationDeliveryPaused } = await import('./notification-capacity-control');
   const bulkPaused = await isBulkNotificationDeliveryPaused();
   const requestedTrafficClasses = options.trafficClasses?.length

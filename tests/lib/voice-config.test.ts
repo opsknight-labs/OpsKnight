@@ -18,7 +18,11 @@ vi.mock('@/lib/encrypted-provider-config', () => ({
   PROVIDER_ERROR_CODES: { DECRYPTION_FAILED: 'DECRYPTION_FAILED' },
 }));
 
-import { getVoiceConfig, isChannelAvailable } from '@/lib/notification-providers';
+import {
+  getVoiceConfig,
+  getTwilioVoiceCallbackCredentials,
+  isChannelAvailable,
+} from '@/lib/notification-providers';
 
 describe('Voice provider configuration and enabled state', () => {
   beforeEach(() => {
@@ -95,5 +99,45 @@ describe('Voice provider configuration and enabled state', () => {
 
     const channelAvailable = await isChannelAvailable('VOICE');
     expect(channelAvailable).toBe(true);
+  });
+
+  describe('Twilio callback credentials for in-flight calls', () => {
+    it('returns callback credentials even when provider.enabled is false and voiceEnabled is false', async () => {
+      mocks.findUnique.mockResolvedValue({
+        id: 'provider-1',
+        provider: 'twilio',
+        enabled: false, // Disabled administratively while call was in progress
+        config: {
+          voiceEnabled: false,
+          accountSid: 'FAKE_SID_FOR_UNIT_TEST',
+          authToken: 'secret_token_value_here',
+          fromNumber: '+14155550100',
+        },
+      });
+
+      // Outbound calls are disabled:
+      const voiceConfig = await getVoiceConfig();
+      expect(voiceConfig.enabled).toBe(false);
+
+      // Inbound callback signature validation still succeeds:
+      const credentials = await getTwilioVoiceCallbackCredentials();
+      expect(credentials).toEqual({
+        accountSid: 'FAKE_SID_FOR_UNIT_TEST',
+        authToken: 'secret_token_value_here',
+      });
+    });
+
+    it('returns null when provider row does not exist or has no authToken', async () => {
+      mocks.findUnique.mockResolvedValue(null);
+      expect(await getTwilioVoiceCallbackCredentials()).toBeNull();
+
+      mocks.findUnique.mockResolvedValue({
+        id: 'provider-1',
+        provider: 'twilio',
+        enabled: true,
+        config: {},
+      });
+      expect(await getTwilioVoiceCallbackCredentials()).toBeNull();
+    });
   });
 });

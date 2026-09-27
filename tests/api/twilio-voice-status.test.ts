@@ -33,9 +33,10 @@ vi.mock('@/lib/prisma', () => ({
 }));
 vi.mock('@/lib/notification-providers', () => ({
   getVoiceConfig: vi.fn().mockResolvedValue({ authToken: 'twilio-secret' }),
+  getTwilioVoiceCallbackCredentials: vi.fn().mockResolvedValue({ authToken: 'twilio-secret' }),
 }));
-vi.mock('@/lib/env-validation', () => ({
-  getBaseUrl: vi.fn().mockReturnValue('https://ops.example.com'),
+vi.mock('@/lib/app-url', () => ({
+  getAppUrl: vi.fn().mockResolvedValue('https://ops.example.com'),
 }));
 
 import { POST } from '@/app/api/webhooks/notifications/twilio/voice/status/route';

@@ -1,10 +1,10 @@
 import { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
-import { getBaseUrl } from '@/lib/env-validation';
+import { getAppUrl } from '@/lib/app-url';
 import { executeIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 import { readIntegrationBody } from '@/lib/integrations/request-security';
 import { logger } from '@/lib/logger';
-import { getVoiceConfig } from '@/lib/notification-providers';
+import { getTwilioVoiceCallbackCredentials } from '@/lib/notification-providers';
 import prisma from '@/lib/prisma';
 import { validateTwilioRequest } from '@/lib/twilio/signature';
 import { verifyVoiceCallbackToken } from '@/lib/voice/token';
@@ -21,15 +21,16 @@ export async function POST(request: NextRequest) {
   try {
     const rawBody = await readIntegrationBody(request, 64 * 1024);
     const params = new URLSearchParams(rawBody);
-    const config = await getVoiceConfig();
-    const callbackUrl = `${getBaseUrl()}${request.nextUrl.pathname}${request.nextUrl.search}`;
+    const credentials = await getTwilioVoiceCallbackCredentials();
+    const appUrl = await getAppUrl();
+    const callbackUrl = `${appUrl}${request.nextUrl.pathname}${request.nextUrl.search}`;
     if (
-      !config.authToken ||
+      !credentials?.authToken ||
       !validateTwilioRequest(
         callbackUrl,
         params,
         request.headers.get('x-twilio-signature') || '',
-        config.authToken
+        credentials.authToken
       )
     ) {
       return xml('This request could not be verified.', 401);
@@ -39,28 +40,79 @@ export async function POST(request: NextRequest) {
     const callSid = params.get('CallSid');
     if (!callSid) return xml('The call could not be identified.', 400);
 
-    // 1. Look up the notification, binding via attempt when available.
-    const notification = await prisma.notification.findFirst({
-      where: {
-        id: claims.notificationId,
-        userId: claims.userId,
-        incidentId: claims.incidentId,
-        channel: 'VOICE',
-      },
-      select: {
-        id: true,
-        providerMessageId: true,
-        user: { select: { id: true, name: true } },
-        incident: { select: { status: true, escalationGeneration: true } },
-      },
-    });
+    // 1. Look up notification and attempt.
+    let notification: {
+      id: string;
+      providerMessageId: string | null;
+      user: { id: string; name: string | null } | null;
+      incident: { id: string; status: string; escalationGeneration: number } | null;
+    } | null = null;
+    let attemptRecord: { id: string; providerMessageId: string | null } | null = null;
+
+    if (claims.deliveryAttemptId) {
+      const attempt = await prisma.notificationDeliveryAttempt.findUnique({
+        where: { id: claims.deliveryAttemptId },
+        select: {
+          id: true,
+          notificationId: true,
+          providerMessageId: true,
+          notification: {
+            select: {
+              id: true,
+              providerMessageId: true,
+              user: { select: { id: true, name: true } },
+              incident: { select: { id: true, status: true, escalationGeneration: true } },
+            },
+          },
+        },
+      });
+      if (attempt) {
+        attemptRecord = { id: attempt.id, providerMessageId: attempt.providerMessageId };
+        if (attempt.notification) {
+          notification = attempt.notification;
+        } else if (attempt.notificationId || claims.notificationId) {
+          notification = await prisma.notification.findFirst({
+            where: {
+              id: attempt.notificationId || claims.notificationId,
+              channel: 'VOICE',
+            },
+            select: {
+              id: true,
+              providerMessageId: true,
+              user: { select: { id: true, name: true } },
+              incident: { select: { id: true, status: true, escalationGeneration: true } },
+            },
+          });
+        }
+      }
+    } else if (claims.notificationId) {
+      // Legacy path for tokens without deliveryAttemptId
+      notification = await prisma.notification.findFirst({
+        where: {
+          id: claims.notificationId,
+          ...(claims.userId ? { userId: claims.userId } : {}),
+          ...(claims.incidentId ? { incidentId: claims.incidentId } : {}),
+          channel: 'VOICE',
+        },
+        select: {
+          id: true,
+          providerMessageId: true,
+          user: { select: { id: true, name: true } },
+          incident: { select: { id: true, status: true, escalationGeneration: true } },
+        },
+      });
+    }
+
     if (!notification?.user || !notification.incident) {
       return xml('This call is no longer actionable.', 404);
     }
 
     // 2. Validate lifecycle state BEFORE mutating any state.
     // Escalation generation must match to prevent stale callbacks from acting.
-    if (notification.incident.escalationGeneration !== claims.escalationGeneration) {
+    if (
+      claims.escalationGeneration != null &&
+      notification.incident.escalationGeneration !== claims.escalationGeneration
+    ) {
       return xml('This page belongs to an earlier escalation and is no longer actionable.');
     }
 
@@ -76,32 +128,24 @@ export async function POST(request: NextRequest) {
       return xml('This incident is no longer awaiting acknowledgement.');
     }
 
-    // 4. Verify Call SID matches this notification/attempt.
-    if (claims.deliveryAttemptId) {
+    // 4. Verify Call SID matches this attempt.
+    if (attemptRecord) {
       // Attempt-level correlation: verify the Call SID belongs to this attempt.
-      const attempt = await prisma.notificationDeliveryAttempt.findUnique({
-        where: { id: claims.deliveryAttemptId },
-        select: { providerMessageId: true, notificationId: true },
-      });
-      if (!attempt || attempt.notificationId !== notification.id) {
-        return xml('This call is no longer actionable.', 404);
-      }
-      if (attempt.providerMessageId && attempt.providerMessageId !== callSid) {
+      if (attemptRecord.providerMessageId && attemptRecord.providerMessageId !== callSid) {
         return xml('This call is no longer actionable.', 409);
       }
+      if (!attemptRecord.providerMessageId) {
+        await prisma.notificationDeliveryAttempt.updateMany({
+          where: { id: attemptRecord.id, providerMessageId: null },
+          data: { providerMessageId: callSid },
+        });
+      }
+      // No callback ever fills a NULL providerMessageId on the parent notification.
     } else {
-      // Legacy path: notification-level binding for in-flight calls without attemptId.
+      // Legacy path: notification-level verification.
       if (notification.providerMessageId && notification.providerMessageId !== callSid) {
         return xml('This call is no longer actionable.', 409);
       }
-      const callBound = await prisma.notification.updateMany({
-        where: {
-          id: notification.id,
-          OR: [{ providerMessageId: callSid }, { providerMessageId: null }],
-        },
-        data: { providerMessageId: callSid },
-      });
-      if (callBound.count === 0) return xml('This call is no longer actionable.', 409);
     }
 
     // 5. Check DTMF digits.
@@ -129,20 +173,21 @@ export async function POST(request: NextRequest) {
     }
 
     // 7. Execute canonical lifecycle command.
+    const incidentId = notification.incident.id;
     try {
       await executeIncidentLifecycleCommand({
-        incidentId: claims.incidentId,
+        incidentId,
         command: 'ACKNOWLEDGE',
         source: 'VOICE',
-        actor: { id: notification.user.id, name: notification.user.name },
+        actor: { id: notification.user.id, name: notification.user.name || undefined },
         expectedStatus: 'OPEN',
-        eventMessage: `Incident acknowledged by ${notification.user.name} via voice call`,
+        eventMessage: `Incident acknowledged by ${notification.user.name || 'responder'} via voice call`,
       });
     } catch (error) {
       // The feedback row makes a concurrent/replayed callback harmless. If state
       // moved after validation, return a truthful message and never regress it.
       const current = await prisma.incident.findUnique({
-        where: { id: claims.incidentId },
+        where: { id: incidentId },
         select: { status: true },
       });
       if (current?.status === 'ACKNOWLEDGED') return xml('This incident is already acknowledged.');

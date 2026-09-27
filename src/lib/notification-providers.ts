@@ -400,6 +400,39 @@ export async function getVoiceConfig(): Promise<VoiceConfig> {
   return { enabled: false, provider: null };
 }
 
+export interface VoiceCallbackCredentials {
+  authToken: string;
+  accountSid?: string;
+}
+
+/**
+ * Get Twilio credentials specifically for validating incoming webhook callbacks.
+ * Unlike getVoiceConfig(), this does not require provider.enabled or voiceEnabled,
+ * ensuring in-flight calls can still be validated and acknowledged even if an admin
+ * disabled the provider after call initiation.
+ */
+export async function getTwilioVoiceCallbackCredentials(): Promise<VoiceCallbackCredentials | null> {
+  try {
+    const provider = await prisma.notificationProvider.findUnique({
+      where: { provider: 'twilio' },
+    });
+    if (!provider?.config) return null;
+    const config = await getDecryptedConfig('twilio', provider.config);
+    if (config.authToken && !String(config.authToken).startsWith('enc:')) {
+      return {
+        authToken: String(config.authToken),
+        accountSid: config.accountSid ? String(config.accountSid) : undefined,
+      };
+    }
+  } catch (error) {
+    logger.error('Failed to load Twilio Voice callback credentials from database', {
+      component: 'notification-providers',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+  return null;
+}
+
 /**
  * Get WhatsApp configuration (stored in Twilio provider config)
  */

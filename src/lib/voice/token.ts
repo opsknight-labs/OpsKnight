@@ -1,11 +1,11 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 export type VoiceCallbackClaims = {
-  notificationId: string;
+  notificationId?: string;
   deliveryAttemptId?: string;
-  userId: string;
-  incidentId: string;
-  escalationGeneration: number;
+  userId?: string;
+  incidentId?: string;
+  escalationGeneration?: number;
   expiresAt: number;
   nonce: string;
   purpose: 'voice-ack';
@@ -61,10 +61,9 @@ export function verifyVoiceCallbackToken(
     ) as VoiceCallbackClaims;
     if (
       claims.purpose !== 'voice-ack' ||
-      !claims.notificationId ||
-      !claims.userId ||
-      !claims.incidentId ||
-      !Number.isInteger(claims.escalationGeneration) ||
+      (!claims.deliveryAttemptId &&
+        (!claims.notificationId || !claims.userId || !claims.incidentId)) ||
+      (claims.escalationGeneration != null && !Number.isInteger(claims.escalationGeneration)) ||
       !claims.nonce ||
       !Number.isFinite(claims.expiresAt) ||
       claims.expiresAt <= now

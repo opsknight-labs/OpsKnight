@@ -1,4 +1,4 @@
-import { getBaseUrl } from '@/lib/env-validation';
+import { getAppUrl } from '@/lib/app-url';
 import { logger } from '@/lib/logger';
 import { getVoiceConfig, type VoiceConfig } from '@/lib/notification-providers';
 import { createVoiceCallbackToken } from './token';
@@ -44,16 +44,25 @@ export async function sendVoiceCall(
   try {
     const imported = await import('twilio');
     const factory = (imported.default || imported) as unknown as TwilioFactory;
-    const baseUrl = getBaseUrl();
+    const baseUrl = await getAppUrl();
     let gatherUrl: string | undefined;
-    if (request.requireAck && request.incidentId && request.userId) {
-      const token = createVoiceCallbackToken({
-        notificationId: request.notificationId,
-        deliveryAttemptId: request.deliveryAttemptId,
-        userId: request.userId,
-        incidentId: request.incidentId,
-        escalationGeneration: request.escalationGeneration ?? 0,
-      });
+    if (
+      request.requireAck &&
+      (request.deliveryAttemptId || (request.incidentId && request.userId))
+    ) {
+      const token = createVoiceCallbackToken(
+        request.deliveryAttemptId
+          ? {
+              deliveryAttemptId: request.deliveryAttemptId,
+              escalationGeneration: request.escalationGeneration ?? 0,
+            }
+          : {
+              notificationId: request.notificationId,
+              userId: request.userId,
+              incidentId: request.incidentId,
+              escalationGeneration: request.escalationGeneration ?? 0,
+            }
+      );
       gatherUrl = `${baseUrl}/api/webhooks/notifications/twilio/voice/gather?token=${encodeURIComponent(token)}`;
     }
     const statusParams = new URLSearchParams({

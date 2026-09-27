@@ -61,10 +61,14 @@ vi.mock('@/lib/notification-providers', () => ({
     authToken: 'test-twilio-secret-token',
     fromNumber: '+14155550100',
   }),
+  getTwilioVoiceCallbackCredentials: vi.fn().mockResolvedValue({
+    authToken: 'test-twilio-secret-token',
+    accountSid: 'AC123',
+  }),
 }));
 
-vi.mock('@/lib/env-validation', () => ({
-  getBaseUrl: vi.fn().mockReturnValue('https://ops.example.com'),
+vi.mock('@/lib/app-url', () => ({
+  getAppUrl: vi.fn().mockResolvedValue('https://ops.example.com'),
 }));
 
 vi.mock('@/lib/incidents/lifecycle', () => ({
