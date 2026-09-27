@@ -450,6 +450,10 @@ function resolveAuthoritativeOrigin(
   statusConfig?: StatusDomainConfig | null,
   usedConfiguredForwardedHost?: boolean
 ): string {
+  if (process.env.TRUST_PROXY_HEADERS === 'true') {
+    return getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) || req.nextUrl.origin;
+  }
+
   if (isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
     const configuredOrigin = getConfiguredApplicationOrigin(statusConfig);
     if (configuredOrigin) {

@@ -231,6 +231,28 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       expect(res.status).toBe(307);
       expect(res.headers.get('location')).toBe('https://www.opsnite.com/settings');
     });
+
+    it('trusted proxy redirect uses trusted proxy headers even when configured app URL has internal port', async () => {
+      vi.stubEnv('TRUST_PROXY_HEADERS', 'true');
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://www.opsnite.com:3100');
+      vi.stubEnv('NEXTAUTH_URL', 'http://www.opsnite.com:3100');
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('http://internal-app:3100/settings', {
+        headers: {
+          host: 'internal-app:3100',
+          'x-forwarded-host': 'www.opsnite.com',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toBe(
+        'https://www.opsnite.com/login?callbackUrl=%2Fsettings'
+      );
+    });
   });
 
   describe('Untrusted Proxy Headers (default — TRUST_PROXY_HEADERS not set)', () => {
