@@ -26,7 +26,7 @@ Keep backup copies outside the application host/cluster failure domain. Encrypt 
 The shipped database service is `opsknight-db`, with database/user defaults of `opsknight_db` and `opsknight`. Override them when your `.env` differs.
 
 ```bash
-docker compose exec -T opsknight-db \
+docker compose -f deploy/compose/docker-compose.yml exec -T opsknight-db \
   pg_dump -U opsknight -d opsknight_db --format=custom --no-owner \
   > opsknight-backup.dump
 ```

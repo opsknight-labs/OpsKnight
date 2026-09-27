@@ -45,7 +45,7 @@ Dotenv files do not evaluate `$(...)` shell substitutions.
 The Compose file constructs the application's container-only `DATABASE_URL` from `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`; you do not need to change the host-development `DATABASE_URL` example for this path.
 
 ```bash
-docker compose up -d
+docker compose -f deploy/compose/docker-compose.yml up -d
 open http://localhost:3000
 ```
 

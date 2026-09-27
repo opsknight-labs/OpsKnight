@@ -39,9 +39,9 @@ only then roll back application replicas.
 Update the application image reference to the tested version, then:
 
 ```bash
-docker compose pull opsknight-app
-docker compose up -d opsknight-app
-docker compose logs --tail=300 opsknight-app
+docker compose -f deploy/compose/docker-compose.yml pull opsknight-app
+docker compose -f deploy/compose/docker-compose.yml up -d opsknight-app
+docker compose -f deploy/compose/docker-compose.yml logs --tail=300 opsknight-app
 ```
 
 ### Helm
@@ -49,11 +49,11 @@ docker compose logs --tail=300 opsknight-app
 Render and review before applying:
 
 ```bash
-helm lint helm/opsknight --values values.production.yaml
-helm template opsknight helm/opsknight --namespace opsknight \
+helm lint deploy/kubernetes/helm/opsknight --values values.production.yaml
+helm template opsknight deploy/kubernetes/helm/opsknight --namespace opsknight \
   --values values.production.yaml > opsknight-rendered.yaml
 
-helm upgrade opsknight helm/opsknight --namespace opsknight \
+helm upgrade opsknight deploy/kubernetes/helm/opsknight --namespace opsknight \
   --values values.production.yaml --wait --timeout 10m
 ```
 
@@ -62,7 +62,7 @@ helm upgrade opsknight helm/opsknight --namespace opsknight \
 Pin the new image in the reviewed overlay, render it, use server-side dry run, then apply:
 
 ```bash
-kubectl kustomize k8s > opsknight-rendered.yaml
+kubectl kustomize deploy/kubernetes/kustomize/profiles/integrated > opsknight-rendered.yaml
 kubectl apply --dry-run=server -f opsknight-rendered.yaml
 kubectl apply -f opsknight-rendered.yaml
 kubectl rollout status deployment/opsknight -n opsknight --timeout=10m

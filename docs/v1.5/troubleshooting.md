@@ -29,9 +29,9 @@ Redact passwords, session/API/integration keys, signature secrets, authenticated
 ### The UI never loads or `docker compose up` exits
 
 ```bash
-docker compose ps
-docker compose logs --tail=200 opsknight-app
-docker compose logs --tail=200 opsknight-db
+docker compose -f deploy/compose/docker-compose.yml ps
+docker compose -f deploy/compose/docker-compose.yml logs --tail=200 opsknight-app
+docker compose -f deploy/compose/docker-compose.yml logs --tail=200 opsknight-db
 curl --fail 'http://localhost:3000/api/health?mode=readiness'
 ```
 
@@ -43,14 +43,14 @@ Check in this order:
 - application startup logs show the migration result; and
 - `APP_PORT`, `NEXTAUTH_URL`, and `NEXT_PUBLIC_APP_URL` match the browser origin.
 
-`docker compose config` is useful for detecting interpolation problems, but its output can contain rendered secrets. Do not paste it into a ticket without redaction.
+`docker compose -f deploy/compose/docker-compose.yml config` is useful for detecting interpolation problems, but its output can contain rendered secrets. Do not paste it into a ticket without redaction.
 
 ### PostgreSQL connection is refused
 
 Inside the Compose application network, PostgreSQL is `opsknight-db:5432`, not `localhost`. On the development host, a published PostgreSQL port normally uses `localhost`.
 
 ```bash
-docker compose exec -T opsknight-db \
+docker compose -f deploy/compose/docker-compose.yml exec -T opsknight-db \
   pg_isready -U "${POSTGRES_USER:-opsknight}" -d "${POSTGRES_DB:-opsknight_db}"
 ```
 
@@ -66,7 +66,7 @@ Set `APP_PORT=3001` and use `http://localhost:3001` for both application URL set
 
 ### You think the database must be reset
 
-Stop. `docker compose down -v` deletes the named PostgreSQL volume. It is not a routine repair command. Confirm the exact Compose project/volume, preserve a backup, and use it only for a deliberately disposable environment. For real data, follow [Backup and restore](./deployment/backup-restore).
+Stop. `docker compose -f deploy/compose/docker-compose.yml down -v` deletes the named PostgreSQL volume. It is not a routine repair command. Confirm the exact Compose project/volume, preserve a backup, and use it only for a deliberately disposable environment. For real data, follow [Backup and restore](./deployment/backup-restore).
 
 ## Kubernetes
 
@@ -240,7 +240,7 @@ Set `LOG_FORMAT=json` for collection and raise `LOG_LEVEL=debug` only for a boun
 For containers, change the deployment environment and recreate/restart through the normal release owner, then collect stdout/stderr:
 
 ```bash
-docker compose logs -f opsknight-app
+docker compose -f deploy/compose/docker-compose.yml logs -f opsknight-app
 kubectl -n opsknight logs deployment/opsknight-app --all-containers -f
 ```
 

@@ -6,7 +6,7 @@ description: Choose Helm or Kustomize, replace unsafe base values, deploy the ap
 
 # Kubernetes deployment
 
-OpsKnight ships both a Helm chart at `helm/opsknight` and a Kustomize base at `k8s/`. Both deploy the same Next.js application and PostgreSQL-backed runtime. Use the method your platform team can render, review, secure, upgrade, and recover consistently.
+OpsKnight ships both a Helm chart at `deploy/kubernetes/helm/opsknight` and a Kustomize base at `deploy/kubernetes/kustomize/`. Both deploy the same Next.js application and PostgreSQL-backed runtime. Use the method your platform team can render, review, secure, upgrade, and recover consistently.
 
 ## Choose a packaging path
 
@@ -32,7 +32,7 @@ Validate rendered API versions and admission/security policies against the actua
 
 ## Understand the shipped Kustomize base
 
-`k8s/kustomization.yaml` includes:
+`deploy/kubernetes/kustomize/base/kustomization.yaml` (combined with `deploy/kubernetes/kustomize/profiles/integrated/kustomization.yaml`) includes:
 
 - Namespace, ServiceAccount, application Deployment, Service, Ingress, HPA, PodDisruptionBudget, and NetworkPolicy;
 - Secret and ConfigMap examples; and
@@ -82,8 +82,8 @@ kubectl apply --server-side --dry-run=server -f /tmp/opsknight-rendered.yaml
 For Helm:
 
 ```bash
-helm lint helm/opsknight --values values.production.yaml
-helm template opsknight helm/opsknight \
+helm lint deploy/kubernetes/helm/opsknight --values values.production.yaml
+helm template opsknight deploy/kubernetes/helm/opsknight \
   --namespace opsknight \
   --values values.production.yaml > /tmp/opsknight-rendered.yaml
 kubectl apply --dry-run=server -f /tmp/opsknight-rendered.yaml
@@ -100,7 +100,7 @@ Apply through the matching owner:
 kubectl apply -k deploy/overlays/production
 
 # Or Helm release
-helm upgrade --install opsknight helm/opsknight \
+helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \
   --namespace opsknight \
   --create-namespace \
   --values values.production.yaml \

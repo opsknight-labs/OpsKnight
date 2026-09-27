@@ -156,7 +156,10 @@ export const complianceControls: readonly ComplianceControlDefinition[] = [
     owner: 'OPERATOR',
     frameworks: ['SOC2', 'ISO27001'],
     implementation: 'A CI restore drill and verification script exist.',
-    evidence: ['.github/workflows/enterprise-readiness.yml', 'scripts/verify-backup-restore.sh'],
+    evidence: [
+      '.github/workflows/enterprise-readiness.yml',
+      'deploy/scripts/drills/verify-backup-restore.sh',
+    ],
     gaps: [
       'CI fixtures are not evidence of restoring a production deployment. Scheduled operator drills and measured RPO/RTO remain required.',
     ],

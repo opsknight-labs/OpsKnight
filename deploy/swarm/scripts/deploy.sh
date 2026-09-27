@@ -214,8 +214,8 @@ else
   export SWARM_STACK_FILE="docker-stack.yml"
 fi
 
-if [ -f "${ROOT_DIR}/scripts/validate-runtime-capacity.cjs" ]; then
-  node "${ROOT_DIR}/scripts/validate-runtime-capacity.cjs"
+if [ -f "${ROOT_DIR}/deploy/scripts/validate-runtime-capacity.cjs" ]; then
+  node "${ROOT_DIR}/deploy/scripts/validate-runtime-capacity.cjs"
 fi
 
 # --- Step 3: Create Overlay Network & Versioned Raft Secrets ---

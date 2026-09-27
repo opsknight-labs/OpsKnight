@@ -100,7 +100,7 @@ Status: Partial. Responsibility: operator.
 
 A CI restore drill and verification script exist.
 
-Evidence: [.github/workflows/enterprise-readiness.yml](../../../.github/workflows/enterprise-readiness.yml), [scripts/verify-backup-restore.sh](../../../scripts/verify-backup-restore.sh).
+Evidence: [.github/workflows/enterprise-readiness.yml](../../../.github/workflows/enterprise-readiness.yml), [deploy/scripts/drills/verify-backup-restore.sh](../../../deploy/scripts/drills/verify-backup-restore.sh).
 
 Remaining: CI fixtures are not evidence of restoring a production deployment. Scheduled operator drills and measured RPO/RTO remain required.
 

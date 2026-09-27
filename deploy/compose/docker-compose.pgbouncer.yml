@@ -1,11 +1,11 @@
 # Overlay for split runtime with PgBouncer connection pooling.
-# Apply after docker-compose.yml and docker-compose.split.yml:
-# Bundled DB:  docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.pgbouncer.yml up -d
-# External DB: docker compose -f docker-compose.yml -f docker-compose.split.yml -f docker-compose.external-db.yml -f docker-compose.pgbouncer.yml up -d
+# Apply after deploy/compose/docker-compose.yml and deploy/compose/docker-compose.split.yml:
+# Bundled DB:  docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml up -d
+# External DB: docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.external-db.yml -f deploy/compose/docker-compose.pgbouncer.yml up -d
 services:
   opsknight-pgbouncer:
     build:
-      context: ./docker/pgbouncer
+      context: ../images/pgbouncer
       dockerfile: Dockerfile
     image: ${PGBOUNCER_IMAGE:-ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75}
     pull_policy: if_not_present
@@ -16,10 +16,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}
       POSTGRES_DB: ${POSTGRES_DB:-opsknight_db}
       PGBOUNCER_DB_HOST: ${PGBOUNCER_DB_HOST:-${EXTERNAL_DB_HOST:-}}
-      PGBOUNCER_DB_PORT: ${PGBOUNCER_DB_PORT:-5432}
-      PGBOUNCER_DB_NAME: ${PGBOUNCER_DB_NAME:-${POSTGRES_DB:-opsknight_db}}
-      PGBOUNCER_DB_USER: ${PGBOUNCER_DB_USER:-${POSTGRES_USER:-opsknight}}
-      PGBOUNCER_DB_PASSWORD: ${PGBOUNCER_DB_PASSWORD:-${EXTERNAL_DB_PASSWORD:-}}
+      PGBOUNCER_DB_PORT: ${PGBOUNCER_DB_PORT:-${EXTERNAL_DB_PORT:-5432}}
+      PGBOUNCER_DB_NAME: ${PGBOUNCER_DB_NAME:-${EXTERNAL_DB_NAME:-${POSTGRES_DB:-opsknight_db}}}
+      PGBOUNCER_DB_USER: ${PGBOUNCER_DB_USER:-${EXTERNAL_DB_USER:-${POSTGRES_USER:-opsknight}}}
+      PGBOUNCER_DB_PASSWORD: ${PGBOUNCER_DB_PASSWORD:-${EXTERNAL_DB_PASSWORD:-${POSTGRES_PASSWORD:-}}}
       PGBOUNCER_DB_PASSWORD_FILE: ${PGBOUNCER_DB_PASSWORD_FILE:-}
       PGBOUNCER_DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-10}
       PGBOUNCER_RESERVE_POOL_SIZE: ${PGBOUNCER_RESERVE_POOL_SIZE:-5}
@@ -28,7 +28,7 @@ services:
       PGBOUNCER_SERVER_TLS_CA_FILE: ${PGBOUNCER_SERVER_TLS_CA_FILE:-}
       OPSKNIGHT_DATABASE_URL: ${OPSKNIGHT_DATABASE_URL:-}
     volumes:
-      - ./docker/pgbouncer/entrypoint.sh:/docker-entrypoint.sh:ro
+      - ../images/pgbouncer/entrypoint.sh:/docker-entrypoint.sh:ro
     depends_on:
       opsknight-db:
         condition: service_healthy

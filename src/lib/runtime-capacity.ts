@@ -1,4 +1,4 @@
-import validateScript from '../../scripts/validate-runtime-capacity.cjs';
+import validateScript from '../../deploy/scripts/validate-runtime-capacity.cjs';
 
 export interface CapacityEnv {
   OPSKNIGHT_RUNTIME_MODE?: string;

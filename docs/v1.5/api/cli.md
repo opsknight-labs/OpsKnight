@@ -97,7 +97,7 @@ This operation activates a disabled/invited account and changes its role. Confir
 The standard application container is `opsknight-app` in Compose and `opsknight_app` as its explicit container name. Prefer the service name:
 
 ```bash
-docker compose exec opsknight-app \
+docker compose -f deploy/compose/docker-compose.yml exec opsknight-app \
   npm run ops -- \
   --user "Recovery Admin" \
   --email "recovery-admin@example.com" \

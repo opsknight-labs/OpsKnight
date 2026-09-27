@@ -7,8 +7,8 @@ on:
     paths:
       - 'deploy/swarm/**'
       - 'docker-entrypoint.sh'
-      - 'docker/pgbouncer/**'
-      - 'scripts/validate-runtime-capacity.cjs'
+      - 'deploy/images/pgbouncer/**'
+      - 'deploy/scripts/validate-runtime-capacity.cjs'
       - 'Dockerfile'
       - 'package.json'
       - 'prisma/**'
@@ -19,8 +19,8 @@ on:
     paths:
       - 'deploy/swarm/**'
       - 'docker-entrypoint.sh'
-      - 'docker/pgbouncer/**'
-      - 'scripts/validate-runtime-capacity.cjs'
+      - 'deploy/images/pgbouncer/**'
+      - 'deploy/scripts/validate-runtime-capacity.cjs'
       - 'Dockerfile'
       - 'package.json'
       - 'prisma/**'
@@ -119,7 +119,7 @@ jobs:
           SWARM_REPLICAS_CRITICAL_WORKER=1 \
           SWARM_REPLICAS_BULK_WORKER=1 \
           SWARM_REPLICAS_STATUS_PROJECTOR=1 \
-          node scripts/validate-runtime-capacity.cjs
+          node deploy/scripts/validate-runtime-capacity.cjs
 
           echo "--- Testing Split Swarm + PgBouncer Capacity ---"
           SWARM_REPLICAS_WEB=4 \
@@ -127,12 +127,12 @@ jobs:
           SWARM_REPLICAS_SCHEDULER=2 \
           SWARM_STACK_FILE="docker-stack.pgbouncer.yml" \
           PGBOUNCER_ENABLED="true" \
-          node scripts/validate-runtime-capacity.cjs
+          node deploy/scripts/validate-runtime-capacity.cjs
 
           echo "--- Testing Integrated Swarm Capacity (3 replicas) ---"
           OPSKNIGHT_RUNTIME_MODE="integrated" \
           INTEGRATED_REPLICAS=3 \
-          node scripts/validate-runtime-capacity.cjs
+          node deploy/scripts/validate-runtime-capacity.cjs
 
   swarm-e2e-lifecycle:
     name: L1-L5 Swarm Convergence, Scaling, Secret Rotation & Mode Switching
@@ -169,7 +169,7 @@ jobs:
 
       - name: Build Swarm PgBouncer Test Container Image
         run: |
-          docker build -t opsknight-pgbouncer:local docker/pgbouncer
+          docker build -t opsknight-pgbouncer:local deploy/images/pgbouncer
 
       - name: Deploy Core Split Swarm Stack
         run: |

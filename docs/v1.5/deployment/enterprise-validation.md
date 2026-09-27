@@ -33,7 +33,7 @@ Create a PostgreSQL custom-format or SQL backup, then restore it into an isolate
 database:
 
 ```bash
-scripts/verify-backup-restore.sh /absolute/path/to/opsknight.dump
+deploy/scripts/drills/verify-backup-restore.sh /absolute/path/to/opsknight.dump
 ```
 
 The script never connects to the source database. It creates a temporary PostgreSQL container,
@@ -50,7 +50,7 @@ readiness endpoint for one minute. Run it only on an approved staging cluster:
 CONFIRM_OPSKNIGHT_CHAOS=delete-one-app-pod \
 OPSKNIGHT_NAMESPACE=opsknight \
 OPSKNIGHT_HEALTH_URL=https://staging.example.com/api/health?mode=readiness \
-  scripts/verify-k8s-failover.sh
+  deploy/scripts/drills/verify-k8s-failover.sh
 ```
 
 The drill refuses to start unless at least two application pods are running. It fails if more than
@@ -58,7 +58,7 @@ one readiness request fails or replacement pods do not become ready within five 
 
 ## Highly available Helm baseline
 
-Start with `helm/opsknight/examples/values-enterprise-ha.yaml`. It configures three application
+Start with `deploy/kubernetes/helm/opsknight/examples/values-enterprise-ha.yaml`. It configures three application
 replicas, a two-pod disruption budget, autoscaling, rolling updates with zero unavailable replicas,
 node spreading, network policy, and an external PostgreSQL boundary.
 

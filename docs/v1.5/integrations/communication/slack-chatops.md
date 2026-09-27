@@ -196,7 +196,7 @@ credited to you.
 ### Reading the logs
 
 ```bash
-docker compose logs --tail=200 opsknight | grep -i "slack"
+docker compose -f deploy/compose/docker-compose.yml logs --tail=200 opsknight-app | grep -i "slack"
 ```
 
 | Log line                                               | Meaning                                               |
