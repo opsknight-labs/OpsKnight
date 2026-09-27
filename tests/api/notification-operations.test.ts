@@ -8,7 +8,16 @@ import { requeueCentralNotification } from '@/lib/notification-control-plane';
 
 vi.mock('@/lib/rbac', () => ({ getCurrentUser: vi.fn() }));
 vi.mock('@/lib/notification-operations', () => ({
-  OPERATIONS_CHANNELS: ['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP'],
+  OPERATIONS_CHANNELS: [
+    'EMAIL',
+    'SMS',
+    'VOICE',
+    'PUSH',
+    'SLACK',
+    'MICROSOFT_TEAMS',
+    'WEBHOOK',
+    'WHATSAPP',
+  ],
   OPERATIONS_STATUSES: ['PENDING', 'SENT', 'DELIVERED', 'FAILED', 'SKIPPED'],
   OPERATIONS_CATEGORIES: ['INCIDENT', 'SECURITY', 'STATUS_PAGE', 'SLA', 'ADMINISTRATION', 'SYSTEM'],
   getNotificationOperations: vi.fn(),

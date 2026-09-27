@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
       'VOICE',
       'PUSH',
       'SLACK',
+      'MICROSOFT_TEAMS',
       'WEBHOOK',
       'WHATSAPP',
     ]);

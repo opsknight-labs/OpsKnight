@@ -57,6 +57,8 @@ export type TeamsDeliveryEnqueueInput = {
     teamId: string;
     channelId: string;
     updatedAt: string;
+    channelName?: string | null;
+    teamName?: string | null;
   };
 };
 
@@ -142,16 +144,42 @@ async function releaseFailedOperation(
 ): Promise<void> {
   const { terminal } = classifyTeamsError(error);
   const status = terminal || attempts >= MAX_TEAMS_OPERATION_ATTEMPTS ? 'FAILED' : 'PENDING';
+  const errMessage = (error instanceof Error ? error.message : String(error)).slice(0, 1000);
   await prisma.externalOperation.updateMany({
     where: { id, status: 'PROCESSING', leaseToken },
     data: {
       status,
       nextAttemptAt: new Date(Date.now() + operationRetryDelayMs(error)),
-      lastError: (error instanceof Error ? error.message : String(error)).slice(0, 1000),
+      lastError: errMessage,
       leaseToken: null,
       leaseExpiresAt: null,
     },
   });
+  if (status === 'FAILED') {
+    try {
+      const op = await prisma.externalOperation.findUnique({
+        where: { id },
+        select: { idempotencyKey: true },
+      });
+      if (op?.idempotencyKey) {
+        await (
+          prisma as unknown as {
+            notification: { updateMany: (a: unknown) => Promise<unknown> };
+          }
+        ).notification
+          .updateMany({
+            where: { deliveryKey: op.idempotencyKey },
+            data: {
+              status: 'FAILED',
+              failedAt: new Date(),
+              errorMsg: errMessage,
+              attempts: { increment: 1 },
+            },
+          })
+          .catch(() => undefined);
+      }
+    } catch {}
+  }
 }
 
 /**
@@ -159,92 +187,59 @@ async function releaseFailedOperation(
  * Uses ExternalOperation @@unique([provider,idempotencyKey]) as the fence so
  * duplicate incident events do not create duplicate cards.
  */
+async function syncTeamsNotificationDelivered(
+  idempotencyKey: string | null | undefined,
+  providerMessageId?: string | null
+) {
+  if (!idempotencyKey) return;
+  await (
+    prisma as unknown as {
+      notification: {
+        updateMany: (a: unknown) => Promise<unknown>;
+      };
+    }
+  ).notification
+    .updateMany({
+      where: { deliveryKey: idempotencyKey },
+      data: {
+        status: 'DELIVERED',
+        sentAt: new Date(),
+        deliveredAt: new Date(),
+        ...(providerMessageId ? { providerMessageId } : {}),
+        attempts: { increment: 1 },
+      },
+    })
+    .catch(() => undefined);
+}
+
+async function syncTeamsNotificationFailure(
+  idempotencyKey: string | null | undefined,
+  errorMsg: string
+) {
+  if (!idempotencyKey) return;
+  await (
+    prisma as unknown as {
+      notification: {
+        updateMany: (a: unknown) => Promise<unknown>;
+      };
+    }
+  ).notification
+    .updateMany({
+      where: { deliveryKey: idempotencyKey },
+      data: {
+        status: 'FAILED',
+        failedAt: new Date(),
+        errorMsg: errorMsg.slice(0, 1000),
+        attempts: { increment: 1 },
+      },
+    })
+    .catch(() => undefined);
+}
+
 export async function enqueueMicrosoftTeamsDelivery(
   input: TeamsDeliveryEnqueueInput
 ): Promise<string> {
-  const idempotencyKey = teamsDeliveryIdempotencyKey(input);
-  const operation = operationForEvent(input.eventType);
-  return prisma.$transaction(async tx => {
-    const existing = await tx.externalOperation.findUnique({
-      where: { provider_idempotencyKey: { provider: TEAMS_PROVIDER, idempotencyKey } },
-      select: { id: true },
-    });
-    if (existing) return existing.id;
-    // Freeze destination routing at enqueue time (fences retarget races).
-    let destinationSnapshot: Record<string, string> | null = null;
-    if (input.destinationSnapshot) {
-      destinationSnapshot = {
-        tenantId: input.destinationSnapshot.tenantId,
-        teamId: input.destinationSnapshot.teamId,
-        channelId: input.destinationSnapshot.channelId,
-        serviceId: '',
-        updatedAt: input.destinationSnapshot.updatedAt,
-      };
-    } else {
-      try {
-        const snap = await (
-          tx as unknown as {
-            microsoftTeamsDestination: {
-              findUnique: (a: unknown) => Promise<{
-                tenantId: string;
-                teamId: string;
-                channelId: string;
-                serviceId: string;
-                updatedAt: Date;
-              } | null>;
-            };
-          }
-        ).microsoftTeamsDestination.findUnique({
-          where: { id: input.destinationId },
-          select: {
-            tenantId: true,
-            teamId: true,
-            channelId: true,
-            serviceId: true,
-            updatedAt: true,
-          },
-        } as never);
-        if (snap) {
-          destinationSnapshot = {
-            tenantId: snap.tenantId,
-            teamId: snap.teamId,
-            channelId: snap.channelId,
-            serviceId: snap.serviceId,
-            updatedAt:
-              snap.updatedAt instanceof Date
-                ? snap.updatedAt.toISOString()
-                : String(snap.updatedAt),
-          };
-        }
-      } catch {}
-    }
-    const payload: Record<string, unknown> = {
-      destinationId: input.destinationId,
-      eventType: input.eventType,
-      incidentUpdatedAt: input.incidentUpdatedAt.toISOString(),
-      escalationGeneration: input.escalationGeneration ?? null,
-    };
-    if (destinationSnapshot) payload.destinationSnapshot = destinationSnapshot;
-    const created = await tx.externalOperation.create({
-      data: {
-        provider: TEAMS_PROVIDER,
-        operation,
-        idempotencyKey,
-        incidentId: input.incidentId,
-        requestPayload: payload as Prisma.InputJsonObject,
-      },
-    });
-    await tx.backgroundJob.create({
-      data: {
-        type: 'EXTERNAL_OPERATION',
-        status: 'PENDING',
-        scheduledAt: new Date(),
-        maxAttempts: MAX_TEAMS_OPERATION_ATTEMPTS,
-        payload: { operationId: created.id },
-      },
-    });
-    return created.id;
-  });
+  return prisma.$transaction(async tx => enqueueMicrosoftTeamsDeliveryInTransaction(tx, input));
 }
 
 export async function enqueueMicrosoftTeamsDeliveryInTransaction(
@@ -259,6 +254,8 @@ export async function enqueueMicrosoftTeamsDeliveryInTransaction(
   });
   if (existing) return existing.id;
   let destinationSnapshot: Record<string, string> | null = null;
+  let channelName: string | null = null;
+  let teamName: string | null = null;
   if (input.destinationSnapshot) {
     destinationSnapshot = {
       tenantId: input.destinationSnapshot.tenantId,
@@ -267,6 +264,8 @@ export async function enqueueMicrosoftTeamsDeliveryInTransaction(
       serviceId: '',
       updatedAt: input.destinationSnapshot.updatedAt,
     };
+    channelName = input.destinationSnapshot.channelName ?? null;
+    teamName = input.destinationSnapshot.teamName ?? null;
   } else {
     try {
       const snap = await (
@@ -276,6 +275,8 @@ export async function enqueueMicrosoftTeamsDeliveryInTransaction(
               tenantId: string;
               teamId: string;
               channelId: string;
+              channelName?: string | null;
+              teamName?: string | null;
               serviceId: string;
               updatedAt: Date;
             } | null>;
@@ -283,7 +284,15 @@ export async function enqueueMicrosoftTeamsDeliveryInTransaction(
         }
       ).microsoftTeamsDestination.findUnique({
         where: { id: input.destinationId },
-        select: { tenantId: true, teamId: true, channelId: true, serviceId: true, updatedAt: true },
+        select: {
+          tenantId: true,
+          teamId: true,
+          channelId: true,
+          channelName: true,
+          teamName: true,
+          serviceId: true,
+          updatedAt: true,
+        },
       } as never);
       if (snap) {
         destinationSnapshot = {
@@ -294,6 +303,8 @@ export async function enqueueMicrosoftTeamsDeliveryInTransaction(
           updatedAt:
             snap.updatedAt instanceof Date ? snap.updatedAt.toISOString() : String(snap.updatedAt),
         };
+        channelName = snap.channelName ?? null;
+        teamName = snap.teamName ?? null;
       }
     } catch {}
   }
@@ -322,6 +333,46 @@ export async function enqueueMicrosoftTeamsDeliveryInTransaction(
       payload: { operationId: created.id },
     },
   });
+
+  const recipientDisplay = channelName
+    ? `${teamName ? teamName + ' / ' : ''}#${channelName}`
+    : destinationSnapshot?.channelId || input.destinationId;
+  const recipientHash = crypto
+    .createHash('sha256')
+    .update(`MICROSOFT_TEAMS:${input.destinationId}`)
+    .digest('hex');
+
+  await (
+    tx as unknown as {
+      notification: {
+        upsert: (a: unknown) => Promise<unknown>;
+      };
+    }
+  ).notification
+    .upsert({
+      where: { deliveryKey: idempotencyKey },
+      create: {
+        id: `notification_${crypto.createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 24)}`,
+        channel: 'MICROSOFT_TEAMS',
+        status: 'PENDING',
+        category: 'INCIDENT',
+        recipientType: 'MICROSOFT_TEAMS_CHANNEL',
+        recipientId: input.destinationId,
+        recipientDisplay,
+        recipientHash,
+        incidentId: input.incidentId,
+        eventType: input.eventType,
+        message: `Microsoft Teams card (${input.eventType}) for ${recipientDisplay}`,
+        templateKey: `service-teams-${input.eventType}`,
+        sourceType: 'SERVICE_INCIDENT',
+        sourceId: input.destinationId,
+        deliveryKey: idempotencyKey,
+        priority: 5,
+      },
+      update: {},
+    })
+    .catch(() => undefined);
+
   return created.id;
 }
 
@@ -344,6 +395,10 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     typeof payload?.eventType === 'string' ? (payload.eventType as string) : 'triggered';
   const incidentId = operation.incidentId;
   if (!incidentId || !destinationId) {
+    await syncTeamsNotificationFailure(
+      operation.idempotencyKey,
+      'Teams operation payload is missing incidentId/destinationId'
+    );
     await prisma.externalOperation.updateMany({
       where: { id, status: 'PROCESSING', leaseToken },
       data: {
@@ -389,6 +444,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       include: { service: { select: { name: true } }, assignee: { select: { name: true } } },
     });
     if (!incident) {
+      await syncTeamsNotificationFailure(operation.idempotencyKey, 'Incident no longer exists');
       await prisma.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
         data: {
@@ -416,6 +472,10 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       }
     ).microsoftTeamsDestination.findUnique({ where: { id: destinationId } } as never);
     if (!destination || !destination.enabled) {
+      await syncTeamsNotificationFailure(
+        operation.idempotencyKey,
+        'Teams destination is not enabled'
+      );
       await prisma.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
         data: {
@@ -449,6 +509,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         (frozen.serviceId && frozen.serviceId !== destination.serviceId);
       if (mismatch) {
         const reason = 'Teams destination was retargeted after enqueue — stale delivery suppressed';
+        await syncTeamsNotificationFailure(operation.idempotencyKey, reason);
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: { status: 'FAILED', lastError: reason, leaseToken: null, leaseExpiresAt: null },
@@ -584,6 +645,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       }
     }
     if (staleReason) {
+      await syncTeamsNotificationFailure(operation.idempotencyKey, staleReason);
       await prisma.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
         data: { status: 'FAILED', lastError: staleReason, leaseToken: null, leaseExpiresAt: null },
@@ -1468,6 +1530,22 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
               ...(replacingCanonicalActivity ? { messageGeneration: { increment: 1 } } : {}),
             },
           } as never);
+          await (
+            tx as unknown as {
+              notification: { updateMany: (a: unknown) => Promise<unknown> };
+            }
+          ).notification
+            .updateMany({
+              where: { deliveryKey: operation.idempotencyKey },
+              data: {
+                status: 'DELIVERED',
+                sentAt: new Date(),
+                deliveredAt: new Date(),
+                providerMessageId: `teams:${id}`,
+                attempts: { increment: 1 },
+              },
+            })
+            .catch(() => undefined);
         });
       } catch (txErr) {
         // The provider accepted the side effect but the local ledger commit failed.
@@ -1513,6 +1591,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
           leaseExpiresAt: null,
         },
       });
+      await syncTeamsNotificationDelivered(operation.idempotencyKey);
     }
     await releaseTeamsConcurrency();
     await releaseCardMutationLease();

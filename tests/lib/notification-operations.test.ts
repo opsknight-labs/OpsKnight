@@ -52,11 +52,24 @@ describe('notification operations query', () => {
     );
   });
 
-  it.each(['SENT', 'DELIVERED'] as const)('filters %s without merging delivery states', async status => {
-    await getNotificationOperations({ status });
+  it.each(['SENT', 'DELIVERED'] as const)(
+    'filters %s without merging delivery states',
+    async status => {
+      await getNotificationOperations({ status });
+      const rowArgs = vi.mocked(prisma.notification.findMany).mock.calls[0]![0]!;
+      const categoryArgs = vi.mocked(prisma.notification.groupBy).mock.calls[1]![0]!;
+      expect(rowArgs.where).toMatchObject({ status });
+      expect(categoryArgs.where).toMatchObject({ status });
+    }
+  );
+
+  it('filters by MICROSOFT_TEAMS channel correctly and includes it in OPERATIONS_CHANNELS', async () => {
+    const { OPERATIONS_CHANNELS } = await import('@/lib/notification-operations');
+    expect(OPERATIONS_CHANNELS).toContain('MICROSOFT_TEAMS');
+    expect(OPERATIONS_CHANNELS).toContain('VOICE');
+
+    await getNotificationOperations({ channel: 'MICROSOFT_TEAMS' });
     const rowArgs = vi.mocked(prisma.notification.findMany).mock.calls[0]![0]!;
-    const categoryArgs = vi.mocked(prisma.notification.groupBy).mock.calls[1]![0]!;
-    expect(rowArgs.where).toMatchObject({ status });
-    expect(categoryArgs.where).toMatchObject({ status });
+    expect(rowArgs.where).toMatchObject({ channel: 'MICROSOFT_TEAMS' });
   });
 });

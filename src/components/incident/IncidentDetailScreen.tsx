@@ -74,6 +74,22 @@ export default async function IncidentDetailScreen({
       team: true,
       events: { orderBy: { createdAt: 'desc' } },
       notes: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+      notifications: {
+        select: {
+          id: true,
+          channel: true,
+          status: true,
+          recipientDisplay: true,
+          errorMsg: true,
+          createdAt: true,
+          sentAt: true,
+          deliveredAt: true,
+          failedAt: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      },
       watchers: { include: { user: true }, orderBy: { createdAt: 'asc' } },
       tags: { include: { tag: true }, orderBy: { createdAt: 'asc' } },
       customFieldValues: { include: { customField: true } },
@@ -170,6 +186,18 @@ export default async function IncidentDetailScreen({
         content: note.content,
         user: note.user,
         createdAt: note.createdAt,
+      }))}
+      notifications={incident.notifications.map(notif => ({
+        id: notif.id,
+        channel: notif.channel,
+        status: notif.status,
+        recipientDisplay: notif.recipientDisplay,
+        errorMsg: notif.errorMsg,
+        createdAt: notif.createdAt,
+        sentAt: notif.sentAt,
+        deliveredAt: notif.deliveredAt,
+        failedAt: notif.failedAt,
+        user: notif.user,
       }))}
       incidentCreatedAt={incident.createdAt}
       incidentAcknowledgedAt={incident.acknowledgedAt}
