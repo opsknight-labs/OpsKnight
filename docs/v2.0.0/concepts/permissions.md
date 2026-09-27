@@ -4,7 +4,8 @@ description: Roles, capabilities, scope, and tenant isolation.
 type: concept
 product_area: authorization
 audience: [administrator, operator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Permissions

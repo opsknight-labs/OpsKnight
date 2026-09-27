@@ -4,7 +4,8 @@ description: Start an evaluation environment and verify that OpsKnight is health
 type: tutorial
 product_area: deployment
 audience: [operator, administrator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Quickstart with Docker Compose

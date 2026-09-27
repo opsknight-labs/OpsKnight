@@ -4,11 +4,12 @@ description: Connect Zabbix alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-verified: true
-verified_at: 2026-09-27
-evidence:
-  - src/lib/integrations/zabbix.ts
-  - src/app/api/integrations/zabbix/route.ts
+verification:
+  level: source
+  verified_at: 2026-09-27
+  evidence:
+    - src/lib/integrations/zabbix.ts
+    - src/app/api/integrations/zabbix/route.ts
 ---
 
 # Zabbix

@@ -4,7 +4,8 @@ description: Deploy, configure, secure, scale, protect, and upgrade OpsKnight.
 type: deployment
 product_area: operations
 audience: [operator, administrator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Operate OpsKnight

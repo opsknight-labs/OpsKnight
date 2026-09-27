@@ -4,10 +4,11 @@ description: Generated inventory of implemented HTTP API route modules.
 type: reference
 product_area: api
 audience: [developer, operator, administrator]
-verified: true
-verified_at: 2026-09-27
-evidence:
-  - src/app/api/
+verification:
+  level: source
+  verified_at: 2026-09-27
+  evidence:
+    - src/app/api/
 ---
 
 # API route inventory

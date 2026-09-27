@@ -4,7 +4,8 @@ description: Connect monitoring, cloud, communication, issue-tracking, uptime, a
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-verified: false
+verification:
+  level: draft
 ---
 
 # Integrations

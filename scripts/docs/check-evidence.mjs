@@ -18,7 +18,7 @@ if (exists('generated/docs-evidence')) {
     let metadata;
     try { metadata = JSON.parse(readRepositoryFile(file)); }
     catch (error) { failures.push(`${file}: invalid JSON (${error.message})`); continue; }
-    for (const field of ['version', 'commit', 'route', 'journey', 'browser', 'viewport']) if (!metadata[field]) failures.push(`${file}: missing ${field}`);
+    for (const field of ['release', 'commit', 'route', 'journey', 'browser', 'viewport']) if (!metadata[field]) failures.push(`${file}: missing ${field}`);
   }
 }
 if (failures.length) {

@@ -14,10 +14,11 @@ description: ${description}
 type: reference
 product_area: ${area}
 audience: [developer, operator, administrator]
-verified: true
-verified_at: ${date}
-evidence:
-${evidence.map(item => `  - ${item}`).join('\n')}
+verification:
+  level: source
+  verified_at: ${date}
+  evidence:
+${evidence.map(item => `    - ${item}`).join('\n')}
 ---`;
 
 const permissions = inspectPermissions();

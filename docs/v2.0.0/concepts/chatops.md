@@ -4,7 +4,8 @@ description: Provider-backed collaboration spaces linked to incidents.
 type: concept
 product_area: chatops
 audience: [administrator, responder]
-verified: false
+verification:
+  level: draft
 ---
 
 # ChatOps and war rooms

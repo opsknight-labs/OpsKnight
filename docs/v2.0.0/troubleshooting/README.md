@@ -4,7 +4,8 @@ description: Diagnose OpsKnight symptoms using observable evidence.
 type: troubleshooting
 product_area: operations
 audience: [operator, administrator, responder]
-verified: false
+verification:
+  level: draft
 ---
 
 # Troubleshooting

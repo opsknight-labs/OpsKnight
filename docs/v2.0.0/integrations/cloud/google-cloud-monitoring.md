@@ -4,11 +4,12 @@ description: Connect Google Cloud Monitoring alerts to OpsKnight incident ingest
 type: integration
 product_area: integrations
 audience: [administrator, operator]
-verified: true
-verified_at: 2026-09-27
-evidence:
-  - src/lib/integrations/google-cloud-monitoring.ts
-  - src/app/api/integrations/google-cloud-monitoring/route.ts
+verification:
+  level: source
+  verified_at: 2026-09-27
+  evidence:
+    - src/lib/integrations/google-cloud-monitoring.ts
+    - src/app/api/integrations/google-cloud-monitoring/route.ts
 ---
 
 # Google Cloud Monitoring

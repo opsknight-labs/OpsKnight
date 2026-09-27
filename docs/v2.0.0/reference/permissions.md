@@ -4,10 +4,11 @@ description: Generated application roles, capabilities, and API scopes.
 type: reference
 product_area: authorization
 audience: [developer, operator, administrator]
-verified: true
-verified_at: 2026-09-27
-evidence:
-  - src/lib/authorization.ts
+verification:
+  level: source
+  verified_at: 2026-09-27
+  evidence:
+    - src/lib/authorization.ts
 ---
 
 # Permissions reference

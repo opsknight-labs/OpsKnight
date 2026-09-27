@@ -4,7 +4,8 @@ description: Frozen acknowledgement and resolution targets for incidents.
 type: concept
 product_area: incident-sla
 audience: [administrator, responder]
-verified: false
+verification:
+  level: draft
 ---
 
 # Incident SLA

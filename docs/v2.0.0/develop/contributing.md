@@ -4,7 +4,8 @@ description: Keep product behavior and documentation evidence aligned.
 type: developer
 product_area: engineering
 audience: [developer]
-verified: false
+verification:
+  level: draft
 ---
 
 # Contributing
