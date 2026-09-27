@@ -63,6 +63,7 @@
     "lint:report": "eslint . --format @microsoft/eslint-formatter-sarif --output-file reports/security.sarif",
     "docs:sync": "scripts/sync-docs-to-website.sh",
     "docs:discover": "node scripts/docs/discover-capabilities.mjs",
+    "docs:test": "node --test tests/docs/tooling/*.test.mjs",
     "docs:map": "node scripts/docs/build-doc-map.mjs",
     "docs:reference": "node scripts/docs/generate-reference.mjs",
     "docs:frontmatter": "node scripts/docs/check-frontmatter.mjs",
