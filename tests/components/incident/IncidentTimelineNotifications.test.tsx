@@ -215,4 +215,37 @@ describe('IncidentTimeline notification integration', () => {
       screen.queryByText('Voice call notification delivered to OpsKnight Admin')
     ).not.toBeInTheDocument();
   });
+
+  it('preserves synthesized voice delivery when the persisted event belongs to a different responder', () => {
+    const propsWithDifferentResponders = {
+      events: [
+        {
+          id: 'voice-event-alice',
+          message: 'Voice call connected to Alice',
+          type: 'STATUS_CHANGE',
+          createdAt: new Date('2026-09-27T10:01:00Z'),
+        },
+      ],
+      notes: [],
+      notifications: [
+        {
+          id: 'notif-voice-bob',
+          channel: 'VOICE',
+          status: 'DELIVERED',
+          recipientDisplay: '+15551234567',
+          createdAt: new Date('2026-09-27T10:00:50Z'),
+          deliveredAt: new Date('2026-09-27T10:01:02Z'),
+          user: { id: 'u2', name: 'Bob', email: 'bob@opsknight.com' },
+        },
+      ],
+      incidentCreatedAt: new Date('2026-09-27T10:00:00Z'),
+    };
+
+    render(<IncidentTimeline {...propsWithDifferentResponders} />);
+
+    // Alice's persisted event should be visible
+    expect(screen.getByText('Voice call connected to Alice')).toBeInTheDocument();
+    // Bob's delivery notification should NOT be suppressed since the event belongs to Alice
+    expect(screen.getByText('Voice call notification delivered to Bob')).toBeInTheDocument();
+  });
 });
