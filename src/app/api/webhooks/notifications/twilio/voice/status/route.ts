@@ -117,7 +117,10 @@ async function processStatusCallback(
   callStatus: string,
   attempt?: { id: string; startedAt: Date }
 ) {
-  const delivered = callStatus === 'answered' || callStatus === 'completed';
+  // Twilio's answered progress event sends CallStatus = 'in-progress'
+  const connected = callStatus === 'in-progress' || callStatus === 'answered';
+  const completed = callStatus === 'completed';
+  const delivered = connected || completed;
   const failed = ['busy', 'no-answer', 'failed', 'canceled'].includes(callStatus);
   const now = new Date();
   await prisma.$transaction(async tx => {
@@ -132,7 +135,7 @@ async function processStatusCallback(
           reconciliationDeadline: null,
         },
       });
-      if (changed.count > 0 && callStatus === 'answered' && notification.incidentId) {
+      if (changed.count > 0 && connected && notification.incidentId) {
         await tx.incidentEvent.create({
           data: {
             incidentId: notification.incidentId,
@@ -174,34 +177,76 @@ async function processStatusCallback(
       });
     }
 
-    // Update the specific delivery attempt if we have an attempt, otherwise
-    // fall back to matching by providerMessageId for legacy in-flight calls.
+    // Monotonic state machine for delivery attempts:
+    // ACCEPTED (1) -> RINGING (2) -> IN-PROGRESS / ANSWERED (3) -> terminal states (COMPLETED, BUSY, NO-ANSWER, FAILED, CANCELED, ACKNOWLEDGED) (4)
+    const TERMINAL_OUTCOMES = [
+      'COMPLETED',
+      'BUSY',
+      'NO-ANSWER',
+      'FAILED',
+      'CANCELED',
+      'ACKNOWLEDGED',
+    ];
+    const CONNECTED_OUTCOMES = ['IN-PROGRESS', 'ANSWERED', 'COMPLETED', 'ACKNOWLEDGED'];
+
+    let targetOutcome: string;
+    let whereOutcomeCondition: object = {};
+
+    if (completed) {
+      targetOutcome = 'COMPLETED';
+      whereOutcomeCondition = { outcome: { not: 'ACKNOWLEDGED' } };
+    } else if (connected) {
+      targetOutcome = callStatus === 'in-progress' ? 'IN-PROGRESS' : 'ANSWERED';
+      whereOutcomeCondition = { outcome: { notIn: ['COMPLETED', 'ACKNOWLEDGED'] } };
+    } else if (failed) {
+      targetOutcome = callStatus.toUpperCase();
+      // A failed callback must never overwrite an attempt that was already connected or completed
+      whereOutcomeCondition = { outcome: { notIn: CONNECTED_OUTCOMES } };
+    } else {
+      targetOutcome = callStatus === 'ringing' ? 'RINGING' : 'ACCEPTED';
+      // Ringing/initiated must never overwrite connected or terminal states
+      whereOutcomeCondition = { outcome: { notIn: [...CONNECTED_OUTCOMES, ...TERMINAL_OUTCOMES] } };
+    }
+
     const attemptFilter = attempt?.id
       ? { id: attempt.id }
       : { notificationId: notification.id, providerMessageId: callSid };
+
     await tx.notificationDeliveryAttempt.updateMany({
-      where: attemptFilter,
+      where: {
+        ...attemptFilter,
+        ...whereOutcomeCondition,
+      },
       data: {
-        outcome: delivered
-          ? callStatus.toUpperCase()
-          : failed
-            ? callStatus.toUpperCase()
-            : 'ACCEPTED',
-        ...(delivered || failed ? { finishedAt: now } : {}),
+        outcome: targetOutcome,
+        ...(completed || failed ? { finishedAt: now } : {}),
         ...(failed
           ? { errorCode: callStatus, errorMessage: `Twilio voice call ${callStatus}` }
           : {}),
       },
     });
-    if (notification.userId && (delivered || failed)) {
-      await recordUserNotificationEndpointOutcome(tx, {
-        userId: notification.userId,
-        channel: 'VOICE',
-        addressHash: notification.recipientHash,
-        delivered,
-        errorCode: failed ? callStatus : undefined,
-        occurredAt: now,
-      });
+
+    if (notification.userId) {
+      if (delivered) {
+        await recordUserNotificationEndpointOutcome(tx, {
+          userId: notification.userId,
+          channel: 'VOICE',
+          addressHash: notification.recipientHash,
+          delivered: true,
+          occurredAt: now,
+        });
+      } else if (failed && callStatus === 'failed') {
+        // Only mark endpoint degraded for actual technical/provider failures,
+        // NOT for human non-responsiveness (busy, no-answer, canceled).
+        await recordUserNotificationEndpointOutcome(tx, {
+          userId: notification.userId,
+          channel: 'VOICE',
+          addressHash: notification.recipientHash,
+          delivered: false,
+          errorCode: callStatus,
+          occurredAt: now,
+        });
+      }
     }
   });
   return new NextResponse(null, { status: 204 });

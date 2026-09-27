@@ -111,12 +111,12 @@ Expect `"status":"healthy"` (or `"degraded"` only if a non-database check failed
 
 ## After the first page
 
-| Next job                                          | Guide                                                        |
-| ------------------------------------------------- | ------------------------------------------------------------ |
-| Email / SMS / Slack so a real page leaves the box | [Notifications](../administration/notifications)             |
-| Public/private status pages                      | [Status pages](../core-concepts/status-page)                 |
-| Slack war rooms (this version)                    | [Slack ChatOps](../integrations/communication/slack-chatops) |
-| Ingest from monitoring                            | [Integrations](../integrations)                              |
-| OIDC SSO (not SAML)                               | [OIDC](../security/oidc-setup)                               |
+| Next job                                                  | Guide                                                        |
+| --------------------------------------------------------- | ------------------------------------------------------------ |
+| Email / Voice / SMS / Slack so a real page leaves the box | [Notifications](../administration/notifications)             |
+| Public/private status pages                               | [Status pages](../core-concepts/status-page)                 |
+| Slack war rooms (this version)                            | [Slack ChatOps](../integrations/communication/slack-chatops) |
+| Ingest from monitoring                                    | [Integrations](../integrations)                              |
+| OIDC SSO (not SAML)                                       | [OIDC](../security/oidc-setup)                               |
 
-There is **no voice** channel. Microsoft Teams and Google Chat are webhook formats, not Slack-style rooms.
+Microsoft Teams and Google Chat are webhook formats, not Slack-style rooms.

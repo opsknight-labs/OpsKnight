@@ -43,9 +43,10 @@ export async function POST(request: NextRequest) {
     // 1. Look up notification and attempt.
     let notification: {
       id: string;
+      incidentId?: string | null;
       providerMessageId: string | null;
       user: { id: string; name: string | null } | null;
-      incident: { id: string; status: string; escalationGeneration: number } | null;
+      incident: { id?: string; status: string; escalationGeneration: number } | null;
     } | null = null;
     let attemptRecord: { id: string; providerMessageId: string | null } | null = null;
 
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
           notification: {
             select: {
               id: true,
+              incidentId: true,
               providerMessageId: true,
               user: { select: { id: true, name: true } },
               incident: { select: { id: true, status: true, escalationGeneration: true } },
@@ -78,6 +80,7 @@ export async function POST(request: NextRequest) {
             },
             select: {
               id: true,
+              incidentId: true,
               providerMessageId: true,
               user: { select: { id: true, name: true } },
               incident: { select: { id: true, status: true, escalationGeneration: true } },
@@ -96,6 +99,7 @@ export async function POST(request: NextRequest) {
         },
         select: {
           id: true,
+          incidentId: true,
           providerMessageId: true,
           user: { select: { id: true, name: true } },
           incident: { select: { id: true, status: true, escalationGeneration: true } },
@@ -173,7 +177,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 7. Execute canonical lifecycle command.
-    const incidentId = notification.incident.id;
+    const incidentId =
+      claims.incidentId || notification.incident?.id || notification.incidentId || '';
     try {
       await executeIncidentLifecycleCommand({
         incidentId,

@@ -206,7 +206,7 @@ describe('Voice escalation integration flow', () => {
     // Attempt outcome marked NO-ANSWER
     expect(mocks.attemptUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'attempt-101' },
+        where: expect.objectContaining({ id: 'attempt-101' }),
         data: expect.objectContaining({ outcome: 'NO-ANSWER' }),
       })
     );

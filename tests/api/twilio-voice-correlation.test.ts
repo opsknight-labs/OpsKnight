@@ -177,7 +177,7 @@ describe('Twilio voice callback correlation & races', () => {
       expect(resA.status).toBe(204);
       // Attempt 1 updated
       expect(mocks.attemptUpdateMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'attempt-1' } })
+        expect.objectContaining({ where: expect.objectContaining({ id: 'attempt-1' }) })
       );
 
       // Now callback arrives claiming attempt-2 with Call A (mismatched CallSid)
@@ -199,7 +199,7 @@ describe('Twilio voice callback correlation & races', () => {
       );
       expect(resB.status).toBe(204);
       expect(mocks.attemptUpdateMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'attempt-2' } })
+        expect.objectContaining({ where: expect.objectContaining({ id: 'attempt-2' }) })
       );
     });
   });
@@ -331,6 +331,82 @@ describe('Twilio voice callback correlation & races', () => {
       const text = await response.text();
       expect(text).toContain('This incident acknowledgement was already received.');
       expect(mocks.executeLifecycle).not.toHaveBeenCalled();
+    });
+
+    it('enforces monotonic attempt state machine: ringing callback cannot overwrite COMPLETED', async () => {
+      mocks.attemptFindUnique.mockResolvedValue({
+        id: 'attempt-1',
+        notificationId: 'notif-1',
+        providerMessageId: 'CA123',
+        startedAt: new Date('2026-09-27T12:00:00Z'),
+        notification: {
+          id: 'notif-1',
+          status: 'DELIVERED',
+          maxAttempts: 3,
+          incidentId: 'incident-1',
+          userId: 'user-1',
+          user: { name: 'Jane' },
+          recipientHash: 'hash-1',
+        },
+      });
+
+      // A late ringing callback arrives for an already COMPLETED attempt
+      const res = await statusPOST(
+        signedStatusRequest(
+          'notificationId=notif-1&attemptId=attempt-1',
+          'CallSid=CA123&CallStatus=ringing'
+        )
+      );
+      expect(res.status).toBe(204);
+
+      // Verify the query required outcome to NOT be in terminal/connected outcomes
+      const updateCall = mocks.attemptUpdateMany.mock.calls.find(
+        c => c[0]?.where?.id === 'attempt-1'
+      );
+      expect(updateCall).toBeDefined();
+      expect(updateCall![0].where.outcome).toEqual(
+        expect.objectContaining({
+          notIn: expect.arrayContaining(['COMPLETED', 'ACKNOWLEDGED', 'IN-PROGRESS', 'ANSWERED']),
+        })
+      );
+    });
+
+    it('enforces monotonic attempt state machine: failed callback cannot overwrite CONNECTED/IN-PROGRESS', async () => {
+      mocks.attemptFindUnique.mockResolvedValue({
+        id: 'attempt-1',
+        notificationId: 'notif-1',
+        providerMessageId: 'CA123',
+        startedAt: new Date('2026-09-27T12:00:00Z'),
+        notification: {
+          id: 'notif-1',
+          status: 'DELIVERED',
+          maxAttempts: 3,
+          incidentId: 'incident-1',
+          userId: 'user-1',
+          user: { name: 'Jane' },
+          recipientHash: 'hash-1',
+        },
+      });
+
+      // A late failed callback arrives
+      const res = await statusPOST(
+        signedStatusRequest(
+          'notificationId=notif-1&attemptId=attempt-1',
+          'CallSid=CA123&CallStatus=failed'
+        )
+      );
+      expect(res.status).toBe(204);
+
+      // Verify update requires outcome NOT in connected outcomes
+      const updateCall = mocks.attemptUpdateMany.mock.calls.find(
+        c => c[0]?.where?.id === 'attempt-1'
+      );
+      expect(updateCall).toBeDefined();
+      expect(updateCall![0].where.outcome).toEqual(
+        expect.objectContaining({
+          notIn: expect.arrayContaining(['IN-PROGRESS', 'ANSWERED', 'COMPLETED', 'ACKNOWLEDGED']),
+        })
+      );
     });
   });
 });

@@ -81,14 +81,14 @@ describe('Twilio voice status callback', () => {
     mocks.transaction.mockImplementation(async callback => callback(tx));
   });
 
-  it('marks answered calls delivered and updates endpoint health', async () => {
-    const response = await POST(signedRequest('CallSid=CA123&CallStatus=answered'));
+  it('marks answered calls (CallStatus=in-progress) delivered and connected', async () => {
+    const response = await POST(signedRequest('CallSid=CA123&CallStatus=in-progress'));
     expect(response.status).toBe(204);
     expect(mocks.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: 'DELIVERED' }) })
     );
     expect(mocks.updateAttemptMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ outcome: 'ANSWERED' }) })
+      expect.objectContaining({ data: expect.objectContaining({ outcome: 'IN-PROGRESS' }) })
     );
     expect(mocks.endpointCreate).toHaveBeenCalled();
     expect(mocks.incidentEventCreate).toHaveBeenCalledWith({
@@ -99,13 +99,22 @@ describe('Twilio voice status callback', () => {
     });
   });
 
-  it('records no-answer as a terminal paging outcome without creating a provider retry', async () => {
+  it('records no-answer as a terminal paging outcome without degrading endpoint health', async () => {
     const response = await POST(signedRequest('CallSid=CA123&CallStatus=no-answer'));
     expect(response.status).toBe(204);
     const update = mocks.updateMany.mock.calls[0]?.[0];
     expect(update.data).toEqual(expect.objectContaining({ status: 'FAILED' }));
     expect(update.data).not.toHaveProperty('nextAttemptAt');
     expect(update.data).toHaveProperty('attempts', 3);
+    // Human non-responsiveness (no-answer) must NOT degrade endpoint health:
+    expect(mocks.endpointCreate).not.toHaveBeenCalled();
+    expect(mocks.endpointUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('degrades endpoint health only for genuine provider failures (failed)', async () => {
+    const response = await POST(signedRequest('CallSid=CA123&CallStatus=failed'));
+    expect(response.status).toBe(204);
+    expect(mocks.endpointCreate).toHaveBeenCalled();
   });
 
   it('rejects unsigned state changes', async () => {
