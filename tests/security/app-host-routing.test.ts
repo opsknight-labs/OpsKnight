@@ -807,5 +807,39 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
 
       expect(options.trustHost).toBe(true);
     });
+
+    it('unauthenticated request with internal port 3000 redirects to configured public canonical URL without port 3000', async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://opssentinal.com');
+      vi.stubEnv('NEXTAUTH_URL', 'https://opssentinal.com');
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('http://opssentinal.com:3000/users/cmkpiyagd009xyceab9m85z2z', {
+        headers: {
+          host: 'opssentinal.com:3000',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toBe(
+        'https://opssentinal.com/login?callbackUrl=%2Fusers%2Fcmkpiyagd009xyceab9m85z2z'
+      );
+    });
+
+    it('getAuthoritativeRequestOrigin strips internal socket port 3000 when configured app URL is standard HTTPS', async () => {
+      const { getAuthoritativeRequestOrigin } = await import('@/lib/request-host');
+
+      const req = new NextRequest('http://opssentinal.com:3000/users/test', {
+        headers: {
+          host: 'opssentinal.com:3000',
+          'x-forwarded-proto': 'https',
+        },
+      });
+
+      const origin = getAuthoritativeRequestOrigin(req, 'https://opssentinal.com');
+      expect(origin).toBe('https://opssentinal.com');
+    });
   });
 });
