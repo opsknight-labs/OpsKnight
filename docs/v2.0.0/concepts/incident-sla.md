@@ -7,7 +7,7 @@ audience: [administrator, responder]
 verification:
   level: source
   verified_at: 2026-09-27
-  evidence: [src/lib/incident-sla.ts, prisma/schema.prisma]
+  evidence: [src/lib/incident-sla/, prisma/schema.prisma]
 ---
 
 # Incident SLA
