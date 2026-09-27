@@ -1,5 +1,6 @@
 ---
 title: Concepts
+order: 2
 description: Understand the OpsKnight incident-operations model.
 type: concept
 product_area: platform

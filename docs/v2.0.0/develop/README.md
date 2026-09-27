@@ -1,5 +1,6 @@
 ---
 title: Develop OpsKnight
+order: 8
 description: Architecture, local development, testing, and contribution guidance.
 type: developer
 product_area: engineering

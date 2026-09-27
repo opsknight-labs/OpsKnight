@@ -1,5 +1,6 @@
 ---
 title: Guides
+order: 3
 description: Task-oriented workflows for responders and administrators.
 type: how-to
 product_area: platform
