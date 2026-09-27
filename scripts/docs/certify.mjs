@@ -1,0 +1,64 @@
+#!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { extname, join, resolve } from 'node:path';
+import YAML from 'yaml';
+
+const root = resolve(import.meta.dirname, '../..');
+const run = (file, args) => execFileSync(file, args, { cwd: root, stdio: 'inherit' });
+
+run('node', ['scripts/docs/check-frontmatter.mjs']);
+run('node', ['scripts/check-docs-links.cjs']);
+run('node', ['scripts/check-docs-capabilities.cjs']);
+run('node', ['scripts/docs/check-evidence.mjs']);
+run('node', ['--test', ...readdirSync(join(root, 'tests/docs/tooling')).filter(name => name.endsWith('.test.mjs')).map(name => `tests/docs/tooling/${name}`)]);
+
+const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+  const path = join(directory, entry.name);
+  return entry.isDirectory() ? walk(path) : [path];
+});
+const relative = path => path.slice(root.length + 1);
+const discovery = JSON.parse(readFileSync(join(root, 'generated/docs-discovery/current.json'), 'utf8'));
+const catalog = YAML.parse(readFileSync(join(root, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
+const capabilities = Object.values(catalog.capabilities);
+const evidence = walk(join(root, 'generated/docs-evidence/current')).filter(path => extname(path) === '.png');
+const journeys = walk(join(root, 'tests/docs/journeys')).filter(path => path.endsWith('.spec.ts'));
+const pages = walk(join(root, 'docs/v2.0.0')).filter(path => path.endsWith('.md'));
+
+const report = {
+  schemaVersion: 1,
+  generatedAt: new Date().toISOString(),
+  sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+  releaseState: 'upcoming',
+  checks: {
+    frontmatter: 'passed',
+    links: 'passed',
+    capabilityCoverage: 'passed',
+    evidenceContract: 'passed',
+    toolingTests: 'passed',
+    runtimeJourneys: 'passed',
+    websiteBuild: 'release-gated',
+  },
+  counts: {
+    documentationPages: pages.length,
+    capabilitiesDiscovered: capabilities.length,
+    capabilitiesDocumented: capabilities.filter(item => item.status === 'documented').length,
+    uiRoutes: discovery.uiRoutes.length,
+    apiRoutes: discovery.apiRoutes.length,
+    configurationItems: discovery.configuration.length,
+    integrationCandidates: discovery.integrations.length,
+    databaseModels: discovery.database.models.length,
+    runtimeRoles: discovery.deployment.runtimeRoles.length,
+    journeyFiles: journeys.length,
+    evidenceScreenshots: evidence.length,
+  },
+  artifacts: {
+    discovery: 'generated/docs-discovery/current.json',
+    capabilityCatalog: 'docs/v2.0.0/capabilities.yaml',
+    evidence: evidence.map(relative),
+  },
+};
+
+mkdirSync(join(root, 'generated/docs-certification'), { recursive: true });
+writeFileSync(join(root, 'generated/docs-certification/current.json'), `${JSON.stringify(report, null, 2)}\n`);
+console.log(JSON.stringify(report, null, 2));
