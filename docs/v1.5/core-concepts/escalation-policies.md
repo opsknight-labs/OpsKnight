@@ -66,7 +66,9 @@ The policy can be saved with no steps, but it cannot page anyone until at least 
 
 New steps created in the policy interface use each resolved user's enabled notification preferences and the configured workspace providers. Although the data model supports stored step-channel overrides, do not depend on an undocumented database-level configuration as a public workflow.
 
-Personal Quiet Hours is a separate recipient policy. It is off by default and must be explicitly enabled by the user. When active, it can suppress LOW-urgency Push, SMS, and WhatsApp delivery for that recipient; Email and in-app remain available, and MEDIUM/HIGH urgency bypasses Quiet Hours. Fallback does not reintroduce a channel that Quiet Hours intentionally suppressed.
+Voice is a supported personal notification channel. When a step target has Voice enabled, a valid E.164 phone number, and the Twilio Voice provider is available, OpsKnight places an outbound incident call with DTMF acknowledgement.
+
+Personal Quiet Hours is a separate recipient policy. It is off by default and must be explicitly enabled by the user. When active, it can suppress LOW-urgency Push, Voice, SMS, and WhatsApp delivery for that recipient; Email and in-app remain available, and MEDIUM/HIGH urgency bypasses Quiet Hours. Fallback does not reintroduce a channel that Quiet Hours intentionally suppressed.
 
 ## Design a resilient policy
 

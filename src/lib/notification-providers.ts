@@ -100,7 +100,15 @@ export interface EmailConfig {
   secure?: boolean;
 }
 
-export type NotificationChannelType = 'EMAIL' | 'SMS' | 'PUSH' | 'WHATSAPP';
+export type NotificationChannelType = 'EMAIL' | 'SMS' | 'VOICE' | 'PUSH' | 'WHATSAPP';
+
+export interface VoiceConfig {
+  enabled: boolean;
+  provider: 'twilio' | null;
+  accountSid?: string;
+  authToken?: string;
+  fromNumber?: string;
+}
 
 function getAppHostname(): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL;
@@ -346,6 +354,8 @@ export async function isChannelAvailable(channel: NotificationChannelType): Prom
       return (await getEmailConfig()).enabled;
     case 'SMS':
       return (await getSMSConfig()).enabled;
+    case 'VOICE':
+      return (await getVoiceConfig()).enabled;
     case 'PUSH':
       return (await getPushConfig()).enabled;
     case 'WHATSAPP':
@@ -354,6 +364,73 @@ export async function isChannelAvailable(channel: NotificationChannelType): Prom
     default:
       return false;
   }
+}
+
+/** Voice shares the Twilio credential record but has an independent capability toggle. */
+export async function getVoiceConfig(): Promise<VoiceConfig> {
+  try {
+    const provider = await prisma.notificationProvider.findUnique({
+      where: { provider: 'twilio' },
+    });
+    if (!provider?.enabled || !provider.config) return { enabled: false, provider: null };
+    const config = await getDecryptedConfig('twilio', provider.config);
+    const enabled = config.voiceEnabled === true;
+    if (
+      enabled &&
+      config.accountSid &&
+      config.authToken &&
+      config.fromNumber &&
+      !String(config.accountSid).startsWith('enc:') &&
+      !String(config.authToken).startsWith('enc:')
+    ) {
+      return {
+        enabled: true,
+        provider: 'twilio',
+        accountSid: String(config.accountSid),
+        authToken: String(config.authToken),
+        fromNumber: String(config.fromNumber),
+      };
+    }
+  } catch (error) {
+    logger.error('Failed to load Twilio Voice config from database', {
+      component: 'notification-providers',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+  return { enabled: false, provider: null };
+}
+
+export interface VoiceCallbackCredentials {
+  authToken: string;
+  accountSid?: string;
+}
+
+/**
+ * Get Twilio credentials specifically for validating incoming webhook callbacks.
+ * Unlike getVoiceConfig(), this does not require provider.enabled or voiceEnabled,
+ * ensuring in-flight calls can still be validated and acknowledged even if an admin
+ * disabled the provider after call initiation.
+ */
+export async function getTwilioVoiceCallbackCredentials(): Promise<VoiceCallbackCredentials | null> {
+  try {
+    const provider = await prisma.notificationProvider.findUnique({
+      where: { provider: 'twilio' },
+    });
+    if (!provider?.config) return null;
+    const config = await getDecryptedConfig('twilio', provider.config);
+    if (config.authToken && !String(config.authToken).startsWith('enc:')) {
+      return {
+        authToken: String(config.authToken),
+        accountSid: config.accountSid ? String(config.accountSid) : undefined,
+      };
+    }
+  } catch (error) {
+    logger.error('Failed to load Twilio Voice callback credentials from database', {
+      component: 'notification-providers',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+  return null;
 }
 
 /**

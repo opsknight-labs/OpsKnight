@@ -34,7 +34,17 @@ async function sendCentralIncidentNotification(input: {
   priority?: string | null;
   urgency?: string | null;
 }): Promise<SendNotificationResult | null> {
-  if (!['EMAIL', 'SMS', 'PUSH', 'WHATSAPP'].includes(input.channel)) return null;
+  if (!['EMAIL', 'SMS', 'VOICE', 'PUSH', 'WHATSAPP'].includes(input.channel)) return null;
+  // Voice is an actionable responder page, not a lifecycle broadcast channel.
+  if (input.channel === 'VOICE' && input.eventType !== 'triggered') {
+    return {
+      success: true,
+      outcome: 'SKIPPED',
+      skipped: true,
+      terminal: true,
+      error: 'Voice calls are only sent for triggered incident pages',
+    };
+  }
   const recipient = await prisma.user.findUnique({
     where: { id: input.userId },
     select: { email: true, phoneNumber: true },
@@ -42,7 +52,7 @@ async function sendCentralIncidentNotification(input: {
   const recipientAddress =
     input.channel === 'EMAIL'
       ? recipient?.email
-      : input.channel === 'SMS' || input.channel === 'WHATSAPP'
+      : input.channel === 'SMS' || input.channel === 'VOICE' || input.channel === 'WHATSAPP'
         ? recipient?.phoneNumber
         : input.userId;
   if (!recipientAddress) {
@@ -58,6 +68,7 @@ async function sendCentralIncidentNotification(input: {
   const kind = `INCIDENT_${input.channel}` as
     | 'INCIDENT_EMAIL'
     | 'INCIDENT_SMS'
+    | 'INCIDENT_VOICE'
     | 'INCIDENT_PUSH'
     | 'INCIDENT_WHATSAPP';
   const queued = await enqueueCentralNotification({

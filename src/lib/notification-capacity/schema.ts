@@ -6,7 +6,7 @@ export const capacityModeSchema = z.enum(['AUTO', 'CUSTOM']);
 export const providerCapacityInputSchema = z
   .object({
     provider: z.string().trim().min(1).max(80).toLowerCase(),
-    channel: z.enum(['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP']),
+    channel: z.enum(['EMAIL', 'SMS', 'VOICE', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP']),
     mode: capacityModeSchema,
     ratePerSecond: z
       .number()

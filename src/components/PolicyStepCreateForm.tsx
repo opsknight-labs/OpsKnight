@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/shadcn/select';
 import { Plus, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
+import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import PolicyTargetCombobox from '@/components/policies/PolicyTargetCombobox';
 import EscalationConditionsEditor, {
   type EditableEscalationCondition,
@@ -189,6 +190,28 @@ export default function PolicyStepCreateForm({
             onChange={setConditions}
             disabled={isPending}
           />
+
+          <div className="space-y-2">
+            <Label>Notification Channels</Label>
+            <input type="hidden" name="notificationChannelsSubmitted" value="true" />
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {[
+                ['EMAIL', 'Email'],
+                ['SMS', 'SMS'],
+                ['VOICE', 'Voice Call'],
+                ['PUSH', 'Push'],
+                ['WHATSAPP', 'WhatsApp'],
+              ].map(([value, label]) => (
+                <label key={value} className="flex items-center gap-2">
+                  <Checkbox name="notificationChannels" value={value} defaultChecked />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Only channels also enabled by the responder will be used.
+            </p>
+          </div>
 
           <div className="flex gap-2 pt-2">
             <Button type="submit" disabled={isPending} className="flex-1">

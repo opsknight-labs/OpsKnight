@@ -134,6 +134,7 @@ type NotificationPreferenceUser = {
   status?: string;
   emailNotificationsEnabled: boolean;
   smsNotificationsEnabled: boolean;
+  voiceNotificationsEnabled: boolean;
   pushNotificationsEnabled: boolean;
   whatsappNotificationsEnabled: boolean;
   phoneNumber: string | null;
@@ -152,6 +153,7 @@ export async function getUserNotificationChannels(
         status: true,
         emailNotificationsEnabled: true,
         smsNotificationsEnabled: true,
+        voiceNotificationsEnabled: true,
         pushNotificationsEnabled: true,
         whatsappNotificationsEnabled: true,
         phoneNumber: true,
@@ -162,18 +164,22 @@ export async function getUserNotificationChannels(
   if (!user || (user.status !== undefined && user.status !== 'ACTIVE')) return [];
 
   const channels: NotificationChannel[] = [];
-  const [pushAvailable, smsAvailable, emailAvailable, whatsappConfig] = await Promise.all([
-    isChannelAvailable('PUSH'),
-    isChannelAvailable('SMS'),
-    isChannelAvailable('EMAIL'),
-    import('./notification-providers').then(module => module.getWhatsAppConfig()),
-  ]);
+  const [pushAvailable, smsAvailable, voiceAvailable, emailAvailable, whatsappConfig] =
+    await Promise.all([
+      isChannelAvailable('PUSH'),
+      isChannelAvailable('SMS'),
+      isChannelAvailable('VOICE'),
+      isChannelAvailable('EMAIL'),
+      import('./notification-providers').then(module => module.getWhatsAppConfig()),
+    ]);
 
   const endpointCandidates: Array<{ channel: NotificationChannel; address: string }> = [];
   if (user.pushNotificationsEnabled && pushAvailable)
     endpointCandidates.push({ channel: 'PUSH', address: userId });
   if (user.smsNotificationsEnabled && user.phoneNumber && smsAvailable)
     endpointCandidates.push({ channel: 'SMS', address: user.phoneNumber });
+  if (user.voiceNotificationsEnabled && user.phoneNumber && voiceAvailable)
+    endpointCandidates.push({ channel: 'VOICE', address: user.phoneNumber });
   if (
     user.whatsappNotificationsEnabled &&
     user.phoneNumber &&
@@ -546,6 +552,7 @@ export async function sendIncidentNotifications(
         id: true,
         emailNotificationsEnabled: true,
         smsNotificationsEnabled: true,
+        voiceNotificationsEnabled: true,
         pushNotificationsEnabled: true,
         whatsappNotificationsEnabled: true,
         phoneNumber: true,

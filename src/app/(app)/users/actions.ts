@@ -907,7 +907,7 @@ export async function updateUserProfile(
   // Check email uniqueness if email is changed
   const existingUser = await prisma.user.findUnique({
     where: { id: userId },
-    select: { email: true, role: true },
+    select: { email: true, role: true, phoneNumber: true },
   });
 
   if (!existingUser) {
@@ -925,6 +925,30 @@ export async function updateUserProfile(
     });
     if (emailConflict) {
       return { error: 'A user with this email address already exists.' };
+    }
+  }
+
+  // Validate voice notifications if requested
+  const voiceRequested = formData.has('voiceNotificationsEnabled')
+    ? formData.get('voiceNotificationsEnabled') === 'true'
+    : false;
+  if (voiceRequested) {
+    const effectivePhone = phoneNumber ? phoneNumber.trim() : existingUser.phoneNumber;
+    if (!effectivePhone) {
+      return {
+        error: 'A valid phone number is required when Voice notifications are enabled.',
+      };
+    }
+    const phoneRegex = /^\+[1-9]\d{1,14}$/;
+    if (!phoneRegex.test(effectivePhone)) {
+      return { error: 'Phone number must be in E.164 format (e.g., +1234567890)' };
+    }
+    const { getVoiceConfig } = await import('@/lib/notification-providers');
+    const voiceConfig = await getVoiceConfig();
+    if (!voiceConfig.enabled) {
+      return {
+        error: 'Voice notifications cannot be enabled because Twilio Voice is not configured.',
+      };
     }
   }
 
@@ -960,6 +984,9 @@ export async function updateUserProfile(
         : {}),
       ...(formData.has('smsNotificationsEnabled')
         ? { smsNotificationsEnabled: formData.get('smsNotificationsEnabled') === 'true' }
+        : {}),
+      ...(formData.has('voiceNotificationsEnabled')
+        ? { voiceNotificationsEnabled: formData.get('voiceNotificationsEnabled') === 'true' }
         : {}),
       ...(formData.has('pushNotificationsEnabled')
         ? { pushNotificationsEnabled: formData.get('pushNotificationsEnabled') === 'true' }

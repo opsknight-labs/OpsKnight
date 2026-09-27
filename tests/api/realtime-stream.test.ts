@@ -82,6 +82,7 @@ describe('API Route - Realtime Stream', () => {
       phoneNumber: null,
       emailNotificationsEnabled: false,
       smsNotificationsEnabled: false,
+      voiceNotificationsEnabled: false,
       pushNotificationsEnabled: false,
       whatsappNotificationsEnabled: false,
     };
@@ -134,6 +135,7 @@ describe('API Route - Realtime Stream', () => {
       phoneNumber: null,
       emailNotificationsEnabled: false,
       smsNotificationsEnabled: false,
+      voiceNotificationsEnabled: false,
       pushNotificationsEnabled: false,
       whatsappNotificationsEnabled: false,
     });

@@ -48,6 +48,7 @@ type EscalationStep = {
   } | null;
   targetSchedule: { id: string; name: string } | null;
   notifyOnlyTeamLead: boolean;
+  notificationChannels: string[];
   conditions?: import('./EscalationConditionsEditor').EditableEscalationCondition[];
 };
 
@@ -89,7 +90,8 @@ export default function EscalationStepItem({
   const { showToast } = useToast();
 
   const handleDelete = () => {
-    if (confirm('Are you sure you want to delete this step?')) {
+    // eslint-disable-next-line no-alert -- destructive policy edits require explicit confirmation
+    if (globalThis.confirm('Are you sure you want to delete this step?')) {
       startTransition(async () => {
         const res = await deleteStep(step.id);
         if (res?.error) {

@@ -32,6 +32,7 @@ export function serializeProfile(profile: Awaited2<typeof fetchProfile>) {
     notificationPreferences: {
       email: profile.emailNotificationsEnabled,
       sms: profile.smsNotificationsEnabled,
+      voice: profile.voiceNotificationsEnabled,
       push: profile.pushNotificationsEnabled,
       whatsapp: profile.whatsappNotificationsEnabled,
     },

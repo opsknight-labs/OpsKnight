@@ -65,6 +65,7 @@ export async function getCurrentUser() {
       phoneNumber: true,
       emailNotificationsEnabled: true,
       smsNotificationsEnabled: true,
+      voiceNotificationsEnabled: true,
       pushNotificationsEnabled: true,
       whatsappNotificationsEnabled: true,
     },

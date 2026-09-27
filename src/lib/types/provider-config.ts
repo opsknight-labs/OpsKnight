@@ -12,6 +12,7 @@ export interface TwilioConfig {
   accountSid?: string;
   authToken?: string;
   fromNumber?: string;
+  voiceEnabled?: boolean;
   // WhatsApp configuration (stored with Twilio)
   whatsappNumber?: string;
   whatsappContentSid?: string;

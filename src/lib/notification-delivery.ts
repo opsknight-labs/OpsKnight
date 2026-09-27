@@ -22,6 +22,7 @@ import { incidentNotificationPriority } from './notification-priority';
 export const NOTIFICATION_CHANNELS = [
   'EMAIL',
   'SMS',
+  'VOICE',
   'PUSH',
   'SLACK',
   'WEBHOOK',
@@ -225,6 +226,7 @@ async function resolveProviderKey(
       const cfg = await getSMSConfig();
       return cfg.provider || 'default';
     }
+    if (channel === 'VOICE') return 'twilio';
     if (channel === 'WHATSAPP') {
       const { getWhatsAppConfig } = await import('./notification-providers');
       const cfg = await getWhatsAppConfig();
@@ -392,6 +394,26 @@ export async function dispatchNotificationAttempt(
             success: true,
             outcome: 'DELIVERED' as const,
             providerMessageId: result.messageSid,
+          };
+        });
+        break;
+      }
+      case 'VOICE': {
+        const { sendIncidentVoice } = await import('./voice');
+        outcome = await CircuitBreakers.voice().execute(async () => {
+          const result = await sendIncidentVoice(
+            input.userId,
+            input.incidentId,
+            input.notificationId,
+            input.message ?? '',
+            incident.escalationGeneration
+          );
+          if (!result.success) return providerFailureResult(result);
+          return {
+            ...result,
+            success: true,
+            outcome: 'QUEUED' as const,
+            providerMessageId: result.callSid,
           };
         });
         break;

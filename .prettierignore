@@ -16,3 +16,5 @@ prisma/migrations
 # Ignore Helm templates
 helm/**/templates/**/*.yaml
 helm/**/templates/**/*.tpl
+deploy/kubernetes/helm/**/templates/**/*.yaml
+deploy/kubernetes/helm/**/templates/**/*.tpl

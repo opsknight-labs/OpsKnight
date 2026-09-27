@@ -31,6 +31,7 @@ export type IncidentLifecycleSource =
   | 'REST_API'
   | 'BULK'
   | 'CHATOPS'
+  | 'VOICE'
   | 'EVENT'
   | 'SYSTEM';
 

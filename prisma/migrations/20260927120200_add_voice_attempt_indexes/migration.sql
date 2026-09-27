@@ -1,0 +1,18 @@
+-- Migration: register the voice attempt partial indexes in Prisma's migration ledger.
+--
+-- The actual indexes are created OUTSIDE this transaction by the online index installer:
+--   scripts/create-voice-attempt-online-indexes.cjs
+--
+-- Rationale: PostgreSQL rejects CREATE INDEX CONCURRENTLY inside a transaction block,
+-- and Prisma 5.x wraps every migration file in an implicit transaction. Running
+-- CONCURRENTLY inside that transaction causes the migration to fail immediately.
+--
+-- The installer script is invoked:
+--   • after prisma migrate deploy via npm run prisma:indexes:voice-attempts
+--   • in docker-entrypoint.sh after run_migrations()
+--   • in deploy/kubernetes/helm/.../migration-job.yaml after prisma migrate deploy
+--
+-- Do NOT add CREATE INDEX CONCURRENTLY here. This file is intentionally a no-op SQL
+-- so that Prisma records the migration as applied without attempting index creation
+-- inside its transaction.
+SELECT 1;

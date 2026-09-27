@@ -47,7 +47,15 @@ export async function GET(req: NextRequest) {
     const fromParam = searchParams.get('from');
     const toParam = searchParams.get('to');
 
-    const allowedChannels = new Set(['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP']);
+    const allowedChannels = new Set([
+      'EMAIL',
+      'SMS',
+      'VOICE',
+      'PUSH',
+      'SLACK',
+      'WEBHOOK',
+      'WHATSAPP',
+    ]);
     const allowedStatuses = new Set(['PENDING', 'SENT', 'DELIVERED', 'FAILED', 'SKIPPED']);
 
     const baseWhere: Prisma.NotificationWhereInput = { userId: user.id };

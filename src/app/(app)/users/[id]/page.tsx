@@ -149,6 +149,7 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
     timeZone: user.timeZone,
     emailNotificationsEnabled: user.emailNotificationsEnabled,
     smsNotificationsEnabled: user.smsNotificationsEnabled,
+    voiceNotificationsEnabled: user.voiceNotificationsEnabled,
     pushNotificationsEnabled: user.pushNotificationsEnabled,
     whatsappNotificationsEnabled: user.whatsappNotificationsEnabled,
     createdAt: user.createdAt,
@@ -291,6 +292,7 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
               phoneNumber: user.phoneNumber,
               emailNotificationsEnabled: user.emailNotificationsEnabled,
               smsNotificationsEnabled: user.smsNotificationsEnabled,
+              voiceNotificationsEnabled: user.voiceNotificationsEnabled,
               pushNotificationsEnabled: user.pushNotificationsEnabled,
               whatsappNotificationsEnabled: user.whatsappNotificationsEnabled,
             }}

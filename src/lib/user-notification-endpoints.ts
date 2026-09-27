@@ -14,7 +14,8 @@ const UNUSABLE_ENDPOINT_STATUSES: readonly NotificationEndpointStatus[] = [
 function normalizedEndpointAddress(channel: NotificationChannel, address: string): string {
   const value = address.trim();
   if (channel === 'EMAIL') return value.toLowerCase();
-  if (channel === 'SMS' || channel === 'WHATSAPP') return value.replace(/[\s().-]/g, '');
+  if (channel === 'SMS' || channel === 'VOICE' || channel === 'WHATSAPP')
+    return value.replace(/[\s().-]/g, '');
   return value;
 }
 

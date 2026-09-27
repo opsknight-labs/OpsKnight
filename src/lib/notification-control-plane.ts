@@ -57,7 +57,10 @@ export function deliveryReconciliationCapability(
   provider?: string | null
 ): DeliveryReconciliationCapability {
   const normalized = provider?.toLowerCase() ?? '';
-  if ((channel === 'SMS' || channel === 'WHATSAPP') && normalized.includes('twilio'))
+  if (
+    (channel === 'SMS' || channel === 'VOICE' || channel === 'WHATSAPP') &&
+    normalized.includes('twilio')
+  )
     return 'CALLBACK';
   // Push dispatches are keyed by the durable notification id, which providers
   // supporting collapse/idempotency can safely receive again.
@@ -92,7 +95,12 @@ type LifecycleDeliveryPolicy = {
 
 export type CentralNotificationPayload =
   | {
-      kind: 'INCIDENT_EMAIL' | 'INCIDENT_SMS' | 'INCIDENT_PUSH' | 'INCIDENT_WHATSAPP';
+      kind:
+        | 'INCIDENT_EMAIL'
+        | 'INCIDENT_SMS'
+        | 'INCIDENT_VOICE'
+        | 'INCIDENT_PUSH'
+        | 'INCIDENT_WHATSAPP';
       userId: string;
       incidentId: string;
       eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated';
@@ -126,6 +134,7 @@ export type CentralNotificationPayload =
       emailRoute?: string[];
     }
   | { kind: 'SMS'; to: string; message: string; providerKey?: string }
+  | { kind: 'VOICE'; to: string; message: string; providerKey?: string }
   | { kind: 'WHATSAPP'; to: string; message: string; from?: string; providerKey?: string }
   | {
       kind: 'PUSH';
@@ -197,7 +206,14 @@ export type CentralNotificationPayload =
 
 type IncidentCentralPayload = Extract<
   CentralNotificationPayload,
-  { kind: 'INCIDENT_EMAIL' | 'INCIDENT_SMS' | 'INCIDENT_PUSH' | 'INCIDENT_WHATSAPP' }
+  {
+    kind:
+      | 'INCIDENT_EMAIL'
+      | 'INCIDENT_SMS'
+      | 'INCIDENT_VOICE'
+      | 'INCIDENT_PUSH'
+      | 'INCIDENT_WHATSAPP';
+  }
 >;
 
 export type CentralNotificationInput = {
@@ -228,7 +244,16 @@ export type CentralNotificationInput = {
 const centralNotificationInputSchema = z
   .object({
     category: z.enum(['INCIDENT', 'SECURITY', 'STATUS_PAGE', 'SLA', 'ADMINISTRATION', 'SYSTEM']),
-    channel: z.enum(['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP', 'MICROSOFT_TEAMS']),
+    channel: z.enum([
+      'EMAIL',
+      'SMS',
+      'VOICE',
+      'PUSH',
+      'SLACK',
+      'WEBHOOK',
+      'WHATSAPP',
+      'MICROSOFT_TEAMS',
+    ]),
     recipientType: z.enum([
       'USER',
       'EMAIL',
@@ -270,12 +295,17 @@ type DeliveryResult = {
   statusCode?: number;
   retryAfterMs?: number;
   errorCode?: string;
+  /** When set, indicates the delivery attempt was pre-created before the provider
+   *  call (e.g. Voice needs the attempt ID for callback URL correlation). The
+   *  post-dispatch flow should update the existing attempt instead of creating one. */
+  preCreatedAttemptId?: string;
 };
 
 function normalizedRecipient(channel: NotificationChannel, recipient: string): string {
   const value = recipient.trim();
   if (channel === 'EMAIL') return value.toLowerCase();
-  if (channel === 'SMS' || channel === 'WHATSAPP') return value.replace(/[\s().-]/g, '');
+  if (channel === 'SMS' || channel === 'VOICE' || channel === 'WHATSAPP')
+    return value.replace(/[\s().-]/g, '');
   return value;
 }
 
@@ -290,7 +320,7 @@ export function maskedNotificationRecipient(
     const local = value.slice(0, separator);
     return `${local.slice(0, 1)}***@${value.slice(separator + 1)}`;
   }
-  if (channel === 'SMS' || channel === 'WHATSAPP') {
+  if (channel === 'SMS' || channel === 'VOICE' || channel === 'WHATSAPP') {
     return value.length > 4 ? `***${value.slice(-4)}` : '***';
   }
   if (channel === 'WEBHOOK') {
@@ -318,6 +348,7 @@ function intentId(deliveryKey: string): string {
 function channelForPayload(payload: CentralNotificationPayload): NotificationChannel {
   if (payload.kind === 'INCIDENT_EMAIL') return 'EMAIL';
   if (payload.kind === 'INCIDENT_SMS') return 'SMS';
+  if (payload.kind === 'INCIDENT_VOICE') return 'VOICE';
   if (payload.kind === 'INCIDENT_PUSH') return 'PUSH';
   if (payload.kind === 'INCIDENT_WHATSAPP') return 'WHATSAPP';
   if (payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK') return 'SLACK';
@@ -339,6 +370,7 @@ function isCentralNotificationPayload(value: unknown): value is CentralNotificat
   switch (value.kind) {
     case 'INCIDENT_EMAIL':
     case 'INCIDENT_SMS':
+    case 'INCIDENT_VOICE':
     case 'INCIDENT_PUSH':
     case 'INCIDENT_WHATSAPP':
       return (
@@ -355,6 +387,7 @@ function isCentralNotificationPayload(value: unknown): value is CentralNotificat
         (hasText(value.html) || hasText(value.contentId))
       );
     case 'SMS':
+    case 'VOICE':
     case 'WHATSAPP':
       return hasText(value.to) && hasText(value.message);
     case 'PUSH':
@@ -715,6 +748,9 @@ export async function pinNotificationProviderKeys(
   if (wanted.has('SMS')) {
     pinned.set('SMS', (await providers.getSMSConfig()).provider || undefined);
   }
+  if (wanted.has('VOICE')) {
+    pinned.set('VOICE', (await providers.getVoiceConfig()).provider || undefined);
+  }
   if (wanted.has('WHATSAPP')) {
     pinned.set('WHATSAPP', (await providers.getWhatsAppConfig()).provider || undefined);
   }
@@ -784,6 +820,14 @@ export async function enqueueCentralNotification(
   ) {
     const providerKey = await import('./notification-providers').then(module =>
       module.getSMSConfig().then(config => config.provider || undefined)
+    );
+    if (providerKey) pinnedInput = { ...input, payload: { ...input.payload, providerKey } };
+  } else if (
+    (input.payload.kind === 'VOICE' || input.payload.kind === 'INCIDENT_VOICE') &&
+    !input.payload.providerKey
+  ) {
+    const providerKey = await import('./notification-providers').then(module =>
+      module.getVoiceConfig().then(config => config.provider || undefined)
     );
     if (providerKey) pinnedInput = { ...input, payload: { ...input.payload, providerKey } };
   } else if (
@@ -911,7 +955,8 @@ function executeProvider<T extends DeliveryResult>(
 
 async function dispatchPayload(
   payload: CentralNotificationPayload,
-  notificationId: string
+  notificationId: string,
+  preCreatedAttemptId?: string
 ): Promise<DeliveryResult> {
   switch (payload.kind) {
     case 'INCIDENT_EMAIL': {
@@ -965,6 +1010,43 @@ async function dispatchPayload(
           payload.providerKey as 'twilio' | 'aws-sns' | undefined
         );
         return { ...result, providerMessageId: result.messageSid };
+      });
+    }
+    case 'INCIDENT_VOICE': {
+      const current = await import('./notification-providers').then(module =>
+        module.getVoiceConfig()
+      );
+      if (!current.enabled) {
+        return {
+          success: false,
+          statusCode: 422,
+          errorCode: 'PROVIDER_DISABLED',
+          error: 'Voice provider is administratively disabled or not configured',
+        };
+      }
+      if (payload.providerKey && current.provider !== payload.providerKey) {
+        return {
+          success: false,
+          statusCode: 422,
+          errorCode: 'PROVIDER_DISABLED',
+          error: `Pinned Voice provider ${payload.providerKey} is unavailable`,
+        };
+      }
+      const { sendIncidentVoice } = await import('./voice');
+      return executeProvider(CircuitBreakers.voice(), async () => {
+        const result = await sendIncidentVoice(
+          payload.userId,
+          payload.incidentId,
+          notificationId,
+          payload.durableMessage,
+          payload.escalationGeneration,
+          preCreatedAttemptId
+        );
+        return {
+          ...result,
+          providerMessageId: result.callSid,
+          preCreatedAttemptId,
+        };
       });
     }
     case 'INCIDENT_PUSH': {
@@ -1085,6 +1167,41 @@ async function dispatchPayload(
           providerKey: payload.providerKey as 'twilio' | 'aws-sns' | undefined,
         });
         return { ...result, providerMessageId: result.messageSid };
+      });
+    }
+    case 'VOICE': {
+      const current = await import('./notification-providers').then(module =>
+        module.getVoiceConfig()
+      );
+      if (!current.enabled) {
+        return {
+          success: false,
+          statusCode: 422,
+          errorCode: 'PROVIDER_DISABLED',
+          error: 'Voice provider is administratively disabled or not configured',
+        };
+      }
+      if (payload.providerKey && current.provider !== payload.providerKey) {
+        return {
+          success: false,
+          statusCode: 422,
+          errorCode: 'PROVIDER_DISABLED',
+          error: `Pinned Voice provider ${payload.providerKey} is unavailable`,
+        };
+      }
+      const { sendTestVoice } = await import('./voice');
+      return executeProvider(CircuitBreakers.voice(), async () => {
+        const result = await sendTestVoice(
+          payload.to,
+          notificationId,
+          payload.message,
+          preCreatedAttemptId
+        );
+        return {
+          ...result,
+          providerMessageId: result.callSid,
+          preCreatedAttemptId,
+        };
       });
     }
     case 'WHATSAPP': {
@@ -1370,6 +1487,7 @@ async function incidentPayloadSuperseded(
   if (
     payload.kind !== 'INCIDENT_EMAIL' &&
     payload.kind !== 'INCIDENT_SMS' &&
+    payload.kind !== 'INCIDENT_VOICE' &&
     payload.kind !== 'INCIDENT_PUSH' &&
     payload.kind !== 'INCIDENT_WHATSAPP'
   ) {
@@ -1756,6 +1874,7 @@ async function finishAttempt(input: {
   ordinal: number;
   outcome: string;
   startedAt: Date;
+  attemptId?: string;
   providerMessageId?: string;
   provider?: string;
   errorCode?: string;
@@ -1763,20 +1882,35 @@ async function finishAttempt(input: {
 }) {
   const finishedAt = new Date();
   try {
-    await prisma.notificationDeliveryAttempt.create({
-      data: {
-        notificationId: input.notificationId,
-        ordinal: input.ordinal,
-        outcome: input.outcome,
-        provider: input.provider,
-        providerMessageId: input.providerMessageId,
-        errorCode: input.errorCode,
-        errorMessage: input.errorMessage,
-        startedAt: input.startedAt,
-        finishedAt,
-        latencyMs: Math.max(0, finishedAt.getTime() - input.startedAt.getTime()),
-      },
-    });
+    if (input.attemptId) {
+      await prisma.notificationDeliveryAttempt.updateMany({
+        where: { id: input.attemptId, outcome: 'IN_FLIGHT' },
+        data: {
+          outcome: input.outcome,
+          provider: input.provider,
+          providerMessageId: input.providerMessageId,
+          errorCode: input.errorCode,
+          errorMessage: input.errorMessage,
+          finishedAt,
+          latencyMs: Math.max(0, finishedAt.getTime() - input.startedAt.getTime()),
+        },
+      });
+    } else {
+      await prisma.notificationDeliveryAttempt.create({
+        data: {
+          notificationId: input.notificationId,
+          ordinal: input.ordinal,
+          outcome: input.outcome,
+          provider: input.provider,
+          providerMessageId: input.providerMessageId,
+          errorCode: input.errorCode,
+          errorMessage: input.errorMessage,
+          startedAt: input.startedAt,
+          finishedAt,
+          latencyMs: Math.max(0, finishedAt.getTime() - input.startedAt.getTime()),
+        },
+      });
+    }
   } catch (error) {
     logger.error('notification.attempt_ledger_write_failed', {
       notificationId: input.notificationId,
@@ -2190,6 +2324,32 @@ export async function deliverCentralNotification(
     let circuitTimeout = false;
     let circuitOpen = false;
 
+    // For voice calls, pre-create the delivery attempt so the attempt ID is
+    // available for Twilio callback URL correlation. This prevents the race
+    // where a Twilio callback arrives before the attempt row exists.
+    let preCreatedAttemptId: string | undefined;
+    const isVoicePayload = payload.kind === 'INCIDENT_VOICE' || payload.kind === 'VOICE';
+    if (isVoicePayload) {
+      try {
+        const preAttempt = await prisma.notificationDeliveryAttempt.create({
+          data: {
+            notificationId: candidate.id,
+            ordinal,
+            outcome: 'IN_FLIGHT',
+            provider: currentProvider,
+            startedAt,
+          },
+        });
+        preCreatedAttemptId = preAttempt.id;
+      } catch (preAttemptError) {
+        logger.warn('notification.voice_pre_attempt_failed', {
+          notificationId: candidate.id,
+          error: safeError(preAttemptError),
+        });
+        // Continue without pre-created attempt; legacy callback path will handle it.
+      }
+    }
+
     try {
       const payloadForProvider =
         currentProvider && currentProvider !== 'default'
@@ -2197,7 +2357,8 @@ export async function deliverCentralNotification(
           : { ...payload, providerKey: undefined };
       result = await dispatchPayload(
         payloadForProvider as CentralNotificationPayload,
-        candidate.id
+        candidate.id,
+        preCreatedAttemptId
       );
     } catch (dispatchError) {
       if (dispatchError instanceof CircuitBreakerTimeoutError) {
@@ -2228,13 +2389,29 @@ export async function deliverCentralNotification(
         ...terminalPayload(candidate.category),
       };
       let committed: { count: number };
-      try {
-        [committed] = await prisma.$transaction([
-          prisma.notification.updateMany({
-            where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-            data: acceptedState,
-          }),
-          prisma.notificationDeliveryAttempt.create({
+      const attemptFinishedAt = isVoicePayload ? null : finishedAt;
+      // ACTIVE_OUTCOMES: states that the success-persistence path is permitted to update.
+      // Any attempt that has already reached a terminal state via a concurrent Twilio
+      // callback (finishedAt IS NOT NULL) must not be touched — the CAS guard enforces this.
+      const VOICE_ACTIVE_OUTCOMES = ['IN_FLIGHT', 'ACCEPTED', 'RINGING', 'IN-PROGRESS', 'ANSWERED'];
+      const attemptOperation = preCreatedAttemptId
+        ? prisma.notificationDeliveryAttempt.updateMany({
+            where: {
+              id: preCreatedAttemptId,
+              // CAS guard: only update if the attempt has not yet been completed by a
+              // concurrent Twilio callback. Prevents overwriting a terminal finishedAt.
+              finishedAt: null,
+              outcome: { in: VOICE_ACTIVE_OUTCOMES },
+            },
+            data: {
+              provider:
+                (result as { selectedProvider?: string }).selectedProvider || currentProvider,
+              providerMessageId: result.providerMessageId,
+              finishedAt: attemptFinishedAt, // always null for voice (set by Twilio callback)
+              latencyMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
+            },
+          })
+        : prisma.notificationDeliveryAttempt.create({
             data: {
               notificationId: candidate.id,
               ordinal,
@@ -2243,23 +2420,72 @@ export async function deliverCentralNotification(
                 (result as { selectedProvider?: string }).selectedProvider || currentProvider,
               providerMessageId: result.providerMessageId,
               startedAt,
-              finishedAt,
+              finishedAt: attemptFinishedAt,
               latencyMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
             },
+          });
+      try {
+        [committed] = await prisma.$transaction([
+          prisma.notification.updateMany({
+            where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+            data: acceptedState,
           }),
+          attemptOperation,
         ]);
+        if (preCreatedAttemptId) {
+          // If still IN_FLIGHT, mark it as ACCEPTED (or SKIPPED). If a concurrent callback
+          // already set a richer status (e.g. ANSWERED, COMPLETED), do not regress it.
+          await prisma.notificationDeliveryAttempt.updateMany({
+            where: { id: preCreatedAttemptId, outcome: 'IN_FLIGHT' },
+            data: { outcome: result.skipped ? 'SKIPPED' : 'ACCEPTED' },
+          });
+        }
       } catch (persistenceError) {
         committed = await prisma.notification.updateMany({
           where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
           data: acceptedState,
         });
+        if (preCreatedAttemptId) {
+          await prisma.notificationDeliveryAttempt
+            .updateMany({
+              where: {
+                id: preCreatedAttemptId,
+                // Same CAS guard as primary path — never overwrite a terminal attempt.
+                finishedAt: null,
+                outcome: { in: VOICE_ACTIVE_OUTCOMES },
+              },
+              data: {
+                provider:
+                  (result as { selectedProvider?: string }).selectedProvider || currentProvider,
+                providerMessageId: result.providerMessageId,
+                finishedAt: attemptFinishedAt, // always null for voice
+                latencyMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
+              },
+            })
+            .catch(() => undefined);
+          await prisma.notificationDeliveryAttempt
+            .updateMany({
+              where: { id: preCreatedAttemptId, outcome: 'IN_FLIGHT' },
+              data: { outcome: result.skipped ? 'SKIPPED' : 'ACCEPTED' },
+            })
+            .catch(() => undefined);
+        }
         logger.error('notification.attempt_ledger_failed_after_provider_acceptance', {
           notificationId: candidate.id,
           providerMessageId: result.providerMessageId,
           error: safeError(persistenceError),
         });
       }
-      if (committed.count === 0) return { success: false, claimed: false };
+      if (committed.count === 0) {
+        const current = await prisma.notification.findUnique({
+          where: { id: candidate.id },
+          select: { status: true },
+        });
+        if (current && ['SENT', 'DELIVERED', 'FAILED'].includes(current.status)) {
+          return { success: true, claimed: true };
+        }
+        return { success: false, claimed: false };
+      }
       await recordFanoutTerminal(candidate.fanoutId, result.skipped ? 'skipped' : 'completed');
       return { success: true, claimed: true };
     }
@@ -2324,6 +2550,7 @@ export async function deliverCentralNotification(
         ordinal,
         outcome: 'DEFERRED_NOT_DUE',
         startedAt,
+        attemptId: preCreatedAttemptId,
         provider: (result as { selectedProvider?: string }).selectedProvider || currentProvider,
         errorCode: result.errorCode,
         errorMessage,
@@ -2332,11 +2559,17 @@ export async function deliverCentralNotification(
     }
 
     // Ambiguous outcome (timeout, ECONNRESET, socket hangup) -> UNKNOWN and NEVER FAILOVER
+    const isCallbackCapable =
+      deliveryReconciliationCapability(channelScope as NotificationChannel, currentProvider) ===
+      'CALLBACK';
     const isAmbiguous =
       circuitTimeout ||
       // A provider HTTP 5xx can occur after accepting a message. Without a
       // provider receipt, retrying it (even on the same provider) risks a duplicate.
-      (isEmail && typeof result.statusCode === 'number' && result.statusCode >= 500) ||
+      // This applies to email AND any callback-capable provider (Voice, SMS, WhatsApp on Twilio).
+      ((isEmail || isCallbackCapable) &&
+        typeof result.statusCode === 'number' &&
+        result.statusCode >= 500) ||
       result.errorCode === 'UNKNOWN' ||
       result.errorCode === 'ETIMEDOUT' ||
       result.errorCode === 'ECONNRESET' ||
@@ -2357,24 +2590,51 @@ export async function deliverCentralNotification(
             where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
             data: ambiguousState,
           });
-          await tx.notificationDeliveryAttempt.create({
-            data: {
-              notificationId: candidate.id,
-              ordinal,
-              outcome: 'AMBIGUOUS',
-              provider: currentProvider,
-              errorMessage,
-              startedAt,
-              finishedAt: new Date(),
-              reconciliationDeadline,
-            },
-          });
+          if (preCreatedAttemptId) {
+            await tx.notificationDeliveryAttempt.updateMany({
+              where: { id: preCreatedAttemptId, outcome: 'IN_FLIGHT' },
+              data: {
+                outcome: 'AMBIGUOUS',
+                provider: currentProvider,
+                errorMessage,
+                finishedAt: new Date(),
+                reconciliationDeadline,
+              },
+            });
+          } else {
+            await tx.notificationDeliveryAttempt.create({
+              data: {
+                notificationId: candidate.id,
+                ordinal,
+                outcome: 'AMBIGUOUS',
+                provider: currentProvider,
+                errorMessage,
+                startedAt,
+                finishedAt: new Date(),
+                reconciliationDeadline,
+              },
+            });
+          }
         });
       } catch (persistenceError) {
         await prisma.notification.updateMany({
           where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
           data: ambiguousState,
         });
+        if (preCreatedAttemptId) {
+          await prisma.notificationDeliveryAttempt
+            .updateMany({
+              where: { id: preCreatedAttemptId, outcome: 'IN_FLIGHT' },
+              data: {
+                outcome: 'AMBIGUOUS',
+                provider: currentProvider,
+                errorMessage,
+                finishedAt: new Date(),
+                reconciliationDeadline,
+              },
+            })
+            .catch(() => undefined);
+        }
         logger.error('notification.ambiguous_ledger_write_failed', {
           notificationId: candidate.id,
           error: safeError(persistenceError),
@@ -2396,6 +2656,7 @@ export async function deliverCentralNotification(
         ordinal,
         outcome: 'RATE_LIMITED',
         startedAt,
+        attemptId: preCreatedAttemptId,
         provider: (result as { selectedProvider?: string }).selectedProvider || currentProvider,
         errorCode: result.errorCode ?? (result.statusCode ? String(result.statusCode) : undefined),
         errorMessage,
@@ -2436,6 +2697,7 @@ export async function deliverCentralNotification(
       ordinal,
       outcome: permanent || (exhausted && !canFailover) ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
       startedAt,
+      attemptId: preCreatedAttemptId,
       provider: (result as { selectedProvider?: string }).selectedProvider || currentProvider,
       errorMessage,
       errorCode: result.errorCode,
@@ -2613,6 +2875,12 @@ export async function processCentralNotificationQueue(
   const now = new Date();
   await reconcileUnknownNotifications(now);
   await cleanupExpiredNotifications(now);
+  try {
+    const { reconcileStaleVoiceCalls } = await import('./voice/reconciliation');
+    await reconcileStaleVoiceCalls(now);
+  } catch {
+    // Non-blocking voice call status reconciliation
+  }
   const { isBulkNotificationDeliveryPaused } = await import('./notification-capacity-control');
   const bulkPaused = await isBulkNotificationDeliveryPaused();
   const requestedTrafficClasses = options.trafficClasses?.length

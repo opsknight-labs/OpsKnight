@@ -51,7 +51,7 @@ describe('Notification Provider Settings UI & Hero Hardening', () => {
   });
 
   describe('1. AWS SNS Integration in SMS Section', () => {
-    it('renders Amazon SNS in the SMS Messaging section alongside Twilio', () => {
+    it('renders Amazon SNS in the SMS & Voice section alongside Twilio', () => {
       const providers: ProviderRecord[] = [
         {
           id: 'prov-twilio',
@@ -75,8 +75,8 @@ describe('Notification Provider Settings UI & Hero Hardening', () => {
 
       render(<SystemNotificationSettings providers={providers} />);
 
-      expect(screen.getByText('SMS Messaging')).toBeDefined();
-      expect(screen.getByText('Twilio (SMS)')).toBeDefined();
+      expect(screen.getByText('SMS & Voice')).toBeDefined();
+      expect(screen.getByText('Twilio (SMS & Voice)')).toBeDefined();
       expect(screen.getByText('Amazon SNS (SMS)')).toBeDefined();
     });
 
