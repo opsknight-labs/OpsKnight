@@ -108,4 +108,21 @@ describe('notification operations authorization', () => {
     expect(response.status).toBe(200);
     expect(requeueCentralNotification).toHaveBeenCalledWith('notification_abc');
   });
+
+  it('allows retrying historical backfilled notif_eo_ IDs for Teams operations', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue(admin as never);
+    vi.mocked(requeueCentralNotification).mockResolvedValue(true);
+    const response = await POST(
+      new NextRequest(
+        'https://example.com/api/admin/notifications/operations/notif_eo_op12345/retry',
+        {
+          method: 'POST',
+          headers: { origin: 'https://example.com' },
+        }
+      ),
+      { params: Promise.resolve({ id: 'notif_eo_op12345' }) }
+    );
+    expect(response.status).toBe(200);
+    expect(requeueCentralNotification).toHaveBeenCalledWith('notif_eo_op12345');
+  });
 });

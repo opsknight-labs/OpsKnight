@@ -195,17 +195,131 @@ async function releaseFailedOperation(
       });
     } catch {}
   } else {
-    await prisma.externalOperation.updateMany({
-      where: { id, status: 'PROCESSING', leaseToken },
-      data: {
-        status: 'PENDING',
-        nextAttemptAt: new Date(Date.now() + operationRetryDelayMs(error)),
-        lastError: errMessage,
-        leaseToken: null,
-        leaseExpiresAt: null,
-      },
+    try {
+      await prisma.$transaction(async tx => {
+        const nextAttempt = new Date(Date.now() + operationRetryDelayMs(error));
+        const updated = await tx.externalOperation.updateMany({
+          where: { id, status: 'PROCESSING', leaseToken },
+          data: {
+            status: 'PENDING',
+            nextAttemptAt: nextAttempt,
+            lastError: errMessage,
+            leaseToken: null,
+            leaseExpiresAt: null,
+          },
+        });
+        if (updated.count === 0) return;
+
+        const op = await tx.externalOperation.findUnique({
+          where: { id },
+          select: { idempotencyKey: true },
+        });
+        if (op?.idempotencyKey) {
+          const client = (
+            tx as unknown as { notification?: { updateMany: (a: unknown) => Promise<unknown> } }
+          )?.notification
+            ? (tx as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } })
+            : (prisma as unknown as {
+                notification: { updateMany: (a: unknown) => Promise<unknown> };
+              });
+
+          await client.notification
+            .updateMany({
+              where: {
+                deliveryKey: op.idempotencyKey,
+                status: { not: 'DELIVERED' },
+              },
+              data: {
+                attempts: { increment: 1 },
+                nextAttemptAt: nextAttempt,
+                lastAttemptAt: new Date(),
+                errorMsg: errMessage,
+              },
+            })
+            .catch(() => undefined);
+        }
+      });
+    } catch {}
+  }
+}
+
+export async function requeueMicrosoftTeamsNotification(notificationId: string): Promise<boolean> {
+  const notif = await prisma.notification.findFirst({
+    where: {
+      id: notificationId,
+      channel: 'MICROSOFT_TEAMS',
+      status: 'FAILED',
+    },
+    select: {
+      id: true,
+      deliveryKey: true,
+      attempts: true,
+      maxAttempts: true,
+    },
+  });
+  if (!notif || notif.attempts >= 20) return false;
+
+  let op = notif.deliveryKey
+    ? await prisma.externalOperation.findUnique({
+        where: {
+          provider_idempotencyKey: {
+            provider: TEAMS_PROVIDER,
+            idempotencyKey: notif.deliveryKey,
+          },
+        },
+        select: { id: true, attempts: true },
+      })
+    : null;
+
+  if (!op && notif.id.startsWith('notif_eo_')) {
+    const rawEoId = notif.id.replace('notif_eo_', '');
+    op = await prisma.externalOperation.findUnique({
+      where: { id: rawEoId },
+      select: { id: true, attempts: true },
     });
   }
+
+  if (!op) return false;
+
+  const maxAttempts = Math.min(20, Math.max(notif.maxAttempts, notif.attempts + 1));
+  const now = new Date();
+
+  await prisma.$transaction(async tx => {
+    await tx.externalOperation.update({
+      where: { id: op!.id },
+      data: {
+        status: 'PENDING',
+        nextAttemptAt: now,
+        leaseToken: null,
+        leaseExpiresAt: null,
+        lastError: null,
+      },
+    });
+
+    await tx.backgroundJob.create({
+      data: {
+        type: 'EXTERNAL_OPERATION',
+        status: 'PENDING',
+        scheduledAt: now,
+        maxAttempts: MAX_TEAMS_OPERATION_ATTEMPTS,
+        payload: { operationId: op!.id },
+      },
+    });
+
+    await tx.notification.update({
+      where: { id: notif.id },
+      data: {
+        status: 'PENDING',
+        maxAttempts,
+        failedAt: null,
+        errorMsg: null,
+        lastAttemptAt: null,
+        nextAttemptAt: now,
+      },
+    });
+  });
+
+  return true;
 }
 
 /**

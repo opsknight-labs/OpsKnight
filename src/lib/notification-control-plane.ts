@@ -3038,6 +3038,15 @@ export async function getNextCentralNotificationAt(
 }
 
 export async function requeueCentralNotification(notificationId: string): Promise<boolean> {
+  const probe = await prisma.notification.findUnique({
+    where: { id: notificationId },
+    select: { channel: true },
+  });
+  if (probe?.channel === 'MICROSOFT_TEAMS') {
+    const { requeueMicrosoftTeamsNotification } = await import('./microsoft-teams/delivery');
+    return requeueMicrosoftTeamsNotification(notificationId);
+  }
+
   const notification = await prisma.notification.findFirst({
     where: {
       id: notificationId,
