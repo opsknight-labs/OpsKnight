@@ -58,10 +58,10 @@ const configurationBody = `${frontmatter({
 # Configuration reference
 
 This generated inventory identifies configuration names found in current source
-and deployment manifests. Presence is not proof that a variable is required or
-safe to change; consult its source locations for parsing, defaults, and scope.
+and deployment manifests. Required and default values are conservative static
+inferences; the listed source remains authoritative for parsing and validation.
 
-${variables.map(variable => `## \`${variable.name}\`\n\nSources: ${variable.sources.map(source => `\`${source}\``).join(', ')}\n`).join('\n')}
+${variables.map(variable => `## \`${variable.name}\`\n\n- Required: ${variable.required ? 'yes' : 'no or conditionally required'}\n- Secret: ${variable.secret ? 'yes' : 'no'}\n- Scope: ${variable.scopes.join(', ')}\n- Static default: ${variable.secret ? 'not displayed' : variable.defaults.length ? variable.defaults.map(value => `\`${value}\``).join(', ') : 'none discovered'}\n- Sources: ${variable.sources.map(source => `\`${source}\``).join(', ')}\n`).join('\n')}
 `;
 
 const routes = inspectApi();

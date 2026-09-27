@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-27T16:27:19.319Z",
+  "generatedAt": "2026-09-27T16:40:39.856Z",
   "sourceRevision": null,
   "uiRoutes": [
     {
@@ -2104,13 +2104,25 @@
       "name": "API_KEY_SECRET",
       "sources": [
         "src/lib/api-keys.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "APP_HOST_ALIASES",
       "sources": [
         "src/middleware.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "APP_PORT",
@@ -2119,6 +2131,14 @@
         "deploy/compose/docker-compose.yml",
         "deploy/swarm/docker-stack.integrated.yml",
         "deploy/swarm/docker-stack.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "3000"
       ]
     },
     {
@@ -2127,258 +2147,507 @@
         "src/components/Sidebar.tsx",
         "src/lib/admin-health.ts",
         "src/lib/version.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "AUTH_BREAK_GLASS_EMAIL",
       "sources": [
         "src/lib/local-auth-policy.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "AUTH_BREAK_GLASS_ENABLED",
       "sources": [
         "src/lib/local-auth-policy.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "AUTH_LOCAL_LOGIN_ENABLED",
       "sources": [
         "src/lib/local-auth-policy.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "AUTH_OPTIONS_CACHE_TTL_MS",
       "sources": [
         "src/lib/auth.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": [
+        "5000"
       ]
     },
     {
       "name": "AUTH_SSO_REAUTH_AFTER_SECONDS",
       "sources": [
         "src/lib/local-auth-policy.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS",
       "sources": [
         "src/lib/local-auth-policy.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "AUTH_SSO_SESSION_MAX_AGE_SECONDS",
       "sources": [
         "src/lib/local-auth-policy.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "AUTH_SSO_SESSION_UPDATE_AGE_SECONDS",
       "sources": [
         "src/lib/local-auth-policy.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "AUTH_TRUST_HOST",
       "sources": [
         "src/lib/auth.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "AWS_ACCESS_KEY_ID",
       "sources": [
         "src/lib/email.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "BASE_APP_VERSION",
       "sources": [
         "src/lib/constants.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "BOOTSTRAP_SECRET",
       "sources": [
         "src/app/setup/actions.ts",
         "src/app/setup/page.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "BUSINESS_HOURS_END",
       "sources": [
         "src/lib/sla-server.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "BUSINESS_HOURS_START",
       "sources": [
         "src/lib/sla-server.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "CALLBACK_URL_COOKIE_NAME",
       "sources": [
         "src/lib/auth.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "CLAIM_TIMEOUT_MS",
       "sources": [
         "src/lib/notification-control-plane.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "CLEANUP_MUTEX_KEY",
       "sources": [
         "src/lib/data-cleanup.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
       "sources": [
         "src/lib/compliance/monitoring/config.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "COMPLIANCE_DRIFT_RENOTIFY_COOLDOWN_MINUTES",
       "sources": [
         "src/lib/compliance/monitoring/config.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "COMPLIANCE_EVIDENCE_TYPES",
       "sources": [
         "src/app/api/compliance/controls/[id]/evidence/route.ts",
         "src/app/api/compliance/evidence/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "COMPLIANCE_MONITOR_INTERVAL_MINUTES",
       "sources": [
         "src/lib/compliance/monitoring/config.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "COMPLIANCE_MONITORING_ENABLED",
       "sources": [
         "src/lib/compliance/monitoring/config.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "CONTENT_WIDTH",
       "sources": [
         "src/lib/status-pages/reports/uptime-report-generator.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "CORS_ALLOWED_ORIGINS",
       "sources": [
         "src/middleware.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "CSRF_TOKEN_COOKIE_NAME",
       "sources": [
         "src/lib/auth.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "CUSTOM_FIELD_ORDER_LOCK",
       "sources": [
         "src/app/api/settings/custom-fields/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "DATABASE_POOL_SIZE",
       "sources": [
         "src/lib/prisma.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "DATABASE_POOL_SIZE_BULK_WORKER",
       "sources": [
-        "src/lib/prisma.ts",
         "deploy/compose/docker-compose.split.yml",
         "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
-        "deploy/swarm/docker-stack.yml"
+        "deploy/swarm/docker-stack.yml",
+        "src/lib/prisma.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": [
+        "3"
       ]
     },
     {
       "name": "DATABASE_POOL_SIZE_CRITICAL_WORKER",
       "sources": [
-        "src/lib/prisma.ts",
         "deploy/compose/docker-compose.split.yml",
         "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
-        "deploy/swarm/docker-stack.yml"
+        "deploy/swarm/docker-stack.yml",
+        "src/lib/prisma.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": [
+        "5"
       ]
     },
     {
       "name": "DATABASE_POOL_SIZE_GENERAL_WORKER",
       "sources": [
-        "src/lib/prisma.ts",
         "deploy/compose/docker-compose.split.yml",
         "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
-        "deploy/swarm/docker-stack.yml"
+        "deploy/swarm/docker-stack.yml",
+        "src/lib/prisma.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": [
+        "5"
       ]
     },
     {
       "name": "DATABASE_POOL_SIZE_INTEGRATED",
       "sources": [
         "src/lib/prisma.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "DATABASE_POOL_SIZE_SCHEDULER",
       "sources": [
-        "src/lib/prisma.ts",
         "deploy/compose/docker-compose.split.yml",
         "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
-        "deploy/swarm/docker-stack.yml"
+        "deploy/swarm/docker-stack.yml",
+        "src/lib/prisma.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": [
+        "3"
       ]
     },
     {
       "name": "DATABASE_POOL_SIZE_STATUS_PROJECTOR",
       "sources": [
-        "src/lib/prisma.ts",
         "deploy/compose/docker-compose.split.yml",
         "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
-        "deploy/swarm/docker-stack.yml"
+        "deploy/swarm/docker-stack.yml",
+        "src/lib/prisma.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": [
+        "3"
       ]
     },
     {
       "name": "DATABASE_POOL_SIZE_WEB",
       "sources": [
-        "src/lib/prisma.ts",
         "deploy/compose/docker-compose.split.yml",
         "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
         "deploy/swarm/docker-stack.integrated.yml",
-        "deploy/swarm/docker-stack.yml"
+        "deploy/swarm/docker-stack.yml",
+        "src/lib/prisma.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": [
+        "10"
       ]
     },
     {
       "name": "DATABASE_POOL_SIZE_WORKER",
       "sources": [
         "src/lib/prisma.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "DATABASE_URL",
       "sources": [
-        "src/app/(app)/settings/system/page.tsx",
-        "src/components/DatabaseOffline.tsx",
-        "src/lib/prisma-datasource.ts",
         "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
         "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml",
         "deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml",
-        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
-      ]
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+        "src/app/(app)/settings/system/page.tsx",
+        "src/components/DatabaseOffline.tsx",
+        "src/lib/prisma-datasource.ts"
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "DEFAULT_LIMIT",
       "sources": [
         "src/app/(public)/logs/LogsClient.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "DIRECT_DATABASE_URL",
@@ -2391,19 +2660,37 @@
         "deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml",
         "deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml",
         "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "DOC_TOPICS",
       "sources": [
         "src/app/(app)/help/page.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "EMAIL_FROM",
       "sources": [
         "src/lib/env-validation.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "ENABLE_INTERNAL_CRON",
@@ -2411,21 +2698,34 @@
         "src/app/api/health/route.ts",
         "src/lib/admin-health.ts",
         "src/lib/cron-scheduler.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "ENCRYPTION_KEY",
       "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "src/app/(app)/settings/system/page.tsx",
         "src/lib/__tests__/encryption.test.ts",
         "src/lib/admin-health.ts",
         "src/lib/encryption.ts",
-        "src/lib/env-validation.ts",
-        "deploy/compose/docker-compose.split.yml",
-        "deploy/compose/docker-compose.yml",
-        "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
-        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml"
-      ]
+        "src/lib/env-validation.ts"
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "ENCRYPTION_KEYS",
@@ -2434,25 +2734,49 @@
         "src/lib/admin-health.ts",
         "src/lib/encryption.ts",
         "src/lib/env-validation.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "ENCRYPTION_TARGETS",
       "sources": [
         "src/lib/compliance/evaluators/encryption.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "ESCALATION_LOCK_TIMEOUT_MS",
       "sources": [
         "src/lib/config.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "EVENT_TRANSACTION_MAX_ATTEMPTS",
       "sources": [
         "src/lib/config.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "EXTERNAL_DB_HOST",
@@ -2460,7 +2784,13 @@
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/swarm/docker-stack.external-db.integrated.yml",
         "deploy/swarm/docker-stack.external-db.yml"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "EXTERNAL_DB_NAME",
@@ -2468,13 +2798,28 @@
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/swarm/docker-stack.external-db.integrated.yml",
         "deploy/swarm/docker-stack.external-db.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "${POSTGRES_DB:-opsknight_db",
+        "opsknight_db"
       ]
     },
     {
       "name": "EXTERNAL_DB_PASSWORD",
       "sources": [
         "deploy/compose/docker-compose.pgbouncer.yml"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "EXTERNAL_DB_PORT",
@@ -2482,6 +2827,14 @@
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/swarm/docker-stack.external-db.integrated.yml",
         "deploy/swarm/docker-stack.external-db.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "5432"
       ]
     },
     {
@@ -2490,49 +2843,102 @@
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/swarm/docker-stack.external-db.integrated.yml",
         "deploy/swarm/docker-stack.external-db.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "${POSTGRES_USER:-opsknight",
+        "opsknight"
       ]
     },
     {
       "name": "FADE_MS",
       "sources": [
         "src/components/auth/HelloGreeting.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "FAQS",
       "sources": [
         "src/app/(app)/help/page.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "GIT_COMMIT_SHA",
       "sources": [
         "src/lib/version.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "GITHUB_SHA",
       "sources": [
         "src/lib/version.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "IMAGE_DIGEST",
       "sources": [
         "src/lib/version.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "INTEGRATED_REPLICAS",
       "sources": [
         "deploy/swarm/docker-stack.integrated.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "1"
       ]
     },
     {
       "name": "INTEGRATION_RATE_LIMIT",
       "sources": [
         "src/lib/integrations/handler.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "INTEGRATION_VERIFY_SIGNATURES",
@@ -2541,25 +2947,49 @@
         "src/app/api/integrations/grafana/route.ts",
         "src/app/api/integrations/sentry/route.ts",
         "src/lib/integrations/handler.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "INTERNAL_API_BASE",
       "sources": [
         "src/middleware.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "INTERNAL_API_URL",
       "sources": [
         "src/middleware.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "JIRA_REQUEST_TIMEOUT_MS",
       "sources": [
         "src/lib/jira.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "JSON",
@@ -2570,189 +3000,377 @@
         "src/lib/idempotency.ts",
         "src/lib/logger.ts",
         "src/lib/status-pages/publication-policy.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "KEY_PREFIX",
       "sources": [
         "src/lib/mobile-cache.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "LOCK_TIMEOUT_MS",
       "sources": [
         "src/lib/cron-scheduler.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "LOG_BUFFER_MAX",
       "sources": [
         "src/lib/logger.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": [
+        "500"
       ]
     },
     {
       "name": "LOG_FORMAT",
       "sources": [
         "src/lib/logger.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "LOG_LEVEL",
       "sources": [
         "src/lib/logger.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MARGIN_X",
       "sources": [
         "src/lib/status-pages/reports/uptime-report-generator.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_ARRAY_LENGTH",
       "sources": [
         "src/lib/compliance/evidence/validate.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_BATCH_SIZE",
       "sources": [
         "src/lib/incidents/lifecycle.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_DAYS_PER_CALL",
       "sources": [
         "src/app/api/admin/rollups/backfill/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_DEDUP_KEY_LENGTH",
       "sources": [
         "src/lib/incidents/creation.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_ESCALATION_DELAY_MINUTES",
       "sources": [
         "src/lib/escalation/policy-validation.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_EVENT_MESSAGE_LENGTH",
       "sources": [
         "src/lib/incidents/lifecycle.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_EVIDENCE_DRAFTS_PER_EVALUATION",
       "sources": [
         "src/lib/compliance/evidence/validate.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_HISTORICAL_DAYS",
       "sources": [
         "src/lib/compliance/export/validation.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_IDEMPOTENCY_KEY_LENGTH",
       "sources": [
         "src/lib/idempotency.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_INTEGRATION_BODY_BYTES",
       "sources": [
         "src/lib/integrations/request-security.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_METADATA_BYTES",
       "sources": [
         "src/lib/compliance/evidence/validate.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_METADATA_DEPTH",
       "sources": [
         "src/lib/compliance/evidence/validate.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_RECONNECT_ATTEMPTS",
       "sources": [
         "src/components/dashboard/WidgetProvider.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_RESOLUTION_LENGTH",
       "sources": [
         "src/components/incident/ResolveIncidentModal.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_RESOLUTION_NOTE_LENGTH",
       "sources": [
         "src/lib/incidents/lifecycle.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_RESPONSE_BODY_BYTES",
       "sources": [
         "src/lib/webhooks.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_SELECTED_CONTROLS",
       "sources": [
         "src/lib/compliance/export/validation.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_SNOOZE_REASON_LENGTH",
       "sources": [
         "src/lib/incidents/lifecycle.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MAX_STRING_LENGTH",
       "sources": [
         "src/lib/compliance/evidence/validate.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MICROSOFT_TEAMS_APPLICATION_ID_URI",
       "sources": [
         "src/app/(app)/settings/integrations/microsoft-teams/page.tsx",
         "src/app/api/microsoft-teams/package/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MICROSOFT_TEAMS_INCLUDE_OPTIONAL_RSC",
       "sources": [
         "src/app/(app)/settings/integrations/microsoft-teams/page.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MICROSOFT_TEAMS_VALID_DOMAINS",
       "sources": [
         "src/app/(app)/settings/integrations/microsoft-teams/page.tsx",
         "src/app/api/microsoft-teams/package/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MIN_CLEAN_SHADOW_CHECKS",
       "sources": [
         "src/app/(app)/settings/incident-sla/actions.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MIN_RESOLUTION_NOTE_LENGTH",
       "sources": [
         "src/lib/incidents/lifecycle.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "MOBILE_CACHE_PREFIX",
@@ -2760,18 +3378,34 @@
         "src/lib/mobile-cache-status.ts",
         "src/lib/mobile-cache.principal-isolation.test.tsx",
         "src/lib/mobile-cache.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "NEXT_PHASE",
       "sources": [
         "src/instrumentation.ts",
         "src/lib/cron-scheduler.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "NEXT_PUBLIC_APP_URL",
       "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml",
         "src/app/(app)/services/[id]/page.tsx",
         "src/app/(app)/settings/system/page.tsx",
         "src/app/api/settings/app-url/route.ts",
@@ -2789,67 +3423,119 @@
         "src/lib/request-host.ts",
         "src/lib/status-page-resolver.ts",
         "src/lib/status-pages/status-auth.ts",
-        "src/middleware.ts",
-        "deploy/compose/docker-compose.split.yml",
-        "deploy/compose/docker-compose.yml",
-        "deploy/swarm/docker-stack.integrated.yml",
-        "deploy/swarm/docker-stack.yml"
+        "src/middleware.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": [
+        "http://localhost:3000"
       ]
     },
     {
       "name": "NEXT_PUBLIC_APP_VERSION",
       "sources": [
         "src/lib/version.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "NEXT_PUBLIC_ENABLE_WEB_VITALS",
       "sources": [
         "src/components/WebVitalsReporter.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "NEXT_PUBLIC_SOURCE_CODE_URL",
       "sources": [
         "src/components/LegalSourceNotice.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
       "sources": [
         "src/app/api/system/vapid-public-key/route.ts",
         "src/lib/push.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "NEXT_RUNTIME",
       "sources": [
         "src/instrumentation.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "NEXTAUTH_COOKIE_SECURE",
       "sources": [
         "src/lib/auth-cookies.ts",
         "src/lib/request-host.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "NEXTAUTH_SECRET",
       "sources": [
-        "src/app/(app)/settings/system/page.tsx",
-        "src/lib/secret-manager.ts",
-        "src/lib/user-notification-endpoints.ts",
-        "src/lib/voice/token.ts",
         "deploy/compose/docker-compose.split.yml",
         "deploy/compose/docker-compose.yml",
         "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
-        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml"
-      ]
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+        "src/app/(app)/settings/system/page.tsx",
+        "src/lib/secret-manager.ts",
+        "src/lib/user-notification-endpoints.ts",
+        "src/lib/voice/token.ts"
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "NEXTAUTH_URL",
       "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml",
         "src/app/(app)/services/[id]/page.tsx",
         "src/app/(app)/settings/system/page.tsx",
         "src/app/api/prefer-desktop/route.ts",
@@ -2869,11 +3555,17 @@
         "src/lib/sla-breach-monitor.ts",
         "src/lib/status-page-resolver.ts",
         "src/lib/status-pages/status-auth.ts",
-        "src/middleware.ts",
-        "deploy/compose/docker-compose.split.yml",
-        "deploy/compose/docker-compose.yml",
-        "deploy/swarm/docker-stack.integrated.yml",
-        "deploy/swarm/docker-stack.yml"
+        "src/middleware.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": [
+        "http://localhost:3000",
+        "localhost"
       ]
     },
     {
@@ -2905,19 +3597,39 @@
         "src/lib/retention-policy.ts",
         "src/lib/secret-manager.ts",
         "src/middleware.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": [
+        "development"
       ]
     },
     {
       "name": "NONCE_COOKIE_NAME",
       "sources": [
         "src/lib/auth.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "NOTIFICATION_AGING_FLOOR",
       "sources": [
         "src/lib/notification-control-plane.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "NOTIFICATION_CONTROL_PLANE_PERSONAL",
@@ -2926,36 +3638,80 @@
         "deploy/compose/docker-compose.yml",
         "deploy/swarm/docker-stack.integrated.yml",
         "deploy/swarm/docker-stack.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "true"
       ]
     },
     {
       "name": "NOTIFICATION_CONTROL_PLANE_STRICT",
       "sources": [
         "src/app/api/health/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "NOTIFICATION_PROVIDER_FEEDBACK_SECRET",
       "sources": [
         "src/app/api/webhooks/notifications/provider-feedback/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "OIDC_CONFIG_CACHE_TTL_MS",
       "sources": [
         "src/lib/oidc-config.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": [
+        "5000"
       ]
     },
     {
       "name": "OIDC_CONFIG_RECORD_CACHE_TTL_MS",
       "sources": [
         "src/lib/oidc-config.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": [
+        "5000"
       ]
     },
     {
       "name": "OIDC_REQUIRE_EMAIL_VERIFIED_STRICT",
       "sources": [
         "src/lib/auth.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": [
+        "true"
       ]
     },
     {
@@ -2964,7 +3720,13 @@
         "deploy/swarm/docker-stack.ca.integrated.yml",
         "deploy/swarm/docker-stack.ca.split.yml",
         "deploy/swarm/docker-stack.pgbouncer-ca.yml"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_DATABASE_URL",
@@ -2973,34 +3735,64 @@
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/compose/docker-compose.split.yml",
         "deploy/compose/docker-compose.yml"
-      ]
+      ],
+      "required": true,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_DATABASE_URL_SECRET",
       "sources": [
         "deploy/swarm/docker-stack.integrated.yml",
         "deploy/swarm/docker-stack.yml"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_DEPLOYMENT_ID",
       "sources": [
         "src/lib/version.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_DIRECT_DATABASE_URL_SECRET",
       "sources": [
         "deploy/swarm/docker-stack.integrated.yml",
         "deploy/swarm/docker-stack.yml"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_ENCRYPTION_KEY_SECRET",
       "sources": [
         "deploy/swarm/docker-stack.integrated.yml",
         "deploy/swarm/docker-stack.yml"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_IMAGE",
@@ -3009,6 +3801,15 @@
         "deploy/compose/docker-compose.yml",
         "deploy/swarm/docker-stack.integrated.yml",
         "deploy/swarm/docker-stack.yml"
+      ],
+      "required": true,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix",
+        "ghcr.io/opsknight-labs/opsknight:latest"
       ]
     },
     {
@@ -3016,72 +3817,144 @@
       "sources": [
         "deploy/swarm/docker-stack.integrated.yml",
         "deploy/swarm/docker-stack.yml"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_PGBOUNCER_DB_PASSWORD_SECRET",
       "sources": [
         "deploy/swarm/docker-stack.pgbouncer.yml"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_PGBOUNCER_IMAGE",
       "sources": [
         "deploy/swarm/docker-stack.pgbouncer.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "ghcr.io/opsknight-labs/opsknight-pgbouncer:1.26.0"
       ]
     },
     {
       "name": "OPSKNIGHT_PGBOUNCER_USERLIST_SECRET",
       "sources": [
         "deploy/swarm/docker-stack.pgbouncer.yml"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_PROCESS_ROLE",
       "sources": [
-        "src/lib/runtime-role.ts",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
-        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
-      ]
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+        "src/lib/runtime-role.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_PROCESS_ROLES",
       "sources": [
         "src/lib/runtime-role.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_PULL_POLICY",
       "sources": [
         "deploy/compose/docker-compose.split.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "always"
       ]
     },
     {
       "name": "OPSKNIGHT_SCHEDULER_PROFILE",
       "sources": [
-        "src/lib/runtime-role.ts",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
-        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
-      ]
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+        "src/lib/runtime-role.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_SCHEDULER_PROFILES",
       "sources": [
         "src/lib/runtime-role.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_SKIP_MIGRATIONS",
       "sources": [
         "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_WEB_DATABASE_URL_SECRET",
       "sources": [
         "deploy/swarm/docker-stack.pgbouncer.yml"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_WORKER_BATCH_SIZE",
@@ -3089,24 +3962,56 @@
         "deploy/compose/docker-compose.split.yml",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "100"
       ]
     },
     {
       "name": "OPSKNIGHT_WORKER_BATCH_SIZE_BULK",
       "sources": [
         "deploy/compose/docker-compose.split.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "100"
       ]
     },
     {
       "name": "OPSKNIGHT_WORKER_BATCH_SIZE_CRITICAL",
       "sources": [
         "deploy/compose/docker-compose.split.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "50"
       ]
     },
     {
       "name": "OPSKNIGHT_WORKER_BATCH_SIZE_PROJECTOR",
       "sources": [
         "deploy/compose/docker-compose.split.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "100"
       ]
     },
     {
@@ -3115,24 +4020,56 @@
         "deploy/compose/docker-compose.split.yml",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "100"
       ]
     },
     {
       "name": "OPSKNIGHT_WORKER_BUSY_POLL_MS_BULK",
       "sources": [
         "deploy/compose/docker-compose.split.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "100"
       ]
     },
     {
       "name": "OPSKNIGHT_WORKER_BUSY_POLL_MS_CRITICAL",
       "sources": [
         "deploy/compose/docker-compose.split.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "100"
       ]
     },
     {
       "name": "OPSKNIGHT_WORKER_BUSY_POLL_MS_PROJECTOR",
       "sources": [
         "deploy/compose/docker-compose.split.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "100"
       ]
     },
     {
@@ -3141,24 +4078,56 @@
         "deploy/compose/docker-compose.split.yml",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "15"
       ]
     },
     {
       "name": "OPSKNIGHT_WORKER_CONCURRENCY_BULK",
       "sources": [
         "deploy/compose/docker-compose.split.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "15"
       ]
     },
     {
       "name": "OPSKNIGHT_WORKER_CONCURRENCY_CRITICAL",
       "sources": [
         "deploy/compose/docker-compose.split.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "10"
       ]
     },
     {
       "name": "OPSKNIGHT_WORKER_CONCURRENCY_PROJECTOR",
       "sources": [
         "deploy/compose/docker-compose.split.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "15"
       ]
     },
     {
@@ -3166,7 +4135,13 @@
       "sources": [
         "src/lib/notification-control-plane.ts",
         "src/lib/provider-admission.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "OPSKNIGHT_WORKER_IDLE_POLL_MS",
@@ -3174,43 +4149,93 @@
         "deploy/compose/docker-compose.split.yml",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "1000"
       ]
     },
     {
       "name": "OPSKNIGHT_WORKER_IDLE_POLL_MS_BULK",
       "sources": [
         "deploy/compose/docker-compose.split.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "1000"
       ]
     },
     {
       "name": "OPSKNIGHT_WORKER_IDLE_POLL_MS_CRITICAL",
       "sources": [
         "deploy/compose/docker-compose.split.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "1000"
       ]
     },
     {
       "name": "OPSKNIGHT_WORKER_IDLE_POLL_MS_PROJECTOR",
       "sources": [
         "deploy/compose/docker-compose.split.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "1000"
       ]
     },
     {
       "name": "PAGE_HEIGHT",
       "sources": [
         "src/lib/status-pages/reports/uptime-report-generator.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "PAGE_WIDTH",
       "sources": [
         "src/lib/status-pages/reports/uptime-report-generator.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "PANEL_GLOBE_WIDTH",
       "sources": [
         "src/components/auth/LoginAnimation.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "PASSWORD_MAX_LENGTH",
@@ -3218,14 +4243,26 @@
         "src/lib/__tests__/passwords.test.ts",
         "src/lib/password-strength.ts",
         "src/lib/passwords.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "PASSWORD_MAX_UTF8_BYTES",
       "sources": [
         "src/lib/password-strength.ts",
         "src/lib/passwords.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "PASSWORD_MIN_LENGTH",
@@ -3233,13 +4270,28 @@
         "src/lib/__tests__/passwords.test.ts",
         "src/lib/password-strength.ts",
         "src/lib/passwords.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "PGBOUNCER_DB_HOST",
       "sources": [
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/swarm/docker-stack.pgbouncer.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "${EXTERNAL_DB_HOST:-",
+        "opsknight-db"
       ]
     },
     {
@@ -3247,6 +4299,15 @@
       "sources": [
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/swarm/docker-stack.pgbouncer.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "${EXTERNAL_DB_NAME:-${POSTGRES_DB:-opsknight_db",
+        "opsknight_db"
       ]
     },
     {
@@ -3254,19 +4315,40 @@
       "sources": [
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/swarm/docker-stack.pgbouncer.yml"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "PGBOUNCER_DB_PASSWORD_FILE",
       "sources": [
         "deploy/compose/docker-compose.pgbouncer.yml"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "PGBOUNCER_DB_PORT",
       "sources": [
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/swarm/docker-stack.pgbouncer.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "${EXTERNAL_DB_PORT:-5432",
+        "5432"
       ]
     },
     {
@@ -3274,6 +4356,15 @@
       "sources": [
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/swarm/docker-stack.pgbouncer.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "${EXTERNAL_DB_USER:-${POSTGRES_USER:-opsknight",
+        "opsknight"
       ]
     },
     {
@@ -3281,12 +4372,28 @@
       "sources": [
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/swarm/docker-stack.pgbouncer.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "10"
       ]
     },
     {
       "name": "PGBOUNCER_IMAGE",
       "sources": [
         "deploy/compose/docker-compose.pgbouncer.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "ghcr.io/icoretech/pgbouncer-docker:1.26.0@sha256:f6537e614011f3d95349847fdd47f1b3a96be86eab99015b5b5918f732884a75"
       ]
     },
     {
@@ -3294,12 +4401,28 @@
       "sources": [
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/swarm/docker-stack.pgbouncer.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "1000"
       ]
     },
     {
       "name": "PGBOUNCER_POOL_MODE",
       "sources": [
         "deploy/swarm/docker-stack.pgbouncer.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "transaction"
       ]
     },
     {
@@ -3307,45 +4430,91 @@
       "sources": [
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/swarm/docker-stack.pgbouncer.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "5"
       ]
     },
     {
       "name": "PGBOUNCER_SERVER_TLS_CA_FILE",
       "sources": [
         "deploy/compose/docker-compose.pgbouncer.yml"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "PGBOUNCER_SERVER_TLS_SSLMODE",
       "sources": [
         "deploy/compose/docker-compose.pgbouncer.yml",
         "deploy/swarm/docker-stack.pgbouncer.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "disable"
       ]
     },
     {
       "name": "PGBOUNCER_TLS_CA_CERT",
       "sources": [
         "deploy/compose/docker-compose.pgbouncer-ca.yml"
-      ]
+      ],
+      "required": true,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "PGDATA",
       "sources": [
         "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
         "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "PKCE_CODE_VERIFIER_COOKIE_NAME",
       "sources": [
         "src/lib/auth.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "PORT",
       "sources": [
         "src/middleware.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "POSTGRES_DB",
@@ -3356,6 +4525,14 @@
         "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
         "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml",
         "deploy/swarm/docker-stack.db.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "opsknight_db"
       ]
     },
     {
@@ -3363,7 +4540,13 @@
       "sources": [
         "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
         "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "POSTGRES_PASSWORD",
@@ -3374,12 +4557,26 @@
         "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
         "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml",
         "deploy/swarm/docker-stack.db.yml"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": []
     },
     {
       "name": "POSTGRES_PORT",
       "sources": [
         "deploy/compose/docker-compose.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "5432"
       ]
     },
     {
@@ -3391,157 +4588,316 @@
         "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
         "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml",
         "deploy/swarm/docker-stack.db.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "opsknight"
       ]
     },
     {
       "name": "PRISMA_SLOW_QUERY_MS",
       "sources": [
         "src/lib/prisma.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": [
+        "500"
       ]
     },
     {
       "name": "PROMETHEUS_SCRAPE_TOKEN",
       "sources": [
-        "src/app/api/health/deep/route.ts",
-        "src/app/api/metrics/route.ts",
         "deploy/compose/docker-compose.split.yml",
         "deploy/compose/docker-compose.yml",
         "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
-        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml"
-      ]
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+        "src/app/api/health/deep/route.ts",
+        "src/app/api/metrics/route.ts"
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "RECENT_DISPLAY_DAYS",
       "sources": [
         "src/components/status-page/v3/IncidentsV3.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "REDIRECT_TO_CANONICAL_HOST",
       "sources": [
         "src/middleware.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "RENDER_GIT_COMMIT",
       "sources": [
         "src/lib/version.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "RESERVED_PREFIX",
       "sources": [
         "src/lib/microsoft-teams/delivery.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "REVOKED_PLATFORM_PREFIX",
       "sources": [
         "src/lib/session-registry.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "ROW_HEIGHT",
       "sources": [
         "src/lib/status-pages/reports/uptime-report-generator.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SCHEDULER_HEALTH_MAX_INTERVAL_SECONDS",
       "sources": [
         "src/app/api/health/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SCIM_BEARER_TOKEN",
       "sources": [
         "src/lib/scim.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SENTRY_DSN",
       "sources": [
         "src/lib/monitoring/sentry.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SENTRY_ENVIRONMENT",
       "sources": [
         "src/lib/monitoring/sentry.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SENTRY_FORCE_ENABLE",
       "sources": [
         "src/lib/monitoring/sentry.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SERVICE_WAR_ROOM_POLICY_PREFIX",
       "sources": [
         "src/lib/incident-collaboration/policy.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SESSION_ACTIVITY_THROTTLE_MS",
       "sources": [
         "src/lib/session-registry.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": [
+        "120000"
       ]
     },
     {
       "name": "SESSION_DEVICE_PREFIX",
       "sources": [
         "src/lib/session-registry.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SESSION_PLATFORM_PREFIX",
       "sources": [
         "src/lib/session-registry.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SESSION_SECURITY_CACHE_TTL_MS",
       "sources": [
         "src/lib/session-security-projection.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": [
+        "5000"
       ]
     },
     {
       "name": "SESSION_TOKEN_COOKIE_NAME",
       "sources": [
         "src/lib/auth.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SETUP_SECRET",
       "sources": [
         "src/app/setup/actions.ts",
         "src/app/setup/page.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SINGLETON_ID",
       "sources": [
         "src/lib/cron-scheduler.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SKIP_ENV_VALIDATION",
       "sources": [
         "src/lib/env-validation.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SLA_ALERT_EMAIL",
       "sources": [
         "src/lib/sla-breach-monitor.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SLACK_BOT_TOKEN",
       "sources": [
         "src/lib/slack.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SLACK_CLIENT_ID",
@@ -3549,6 +4905,14 @@
         "src/app/(app)/settings/slack-oauth/actions.ts",
         "src/app/api/slack/oauth/callback/route.ts",
         "src/app/api/slack/oauth/route.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": [
+        "workspace-credentials"
       ]
     },
     {
@@ -3557,143 +4921,281 @@
         "src/app/(app)/settings/slack-oauth/actions.ts",
         "src/app/api/slack/oauth/callback/route.ts",
         "src/app/api/slack/oauth/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SLACK_REDIRECT_URI",
       "sources": [
         "src/app/api/slack/oauth/callback/route.ts",
         "src/app/api/slack/oauth/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SLACK_RESPONSE_ORIGIN",
       "sources": [
         "src/lib/slack-signature.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SLACK_SIGNING_SECRET",
       "sources": [
         "src/app/(app)/settings/integrations/slack/page.tsx",
         "src/lib/slack-signature.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SLACK_WEBHOOK_URL",
       "sources": [
         "src/lib/slack.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SOURCE_VERSION",
       "sources": [
         "src/lib/version.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATE_COOKIE_NAME",
       "sources": [
         "src/lib/auth.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_BADGE_CLASS",
       "sources": [
         "src/components/settings/privacy/PrivacyRequestsBoard.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1",
       "sources": [
         "src/app/api/settings/status-page/announcements/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2",
       "sources": [
         "src/app/api/settings/status-page/announcements/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING",
       "sources": [
         "src/app/api/settings/status-page/announcements/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_PAGE_DOMAIN_CACHE_TTL",
       "sources": [
         "src/middleware.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_PAGE_EXTERNAL_SERVING_STORE",
       "sources": [
         "src/middleware.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_PAGE_LIFECYCLE_LOCK",
       "sources": [
         "src/lib/status-pages/admin.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_PAGE_PUBLIC_CSS",
       "sources": [
         "src/lib/status-page-preview-css.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_PAGE_SERVING_STORE_TOKEN",
       "sources": [
         "src/lib/status-pages/serving-store.ts",
         "src/middleware.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_PAGE_SERVING_STORE_URL",
       "sources": [
         "src/lib/status-pages/serving-store.ts",
         "src/middleware.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_PAGE_SNAPSHOT_MAX_BYTES",
       "sources": [
         "src/lib/status-pages/snapshot.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_PAGE_SURFACE_CLASS",
       "sources": [
         "src/lib/status-pages/public-css.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_PAGE_SYNC_PUBLISH_BUDGET_MS",
       "sources": [
         "src/lib/status-pages/publish-configuration.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STATUS_SESSION_COOKIE_NAME",
       "sources": [
         "src/app/status-auth/callback/route.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STORAGE_KEY_PREFIX",
       "sources": [
         "src/components/DashboardWidgetToggle.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "STORAGE_PREFIX",
       "sources": [
         "src/lib/mobile-principal-state.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "SWARM_NETWORK_NAME",
@@ -3704,125 +5206,262 @@
         "deploy/swarm/docker-stack.integrated.yml",
         "deploy/swarm/docker-stack.pgbouncer.yml",
         "deploy/swarm/docker-stack.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "opsknight"
       ]
     },
     {
       "name": "SWARM_REPLICAS_BULK_WORKER",
       "sources": [
         "deploy/swarm/docker-stack.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "2"
       ]
     },
     {
       "name": "SWARM_REPLICAS_CRITICAL_WORKER",
       "sources": [
         "deploy/swarm/docker-stack.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "2"
       ]
     },
     {
       "name": "SWARM_REPLICAS_GENERAL_WORKER",
       "sources": [
         "deploy/swarm/docker-stack.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "2"
       ]
     },
     {
       "name": "SWARM_REPLICAS_SCHEDULER",
       "sources": [
         "deploy/swarm/docker-stack.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "2"
       ]
     },
     {
       "name": "SWARM_REPLICAS_STATUS_PROJECTOR",
       "sources": [
         "deploy/swarm/docker-stack.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "2"
       ]
     },
     {
       "name": "SWARM_REPLICAS_WEB",
       "sources": [
         "deploy/swarm/docker-stack.yml"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [
+        "2"
       ]
     },
     {
       "name": "TILE_W",
       "sources": [
         "src/components/auth/LoginAnimation.tsx"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "TRUST_PROXY_HEADERS",
       "sources": [
         "src/lib/request-host.ts",
         "src/middleware.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "TRUSTED_PROXY_HOPS",
       "sources": [
         "src/lib/client-ip.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "TRUSTED_PWA_SESSION_DAYS",
       "sources": [
         "src/lib/pwa-session-policy.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "VAPID_PRIVATE_KEY",
       "sources": [
         "src/lib/push.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "VAPID_SUBJECT",
       "sources": [
         "src/lib/push.ts"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": [
+        "mailto:admin@localhost"
       ]
     },
     {
       "name": "VERCEL_GIT_COMMIT_SHA",
       "sources": [
         "src/lib/version.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "VITEST",
       "sources": [
         "src/lib/provider-admission.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "VITEST_USE_REAL_DB",
       "sources": [
         "src/lib/incident-collaboration/meeting-store.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "VITEST_WORKER_ID",
       "sources": [
         "src/lib/provider-admission.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "VOICE_CALLBACK_SIGNING_SECRET",
       "sources": [
         "src/lib/voice/token.ts"
-      ]
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "WEB_DATABASE_URL",
       "sources": [
-        "src/lib/prisma-datasource.ts",
         "deploy/compose/docker-compose.pgbouncer.yml",
-        "deploy/compose/docker-compose.split.yml"
-      ]
+        "deploy/compose/docker-compose.split.yml",
+        "src/lib/prisma-datasource.ts"
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": []
     },
     {
       "name": "WORKER_ID",
       "sources": [
         "src/lib/cron-scheduler.ts",
         "src/lib/provider-admission.ts"
-      ]
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": []
     }
   ],
   "integrations": [
