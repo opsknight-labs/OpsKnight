@@ -31,8 +31,8 @@ export default async function globalSetup() {
     ];
     const users = await Promise.all(userFixtures.map(async ({ fixture, role }) => prisma.user.upsert({
       where: { email: fixture.email },
-      update: { name: fixture.name, role, status: 'ACTIVE', passwordHash: await bcrypt.hash(fixture.password, 12) },
-      create: { email: fixture.email, name: fixture.name, role, status: 'ACTIVE', passwordHash: await bcrypt.hash(fixture.password, 12) },
+      update: { name: fixture.name, role, status: 'ACTIVE', passwordHash: await bcrypt.hash(fixture.password, 10) },
+      create: { email: fixture.email, name: fixture.name, role, status: 'ACTIVE', passwordHash: await bcrypt.hash(fixture.password, 10) },
     })));
     const [admin, responder, viewer] = users;
     const team = await prisma.team.upsert({

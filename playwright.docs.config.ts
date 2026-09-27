@@ -5,6 +5,7 @@ const databaseUrl =
   'postgresql://opsknight_docs:opsknight_docs@127.0.0.1:55432/opsknight_docs?schema=public';
 process.env.DOCS_DATABASE_URL = databaseUrl;
 process.env.DATABASE_URL = databaseUrl;
+process.env.DOCS_OPSKNIGHT_IMAGE ||= 'ghcr.io/opsknight-labs/opsknight-test@sha256:4364470f96e793e24a3c85cad62ed429cfe179f23aa5eb8a26ddcc864e2303dd';
 
 export default defineConfig({
   testDir: './tests/docs/journeys',

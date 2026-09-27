@@ -15,7 +15,7 @@ services:
       - docs_postgres_data:/var/lib/postgresql/data
 
   opsknight-app:
-    image: ${DOCS_OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight-test:latest}
+    image: ${DOCS_OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight-test@sha256:4364470f96e793e24a3c85cad62ed429cfe179f23aa5eb8a26ddcc864e2303dd}
     pull_policy: always
     ports: !override
       - '127.0.0.1:3200:3000'
@@ -26,7 +26,7 @@ services:
       NEXTAUTH_URL: http://localhost:3200
       NEXT_PUBLIC_APP_URL: http://localhost:3200
       NEXTAUTH_SECRET: docs-runtime-only-nextauth-secret
-      ENCRYPTION_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
       NEXTAUTH_COOKIE_SECURE: 'false'
       PORT: '3000'
       HOSTNAME: 0.0.0.0
