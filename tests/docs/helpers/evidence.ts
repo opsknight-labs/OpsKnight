@@ -7,7 +7,9 @@ export async function captureEvidence(page: Page, testInfo: TestInfo, journey: s
   const directory = resolve('generated/docs-evidence/current', journey);
   await mkdir(directory, { recursive: true });
   const image = resolve(directory, `${name}.png`);
-  await page.screenshot({ path: image, fullPage: true });
+  // Viewport captures preserve fixed navigation chrome. Full-page stitching can
+  // omit the fixed sidebar while retaining its content gutter.
+  await page.screenshot({ path: image, fullPage: false });
   const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   await writeFile(resolve(directory, `${name}.json`), `${JSON.stringify({
     release: 'current',
@@ -19,4 +21,3 @@ export async function captureEvidence(page: Page, testInfo: TestInfo, journey: s
     capturedAt: new Date().toISOString(),
   }, null, 2)}\n`);
 }
-

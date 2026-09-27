@@ -10,6 +10,20 @@ export default async function globalSetup() {
   process.env.DATABASE_URL = databaseUrl;
   const prisma = new PrismaClient();
   try {
+    const legacyEmails = [
+      ['docs-admin@example.test', DOCS_ADMIN.email],
+      ['docs-responder@example.test', DOCS_RESPONDER.email],
+      ['docs-viewer@example.test', DOCS_VIEWER.email],
+    ] as const;
+    for (const [legacyEmail, email] of legacyEmails) {
+      await prisma.user.updateMany({ where: { email: legacyEmail }, data: { email } });
+    }
+    await prisma.team.updateMany({ where: { name: 'Platform' }, data: { name: DOCS_FIXTURES.team } });
+    await prisma.service.updateMany({ where: { name: 'Checkout' }, data: { name: DOCS_FIXTURES.service } });
+    await prisma.onCallSchedule.updateMany({ where: { name: 'Platform Primary' }, data: { name: DOCS_FIXTURES.schedule } });
+    await prisma.escalationPolicy.updateMany({ where: { name: 'Platform Escalation' }, data: { name: DOCS_FIXTURES.policy } });
+    await prisma.statusPage.updateMany({ where: { name: 'Acme Status' }, data: { name: DOCS_FIXTURES.statusPage, slug: 'northstar-systems', organizationName: 'Northstar Systems' } });
+    await prisma.incident.updateMany({ where: { title: 'Checkout latency is above threshold' }, data: { title: DOCS_FIXTURES.incident } });
     const userFixtures: Array<{ fixture: typeof DOCS_ADMIN | typeof DOCS_RESPONDER | typeof DOCS_VIEWER; role: Role }> = [
       { fixture: DOCS_ADMIN, role: 'ADMIN' },
       { fixture: DOCS_RESPONDER, role: 'RESPONDER' },
@@ -23,8 +37,8 @@ export default async function globalSetup() {
     const [admin, responder, viewer] = users;
     const team = await prisma.team.upsert({
       where: { name: DOCS_FIXTURES.team },
-      update: { description: 'Synthetic documentation fixture', teamLeadId: responder.id },
-      create: { name: DOCS_FIXTURES.team, description: 'Synthetic documentation fixture', teamLeadId: responder.id },
+      update: { description: 'Reliability ownership for customer checkout services', teamLeadId: responder.id },
+      create: { name: DOCS_FIXTURES.team, description: 'Reliability ownership for customer checkout services', teamLeadId: responder.id },
     });
     await Promise.all(users.map(user => prisma.teamMember.upsert({
       where: { userId_teamId: { userId: user.id, teamId: team.id } },
@@ -33,8 +47,8 @@ export default async function globalSetup() {
     })));
     const policy = await prisma.escalationPolicy.upsert({
       where: { name: DOCS_FIXTURES.policy },
-      update: { description: 'Synthetic escalation fixture' },
-      create: { name: DOCS_FIXTURES.policy, description: 'Synthetic escalation fixture' },
+      update: { description: 'Primary and backup response for critical commerce incidents' },
+      create: { name: DOCS_FIXTURES.policy, description: 'Primary and backup response for critical commerce incidents' },
     });
     await prisma.escalationRule.upsert({
       where: { policyId_stepOrder: { policyId: policy.id, stepOrder: 0 } },
@@ -44,7 +58,7 @@ export default async function globalSetup() {
     const service = await prisma.service.upsert({
       where: { name: DOCS_FIXTURES.service },
       update: { teamId: team.id, escalationPolicyId: policy.id },
-      create: { name: DOCS_FIXTURES.service, description: 'Synthetic checkout service', teamId: team.id, escalationPolicyId: policy.id },
+      create: { name: DOCS_FIXTURES.service, description: 'Customer checkout and payment orchestration API', teamId: team.id, escalationPolicyId: policy.id },
     });
     const schedule = await prisma.onCallSchedule.upsert({
       where: { name: DOCS_FIXTURES.schedule },
@@ -61,12 +75,12 @@ export default async function globalSetup() {
     await prisma.statusPage.upsert({
       where: { name: DOCS_FIXTURES.statusPage },
       update: { enabled: true, slug: 'acme-status' },
-      create: { name: DOCS_FIXTURES.statusPage, enabled: true, slug: 'acme-status', organizationName: 'Acme' },
+      create: { name: DOCS_FIXTURES.statusPage, enabled: true, slug: 'northstar-systems', organizationName: 'Northstar Systems' },
     });
     const existing = await prisma.incident.findFirst({ where: { title: DOCS_FIXTURES.incident, serviceId: service.id } });
-    if (!existing) await prisma.incident.create({
-      data: { title: DOCS_FIXTURES.incident, description: 'Synthetic documentation incident.', serviceId: service.id, teamId: team.id, urgency: 'HIGH', status: 'OPEN', slaAckTargetMs: 900_000, slaResolveTargetMs: 7_200_000, slaTargetSource: 'service' },
-    });
+    const resetIncident = { title: DOCS_FIXTURES.incident, description: 'Elevated checkout latency is affecting payment completion in multiple regions.', urgency: 'HIGH' as const, status: 'OPEN' as const, acknowledgedAt: null, resolvedAt: null, slaAckTargetMs: 900_000, slaResolveTargetMs: 7_200_000, slaTargetSource: 'service' };
+    if (existing) await prisma.incident.update({ where: { id: existing.id }, data: resetIncident });
+    else await prisma.incident.create({ data: { ...resetIncident, serviceId: service.id, teamId: team.id } });
     void viewer;
   } finally {
     await prisma.$disconnect();

@@ -1,17 +1,36 @@
+name: opsknight-docs
+
 include:
   - ../../../deploy/compose/docker-compose.yml
-  - ../../../deploy/compose/docker-compose.split.yml
 
 services:
   opsknight-db:
-    ports:
+    ports: !override
       - '127.0.0.1:55432:5432'
     environment:
       POSTGRES_USER: opsknight_docs
       POSTGRES_PASSWORD: opsknight_docs
       POSTGRES_DB: opsknight_docs
-    volumes:
+    volumes: !override
       - docs_postgres_data:/var/lib/postgresql/data
+
+  opsknight-app:
+    image: ${DOCS_OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight-test:latest}
+    pull_policy: always
+    ports: !override
+      - '127.0.0.1:3200:3000'
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://opsknight_docs:opsknight_docs@opsknight-db:5432/opsknight_docs?schema=public
+      DIRECT_DATABASE_URL: postgresql://opsknight_docs:opsknight_docs@opsknight-db:5432/opsknight_docs?schema=public
+      NEXTAUTH_URL: http://localhost:3200
+      NEXT_PUBLIC_APP_URL: http://localhost:3200
+      NEXTAUTH_SECRET: docs-runtime-only-nextauth-secret
+      ENCRYPTION_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      NEXTAUTH_COOKIE_SECURE: 'false'
+      PORT: '3000'
+      HOSTNAME: 0.0.0.0
+      NEXT_TELEMETRY_DISABLED: '1'
 
   mock-slack:
     image: wiremock/wiremock:3.13.1
@@ -31,4 +50,3 @@ services:
 
 volumes:
   docs_postgres_data:
-

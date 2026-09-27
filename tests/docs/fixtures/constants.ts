@@ -1,27 +1,26 @@
 export const DOCS_ADMIN = {
-  email: 'docs-admin@example.test',
+  email: 'maya.chen@opsknight.com',
   password: 'Docs-only-harbor-482!',
-  name: 'Documentation Admin',
+  name: 'Maya Chen',
 } as const;
 
 export const DOCS_RESPONDER = {
-  email: 'docs-responder@example.test',
+  email: 'daniel.kim@opsknight.com',
   password: 'Docs-only-orbit-583!',
-  name: 'Documentation Responder',
+  name: 'Daniel Kim',
 } as const;
 
 export const DOCS_VIEWER = {
-  email: 'docs-viewer@example.test',
+  email: 'priya.shah@opsknight.com',
   password: 'Docs-only-forest-684!',
-  name: 'Documentation Viewer',
+  name: 'Priya Shah',
 } as const;
 
 export const DOCS_FIXTURES = {
-  team: 'Platform',
-  service: 'Checkout',
-  schedule: 'Platform Primary',
-  policy: 'Platform Escalation',
-  statusPage: 'Acme Status',
-  incident: 'Checkout latency is above threshold',
+  team: 'Commerce Reliability',
+  service: 'Checkout API',
+  schedule: 'Commerce Primary On-Call',
+  policy: 'Commerce Critical Escalation',
+  statusPage: 'Northstar Systems Status',
+  incident: 'Checkout API p95 latency above SLO',
 } as const;
-
