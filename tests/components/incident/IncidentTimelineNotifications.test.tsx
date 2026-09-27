@@ -101,4 +101,55 @@ describe('IncidentTimeline notification integration', () => {
     // No "No matching events" empty state
     expect(screen.queryByText('No matching events')).not.toBeInTheDocument();
   });
+
+  it('uses failedAt timestamp rather than sentAt for failed notifications to maintain timeline order', () => {
+    const propsWithFailed = {
+      events: [
+        {
+          id: 'event-1',
+          message: 'Incident triggered and created',
+          type: 'CREATED',
+          createdAt: new Date('2026-09-27T10:00:00Z'),
+        },
+        {
+          id: 'event-intervening',
+          message: 'Intervening incident event',
+          type: 'EVENT',
+          createdAt: new Date('2026-09-27T10:03:00Z'),
+        },
+      ],
+      notes: [],
+      notifications: [
+        {
+          id: 'notif-failed-1',
+          channel: 'SMS',
+          status: 'FAILED',
+          recipientDisplay: '+917720833966',
+          createdAt: new Date('2026-09-27T10:01:00Z'),
+          sentAt: new Date('2026-09-27T10:01:05Z'), // Initial send
+          failedAt: new Date('2026-09-27T10:05:00Z'), // Provider webhook failure later
+          errorMsg: 'Carrier rejected',
+          user: { id: 'u1', name: 'OpsKnight Admin', email: 'admin@opsknight.com' },
+        },
+      ],
+      incidentCreatedAt: new Date('2026-09-27T10:00:00Z'),
+    };
+
+    render(<IncidentTimeline {...propsWithFailed} />);
+
+    // Verify notification is rendered with error details
+    expect(
+      screen.getByText('SMS notification to OpsKnight Admin failed: Carrier rejected')
+    ).toBeInTheDocument();
+
+    // Check DOM order: 'Intervening incident event' (10:03:00) should appear BEFORE the failed notification (10:05:00)
+    const interveningEl = screen.getByText('Intervening incident event');
+    const failedNotifEl = screen.getByText(
+      'SMS notification to OpsKnight Admin failed: Carrier rejected'
+    );
+
+    expect(
+      interveningEl.compareDocumentPosition(failedNotifEl) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
 });

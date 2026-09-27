@@ -273,7 +273,21 @@ export default function IncidentTimeline({
   // Synthesize timeline events for incident notifications
   if (notifications && notifications.length > 0) {
     notifications.forEach(notif => {
-      const timestamp = notif.deliveredAt || notif.sentAt || notif.failedAt || notif.createdAt;
+      let timestamp: string | Date | undefined;
+      switch (notif.status) {
+        case 'FAILED':
+          timestamp = notif.failedAt || notif.sentAt || notif.createdAt;
+          break;
+        case 'DELIVERED':
+          timestamp = notif.deliveredAt || notif.sentAt || notif.createdAt;
+          break;
+        case 'SENT':
+          timestamp = notif.sentAt || notif.deliveredAt || notif.createdAt;
+          break;
+        default:
+          timestamp = notif.deliveredAt || notif.failedAt || notif.sentAt || notif.createdAt;
+          break;
+      }
       timelineEvents.push({
         id: `notif-${notif.id}`,
         message: formatNotificationMessage(notif),

@@ -145,40 +145,66 @@ async function releaseFailedOperation(
   const { terminal } = classifyTeamsError(error);
   const status = terminal || attempts >= MAX_TEAMS_OPERATION_ATTEMPTS ? 'FAILED' : 'PENDING';
   const errMessage = (error instanceof Error ? error.message : String(error)).slice(0, 1000);
-  await prisma.externalOperation.updateMany({
-    where: { id, status: 'PROCESSING', leaseToken },
-    data: {
-      status,
-      nextAttemptAt: new Date(Date.now() + operationRetryDelayMs(error)),
-      lastError: errMessage,
-      leaseToken: null,
-      leaseExpiresAt: null,
-    },
-  });
+
   if (status === 'FAILED') {
     try {
-      const op = await prisma.externalOperation.findUnique({
-        where: { id },
-        select: { idempotencyKey: true },
+      await prisma.$transaction(async tx => {
+        const updated = await tx.externalOperation.updateMany({
+          where: { id, status: 'PROCESSING', leaseToken },
+          data: {
+            status: 'FAILED',
+            nextAttemptAt: new Date(Date.now() + operationRetryDelayMs(error)),
+            lastError: errMessage,
+            leaseToken: null,
+            leaseExpiresAt: null,
+          },
+        });
+        if (updated.count === 0) {
+          // Stale worker lost its lease; another worker may have reclaimed or completed the operation
+          return;
+        }
+
+        const op = await tx.externalOperation.findUnique({
+          where: { id },
+          select: { idempotencyKey: true },
+        });
+        if (op?.idempotencyKey) {
+          const client = (
+            tx as unknown as { notification?: { updateMany: (a: unknown) => Promise<unknown> } }
+          )?.notification
+            ? (tx as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } })
+            : (prisma as unknown as {
+                notification: { updateMany: (a: unknown) => Promise<unknown> };
+              });
+
+          await client.notification
+            .updateMany({
+              where: {
+                deliveryKey: op.idempotencyKey,
+                status: { not: 'DELIVERED' },
+              },
+              data: {
+                status: 'FAILED',
+                failedAt: new Date(),
+                errorMsg: errMessage,
+                attempts: { increment: 1 },
+              },
+            })
+            .catch(() => undefined);
+        }
       });
-      if (op?.idempotencyKey) {
-        await (
-          prisma as unknown as {
-            notification: { updateMany: (a: unknown) => Promise<unknown> };
-          }
-        ).notification
-          .updateMany({
-            where: { deliveryKey: op.idempotencyKey },
-            data: {
-              status: 'FAILED',
-              failedAt: new Date(),
-              errorMsg: errMessage,
-              attempts: { increment: 1 },
-            },
-          })
-          .catch(() => undefined);
-      }
     } catch {}
+  } else {
+    await prisma.externalOperation.updateMany({
+      where: { id, status: 'PROCESSING', leaseToken },
+      data: {
+        status: 'PENDING',
+        nextAttemptAt: new Date(Date.now() + operationRetryDelayMs(error)),
+        lastError: errMessage,
+        leaseToken: null,
+        leaseExpiresAt: null,
+      },
+    });
   }
 }
 
@@ -189,16 +215,17 @@ async function releaseFailedOperation(
  */
 async function syncTeamsNotificationDelivered(
   idempotencyKey: string | null | undefined,
-  providerMessageId?: string | null
+  providerMessageId?: string | null,
+  tx?: unknown
 ) {
   if (!idempotencyKey) return;
-  await (
-    prisma as unknown as {
-      notification: {
-        updateMany: (a: unknown) => Promise<unknown>;
-      };
-    }
-  ).notification
+  const client = (
+    tx as unknown as { notification?: { updateMany: (a: unknown) => Promise<unknown> } }
+  )?.notification
+    ? (tx as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } })
+    : (prisma as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } });
+
+  await client.notification
     .updateMany({
       where: { deliveryKey: idempotencyKey },
       data: {
@@ -214,18 +241,19 @@ async function syncTeamsNotificationDelivered(
 
 async function syncTeamsNotificationFailure(
   idempotencyKey: string | null | undefined,
-  errorMsg: string
+  errorMsg: string,
+  tx?: unknown
 ) {
   if (!idempotencyKey) return;
-  await (
-    prisma as unknown as {
-      notification: {
-        updateMany: (a: unknown) => Promise<unknown>;
-      };
-    }
-  ).notification
+  const client = (
+    tx as unknown as { notification?: { updateMany: (a: unknown) => Promise<unknown> } }
+  )?.notification
+    ? (tx as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } })
+    : (prisma as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } });
+
+  await client.notification
     .updateMany({
-      where: { deliveryKey: idempotencyKey },
+      where: { deliveryKey: idempotencyKey, status: { not: 'DELIVERED' } },
       data: {
         status: 'FAILED',
         failedAt: new Date(),
@@ -395,19 +423,23 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     typeof payload?.eventType === 'string' ? (payload.eventType as string) : 'triggered';
   const incidentId = operation.incidentId;
   if (!incidentId || !destinationId) {
-    await syncTeamsNotificationFailure(
-      operation.idempotencyKey,
-      'Teams operation payload is missing incidentId/destinationId'
-    );
-    await prisma.externalOperation.updateMany({
-      where: { id, status: 'PROCESSING', leaseToken },
-      data: {
-        status: 'FAILED',
-        lastError: 'Teams operation payload is missing incidentId/destinationId',
-        leaseToken: null,
-        leaseExpiresAt: null,
-      },
-    });
+    const errorMsg = 'Teams operation payload is missing incidentId/destinationId';
+    await prisma
+      .$transaction(async tx => {
+        const updated = await tx.externalOperation.updateMany({
+          where: { id, status: 'PROCESSING', leaseToken },
+          data: {
+            status: 'FAILED',
+            lastError: errorMsg,
+            leaseToken: null,
+            leaseExpiresAt: null,
+          },
+        });
+        if (updated.count > 0) {
+          await syncTeamsNotificationFailure(operation.idempotencyKey, errorMsg, tx);
+        }
+      })
+      .catch(() => undefined);
     throw new Error('Teams operation payload is invalid');
   }
 
@@ -444,16 +476,23 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       include: { service: { select: { name: true } }, assignee: { select: { name: true } } },
     });
     if (!incident) {
-      await syncTeamsNotificationFailure(operation.idempotencyKey, 'Incident no longer exists');
-      await prisma.externalOperation.updateMany({
-        where: { id, status: 'PROCESSING', leaseToken },
-        data: {
-          status: 'FAILED',
-          lastError: 'Incident no longer exists',
-          leaseToken: null,
-          leaseExpiresAt: null,
-        },
-      });
+      const errorMsg = 'Incident no longer exists';
+      await prisma
+        .$transaction(async tx => {
+          const updated = await tx.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: 'FAILED',
+              lastError: errorMsg,
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
+          });
+          if (updated.count > 0) {
+            await syncTeamsNotificationFailure(operation.idempotencyKey, errorMsg, tx);
+          }
+        })
+        .catch(() => undefined);
       return null;
     }
     const destination = await (
@@ -472,19 +511,23 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       }
     ).microsoftTeamsDestination.findUnique({ where: { id: destinationId } } as never);
     if (!destination || !destination.enabled) {
-      await syncTeamsNotificationFailure(
-        operation.idempotencyKey,
-        'Teams destination is not enabled'
-      );
-      await prisma.externalOperation.updateMany({
-        where: { id, status: 'PROCESSING', leaseToken },
-        data: {
-          status: 'FAILED',
-          lastError: 'Teams destination is not enabled',
-          leaseToken: null,
-          leaseExpiresAt: null,
-        },
-      });
+      const errorMsg = 'Teams destination is not enabled';
+      await prisma
+        .$transaction(async tx => {
+          const updated = await tx.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: 'FAILED',
+              lastError: errorMsg,
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
+          });
+          if (updated.count > 0) {
+            await syncTeamsNotificationFailure(operation.idempotencyKey, errorMsg, tx);
+          }
+        })
+        .catch(() => undefined);
       throw new AppError({
         code: 'INTEGRATION_DISABLED',
         userMessage: 'Microsoft Teams destination is not enabled.',
@@ -509,11 +552,17 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         (frozen.serviceId && frozen.serviceId !== destination.serviceId);
       if (mismatch) {
         const reason = 'Teams destination was retargeted after enqueue — stale delivery suppressed';
-        await syncTeamsNotificationFailure(operation.idempotencyKey, reason);
-        await prisma.externalOperation.updateMany({
-          where: { id, status: 'PROCESSING', leaseToken },
-          data: { status: 'FAILED', lastError: reason, leaseToken: null, leaseExpiresAt: null },
-        });
+        await prisma
+          .$transaction(async tx => {
+            const updated = await tx.externalOperation.updateMany({
+              where: { id, status: 'PROCESSING', leaseToken },
+              data: { status: 'FAILED', lastError: reason, leaseToken: null, leaseExpiresAt: null },
+            });
+            if (updated.count > 0) {
+              await syncTeamsNotificationFailure(operation.idempotencyKey, reason, tx);
+            }
+          })
+          .catch(() => undefined);
         try {
           await emitAuditEvent({
             action: 'microsoftTeams.delivery.superseded',
@@ -645,11 +694,18 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       }
     }
     if (staleReason) {
-      await syncTeamsNotificationFailure(operation.idempotencyKey, staleReason);
-      await prisma.externalOperation.updateMany({
-        where: { id, status: 'PROCESSING', leaseToken },
-        data: { status: 'FAILED', lastError: staleReason, leaseToken: null, leaseExpiresAt: null },
-      });
+      const reason = staleReason;
+      await prisma
+        .$transaction(async tx => {
+          const updated = await tx.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: { status: 'FAILED', lastError: reason, leaseToken: null, leaseExpiresAt: null },
+          });
+          if (updated.count > 0) {
+            await syncTeamsNotificationFailure(operation.idempotencyKey, reason, tx);
+          }
+        })
+        .catch(() => undefined);
       try {
         await emitAuditEvent({
           action: 'microsoftTeams.delivery.superseded',
@@ -1577,21 +1633,25 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       }
     } else {
       // No providerMessageId (e.g. recover path without id) — still mark COMPLETED.
-      await prisma.externalOperation.updateMany({
-        where: { id, status: 'PROCESSING', leaseToken },
-        data: {
-          status: 'COMPLETED',
-          externalId: null,
-          externalKey: null,
-          resultPayload: {
-            providerMessageId: null,
-            conversationId: result.conversationId ?? null,
-          } as Prisma.InputJsonObject,
-          leaseToken: null,
-          leaseExpiresAt: null,
-        },
+      await prisma.$transaction(async tx => {
+        const updated = await tx.externalOperation.updateMany({
+          where: { id, status: 'PROCESSING', leaseToken },
+          data: {
+            status: 'COMPLETED',
+            externalId: null,
+            externalKey: null,
+            resultPayload: {
+              providerMessageId: null,
+              conversationId: result.conversationId ?? null,
+            } as Prisma.InputJsonObject,
+            leaseToken: null,
+            leaseExpiresAt: null,
+          },
+        });
+        if (updated.count > 0) {
+          await syncTeamsNotificationDelivered(operation.idempotencyKey, undefined, tx);
+        }
       });
-      await syncTeamsNotificationDelivered(operation.idempotencyKey);
     }
     await releaseTeamsConcurrency();
     await releaseCardMutationLease();
