@@ -48,6 +48,8 @@ export async function POST(request: NextRequest) {
           notificationId: true,
           providerMessageId: true,
           startedAt: true,
+          finishedAt: true,
+          outcome: true,
           notification: {
             select: {
               id: true,
@@ -62,6 +64,19 @@ export async function POST(request: NextRequest) {
         },
       });
       if (!attempt || attempt.notificationId !== notificationId) {
+        return new NextResponse(null, { status: 204 });
+      }
+      // If the attempt is already in a terminal state (or finishedAt is set),
+      // ignore subsequent status callbacks to enforce absolute terminal immutability.
+      const TERMINAL_OUTCOMES = [
+        'COMPLETED',
+        'BUSY',
+        'NO-ANSWER',
+        'FAILED',
+        'CANCELED',
+        'ACKNOWLEDGED',
+      ];
+      if (attempt.finishedAt || TERMINAL_OUTCOMES.includes(attempt.outcome)) {
         return new NextResponse(null, { status: 204 });
       }
       // Verify the Call SID matches this attempt. If the attempt has no provider
@@ -180,35 +195,34 @@ async function processStatusCallback(
       }
     }
 
-    // Monotonic state machine for delivery attempts:
-    // ACCEPTED (1) -> RINGING (2) -> IN-PROGRESS / ANSWERED (3) -> terminal states (COMPLETED, BUSY, NO-ANSWER, FAILED, CANCELED, ACKNOWLEDGED) (4)
-    const TERMINAL_OUTCOMES = [
-      'COMPLETED',
-      'BUSY',
-      'NO-ANSWER',
-      'FAILED',
-      'CANCELED',
-      'ACKNOWLEDGED',
-    ];
-    const CONNECTED_OUTCOMES = ['IN-PROGRESS', 'ANSWERED', 'COMPLETED', 'ACKNOWLEDGED'];
-
+    // Monotonic transition rank and CAS state machine for delivery attempts:
+    // Rank 0: IN_FLIGHT
+    // Rank 1: ACCEPTED
+    // Rank 2: RINGING
+    // Rank 3: IN-PROGRESS / ANSWERED
+    // Rank 4: Terminal states (COMPLETED, BUSY, NO-ANSWER, FAILED, CANCELED, ACKNOWLEDGED)
+    //
+    // Transitions can ONLY move forward in rank, and ANY attempt with finishedAt != null
+    // or an existing terminal outcome is completely immutable.
     let targetOutcome: string;
-    let whereOutcomeCondition: object = {};
+    let allowedPreviousOutcomes: string[];
 
     if (completed) {
       targetOutcome = 'COMPLETED';
-      whereOutcomeCondition = { outcome: { not: 'ACKNOWLEDGED' } };
+      // Completed can only transition from active, non-terminal states
+      allowedPreviousOutcomes = ['IN_FLIGHT', 'ACCEPTED', 'RINGING', 'IN-PROGRESS', 'ANSWERED'];
     } else if (connected) {
       targetOutcome = callStatus === 'in-progress' ? 'IN-PROGRESS' : 'ANSWERED';
-      whereOutcomeCondition = { outcome: { notIn: ['COMPLETED', 'ACKNOWLEDGED'] } };
+      // Connected can only transition from pre-connection states
+      allowedPreviousOutcomes = ['IN_FLIGHT', 'ACCEPTED', 'RINGING'];
     } else if (failed) {
       targetOutcome = callStatus.toUpperCase();
-      // A failed callback must never overwrite an attempt that was already connected or completed
-      whereOutcomeCondition = { outcome: { notIn: CONNECTED_OUTCOMES } };
+      // Human/network terminal failures can only transition from pre-connection states
+      allowedPreviousOutcomes = ['IN_FLIGHT', 'ACCEPTED', 'RINGING'];
     } else {
       targetOutcome = callStatus === 'ringing' ? 'RINGING' : 'ACCEPTED';
-      // Ringing/initiated must never overwrite connected or terminal states
-      whereOutcomeCondition = { outcome: { notIn: [...CONNECTED_OUTCOMES, ...TERMINAL_OUTCOMES] } };
+      // Ringing can only transition from initial dispatch states
+      allowedPreviousOutcomes = ['IN_FLIGHT', 'ACCEPTED'];
     }
 
     const attemptFilter = attempt?.id
@@ -218,7 +232,8 @@ async function processStatusCallback(
     await tx.notificationDeliveryAttempt.updateMany({
       where: {
         ...attemptFilter,
-        ...whereOutcomeCondition,
+        finishedAt: null,
+        outcome: { in: allowedPreviousOutcomes },
       },
       data: {
         outcome: targetOutcome,

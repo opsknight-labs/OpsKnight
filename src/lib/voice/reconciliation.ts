@@ -39,7 +39,7 @@ export async function reconcileStaleVoiceCalls(
       providerMessageId: true,
       maxAttempts: true,
       deliveryAttempts: {
-        where: { outcome: { in: ['ACCEPTED', 'IN_FLIGHT', 'RINGING'] } },
+        where: { outcome: { in: ['ACCEPTED', 'IN_FLIGHT', 'RINGING'] }, finishedAt: null },
         orderBy: { ordinal: 'desc' },
         take: 1,
         select: { id: true, providerMessageId: true },
@@ -104,7 +104,11 @@ export async function reconcileStaleVoiceCalls(
           const attemptId = notif.deliveryAttempts[0]?.id;
           if (attemptId) {
             await tx.notificationDeliveryAttempt.updateMany({
-              where: { id: attemptId },
+              where: {
+                id: attemptId,
+                finishedAt: null,
+                outcome: { in: ['ACCEPTED', 'IN_FLIGHT', 'RINGING', 'IN-PROGRESS', 'ANSWERED'] },
+              },
               data: {
                 outcome:
                   callStatus === 'in-progress'
@@ -133,7 +137,11 @@ export async function reconcileStaleVoiceCalls(
           const attemptId = notif.deliveryAttempts[0]?.id;
           if (attemptId) {
             await tx.notificationDeliveryAttempt.updateMany({
-              where: { id: attemptId },
+              where: {
+                id: attemptId,
+                finishedAt: null,
+                outcome: { in: ['ACCEPTED', 'IN_FLIGHT', 'RINGING'] },
+              },
               data: {
                 outcome: callStatus.toUpperCase(),
                 finishedAt: now,

@@ -81,7 +81,11 @@ describe('Active reconciliation of stale SENT voice calls', () => {
     );
     expect(mocks.updateManyAttempt).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'attempt-1' },
+        where: {
+          id: 'attempt-1',
+          finishedAt: null,
+          outcome: { in: ['ACCEPTED', 'IN_FLIGHT', 'RINGING', 'IN-PROGRESS', 'ANSWERED'] },
+        },
         data: expect.objectContaining({ outcome: 'COMPLETED', finishedAt: expect.any(Date) }),
       })
     );
@@ -114,7 +118,11 @@ describe('Active reconciliation of stale SENT voice calls', () => {
     );
     expect(mocks.updateManyAttempt).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'attempt-in-prog' },
+        where: {
+          id: 'attempt-in-prog',
+          finishedAt: null,
+          outcome: { in: ['ACCEPTED', 'IN_FLIGHT', 'RINGING', 'IN-PROGRESS', 'ANSWERED'] },
+        },
         data: { outcome: 'IN-PROGRESS' },
       })
     );
@@ -166,8 +174,26 @@ describe('Active reconciliation of stale SENT voice calls', () => {
     );
     expect(mocks.updateManyAttempt).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'attempt-2' },
+        where: {
+          id: 'attempt-2',
+          finishedAt: null,
+          outcome: { in: ['ACCEPTED', 'IN_FLIGHT', 'RINGING'] },
+        },
         data: expect.objectContaining({ outcome: 'NO-ANSWER' }),
+      })
+    );
+  });
+
+  it('protects finished attempts by requiring finishedAt null in attempt query', async () => {
+    mocks.findMany.mockResolvedValue([]);
+    await reconcileStaleVoiceCalls(new Date('2026-09-27T12:00:00Z'));
+    expect(mocks.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({
+          deliveryAttempts: expect.objectContaining({
+            where: expect.objectContaining({ finishedAt: null }),
+          }),
+        }),
       })
     );
   });
