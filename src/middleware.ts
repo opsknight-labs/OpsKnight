@@ -387,9 +387,7 @@ function matchesConfiguredStatusHost(
 ): boolean {
   if (!hostname || !statusConfig?.enabled) return false;
   return Boolean(
-    statusConfig.pages?.some(page =>
-      matchesStatusPageDomain(page, hostname, statusConfig.appHost)
-    )
+    statusConfig.pages?.some(page => matchesStatusPageDomain(page, hostname, statusConfig.appHost))
   );
 }
 
@@ -444,6 +442,34 @@ function getConfiguredApplicationOrigin(statusConfig?: StatusDomainConfig | null
   } catch {
     return null;
   }
+}
+
+function resolveAuthoritativeOrigin(
+  req: NextRequest,
+  requestHost: string,
+  statusConfig?: StatusDomainConfig | null,
+  usedConfiguredForwardedHost?: boolean
+): string {
+  if (process.env.TRUST_PROXY_HEADERS === 'true') {
+    return getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) || req.nextUrl.origin;
+  }
+
+  if (isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
+    const configuredOrigin = getConfiguredApplicationOrigin(statusConfig);
+    if (configuredOrigin) {
+      if (process.env.REDIRECT_TO_CANONICAL_HOST === 'false') {
+        const parsed = new URL(configuredOrigin);
+        const portSuffix = parsed.port ? `:${parsed.port}` : '';
+        return `${parsed.protocol}//${requestHost}${portSuffix}`;
+      }
+      return configuredOrigin;
+    }
+  }
+  return (
+    (usedConfiguredForwardedHost ? getConfiguredApplicationOrigin(statusConfig) : null) ||
+    getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) ||
+    req.nextUrl.origin
+  );
 }
 
 function applyResolvedProxyHeaders(
@@ -937,10 +963,12 @@ export default async function middleware(req: NextRequest) {
   // 4. Canonical host 308 redirection for domain aliases (e.g. opsnite.com -> www.opsnite.com)
   const canonicalHost = getCanonicalApplicationHost(statusConfig?.appHost);
   if (shouldRedirectToCanonicalAppHost(requestHost, canonicalHost, pathname, req.method)) {
-    const authoritativeOrigin =
-      (usedConfiguredForwardedHost ? getConfiguredApplicationOrigin(statusConfig) : null) ||
-      getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) ||
-      req.nextUrl.origin;
+    const authoritativeOrigin = resolveAuthoritativeOrigin(
+      req,
+      requestHost,
+      statusConfig,
+      usedConfiguredForwardedHost
+    );
     const originUrl = new URL(authoritativeOrigin);
     const targetHost = canonicalHost.includes(':')
       ? canonicalHost
@@ -961,10 +989,12 @@ export default async function middleware(req: NextRequest) {
 
   // Old mobile reset links remain valid but converge on the single responsive page.
   if (pathname === '/m/reset-password') {
-    const authoritativeOrigin =
-      (usedConfiguredForwardedHost ? getConfiguredApplicationOrigin(statusConfig) : null) ||
-      getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) ||
-      req.nextUrl.origin;
+    const authoritativeOrigin = resolveAuthoritativeOrigin(
+      req,
+      requestHost,
+      statusConfig,
+      usedConfiguredForwardedHost
+    );
     const resetUrl = new URL('/reset-password', authoritativeOrigin);
     resetUrl.search = req.nextUrl.search;
     const redirectResponse = NextResponse.redirect(resetUrl);
@@ -998,10 +1028,12 @@ export default async function middleware(req: NextRequest) {
     );
 
   if (shouldRedirectToMobile && mobileDestination) {
-    const authoritativeOrigin =
-      (usedConfiguredForwardedHost ? getConfiguredApplicationOrigin(statusConfig) : null) ||
-      getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) ||
-      req.nextUrl.origin;
+    const authoritativeOrigin = resolveAuthoritativeOrigin(
+      req,
+      requestHost,
+      statusConfig,
+      usedConfiguredForwardedHost
+    );
     const mobileUrl = new URL(mobileDestination, authoritativeOrigin);
     mobileUrl.search = req.nextUrl.search;
     const redirectResponse = NextResponse.redirect(mobileUrl);
@@ -1079,10 +1111,12 @@ export default async function middleware(req: NextRequest) {
         req.nextUrl.searchParams.get('callbackUrl'),
         defaultDest
       );
-      const authoritativeOrigin =
-        (usedConfiguredForwardedHost ? getConfiguredApplicationOrigin(statusConfig) : null) ||
-        getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) ||
-        req.nextUrl.origin;
+      const authoritativeOrigin = resolveAuthoritativeOrigin(
+        req,
+        requestHost,
+        statusConfig,
+        usedConfiguredForwardedHost
+      );
       const redirectResponse = NextResponse.redirect(new URL(redirectUrl, authoritativeOrigin));
       Object.entries(securityHeaders).forEach(([key, value]) =>
         redirectResponse.headers.set(key, value)
@@ -1094,10 +1128,12 @@ export default async function middleware(req: NextRequest) {
 
   if (isPublicPath(pathname)) return response;
 
-  const authoritativeOrigin =
-    (usedConfiguredForwardedHost ? getConfiguredApplicationOrigin(statusConfig) : null) ||
-    getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) ||
-    req.nextUrl.origin;
+  const authoritativeOrigin = resolveAuthoritativeOrigin(
+    req,
+    requestHost,
+    statusConfig,
+    usedConfiguredForwardedHost
+  );
   const loginPath =
     pathname.startsWith('/m') || (isMobile && !preferDesktop) ? '/m/login' : '/login';
   const url = new URL(loginPath, authoritativeOrigin);

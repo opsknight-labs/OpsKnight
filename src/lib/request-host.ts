@@ -94,12 +94,7 @@ export function isInternalInfrastructureHost(value?: string | null): boolean {
   const host = normalizeHostname(value);
   if (!host) return false;
 
-  if (
-    host === 'localhost' ||
-    host === '::1' ||
-    host.endsWith('.localhost') ||
-    host === '0.0.0.0'
-  ) {
+  if (host === 'localhost' || host === '::1' || host.endsWith('.localhost') || host === '0.0.0.0') {
     return true;
   }
 
@@ -123,23 +118,13 @@ export function isInternalInfrastructureHost(value?: string | null): boolean {
   }
 
   const lower = host.toLowerCase();
-  if (
-    lower.startsWith('fc') ||
-    lower.startsWith('fd') ||
-    /^fe[89ab]/.test(lower)
-  ) {
+  if (lower.startsWith('fc') || lower.startsWith('fd') || /^fe[89ab]/.test(lower)) {
     return lower.includes(':');
   }
 
-  return [
-    '.internal',
-    '.local',
-    '.lan',
-    '.docker',
-    '.svc',
-    '.cluster.local',
-    '.home.arpa',
-  ].some(suffix => lower.endsWith(suffix));
+  return ['.internal', '.local', '.lan', '.docker', '.svc', '.cluster.local', '.home.arpa'].some(
+    suffix => lower.endsWith(suffix)
+  );
 }
 
 /**
@@ -283,6 +268,7 @@ export function getAuthoritativeRequestOrigin(
         try {
           const parsedUrl = new URL(source.url);
           const transportProto = parsedUrl.protocol.replace(':', '');
+          let matchedConfigPort: string | null | undefined = undefined;
 
           if (untrustedForwardedProto) {
             // Next.js server derives request.url's scheme from req.headers['x-forwarded-proto'].
@@ -299,14 +285,9 @@ export function getAuthoritativeRequestOrigin(
             if (configuredUrl) {
               try {
                 const parsedConfig = new URL(configuredUrl);
-                const configPort =
-                  parsedConfig.port || (parsedConfig.protocol === 'https:' ? '443' : '80');
-                const requestPort = port || (transportProto === 'http' ? '80' : '443');
-                if (
-                  normalizeHostname(parsedConfig.host) === hostname &&
-                  configPort === requestPort
-                ) {
+                if (normalizeHostname(parsedConfig.host) === hostname) {
                   matchedConfigScheme = parsedConfig.protocol.replace(':', '');
+                  matchedConfigPort = parsedConfig.port || null;
                 }
               } catch {
                 // Ignore malformed URL
@@ -319,6 +300,9 @@ export function getAuthoritativeRequestOrigin(
 
             if (matchedConfigScheme) {
               proto = matchedConfigScheme;
+              if (matchedConfigPort !== undefined) {
+                port = matchedConfigPort;
+              }
             } else if (typeof socketEncrypted === 'boolean') {
               proto = socketEncrypted ? 'https' : 'http';
             } else if (process.env.NEXTAUTH_COOKIE_SECURE === 'false') {
@@ -335,7 +319,7 @@ export function getAuthoritativeRequestOrigin(
           } else {
             proto = transportProto;
           }
-          if (!port && parsedUrl.port) {
+          if (matchedConfigPort === undefined && !port && parsedUrl.port) {
             port = parsedUrl.port;
           }
         } catch {
