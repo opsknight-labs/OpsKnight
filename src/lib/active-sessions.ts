@@ -1,5 +1,7 @@
-import prisma from '@/lib/prisma';
-import { emitAuditEvent } from '@/lib/audit';
+// NOTE: recordSessionHeartbeat() and getUserActiveSessions() have been retired.
+// Session tracking is now handled exclusively by the JTI-based session registry
+// (src/lib/session-registry.ts). parseUserAgent() is kept as it is consumed by
+// the registry for display metadata.
 
 export interface ParsedDeviceInfo {
   browser: string;
@@ -70,6 +72,10 @@ export function parseUserAgent(userAgent?: string | null): ParsedDeviceInfo {
   return { browser, os, deviceType, isMobile: isMobile || isTablet };
 }
 
+/**
+ * @deprecated Legacy audit-derived session shape. Retained only for existing
+ * test compatibility. Use RegisteredSession from session-registry instead.
+ */
 export interface ActiveSession {
   id: string;
   browser: string;
@@ -79,171 +85,4 @@ export interface ActiveSession {
   isCurrent: boolean;
   lastActive: string; // ISO string
   tokenVersion: number;
-}
-
-// In-memory throttle to avoid writing heartbeats too frequently
-const heartbeatCache = new Map<string, number>();
-const HEARTBEAT_THROTTLE_MS = 2 * 60 * 1000; // 2 minutes (keeps open browser tabs firmly in Active Now)
-
-/**
- * Records an active session heartbeat if throttled window has elapsed.
- */
-export async function recordSessionHeartbeat({
-  userId,
-  userAgent,
-  ip,
-}: {
-  userId: string;
-  userAgent: string;
-  ip: string;
-}): Promise<void> {
-  if (!userId) return;
-
-  const parsed = parseUserAgent(userAgent);
-  const cacheKey = `${userId}:${parsed.browser}:${parsed.os}:${parsed.deviceType}`;
-  const now = Date.now();
-  const lastHeartbeat = heartbeatCache.get(cacheKey) ?? 0;
-
-  if (now - lastHeartbeat < HEARTBEAT_THROTTLE_MS) {
-    return;
-  }
-
-  heartbeatCache.set(cacheKey, now);
-
-  try {
-    await emitAuditEvent({
-      action: 'SESSION_HEARTBEAT',
-      source: 'AUTH',
-      target: { type: 'USER', id: userId },
-      actor: { type: 'USER', id: userId },
-      occurredAt: new Date(now),
-      ip: ip || null,
-      metadata: {
-        userAgent: userAgent.slice(0, 500),
-        browser: parsed.browser,
-        os: parsed.os,
-        deviceType: parsed.deviceType,
-      },
-    });
-  } catch {
-    // Non-critical, swallow error to prevent blocking request
-  }
-}
-
-/**
- * Resolves all distinct active sessions for a user from their audit trail.
- */
-export async function getUserActiveSessions({
-  userId,
-  currentIp,
-  currentUserAgent,
-  tokenVersion = 0,
-}: {
-  userId: string;
-  currentIp?: string;
-  currentUserAgent?: string;
-  tokenVersion?: number;
-}): Promise<ActiveSession[]> {
-  const currentParsed = parseUserAgent(currentUserAgent);
-
-  // Active session cutoff window: 14 days (stale/dormant devices drop off)
-  const ACTIVE_SESSION_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
-  let cutoffDate = new Date(Date.now() - ACTIVE_SESSION_MAX_AGE_MS);
-
-  try {
-    const lastRevocation = await prisma.auditLog.findFirst({
-      where: {
-        actorId: userId,
-        action: 'session.revoked_all',
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { createdAt: true },
-    });
-
-    if (lastRevocation && lastRevocation.createdAt > cutoffDate) {
-      cutoffDate = lastRevocation.createdAt;
-    }
-  } catch {
-    // ignore
-  }
-
-  // Fetch all recent login and heartbeat events
-  const sessionLogs = await prisma.auditLog.findMany({
-    where: {
-      OR: [{ actorId: userId }, { entityId: userId }],
-      action: { in: ['LOGIN_SUCCESS', 'SESSION_HEARTBEAT'] },
-      createdAt: { gte: cutoffDate },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-    select: {
-      id: true,
-      action: true,
-      ip: true,
-      details: true,
-      createdAt: true,
-    },
-  });
-
-  // Group events by distinct client device profile (Browser + OS + DeviceType).
-  // Since sessionLogs are sorted descending by createdAt, the first entry encountered
-  // is guaranteed to be the most recent activity and IP for that physical device.
-  const deviceMap = new Map<string, ActiveSession>();
-
-  for (const log of sessionLogs) {
-    const details = (log.details as Record<string, unknown>) || {};
-    const metadata = (details.metadata as Record<string, unknown>) || {};
-    const ua = (metadata.userAgent as string) || (details.userAgent as string) || '';
-    const parsed = parseUserAgent(ua);
-    const ip = log.ip || (details.ip as string) || 'Unknown IP';
-
-    // Grouping key per physical client device profile
-    const deviceKey = `${parsed.browser}:${parsed.os}:${parsed.deviceType}`;
-
-    if (!deviceMap.has(deviceKey)) {
-      deviceMap.set(deviceKey, {
-        id: log.id,
-        browser: parsed.browser,
-        os: parsed.os,
-        deviceType: parsed.deviceType,
-        ip,
-        isCurrent: false, // will be explicitly set for the single current device below
-        lastActive: log.createdAt.toISOString(),
-        tokenVersion,
-      });
-    }
-  }
-
-  // Current client device key
-  const currentDeviceKey = `${currentParsed.browser}:${currentParsed.os}:${currentParsed.deviceType}`;
-
-  if (deviceMap.has(currentDeviceKey)) {
-    const currentSession = deviceMap.get(currentDeviceKey)!;
-    currentSession.isCurrent = true;
-    currentSession.lastActive = new Date().toISOString();
-    if (currentIp && currentIp !== '127.0.0.1' && currentIp !== 'Unknown IP') {
-      currentSession.ip = currentIp;
-    }
-  } else {
-    // Current device had no prior audit log within the window; register it as current
-    deviceMap.set(currentDeviceKey, {
-      id: 'current-session',
-      browser: currentParsed.browser,
-      os: currentParsed.os,
-      deviceType: currentParsed.deviceType,
-      ip: currentIp || '127.0.0.1',
-      isCurrent: true,
-      lastActive: new Date().toISOString(),
-      tokenVersion,
-    });
-  }
-
-  // Sort sessions: Single current device first, then other devices sorted by lastActive descending
-  const sessions = Array.from(deviceMap.values()).sort((a, b) => {
-    if (a.isCurrent) return -1;
-    if (b.isCurrent) return 1;
-    return new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime();
-  });
-
-  return sessions;
 }

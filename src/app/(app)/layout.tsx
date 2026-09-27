@@ -91,18 +91,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!shell) redirect('/api/auth/signout?callbackUrl=/login?error=SessionExpired');
   const activeShell: AppShellContext = shell;
 
-  try {
-    const { headers } = await import('next/headers');
-    const headerList = await headers();
-    const userAgent = headerList.get('user-agent') || '';
-    const ip =
-      headerList.get('x-forwarded-for')?.split(',')[0].trim() ||
-      headerList.get('x-real-ip') ||
-      '127.0.0.1';
-    const { recordSessionHeartbeat } = await import('@/lib/active-sessions');
-    void recordSessionHeartbeat({ userId: activeShell.user.id, userAgent, ip }).catch(() => {});
-  } catch {}
-
   const userName = activeShell.user.name;
   const userEmail = activeShell.user.email;
   const userRole = activeShell.user.role;

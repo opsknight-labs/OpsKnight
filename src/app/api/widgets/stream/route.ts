@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { logger } from '@/lib/logger';
@@ -6,6 +7,7 @@ import prisma from '@/lib/prisma';
 import { buildRetainedDateFilter } from '@/lib/dashboard-utils';
 import { dashboardMetricsScope } from '@/lib/authorization-filters';
 import {
+  getRequestSessionJti,
   hasSameStreamAuthorizationScope,
   resolveStreamAuthorization,
   type StreamAuthorization,
@@ -16,7 +18,7 @@ import {
 } from '@/lib/realtime-change-control-plane';
 
 /** Event-driven SSE stream for filtered dashboard widget projections. */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(await getAuthOptions());
     if (!session?.user?.email) return new Response('Unauthorized', { status: 401 });
@@ -27,10 +29,12 @@ export async function GET(request: Request) {
     });
     if (!sessionUser) return new Response('Unauthorized', { status: 401 });
 
+    const sessionJti = await getRequestSessionJti(request);
     const expectedTokenVersion = session.user.tokenVersion ?? 0;
     const initialAuthorization = await resolveStreamAuthorization(
       sessionUser.id,
-      expectedTokenVersion
+      expectedTokenVersion,
+      sessionJti
     );
     if (!initialAuthorization) return new Response('Unauthorized', { status: 401 });
     let actor: StreamAuthorization = initialAuthorization;
@@ -74,7 +78,6 @@ export async function GET(request: Request) {
         let isUpdating = false;
         let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
         let unsubscribeChanges: () => void = () => {};
-        let authorizationCounter = 0;
         let pendingGeneration: string | null | undefined;
 
         const send = (value: unknown) => {
@@ -148,13 +151,11 @@ export async function GET(request: Request) {
         heartbeatInterval = setInterval(async () => {
           if (isClosed) return;
           send({ type: 'heartbeat', timestamp: new Date().toISOString() });
-          authorizationCounter += 1;
-          if (authorizationCounter < 2) return;
-          authorizationCounter = 0;
           try {
             const nextAuthorization = await resolveStreamAuthorization(
               actor.id,
-              expectedTokenVersion
+              expectedTokenVersion,
+              sessionJti
             );
             if (!nextAuthorization || !hasSameStreamAuthorizationScope(actor, nextAuthorization)) {
               send({ type: 'authorization_revoked' });
@@ -168,8 +169,12 @@ export async function GET(request: Request) {
               userId: actor.id,
               error: error instanceof Error ? error.message : String(error),
             });
+            // Fail closed: terminate stream on authorization recheck failure
+            send({ type: 'authorization_revoked' });
+            cleanup();
+            return;
           }
-        }, 30_000);
+        }, 15_000);
       },
       cancel() {
         cleanup();

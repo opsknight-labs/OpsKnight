@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { getOidcConfig } from '@/lib/oidc-config';
 import { requiresOidcEmailVerifiedClaim } from '@/lib/oidc-provider';
 import { resolveOidcIdentityForSignIn } from '@/lib/oidc-identity-resolution';
+import { v4 as uuidv4 } from 'uuid';
 import { getDefaultAvatar } from '@/lib/avatar';
 import {
   SESSION_TOKEN_COOKIE_NAME,
@@ -466,6 +467,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             delete (token as AugmentedJWT).error;
             (token as AugmentedJWT).authProvider =
               account.provider === 'oidc' ? 'oidc' : 'credentials';
+            if (!token.jti || typeof token.jti !== 'string') {
+              token.jti = uuidv4();
+            }
             logger.debug('[Auth-Debug] Initial Sign In', {
               component: 'auth:jwt',
               userId: user.id,
@@ -557,6 +561,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             (token as AugmentedJWT).absoluteExpiresAt = absoluteExpiresAt;
           } else if (user) {
             delete (token as AugmentedJWT).error;
+            if (!token.jti || typeof token.jti !== 'string') {
+              token.jti = uuidv4();
+            }
             logger.debug('[Auth-Debug] Initial Sign In (Fallback)', {
               component: 'auth:jwt',
               userId: user.id || (user as AugmentedUser).id,
@@ -758,6 +765,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             return session;
           }
 
+          const sessionJti = typeof token.jti === 'string' ? token.jti : undefined;
           if (session.user) {
             (session.user as AugmentedUser).role = token.role;
             (session.user as AugmentedUser).id = token.sub;
@@ -768,7 +776,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             session.user.avatarUrl = token.avatarUrl;
             session.user.gender = token.gender;
             session.user.image = token.avatarUrl || getDefaultAvatar(token.gender, token.sub);
+            session.user.sessionId = sessionJti;
           }
+          session.sessionId = sessionJti;
 
           if (typeof (token as AugmentedJWT)?.sessionExpiresAt === 'number') {
             session.expires = new Date(

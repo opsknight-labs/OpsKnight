@@ -17,6 +17,18 @@ vi.mock('@/lib/realtime-cache', () => ({
   getCachedDashboardMetrics: dashboardMetricsMock,
 }));
 
+vi.mock('@/lib/realtime-stream-authorization', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/lib/realtime-stream-authorization')>();
+  return {
+    ...actual,
+    getRequestSessionJti: vi.fn().mockResolvedValue('test-jti'),
+  };
+});
+
+vi.mock('@/lib/session-registry', () => ({
+  isSessionActive: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock('@/lib/rbac', () => ({
   getCurrentUser: vi.fn(),
 }));

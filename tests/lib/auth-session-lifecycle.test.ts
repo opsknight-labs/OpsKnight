@@ -65,6 +65,11 @@ vi.mock('@/lib/prisma', () => ({
       findFirst: vi.fn(),
       updateMany: vi.fn(),
     },
+    userDevice: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     $transaction: vi.fn((fn: (tx: unknown) => unknown) => fn(prisma)),
   },
 }));
