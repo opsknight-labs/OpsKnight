@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   notificationUpdateMany: vi.fn(),
   attemptFindUnique: vi.fn(),
   attemptUpdateMany: vi.fn(),
+  attemptFindFirst: vi.fn(),
   attemptCreate: vi.fn(),
   feedbackCreate: vi.fn(),
   feedbackDeleteMany: vi.fn(),
@@ -23,7 +24,10 @@ const mocks = vi.hoisted(() => ({
 
 const tx = {
   notification: { updateMany: mocks.notificationUpdateMany },
-  notificationDeliveryAttempt: { updateMany: mocks.attemptUpdateMany },
+  notificationDeliveryAttempt: {
+    updateMany: mocks.attemptUpdateMany,
+    findFirst: mocks.attemptFindFirst,
+  },
   userNotificationEndpoint: {
     upsert: mocks.endpointUpsert,
     findUnique: mocks.endpointFindUnique,

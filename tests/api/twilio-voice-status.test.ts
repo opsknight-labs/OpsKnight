@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
   updateMany: vi.fn(),
   updateAttemptMany: vi.fn(),
+  findUniqueAttempt: vi.fn(),
+  findFirstAttempt: vi.fn(),
   endpointUpsert: vi.fn(),
   endpointFindUnique: vi.fn(),
   endpointCreate: vi.fn(),
@@ -16,7 +18,10 @@ const mocks = vi.hoisted(() => ({
 
 const tx = {
   notification: { updateMany: mocks.updateMany },
-  notificationDeliveryAttempt: { updateMany: mocks.updateAttemptMany },
+  notificationDeliveryAttempt: {
+    updateMany: mocks.updateAttemptMany,
+    findFirst: mocks.findFirstAttempt,
+  },
   userNotificationEndpoint: {
     upsert: mocks.endpointUpsert,
     findUnique: mocks.endpointFindUnique,
@@ -28,6 +33,10 @@ const tx = {
 vi.mock('@/lib/prisma', () => ({
   default: {
     notification: { findFirst: mocks.findFirst },
+    notificationDeliveryAttempt: {
+      findUnique: mocks.findUniqueAttempt,
+      updateMany: mocks.updateAttemptMany,
+    },
     $transaction: mocks.transaction,
   },
 }));
@@ -41,9 +50,12 @@ vi.mock('@/lib/app-url', () => ({
 
 import { POST } from '@/app/api/webhooks/notifications/twilio/voice/status/route';
 
-function signedRequest(body: string, signatureOverride?: string) {
-  const url =
-    'https://ops.example.com/api/webhooks/notifications/twilio/voice/status?notificationId=notification-1';
+function signedRequest(
+  body: string,
+  signatureOverride?: string,
+  query = 'notificationId=notification-1'
+) {
+  const url = `https://ops.example.com/api/webhooks/notifications/twilio/voice/status?${query}`;
   const params = new URLSearchParams(body);
   const sorted = Array.from(params.keys())
     .sort()
@@ -73,6 +85,8 @@ describe('Twilio voice status callback', () => {
       user: { name: 'Jane' },
       recipientHash: 'recipient-hash',
     });
+    mocks.findUniqueAttempt.mockResolvedValue(null);
+    mocks.findFirstAttempt.mockResolvedValue(null);
     mocks.updateMany.mockResolvedValue({ count: 1 });
     mocks.updateAttemptMany.mockResolvedValue({ count: 1 });
     mocks.endpointUpsert.mockResolvedValue({ id: 'endpoint-1' });
@@ -115,6 +129,45 @@ describe('Twilio voice status callback', () => {
     const response = await POST(signedRequest('CallSid=CA123&CallStatus=failed'));
     expect(response.status).toBe(204);
     expect(mocks.endpointCreate).toHaveBeenCalled();
+  });
+
+  it('does not mutate parent notification when a newer attempt exists (stale callback)', async () => {
+    const startedAt = new Date('2026-09-27T10:00:00Z');
+    mocks.findUniqueAttempt.mockResolvedValue({
+      id: 'attempt-1',
+      notificationId: 'notification-1',
+      providerMessageId: 'CA123',
+      startedAt,
+      notification: {
+        id: 'notification-1',
+        status: 'SENT',
+        maxAttempts: 3,
+        incidentId: 'incident-1',
+        userId: 'user-1',
+        user: { name: 'Jane' },
+        recipientHash: 'recipient-hash',
+      },
+    });
+    // Newer attempt exists
+    mocks.findFirstAttempt.mockResolvedValue({ id: 'attempt-2' });
+
+    const response = await POST(
+      signedRequest(
+        'CallSid=CA123&CallStatus=in-progress',
+        undefined,
+        'notificationId=notification-1&attemptId=attempt-1'
+      )
+    );
+    expect(response.status).toBe(204);
+    // Parent notification must NOT be updated
+    expect(mocks.updateMany).not.toHaveBeenCalled();
+    // But the attempt itself is still monotonically updated
+    expect(mocks.updateAttemptMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'attempt-1' }),
+        data: expect.objectContaining({ outcome: 'IN-PROGRESS' }),
+      })
+    );
   });
 
   it('rejects unsigned state changes', async () => {

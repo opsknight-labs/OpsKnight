@@ -43,6 +43,8 @@ describe('Active reconciliation of stale SENT voice calls', () => {
       accountSid: 'FAKE_SID_TEST',
       authToken: 'secret_token',
     });
+    mocks.updateManyNotification.mockResolvedValue({ count: 1 });
+    mocks.updateManyAttempt.mockResolvedValue({ count: 1 });
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) => {
       const tx = {
         notification: { updateMany: mocks.updateManyNotification },
@@ -74,15 +76,67 @@ describe('Active reconciliation of stale SENT voice calls', () => {
     expect(mocks.updateManyNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'notif-1', status: 'SENT' },
-        data: expect.objectContaining({ status: 'DELIVERED' }),
+        data: expect.objectContaining({ status: 'DELIVERED', reconciliationDeadline: null }),
       })
     );
     expect(mocks.updateManyAttempt).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'attempt-1' },
-        data: expect.objectContaining({ outcome: 'COMPLETED' }),
+        data: expect.objectContaining({ outcome: 'COMPLETED', finishedAt: expect.any(Date) }),
       })
     );
+  });
+
+  it('reconciles in-progress voice calls to DELIVERED without terminal finishedAt', async () => {
+    mocks.findMany.mockResolvedValue([
+      {
+        id: 'notif-in-prog',
+        providerMessageId: 'CA_IN_PROGRESS_123',
+        maxAttempts: 3,
+        deliveryAttempts: [{ id: 'attempt-in-prog' }],
+      },
+    ]);
+    mocks.fetchCall.mockResolvedValue({
+      sid: 'CA_IN_PROGRESS_123',
+      status: 'in-progress',
+    });
+
+    const result = await reconcileStaleVoiceCalls(new Date('2026-09-27T12:00:00Z'));
+
+    expect(result.checked).toBe(1);
+    expect(result.reconciled).toBe(1);
+
+    expect(mocks.updateManyNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'notif-in-prog', status: 'SENT' },
+        data: expect.objectContaining({ status: 'DELIVERED' }),
+      })
+    );
+    expect(mocks.updateManyAttempt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'attempt-in-prog' },
+        data: { outcome: 'IN-PROGRESS' },
+      })
+    );
+  });
+
+  it('skips notifications when CAS lease is claimed by another worker', async () => {
+    mocks.findMany.mockResolvedValue([
+      {
+        id: 'notif-contended',
+        providerMessageId: 'CA_CONTENDED_123',
+        maxAttempts: 3,
+        deliveryAttempts: [{ id: 'attempt-contended' }],
+      },
+    ]);
+    // Simulate lease contention: updateMany returns count: 0
+    mocks.updateManyNotification.mockResolvedValueOnce({ count: 0 });
+
+    const result = await reconcileStaleVoiceCalls(new Date('2026-09-27T12:00:00Z'));
+
+    expect(result.checked).toBe(0);
+    expect(result.reconciled).toBe(0);
+    expect(mocks.fetchCall).not.toHaveBeenCalled();
   });
 
   it('reconciles no-answer voice calls to FAILED when webhook was dropped', async () => {

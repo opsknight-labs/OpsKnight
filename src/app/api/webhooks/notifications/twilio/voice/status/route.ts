@@ -28,7 +28,9 @@ export async function POST(request: NextRequest) {
     }
 
     const notificationId = request.nextUrl.searchParams.get('notificationId');
-    const attemptId = request.nextUrl.searchParams.get('attemptId');
+    const attemptId =
+      request.nextUrl.searchParams.get('attemptId') ||
+      request.nextUrl.searchParams.get('deliveryAttemptId');
     const callSid = params.get('CallSid');
     const callStatus = (params.get('CallStatus') || '').toLowerCase();
     if (!notificationId || !callSid) {
@@ -124,30 +126,10 @@ async function processStatusCallback(
   const failed = ['busy', 'no-answer', 'failed', 'canceled'].includes(callStatus);
   const now = new Date();
   await prisma.$transaction(async tx => {
-    if (delivered) {
-      const changed = await tx.notification.updateMany({
-        where: { id: notification.id, status: { in: ['PENDING', 'SENT', 'UNKNOWN'] } },
-        data: {
-          status: 'DELIVERED',
-          deliveredAt: now,
-          failedAt: null,
-          errorMsg: null,
-          reconciliationDeadline: null,
-        },
-      });
-      if (changed.count > 0 && connected && notification.incidentId) {
-        await tx.incidentEvent.create({
-          data: {
-            incidentId: notification.incidentId,
-            type: 'STATUS_CHANGE',
-            message: `Voice call connected to ${notification.user?.name || 'responder'}`,
-          },
-        });
-      }
-    } else if (failed && notification.status !== 'DELIVERED') {
-      // Only fail the notification if this attempt is still the active attempt
-      // (no subsequent attempt has been initiated).
-      const newerAttempt = attempt?.startedAt
+    // If a newer attempt exists, this callback is for a stale attempt and must NOT
+    // mutate the parent notification state.
+    const newerAttempt =
+      attempt?.startedAt && tx.notificationDeliveryAttempt?.findFirst
         ? await tx.notificationDeliveryAttempt.findFirst({
             where: {
               notificationId: notification.id,
@@ -158,7 +140,28 @@ async function processStatusCallback(
           })
         : null;
 
-      if (!newerAttempt) {
+    if (!newerAttempt) {
+      if (delivered) {
+        const changed = await tx.notification.updateMany({
+          where: { id: notification.id, status: { in: ['PENDING', 'SENT', 'UNKNOWN'] } },
+          data: {
+            status: 'DELIVERED',
+            deliveredAt: now,
+            failedAt: null,
+            errorMsg: null,
+            reconciliationDeadline: null,
+          },
+        });
+        if (changed.count > 0 && connected && notification.incidentId) {
+          await tx.incidentEvent.create({
+            data: {
+              incidentId: notification.incidentId,
+              type: 'STATUS_CHANGE',
+              message: `Voice call connected to ${notification.user?.name || 'responder'}`,
+            },
+          });
+        }
+      } else if (failed && notification.status !== 'DELIVERED') {
         await tx.notification.updateMany({
           where: { id: notification.id, status: { in: ['PENDING', 'SENT', 'UNKNOWN'] } },
           data: {
@@ -169,12 +172,12 @@ async function processStatusCallback(
             reconciliationDeadline: null,
           },
         });
+      } else {
+        await tx.notification.updateMany({
+          where: { id: notification.id, status: { in: ['PENDING', 'UNKNOWN'] } },
+          data: { status: 'SENT', errorMsg: null },
+        });
       }
-    } else {
-      await tx.notification.updateMany({
-        where: { id: notification.id, status: { in: ['PENDING', 'UNKNOWN'] } },
-        data: { status: 'SENT', errorMsg: null },
-      });
     }
 
     // Monotonic state machine for delivery attempts:

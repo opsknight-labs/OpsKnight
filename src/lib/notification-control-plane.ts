@@ -1016,11 +1016,19 @@ async function dispatchPayload(
       const current = await import('./notification-providers').then(module =>
         module.getVoiceConfig()
       );
+      if (!current.enabled) {
+        return {
+          success: false,
+          statusCode: 422,
+          errorCode: 'PROVIDER_DISABLED',
+          error: 'Voice provider is administratively disabled or not configured',
+        };
+      }
       if (payload.providerKey && current.provider !== payload.providerKey) {
         return {
           success: false,
-          statusCode: 409,
-          errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
+          statusCode: 422,
+          errorCode: 'PROVIDER_DISABLED',
           error: `Pinned Voice provider ${payload.providerKey} is unavailable`,
         };
       }
@@ -1165,11 +1173,19 @@ async function dispatchPayload(
       const current = await import('./notification-providers').then(module =>
         module.getVoiceConfig()
       );
+      if (!current.enabled) {
+        return {
+          success: false,
+          statusCode: 422,
+          errorCode: 'PROVIDER_DISABLED',
+          error: 'Voice provider is administratively disabled or not configured',
+        };
+      }
       if (payload.providerKey && current.provider !== payload.providerKey) {
         return {
           success: false,
-          statusCode: 409,
-          errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
+          statusCode: 422,
+          errorCode: 'PROVIDER_DISABLED',
           error: `Pinned Voice provider ${payload.providerKey} is unavailable`,
         };
       }
@@ -1867,8 +1883,8 @@ async function finishAttempt(input: {
   const finishedAt = new Date();
   try {
     if (input.attemptId) {
-      await prisma.notificationDeliveryAttempt.update({
-        where: { id: input.attemptId },
+      await prisma.notificationDeliveryAttempt.updateMany({
+        where: { id: input.attemptId, outcome: 'IN_FLIGHT' },
         data: {
           outcome: input.outcome,
           provider: input.provider,
@@ -2373,6 +2389,7 @@ export async function deliverCentralNotification(
         ...terminalPayload(candidate.category),
       };
       let committed: { count: number };
+      const attemptFinishedAt = isVoicePayload ? null : finishedAt;
       const attemptOperation = preCreatedAttemptId
         ? prisma.notificationDeliveryAttempt.updateMany({
             where: { id: preCreatedAttemptId },
@@ -2380,7 +2397,7 @@ export async function deliverCentralNotification(
               provider:
                 (result as { selectedProvider?: string }).selectedProvider || currentProvider,
               providerMessageId: result.providerMessageId,
-              finishedAt,
+              finishedAt: attemptFinishedAt,
               latencyMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
             },
           })
@@ -2393,7 +2410,7 @@ export async function deliverCentralNotification(
                 (result as { selectedProvider?: string }).selectedProvider || currentProvider,
               providerMessageId: result.providerMessageId,
               startedAt,
-              finishedAt,
+              finishedAt: attemptFinishedAt,
               latencyMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
             },
           });
@@ -2426,7 +2443,7 @@ export async function deliverCentralNotification(
                 provider:
                   (result as { selectedProvider?: string }).selectedProvider || currentProvider,
                 providerMessageId: result.providerMessageId,
-                finishedAt,
+                finishedAt: attemptFinishedAt,
                 latencyMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
               },
             })
@@ -2559,8 +2576,8 @@ export async function deliverCentralNotification(
             data: ambiguousState,
           });
           if (preCreatedAttemptId) {
-            await tx.notificationDeliveryAttempt.update({
-              where: { id: preCreatedAttemptId },
+            await tx.notificationDeliveryAttempt.updateMany({
+              where: { id: preCreatedAttemptId, outcome: 'IN_FLIGHT' },
               data: {
                 outcome: 'AMBIGUOUS',
                 provider: currentProvider,
@@ -2591,8 +2608,8 @@ export async function deliverCentralNotification(
         });
         if (preCreatedAttemptId) {
           await prisma.notificationDeliveryAttempt
-            .update({
-              where: { id: preCreatedAttemptId },
+            .updateMany({
+              where: { id: preCreatedAttemptId, outcome: 'IN_FLIGHT' },
               data: {
                 outcome: 'AMBIGUOUS',
                 provider: currentProvider,
