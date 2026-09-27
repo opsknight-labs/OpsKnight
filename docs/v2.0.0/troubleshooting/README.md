@@ -5,7 +5,9 @@ type: troubleshooting
 product_area: operations
 audience: [operator, administrator, responder]
 verification:
-  level: draft
+  level: source
+  verified_at: 2026-09-27
+  evidence: [src/app/api/health/deep/route.ts, deploy/]
 ---
 
 # Troubleshooting
@@ -16,4 +18,3 @@ recovery actions, and escalation evidence.
 
 Areas include installation, login, notifications, incidents, integrations,
 status pages, workers, scheduler, database, Kubernetes, and upgrades.
-
