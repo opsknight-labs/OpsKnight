@@ -169,28 +169,7 @@ async function releaseFailedOperation(
           select: { idempotencyKey: true },
         });
         if (op?.idempotencyKey) {
-          const client = (
-            tx as unknown as { notification?: { updateMany: (a: unknown) => Promise<unknown> } }
-          )?.notification
-            ? (tx as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } })
-            : (prisma as unknown as {
-                notification: { updateMany: (a: unknown) => Promise<unknown> };
-              });
-
-          await client.notification
-            .updateMany({
-              where: {
-                deliveryKey: op.idempotencyKey,
-                status: { not: 'DELIVERED' },
-              },
-              data: {
-                status: 'FAILED',
-                failedAt: new Date(),
-                errorMsg: errMessage,
-                attempts: { increment: 1 },
-              },
-            })
-            .catch(() => undefined);
+          await syncTeamsNotificationFailure(op.idempotencyKey, errMessage, tx);
         }
       });
     } catch {}
@@ -215,28 +194,7 @@ async function releaseFailedOperation(
           select: { idempotencyKey: true },
         });
         if (op?.idempotencyKey) {
-          const client = (
-            tx as unknown as { notification?: { updateMany: (a: unknown) => Promise<unknown> } }
-          )?.notification
-            ? (tx as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } })
-            : (prisma as unknown as {
-                notification: { updateMany: (a: unknown) => Promise<unknown> };
-              });
-
-          await client.notification
-            .updateMany({
-              where: {
-                deliveryKey: op.idempotencyKey,
-                status: { not: 'DELIVERED' },
-              },
-              data: {
-                attempts: { increment: 1 },
-                nextAttemptAt: nextAttempt,
-                lastAttemptAt: new Date(),
-                errorMsg: errMessage,
-              },
-            })
-            .catch(() => undefined);
+          await syncTeamsNotificationRetry(op.idempotencyKey, nextAttempt, errMessage, tx);
         }
       });
     } catch {}
@@ -373,6 +331,35 @@ async function syncTeamsNotificationFailure(
         failedAt: new Date(),
         errorMsg: errorMsg.slice(0, 1000),
         attempts: { increment: 1 },
+      },
+    })
+    .catch(() => undefined);
+}
+
+async function syncTeamsNotificationRetry(
+  idempotencyKey: string | null | undefined,
+  nextAttemptAt: Date,
+  errorMsg: string,
+  tx?: unknown
+) {
+  if (!idempotencyKey) return;
+  const client = (
+    tx as unknown as { notification?: { updateMany: (a: unknown) => Promise<unknown> } }
+  )?.notification
+    ? (tx as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } })
+    : (prisma as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } });
+
+  await client.notification
+    .updateMany({
+      where: {
+        deliveryKey: idempotencyKey,
+        status: { not: 'DELIVERED' },
+      },
+      data: {
+        attempts: { increment: 1 },
+        nextAttemptAt,
+        lastAttemptAt: new Date(),
+        errorMsg: errorMsg.slice(0, 1000),
       },
     })
     .catch(() => undefined);
@@ -1409,18 +1396,23 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
             })
           );
         } else if (!updateResult.success && updateResult.errorCode === 'PATCH_NOT_SUPPORTED') {
-          await prisma.externalOperation.updateMany({
-            where: { id, status: 'PROCESSING', leaseToken },
-            data: {
-              status: 'FAILED',
-              lastError: `Teams update requires delegated permissions (PATCH_NOT_SUPPORTED): ${updateResult.error.slice(0, 400)}`,
-              leaseToken: null,
-              leaseExpiresAt: null,
-              resultPayload: {
-                degraded: true,
-                errorCode: 'PATCH_NOT_SUPPORTED',
-              } as Prisma.InputJsonObject,
-            },
+          const errMessage = `Teams update requires delegated permissions (PATCH_NOT_SUPPORTED): ${updateResult.error.slice(0, 400)}`;
+          await prisma.$transaction(async tx => {
+            const updated = await tx.externalOperation.updateMany({
+              where: { id, status: 'PROCESSING', leaseToken },
+              data: {
+                status: 'FAILED',
+                lastError: errMessage,
+                leaseToken: null,
+                leaseExpiresAt: null,
+                resultPayload: {
+                  degraded: true,
+                  errorCode: 'PATCH_NOT_SUPPORTED',
+                } as Prisma.InputJsonObject,
+              },
+            });
+            if (updated.count === 0) return;
+            await syncTeamsNotificationFailure(operation.idempotencyKey, errMessage, tx);
           });
           await releaseTeamsConcurrency();
           await releaseCardMutationLease();
@@ -1459,21 +1451,26 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         const isAmbiguousRetry = reservedByUs && priorResult?.createAttempted === true;
         if (isAmbiguousRetry) {
           await markCardCreateAmbiguous();
-          await prisma.externalOperation.updateMany({
-            where: { id, status: 'PROCESSING', leaseToken },
-            data: {
-              status: 'AMBIGUOUS',
-              nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
-              lastError:
-                'Teams create outcome requires manual reconciliation; automatic re-create is disabled',
-              leaseToken: null,
-              leaseExpiresAt: null,
-              resultPayload: {
-                ...priorResult,
-                createAttempted: true,
-                requiresManualReconciliation: true,
-              } as Prisma.InputJsonObject,
-            },
+          const ambigMsg =
+            'Teams create outcome requires manual reconciliation; automatic re-create is disabled';
+          await prisma.$transaction(async tx => {
+            const updated = await tx.externalOperation.updateMany({
+              where: { id, status: 'PROCESSING', leaseToken },
+              data: {
+                status: 'AMBIGUOUS',
+                nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
+                lastError: ambigMsg,
+                leaseToken: null,
+                leaseExpiresAt: null,
+                resultPayload: {
+                  ...priorResult,
+                  createAttempted: true,
+                  requiresManualReconciliation: true,
+                } as Prisma.InputJsonObject,
+              },
+            });
+            if (updated.count === 0) return;
+            await syncTeamsNotificationAmbiguous(operation.idempotencyKey, ambigMsg, tx);
           });
           await releaseTeamsConcurrency();
           throw new Error('Teams create outcome is ambiguous; manual reconciliation required');
@@ -1501,21 +1498,24 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       await releaseTeamsConcurrency();
       if (result.errorCode === 'AMBIGUOUS_SIDE_EFFECT') {
         await markCardCreateAmbiguous();
-        await prisma.externalOperation.updateMany({
-          where: { id, status: 'PROCESSING', leaseToken },
-          data: {
-            status: 'AMBIGUOUS',
-            nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
-            lastError: result.error.slice(0, 1000),
-            leaseToken: null,
-            leaseExpiresAt: null,
-            resultPayload: {
-              createAttempted: true,
-              requiresManualReconciliation: true,
-            } as Prisma.InputJsonObject,
-          },
+        await prisma.$transaction(async tx => {
+          const updated = await tx.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: 'AMBIGUOUS',
+              nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
+              lastError: result.error.slice(0, 1000),
+              leaseToken: null,
+              leaseExpiresAt: null,
+              resultPayload: {
+                createAttempted: true,
+                requiresManualReconciliation: true,
+              } as Prisma.InputJsonObject,
+            },
+          });
+          if (updated.count === 0) return;
+          await syncTeamsNotificationAmbiguous(operation.idempotencyKey, result.error, tx);
         });
-        await syncTeamsNotificationAmbiguous(operation.idempotencyKey, result.error);
         throw new Error(result.error);
       }
       const code = categorizeTeamsErrorCode(result.errorCode);
@@ -1526,22 +1526,25 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       if (createAttemptStarted && statusCode != null && statusCode >= 500) {
         await markCardCreateAmbiguous();
         const ambigMsg = `Teams create returned HTTP ${statusCode}; external outcome is uncertain: ${result.error.slice(0, 800)}`;
-        await prisma.externalOperation.updateMany({
-          where: { id, status: 'PROCESSING', leaseToken },
-          data: {
-            status: 'AMBIGUOUS',
-            nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
-            lastError: ambigMsg,
-            leaseToken: null,
-            leaseExpiresAt: null,
-            resultPayload: {
-              createAttempted: true,
-              requiresManualReconciliation: true,
-              providerStatus: statusCode,
-            } as Prisma.InputJsonObject,
-          },
+        await prisma.$transaction(async tx => {
+          const updated = await tx.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: 'AMBIGUOUS',
+              nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
+              lastError: ambigMsg,
+              leaseToken: null,
+              leaseExpiresAt: null,
+              resultPayload: {
+                createAttempted: true,
+                requiresManualReconciliation: true,
+                providerStatus: statusCode,
+              } as Prisma.InputJsonObject,
+            },
+          });
+          if (updated.count === 0) return;
+          await syncTeamsNotificationAmbiguous(operation.idempotencyKey, ambigMsg, tx);
         });
-        await syncTeamsNotificationAmbiguous(operation.idempotencyKey, ambigMsg);
         throw new Error(result.error);
       }
       // An explicit non-5xx HTTP response proves the create was rejected. Clear
@@ -1591,17 +1594,33 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         try {
           await deferProviderAdmission('MICROSOFT_TEAMS', tenantProviderKey, providerRetryAt);
         } catch {}
-        await prisma.externalOperation.updateMany({
-          where: { id, status: 'PROCESSING', leaseToken },
-          data: {
-            status: retryStatus(operation.attempts),
-            nextAttemptAt: new Date(
-              Date.now() + jitteredDelayMs(Math.max(retryAfterMs ?? 60_000, 1_000))
-            ),
-            lastError: `Teams rate limited: ${result.error.slice(0, 400)}`,
-            leaseToken: null,
-            leaseExpiresAt: null,
-          },
+        const nextAttemptAt = new Date(
+          Date.now() + jitteredDelayMs(Math.max(retryAfterMs ?? 60_000, 1_000))
+        );
+        const st = retryStatus(operation.attempts);
+        const errMessage = `Teams rate limited: ${result.error.slice(0, 400)}`;
+        await prisma.$transaction(async tx => {
+          const updated = await tx.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: st,
+              nextAttemptAt,
+              lastError: errMessage,
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
+          });
+          if (updated.count === 0) return;
+          if (st === 'FAILED') {
+            await syncTeamsNotificationFailure(operation.idempotencyKey, errMessage, tx);
+          } else {
+            await syncTeamsNotificationRetry(
+              operation.idempotencyKey,
+              nextAttemptAt,
+              errMessage,
+              tx
+            );
+          }
         });
         try {
           await emitAuditEvent({
@@ -1634,14 +1653,19 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
             });
           } catch {}
         }
-        await prisma.externalOperation.updateMany({
-          where: { id, status: 'PROCESSING', leaseToken },
-          data: {
-            status: 'FAILED',
-            lastError: err.message.slice(0, 1000),
-            leaseToken: null,
-            leaseExpiresAt: null,
-          },
+        const errMessage = err.message.slice(0, 1000);
+        await prisma.$transaction(async tx => {
+          const updated = await tx.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: 'FAILED',
+              lastError: errMessage,
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
+          });
+          if (updated.count === 0) return;
+          await syncTeamsNotificationFailure(operation.idempotencyKey, errMessage, tx);
         });
         try {
           await emitAuditEvent({
@@ -1663,15 +1687,26 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         } catch {}
         throw err;
       }
-      await prisma.externalOperation.updateMany({
-        where: { id, status: 'PROCESSING', leaseToken },
-        data: {
-          status: retryStatus(operation.attempts),
-          nextAttemptAt: new Date(Date.now() + operationRetryDelayMs(err)),
-          lastError: err.message.slice(0, 1000),
-          leaseToken: null,
-          leaseExpiresAt: null,
-        },
+      const nextAttemptAt = new Date(Date.now() + operationRetryDelayMs(err));
+      const st = retryStatus(operation.attempts);
+      const errMessage = err.message.slice(0, 1000);
+      await prisma.$transaction(async tx => {
+        const updated = await tx.externalOperation.updateMany({
+          where: { id, status: 'PROCESSING', leaseToken },
+          data: {
+            status: st,
+            nextAttemptAt,
+            lastError: errMessage,
+            leaseToken: null,
+            leaseExpiresAt: null,
+          },
+        });
+        if (updated.count === 0) return;
+        if (st === 'FAILED') {
+          await syncTeamsNotificationFailure(operation.idempotencyKey, errMessage, tx);
+        } else {
+          await syncTeamsNotificationRetry(operation.idempotencyKey, nextAttemptAt, errMessage, tx);
+        }
       });
       throw err;
     }
@@ -1751,22 +1786,25 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         const msg = txErr instanceof Error ? txErr.message : String(txErr);
         await markCardCreateAmbiguous();
         const ambigMsg = `Teams provider succeeded but ledger commit failed; manual reconciliation required: ${msg.slice(0, 400)}`;
-        await prisma.externalOperation.updateMany({
-          where: { id, status: 'PROCESSING', leaseToken },
-          data: {
-            status: 'AMBIGUOUS',
-            nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
-            lastError: ambigMsg,
-            leaseToken: null,
-            leaseExpiresAt: null,
-            resultPayload: {
-              requiresManualReconciliation: true,
-              providerMessageId: result.providerMessageId,
-              conversationId: result.conversationId ?? null,
-            } as Prisma.InputJsonObject,
-          },
+        await prisma.$transaction(async tx => {
+          const updated = await tx.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: 'AMBIGUOUS',
+              nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
+              lastError: ambigMsg,
+              leaseToken: null,
+              leaseExpiresAt: null,
+              resultPayload: {
+                requiresManualReconciliation: true,
+                providerMessageId: result.providerMessageId,
+                conversationId: result.conversationId ?? null,
+              } as Prisma.InputJsonObject,
+            },
+          });
+          if (updated.count === 0) return;
+          await syncTeamsNotificationAmbiguous(operation.idempotencyKey, ambigMsg, tx);
         });
-        await syncTeamsNotificationAmbiguous(operation.idempotencyKey, ambigMsg);
         await releaseTeamsConcurrency();
         logger.warn('[MicrosoftTeams] Ledger transaction failed — manual reconciliation required', {
           incidentId,

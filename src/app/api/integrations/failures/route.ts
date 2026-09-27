@@ -80,63 +80,189 @@ export async function POST(request: NextRequest) {
       if (existing.status === 'AMBIGUOUS') {
         if (body.resolution === 'mark_delivered') {
           const payload = existing.requestPayload as Record<string, unknown> | null;
-          const destinationId = typeof payload?.destinationId === 'string' ? payload.destinationId : '';
-          if ((existing.provider as string) !== 'MICROSOFT_TEAMS' || !existing.incidentId || !destinationId || !body.providerMessageId?.trim() || !body.conversationId?.trim()) {
-            throw new Error('Ambiguous Teams delivery requires providerMessageId and conversationId');
+          const destinationId =
+            typeof payload?.destinationId === 'string' ? payload.destinationId : '';
+          if (
+            (existing.provider as string) !== 'MICROSOFT_TEAMS' ||
+            !existing.incidentId ||
+            !destinationId ||
+            !body.providerMessageId?.trim() ||
+            !body.conversationId?.trim()
+          ) {
+            throw new Error(
+              'Ambiguous Teams delivery requires providerMessageId and conversationId'
+            );
           }
-          const destination = await tx.microsoftTeamsDestination.findUnique({ where: { id: destinationId } });
+          const destination = await tx.microsoftTeamsDestination.findUnique({
+            where: { id: destinationId },
+          });
           if (!destination) throw new Error('Teams destination no longer exists');
           const snapshot = payload?.destinationSnapshot as Record<string, unknown> | undefined;
-          if (snapshot && (snapshot.tenantId !== destination.tenantId || snapshot.teamId !== destination.teamId || snapshot.channelId !== destination.channelId)) {
-            throw new Error('Teams destination changed after this delivery; it cannot be reconciled against the new target');
+          if (
+            snapshot &&
+            (snapshot.tenantId !== destination.tenantId ||
+              snapshot.teamId !== destination.teamId ||
+              snapshot.channelId !== destination.channelId)
+          ) {
+            throw new Error(
+              'Teams destination changed after this delivery; it cannot be reconciled against the new target'
+            );
           }
           const installation = await tx.microsoftTeamsInstallation.findFirst({
             where: { tenantId: destination.tenantId, teamId: destination.teamId },
             select: { id: true },
           });
-          if (!installation) throw new Error('Teams installation no longer corresponds to this destination');
+          if (!installation)
+            throw new Error('Teams installation no longer corresponds to this destination');
           const priorMessage = await tx.microsoftTeamsIncidentMessage.findUnique({
             where: { incidentId_destinationId: { incidentId: existing.incidentId, destinationId } },
             select: { messageId: true },
           });
-          const replacesCanonical = Boolean(priorMessage?.messageId && !priorMessage.messageId.startsWith('__reserved__:'));
+          const replacesCanonical = Boolean(
+            priorMessage?.messageId && !priorMessage.messageId.startsWith('__reserved__:')
+          );
           await tx.microsoftTeamsIncidentMessage.upsert({
             where: { incidentId_destinationId: { incidentId: existing.incidentId, destinationId } },
-            create: { incidentId: existing.incidentId, destinationId, messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId, createState: 'NONE', createOperationId: null },
-            update: { messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId, createState: 'NONE', createOperationId: null, ...(replacesCanonical ? { messageGeneration: { increment: 1 } } : {}) },
+            create: {
+              incidentId: existing.incidentId,
+              destinationId,
+              messageId: body.providerMessageId.trim(),
+              conversationId: body.conversationId.trim(),
+              tenantId: destination.tenantId,
+              teamId: destination.teamId,
+              channelId: destination.channelId,
+              createState: 'NONE',
+              createOperationId: null,
+            },
+            update: {
+              messageId: body.providerMessageId.trim(),
+              conversationId: body.conversationId.trim(),
+              tenantId: destination.tenantId,
+              teamId: destination.teamId,
+              channelId: destination.channelId,
+              createState: 'NONE',
+              createOperationId: null,
+              ...(replacesCanonical ? { messageGeneration: { increment: 1 } } : {}),
+            },
           });
-          await tx.externalOperation.update({ where: { id: body.id }, data: { status: 'COMPLETED', externalId: body.providerMessageId.trim(), externalKey: body.providerMessageId.trim(), resultPayload: { providerMessageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), reconciledManually: true }, lastError: null } });
-          await emitAuditEvent({
-            action: 'microsoftTeams.delivery.reconciled_delivered', source: 'UI',
-            target: { type: 'INCIDENT', id: existing.incidentId }, actor: { type: 'USER', id: admin.user.id },
-            oldValue: { status: 'AMBIGUOUS' }, newValue: { status: 'COMPLETED' },
-            metadata: { operationId: existing.id, destinationId, tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId, providerMessageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim() },
-          }, tx);
+          await tx.externalOperation.update({
+            where: { id: body.id },
+            data: {
+              status: 'COMPLETED',
+              externalId: body.providerMessageId.trim(),
+              externalKey: body.providerMessageId.trim(),
+              resultPayload: {
+                providerMessageId: body.providerMessageId.trim(),
+                conversationId: body.conversationId.trim(),
+                reconciledManually: true,
+              },
+              lastError: null,
+            },
+          });
+          const deliveredWhere = existing.idempotencyKey
+            ? { OR: [{ deliveryKey: existing.idempotencyKey }, { id: `notif_eo_${existing.id}` }] }
+            : { id: `notif_eo_${existing.id}` };
+          await (
+            tx as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } }
+          ).notification
+            .updateMany({
+              where: deliveredWhere,
+              data: {
+                status: 'DELIVERED',
+                sentAt: new Date(),
+                deliveredAt: new Date(),
+                providerMessageId: `teams:${existing.id}`,
+              },
+            })
+            .catch(() => undefined);
+          await emitAuditEvent(
+            {
+              action: 'microsoftTeams.delivery.reconciled_delivered',
+              source: 'UI',
+              target: { type: 'INCIDENT', id: existing.incidentId },
+              actor: { type: 'USER', id: admin.user.id },
+              oldValue: { status: 'AMBIGUOUS' },
+              newValue: { status: 'COMPLETED' },
+              metadata: {
+                operationId: existing.id,
+                destinationId,
+                tenantId: destination.tenantId,
+                teamId: destination.teamId,
+                channelId: destination.channelId,
+                providerMessageId: body.providerMessageId.trim(),
+                conversationId: body.conversationId.trim(),
+              },
+            },
+            tx
+          );
           return;
         }
         if (body.resolution === 'mark_failed') {
           const payload = existing.requestPayload as Record<string, unknown> | null;
-          const destinationId = typeof payload?.destinationId === 'string' ? payload.destinationId : '';
+          const destinationId =
+            typeof payload?.destinationId === 'string' ? payload.destinationId : '';
           if (existing.incidentId && destinationId) {
-            await tx.microsoftTeamsIncidentMessage.deleteMany({ where: { incidentId: existing.incidentId, destinationId, messageId: `__reserved__:${existing.id}` } });
+            await tx.microsoftTeamsIncidentMessage.deleteMany({
+              where: {
+                incidentId: existing.incidentId,
+                destinationId,
+                messageId: `__reserved__:${existing.id}`,
+              },
+            });
             await tx.microsoftTeamsIncidentMessage.updateMany({
-              where: { incidentId: existing.incidentId, destinationId, createState: 'AMBIGUOUS', createOperationId: existing.id },
+              where: {
+                incidentId: existing.incidentId,
+                destinationId,
+                createState: 'AMBIGUOUS',
+                createOperationId: existing.id,
+              },
               data: { createState: 'NONE', createOperationId: null },
             });
           }
-          await tx.externalOperation.update({ where: { id: body.id }, data: { status: 'FAILED', lastError: 'Operator confirmed the ambiguous Teams delivery was not delivered.' } });
-          await emitAuditEvent({
-            action: 'microsoftTeams.delivery.reconciled_failed', source: 'UI',
-            target: { type: 'INCIDENT', id: existing.incidentId }, actor: { type: 'USER', id: admin.user.id },
-            oldValue: { status: 'AMBIGUOUS' }, newValue: { status: 'FAILED' },
-            metadata: { operationId: existing.id, destinationId },
-          }, tx);
+          await tx.externalOperation.update({
+            where: { id: body.id },
+            data: {
+              status: 'FAILED',
+              lastError: 'Operator confirmed the ambiguous Teams delivery was not delivered.',
+            },
+          });
+          const failedWhere = existing.idempotencyKey
+            ? { OR: [{ deliveryKey: existing.idempotencyKey }, { id: `notif_eo_${existing.id}` }] }
+            : { id: `notif_eo_${existing.id}` };
+          await (
+            tx as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } }
+          ).notification
+            .updateMany({
+              where: failedWhere,
+              data: {
+                status: 'FAILED',
+                failedAt: new Date(),
+                errorMsg: 'Operator confirmed the ambiguous Teams delivery was not delivered.',
+              },
+            })
+            .catch(() => undefined);
+          await emitAuditEvent(
+            {
+              action: 'microsoftTeams.delivery.reconciled_failed',
+              source: 'UI',
+              target: { type: 'INCIDENT', id: existing.incidentId },
+              actor: { type: 'USER', id: admin.user.id },
+              oldValue: { status: 'AMBIGUOUS' },
+              newValue: { status: 'FAILED' },
+              metadata: { operationId: existing.id, destinationId },
+            },
+            tx
+          );
           return;
         }
-        throw new Error('Ambiguous deliveries cannot be retried; reconcile as mark_delivered or mark_failed');
+        throw new Error(
+          'Ambiguous deliveries cannot be retried; reconcile as mark_delivered or mark_failed'
+        );
       }
       if (existing.status !== 'FAILED') {
-        throw new Error(`Only FAILED external operations can be retried (current state: ${existing.status})`);
+        throw new Error(
+          `Only FAILED external operations can be retried (current state: ${existing.status})`
+        );
       }
       const operation = await tx.externalOperation.update({
         where: { id: body.id },
@@ -149,6 +275,22 @@ export async function POST(request: NextRequest) {
           leaseExpiresAt: null,
         },
       });
+      const retryWhere = existing.idempotencyKey
+        ? { OR: [{ deliveryKey: existing.idempotencyKey }, { id: `notif_eo_${existing.id}` }] }
+        : { id: `notif_eo_${existing.id}` };
+      await (
+        tx as unknown as { notification: { updateMany: (a: unknown) => Promise<unknown> } }
+      ).notification
+        .updateMany({
+          where: retryWhere,
+          data: {
+            status: 'PENDING',
+            failedAt: null,
+            errorMsg: null,
+            nextAttemptAt: new Date(),
+          },
+        })
+        .catch(() => undefined);
       await tx.backgroundJob.create({
         data: {
           type: 'EXTERNAL_OPERATION',
@@ -158,11 +300,21 @@ export async function POST(request: NextRequest) {
           payload: { operationId: operation.id },
         },
       });
-      await emitAuditEvent({
-        action: existing.provider === 'MICROSOFT_TEAMS' ? 'microsoftTeams.delivery.manual_retry' : 'externalOperation.manual_retry', source: 'UI',
-        target: { type: 'INCIDENT', id: existing.incidentId }, actor: { type: 'USER', id: admin.user.id },
-        oldValue: { status: 'FAILED' }, newValue: { status: 'PENDING' }, metadata: { operationId: existing.id, provider: existing.provider },
-      }, tx);
+      await emitAuditEvent(
+        {
+          action:
+            existing.provider === 'MICROSOFT_TEAMS'
+              ? 'microsoftTeams.delivery.manual_retry'
+              : 'externalOperation.manual_retry',
+          source: 'UI',
+          target: { type: 'INCIDENT', id: existing.incidentId },
+          actor: { type: 'USER', id: admin.user.id },
+          oldValue: { status: 'FAILED' },
+          newValue: { status: 'PENDING' },
+          metadata: { operationId: existing.id, provider: existing.provider },
+        },
+        tx
+      );
     } else {
       const intent = await tx.chatOpsIntent.update({
         where: { id: body.id },
