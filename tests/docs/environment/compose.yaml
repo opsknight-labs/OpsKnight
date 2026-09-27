@@ -1,0 +1,34 @@
+include:
+  - ../../../deploy/compose/docker-compose.yml
+  - ../../../deploy/compose/docker-compose.split.yml
+
+services:
+  opsknight-db:
+    ports:
+      - '127.0.0.1:55432:5432'
+    environment:
+      POSTGRES_USER: opsknight_docs
+      POSTGRES_PASSWORD: opsknight_docs
+      POSTGRES_DB: opsknight_docs
+    volumes:
+      - docs_postgres_data:/var/lib/postgresql/data
+
+  mock-slack:
+    image: wiremock/wiremock:3.13.1
+    networks: [opsknight-network]
+  mock-teams:
+    image: wiremock/wiremock:3.13.1
+    networks: [opsknight-network]
+  mock-jira:
+    image: wiremock/wiremock:3.13.1
+    networks: [opsknight-network]
+  mock-smtp:
+    image: axllent/mailpit:v1.27
+    networks: [opsknight-network]
+  webhook-receiver:
+    image: wiremock/wiremock:3.13.1
+    networks: [opsknight-network]
+
+volumes:
+  docs_postgres_data:
+
