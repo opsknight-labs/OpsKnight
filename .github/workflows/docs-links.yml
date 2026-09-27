@@ -7,6 +7,9 @@ on:
       - 'docs/v2.0.0/**'
       - 'docs/internal/**'
       - 'scripts/docs/**'
+      - 'src/**'
+      - 'deploy/**'
+      - 'prisma/**'
       - 'scripts/check-docs-links.cjs'
       - 'scripts/check-docs-capabilities.cjs'
       - 'package.json'
@@ -17,6 +20,9 @@ on:
       - 'docs/v2.0.0/**'
       - 'docs/internal/**'
       - 'scripts/docs/**'
+      - 'src/**'
+      - 'deploy/**'
+      - 'prisma/**'
       - 'scripts/check-docs-links.cjs'
       - 'scripts/check-docs-capabilities.cjs'
       - 'package.json'
@@ -37,3 +43,9 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Validate 2.0.0 documentation contracts
         run: npm run docs:lint
+      - name: Detect documentation impact
+        if: github.event_name == 'pull_request'
+        env:
+          DOCS_IMPACT_BASE: origin/${{ github.base_ref }}
+          DOCS_IMPACT_STRICT: 'true'
+        run: npm run docs:impact
