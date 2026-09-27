@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import twilio from 'twilio';
 
 export function validateTwilioRequest(
   url: string,
@@ -7,14 +7,16 @@ export function validateTwilioRequest(
   authToken: string
 ): boolean {
   if (!signature || !authToken) return false;
-  const sorted = Array.from(params.keys())
-    .sort()
-    .map(key => `${key}${params.get(key) || ''}`)
-    .join('');
-  const expected = createHmac('sha1', authToken).update(`${url}${sorted}`).digest('base64');
-  const actualBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expected);
-  return (
-    actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer)
-  );
+  const paramsObject: Record<string, string> = Object.create(null);
+  for (const [key, value] of params.entries()) {
+    paramsObject[key] = value;
+  }
+  const validate =
+    twilio.validateRequest ||
+    (twilio as unknown as { default?: { validateRequest: typeof twilio.validateRequest } }).default
+      ?.validateRequest;
+  if (typeof validate === 'function') {
+    return validate(authToken, signature, url, paramsObject);
+  }
+  return false;
 }

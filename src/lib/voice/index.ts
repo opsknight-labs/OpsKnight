@@ -8,7 +8,8 @@ export async function sendIncidentVoice(
   incidentId: string,
   notificationId: string,
   durableMessage: string,
-  escalationGeneration?: number
+  escalationGeneration?: number,
+  deliveryAttemptId?: string
 ): Promise<VoiceCallResult> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -17,6 +18,7 @@ export async function sendIncidentVoice(
   if (!user?.phoneNumber) {
     return { success: false, retryable: false, error: 'User has no phone number' };
   }
+  // Load config once and pass it through to sendVoiceCall to avoid TOCTOU.
   const config = await import('@/lib/notification-providers').then(module =>
     module.getVoiceConfig()
   );
@@ -27,22 +29,27 @@ export async function sendIncidentVoice(
       error: 'Twilio Voice From number is not configured',
     };
   }
-  return sendVoiceCall({
-    to: user.phoneNumber,
-    from: config.fromNumber,
-    message: buildIncidentVoiceMessage(durableMessage),
-    notificationId,
-    incidentId,
-    userId,
-    escalationGeneration,
-    requireAck: true,
-  });
+  return sendVoiceCall(
+    {
+      to: user.phoneNumber,
+      from: config.fromNumber,
+      message: buildIncidentVoiceMessage(durableMessage),
+      notificationId,
+      deliveryAttemptId,
+      incidentId,
+      userId,
+      escalationGeneration,
+      requireAck: true,
+    },
+    config
+  );
 }
 
 export async function sendTestVoice(
   to: string,
   notificationId: string,
-  message: string
+  message: string,
+  deliveryAttemptId?: string
 ): Promise<VoiceCallResult> {
   const config = await import('@/lib/notification-providers').then(module =>
     module.getVoiceConfig()
@@ -54,5 +61,8 @@ export async function sendTestVoice(
       error: 'Twilio Voice From number is not configured',
     };
   }
-  return sendVoiceCall({ to, from: config.fromNumber, message, notificationId, requireAck: false });
+  return sendVoiceCall(
+    { to, from: config.fromNumber, message, notificationId, deliveryAttemptId, requireAck: false },
+    config
+  );
 }

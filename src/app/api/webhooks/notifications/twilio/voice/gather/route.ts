@@ -39,16 +39,17 @@ export async function POST(request: NextRequest) {
     const callSid = params.get('CallSid');
     if (!callSid) return xml('The call could not be identified.', 400);
 
+    // 1. Look up the notification, binding via attempt when available.
     const notification = await prisma.notification.findFirst({
       where: {
         id: claims.notificationId,
         userId: claims.userId,
         incidentId: claims.incidentId,
         channel: 'VOICE',
-        OR: [{ providerMessageId: callSid }, { providerMessageId: null }],
       },
       select: {
         id: true,
+        providerMessageId: true,
         user: { select: { id: true, name: true } },
         incident: { select: { status: true, escalationGeneration: true } },
       },
@@ -56,24 +57,59 @@ export async function POST(request: NextRequest) {
     if (!notification?.user || !notification.incident) {
       return xml('This call is no longer actionable.', 404);
     }
-    const callBound = await prisma.notification.updateMany({
-      where: {
-        id: notification.id,
-        OR: [{ providerMessageId: callSid }, { providerMessageId: null }],
-      },
-      data: { providerMessageId: callSid },
-    });
-    if (callBound.count === 0) return xml('This call is no longer actionable.', 409);
+
+    // 2. Validate lifecycle state BEFORE mutating any state.
+    // Escalation generation must match to prevent stale callbacks from acting.
     if (notification.incident.escalationGeneration !== claims.escalationGeneration) {
       return xml('This page belongs to an earlier escalation and is no longer actionable.');
     }
-    if (notification.incident.status === 'RESOLVED') {
-      return xml('This incident is already resolved.');
+
+    // 3. Explicitly handle non-OPEN incident states with truthful TwiML.
+    if (notification.incident.status !== 'OPEN') {
+      if (notification.incident.status === 'RESOLVED') {
+        return xml('This incident is already resolved.');
+      }
+      if (notification.incident.status === 'ACKNOWLEDGED') {
+        return xml('This incident is already acknowledged.');
+      }
+      // SNOOZED, SUPPRESSED, or any other non-OPEN state
+      return xml('This incident is no longer awaiting acknowledgement.');
     }
+
+    // 4. Verify Call SID matches this notification/attempt.
+    if (claims.deliveryAttemptId) {
+      // Attempt-level correlation: verify the Call SID belongs to this attempt.
+      const attempt = await prisma.notificationDeliveryAttempt.findUnique({
+        where: { id: claims.deliveryAttemptId },
+        select: { providerMessageId: true, notificationId: true },
+      });
+      if (!attempt || attempt.notificationId !== notification.id) {
+        return xml('This call is no longer actionable.', 404);
+      }
+      if (attempt.providerMessageId && attempt.providerMessageId !== callSid) {
+        return xml('This call is no longer actionable.', 409);
+      }
+    } else {
+      // Legacy path: notification-level binding for in-flight calls without attemptId.
+      if (notification.providerMessageId && notification.providerMessageId !== callSid) {
+        return xml('This call is no longer actionable.', 409);
+      }
+      const callBound = await prisma.notification.updateMany({
+        where: {
+          id: notification.id,
+          OR: [{ providerMessageId: callSid }, { providerMessageId: null }],
+        },
+        data: { providerMessageId: callSid },
+      });
+      if (callBound.count === 0) return xml('This call is no longer actionable.', 409);
+    }
+
+    // 5. Check DTMF digits.
     if (params.get('Digits') !== '1') {
       return xml('No acknowledgement was received. The incident remains active.');
     }
 
+    // 6. Idempotent ACK via provider feedback.
     const providerEventId = `${callSid}:voice-ack:${claims.nonce}`;
     try {
       await prisma.notificationProviderFeedback.create({
@@ -92,6 +128,7 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
+    // 7. Execute canonical lifecycle command.
     try {
       await executeIncidentLifecycleCommand({
         incidentId: claims.incidentId,
@@ -116,8 +153,12 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
+    // 8. Record attempt outcome.
+    const attemptFilter = claims.deliveryAttemptId
+      ? { id: claims.deliveryAttemptId }
+      : { notificationId: notification.id, providerMessageId: callSid };
     await prisma.notificationDeliveryAttempt.updateMany({
-      where: { notificationId: notification.id, providerMessageId: callSid },
+      where: attemptFilter,
       data: { outcome: 'ACKNOWLEDGED', finishedAt: new Date() },
     });
     return xml('Thank you. The incident has been acknowledged.');

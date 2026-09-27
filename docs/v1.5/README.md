@@ -20,7 +20,8 @@ This tree is **v1.5**. Switch versions in the sidebar for older releases.
 - [Navigation, search, and alerts](./core-concepts/navigation-search-notifications) — Find records and use the in-app inbox
 - [Installation](./getting-started/installation) — Compose, Helm, Kustomize, from source. First boot needs `NEXTAUTH_SECRET` and `ENCRYPTION_KEY`.
 - [Troubleshooting](./troubleshooting) — Compose, database, auth, paging
-- [Notifications](./administration/notifications) — How someone actually gets paged (no voice), including user-controlled Quiet Hours.
+- [Notifications](./administration/notifications) — How someone actually gets paged, including user-controlled Quiet Hours.
+- [Voice notifications](./administration/voice-notifications) — Twilio outbound incident calls with DTMF acknowledgement.
 - [Prometheus metrics](./deployment/prometheus) — Secure scraping, Helm/Compose/Kustomize setup, PromQL, recording rules, and alerts.
 - [Incidents](./core-concepts/incidents)
 - [Escalation policies](./core-concepts/escalation-policies)

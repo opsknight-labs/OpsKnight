@@ -2,7 +2,15 @@ import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-const DIRECT_PROVIDER_MODULES = new Set(['email', 'sms', 'push', 'whatsapp', 'slack', 'webhooks']);
+const DIRECT_PROVIDER_MODULES = new Set([
+  'email',
+  'sms',
+  'push',
+  'whatsapp',
+  'slack',
+  'webhooks',
+  'voice',
+]);
 const ALLOWED_PROVIDER_SENDERS = new Set([
   'src/lib/notification-control-plane.ts',
   'src/lib/notification-delivery.ts',
@@ -10,7 +18,9 @@ const ALLOWED_PROVIDER_SENDERS = new Set([
 ]);
 
 function providerModule(specifier: string): string | null {
-  const match = specifier.match(/(?:^@\/lib\/|^\.\/)(email|sms|push|whatsapp|slack|webhooks)$/);
+  const match = specifier.match(
+    /(?:^@\/lib\/|^\.\/)(email|sms|push|whatsapp|slack|webhooks|voice)$/
+  );
   return match?.[1] || null;
 }
 
@@ -37,7 +47,7 @@ describe('notification control-plane architecture', () => {
         }
       });
       if (
-        /\{\s*(?:send|notify)[A-Za-z0-9_]*\s*\}\s*=\s*await\s+import\(['"](?:@\/lib\/|\.\/)(?:email|sms|push|whatsapp|slack|webhooks)['"]\)/.test(
+        /\{\s*(?:send|notify)[A-Za-z0-9_]*\s*\}\s*=\s*await\s+import\(['"](?:@\/lib\/|\.\/)(?:email|sms|push|whatsapp|slack|webhooks|voice)['"]\)/.test(
           sourceText
         )
       )
@@ -67,7 +77,7 @@ describe('notification control-plane architecture', () => {
         'prisma/migrations/20260831090000_generalize_notification_control_plane/migration.sql'
       )
     );
-    expect(migration).toContain('"status" IN (\'SENT\', \'DELIVERED\', \'SKIPPED\')');
+    expect(migration).toContain("\"status\" IN ('SENT', 'DELIVERED', 'SKIPPED')");
     expect(migration).toContain('"attempts" >= "maxAttempts"');
   });
 
@@ -88,7 +98,7 @@ describe('notification control-plane architecture', () => {
         'prisma/migrations/20260831171000_fence_legacy_trigger_notifications/migration.sql'
       )
     );
-    expect(migration).toContain('"status" IN (\'PENDING\', \'FAILED\')');
+    expect(migration).toContain("\"status\" IN ('PENDING', 'FAILED')");
     expect(migration).toContain('"id" NOT LIKE \'ntf:triggered:%:g%:%\'');
     expect(migration).toContain("'SKIPPED'");
   });

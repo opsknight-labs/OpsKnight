@@ -13,6 +13,6 @@ export function buildIncidentVoiceMessage(durableMessage: string): string {
     const urgency = concise(snapshot.urgency, 'High').toLowerCase();
     return `${urgency} priority incident. Service: ${concise(snapshot.service.name, 'Unknown service', 80)}. Incident: ${concise(snapshot.title, 'An incident requires attention')}.`;
   } catch {
-    return 'Critical incident. An incident requires your attention.';
+    return 'Incident requires your attention.';
   }
 }

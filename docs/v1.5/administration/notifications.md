@@ -6,7 +6,7 @@ order: 2
 
 # Notifications
 
-OpsKnight can create in-app notifications and deliver incident messages through email, SMS, web push, WhatsApp, Slack, and service webhooks. There is no native voice/PSTN channel in v1.4.
+OpsKnight can create in-app notifications and deliver incident messages through email, SMS, web push, WhatsApp, Slack, and service webhooks. Voice (PSTN) paging is available via Twilio. See [Voice notifications](./voice-notifications.md) for configuration and call behavior.
 
 Reliable delivery requires several independent layers:
 
@@ -38,6 +38,7 @@ Saving one layer does not verify the whole path. Test every production recipient
 | SMS      | Twilio or AWS SNS                                      | SMS preference enabled and E.164 phone number                       | Controlled incident; inspect the provider and history. |
 | Push     | Standard Web Push with VAPID keys                      | Push preference, browser permission, registered subscription, HTTPS | User's **Test Push** control.                          |
 | WhatsApp | Twilio WhatsApp Business                               | WhatsApp preference and E.164 phone number                          | Approved test incident/template path.                  |
+| Voice    | Twilio (shared with SMS provider)                      | Voice preference enabled and E.164 phone number                     | Controlled incident; inspect provider and history.     |
 | Slack    | Slack workspace/OAuth or service webhook configuration | Service/workspace channel configuration                             | Slack setup and synthetic incident.                    |
 | Webhook  | Service webhook integration                            | Reachable allowed URL and selected events                           | Webhook test plus synthetic incident.                  |
 
@@ -48,9 +49,10 @@ Microsoft Teams and Google Chat are not native notification-provider types. A ge
 For a policy/user notification, OpsKnight builds the available user channels in this order:
 
 1. Push
-2. SMS
-3. WhatsApp
-4. Email
+2. Voice
+3. SMS
+4. WhatsApp
+5. Email
 
 It attempts channels in order and normally stops after the first successful non-email delivery. For a High-urgency incident, it can continue to email after a successful primary non-email channel. Failed earlier channels are recorded and the next available channel is tried.
 
@@ -74,7 +76,7 @@ The configured times are evaluated in the user's profile timezone. The initial e
 
 During an active Quiet Hours window:
 
-- **LOW urgency**: Push, SMS, and WhatsApp are suppressed;
+- **LOW urgency**: Push, Voice, SMS, and WhatsApp are suppressed;
 - **Email and in-app** notifications remain available; and
 - **MEDIUM and HIGH urgency** bypass Quiet Hours and continue paging normally.
 

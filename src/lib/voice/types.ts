@@ -3,6 +3,7 @@ export interface VoiceCallRequest {
   from: string;
   message: string;
   notificationId: string;
+  deliveryAttemptId?: string;
   incidentId?: string;
   userId?: string;
   escalationGeneration?: number;

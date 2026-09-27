@@ -1,6 +1,6 @@
 import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
-import { getVoiceConfig } from '@/lib/notification-providers';
+import { getVoiceConfig, type VoiceConfig } from '@/lib/notification-providers';
 import { createVoiceCallbackToken } from './token';
 import { buildVoiceTwiml } from './twiml';
 import type { VoiceCallRequest, VoiceCallResult } from './types';
@@ -29,8 +29,15 @@ function classifyTwilioError(error: unknown): VoiceCallResult {
   };
 }
 
-export async function sendVoiceCall(request: VoiceCallRequest): Promise<VoiceCallResult> {
-  const config = await getVoiceConfig();
+/**
+ * Send a voice call via Twilio. Accepts an optional pre-loaded config to avoid
+ * TOCTOU issues when the caller already resolved provider configuration.
+ */
+export async function sendVoiceCall(
+  request: VoiceCallRequest,
+  preloadedConfig?: VoiceConfig
+): Promise<VoiceCallResult> {
+  const config = preloadedConfig ?? (await getVoiceConfig());
   if (!config.enabled || !config.accountSid || !config.authToken || !config.fromNumber) {
     return { success: false, retryable: false, error: 'Twilio Voice is not configured' };
   }
@@ -42,11 +49,18 @@ export async function sendVoiceCall(request: VoiceCallRequest): Promise<VoiceCal
     if (request.requireAck && request.incidentId && request.userId) {
       const token = createVoiceCallbackToken({
         notificationId: request.notificationId,
+        deliveryAttemptId: request.deliveryAttemptId,
         userId: request.userId,
         incidentId: request.incidentId,
         escalationGeneration: request.escalationGeneration ?? 0,
       });
       gatherUrl = `${baseUrl}/api/webhooks/notifications/twilio/voice/gather?token=${encodeURIComponent(token)}`;
+    }
+    const statusParams = new URLSearchParams({
+      notificationId: request.notificationId,
+    });
+    if (request.deliveryAttemptId) {
+      statusParams.set('attemptId', request.deliveryAttemptId);
     }
     const call = await factory(config.accountSid, config.authToken).calls.create({
       to: request.to,
@@ -56,9 +70,10 @@ export async function sendVoiceCall(request: VoiceCallRequest): Promise<VoiceCal
         gatherUrl,
         requireAck: Boolean(gatherUrl),
       }),
-      statusCallback: `${baseUrl}/api/webhooks/notifications/twilio/voice/status?notificationId=${encodeURIComponent(request.notificationId)}`,
+      statusCallback: `${baseUrl}/api/webhooks/notifications/twilio/voice/status?${statusParams.toString()}`,
       statusCallbackMethod: 'POST',
       statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
+      timeout: 20,
     });
     return {
       success: true,

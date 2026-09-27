@@ -2,6 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 export type VoiceCallbackClaims = {
   notificationId: string;
+  deliveryAttemptId?: string;
   userId: string;
   incidentId: string;
   escalationGeneration: number;

@@ -372,7 +372,7 @@ export async function getVoiceConfig(): Promise<VoiceConfig> {
     const provider = await prisma.notificationProvider.findUnique({
       where: { provider: 'twilio' },
     });
-    if (!provider?.config) return { enabled: false, provider: null };
+    if (!provider?.enabled || !provider.config) return { enabled: false, provider: null };
     const config = await getDecryptedConfig('twilio', provider.config);
     const enabled = config.voiceEnabled === true;
     if (

@@ -93,7 +93,7 @@ describe('Twilio voice status callback', () => {
     expect(mocks.incidentEventCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         incidentId: 'incident-1',
-        message: 'Voice call answered by Jane',
+        message: 'Voice call connected to Jane',
       }),
     });
   });
