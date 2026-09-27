@@ -68,6 +68,7 @@
     "docs:journeys": "playwright test -c playwright.docs.config.ts",
     "docs:map": "node scripts/docs/build-doc-map.mjs",
     "docs:reference": "node scripts/docs/generate-reference.mjs",
+    "docs:integrations": "node scripts/docs/generate-integrations.mjs",
     "docs:frontmatter": "node scripts/docs/check-frontmatter.mjs",
     "docs:evidence": "node scripts/docs/check-evidence.mjs",
     "docs:links": "node scripts/check-docs-links.cjs",
