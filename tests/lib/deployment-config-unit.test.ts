@@ -457,11 +457,35 @@ describe('deployment configuration invariants', () => {
     const k8sReadme = read('deploy/kubernetes/README.md');
     const composeReadme = read('deploy/compose/README.md');
     const dockerDoc = read('docs/v1.5/deployment/docker.md');
+    const contributing = read('CONTRIBUTING.md');
+    const composeDev = read('deploy/compose/docker-compose.dev.yml');
     expect(k8sReadme).not.toContain('image.tag=1.4.0');
     expect(composeReadme).not.toContain('opsknight:1.4.0');
     expect(dockerDoc).not.toMatch(
       /^docker compose (?:exec|stop|start|pull|up|ps|logs|restart|down)\b/m
     );
+    expect(composeDev).toContain('  opsknight-db:');
+    expect(contributing).toContain(
+      'docker compose -f deploy/compose/docker-compose.dev.yml up -d opsknight-db'
+    );
+    expect(contributing).not.toContain('up -d postgres');
+
+    // Keep Kustomize split-pgbouncer web-database-patch aligned with base split web container hardening
+    const splitDeployments = read(
+      'deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml'
+    );
+    const webPatch = read(
+      'deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml'
+    );
+    expect(webPatch).toContain(
+      'image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required'
+    );
+    expect(splitDeployments).toContain(
+      'image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required'
+    );
+    expect(webPatch).toContain('runAsUser: 1001');
+    expect(webPatch).toContain('readOnlyRootFilesystem: true');
+    expect(webPatch).toContain("path: '/api/health?mode=readiness'");
   });
 
   it('validates runtime database connection capacity budgets across topologies', () => {
