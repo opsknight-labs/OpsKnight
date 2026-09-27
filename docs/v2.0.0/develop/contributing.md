@@ -11,4 +11,4 @@ verified: false
 
 Update the capability inventory when product behavior changes. Documentation
 claims must cite discoverable source, configuration, tests, or runtime evidence.
-Historical pages alone are not evidence for 2.0.0 behavior.
+Historical pages alone are not evidence for current behavior.

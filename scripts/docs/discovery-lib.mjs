@@ -37,6 +37,5 @@ export function routeFromFile(file, prefix) {
     .split('/')
     .filter(segment => !/^\(.+\)$/.test(segment))
     .join('/');
-  return `/${route}`.replace(/\/$/, '') || '/';
+  return `/${route}`.replace(/^\/+/, '/').replace(/\/$/, '') || '/';
 }
-

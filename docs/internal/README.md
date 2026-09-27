@@ -15,6 +15,5 @@ The release-gated sync copies only directories listed in
 - [Release](./release/README.md) — release readiness and transition records.
 
 Historical versioned documents remain in place so old links remain valid. A
-historical location does not make an audit or engineering record public 2.0.0
+historical location does not make an audit or engineering record public product
 guidance.
-

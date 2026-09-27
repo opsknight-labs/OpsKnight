@@ -1,6 +1,6 @@
 ---
 title: Reference
-description: Exact technical contracts for OpsKnight 2.0.0.
+description: Exact technical contracts for OpsKnight.
 type: reference
 product_area: platform
 audience: [developer, operator, administrator]
@@ -22,4 +22,3 @@ contracts without speculative guidance.
 - Metrics
 - Health
 - Limits
-
