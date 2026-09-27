@@ -1,0 +1,422 @@
+generated: true
+providers:
+  - id: appdynamics
+    title: AppDynamics
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/appdynamics
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/appdynamics.ts
+    route: src/app/api/integrations/appdynamics/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: datadog
+    title: Datadog
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/datadog
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/datadog.ts
+    route: src/app/api/integrations/datadog/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: dynatrace
+    title: Dynatrace
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/dynatrace
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/dynatrace.ts
+    route: src/app/api/integrations/dynatrace/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: elastic
+    title: Elastic
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/elastic
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/elastic.ts
+    route: src/app/api/integrations/elastic/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: grafana
+    title: Grafana
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/grafana
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/grafana.ts
+    route: src/app/api/integrations/grafana/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: honeycomb
+    title: Honeycomb
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/honeycomb
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/honeycomb.ts
+    route: src/app/api/integrations/honeycomb/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: icinga
+    title: Icinga
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/icinga
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/icinga.ts
+    route: src/app/api/integrations/icinga/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: manageengine
+    title: ManageEngine
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/manageengine
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/manageengine.ts
+    route: src/app/api/integrations/manageengine/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: nagios
+    title: Nagios
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/nagios
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/nagios.ts
+    route: src/app/api/integrations/nagios/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: newrelic
+    title: New Relic
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/newrelic
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/newrelic.ts
+    route: src/app/api/integrations/newrelic/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: prometheus
+    title: Prometheus Alertmanager
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/prometheus
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/prometheus.ts
+    route: src/app/api/integrations/prometheus/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: sentry
+    title: Sentry
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/sentry
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/sentry.ts
+    route: src/app/api/integrations/sentry/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: splunk-observability
+    title: Splunk Observability
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/splunk-observability
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/splunk-observability.ts
+    route: src/app/api/integrations/splunk-observability/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: splunk-oncall
+    title: Splunk On-Call
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/splunk-oncall
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/splunk-oncall.ts
+    route: src/app/api/integrations/splunk-oncall/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: zabbix
+    title: Zabbix
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/zabbix
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/zabbix.ts
+    route: src/app/api/integrations/zabbix/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: azure
+    title: Azure Monitor
+    category: cloud
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/azure
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/azure.ts
+    route: src/app/api/integrations/azure/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: cloudwatch
+    title: Amazon CloudWatch
+    category: cloud
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/cloudwatch
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/cloudwatch.ts
+    route: src/app/api/integrations/cloudwatch/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: google-cloud-monitoring
+    title: Google Cloud Monitoring
+    category: cloud
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/google-cloud-monitoring
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/google-cloud-monitoring.ts
+    route: src/app/api/integrations/google-cloud-monitoring/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: better-uptime
+    title: Better Uptime
+    category: uptime
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/better-uptime
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/better-uptime.ts
+    route: src/app/api/integrations/better-uptime/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: pingdom
+    title: Pingdom
+    category: uptime
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/pingdom
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/pingdom.ts
+    route: src/app/api/integrations/pingdom/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: uptime-kuma
+    title: Uptime Kuma
+    category: uptime
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/uptime-kuma
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/uptime-kuma.ts
+    route: src/app/api/integrations/uptime-kuma/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: uptimerobot
+    title: UptimeRobot
+    category: uptime
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/uptimerobot
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/uptimerobot.ts
+    route: src/app/api/integrations/uptimerobot/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: bitbucket
+    title: Bitbucket
+    category: webhooks
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/bitbucket
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/bitbucket.ts
+    route: src/app/api/integrations/bitbucket/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: github
+    title: GitHub
+    category: webhooks
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/github
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/github.ts
+    route: src/app/api/integrations/github/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: gitlab
+    title: GitLab
+    category: webhooks
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/gitlab
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/gitlab.ts
+    route: src/app/api/integrations/gitlab/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: pagerduty
+    title: PagerDuty Events API
+    category: webhooks
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/pagerduty
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/pagerduty.ts
+    route: src/app/api/integrations/pagerduty/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: vercel
+    title: Vercel
+    category: webhooks
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/vercel
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/vercel.ts
+    route: src/app/api/integrations/vercel/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+  - id: webhook
+    title: Generic webhook
+    category: webhooks
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/webhook
+    authentication:
+      - integration-key
+      - optional-provider-signature
+    source: src/lib/integrations/webhook.ts
+    route: src/app/api/integrations/webhook/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
