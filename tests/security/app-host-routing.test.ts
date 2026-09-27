@@ -841,5 +841,26 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       const origin = getAuthoritativeRequestOrigin(req, 'https://opssentinal.com');
       expect(origin).toBe('https://opssentinal.com');
     });
+
+    it('respects REDIRECT_TO_CANONICAL_HOST=false by preserving requested alias while stripping internal port', async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://opsnite.com');
+      vi.stubEnv('NEXTAUTH_URL', 'https://opsnite.com');
+      vi.stubEnv('REDIRECT_TO_CANONICAL_HOST', 'false');
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('http://www.opsnite.com:3000/settings', {
+        headers: {
+          host: 'www.opsnite.com:3000',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toBe(
+        'https://www.opsnite.com/login?callbackUrl=%2Fsettings'
+      );
+    });
   });
 });

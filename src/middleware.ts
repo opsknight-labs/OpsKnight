@@ -452,7 +452,14 @@ function resolveAuthoritativeOrigin(
 ): string {
   if (isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
     const configuredOrigin = getConfiguredApplicationOrigin(statusConfig);
-    if (configuredOrigin) return configuredOrigin;
+    if (configuredOrigin) {
+      if (process.env.REDIRECT_TO_CANONICAL_HOST === 'false') {
+        const parsed = new URL(configuredOrigin);
+        const portSuffix = parsed.port ? `:${parsed.port}` : '';
+        return `${parsed.protocol}//${requestHost}${portSuffix}`;
+      }
+      return configuredOrigin;
+    }
   }
   return (
     (usedConfiguredForwardedHost ? getConfiguredApplicationOrigin(statusConfig) : null) ||
