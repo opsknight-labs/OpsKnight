@@ -12,6 +12,11 @@ const coverage = {};
 for (const [id, capability] of Object.entries(inventory.capabilities ?? {})) {
   const groups = ['concepts', 'guides', 'reference', 'tests', 'sources', 'evidence'];
   coverage[id] = Object.fromEntries(groups.map(group => [group, capability[group]?.length ?? 0]));
+  for (const [group, required] of Object.entries(capability.required ?? {})) {
+    if (required === true && (capability[group]?.length ?? 0) === 0) {
+      failures.push(`${id}.${group}: required coverage is empty`);
+    }
+  }
   for (const group of ['concepts', 'guides', 'reference']) {
     for (const path of capability[group] ?? []) {
       if (!exists(`docs/v2.0.0/${path}`)) failures.push(`${id}.${group}: missing docs/v2.0.0/${path}`);
@@ -22,6 +27,15 @@ for (const [id, capability] of Object.entries(inventory.capabilities ?? {})) {
       if (!exists(path)) failures.push(`${id}.${group}: missing ${path}`);
     }
   }
+  for (const path of capability.evidence ?? []) {
+    if (!exists(path)) failures.push(`${id}.evidence: missing ${path}`);
+    if (path.endsWith('.png') && !exists(path.replace(/\.png$/, '.json'))) {
+      failures.push(`${id}.evidence: missing metadata ${path.replace(/\.png$/, '.json')}`);
+    }
+  }
+  if (!['discovered', 'partial', 'documented', 'certified'].includes(capability.status)) {
+    failures.push(`${id}.status: unsupported status ${capability.status}`);
+  }
 }
 
 if (failures.length) {
@@ -30,4 +44,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(JSON.stringify({ version: inventory.version, capabilities: coverage }, null, 2));
+console.log(JSON.stringify({ catalog: inventory.catalog, capabilities: coverage }, null, 2));
