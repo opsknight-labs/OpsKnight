@@ -5,7 +5,9 @@ type: reference
 product_area: platform
 audience: [developer, operator, administrator]
 verification:
-  level: draft
+  level: source
+  verified_at: 2026-09-27
+  evidence: [generated/docs-discovery/current.json]
 ---
 
 # Reference

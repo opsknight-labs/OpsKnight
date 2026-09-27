@@ -5,7 +5,9 @@ type: concept
 product_area: platform
 audience: [responder, administrator, operator]
 verification:
-  level: draft
+  level: source
+  verified_at: 2026-09-27
+  evidence: [docs/v2.0.0/capabilities.yaml]
 ---
 
 # Concepts
@@ -28,4 +30,3 @@ in [Guides](../guides/README.md); exact contracts belong in
 - [Analytics](./analytics)
 - [Authentication](./authentication)
 - [Permissions](./permissions)
-

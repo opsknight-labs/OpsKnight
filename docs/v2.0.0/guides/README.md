@@ -5,7 +5,9 @@ type: how-to
 product_area: platform
 audience: [responder, administrator]
 verification:
-  level: draft
+  level: source
+  verified_at: 2026-09-27
+  evidence: [docs/v2.0.0/capabilities.yaml]
 ---
 
 # Guides
@@ -16,4 +18,3 @@ test, current source/configuration, or a certified runtime journey.
 
 Browse by task area: incidents, on-call, escalation, notifications, ChatOps,
 status pages, identity, Jira, and administration.
-
