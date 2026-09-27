@@ -5,6 +5,10 @@ The machine-readable inventory is
 product capability to its concepts, task guides, reference contracts, tests,
 source evidence, generated runtime evidence, roles, and coverage status.
 
+The discovery artifact finds repository surfaces automatically. This curated map
+groups those surfaces into user-meaningful capabilities and declares which
+concept, guide, reference, test, and runtime-evidence layers are required.
+
 ## Status meanings
 
 - `discovered` — source evidence exists, but documentation coverage is not mapped.

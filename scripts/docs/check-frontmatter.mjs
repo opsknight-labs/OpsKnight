@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import YAML from 'yaml';
-import { filesUnder, readRepositoryFile } from './discovery-lib.mjs';
+import { exists, filesUnder, readRepositoryFile } from './discovery-lib.mjs';
 
 const allowedTypes = new Set(['tutorial', 'concept', 'how-to', 'reference', 'troubleshooting', 'deployment', 'integration', 'developer']);
 const allowedAudiences = new Set(['responder', 'administrator', 'operator', 'developer', 'viewer']);
@@ -28,6 +28,7 @@ for (const file of filesUnder('docs/v2.0.0', path => path.endsWith('.md'))) {
   } else if (verification.level !== 'draft') {
     if (!verification.verified_at) failures.push(`${file}: verified pages require verification.verified_at`);
     if (!Array.isArray(verification.evidence) || verification.evidence.length === 0) failures.push(`${file}: verified pages require verification.evidence`);
+    else for (const evidence of verification.evidence) if (!exists(evidence)) failures.push(`${file}: missing verification evidence ${evidence}`);
   }
 }
 

@@ -1,190 +1,267 @@
-version: 2.0.0
-authority_order:
-  - runtime
-  - tests
-  - source
-  - historical_docs
+catalog: current
+authority_order: [runtime, tests, source, historical_docs]
 capabilities:
   incident_lifecycle:
     title: Manage the incident lifecycle
     product_area: incidents
-    concepts:
-      - concepts/incidents.md
-      - concepts/incident-response.md
-      - concepts/incident-sla.md
-    guides: []
-    reference: []
-    tests:
-      - tests/lib/incidents/lifecycle.test.ts
-    sources:
-      - src/lib/incidents/lifecycle.ts
-      - src/app/(app)/incidents/actions.ts
+    status: documented
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    concepts: [concepts/incidents.md, concepts/incident-response.md, concepts/incident-sla.md]
+    guides: [guides/incidents/create.md, guides/incidents/acknowledge.md, guides/incidents/assign.md, guides/incidents/escalate.md, guides/incidents/resolve.md]
+    reference: [reference/api/README.md]
+    tests: [tests/docs/journeys/incident-lifecycle.spec.ts, tests/lib/incidents/lifecycle.test.ts]
+    sources: [src/lib/incidents/lifecycle.ts, src/app/(app)/incidents/actions.ts]
     evidence: []
     roles: [responder, administrator]
-    status: partial
-  incident_acknowledgement:
-    title: Acknowledge an incident
-    product_area: incidents
-    concepts:
-      - concepts/incident-response.md
-      - concepts/incident-sla.md
-    guides: []
-    reference: []
-    tests: []
-    sources:
-      - src/components/incident/IncidentDetailScreen.tsx
-      - src/app/(app)/incidents/actions.ts
-    evidence: []
-    roles: [responder, administrator]
-    status: partial
-  services:
-    title: Organize operational services
+  services_and_teams:
+    title: Organize services and ownership teams
     product_area: services
-    concepts:
-      - concepts/services.md
+    status: documented
+    required: { concepts: true, guides: false, reference: true, tests: true, evidence: false }
+    concepts: [concepts/services.md, concepts/teams.md]
     guides: []
-    reference: []
-    tests: []
-    sources:
-      - src/app/(app)/services
+    reference: [reference/api/README.md]
+    tests: [tests/lib/authorization-filters.test.ts]
+    sources: [src/app/(app)/services, src/app/(app)/teams]
     evidence: []
-    roles: [administrator, responder]
-    status: partial
-  teams:
-    title: Manage operational teams
-    product_area: teams
-    concepts:
-      - concepts/teams.md
-    guides: []
-    reference: []
-    tests: []
-    sources:
-      - src/app/(app)/teams
-    evidence: []
-    roles: [administrator]
-    status: partial
-  on_call_schedules:
-    title: Build an on-call schedule
+    roles: [responder, administrator]
+  on_call:
+    title: Build schedules and temporary overrides
     product_area: on-call
-    concepts:
-      - concepts/schedules.md
-    guides: []
-    reference: []
-    tests: []
-    sources:
-      - src/lib/schedules
+    status: documented
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    concepts: [concepts/schedules.md]
+    guides: [guides/on-call/build-schedule.md, guides/on-call/overrides.md]
+    reference: [reference/api/README.md]
+    tests: [tests/integration/schedule-assignment-concurrency.test.ts]
+    sources: [src/lib/schedules]
     evidence: []
-    roles: [administrator, responder]
-    status: partial
-  escalation_policies:
-    title: Configure escalation policies
+    roles: [responder, administrator]
+  escalation:
+    title: Configure and execute escalation policies
     product_area: escalation
-    concepts:
-      - concepts/escalation-policies.md
+    status: documented
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    concepts: [concepts/escalation-policies.md]
+    guides: [guides/escalation/configure-policy.md, guides/incidents/escalate.md]
+    reference: [reference/api/README.md]
+    tests: [tests/integration/escalation-lifecycle-invariant.test.ts]
+    sources: [src/lib/escalation]
+    evidence: []
+    roles: [responder, administrator]
+  notifications:
+    title: Route and inspect multi-channel notifications
+    product_area: notifications
+    status: documented
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    concepts: [concepts/notifications.md]
+    guides: [guides/notifications/configure-routing.md, guides/notifications/inspect-delivery.md]
+    reference: [reference/api/README.md]
+    tests: [tests/integration/notification-flow.test.ts, tests/integration/notification-policy-outcomes.test.ts]
+    sources: [src/lib/user-notifications.ts, src/lib/notification-providers.ts]
+    evidence: []
+    roles: [responder, administrator, operator]
+  status_pages:
+    title: Publish scoped service status
+    product_area: status-pages
+    status: documented
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    concepts: [concepts/status-pages.md]
+    guides: [guides/status-pages/publish-update.md]
+    reference: [reference/api/README.md]
+    tests: [tests/integration/status-page-publication.test.ts, tests/integration/status-page-privacy-matrix.test.ts]
+    sources: [src/lib/status-page-projection.ts, src/lib/status-page-public-data.ts]
+    evidence: []
+    roles: [responder, administrator]
+  chatops:
+    title: Coordinate incidents in Slack and Microsoft Teams
+    product_area: chatops
+    status: documented
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    concepts: [concepts/chatops.md]
+    guides: [guides/chatops/create-war-room.md]
+    reference: [integrations/communication/slack.md, integrations/communication/microsoft-teams.md]
+    tests: [tests/architecture/war-room-provider-neutral-contract.test.ts]
+    sources: [src/lib/war-room]
+    evidence: []
+    roles: [responder, administrator]
+  inbound_integrations:
+    title: Ingest provider webhook events
+    product_area: integrations
+    status: documented
+    required: { concepts: false, guides: false, reference: true, tests: true, evidence: false }
+    concepts: []
     guides: []
-    reference: []
-    tests: []
-    sources:
-      - src/lib/escalation
+    reference: [integrations/README.md, integrations/catalog.yaml]
+    tests: [tests/integration/event-resilience.test.ts, tests/integration/event-dedup-semantics.test.ts]
+    sources: [src/lib/integrations, src/app/api/integrations]
+    evidence: []
+    roles: [administrator, operator]
+  jira:
+    title: Link incident work to Jira
+    product_area: jira
+    status: documented
+    required: { concepts: false, guides: true, reference: true, tests: true, evidence: false }
+    concepts: []
+    guides: [guides/jira/connect-jira.md]
+    reference: [integrations/issue-tracking/jira.md]
+    tests: [tests/unit/jira-issue-creation.test.ts, tests/architecture/jira-enterprise-hardening-contract.test.ts]
+    sources: [src/lib/jira-sync.ts, src/app/api/jira/webhook/route.ts]
+    evidence: []
+    roles: [responder, administrator]
+  oidc:
+    title: Authenticate through OpenID Connect
+    product_area: identity
+    status: documented
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    concepts: [concepts/authentication.md]
+    guides: [guides/identity/configure-oidc.md]
+    reference: [reference/configuration/README.md]
+    tests: [tests/lib/oidc-provider.test.ts, tests/lib/oidc-validation-provider-matrix.test.ts]
+    sources: [src/lib/oidc.ts]
+    evidence: []
+    roles: [administrator, operator]
+  scim:
+    title: Provision users through SCIM
+    product_area: identity
+    status: documented
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    concepts: [concepts/authentication.md]
+    guides: [guides/identity/configure-scim.md]
+    reference: [reference/api/README.md]
+    tests: [tests/api/scim-users.test.ts, tests/lib/scim.test.ts]
+    sources: [src/app/api/scim/v2/Users]
+    evidence: []
+    roles: [administrator, operator]
+  authorization:
+    title: Enforce roles, capabilities, and resource scope
+    product_area: authorization
+    status: documented
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    concepts: [concepts/permissions.md]
+    guides: [guides/administration/manage-permissions.md]
+    reference: [reference/permissions.md]
+    tests: [tests/lib/authorization-policy.test.ts, tests/lib/authorization-filters.test.ts]
+    sources: [src/lib/authorization.ts, src/lib/rbac.ts]
+    evidence: []
+    roles: [administrator, operator]
+  user_administration:
+    title: Manage user lifecycle and ownership
+    product_area: users
+    status: documented
+    required: { concepts: false, guides: true, reference: true, tests: true, evidence: false }
+    concepts: []
+    guides: [guides/administration/manage-users.md]
+    reference: [reference/api/README.md]
+    tests: [tests/lib/user-deletion.test.ts]
+    sources: [src/lib/users]
     evidence: []
     roles: [administrator]
-    status: partial
-  notification_delivery:
-    title: Route and inspect notifications
-    product_area: notifications
-    concepts:
-      - concepts/notifications.md
+  analytics_and_reports:
+    title: Analyze incident and service performance
+    product_area: analytics
+    status: documented
+    required: { concepts: true, guides: false, reference: true, tests: true, evidence: false }
+    concepts: [concepts/analytics.md]
     guides: []
-    reference: []
-    tests: []
-    sources:
-      - src/lib/notification-providers.ts
-      - src/lib/user-notifications.ts
+    reference: [reference/api/README.md, reference/metrics.md]
+    tests: [tests/unit/analytics-panels.test.ts, tests/api/reports-metrics-response.test.ts]
+    sources: [src/app/(app)/analytics, src/lib/reports]
     evidence: []
-    roles: [administrator, responder, operator]
-    status: partial
-  chatops_war_rooms:
-    title: Coordinate through provider-backed war rooms
-    product_area: chatops
-    concepts:
-      - concepts/chatops.md
+    roles: [responder, administrator]
+  postmortems:
+    title: Learn from resolved incidents
+    product_area: postmortems
+    status: documented
+    required: { concepts: true, guides: false, reference: true, tests: true, evidence: false }
+    concepts: [concepts/postmortems.md, concepts/postmortem-workflow.md]
     guides: []
-    reference: []
-    tests: []
-    sources:
-      - src/lib/war-room
+    reference: [reference/api/README.md]
+    tests: [tests/components/jira-postmortem-consistency.test.tsx]
+    sources: [src/app/(app)/postmortems, src/lib/action-items.ts]
     evidence: []
-    roles: [administrator, responder]
-    status: partial
-  status_pages:
-    title: Publish service status
-    product_area: status-pages
-    concepts:
-      - concepts/status-pages.md
+    roles: [responder, administrator]
+  privacy:
+    title: Process privacy requests and retention holds
+    product_area: privacy
+    status: documented
+    required: { concepts: true, guides: false, reference: true, tests: true, evidence: false }
+    concepts: [concepts/privacy.md]
     guides: []
-    reference: []
-    tests: []
-    sources:
-      - src/lib/status-page-projection.ts
-      - src/lib/status-page-public-data.ts
-    evidence: []
-    roles: [administrator, responder]
-    status: partial
-  authentication:
-    title: Authenticate users
-    product_area: identity
-    concepts:
-      - concepts/authentication.md
-    guides: []
-    reference: []
-    tests: []
-    sources:
-      - src/lib/auth.ts
-      - src/lib/oidc.ts
+    reference: [reference/api/README.md]
+    tests: [tests/integration/privacy-verification-lifecycle.test.ts, tests/integration/privacy-erasure-concurrency.test.ts]
+    sources: [src/lib/privacy, src/lib/retention-policy.ts]
     evidence: []
     roles: [administrator, operator]
-    status: partial
-  authorization:
-    title: Enforce role and scope permissions
-    product_area: authorization
-    concepts:
-      - concepts/permissions.md
+  compliance:
+    title: Evaluate controls and export compliance evidence
+    product_area: compliance
+    status: documented
+    required: { concepts: true, guides: false, reference: true, tests: true, evidence: false }
+    concepts: [concepts/compliance.md]
     guides: []
-    reference: []
-    tests: []
-    sources:
-      - src/lib/authorization.ts
-      - src/lib/rbac.ts
+    reference: [reference/api/README.md]
+    tests: [tests/integration/compliance-runtime-evaluation.test.ts, tests/integration/compliance-evidence-export.test.ts]
+    sources: [src/lib/compliance, docs/compliance]
     evidence: []
     roles: [administrator, operator]
-    status: partial
+  mobile:
+    title: Respond through mobile and progressive web routes
+    product_area: mobile
+    status: documented
+    required: { concepts: true, guides: false, reference: false, tests: true, evidence: false }
+    concepts: [concepts/mobile.md]
+    guides: []
+    reference: []
+    tests: [tests/e2e/mobile-pwa.spec.ts, tests/e2e/mobile-responsive-matrix.spec.ts]
+    sources: [src/app/(mobile)]
+    evidence: []
+    roles: [responder, administrator]
   deployment:
-    title: Deploy OpsKnight
+    title: Deploy integrated and split runtimes
     product_area: deployment
+    status: documented
+    required: { concepts: false, guides: true, reference: true, tests: true, evidence: false }
     concepts: []
-    guides:
-      - start/quickstart.md
-      - start/production-install.md
-    reference: []
-    tests: []
-    sources:
-      - deploy/compose/docker-compose.yml
-      - deploy/kubernetes/helm
-      - deploy/kubernetes/kustomize
+    guides: [start/quickstart.md, start/production-install.md, operate/deploy/compose.md, operate/deploy/kubernetes.md, operate/deploy/split-runtime.md]
+    reference: [reference/configuration/README.md, reference/health.md]
+    tests: [tests/lib/deployment-config-unit.test.ts]
+    sources: [deploy/compose, deploy/kubernetes]
     evidence: []
     roles: [operator, administrator]
-    status: partial
+  observability:
+    title: Monitor health, metrics, and runtime capacity
+    product_area: observability
+    status: documented
+    required: { concepts: false, guides: true, reference: true, tests: true, evidence: false }
+    concepts: []
+    guides: [operate/reliability/health-and-metrics.md, operate/reliability/scaling.md]
+    reference: [reference/health.md, reference/metrics.md]
+    tests: [tests/api/metrics.test.ts, tests/lib/admin-health.test.ts]
+    sources: [src/app/api/health, src/app/api/metrics, src/lib/runtime-capacity.ts]
+    evidence: []
+    roles: [operator]
+  data_protection:
+    title: Back up and restore operational data
+    product_area: data
+    status: documented
+    required: { concepts: false, guides: true, reference: false, tests: true, evidence: false }
+    concepts: []
+    guides: [operate/data/backup-and-restore.md]
+    reference: []
+    tests: [tests/lib/deployment-config-unit.test.ts]
+    sources: [deploy/scripts/drills/verify-backup-restore.sh, prisma/schema.prisma]
+    evidence: []
+    roles: [operator]
   upgrades:
-    title: Upgrade from OpsKnight 1.x
+    title: Upgrade and roll back safely
     product_area: upgrades
+    status: documented
+    required: { concepts: false, guides: true, reference: true, tests: true, evidence: false }
     concepts: []
-    guides:
-      - start/migrate-from-v1.md
-    reference: []
-    tests: []
-    sources:
-      - prisma/migrations
-      - scripts/validate-release-tag.cjs
+    guides: [start/migrate-from-v1.md, operate/upgrades/upgrade.md, operate/upgrades/rollback.md]
+    reference: [reference/configuration/README.md]
+    tests: [tests/unit/migration-recovery.test.ts]
+    sources: [prisma/migrations, scripts/validate-migrations.cjs]
     evidence: []
     roles: [operator, administrator]
-    status: partial
