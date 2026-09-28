@@ -20,10 +20,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-opsknight_db}
     volumes:
       - opsknight-db-data:/var/lib/postgresql/data
-    ports:
-      - target: 5432
-        published: ${POSTGRES_PORT:-5432}
-        protocol: tcp
     healthcheck:
       test:
         [

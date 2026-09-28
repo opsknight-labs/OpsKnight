@@ -59,6 +59,15 @@ verify_fix.ts
 /reports/
 /ci-artifacts/
 
+# load testing raw telemetry
+artifacts/load-certification/**/*.json
+!artifacts/load-certification/certification-summary.json
+artifacts/load-certification/**/*.jsonl
+artifacts/load-certification/**/*.log
+artifacts/load-test-25m/
+artifacts/single-image-test-10m/
+artifacts/soak-test/
+
 # debug API routes
 /src/app/api/debug/
 

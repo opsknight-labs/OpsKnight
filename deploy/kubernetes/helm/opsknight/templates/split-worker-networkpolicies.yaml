@@ -50,17 +50,13 @@ spec:
         - protocol: TCP
           port: 443
         - protocol: TCP
-          port: 80
-        - protocol: TCP
-          port: 8086
-        - protocol: TCP
-          port: 8088
-        - protocol: TCP
-          port: 2525
-        - protocol: TCP
           port: 587
         - protocol: TCP
           port: 25
+        {{- range $root.Values.networkPolicy.additionalEgressPorts }}
+        - protocol: TCP
+          port: {{ . | int }}
+        {{- end }}
 ---
 {{- end }}
 {{- end }}

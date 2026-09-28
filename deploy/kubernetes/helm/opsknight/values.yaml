@@ -234,6 +234,8 @@ networkPolicy:
   # CIDRs. An empty list preserves broad compatibility; production should set
   # the documented provider ranges.
   externalDatabaseCIDRs: []
+  # Optional list of additional TCP egress ports (e.g. custom notification relays or test emulators)
+  additionalEgressPorts: []
 
 config:
   nodeEnv: production

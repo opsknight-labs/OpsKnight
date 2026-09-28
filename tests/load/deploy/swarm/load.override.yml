@@ -1,0 +1,32 @@
+version: '3.8'
+
+# Test-only Swarm overlay for load certification
+# Injects test allowlist for downstream provider emulators without modifying production stack definitions.
+services:
+  opsknight-app:
+    environment:
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator
+
+  opsknight-web:
+    environment:
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator
+
+  opsknight-scheduler:
+    environment:
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator
+
+  opsknight-general-worker:
+    environment:
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator
+
+  opsknight-critical-worker:
+    environment:
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator
+
+  opsknight-bulk-worker:
+    environment:
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator
+
+  opsknight-status-projector:
+    environment:
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator

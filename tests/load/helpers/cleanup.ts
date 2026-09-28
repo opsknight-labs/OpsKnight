@@ -54,11 +54,11 @@ export async function runLoadCleanup(options?: {
     // 1. Atomically delete background jobs, notifications, alerts, and incidents in dependency order
     const [
       deletedBackgroundJobs,
-      deletedAttempts,
+      _deletedAttempts,
       deletedNotifications,
       ,
-      deletedEvents,
-      deletedNotes,
+      _deletedEvents,
+      _deletedNotes,
       deletedAlerts,
       deletedIncidents,
     ] = await prisma.$transaction([

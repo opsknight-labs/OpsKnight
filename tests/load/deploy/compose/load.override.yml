@@ -1,0 +1,46 @@
+version: '3.8'
+
+# Test-only compose overlay for load certification
+# Injects test signing secrets and allows SSRF exemptions to the local provider emulator.
+services:
+  opsknight-app:
+    environment:
+      NEXTAUTH_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      API_KEY_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator
+
+  opsknight-web:
+    environment:
+      NEXTAUTH_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      API_KEY_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator
+
+  opsknight-scheduler:
+    environment:
+      NEXTAUTH_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      API_KEY_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator
+
+  opsknight-general-worker:
+    environment:
+      NEXTAUTH_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      API_KEY_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator
+
+  opsknight-critical-worker:
+    environment:
+      NEXTAUTH_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      API_KEY_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator
+
+  opsknight-bulk-worker:
+    environment:
+      NEXTAUTH_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      API_KEY_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator
+
+  opsknight-status-projector:
+    environment:
+      NEXTAUTH_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      API_KEY_SECRET: load_cert_nextauth_secret_32_bytes_minimum_value_0123456789
+      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1,opsknight-emulator

@@ -427,6 +427,10 @@ if [ -n "${PGBOUNCER_TLS_CA_CERT:-}" ] && [ -f "${PGBOUNCER_TLS_CA_CERT}" ]; the
   fi
 fi
 
+if [ -n "${SWARM_EXTRA_STACK_FILE:-}" ] && [ -f "${SWARM_EXTRA_STACK_FILE}" ]; then
+  STACK_FILES+=("-c" "${SWARM_EXTRA_STACK_FILE}")
+fi
+
 DEPLOY_OPTS=("--with-registry-auth")
 if [ "${SWARM_RESOLVE_IMAGE_NEVER:-}" = "true" ] || [[ "${OPSKNIGHT_IMAGE:-}" == *local* ]]; then
   DEPLOY_OPTS+=("--resolve-image=never")

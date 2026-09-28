@@ -45,6 +45,15 @@
             "type": "string",
             "pattern": "^[0-9A-Fa-f:.]+/[0-9]{1,3}$"
           }
+        },
+        "additionalEgressPorts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          }
         }
       }
     },

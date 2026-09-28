@@ -35,7 +35,6 @@ services:
       DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
       NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
       ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
-      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: ${OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS:-}
     secrets:
       - source: opsknight_database_url
         target: /run/secrets/opsknight_database_url
@@ -105,7 +104,6 @@ services:
       DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
       NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
       ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
-      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: ${OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS:-}
     secrets:
       - source: opsknight_database_url
         target: /run/secrets/opsknight_database_url
@@ -174,7 +172,6 @@ services:
       DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
       NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
       ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
-      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: ${OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS:-}
     secrets:
       - source: opsknight_database_url
         target: /run/secrets/opsknight_database_url
@@ -243,7 +240,6 @@ services:
       DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
       NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
       ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
-      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: ${OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS:-}
     secrets:
       - source: opsknight_database_url
         target: /run/secrets/opsknight_database_url
@@ -312,7 +308,6 @@ services:
       DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
       NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
       ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
-      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: ${OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS:-}
     secrets:
       - source: opsknight_database_url
         target: /run/secrets/opsknight_database_url
@@ -381,7 +376,6 @@ services:
       DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
       NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
       ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
-      OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: ${OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS:-}
     secrets:
       - source: opsknight_database_url
         target: /run/secrets/opsknight_database_url

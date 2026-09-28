@@ -1,8 +1,19 @@
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
 
-export const TRANSACTION_MAX_ATTEMPTS = 5;
-export const TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD = 8;
+export const TRANSACTION_MAX_ATTEMPTS = Number(
+  process.env.OPSKNIGHT_TX_MAX_ATTEMPTS ?? 3
+);
+export const TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD = Number(
+  process.env.OPSKNIGHT_TX_MAX_ATTEMPTS_HIGH_LOAD ?? 5
+);
+
+const TRANSACTION_TIMEOUT_MS = Number(
+  process.env.OPSKNIGHT_TX_TIMEOUT_MS ?? 10000
+);
+const TRANSACTION_MAX_WAIT_MS = Number(
+  process.env.OPSKNIGHT_TX_MAX_WAIT_MS ?? 2000
+);
 
 // Exponential backoff delays for retries (ms)
 const RETRY_DELAYS = [20, 50, 100, 200, 400];
@@ -60,8 +71,8 @@ export async function runSerializableTransaction<T>(
     try {
       return await prisma.$transaction(tx => operation(tx), {
         isolationLevel: 'Serializable',
-        timeout: 15000,
-        maxWait: 10000,
+        timeout: TRANSACTION_TIMEOUT_MS,
+        maxWait: TRANSACTION_MAX_WAIT_MS,
       });
     } catch (error) {
       if (attempt < maxAttempts - 1 && isRetryableTransactionError(error)) {
@@ -92,8 +103,8 @@ export async function runReadCommittedTransaction<T>(
     try {
       return await prisma.$transaction(tx => operation(tx), {
         isolationLevel: 'ReadCommitted',
-        timeout: 15000,
-        maxWait: 10000,
+        timeout: TRANSACTION_TIMEOUT_MS,
+        maxWait: TRANSACTION_MAX_WAIT_MS,
       });
     } catch (error) {
       if (attempt < maxAttempts - 1 && isRetryableTransactionError(error)) {
