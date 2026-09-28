@@ -26,7 +26,7 @@ services:
       DATABASE_URL: postgresql://opsknight_docs:opsknight_docs@opsknight-db:5432/opsknight_docs?schema=public
       DIRECT_DATABASE_URL: postgresql://opsknight_docs:opsknight_docs@opsknight-db:5432/opsknight_docs?schema=public
       NEXTAUTH_URL: http://localhost:13200
-      NEXT_PUBLIC_APP_URL: http://localhost:13200
+      NEXT_PUBLIC_APP_URL: https://ops.northstar.example
       NEXTAUTH_SECRET: docs-runtime-only-nextauth-secret
       ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
       NEXTAUTH_COOKIE_SECURE: 'false'
