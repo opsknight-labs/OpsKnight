@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-28T03:28:12.974Z",
-  "sourceRevision": "cbd1d8c535d108e104e8b22c8a45a4ea21c47881",
+  "generatedAt": "2026-09-28T03:36:12.067Z",
+  "sourceRevision": "d51e2f71eb746f8b128d80f4b97146761e28f2f2",
   "releaseState": "upcoming",
   "checks": {
     "frontmatter": "passed",
