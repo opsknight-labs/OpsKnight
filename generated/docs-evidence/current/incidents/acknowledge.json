@@ -1,17 +1,17 @@
 {
   "release": "current",
-  "sourceRevision": "3f63aa16031bec6d4bac45e54cd2135ad5ed3aad",
+  "sourceRevision": "ea87f1def686b85132977847adfdb0cfce1732cb",
   "runtime": {
     "requestedImage": "opsknight-docs-v2@sha256:4666672ba9ee0af4528d3c4820da282cb0c4cb4a3b5209833c5144eb2560a81e",
     "digest": "opsknight-docs-v2@sha256:4666672ba9ee0af4528d3c4820da282cb0c4cb4a3b5209833c5144eb2560a81e",
     "sourceRevision": "c361c6277983d511d906aaf6aee723a4891dcca0"
   },
-  "route": "/incidents/cmul9h2xx0032u2klnaqfltv3",
+  "route": "/incidents/cmulb0fbd00325pu1dnwf9vsy",
   "journey": "incidents",
   "browser": "docs-chromium",
   "viewport": {
     "width": 1440,
     "height": 900
   },
-  "capturedAt": "2026-09-28T13:06:29.454Z"
+  "capturedAt": "2026-09-28T13:49:31.894Z"
 }
