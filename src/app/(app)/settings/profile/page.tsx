@@ -59,6 +59,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
           lastOidcSync: true,
           emailNotificationsEnabled: true,
           smsNotificationsEnabled: true,
+          voiceNotificationsEnabled: true,
           pushNotificationsEnabled: true,
           whatsappNotificationsEnabled: true,
           phoneNumber: true,
@@ -142,6 +143,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
   const activeChannelsCount = [
     user?.emailNotificationsEnabled ?? false,
     (user?.smsNotificationsEnabled ?? false) && !!user?.phoneNumber,
+    (user?.voiceNotificationsEnabled ?? false) && !!user?.phoneNumber,
     (user?.whatsappNotificationsEnabled ?? false) && !!user?.phoneNumber,
     user?.pushNotificationsEnabled ?? false,
   ].filter(Boolean).length;
@@ -226,6 +228,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
           <NotificationPreferencesForm
             emailEnabled={user?.emailNotificationsEnabled ?? false}
             smsEnabled={user?.smsNotificationsEnabled ?? false}
+            voiceEnabled={user?.voiceNotificationsEnabled ?? false}
             pushEnabled={user?.pushNotificationsEnabled ?? false}
             whatsappEnabled={user?.whatsappNotificationsEnabled ?? false}
             phoneNumber={user?.phoneNumber ?? null}
@@ -246,7 +249,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
             {/* Quiet Hours */}
             <SettingsSection
               title="Quiet Hours"
-              description="Silence low-urgency notifications (SMS, Push, WhatsApp) during your resting schedule"
+              description="Silence low-urgency notifications (SMS, Voice, Push, WhatsApp) during your resting schedule"
               footer={
                 <p className="text-xs text-muted-foreground flex items-center gap-2">
                   <Flame className="h-3.5 w-3.5 text-amber-500 shrink-0" />

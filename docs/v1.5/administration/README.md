@@ -42,10 +42,11 @@ User, team, service, schedule, escalation-policy, and API-key operations are als
 | SMS           | Twilio.                                                 |
 | Mobile push   | Standard Web Push/PWA with VAPID.                       |
 | WhatsApp      | Twilio WhatsApp Business.                               |
+| Voice         | Twilio outbound incident paging with DTMF ACK.          |
 | Slack         | Slack workspace/OAuth and service configuration.        |
 | External HTTP | Service or status-page webhooks, depending on audience. |
 
-Twilio and AWS SNS are the v1.4 SMS choices. FCM and OneSignal are not the v1.4 push-provider model. There is no native voice/PSTN channel.
+Twilio and AWS SNS are the SMS choices. Twilio provides Voice (PSTN) paging. FCM and OneSignal are not the push-provider model.
 
 ## Administrator safety rules
 

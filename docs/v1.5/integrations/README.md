@@ -8,13 +8,13 @@ order: 4
 
 OpsKnight integrations have three distinct directions:
 
-| Direction             | Purpose                                                                                     | Examples                                              |
-| --------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Inbound               | Normalize a provider webhook into trigger, acknowledge, or resolve actions for one service. | CloudWatch, Datadog, Prometheus, CI/CD, uptime tools. |
-| Outbound notification | Deliver incident and escalation messages to responders or external endpoints.               | Email, SMS, push, WhatsApp, Slack, service webhooks.  |
-| Workflow              | Connect incident response to another working surface.                                       | Slack ChatOps war rooms and Jira issues/action items. |
+| Direction             | Purpose                                                                                     | Examples                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Inbound               | Normalize a provider webhook into trigger, acknowledge, or resolve actions for one service. | CloudWatch, Datadog, Prometheus, CI/CD, uptime tools.              |
+| Outbound notification | Deliver incident and escalation messages to responders or external endpoints.               | Email, Voice (PSTN), SMS, push, WhatsApp, Slack, service webhooks. |
+| Workflow              | Connect incident response to another working surface.                                       | Slack ChatOps war rooms and Jira issues/action items.              |
 
-There is no native voice/PSTN notification channel in v1.5. PagerDuty support is inbound Events API v2 compatibility, not a full PagerDuty product or bidirectional synchronization.
+Voice (PSTN) paging is supported via Twilio. PagerDuty support is inbound Events API v2 compatibility, not a full PagerDuty product or bidirectional synchronization.
 
 ## Start here
 

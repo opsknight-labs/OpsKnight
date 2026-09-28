@@ -26,7 +26,7 @@ import {
   CardDescription,
 } from '@/components/ui/shadcn/card';
 import EmptyState from '@/components/ui/EmptyState';
-import { Clock, Plus, ShieldAlert } from 'lucide-react';
+import { Clock, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-product-notification';
 import PolicyStepCreateForm from '@/components/PolicyStepCreateForm';
 
@@ -52,6 +52,7 @@ type EscalationStep = {
   } | null;
   targetSchedule: { id: string; name: string } | null;
   notifyOnlyTeamLead: boolean;
+  notificationChannels: string[];
   conditions?: import('./EscalationConditionsEditor').EditableEscalationCondition[];
 };
 

@@ -11,8 +11,10 @@ import prisma from './prisma';
 export const OPERATIONS_CHANNELS = [
   'EMAIL',
   'SMS',
+  'VOICE',
   'PUSH',
   'SLACK',
+  'MICROSOFT_TEAMS',
   'WEBHOOK',
   'WHATSAPP',
 ] as const satisfies readonly NotificationChannel[];

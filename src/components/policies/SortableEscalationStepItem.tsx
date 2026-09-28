@@ -27,6 +27,7 @@ type EscalationStep = {
   } | null;
   targetSchedule: { id: string; name: string } | null;
   notifyOnlyTeamLead: boolean;
+  notificationChannels: string[];
   conditions?: import('./EscalationConditionsEditor').EditableEscalationCondition[];
 };
 

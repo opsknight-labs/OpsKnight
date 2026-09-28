@@ -40,7 +40,7 @@ describe('quiet-hours notification policy', () => {
     );
 
     expect(result.channels).toEqual(['EMAIL']);
-    expect(result.blockedChannels).toEqual(new Set(['PUSH', 'SMS', 'WHATSAPP']));
+    expect(result.blockedChannels).toEqual(new Set(['PUSH', 'SMS', 'VOICE', 'WHATSAPP']));
   });
 
   it('allows MEDIUM and HIGH urgency to bypass quiet hours', () => {

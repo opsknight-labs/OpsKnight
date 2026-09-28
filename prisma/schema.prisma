@@ -164,6 +164,7 @@ enum InboundDeliveryStatus {
 enum NotificationChannel {
   EMAIL
   SMS
+  VOICE
   PUSH
   SLACK
   WEBHOOK
@@ -462,6 +463,7 @@ model User {
   timeZone                     String     @default("UTC")
   emailNotificationsEnabled    Boolean    @default(false)
   smsNotificationsEnabled      Boolean    @default(false)
+  voiceNotificationsEnabled    Boolean    @default(false)
   pushNotificationsEnabled     Boolean    @default(false)
   whatsappNotificationsEnabled Boolean    @default(false)
   phoneNumber                  String?
@@ -1773,6 +1775,13 @@ model NotificationDeliveryAttempt {
   @@unique([notificationId, ordinal])
   @@index([notificationId, startedAt])
   @@index([outcome, startedAt])
+  // Two additional partial indexes are managed as raw SQL (Prisma 5.x cannot express
+  // WHERE predicates in @@index declarations). They are applied via migration
+  // 20260927120200_add_voice_attempt_indexes/migration.sql using CREATE INDEX CONCURRENTLY:
+  //   idx_attempt_open_voice      — (notificationId, outcome) WHERE finishedAt IS NULL
+  //   idx_attempt_provider_msg_id — (providerMessageId) WHERE providerMessageId IS NOT NULL
+  // Do NOT add @@index entries for these here; doing so would generate a conflicting
+  // prisma migrate diff that drops the partial indexes and recreates them as full ones.
 }
 
 model NotificationProviderFeedback {

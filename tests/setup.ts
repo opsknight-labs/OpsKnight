@@ -152,7 +152,8 @@ vi.mock('@/lib/prisma', async importOriginal => {
 });
 
 // Mock Twilio globally for dynamic requires
-vi.mock('twilio', () => {
+vi.mock('twilio', async importOriginal => {
+  const actual = await importOriginal<any>();
   const mockCreate = vi.fn().mockResolvedValue({ sid: 'mock-sid' });
   const mockClient = {
     messages: {
@@ -160,7 +161,9 @@ vi.mock('twilio', () => {
     },
   };
   const mockFunc = vi.fn(() => mockClient);
+  Object.assign(mockFunc, actual);
   return {
+    ...actual,
     default: mockFunc,
     __esModule: true,
   };

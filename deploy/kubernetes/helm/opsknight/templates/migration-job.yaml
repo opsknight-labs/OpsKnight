@@ -39,6 +39,9 @@ spec:
               if [ -f "scripts/create-status-platform-online-indexes.cjs" ]; then
                 node scripts/create-status-platform-online-indexes.cjs
               fi
+              if [ -f "scripts/create-voice-attempt-online-indexes.cjs" ]; then
+                node scripts/create-voice-attempt-online-indexes.cjs
+              fi
               echo "Migration Job completed successfully."
           env:
             - name: DATABASE_URL

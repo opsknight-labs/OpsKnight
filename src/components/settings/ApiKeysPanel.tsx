@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useMemo } from 'react';
 import { useFormStatus } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { createApiKey, revokeApiKey } from '@/app/(app)/settings/actions';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -39,10 +40,19 @@ import {
 } from '@/components/ui/shadcn/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/shadcn/tabs';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { EmptyState } from './feedback/EmptyState';
 import CopyButton from './CopyButton';
-import ConfirmDialog from './ConfirmDialog';
 import {
   Key,
   CheckCircle2,
@@ -171,8 +181,11 @@ export default function ApiKeysPanel({
     token: null,
   });
 
+  const router = useRouter();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [revokeKeyId, setRevokeKeyId] = useState<string | null>(null);
+  const [isRevoking, setIsRevoking] = useState(false);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'REVOKED' | 'EXPIRED'>('ALL');
 
@@ -181,11 +194,20 @@ export default function ApiKeysPanel({
     : SCOPES_CONFIG.filter(scope => !scope.value.endsWith(':write'));
 
   const handleRevoke = async (keyId: string) => {
-    const formData = new FormData();
-    formData.append('keyId', keyId);
-    await revokeApiKey(formData);
-    setRevokeKeyId(null);
-    window.location.reload();
+    setIsRevoking(true);
+    setRevokeError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('keyId', keyId);
+      await revokeApiKey(formData);
+      setRevokeKeyId(null);
+      router.refresh();
+    } catch (error) {
+      setRevokeError(error instanceof Error ? error.message : 'Unable to revoke API key.');
+    } finally {
+      setIsRevoking(false);
+    }
   };
 
   // Filtered keys
@@ -665,13 +687,16 @@ print(response.json()["incidents"])`}
 
       {/* 5. Create API Key Modal Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="w-[calc(100%-2rem)] max-h-[90vh] overflow-x-hidden overflow-y-auto sm:w-[94vw]"
+          style={{ maxWidth: '72rem' }}
+        >
           <DialogHeader>
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
                 <Key className="h-5 w-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <DialogTitle className="text-base font-bold">Generate New API Key</DialogTitle>
                 <DialogDescription className="text-xs">
                   Create programmatic credentials to ingest events or query OpsKnight resources.
@@ -694,7 +719,7 @@ print(response.json()["incidents"])`}
               </Alert>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid min-w-0 gap-4 md:grid-cols-2">
               {/* Key Name */}
               <div className="space-y-1.5">
                 <Label htmlFor="modal-key-name" className="text-xs font-semibold">
@@ -744,38 +769,36 @@ print(response.json()["incidents"])`}
                 </p>
               </div>
 
-              <div className="grid gap-2.5 sm:grid-cols-2">
+              <div className="grid min-w-0 gap-2.5 xl:grid-cols-2">
                 {visibleScopes.map(scope => {
                   const Icon = scope.icon;
                   return (
                     <div
                       key={scope.value}
-                      className="flex items-start gap-2.5 rounded-xl border border-border/80 bg-background p-3 hover:border-primary/40 hover:bg-accent/30 transition-all text-xs"
+                      className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border border-border/80 bg-background p-3.5 text-xs transition-all hover:border-primary/40 hover:bg-accent/30"
                     >
                       <Checkbox
                         name="scopes"
                         value={scope.value}
                         defaultChecked={scope.defaultChecked}
                         id={`scope-${scope.value}`}
-                        className="mt-0.5"
+                        className="mt-0.5 shrink-0"
                       />
-                      <div className="flex-1 space-y-1">
-                        <label
-                          htmlFor={`scope-${scope.value}`}
-                          className="text-xs font-semibold leading-none cursor-pointer flex items-center justify-between"
-                        >
-                          <span className="flex items-center gap-1.5 text-foreground">
-                            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                            {scope.title}
-                          </span>
-                          <code className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono border border-border/50">
-                            {scope.value}
-                          </code>
-                        </label>
-                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      <label
+                        htmlFor={`scope-${scope.value}`}
+                        className="grid min-w-0 cursor-pointer gap-2 sm:grid-cols-[minmax(9rem,0.8fr)_minmax(0,1.35fr)_auto] sm:items-center"
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold leading-tight text-foreground">
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 whitespace-normal break-normal">{scope.title}</span>
+                        </span>
+                        <span className="min-w-0 text-[11px] leading-relaxed text-muted-foreground">
                           {scope.detail}
-                        </p>
-                      </div>
+                        </span>
+                        <code className="max-w-full justify-self-start whitespace-nowrap rounded border border-border/50 bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:justify-self-end">
+                          {scope.value}
+                        </code>
+                      </label>
                     </div>
                   );
                 })}
@@ -798,18 +821,49 @@ print(response.json()["incidents"])`}
       </Dialog>
 
       {/* Revoke Confirmation Dialog */}
-      {revokeKeyId && (
-        <ConfirmDialog
-          open={true}
-          title="Revoke API Key?"
-          message="Are you sure you want to revoke this API key? Any applications, webhooks, or pipelines using this token will immediately lose access."
-          confirmLabel="Revoke Key"
-          cancelLabel="Cancel"
-          variant="danger"
-          onConfirm={() => handleRevoke(revokeKeyId)}
-          onCancel={() => setRevokeKeyId(null)}
-        />
-      )}
+      <AlertDialog
+        open={Boolean(revokeKeyId)}
+        onOpenChange={open => {
+          if (!open && !isRevoking) {
+            setRevokeKeyId(null);
+            setRevokeError(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke API Key?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Any applications, webhooks, or pipelines using this token will immediately lose
+              access. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {revokeError && (
+            <Alert variant="destructive">
+              <XCircle className="h-4 w-4" />
+              <AlertDescription>{revokeError}</AlertDescription>
+            </Alert>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRevoking}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isRevoking || !revokeKeyId}
+              onClick={event => {
+                event.preventDefault();
+                if (revokeKeyId) {
+                  void handleRevoke(revokeKeyId);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isRevoking && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isRevoking ? 'Revoking...' : 'Revoke Key'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

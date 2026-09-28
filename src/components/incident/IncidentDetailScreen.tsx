@@ -33,6 +33,7 @@ import { projectIncidentSlaState } from '@/lib/incident-sla/state';
 import { Badge } from '@/components/ui/shadcn/badge';
 import CopyButton from '@/components/common/CopyButton';
 import { getAppUrl } from '@/lib/app-url';
+import { redactNotificationError } from '@/lib/notification-operations';
 import { AlertCircle, ArrowLeft, CheckCircle2, ChevronDown, Pause, Volume2 } from 'lucide-react';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
@@ -74,6 +75,22 @@ export default async function IncidentDetailScreen({
       team: true,
       events: { orderBy: { createdAt: 'desc' } },
       notes: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+      notifications: {
+        select: {
+          id: true,
+          channel: true,
+          status: true,
+          recipientDisplay: true,
+          errorMsg: true,
+          createdAt: true,
+          sentAt: true,
+          deliveredAt: true,
+          failedAt: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      },
       watchers: { include: { user: true }, orderBy: { createdAt: 'asc' } },
       tags: { include: { tag: true }, orderBy: { createdAt: 'asc' } },
       customFieldValues: { include: { customField: true } },
@@ -170,6 +187,18 @@ export default async function IncidentDetailScreen({
         content: note.content,
         user: note.user,
         createdAt: note.createdAt,
+      }))}
+      notifications={incident.notifications.map(notif => ({
+        id: notif.id,
+        channel: notif.channel,
+        status: notif.status,
+        recipientDisplay: notif.recipientDisplay,
+        errorMsg: redactNotificationError(notif.errorMsg),
+        createdAt: notif.createdAt,
+        sentAt: notif.sentAt,
+        deliveredAt: notif.deliveredAt,
+        failedAt: notif.failedAt,
+        user: notif.user,
       }))}
       incidentCreatedAt={incident.createdAt}
       incidentAcknowledgedAt={incident.acknowledgedAt}

@@ -6,11 +6,11 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { getUserPermissions } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
 import { invalidateNotificationCapacityControl } from '@/lib/notification-capacity-control';
+import { invalidateCapacityCache, invalidateRuntimeCache } from '@/lib/notification-capacity/cache';
 import {
-  invalidateCapacityCache,
-  invalidateRuntimeCache,
-} from '@/lib/notification-capacity/cache';
-import { providerCapacityInputSchema, runtimeSettingsInputSchema } from '@/lib/notification-capacity/schema';
+  providerCapacityInputSchema,
+  runtimeSettingsInputSchema,
+} from '@/lib/notification-capacity/schema';
 import { HARD_LIMITS } from '@/lib/notification-capacity/hard-limits';
 
 const bulkPausedSchema = z.object({ bulkPaused: z.boolean() }).strict();
@@ -19,7 +19,10 @@ const bulkPausedSchema = z.object({ bulkPaused: z.boolean() }).strict();
 export async function GET() {
   const permissions = await getUserPermissions();
   if (!permissions.authenticated) return jsonError('Authentication required', 401);
-  if (!permissions.capabilities.includes('admin.manage') && !permissions.capabilities.includes('audit.read' as never)) {
+  if (
+    !permissions.capabilities.includes('admin.manage') &&
+    !permissions.capabilities.includes('audit.read' as never)
+  ) {
     // Fall back to role check so AUDITOR can read
     if (permissions.role !== 'AUDITOR' && permissions.role !== 'ADMIN') {
       return jsonError('Admin access required', 403);
@@ -29,7 +32,9 @@ export async function GET() {
   const [control, runtime, providerCapacities] = await Promise.all([
     prisma.systemConfig.findUnique({ where: { key: 'notification_capacity_control' } }),
     prisma.notificationRuntimeSettings.findUnique({ where: { id: 'default' } }),
-    prisma.notificationProviderCapacity.findMany({ orderBy: [{ provider: 'asc' }, { channel: 'asc' }] }),
+    prisma.notificationProviderCapacity.findMany({
+      orderBy: [{ provider: 'asc' }, { channel: 'asc' }],
+    }),
   ]);
 
   const controlValue =
@@ -39,17 +44,23 @@ export async function GET() {
 
   // Effective resolved view (DB > ENV > DEFAULT) for lossless ENV→UI takeover.
   // Lazy import to avoid circular deps; resolver uses prisma + env.
-  const { getEffectiveCapacity, getEffectiveWatermarks } = await import('@/lib/notification-capacity/resolver');
-  const channels = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH', 'SLACK', 'WEBHOOK'] as const;
+  const { getEffectiveCapacity, getEffectiveWatermarks } =
+    await import('@/lib/notification-capacity/resolver');
+  const channels = ['EMAIL', 'SMS', 'VOICE', 'WHATSAPP', 'PUSH', 'SLACK', 'WEBHOOK'] as const;
   const seen = new Set(providerCapacities.map(r => `${r.channel}:${r.provider}`));
   const inventory: Array<{ channel: (typeof channels)[number]; provider: string }> = [
-    ...providerCapacities.map(r => ({ channel: r.channel as (typeof channels)[number], provider: r.provider })),
+    ...providerCapacities.map(r => ({
+      channel: r.channel as (typeof channels)[number],
+      provider: r.provider,
+    })),
   ];
   // Include actually configured providers (e.g. ses without DB row + ENV override)
   // before synthetic defaults so a channel already covered by a real provider
   // (EMAIL:ses) does not get a redundant EMAIL:default shadowing it.
   try {
-    const configuredProviders = await prisma.notificationProvider.findMany({ select: { provider: true, enabled: true } });
+    const configuredProviders = await prisma.notificationProvider.findMany({
+      select: { provider: true, enabled: true },
+    });
     const providerToChannel: Record<string, (typeof channels)[number]> = {
       resend: 'EMAIL',
       sendgrid: 'EMAIL',
@@ -70,6 +81,11 @@ export async function GET() {
       }
       // Twilio also backs WHATSAPP — expose separate WHATSAPP:twilio entry
       if (rec.provider === 'twilio') {
+        const vKey = `VOICE:twilio`;
+        if (!seen.has(vKey)) {
+          seen.add(vKey);
+          inventory.push({ channel: 'VOICE', provider: 'twilio' });
+        }
         const wKey = `WHATSAPP:twilio`;
         if (!seen.has(wKey)) {
           seen.add(wKey);
@@ -99,7 +115,11 @@ export async function GET() {
   }
 
   const [effectiveCapacities, effectiveWatermarks] = await Promise.all([
-    Promise.all(inventory.map(({ channel, provider }) => getEffectiveCapacity({ channel: channel as never, provider }))),
+    Promise.all(
+      inventory.map(({ channel, provider }) =>
+        getEffectiveCapacity({ channel: channel as never, provider })
+      )
+    ),
     getEffectiveWatermarks(),
   ]);
 
@@ -170,7 +190,9 @@ export async function PATCH(request: NextRequest) {
     const parsed = bulkPausedSchema.safeParse(input);
     if (!parsed.success) return jsonError('Invalid capacity update', 400);
     const { bulkPaused } = parsed.data;
-    const before = await prisma.systemConfig.findUnique({ where: { key: 'notification_capacity_control' } });
+    const before = await prisma.systemConfig.findUnique({
+      where: { key: 'notification_capacity_control' },
+    });
     const beforeValue = before?.value as Record<string, unknown> | null;
     await prisma.$transaction(async tx => {
       await tx.systemConfig.upsert({
@@ -224,20 +246,29 @@ export async function PATCH(request: NextRequest) {
       if (existing?.ratePerSecond != null) {
         const oldRate = existing.ratePerSecond;
         const largeJump =
-          (nextRate > 500 && nextRate >= oldRate * 3) || (nextRate >= 2000 && nextRate > oldRate * 2);
+          (nextRate > 500 && nextRate >= oldRate * 3) ||
+          (nextRate >= 2000 && nextRate > oldRate * 2);
         if (largeJump && data.acknowledgeRisk !== true) {
-          return jsonError('Large capacity increase requires acknowledgeRisk: true — confirm the provider quota permits this rate.', 400);
+          return jsonError(
+            'Large capacity increase requires acknowledgeRisk: true — confirm the provider quota permits this rate.',
+            400
+          );
         }
       } else {
-        const { getEffectiveCapacity: _getEff } = await import('@/lib/notification-capacity/resolver');
+        const { getEffectiveCapacity: _getEff } =
+          await import('@/lib/notification-capacity/resolver');
         const effectiveBefore = await _getEff({ channel: channel as never, provider });
         const effectiveRate = effectiveBefore.configuredRatePerSecond;
         // Same-value ENV/DEFAULT takeover must not gate (ENV:5000 first DB save as 5000).
         if (nextRate !== effectiveRate) {
           const largeJump =
-            (nextRate > 500 && nextRate >= effectiveRate * 3) || (nextRate >= 2000 && nextRate > effectiveRate * 2);
+            (nextRate > 500 && nextRate >= effectiveRate * 3) ||
+            (nextRate >= 2000 && nextRate > effectiveRate * 2);
           if (largeJump && data.acknowledgeRisk !== true) {
-            return jsonError('Large capacity increase requires acknowledgeRisk: true — confirm the provider quota permits this rate.', 400);
+            return jsonError(
+              'Large capacity increase requires acknowledgeRisk: true — confirm the provider quota permits this rate.',
+              400
+            );
           }
         }
       }
@@ -297,7 +328,8 @@ export async function PATCH(request: NextRequest) {
             where: { provider, channel, revision: existing.revision },
             data: writeData,
           });
-          if (result.count !== 1) throw Object.assign(new Error('CAS_CONFLICT'), { code: 'CAS_CONFLICT' });
+          if (result.count !== 1)
+            throw Object.assign(new Error('CAS_CONFLICT'), { code: 'CAS_CONFLICT' });
           inner = await tx.notificationProviderCapacity.findUniqueOrThrow({
             where: { provider_channel: { provider, channel } },
             select: { revision: true, updatedAt: true },
@@ -355,14 +387,20 @@ export async function PATCH(request: NextRequest) {
   }
 
   // 3) Runtime / queue watermarks
-  if ('bulkQueueLowWatermark' in record || 'bulkQueueHighWatermark' in record || 'defaultBulkSharePercent' in record) {
+  if (
+    'bulkQueueLowWatermark' in record ||
+    'bulkQueueHighWatermark' in record ||
+    'defaultBulkSharePercent' in record
+  ) {
     const parsed = runtimeSettingsInputSchema.safeParse(input);
     if (!parsed.success) {
       const message = parsed.error.issues[0]?.message || 'Invalid runtime settings';
       return jsonError(message, 400);
     }
     const data = parsed.data;
-    const existing = await prisma.notificationRuntimeSettings.findUnique({ where: { id: 'default' } });
+    const existing = await prisma.notificationRuntimeSettings.findUnique({
+      where: { id: 'default' },
+    });
     if (data.revision != null && existing && data.revision !== existing.revision) {
       return jsonError('Settings changed elsewhere. Reload before saving.', 409);
     }
@@ -426,7 +464,8 @@ export async function PATCH(request: NextRequest) {
               updatedBy: permissions.id,
             },
           });
-          if (result.count !== 1) throw Object.assign(new Error('CAS_CONFLICT'), { code: 'CAS_CONFLICT' });
+          if (result.count !== 1)
+            throw Object.assign(new Error('CAS_CONFLICT'), { code: 'CAS_CONFLICT' });
           createdOrUpdated = await tx.notificationRuntimeSettings.findUniqueOrThrow({
             where: { id: 'default' },
             select: { revision: true, updatedAt: true },

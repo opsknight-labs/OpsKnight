@@ -142,6 +142,26 @@ if [ $MIGRATION_SUCCESS -eq 0 ]; then
     exit 1
 fi
 
+install_sla_scheduler_index() {
+    if [ -f "scripts/create-sla-scheduler-online-index.cjs" ]; then
+        node scripts/create-sla-scheduler-online-index.cjs
+        return $?
+    fi
+
+    echo "ℹ️  SLA scheduler index installer not found, skipping"
+    return 0
+}
+
+install_voice_attempt_indexes() {
+    if [ -f "scripts/create-voice-attempt-online-indexes.cjs" ]; then
+        node scripts/create-voice-attempt-online-indexes.cjs
+        return $?
+    fi
+
+    echo "ℹ️  Voice attempt index installer not found, skipping"
+    return 0
+}
+
 echo "🔄 Enforcing status platform indexes..."
 if ! install_status_platform_indexes; then
     echo "❌ Status platform index enforcement failed. Refusing to start without required indexes."
@@ -149,6 +169,14 @@ if ! install_status_platform_indexes; then
 fi
 
 echo "✅ Status platform indexes are ready."
+
+echo "🔄 Enforcing voice attempt indexes..."
+if ! install_voice_attempt_indexes; then
+    echo "❌ Voice attempt index enforcement failed. Refusing to start without required indexes."
+    exit 1
+fi
+
+echo "✅ Voice attempt indexes are ready."
 echo "✅ Database is ready."
 
 if [ -n "${DIRECT_DATABASE_URL:-}" ]; then

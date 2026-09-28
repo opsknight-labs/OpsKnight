@@ -1,4 +1,3 @@
-import { createHmac, timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getBaseUrl } from '@/lib/env-validation';
@@ -6,22 +5,7 @@ import { getSMSConfig, getWhatsAppConfig } from '@/lib/notification-providers';
 import { readIntegrationBody } from '@/lib/integrations/request-security';
 import { logger } from '@/lib/logger';
 import { recordUserNotificationEndpointOutcome } from '@/lib/user-notification-endpoints';
-
-function validTwilioSignature(
-  url: string,
-  params: URLSearchParams,
-  signature: string,
-  authToken: string
-): boolean {
-  const sorted = Array.from(params.keys())
-    .sort()
-    .map(key => `${key}${params.get(key) || ''}`)
-    .join('');
-  const expected = createHmac('sha1', authToken).update(`${url}${sorted}`).digest('base64');
-  const a = Buffer.from(signature);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
+import { validateTwilioRequest } from '@/lib/twilio/signature';
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     if (
       !signature ||
-      !authTokens.some(token => validTwilioSignature(callbackUrl, params, signature, token))
+      !authTokens.some(token => validateTwilioRequest(callbackUrl, params, signature, token))
     ) {
       return NextResponse.json({ error: 'Invalid Twilio signature' }, { status: 401 });
     }

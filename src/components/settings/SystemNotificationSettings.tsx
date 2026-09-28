@@ -13,8 +13,9 @@ interface SystemNotificationSettingsProps {
 const providerConfigs: ProviderConfigSchema[] = [
   {
     key: 'twilio',
-    name: 'Twilio (SMS)',
-    description: 'Send SMS notifications via Twilio',
+    name: 'Twilio (SMS & Voice)',
+    description:
+      'Send SMS notifications and outbound incident voice calls via Twilio. Enable Voice Calling below to activate PSTN paging.',
     fields: [
       {
         name: 'accountSid',
@@ -36,6 +37,12 @@ const providerConfigs: ProviderConfigSchema[] = [
         type: 'tel',
         required: true,
         placeholder: '+1234567890',
+      },
+      {
+        name: 'voiceEnabled',
+        label: 'Enable Voice Calling',
+        type: 'checkbox',
+        required: false,
       },
     ],
   },
@@ -419,9 +426,9 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
 
   const categories = [
     {
-      title: 'SMS Messaging',
+      title: 'SMS & Voice',
       description:
-        'Outbound SMS text message dispatch for high-priority incidents and on-call paging via Twilio or AWS SNS.',
+        'Outbound SMS text messages and PSTN voice calls for incident paging via Twilio or AWS SNS (SMS only).',
       keys: ['twilio', 'aws-sns'],
     },
     {
