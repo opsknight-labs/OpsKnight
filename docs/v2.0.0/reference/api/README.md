@@ -13,9 +13,15 @@ verification:
 
 # API route inventory
 
-This page lists route modules implemented under `src/app/api`. It is an
-implementation inventory, not a stability promise. Authentication, request,
-response, and error contracts require dedicated schema-backed pages.
+This page classifies route modules implemented under `src/app/api`. It is an
+implementation inventory, not a public stability promise. Alert-ingestion
+contracts live in the provider pages; webhook, health, metrics, SCIM, and OIDC
+surfaces use their dedicated references. Everything in the internal section is
+explicitly unsupported for third-party automation.
+
+## Application and internal UI endpoints
+
+> These routes support the OpsKnight UI and are not a supported external API contract. Do not build external automation against them unless a dedicated contract page says otherwise.
 
 - `POST /api/admin/generate-reset-link` — `src/app/api/admin/generate-reset-link/route.ts`
 - `POST /api/admin/incident-collaboration/meetings/[meetingId]/retry-cleanup` — `src/app/api/admin/incident-collaboration/meetings/[meetingId]/retry-cleanup/route.ts`
@@ -80,8 +86,6 @@ response, and error contracts require dedicated schema-backed pages.
 - `GET, POST /api/dashboards` — `src/app/api/dashboards/route.ts`
 - `POST /api/events` — `src/app/api/events/route.ts`
 - `GET /api/events/stream` — `src/app/api/events/stream/route.ts`
-- `GET /api/health/deep` — `src/app/api/health/deep/route.ts`
-- `GET /api/health` — `src/app/api/health/route.ts`
 - `GET /api/incidents/[id]/collaboration` — `src/app/api/incidents/[id]/collaboration/route.ts`
 - `GET /api/incidents/[id]/context` — `src/app/api/incidents/[id]/context/route.ts`
 - `POST /api/incidents/[id]/custom-fields` — `src/app/api/incidents/[id]/custom-fields/route.ts`
@@ -98,41 +102,9 @@ response, and error contracts require dedicated schema-backed pages.
 - `POST /api/incidents/create` — `src/app/api/incidents/create/route.ts`
 - `GET /api/incidents/export` — `src/app/api/incidents/export/route.ts`
 - `GET, POST /api/incidents` — `src/app/api/incidents/route.ts`
-- `POST /api/integrations/appdynamics` — `src/app/api/integrations/appdynamics/route.ts`
-- `POST /api/integrations/azure` — `src/app/api/integrations/azure/route.ts`
-- `POST /api/integrations/better-uptime` — `src/app/api/integrations/better-uptime/route.ts`
-- `POST /api/integrations/bitbucket` — `src/app/api/integrations/bitbucket/route.ts`
-- `POST /api/integrations/cloudwatch` — `src/app/api/integrations/cloudwatch/route.ts`
-- `POST /api/integrations/datadog` — `src/app/api/integrations/datadog/route.ts`
-- `POST /api/integrations/dynatrace` — `src/app/api/integrations/dynatrace/route.ts`
-- `POST /api/integrations/elastic` — `src/app/api/integrations/elastic/route.ts`
-- `GET, POST /api/integrations/failures` — `src/app/api/integrations/failures/route.ts`
-- `POST /api/integrations/github` — `src/app/api/integrations/github/route.ts`
-- `POST /api/integrations/gitlab` — `src/app/api/integrations/gitlab/route.ts`
-- `POST /api/integrations/google-cloud-monitoring` — `src/app/api/integrations/google-cloud-monitoring/route.ts`
-- `POST /api/integrations/grafana` — `src/app/api/integrations/grafana/route.ts`
-- `GET, POST /api/integrations/health` — `src/app/api/integrations/health/route.ts`
-- `POST /api/integrations/honeycomb` — `src/app/api/integrations/honeycomb/route.ts`
-- `POST /api/integrations/icinga` — `src/app/api/integrations/icinga/route.ts`
-- `POST /api/integrations/manageengine` — `src/app/api/integrations/manageengine/route.ts`
-- `POST /api/integrations/nagios` — `src/app/api/integrations/nagios/route.ts`
-- `POST /api/integrations/newrelic` — `src/app/api/integrations/newrelic/route.ts`
-- `POST /api/integrations/pagerduty` — `src/app/api/integrations/pagerduty/route.ts`
-- `POST /api/integrations/pagerduty/v2/enqueue` — `src/app/api/integrations/pagerduty/v2/enqueue/route.ts`
-- `POST /api/integrations/pingdom` — `src/app/api/integrations/pingdom/route.ts`
-- `POST /api/integrations/prometheus` — `src/app/api/integrations/prometheus/route.ts`
-- `POST /api/integrations/sentry` — `src/app/api/integrations/sentry/route.ts`
-- `POST /api/integrations/splunk-observability` — `src/app/api/integrations/splunk-observability/route.ts`
-- `POST /api/integrations/splunk-oncall` — `src/app/api/integrations/splunk-oncall/route.ts`
-- `POST /api/integrations/uptime-kuma` — `src/app/api/integrations/uptime-kuma/route.ts`
-- `POST /api/integrations/uptimerobot` — `src/app/api/integrations/uptimerobot/route.ts`
-- `POST /api/integrations/vercel` — `src/app/api/integrations/vercel/route.ts`
-- `POST /api/integrations/webhook` — `src/app/api/integrations/webhook/route.ts`
-- `POST /api/integrations/zabbix` — `src/app/api/integrations/zabbix/route.ts`
 - `POST /api/jira/test` — `src/app/api/jira/test/route.ts`
 - `POST /api/jira/webhook` — `src/app/api/jira/webhook/route.ts`
 - `POST /api/logs/ingest` — `src/app/api/logs/ingest/route.ts`
-- `GET /api/metrics` — `src/app/api/metrics/route.ts`
 - `GET, POST, PATCH, DELETE /api/microsoft-teams/destinations` — `src/app/api/microsoft-teams/destinations/route.ts`
 - `GET /api/microsoft-teams/discovery/channels` — `src/app/api/microsoft-teams/discovery/channels/route.ts`
 - `GET /api/microsoft-teams/discovery/teams` — `src/app/api/microsoft-teams/discovery/teams/route.ts`
@@ -153,8 +125,6 @@ response, and error contracts require dedicated schema-backed pages.
 - `GET /api/schedules/[id]/oncall` — `src/app/api/schedules/[id]/oncall/route.ts`
 - `GET /api/schedules/[id]` — `src/app/api/schedules/[id]/route.ts`
 - `GET /api/schedules` — `src/app/api/schedules/route.ts`
-- `GET, PUT, PATCH, DELETE /api/scim/v2/Users/[id]` — `src/app/api/scim/v2/Users/[id]/route.ts`
-- `GET, POST, PATCH /api/scim/v2/Users` — `src/app/api/scim/v2/Users/route.ts`
 - `GET /api/search` — `src/app/api/search/route.ts`
 - `GET /api/services/[id]` — `src/app/api/services/[id]/route.ts`
 - `GET /api/services` — `src/app/api/services/route.ts`
@@ -230,9 +200,57 @@ response, and error contracts require dedicated schema-backed pages.
 - `GET /api/v1/service-objectives/[id]/versions` — `src/app/api/v1/service-objectives/[id]/versions/route.ts`
 - `GET, POST /api/v1/service-objectives` — `src/app/api/v1/service-objectives/route.ts`
 - `GET, PUT /api/v1/services/[id]/response-policy` — `src/app/api/v1/services/[id]/response-policy/route.ts`
+- `GET /api/widgets/data` — `src/app/api/widgets/data/route.ts`
+- `GET /api/widgets/stream` — `src/app/api/widgets/stream/route.ts`
+
+## Operator health and metrics endpoints
+
+- `GET /api/health/deep` — `src/app/api/health/deep/route.ts`
+- `GET /api/health` — `src/app/api/health/route.ts`
+- `GET /api/metrics` — `src/app/api/metrics/route.ts`
+
+## Alert ingestion endpoints
+
+- `POST /api/integrations/appdynamics` — `src/app/api/integrations/appdynamics/route.ts`
+- `POST /api/integrations/azure` — `src/app/api/integrations/azure/route.ts`
+- `POST /api/integrations/better-uptime` — `src/app/api/integrations/better-uptime/route.ts`
+- `POST /api/integrations/bitbucket` — `src/app/api/integrations/bitbucket/route.ts`
+- `POST /api/integrations/cloudwatch` — `src/app/api/integrations/cloudwatch/route.ts`
+- `POST /api/integrations/datadog` — `src/app/api/integrations/datadog/route.ts`
+- `POST /api/integrations/dynatrace` — `src/app/api/integrations/dynatrace/route.ts`
+- `POST /api/integrations/elastic` — `src/app/api/integrations/elastic/route.ts`
+- `GET, POST /api/integrations/failures` — `src/app/api/integrations/failures/route.ts`
+- `POST /api/integrations/github` — `src/app/api/integrations/github/route.ts`
+- `POST /api/integrations/gitlab` — `src/app/api/integrations/gitlab/route.ts`
+- `POST /api/integrations/google-cloud-monitoring` — `src/app/api/integrations/google-cloud-monitoring/route.ts`
+- `POST /api/integrations/grafana` — `src/app/api/integrations/grafana/route.ts`
+- `GET, POST /api/integrations/health` — `src/app/api/integrations/health/route.ts`
+- `POST /api/integrations/honeycomb` — `src/app/api/integrations/honeycomb/route.ts`
+- `POST /api/integrations/icinga` — `src/app/api/integrations/icinga/route.ts`
+- `POST /api/integrations/manageengine` — `src/app/api/integrations/manageengine/route.ts`
+- `POST /api/integrations/nagios` — `src/app/api/integrations/nagios/route.ts`
+- `POST /api/integrations/newrelic` — `src/app/api/integrations/newrelic/route.ts`
+- `POST /api/integrations/pagerduty` — `src/app/api/integrations/pagerduty/route.ts`
+- `POST /api/integrations/pagerduty/v2/enqueue` — `src/app/api/integrations/pagerduty/v2/enqueue/route.ts`
+- `POST /api/integrations/pingdom` — `src/app/api/integrations/pingdom/route.ts`
+- `POST /api/integrations/prometheus` — `src/app/api/integrations/prometheus/route.ts`
+- `POST /api/integrations/sentry` — `src/app/api/integrations/sentry/route.ts`
+- `POST /api/integrations/splunk-observability` — `src/app/api/integrations/splunk-observability/route.ts`
+- `POST /api/integrations/splunk-oncall` — `src/app/api/integrations/splunk-oncall/route.ts`
+- `POST /api/integrations/uptime-kuma` — `src/app/api/integrations/uptime-kuma/route.ts`
+- `POST /api/integrations/uptimerobot` — `src/app/api/integrations/uptimerobot/route.ts`
+- `POST /api/integrations/vercel` — `src/app/api/integrations/vercel/route.ts`
+- `POST /api/integrations/webhook` — `src/app/api/integrations/webhook/route.ts`
+- `POST /api/integrations/zabbix` — `src/app/api/integrations/zabbix/route.ts`
+
+## Identity protocol endpoints
+
+- `GET, PUT, PATCH, DELETE /api/scim/v2/Users/[id]` — `src/app/api/scim/v2/Users/[id]/route.ts`
+- `GET, POST, PATCH /api/scim/v2/Users` — `src/app/api/scim/v2/Users/route.ts`
+
+## Provider callback and webhook endpoints
+
 - `POST /api/webhooks/notifications/provider-feedback` — `src/app/api/webhooks/notifications/provider-feedback/route.ts`
 - `POST /api/webhooks/notifications/twilio` — `src/app/api/webhooks/notifications/twilio/route.ts`
 - `POST /api/webhooks/notifications/twilio/voice/gather` — `src/app/api/webhooks/notifications/twilio/voice/gather/route.ts`
 - `POST /api/webhooks/notifications/twilio/voice/status` — `src/app/api/webhooks/notifications/twilio/voice/status/route.ts`
-- `GET /api/widgets/data` — `src/app/api/widgets/data/route.ts`
-- `GET /api/widgets/stream` — `src/app/api/widgets/stream/route.ts`

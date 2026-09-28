@@ -78,5 +78,6 @@ const report = {
 };
 
 mkdirSync(join(root, 'generated/docs-certification'), { recursive: true });
-writeFileSync(join(root, 'generated/docs-certification/current.json'), `${JSON.stringify(report, null, 2)}\n`);
+const reportName = fullRuntime ? 'current.json' : 'static.json';
+writeFileSync(join(root, 'generated/docs-certification', reportName), `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify(report, null, 2));

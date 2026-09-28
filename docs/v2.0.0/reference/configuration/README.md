@@ -18,6 +18,87 @@ This generated inventory identifies configuration names found in current source
 and deployment manifests. Required and default values are conservative static
 inferences; the listed source remains authoritative for parsing and validation.
 
+## Curated production contract
+
+These critical settings have operator-reviewed semantics. Conditions and safe
+rotation procedures in the linked deployment and security guides take precedence
+over a scanner-inferred default.
+
+### `DATABASE_URL`
+
+PostgreSQL connection used by the web and worker runtime.
+
+- Type and valid value: PostgreSQL URL
+- Runtime role: all runtime roles
+- Apply behavior: restart required
+- Sensitivity: secret
+
+### `DIRECT_DATABASE_URL`
+
+Direct PostgreSQL connection used for migrations and operations that must bypass a pooler.
+
+- Type and valid value: PostgreSQL URL
+- Runtime role: migration/integrated runtime
+- Apply behavior: restart required
+- Sensitivity: secret
+
+### `NEXTAUTH_URL`
+
+Canonical externally reachable application URL used by authentication callbacks.
+
+- Type and valid value: absolute URL
+- Runtime role: web
+- Apply behavior: restart required
+- Sensitivity: non-secret
+
+### `NEXT_PUBLIC_APP_URL`
+
+Public application origin embedded in browser-visible links and provider callbacks.
+
+- Type and valid value: absolute URL
+- Runtime role: web/build
+- Apply behavior: rebuild or restart required
+- Sensitivity: non-secret
+
+### `NEXTAUTH_SECRET`
+
+Signs authentication state and may act as the voice callback fallback only when sufficiently long.
+
+- Type and valid value: high-entropy string (32+ characters)
+- Runtime role: web
+- Apply behavior: restart invalidates existing sessions
+- Sensitivity: secret
+
+### `ENCRYPTION_KEY`
+
+Encrypts stored integration and provider credentials.
+
+- Type and valid value: 64 hexadecimal characters
+- Runtime role: all roles accessing encrypted data
+- Apply behavior: coordinated restart; rotate through the documented procedure
+- Sensitivity: critical secret
+
+### `VOICE_CALLBACK_SIGNING_SECRET`
+
+Signs Twilio voice gather and status callback tokens independently of login sessions.
+
+- Type and valid value: high-entropy string (32+ characters)
+- Runtime role: web and notification workers
+- Apply behavior: restart required
+- Sensitivity: secret
+
+### `PROMETHEUS_SCRAPE_TOKEN`
+
+Bearer token required by the metrics endpoint when configured.
+
+- Type and valid value: opaque token
+- Runtime role: web
+- Apply behavior: restart required
+- Sensitivity: secret
+
+
+## Complete discovered inventory
+
 ## `API_KEY_SECRET`
 
 - Required: no or conditionally required
