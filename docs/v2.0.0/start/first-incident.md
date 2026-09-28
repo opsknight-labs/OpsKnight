@@ -18,6 +18,10 @@ verification:
 Use a non-production service and responder so the exercise cannot page a real
 team.
 
+## Before you begin
+
+Complete the quickstart, sign in, and create an active test responder.
+
 1. Create a team, add an active responder, and make that team responsible for a
    test service.
 2. Attach an escalation policy and confirm its first target and delay.

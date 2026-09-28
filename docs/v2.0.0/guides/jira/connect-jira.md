@@ -14,6 +14,13 @@ verification:
 
 # Connect Jira
 
+## Before you begin
+
+Obtain Jira credentials with access to the intended project and issue type.
+
+1. Configure and test Jira under **Settings → Integrations → Jira**.
+2. Create a linked issue from a test incident and verify synchronization.
+
 Configure the Jira base URL and encrypted credentials, test connectivity, and
 map each OpsKnight service to the intended Jira project. On a synthetic incident,
 create or link an issue and verify its key, URL, status, assignee, and sync state.

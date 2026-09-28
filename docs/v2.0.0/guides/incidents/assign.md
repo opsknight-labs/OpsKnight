@@ -14,10 +14,16 @@ verification:
 
 # Assign an incident
 
+## Before you begin
+
+Open an active incident and confirm the intended user or team is eligible.
+
+1. Select the assignee and apply the change.
+2. Verify the incident header and timeline show the new owner.
+
 Open the incident, locate **Assignee**, choose an eligible user or team, and
 select **Assign**. Verify that the header and timeline show the new owner.
 
 Assignment establishes responsibility; it does not acknowledge the incident on
 the responder's behalf. If a user is missing, check active status, team scope,
 and permission policy before changing the incident.
-
