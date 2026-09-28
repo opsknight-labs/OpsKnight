@@ -62,6 +62,11 @@ spec:
               value: /var/lib/postgresql/data/pgdata
             - name: POSTGRES_INITDB_ARGS
               value: '-E UTF8 --locale=C'
+          args:
+            - -c
+            - max_connections=300
+            - -c
+            - shared_buffers=128MB
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data

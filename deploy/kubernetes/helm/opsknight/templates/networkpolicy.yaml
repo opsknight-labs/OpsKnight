@@ -96,6 +96,18 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 8086
+        - protocol: TCP
+          port: 8088
+        - protocol: TCP
+          port: 2525
+        - protocol: TCP
+          port: 587
+        - protocol: TCP
+          port: 25
 {{- if .Values.postgresql.enabled }}
 ---
 apiVersion: networking.k8s.io/v1
@@ -117,6 +129,12 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "opsknight.selectorLabels" . | nindent 14 }}
+        {{- if .Values.pgbouncer.enabled }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "opsknight.name" . }}-pgbouncer
+              app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- end }}
       ports:
         - protocol: TCP
           port: 5432

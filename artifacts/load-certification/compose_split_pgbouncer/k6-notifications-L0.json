@@ -1,0 +1,161 @@
+{
+    "metrics": {
+        "data_received": {
+            "count": 38375,
+            "rate": 892.4104393161599
+        },
+        "iterations": {
+            "count": 2,
+            "rate": 0.04650999032266631
+        },
+        "http_req_duration": {
+            "min": 0.504,
+            "med": 18683.6305,
+            "max": 38922.669,
+            "p(90)": 36093.116400000006,
+            "p(95)": 36347.9961,
+            "p(99)": 38407.73442,
+            "avg": 18287.46075
+        },
+        "http_req_duration{expected_response:true}": {
+            "p(99)": 36198.19221,
+            "avg": 4866.025250000001,
+            "min": 0.504,
+            "med": 0.6765,
+            "max": 38922.669,
+            "p(90)": 11677.901100000006,
+            "p(95)": 25300.285049999988
+        },
+        "vus": {
+            "value": 15,
+            "min": 6,
+            "max": 17
+        },
+        "opsknight_events_accepted_total": {
+            "count": 1,
+            "rate": 0.023254995161333156
+        },
+        "opsknight_events_success_rate": {
+            "passes": 1,
+            "fails": 0,
+            "thresholds": {
+                "rate>0.98": false
+            },
+            "value": 1
+        },
+        "http_req_blocked": {
+            "p(99)": 0.82792,
+            "avg": 0.2577,
+            "min": 0.003,
+            "med": 0.269,
+            "max": 0.853,
+            "p(90)": 0.46450000000000014,
+            "p(95)": 0.7275999999999999
+        },
+        "http_req_sending": {
+            "min": 0.017,
+            "med": 0.0325,
+            "max": 0.068,
+            "p(90)": 0.0522,
+            "p(95)": 0.06325,
+            "p(99)": 0.06705,
+            "avg": 0.03500000000000001
+        },
+        "http_req_waiting": {
+            "avg": 18287.1652,
+            "min": 0.456,
+            "med": 18683.163500000002,
+            "max": 38922.416,
+            "p(90)": 36092.2401,
+            "p(95)": 36347.19115,
+            "p(99)": 38407.371029999995
+        },
+        "http_req_receiving": {
+            "avg": 0.26055,
+            "min": 0.029,
+            "med": 0.2145,
+            "max": 0.863,
+            "p(90)": 0.5519000000000002,
+            "p(95)": 0.8059999999999999,
+            "p(99)": 0.8516
+        },
+        "vus_max": {
+            "value": 17,
+            "min": 13,
+            "max": 17
+        },
+        "http_reqs": {
+            "count": 20,
+            "rate": 0.4650999032266631
+        },
+        "http_req_tls_handshaking": {
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0,
+            "p(99)": 0,
+            "avg": 0
+        },
+        "dropped_iterations": {
+            "count": 151,
+            "rate": 3.5115042693613066
+        },
+        "checks": {
+            "passes": 1,
+            "fails": 0,
+            "value": 1
+        },
+        "iteration_duration": {
+            "med": 22967.3429585,
+            "max": 38923.076584,
+            "p(90)": 35731.9298589,
+            "p(95)": 37327.50322145,
+            "p(99)": 38603.961911490005,
+            "avg": 22967.3429585,
+            "min": 7011.609333
+        },
+        "http_req_failed": {
+            "passes": 12,
+            "fails": 8,
+            "value": 0.6
+        },
+        "http_req_connecting": {
+            "max": 0.619,
+            "p(90)": 0.3653,
+            "p(95)": 0.48314999999999986,
+            "p(99)": 0.59183,
+            "avg": 0.20234999999999997,
+            "min": 0,
+            "med": 0.223
+        },
+        "opsknight_events_latency_ms": {
+            "med": 38922.669,
+            "max": 38922.669,
+            "p(90)": 38922.669,
+            "p(95)": 38922.669,
+            "p(99)": 38922.669,
+            "avg": 38922.669,
+            "min": 38922.669
+        },
+        "data_sent": {
+            "count": 16736,
+            "rate": 389.1955990200717
+        }
+    },
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "event ingestion decoupled from provider latency (202 or 429)": {
+                    "name": "event ingestion decoupled from provider latency (202 or 429)",
+                    "path": "::event ingestion decoupled from provider latency (202 or 429)",
+                    "id": "a088de19c95038e6d745cf0b681946dd",
+                    "passes": 1,
+                    "fails": 0
+                }
+            }
+    }
+}

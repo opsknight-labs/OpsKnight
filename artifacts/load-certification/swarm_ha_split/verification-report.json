@@ -1,0 +1,54 @@
+{
+  "passed": true,
+  "checkedAt": "2026-09-27T17:12:23.636Z",
+  "topology": "swarm_ha_split",
+  "invariants": {
+    "zeroDuplicateOpenIncidents": {
+      "passed": true,
+      "duplicateGroups": 0,
+      "samples": []
+    },
+    "zeroLostAcceptedAlerts": {
+      "passed": true,
+      "totalLoadAlerts": 758,
+      "unlinkedAlerts": 0
+    },
+    "zeroFalseEscalationsAfterAckOrResolve": {
+      "passed": true,
+      "violationCount": 0,
+      "sampleIncidentIds": []
+    },
+    "zeroCorruptedIncidentStates": {
+      "passed": true,
+      "acknowledgedWithoutTimestamp": 0,
+      "resolvedWithoutTimestamp": 0,
+      "snoozedWithoutUntil": 0
+    },
+    "zeroCriticalNotificationStarvation": {
+      "passed": true,
+      "pendingCriticalCount": 1417,
+      "oldestPendingCriticalAgeMs": 202962,
+      "pendingBulkCount": 0,
+      "deliveredCriticalCount": 570,
+      "deliveredBulkCount": 40
+    },
+    "providerIdempotencyCheck": {
+      "passed": true,
+      "duplicateDeliveryKeysByProvider": {
+        "email": 0,
+        "slack": 0,
+        "sms": 0,
+        "push": 0,
+        "teams": 0,
+        "webhook": 0
+      }
+    }
+  },
+  "totals": {
+    "incidentsCreated": 793,
+    "alertsPersisted": 758,
+    "notificationsTotal": 2802,
+    "backgroundJobsPending": 2655,
+    "backgroundJobsFailed": 0
+  }
+}

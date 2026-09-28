@@ -1,0 +1,1036 @@
+[
+  {
+    "topologyId": "compose_integrated_bundled_db",
+    "topologyName": "Compose: Integrated Runtime + Bundled PostgreSQL",
+    "phase": 1,
+    "startedAt": "2026-09-27T16:33:18.158Z",
+    "completedAt": "2026-09-27T16:38:22.594Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 13958,
+        "exitCode": 0,
+        "p50Ms": 194.53,
+        "p95Ms": 933.56,
+        "p99Ms": 1022.35,
+        "rps": 13.46,
+        "errorRate": 0
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 20151,
+        "exitCode": 0,
+        "p50Ms": 416.6,
+        "p95Ms": 1594.78,
+        "p99Ms": 2573.24,
+        "rps": 11.79,
+        "errorRate": 0.3648
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 43458,
+        "exitCode": 0,
+        "p50Ms": 20200.68,
+        "p95Ms": 35920.19,
+        "p99Ms": 36569.71,
+        "rps": 0.3,
+        "errorRate": 1
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 13682,
+        "exitCode": 0,
+        "p50Ms": 70.75,
+        "p95Ms": 1525.95,
+        "p99Ms": 1771.99,
+        "rps": 12.03,
+        "errorRate": 0
+      },
+      {
+        "scenario": "status-fanout.js",
+        "loadLevel": "L0",
+        "durationMs": 43384,
+        "exitCode": 0,
+        "p50Ms": 756.65,
+        "p95Ms": 11967.63,
+        "p99Ms": 19597.08,
+        "rps": 1.79,
+        "errorRate": 0.0519
+      },
+      {
+        "scenario": "realtime.js",
+        "loadLevel": "L0",
+        "durationMs": 38516,
+        "exitCode": 0,
+        "p50Ms": 4000.14,
+        "p95Ms": 19154.67,
+        "p99Ms": 19926.5,
+        "rps": 2.53,
+        "errorRate": 0.6875
+      }
+    ],
+    "verification": {
+      "passed": true,
+      "checkedAt": "2026-09-27T16:38:22.587Z",
+      "topology": "compose_integrated_bundled_db",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 387,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": true,
+          "pendingCriticalCount": 301,
+          "oldestPendingCriticalAgeMs": 93172,
+          "pendingBulkCount": 0,
+          "deliveredCriticalCount": 389,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          }
+        }
+      },
+      "totals": {
+        "incidentsCreated": 413,
+        "alertsPersisted": 387,
+        "notificationsTotal": 727,
+        "backgroundJobsPending": 2245,
+        "backgroundJobsFailed": 0
+      }
+    },
+    "peakActivePgConnections": 11,
+    "peakOldestPendingJobAgeMs": 161262,
+    "certified": true
+  },
+  {
+    "topologyId": "compose_split_bundled_db",
+    "topologyName": "Compose: Split Runtime + Bundled PostgreSQL",
+    "phase": 1,
+    "startedAt": "2026-09-27T16:38:24.958Z",
+    "completedAt": "2026-09-27T16:45:29.813Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 43559,
+        "exitCode": 0,
+        "p50Ms": 14978.32,
+        "p95Ms": 30147.03,
+        "p99Ms": 30379.11,
+        "rps": 1.33,
+        "errorRate": 0.614
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 43461,
+        "exitCode": 0,
+        "p50Ms": 11707.86,
+        "p95Ms": 23803.6,
+        "p99Ms": 26569.16,
+        "rps": 1.07,
+        "errorRate": 0.7391
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 43557,
+        "exitCode": 0,
+        "p50Ms": 774.59,
+        "p95Ms": 20120.25,
+        "p99Ms": 35365.98,
+        "rps": 0.93,
+        "errorRate": 0.175
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 43461,
+        "exitCode": 0,
+        "p50Ms": 27130.69,
+        "p95Ms": 28975.01,
+        "p99Ms": 29102.55,
+        "rps": 0.49,
+        "errorRate": 0.381
+      },
+      {
+        "scenario": "status-fanout.js",
+        "loadLevel": "L0",
+        "durationMs": 38478,
+        "exitCode": 0,
+        "p50Ms": 20250.22,
+        "p95Ms": 34349.08,
+        "p99Ms": 35438.29,
+        "rps": 1.58,
+        "errorRate": 0.2667
+      },
+      {
+        "scenario": "realtime.js",
+        "loadLevel": "L0",
+        "durationMs": 38553,
+        "exitCode": 0,
+        "p50Ms": 4000.84,
+        "p95Ms": 22767.18,
+        "p99Ms": 25570.3,
+        "rps": 1.68,
+        "errorRate": 1
+      },
+      {
+        "scenario": "recovery.js",
+        "loadLevel": "L0",
+        "durationMs": 38414,
+        "exitCode": 0,
+        "p50Ms": 15582.1,
+        "p95Ms": 20903.2,
+        "p99Ms": 26177.32,
+        "rps": 0.68,
+        "errorRate": 0.4615
+      }
+    ],
+    "verification": {
+      "passed": true,
+      "checkedAt": "2026-09-27T16:45:29.803Z",
+      "topology": "compose_split_bundled_db",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 76,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": true,
+          "pendingCriticalCount": 137,
+          "oldestPendingCriticalAgeMs": 130775,
+          "pendingBulkCount": 0,
+          "deliveredCriticalCount": 503,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          }
+        }
+      },
+      "totals": {
+        "incidentsCreated": 104,
+        "alertsPersisted": 76,
+        "notificationsTotal": 757,
+        "backgroundJobsPending": 74,
+        "backgroundJobsFailed": 0
+      }
+    },
+    "peakActivePgConnections": 9,
+    "peakOldestPendingJobAgeMs": 22823,
+    "certified": true
+  },
+  {
+    "topologyId": "compose_split_pgbouncer",
+    "topologyName": "Compose: Split Runtime + PgBouncer + Bundled PostgreSQL",
+    "phase": 1,
+    "startedAt": "2026-09-27T16:45:31.196Z",
+    "completedAt": "2026-09-27T16:52:54.886Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 13462,
+        "exitCode": 0,
+        "p50Ms": 64.72,
+        "p95Ms": 129.87,
+        "p99Ms": 162.33,
+        "rps": 14.14,
+        "errorRate": 0
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 43390,
+        "exitCode": 0,
+        "p50Ms": 118.3,
+        "p95Ms": 502.05,
+        "p99Ms": 30107.87,
+        "rps": 6.14,
+        "errorRate": 0.2424
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 43448,
+        "exitCode": 0,
+        "p50Ms": 22918.79,
+        "p95Ms": 40276.41,
+        "p99Ms": 40431.07,
+        "rps": 0.44,
+        "errorRate": 0.9474
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 43398,
+        "exitCode": 0,
+        "p50Ms": 18683.63,
+        "p95Ms": 36348,
+        "p99Ms": 38407.73,
+        "rps": 0.47,
+        "errorRate": 0.6
+      },
+      {
+        "scenario": "status-fanout.js",
+        "loadLevel": "L0",
+        "durationMs": 38574,
+        "exitCode": 0,
+        "p50Ms": 14139.38,
+        "p95Ms": 26172.61,
+        "p99Ms": 29987.72,
+        "rps": 1.81,
+        "errorRate": 0.4493
+      },
+      {
+        "scenario": "realtime.js",
+        "loadLevel": "L0",
+        "durationMs": 38393,
+        "exitCode": 0,
+        "p50Ms": 4001.7,
+        "p95Ms": 36587.35,
+        "p99Ms": 37791.26,
+        "rps": 2.11,
+        "errorRate": 1
+      },
+      {
+        "scenario": "recovery.js",
+        "loadLevel": "L0",
+        "durationMs": 38455,
+        "exitCode": 0,
+        "p50Ms": 10187.54,
+        "p95Ms": 20387.94,
+        "p99Ms": 20519.17,
+        "rps": 0.87,
+        "errorRate": 0.4545
+      },
+      {
+        "scenario": "mixed-incident-storm.js",
+        "loadLevel": "L0",
+        "durationMs": 43410,
+        "exitCode": 0,
+        "p50Ms": 14209.58,
+        "p95Ms": 29903.45,
+        "p99Ms": 30718.88,
+        "rps": 2.84,
+        "errorRate": 0.8689
+      }
+    ],
+    "verification": {
+      "passed": true,
+      "checkedAt": "2026-09-27T16:52:54.875Z",
+      "topology": "compose_split_pgbouncer",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 196,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": true,
+          "pendingCriticalCount": 318,
+          "oldestPendingCriticalAgeMs": 364836,
+          "pendingBulkCount": 0,
+          "deliveredCriticalCount": 548,
+          "deliveredBulkCount": 40
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          }
+        }
+      },
+      "totals": {
+        "incidentsCreated": 231,
+        "alertsPersisted": 196,
+        "notificationsTotal": 1193,
+        "backgroundJobsPending": 186,
+        "backgroundJobsFailed": 0
+      }
+    },
+    "peakActivePgConnections": 9,
+    "peakOldestPendingJobAgeMs": 199660,
+    "certified": true
+  },
+  {
+    "topologyId": "swarm_single_node_split",
+    "topologyName": "Docker Swarm: Single-Node Split Stack + PgBouncer",
+    "phase": 3,
+    "startedAt": "2026-09-27T17:00:53.481Z",
+    "completedAt": "2026-09-27T17:07:49.581Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 13522,
+        "exitCode": 0,
+        "p50Ms": 256.9,
+        "p95Ms": 565.41,
+        "p99Ms": 650.76,
+        "rps": 14.04,
+        "errorRate": 0
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 22216,
+        "exitCode": 0,
+        "p50Ms": 263.21,
+        "p95Ms": 10017.95,
+        "p99Ms": 11092.43,
+        "rps": 9.44,
+        "errorRate": 0.267
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 43468,
+        "exitCode": 0,
+        "p50Ms": 525.33,
+        "p95Ms": 35676.27,
+        "p99Ms": 36723.04,
+        "rps": 1.35,
+        "errorRate": 0.1034
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 43407,
+        "exitCode": 0,
+        "p50Ms": 20363.13,
+        "p95Ms": 36644.9,
+        "p99Ms": 36806.17,
+        "rps": 0.53,
+        "errorRate": 0.6957
+      },
+      {
+        "scenario": "status-fanout.js",
+        "loadLevel": "L0",
+        "durationMs": 38416,
+        "exitCode": 0,
+        "p50Ms": 15946.68,
+        "p95Ms": 35731.94,
+        "p99Ms": 36184.99,
+        "rps": 1.29,
+        "errorRate": 0.2857
+      },
+      {
+        "scenario": "realtime.js",
+        "loadLevel": "L0",
+        "durationMs": 17268,
+        "exitCode": 0,
+        "p50Ms": 4000.04,
+        "p95Ms": 4002.23,
+        "p99Ms": 4136.56,
+        "rps": 5.71,
+        "errorRate": 0.6146
+      },
+      {
+        "scenario": "recovery.js",
+        "loadLevel": "L0",
+        "durationMs": 14038,
+        "exitCode": 0,
+        "p50Ms": 206.56,
+        "p95Ms": 9746.18,
+        "p99Ms": 10059.81,
+        "rps": 10.4,
+        "errorRate": 0
+      }
+    ],
+    "verification": {
+      "passed": true,
+      "checkedAt": "2026-09-27T17:07:49.567Z",
+      "topology": "swarm_single_node_split",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 297,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": true,
+          "pendingCriticalCount": 427,
+          "oldestPendingCriticalAgeMs": 253247,
+          "pendingBulkCount": 0,
+          "deliveredCriticalCount": 551,
+          "deliveredBulkCount": 40
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          }
+        }
+      },
+      "totals": {
+        "incidentsCreated": 313,
+        "alertsPersisted": 297,
+        "notificationsTotal": 1449,
+        "backgroundJobsPending": 391,
+        "backgroundJobsFailed": 0
+      }
+    },
+    "peakActivePgConnections": 14,
+    "peakOldestPendingJobAgeMs": 179045,
+    "certified": true
+  },
+  {
+    "topologyId": "swarm_ha_split",
+    "topologyName": "Docker Swarm: High-Availability (HA) Multi-Replica Split Stack",
+    "phase": 3,
+    "startedAt": "2026-09-27T17:08:00.021Z",
+    "completedAt": "2026-09-27T17:12:23.643Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 13652,
+        "exitCode": 0,
+        "p50Ms": 100.03,
+        "p95Ms": 825.79,
+        "p99Ms": 1002.98,
+        "rps": 13.75,
+        "errorRate": 0
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 18245,
+        "exitCode": 0,
+        "p50Ms": 233.84,
+        "p95Ms": 1315.66,
+        "p99Ms": 1503.22,
+        "rps": 16.58,
+        "errorRate": 0.3017
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 13600,
+        "exitCode": 0,
+        "p50Ms": 302.62,
+        "p95Ms": 775.92,
+        "p99Ms": 883.29,
+        "rps": 16.15,
+        "errorRate": 0.0143
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 13405,
+        "exitCode": 0,
+        "p50Ms": 365.13,
+        "p95Ms": 1543.83,
+        "p99Ms": 1765.16,
+        "rps": 11.86,
+        "errorRate": 0
+      },
+      {
+        "scenario": "status-fanout.js",
+        "loadLevel": "L0",
+        "durationMs": 13505,
+        "exitCode": 0,
+        "p50Ms": 101.33,
+        "p95Ms": 866.48,
+        "p99Ms": 1616.92,
+        "rps": 56.66,
+        "errorRate": 0
+      },
+      {
+        "scenario": "realtime.js",
+        "loadLevel": "L0",
+        "durationMs": 17223,
+        "exitCode": 0,
+        "p50Ms": 3999.85,
+        "p95Ms": 4001.87,
+        "p99Ms": 4002.12,
+        "rps": 5.95,
+        "errorRate": 0.59
+      },
+      {
+        "scenario": "recovery.js",
+        "loadLevel": "L0",
+        "durationMs": 8611,
+        "exitCode": 0,
+        "p50Ms": 46.91,
+        "p95Ms": 280.22,
+        "p99Ms": 518.65,
+        "rps": 43.99,
+        "errorRate": 0
+      },
+      {
+        "scenario": "mixed-incident-storm.js",
+        "loadLevel": "L0",
+        "durationMs": 13319,
+        "exitCode": 0,
+        "p50Ms": 171.48,
+        "p95Ms": 3000.3,
+        "p99Ms": 3001.05,
+        "rps": 29.79,
+        "errorRate": 0.1276
+      }
+    ],
+    "verification": {
+      "passed": true,
+      "checkedAt": "2026-09-27T17:12:23.636Z",
+      "topology": "swarm_ha_split",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 758,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": true,
+          "pendingCriticalCount": 1417,
+          "oldestPendingCriticalAgeMs": 202962,
+          "pendingBulkCount": 0,
+          "deliveredCriticalCount": 570,
+          "deliveredBulkCount": 40
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          }
+        }
+      },
+      "totals": {
+        "incidentsCreated": 793,
+        "alertsPersisted": 758,
+        "notificationsTotal": 2802,
+        "backgroundJobsPending": 2655,
+        "backgroundJobsFailed": 0
+      }
+    },
+    "peakActivePgConnections": 9,
+    "peakOldestPendingJobAgeMs": 90881,
+    "certified": true
+  },
+  {
+    "topologyId": "kind_helm_split_pgbouncer",
+    "topologyName": "Kind Kubernetes (4-Node): Helm Split Runtime + PgBouncer + HPA/PDB",
+    "phase": 4,
+    "startedAt": "2026-09-27T18:25:20.479Z",
+    "completedAt": "2026-09-27T18:34:00.895Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 43548,
+        "exitCode": 0,
+        "p50Ms": 14295.56,
+        "p95Ms": 28720.91,
+        "p99Ms": 29941.25,
+        "rps": 1.33,
+        "errorRate": 0.5789
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 43413,
+        "exitCode": 0,
+        "p50Ms": 18832.45,
+        "p95Ms": 28985.93,
+        "p99Ms": 29056.17,
+        "rps": 0.35,
+        "errorRate": 0.8667
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 43402,
+        "exitCode": 0,
+        "p50Ms": 24425.73,
+        "p95Ms": 41634.58,
+        "p99Ms": 41804.46,
+        "rps": 0.44,
+        "errorRate": 1
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 43388,
+        "exitCode": 0,
+        "p50Ms": 20032.22,
+        "p95Ms": 25378.3,
+        "p99Ms": 28752.52,
+        "rps": 0.7,
+        "errorRate": 0.7667
+      },
+      {
+        "scenario": "status-fanout.js",
+        "loadLevel": "L0",
+        "durationMs": 38427,
+        "exitCode": 0,
+        "p50Ms": 15237.88,
+        "p95Ms": 26912.69,
+        "p99Ms": 27545.85,
+        "rps": 1.61,
+        "errorRate": 0.2459
+      },
+      {
+        "scenario": "realtime.js",
+        "loadLevel": "L0",
+        "durationMs": 38395,
+        "exitCode": 0,
+        "p50Ms": 4000.82,
+        "p95Ms": 31107.25,
+        "p99Ms": 31764.54,
+        "rps": 2.18,
+        "errorRate": 1
+      },
+      {
+        "scenario": "recovery.js",
+        "loadLevel": "L0",
+        "durationMs": 38421,
+        "exitCode": 0,
+        "p50Ms": 22790.06,
+        "p95Ms": 23801.34,
+        "p99Ms": 23887.19,
+        "rps": 0.74,
+        "errorRate": 0.6786
+      },
+      {
+        "scenario": "mixed-incident-storm.js",
+        "loadLevel": "L0",
+        "durationMs": 43399,
+        "exitCode": 0,
+        "p50Ms": 13296.15,
+        "p95Ms": 23592.72,
+        "p99Ms": 29384.53,
+        "rps": 2.81,
+        "errorRate": 0.8678
+      }
+    ],
+    "verification": {
+      "passed": true,
+      "checkedAt": "2026-09-27T18:34:00.888Z",
+      "topology": "kind_helm_split_pgbouncer",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 30,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": true,
+          "pendingCriticalCount": 0,
+          "oldestPendingCriticalAgeMs": 0,
+          "pendingBulkCount": 0,
+          "deliveredCriticalCount": 149,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          }
+        }
+      },
+      "totals": {
+        "incidentsCreated": 54,
+        "alertsPersisted": 30,
+        "notificationsTotal": 338,
+        "backgroundJobsPending": 24,
+        "backgroundJobsFailed": 0
+      }
+    },
+    "peakActivePgConnections": 9,
+    "peakOldestPendingJobAgeMs": 289,
+    "certified": true
+  },
+  {
+    "topologyId": "kind_kustomize_split_pgbouncer",
+    "topologyName": "Kind Kubernetes (4-Node): Kustomize Split + PgBouncer Profile",
+    "phase": 4,
+    "startedAt": "2026-09-28T03:13:03.920Z",
+    "completedAt": "2026-09-28T03:20:59.161Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 43689,
+        "exitCode": 0,
+        "p50Ms": 18695.51,
+        "p95Ms": 28682.64,
+        "p99Ms": 29335.11,
+        "rps": 0.95,
+        "errorRate": 0.8293
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 43390,
+        "exitCode": 0,
+        "p50Ms": 9109.59,
+        "p95Ms": 30811.3,
+        "p99Ms": 37439.97,
+        "rps": 0.86,
+        "errorRate": 0.7838
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 43502,
+        "exitCode": 0,
+        "p50Ms": 24637.1,
+        "p95Ms": 26561.54,
+        "p99Ms": 26687.42,
+        "rps": 0.44,
+        "errorRate": 1
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 43404,
+        "exitCode": 0,
+        "p50Ms": 22336.08,
+        "p95Ms": 38687.34,
+        "p99Ms": 39010.55,
+        "rps": 0.53,
+        "errorRate": 0.6957
+      },
+      {
+        "scenario": "status-fanout.js",
+        "loadLevel": "L0",
+        "durationMs": 38420,
+        "exitCode": 0,
+        "p50Ms": 10079.26,
+        "p95Ms": 27678.28,
+        "p99Ms": 28347.65,
+        "rps": 1.84,
+        "errorRate": 0.3286
+      },
+      {
+        "scenario": "realtime.js",
+        "loadLevel": "L0",
+        "durationMs": 38400,
+        "exitCode": 0,
+        "p50Ms": 4001.41,
+        "p95Ms": 28285.57,
+        "p99Ms": 29622.89,
+        "rps": 2.18,
+        "errorRate": 1
+      },
+      {
+        "scenario": "recovery.js",
+        "loadLevel": "L0",
+        "durationMs": 38392,
+        "exitCode": 0,
+        "p50Ms": 25323.88,
+        "p95Ms": 25934.32,
+        "p99Ms": 26023.07,
+        "rps": 0.71,
+        "errorRate": 0.7778
+      },
+      {
+        "scenario": "mixed-incident-storm.js",
+        "loadLevel": "L0",
+        "durationMs": 43430,
+        "exitCode": 0,
+        "p50Ms": 14414.43,
+        "p95Ms": 20057.13,
+        "p99Ms": 32539.47,
+        "rps": 2.79,
+        "errorRate": 0.6917
+      }
+    ],
+    "verification": {
+      "passed": true,
+      "checkedAt": "2026-09-28T03:20:59.152Z",
+      "topology": "kind_kustomize_split_pgbouncer",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 19,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": true,
+          "pendingCriticalCount": 8,
+          "oldestPendingCriticalAgeMs": 2554,
+          "pendingBulkCount": 0,
+          "deliveredCriticalCount": 71,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          }
+        }
+      },
+      "totals": {
+        "incidentsCreated": 45,
+        "alertsPersisted": 19,
+        "notificationsTotal": 220,
+        "backgroundJobsPending": 20,
+        "backgroundJobsFailed": 0
+      }
+    },
+    "peakActivePgConnections": 13,
+    "peakOldestPendingJobAgeMs": 627,
+    "certified": true
+  }
+]

@@ -200,12 +200,12 @@ export async function processEvent(
 
     // Rolling-upgrade compatibility: move an open incident created with an
     // older, unscoped key to the integration-scoped key on first contact.
-    if (existingIncident && existingIncident.dedupKey !== dedup_key) {
+    if (existingIncident && existingIncident.dedupKey !== dedupKeys.primary) {
       await tx.incident.update({
         where: { id: existingIncident.id },
-        data: { dedupKey: dedup_key },
+        data: { dedupKey: dedupKeys.primary },
       });
-      existingIncident.dedupKey = dedup_key;
+      existingIncident.dedupKey = dedupKeys.primary;
     }
 
     // Run this after the advisory lock so a queued event observes alert
@@ -467,7 +467,7 @@ export async function processEvent(
           status: isFlapping ? 'SUPPRESSED' : 'OPEN',
           urgency,
           priority: classification.priority,
-          dedupKey: dedup_key,
+          dedupKey: dedupKeys.primary,
           serviceId,
           visibility: service.defaultIncidentVisibility ?? 'PUBLIC',
           slaAckTargetMs: newSla.ackTargetMs,

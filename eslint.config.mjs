@@ -54,9 +54,31 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    files: ['tests/architecture/compliance-evidence-contract.test.ts'],
+    files: [
+      'tests/architecture/compliance-evidence-contract.test.ts',
+      'tests/lib/load-certification-suite.test.ts',
+    ],
     rules: {
       'security/detect-non-literal-fs-filename': 'off',
+    },
+  },
+  {
+    files: ['tests/load/**/*.{ts,js}'],
+    languageOptions: {
+      globals: {
+        __ENV: 'readonly',
+        __VU: 'readonly',
+        __ITER: 'readonly',
+        open: 'readonly',
+      },
+    },
+    rules: {
+      'security/detect-non-literal-fs-filename': 'off',
+      'security/detect-object-injection': 'off',
+      'security/detect-child-process': 'off',
+      'security/detect-non-literal-regexp': 'off',
+      'security/detect-unsafe-regex': 'off',
+      'import/no-anonymous-default-export': 'off',
     },
   },
   {
@@ -86,6 +108,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "dist/**",
+    "artifacts/**",
     "*.generated.*",
     "next-env.d.ts",
     "*.config.js",

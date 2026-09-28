@@ -83,6 +83,12 @@ export function normalizeError(error: unknown): AppError {
         cause: error,
       });
     }
+    if (code === 'P2034') {
+      return new AppError({
+        code: 'INCIDENT_STATE_CONFLICT',
+        cause: error,
+      });
+    }
   }
 
   return new AppError({

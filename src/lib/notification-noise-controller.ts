@@ -75,14 +75,34 @@ export async function countRelatedNotificationGroups(
     ])
   );
   if (unique.size === 0) return new Map();
-  const rows = await store.notification.findMany({
-    where: {
-      createdAt: { gte: new Date(now.getTime() - 60_000) },
-      OR: [...unique.values()].map(input => ({
-        recipientId: input.recipientId,
+
+  const groupedBySource = new Map<
+    string,
+    { sourceType: string; sourceId: string; eventType: string; recipientIds: string[] }
+  >();
+  for (const input of unique.values()) {
+    const groupKey = JSON.stringify([input.sourceType, input.sourceId, input.eventType]);
+    const existing = groupedBySource.get(groupKey);
+    if (existing) {
+      existing.recipientIds.push(input.recipientId);
+    } else {
+      groupedBySource.set(groupKey, {
         sourceType: input.sourceType,
         sourceId: input.sourceId,
         eventType: input.eventType,
+        recipientIds: [input.recipientId],
+      });
+    }
+  }
+
+  const rows = await store.notification.findMany({
+    where: {
+      createdAt: { gte: new Date(now.getTime() - 60_000) },
+      OR: [...groupedBySource.values()].map(group => ({
+        sourceType: group.sourceType,
+        sourceId: group.sourceId,
+        eventType: group.eventType,
+        recipientId: { in: group.recipientIds },
       })),
     },
     select: { recipientId: true, sourceType: true, sourceId: true, eventType: true },

@@ -1,11 +1,11 @@
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
 
-export const TRANSACTION_MAX_ATTEMPTS = 3;
-export const TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD = 5;
+export const TRANSACTION_MAX_ATTEMPTS = 5;
+export const TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD = 8;
 
 // Exponential backoff delays for retries (ms)
-const RETRY_DELAYS = [10, 25, 50, 100, 200];
+const RETRY_DELAYS = [20, 50, 100, 200, 400];
 
 function isRetryableTransactionError(error: unknown): boolean {
   const code =
@@ -16,7 +16,14 @@ function isRetryableTransactionError(error: unknown): boolean {
     // P2034 = Transaction failed due to write conflict or deadlock
     // P2002 = Unique constraint violation (can be retryable in race conditions)
     // P2028 = Transaction API error
-    return code === 'P2034' || code === 'P2002' || code === 'P2028';
+    // P2024 = Connection pool timeout
+    return (
+      code === 'P2034' ||
+      code === 'P2002' ||
+      code === 'P2028' ||
+      code === 'P2024' ||
+      ['P1001', 'P1002', 'P1008', 'P1017'].includes(code)
+    );
   }
   const message = error instanceof Error ? error.message : '';
   return (
@@ -24,7 +31,10 @@ function isRetryableTransactionError(error: unknown): boolean {
     message.includes('deadlock') ||
     message.includes('write conflict') ||
     message.includes('could not serialize') ||
-    message.includes('concurrent update')
+    message.includes('concurrent update') ||
+    message.includes('connection pool') ||
+    message.includes('timed out') ||
+    message.includes('timeout')
   );
 }
 
@@ -50,8 +60,8 @@ export async function runSerializableTransaction<T>(
     try {
       return await prisma.$transaction(tx => operation(tx), {
         isolationLevel: 'Serializable',
-        timeout: 10000,
-        maxWait: 2000,
+        timeout: 15000,
+        maxWait: 10000,
       });
     } catch (error) {
       if (attempt < maxAttempts - 1 && isRetryableTransactionError(error)) {
@@ -82,8 +92,8 @@ export async function runReadCommittedTransaction<T>(
     try {
       return await prisma.$transaction(tx => operation(tx), {
         isolationLevel: 'ReadCommitted',
-        timeout: 10000,
-        maxWait: 2000,
+        timeout: 15000,
+        maxWait: 10000,
       });
     } catch (error) {
       if (attempt < maxAttempts - 1 && isRetryableTransactionError(error)) {

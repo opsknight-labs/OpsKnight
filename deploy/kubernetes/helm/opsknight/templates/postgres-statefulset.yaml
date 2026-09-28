@@ -48,6 +48,11 @@ spec:
               value: /var/lib/postgresql/data/pgdata
             - name: POSTGRES_INITDB_ARGS
               value: "-E UTF8 --locale=C"
+          args:
+            - -c
+            - max_connections=300
+            - -c
+            - shared_buffers=128MB
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
@@ -59,12 +64,12 @@ spec:
             {{- toYaml .Values.postgresql.resources | nindent 12 }}
           livenessProbe:
             exec:
-              command: ["pg_isready", "-U", {{ .Values.postgresql.username | quote }}]
+              command: ["pg_isready", "-U", {{ .Values.postgresql.username | quote }}, "-d", {{ .Values.postgresql.database | quote }}]
             initialDelaySeconds: 30
             periodSeconds: 10
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", {{ .Values.postgresql.username | quote }}]
+              command: ["pg_isready", "-U", {{ .Values.postgresql.username | quote }}, "-d", {{ .Values.postgresql.database | quote }}]
             initialDelaySeconds: 5
             periodSeconds: 5
       volumes:

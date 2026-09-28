@@ -429,16 +429,25 @@ export async function processPendingEscalations(
     });
 
     const total = pendingIncidents.length;
-    const settledResults = await Promise.all(
-      pendingIncidents.map(async incident => {
-        const stepIndex = incident.currentEscalationStep ?? 0;
-        try {
-          return { incident, result: await executor(incident.id, stepIndex) } as const;
-        } catch (error) {
-          return { incident, error } as const;
-        }
-      })
-    );
+    const settledResults: Array<
+      | { readonly incident: (typeof pendingIncidents)[number]; readonly result: Awaited<ReturnType<typeof executor>> }
+      | { readonly incident: (typeof pendingIncidents)[number]; readonly error: unknown }
+    > = [];
+    const CHUNK_SIZE = 5;
+    for (let i = 0; i < pendingIncidents.length; i += CHUNK_SIZE) {
+      const chunk = pendingIncidents.slice(i, i + CHUNK_SIZE);
+      const chunkResults = await Promise.all(
+        chunk.map(async incident => {
+          const stepIndex = incident.currentEscalationStep ?? 0;
+          try {
+            return { incident, result: await executor(incident.id, stepIndex) } as const;
+          } catch (error) {
+            return { incident, error } as const;
+          }
+        })
+      );
+      settledResults.push(...chunkResults);
+    }
 
     for (const settledResult of settledResults) {
       const { incident } = settledResult;
