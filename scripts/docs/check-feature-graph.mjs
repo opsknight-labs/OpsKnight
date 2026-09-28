@@ -9,6 +9,8 @@ if (!graph || graph.schemaVersion !== 1) throw new Error('Feature graph is missi
 if (graph.unclassified.length > 0) throw new Error(`Unclassified feature nodes:\n${graph.unclassified.join('\n')}`);
 if (graph.duplicateIds.length > 0) throw new Error(`Duplicate feature node IDs:\n${graph.duplicateIds.join('\n')}`);
 if (graph.unsupportedClaims.length > 0) throw new Error(`Unsupported generated claims:\n${graph.unsupportedClaims.join('\n')}`);
+if (graph.undocumented.length > 0) throw new Error(`Supported feature nodes without documentation:\n${graph.undocumented.join('\n')}`);
+if (graph.unresolvedSemanticContracts.length > 0) throw new Error(`Unresolved semantic contracts:\n${graph.unresolvedSemanticContracts.join('\n')}`);
 
 const requiredKinds = [
   'api', 'ui', 'model', 'enum', 'configuration', 'integration', 'notification-provider',
@@ -30,6 +32,14 @@ for (const node of graph.nodes) {
       throw new Error(`Incomplete claim provenance: ${claim.id}`);
     }
   }
+  if (node.classification !== 'INTERNAL_IMPLEMENTATION') {
+    const documentation = Object.values(node.documentation ?? {}).flat();
+    if (documentation.length === 0) throw new Error(`Supported feature has no documentation: ${node.id}`);
+    for (const path of documentation) {
+      try { readFileSync(resolve(root, 'docs/v2.0.0', path)); }
+      catch { throw new Error(`Feature documentation does not exist: ${node.id} -> ${path}`); }
+    }
+  }
 }
 
-console.log(`Feature graph contract passed: ${graph.nodes.length} classified nodes and ${graph.summary.claims} evidence-backed claims.`);
+console.log(`Feature graph contract passed: ${graph.nodes.length} classified nodes, ${graph.summary.documentedSupported}/${graph.summary.supported} supported nodes documented, and ${graph.summary.claims} evidence-backed claims.`);
