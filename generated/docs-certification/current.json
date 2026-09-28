@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-28T03:05:55.680Z",
-  "sourceRevision": "487683513a546b58bb334edea62a7a1593c7c5d8",
+  "generatedAt": "2026-09-28T03:22:37.590Z",
+  "sourceRevision": "38e9c140e07b8a9c32d9b8496931c5aee30876ff",
   "releaseState": "upcoming",
   "checks": {
     "frontmatter": "passed",
@@ -9,11 +9,11 @@
     "capabilityCoverage": "passed",
     "evidenceContract": "passed",
     "toolingTests": "passed",
-    "runtimeJourneys": "not-run",
+    "runtimeJourneys": "passed",
     "websiteBuild": "release-gated"
   },
   "counts": {
-    "documentationPages": 111,
+    "documentationPages": 112,
     "capabilitiesDiscovered": 22,
     "capabilitiesDocumented": 22,
     "uiRoutes": 101,

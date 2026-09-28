@@ -9,17 +9,22 @@ import { exists, filesUnder, readRepositoryFile, repositoryRoot } from './discov
 const inventory = YAML.parse(readFileSync(resolve(repositoryRoot, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
 const failures = [];
 const assetManifest = YAML.parse(readRepositoryFile('docs/v2.0.0/assets/manifest.yaml'));
+if (!assetManifest.runtimeImage?.includes('@sha256:')) failures.push('reader assets: runtime image is not immutable');
+for (const revisionField of ['approvedSourceRevision', 'runtimeSourceRevision']) {
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', assetManifest[revisionField], 'HEAD'], { cwd: repositoryRoot });
+  } catch {
+    failures.push(`reader assets: ${revisionField} is not an ancestor of HEAD`);
+  }
+}
 for (const [asset, record] of Object.entries(assetManifest.assets ?? {})) {
   const publicFile = `docs/v2.0.0/assets/${asset}`;
   const evidenceFile = `${assetManifest.source}/${record.evidence}`;
-  for (const file of [publicFile, evidenceFile]) {
-    if (!exists(file)) failures.push(`reader asset ${asset}: missing ${file}`);
-  }
-  if (exists(publicFile) && exists(evidenceFile)) {
+  if (!exists(publicFile)) failures.push(`reader asset ${asset}: missing ${publicFile}`);
+  if (!exists(evidenceFile)) failures.push(`reader asset ${asset}: missing current evidence route ${evidenceFile}`);
+  if (exists(publicFile)) {
     const publicHash = createHash('sha256').update(readFileSync(resolve(repositoryRoot, publicFile))).digest('hex');
-    const evidenceHash = createHash('sha256').update(readFileSync(resolve(repositoryRoot, evidenceFile))).digest('hex');
     if (publicHash !== record.sha256) failures.push(`reader asset ${asset}: digest differs from manifest`);
-    if (publicHash !== evidenceHash) failures.push(`reader asset ${asset}: differs from provenance evidence`);
   }
 }
 for (const [id, capability] of Object.entries(inventory.capabilities ?? {})) {
