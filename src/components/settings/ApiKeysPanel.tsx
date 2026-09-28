@@ -687,7 +687,7 @@ print(response.json()["incidents"])`}
 
       {/* 5. Create API Key Modal Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="w-[calc(100%-2rem)] max-w-4xl max-h-[90vh] overflow-x-hidden overflow-y-auto">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-none max-h-[90vh] overflow-x-hidden overflow-y-auto sm:w-[calc(100%-3rem)] sm:max-w-5xl">
           <DialogHeader>
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
@@ -716,7 +716,7 @@ print(response.json()["incidents"])`}
               </Alert>
             )}
 
-            <div className="grid min-w-0 gap-4 md:grid-cols-2">
+            <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.65fr)]">
               {/* Key Name */}
               <div className="space-y-1.5">
                 <Label htmlFor="modal-key-name" className="text-xs font-semibold">
@@ -766,13 +766,13 @@ print(response.json()["incidents"])`}
                 </p>
               </div>
 
-              <div className="grid min-w-0 gap-2.5 xl:grid-cols-2">
+              <div className="grid min-w-0 gap-3 lg:grid-cols-2">
                 {visibleScopes.map(scope => {
                   const Icon = scope.icon;
                   return (
                     <div
                       key={scope.value}
-                      className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border border-border/80 bg-background p-3.5 text-xs transition-all hover:border-primary/40 hover:bg-accent/30"
+                      className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2 rounded-xl border border-border/80 bg-background p-4 text-xs transition-all hover:border-primary/40 hover:bg-accent/30 sm:grid-cols-[auto_minmax(0,1fr)_auto]"
                     >
                       <Checkbox
                         name="scopes"
@@ -781,23 +781,25 @@ print(response.json()["incidents"])`}
                         id={`scope-${scope.value}`}
                         className="mt-0.5 shrink-0"
                       />
-                      <div className="min-w-0 space-y-1.5">
+
+                      <div className="min-w-0">
                         <label
                           htmlFor={`scope-${scope.value}`}
-                          className="grid min-w-0 cursor-pointer gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
+                          className="flex min-w-0 cursor-pointer items-center gap-1.5 text-xs font-semibold leading-tight text-foreground"
                         >
-                          <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold leading-tight text-foreground">
-                            <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="min-w-0 whitespace-normal break-normal">{scope.title}</span>
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 whitespace-normal sm:whitespace-nowrap">
+                            {scope.title}
                           </span>
-                          <code className="max-w-full justify-self-start whitespace-nowrap rounded border border-border/50 bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:justify-self-end">
-                            {scope.value}
-                          </code>
                         </label>
-                        <p className="max-w-prose text-[11px] leading-relaxed text-muted-foreground">
+                        <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
                           {scope.detail}
                         </p>
                       </div>
+
+                      <code className="col-start-2 max-w-full justify-self-start whitespace-nowrap rounded border border-border/50 bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:col-start-3 sm:row-start-1 sm:justify-self-end">
+                        {scope.value}
+                      </code>
                     </div>
                   );
                 })}
