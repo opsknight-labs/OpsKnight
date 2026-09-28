@@ -4,6 +4,7 @@ description: Create a schedule and escalation policy for a new service.
 type: tutorial
 product_area: getting-started
 audience: [administrator]
+keywords: [configure on-call, on-call schedule, responder rotation, escalation policy]
 verification:
   level: source
   verified_at: 2026-09-28

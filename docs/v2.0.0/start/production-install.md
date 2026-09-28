@@ -4,6 +4,7 @@ description: Choose and validate an OpsKnight deployment topology.
 type: deployment
 product_area: deployment
 audience: [operator, administrator]
+keywords: [production install, choose deployment, Docker Compose, Kubernetes, Swarm, high availability]
 verification:
   level: source
   verified_at: 2026-09-27
@@ -15,20 +16,24 @@ verification:
 
 # Plan a production installation
 
-Choose a topology based on failure isolation, throughput, and operational
-ownership. The deployment reference covers Compose, Kubernetes, Helm,
-Kustomize, and split-runtime roles. Do not promote an installation until
-readiness, migrations, backup, restore, and rollback have been exercised.
+Choose from operational ownership, HA, and isolation requirements. No topology
+currently has a certified numeric production envelope, so do not choose from an
+uncertified requests-per-second claim.
 
 ## Choose a topology
 
-- Use [Compose](../operate/deploy/compose) for a single-host installation with
-  straightforward ownership.
-- Use [Kubernetes](../operate/deploy/kubernetes) when the platform team owns
-  scheduling, disruption budgets, network policy, and persistent storage.
-- Use [split runtime](../operate/deploy/split-runtime) when web, scheduler,
-  critical, general, bulk, and status projection workloads need independent
-  capacity and failure isolation.
+- Single host and simplest operation: [Integrated Compose](../operate/deploy/compose/).
+- Single host with worker isolation: [Split Compose](../operate/deploy/split-runtime/).
+- Split runtime with web/database connection pressure: calculate the connection
+  budget, then add supported PgBouncer transaction pooling.
+- Docker-native multi-node HA: [Docker Swarm](../operate/deploy/swarm/).
+- Existing Kubernetes platform: [Kubernetes](../operate/deploy/kubernetes/).
+- Packaged, schema-validated Kubernetes: [Helm](../operate/deploy/helm/).
+- GitOps or owned overlays: [Kustomize](../operate/deploy/kustomize/).
+
+Use the complete [deployment decision table](../operate/capacity/choose-deployment/)
+and [capacity methodology](../operate/capacity/certification-methodology/) before
+converting test observations into a production plan.
 
 ## Promotion checklist
 
@@ -43,3 +48,5 @@ readiness, migrations, backup, restore, and rollback have been exercised.
    and [rollback](../operate/upgrades/rollback) with representative data.
 6. Run a synthetic incident through every delivery channel before accepting
    production alerts.
+7. Establish queue, provider, PostgreSQL, SSE, and projector alerts from
+   [scaling signals](../operate/capacity/scaling-signals/).

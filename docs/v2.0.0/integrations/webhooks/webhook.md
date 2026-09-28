@@ -4,6 +4,7 @@ description: Connect Generic webhook alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Generic webhook webhook", "connect Generic webhook", "Generic webhook alerts", "Generic webhook integration"]
 verification:
   level: source
   verified_at: 2026-09-27

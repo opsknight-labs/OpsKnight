@@ -4,6 +4,7 @@ description: Configure Jira credentials, project defaults, and issue creation.
 type: how-to
 product_area: jira
 audience: [administrator]
+keywords: [connect Jira, Jira integration, Jira credentials, Jira service mapping]
 verification:
   level: source
   verified_at: 2026-09-28

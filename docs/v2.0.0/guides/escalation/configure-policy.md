@@ -4,6 +4,7 @@ description: Route unanswered incidents through ordered response targets.
 type: how-to
 product_area: escalation
 audience: [administrator]
+keywords: [escalation policy, change escalation, responder tiers, escalation delay]
 verification:
   level: source
   verified_at: 2026-09-27

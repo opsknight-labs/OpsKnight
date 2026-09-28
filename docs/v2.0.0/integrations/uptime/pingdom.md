@@ -4,6 +4,7 @@ description: Connect Pingdom alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Pingdom webhook", "connect Pingdom", "Pingdom alerts", "Pingdom integration"]
 verification:
   level: source
   verified_at: 2026-09-27

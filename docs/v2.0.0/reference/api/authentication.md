@@ -4,6 +4,7 @@ description: Authenticate supported OpsKnight API requests and rotate credential
 type: reference
 product_area: api
 audience: [developer, operator, administrator]
+keywords: [API token, API key, bearer authentication, API permissions, rotate API key]
 verification:
   level: runtime
   verified_at: 2026-09-27

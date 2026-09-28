@@ -14,8 +14,8 @@ verification:
 # Concepts
 
 Concept pages explain the product model and its constraints. Procedures belong
-in [Guides](../guides/README.md); exact contracts belong in
-[Reference](../reference/README.md).
+in [Guides](../guides/); exact contracts belong in
+[Reference](../reference/).
 
 - [Incidents](./incidents)
 - [Services](./services)

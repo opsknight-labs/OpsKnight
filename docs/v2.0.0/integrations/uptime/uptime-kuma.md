@@ -4,6 +4,7 @@ description: Connect Uptime Kuma alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Uptime Kuma webhook", "connect Uptime Kuma", "Uptime Kuma alerts", "Uptime Kuma integration"]
 verification:
   level: source
   verified_at: 2026-09-27

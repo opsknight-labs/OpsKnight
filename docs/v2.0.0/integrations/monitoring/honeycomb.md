@@ -4,6 +4,7 @@ description: Connect Honeycomb alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Honeycomb webhook", "connect Honeycomb", "Honeycomb alerts", "Honeycomb integration"]
 verification:
   level: source
   verified_at: 2026-09-27

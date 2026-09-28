@@ -4,6 +4,7 @@ description: Connect an OpenID Connect provider and test safe sign-in behavior.
 type: how-to
 product_area: identity
 audience: [administrator, operator]
+keywords: [OIDC login, configure SSO, OpenID Connect, identity provider, OIDC setup]
 verification:
   level: source
   verified_at: 2026-09-27

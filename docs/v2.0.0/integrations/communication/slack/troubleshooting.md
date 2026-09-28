@@ -4,6 +4,7 @@ description: Diagnose OAuth, delivery, interactive-action, identity, and war-roo
 type: troubleshooting
 product_area: chatops
 audience: [administrator, responder]
+keywords: [slack not sending, slack message failed, slack troubleshooting, slack actions failing]
 verification:
   level: source
   verified_at: 2026-09-28
@@ -34,4 +35,3 @@ should be retried only after worker health is restored.
 Check `channels:manage`; for private rooms also check the optional `groups:*`
 scopes. Inspect the incident collaboration operation before manually creating a
 replacement channel.
-

@@ -4,6 +4,7 @@ description: Stage an application and schema upgrade with explicit verification.
 type: deployment
 product_area: upgrades
 audience: [operator, administrator]
+keywords: [upgrade OpsKnight, migration upgrade, release upgrade, rolling upgrade]
 verification:
   level: source
   verified_at: 2026-09-27
@@ -22,4 +23,3 @@ changes once, then roll application roles in the documented compatibility order.
 Verify readiness, deep health, authentication, incident lifecycle, notification
 processing, scheduler progress, status projection, integrations, and mobile
 routes before completing the window.
-

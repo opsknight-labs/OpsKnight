@@ -4,6 +4,7 @@ description: Connect Splunk On-Call alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Splunk On-Call webhook", "connect Splunk On-Call", "Splunk On-Call alerts", "Splunk On-Call integration"]
 verification:
   level: source
   verified_at: 2026-09-27

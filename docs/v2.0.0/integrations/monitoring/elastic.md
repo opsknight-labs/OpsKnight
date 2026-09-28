@@ -4,6 +4,7 @@ description: Connect Elastic alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Elastic webhook", "connect Elastic", "Elastic alerts", "Elastic integration"]
 verification:
   level: source
   verified_at: 2026-09-27

@@ -4,6 +4,7 @@ description: Connect ManageEngine alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["ManageEngine webhook", "connect ManageEngine", "ManageEngine alerts", "ManageEngine integration"]
 verification:
   level: source
   verified_at: 2026-09-27
