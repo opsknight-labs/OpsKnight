@@ -16,6 +16,38 @@ const areaPatterns = [
 
 const ownerFor = value => areaPatterns.find(([, pattern]) => pattern.test(value))?.[0] ?? 'platform';
 
+const catalog = YAML.parse(readFileSync(resolve(repositoryRoot, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
+const documentationGroups = ['concepts', 'guides', 'reference'];
+const normalizeSource = value => value.replace(/\/$/, '');
+const overlaps = (left, right) => left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`);
+
+function documentationFor(kind, id, sources, owner) {
+  let matched = Object.values(catalog.capabilities ?? {}).filter(capability =>
+    (capability.sources ?? []).some(pattern => sources.some(source => overlaps(normalizeSource(source), normalizeSource(pattern))))
+  );
+  if (matched.length === 0 && kind === 'ui') {
+    const aliases = {
+      incident: ['incidents', 'postmortems'], notification: ['notifications'], 'on-call': ['on-call'],
+      escalation: ['escalation'], 'status-page': ['status-pages'], identity: ['identity', 'mobile'],
+      authorization: ['authorization'], compliance: ['compliance'], privacy: ['privacy'], analytics: ['analytics'],
+      integration: ['integrations', 'jira', 'chatops'], chatops: ['chatops'], deployment: ['deployment', 'observability'], platform: ['mobile', 'deployment'],
+    };
+    matched = Object.values(catalog.capabilities ?? {}).filter(capability => (aliases[owner] ?? []).includes(capability.product_area));
+  }
+  const documentation = Object.fromEntries(documentationGroups.map(group => [group, [...new Set(matched.flatMap(item => item[group] ?? []))]]));
+  if (kind === 'configuration') documentation.reference.push('reference/configuration/README.md');
+  if (kind === 'limit') documentation.reference.push('reference/limits.md');
+  if (['permission', 'authorization-action', 'api-scope'].includes(kind)) documentation.reference.push('reference/permissions.md');
+  if (kind === 'api') documentation.reference.push('reference/api/README.md');
+  if (kind === 'integration') {
+    const entry = `integrations/${id === 'webhook' ? 'webhooks' : id === 'pagerduty' ? 'webhooks' : 'monitoring'}/${id}.md`;
+    if (exists(`docs/v2.0.0/${entry}`)) documentation.reference.push(entry);
+    documentation.reference.push('integrations/README.md');
+  }
+  if (kind === 'notification-provider') documentation.concepts.push('concepts/notifications.md');
+  return Object.fromEntries(Object.entries(documentation).map(([group, paths]) => [group, [...new Set(paths)].sort()]));
+}
+
 function apiClassification(route) {
   if (/^\/api\/(?:events|incidents(?:\/\[id\])?)$/.test(route)) return 'PUBLIC_API';
   if (/^\/api\/(?:integrations|webhooks|scim)\//.test(route)) return 'PUBLIC_API';
@@ -53,6 +85,7 @@ export function buildFeatureGraph(discovery) {
       evidence,
       verification: 'source',
     });
+    const documentation = documentationFor(kind, id, evidence, owner);
     nodes.push({
     id: nodeId,
     kind,
@@ -61,11 +94,12 @@ export function buildFeatureGraph(discovery) {
     classification,
     sources: evidence,
     contract,
+    documentation,
     claims,
   });
   };
 
-  for (const route of discovery.apiRoutes) add('api', route.route, apiClassification(route.route), ownerFor(route.route), [route.file], route);
+  for (const route of discovery.apiRoutes) add('api', route.route, apiClassification(route.route), ownerFor(route.route), route.sources ?? [route.file], route);
   for (const route of discovery.uiRoutes) add('ui', route.route, uiClassification(route.route), ownerFor(route.route), [route.file], route);
   for (const model of discovery.database.models) add('model', model, 'INTERNAL_IMPLEMENTATION', ownerFor(model), [discovery.database.source]);
   for (const value of discovery.database.enums) add('enum', value, 'INTERNAL_IMPLEMENTATION', ownerFor(value), [discovery.database.source]);
@@ -78,7 +112,11 @@ export function buildFeatureGraph(discovery) {
   for (const lane of discovery.runtime.workerLanes) add('worker-lane', lane, 'OPERATOR_FEATURE', 'deployment', ['src/lib/job-worker.ts']);
   for (const role of discovery.deployment.runtimeRoles) add('runtime-role', role.name, 'OPERATOR_FEATURE', 'deployment', role.sources);
   for (const topology of discovery.deployment.topologies) add('deployment-topology', topology.name, 'OPERATOR_FEATURE', 'deployment', topology.files);
-  for (const limit of discovery.limits) add('limit', limit.id, 'OPERATOR_FEATURE', ownerFor(limit.source), [limit.source], limit);
+  for (const limit of discovery.limits) add('limit', limit.id,
+    limit.semanticClassification === 'INTERNAL_IMPLEMENTATION' || limit.semanticClassification === 'PROVIDER_CONSTRAINT'
+      ? 'INTERNAL_IMPLEMENTATION'
+      : limit.semanticClassification === 'OPERATOR_TUNABLE' ? 'OPERATOR_FEATURE' : 'PUBLIC_FEATURE',
+    ownerFor(limit.source), [limit.source], limit);
 
   const duplicateIds = [...new Set(nodes.filter((node, index) => nodes.findIndex(candidate => candidate.id === node.id) !== index).map(node => node.id))];
   const unclassified = nodes.filter(node => !node.classification || !node.owner || node.sources.length === 0).map(node => node.id);
@@ -86,6 +124,11 @@ export function buildFeatureGraph(discovery) {
   const byClassification = Object.fromEntries([...new Set(nodes.map(node => node.classification))].sort().map(value => [value, nodes.filter(node => node.classification === value).length]));
   const claims = nodes.flatMap(node => node.claims);
   const unsupportedClaims = claims.filter(claim => claim.evidence.length === 0);
+  const supported = nodes.filter(node => node.classification !== 'INTERNAL_IMPLEMENTATION');
+  const undocumented = supported.filter(node => !Object.values(node.documentation).some(paths => paths.length > 0));
+  const unresolvedSemanticContracts = supported.filter(node =>
+    node.kind === 'notification-provider' && (node.contract.enabledCondition === 'unknown' || node.contract.discovery !== 'implementation')
+  );
   return {
     schemaVersion: 1,
     nodes,
@@ -93,6 +136,10 @@ export function buildFeatureGraph(discovery) {
       total: nodes.length,
       claims: claims.length,
       unsupportedClaims: unsupportedClaims.length,
+      supported: supported.length,
+      documentedSupported: supported.length - undocumented.length,
+      undocumentedSupported: undocumented.length,
+      unresolvedSemanticContracts: unresolvedSemanticContracts.length,
       byKind,
       byClassification,
       unclassified: unclassified.length,
@@ -100,5 +147,11 @@ export function buildFeatureGraph(discovery) {
     unclassified,
     duplicateIds,
     unsupportedClaims: unsupportedClaims.map(claim => claim.id),
+    undocumented: undocumented.map(node => node.id),
+    unresolvedSemanticContracts: unresolvedSemanticContracts.map(node => node.id),
   };
 }
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import YAML from 'yaml';
+import { exists, repositoryRoot } from './discovery-lib.mjs';

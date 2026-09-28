@@ -23,6 +23,10 @@ API promises.
 - Unclassified nodes: 0
 - Evidence-backed generated claims: 1539
 - Unsupported generated claims: 0
+- Supported product nodes: 564
+- Documented supported nodes: 564
+- Undocumented supported nodes: 0
+- Unresolved semantic contracts: 0
 
 - `api`: 219
 - `api-scope`: 7
@@ -42,10 +46,10 @@ API promises.
 ## Classification totals
 
 - `ADMIN_FEATURE`: 83
-- `INTERNAL_IMPLEMENTATION`: 355
-- `OPERATOR_FEATURE`: 494
+- `INTERNAL_IMPLEMENTATION`: 530
+- `OPERATOR_FEATURE`: 277
 - `PUBLIC_API`: 47
-- `PUBLIC_FEATURE`: 115
+- `PUBLIC_FEATURE`: 157
 
 The complete node-level contract, including provenance and extracted API
 semantics, is stored in `generated/docs-contracts/current.json`.

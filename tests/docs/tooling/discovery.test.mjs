@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { routeFromFile } from '../../../scripts/docs/discovery-lib.mjs';
 import { inspectConfig } from '../../../scripts/docs/inspect-config.mjs';
-import { exportedHttpMethods } from '../../../scripts/docs/inspect-api.mjs';
+import { effectiveRouteSources, exportedHttpMethods, inspectApi } from '../../../scripts/docs/inspect-api.mjs';
+import { inspectNotificationProviders } from '../../../scripts/docs/inspect-notification-providers.mjs';
 
 describe('documentation route discovery', () => {
   it('normalizes an API collection route', () => {
@@ -18,6 +19,25 @@ describe('documentation route discovery', () => {
 
   it('removes route groups from application pages', () => {
     assert.equal(routeFromFile('src/app/(app)/incidents/page.tsx', 'src/app/'), '/incidents');
+  });
+
+  it('resolves shared integration handler semantics', () => {
+    const sources = effectiveRouteSources('src/app/api/integrations/datadog/route.ts');
+    assert.ok(sources.includes('src/lib/integrations/handler.ts'));
+    const route = inspectApi().find(item => item.route === '/api/integrations/datadog');
+    assert.deepEqual(route?.authentication, ['integration-key']);
+    assert.equal(route?.rateLimited, true);
+    assert.equal(route?.bodyLimited, true);
+    assert.equal(route?.deliveryFencing, true);
+  });
+});
+
+describe('notification provider discovery', () => {
+  it('derives WhatsApp support from its implementation', () => {
+    const provider = inspectNotificationProviders().find(item => item.id === 'whatsapp.twilio');
+    assert.equal(provider?.discovery, 'implementation');
+    assert.ok(provider?.requiredCredentials.includes('whatsappNumber'));
+    assert.notEqual(provider?.enabledCondition, 'unknown');
   });
 });
 

@@ -147,7 +147,7 @@ Supported general-purpose contracts are documented separately:
 - `POST, PATCH, DELETE /api/settings/status-page/announcements` — `src/app/api/settings/status-page/announcements/route.ts`
 - `POST, DELETE /api/settings/status-page/api-tokens` — `src/app/api/settings/status-page/api-tokens/route.ts`
 - `POST /api/settings/status-page` — `src/app/api/settings/status-page/route.ts`
-- `PATCH /api/settings/status-pages/[pageId]/[section]` — `src/app/api/settings/status-pages/[pageId]/[section]/route.ts`
+- `POST, PATCH /api/settings/status-pages/[pageId]/[section]` — `src/app/api/settings/status-pages/[pageId]/[section]/route.ts`
 - `POST /api/settings/status-pages/[pageId]/make-default` — `src/app/api/settings/status-pages/[pageId]/make-default/route.ts`
 - `POST /api/settings/status-pages/[pageId]/publish` — `src/app/api/settings/status-pages/[pageId]/publish/route.ts`
 - `GET, POST, DELETE /api/settings/status-pages` — `src/app/api/settings/status-pages/route.ts`
