@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ApiKeysPanel, { type ApiKey } from '@/components/settings/ApiKeysPanel';
+import { revokeApiKey } from '@/app/(app)/settings/actions';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    refresh: vi.fn(),
+  }),
+}));
 
 // Mock server actions
 vi.mock('@/app/(app)/settings/actions', () => ({
@@ -97,6 +104,30 @@ describe('ApiKeysPanel Component', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
     expect(screen.getByText('Response Policy Read')).toBeDefined();
     expect(screen.queryByText('Response Policy Write')).toBeNull();
+  });
+
+
+  it('uses the standard confirmation dialog and revokes the selected key', async () => {
+    vi.mocked(revokeApiKey).mockResolvedValue(undefined);
+
+    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={true} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+
+    expect(screen.getByRole('alertdialog')).toBeDefined();
+    expect(screen.getByText('Revoke API Key?')).toBeDefined();
+    expect(
+      screen.getByText(/applications, webhooks, or pipelines using this token/i)
+    ).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke Key' }));
+
+    await waitFor(() => {
+      expect(revokeApiKey).toHaveBeenCalledTimes(1);
+    });
+
+    const formData = vi.mocked(revokeApiKey).mock.calls[0][0] as FormData;
+    expect(formData.get('keyId')).toBe('key-1');
   });
 
   it('renders developer API quickstart code examples', () => {
