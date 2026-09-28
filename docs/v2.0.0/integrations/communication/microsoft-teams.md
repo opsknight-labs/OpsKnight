@@ -19,6 +19,10 @@ install it in the intended tenant, and map destinations to OpsKnight services.
 Use a synthetic incident to verify Adaptive Card delivery, action validation,
 identity linking, participant synchronization, and war-room cleanup.
 
+For the complete workflow, use the [Microsoft Teams ChatOps guide](./microsoft-teams/),
+including Entra and Bot setup, destinations, Adaptive Card actions, optional
+war-room consent, permissions, and troubleshooting.
+
 Open **Services → your service → Notifications**, enable Microsoft Teams, and
 link up to three team/channel destinations. All linked destinations receive the
 service lifecycle messages. Test each channel independently and remove an old

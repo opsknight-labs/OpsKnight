@@ -22,3 +22,13 @@ Each inbound page records the handler type, lifecycle actions actually present
 in its adapter, authentication and conditional signature behavior, and available
 delivery identity. Do not assume every provider supports acknowledge, signatures,
 or durable delivery fencing merely because another provider does.
+
+## Communication and work management
+
+- [Slack ChatOps](./communication/slack/) — OAuth, destinations, incident
+  actions, identities, war rooms, permissions, and troubleshooting.
+- [Microsoft Teams ChatOps](./communication/microsoft-teams/) — Entra and Bot
+  setup, Adaptive Cards, destinations, war rooms, consent, and troubleshooting.
+- [Jira](./issue-tracking/jira) — issue creation, linking, synchronization, and
+  authenticated webhooks.
+- [Voice paging](./communication/voice) — Twilio voice delivery and callbacks.

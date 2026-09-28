@@ -1,0 +1,25 @@
+---
+title: Microsoft Teams ChatOps
+description: Configure the Teams application, destinations, incident cards, and war rooms.
+type: integration
+product_area: chatops
+audience: [administrator, responder]
+verification:
+  level: source
+  verified_at: 2026-09-28
+  evidence: [src/lib/microsoft-teams/app-manifest.ts, src/lib/microsoft-teams/auth.ts, src/lib/war-room/providers/microsoft-teams/adapter.ts]
+---
+
+# Microsoft Teams ChatOps
+
+Teams uses a registered Entra application, Azure Bot messaging endpoint, a
+Teams app package, tenant-scoped installation records, service destinations,
+and Adaptive Cards. It is not a Slack configuration with renamed fields.
+
+- [Connect Microsoft Teams](./connect)
+- [Configure service destinations](./configure-destinations)
+- [Use Adaptive Card actions](./incident-actions)
+- [Configure Teams war rooms](./war-rooms)
+- [Review permissions](./permissions)
+- [Troubleshoot Teams](./troubleshooting)
+

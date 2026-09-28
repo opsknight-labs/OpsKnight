@@ -4,6 +4,8 @@ import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import YAML from 'yaml';
 import { exists, readRepositoryFile, repositoryRoot } from './discovery-lib.mjs';
+import { inspectApi } from './inspect-api.mjs';
+import { inspectIntegrations } from './inspect-integrations.mjs';
 
 const categories = {
   monitoring: ['appdynamics', 'datadog', 'dynatrace', 'elastic', 'grafana', 'honeycomb', 'icinga', 'manageengine', 'nagios', 'newrelic', 'prometheus', 'sentry', 'splunk-observability', 'splunk-oncall', 'zabbix'],
@@ -22,9 +24,12 @@ const displayNames = {
   vercel: 'Vercel', webhook: 'Generic webhook',
 };
 
+const categoryFor = id => Object.entries(categories).find(([, names]) => names.includes(id))?.[0] ?? 'webhooks';
+const apiContracts = new Map(inspectApi().map(contract => [contract.route, contract]));
 const providers = [];
-for (const [category, names] of Object.entries(categories)) {
-  for (const id of names) {
+for (const discovered of inspectIntegrations()) {
+    const id = discovered.provider;
+    const category = categoryFor(id);
     const source = `src/lib/integrations/${id}.ts`;
     const route = `src/app/api/integrations/${id}/route.ts`;
     if (!exists(source) || !exists(route)) throw new Error(`Provider ${id} is missing source or route evidence`);
@@ -37,6 +42,9 @@ for (const [category, names] of Object.entries(categories)) {
     const signatureProvider = routeSource.match(/signatureProvider:\s*['"]([^'"]+)['"]/)?.[1];
     const headers = [...new Set([...routeSource.matchAll(/headers?\.get\(['"]([^'"]+)['"]\)/gi)]
       .map(match => match[1].toLowerCase()))];
+    const api = apiContracts.get(`/api/integrations/${id}`);
+    const requestSchema = routeSource.match(/schema:\s*([A-Za-z][A-Za-z0-9]+Schema)\b/)?.[1] ??
+      routeSource.match(/IntegrationSchemas\.([A-Z][A-Z0-9_]*)/)?.[1] ?? 'shared provider schema';
     providers.push({
       id,
       title: displayNames[id] ?? id,
@@ -45,8 +53,17 @@ for (const [category, names] of Object.entries(categories)) {
       protocol: 'webhook',
       endpoint: `/api/integrations/${id}`,
       handler: sharedHandler ? 'shared' : 'custom',
+      tier: ['datadog', 'prometheus', 'grafana', 'cloudwatch', 'azure', 'google-cloud-monitoring'].includes(id) ? 1 : id === 'webhook' ? 3 : 2,
       acceptedActions: actions,
-      authentication: sharedHandler ? ['integration-id', 'integration-key'] : ['integration-id'],
+      authentication: api?.authentication ?? (sharedHandler ? ['integration-key'] : []),
+      request: {
+        method: api?.methods?.[0] ?? 'POST',
+        schema: requestSchema,
+        bodyLimitBytes: api?.bodyLimited ? 1024 * 1024 : 'unknown',
+        rateLimit: api?.rateLimited ? { requests: 100, windowSeconds: 60 } : 'unknown',
+        integrationId: 'query parameter',
+        integrationKey: sharedHandler ? ['Authorization: Bearer', 'Authorization: Token token=', 'x-integration-key', 'x-api-key', 'integrationKey query parameter'] : [],
+      },
       signatureVerification: {
         mode: routeSource.includes('signatureSecret') || sharedHandler ? 'conditional-when-secret-configured' : 'not-declared',
         provider: signatureProvider ?? (sharedHandler ? 'generic' : id),
@@ -60,8 +77,15 @@ for (const [category, names] of Object.entries(categories)) {
         'src/lib/integrations/request-security.ts',
         'src/lib/integrations/rate-limiter.ts',
       ],
+      errors: sharedHandler ? [
+        { status: 400, meaning: 'Invalid request or payload validation failed' },
+        { status: 401, meaning: 'Integration is disabled, mismatched, or unauthorized' },
+        { status: 404, meaning: 'Integration record was not found' },
+        { status: 413, meaning: 'Payload exceeds the one MiB body limit' },
+        { status: 429, meaning: 'Per-integration request rate exceeded' },
+        { status: 503, meaning: 'A matching delivery is already being processed' },
+      ] : [],
     });
-  }
 }
 
 const platformIntegrations = [
@@ -81,7 +105,7 @@ for (const integration of platformIntegrations) {
   integration.sources = integration.sources.filter(exists);
   if (!integration.sources.length) throw new Error(`Platform integration ${integration.id} has no source evidence`);
 }
-const catalog = { generated: true, providers, integrations: [...providers, ...platformIntegrations] };
+const catalog = { schemaVersion: 2, generated: true, providers, integrations: [...providers, ...platformIntegrations] };
 const docsRoot = resolve(repositoryRoot, 'docs/v2.0.0/integrations');
 const verifiedAt = execFileSync(
   'git',
@@ -89,6 +113,8 @@ const verifiedAt = execFileSync(
   { cwd: repositoryRoot, encoding: 'utf8' }
 ).trim();
 writeFileSync(resolve(docsRoot, 'catalog.yaml'), YAML.stringify(catalog));
+mkdirSync(resolve(repositoryRoot, 'generated/docs-contracts'), { recursive: true });
+writeFileSync(resolve(repositoryRoot, 'generated/docs-contracts/integrations.json'), `${JSON.stringify({ schemaVersion: 1, providers }, null, 2)}\n`);
 
 for (const provider of providers) {
   const directory = resolve(docsRoot, provider.category);
@@ -125,17 +151,31 @@ service.
 
 ## Setup and configuration
 
-Create the integration from the service integration settings. Configure the
-provider to send events to the endpoint shown by OpsKnight. Treat the integration
-key and any signature secret as credentials; do not place them in logs or source
-control.
+1. In OpsKnight, open **Services → your service → Integrations**.
+2. Select **Add integration → ${provider.title}**, then save the integration.
+3. Copy the webhook URL and integration key shown by OpsKnight.
+4. In ${provider.title}, create a webhook for the monitors or alerts you want to route.
+5. Use \`${provider.request.method}\` and the URL generated by OpsKnight. Configure one of the supported key transports listed below.
+6. Send a test alert, then verify the incident under **Incidents**.
+
+Provider console labels can change independently of OpsKnight. Use the webhook
+or notification configuration area in the provider rather than copying a URL
+from another service. Treat keys and signature secrets as credentials; never
+place them in logs or source control.
 
 ## Authentication and request verification
 
-The endpoint requires the integration identifier${provider.authentication.includes('integration-key') ? ' and validates the integration key' : ''}.
+The endpoint requires the integration identifier${provider.authentication.includes('integration-key') ? ' and validates the integration key using a timing-safe comparison' : ''}.
 Signature verification is **${provider.signatureVerification.mode}** using the
 \`${provider.signatureVerification.provider}\` verification contract${provider.signatureVerification.headers.length ? ` and headers ${provider.signatureVerification.headers.map(header => `\`${header}\``).join(', ')}` : ''}.
 The exact payload schema is defined by \`${provider.route}\` and \`${provider.source}\`.
+
+- Method: \`${provider.request.method}\`
+- Integration identifier: ${provider.request.integrationId}
+- Integration key transports: ${provider.request.integrationKey.length ? provider.request.integrationKey.map(value => `\`${value}\``).join(', ') : 'not statically resolved'}
+- Schema: \`${provider.request.schema}\`
+- Body limit: ${typeof provider.request.bodyLimitBytes === 'number' ? `${provider.request.bodyLimitBytes} bytes (1 MiB)` : 'not statically resolved'}
+- Rate limit: ${typeof provider.request.rateLimit === 'object' ? `${provider.request.rateLimit.requests} requests per ${provider.request.rateLimit.windowSeconds} seconds, per integration` : 'not statically resolved'}
 
 ## Event mapping and incident lifecycle
 
@@ -156,11 +196,34 @@ trigger and recovery pair in a non-production service, verify that one incident
 is created, and confirm that recovery updates that incident rather than creating
 another.
 
+## Verify the connection
+
+After the test alert, confirm all of the following:
+
+- One incident appears for the selected OpsKnight service.
+- The incident source identifies ${provider.title}.
+- A repeat event updates or correlates according to the adapter identity.
+- A recovery event ${provider.acceptedActions.includes('resolve') ? 'resolves the correlated incident' : 'does not imply automatic resolution unless the adapter emits `resolve`'}.
+
+## Error reference
+
+${provider.errors.length ? provider.errors.map(error => `- \`${error.status}\` — ${error.meaning}.`).join('\n') : '- This custom route does not expose the shared integration error contract.'}
+
 ## Troubleshooting
 
-Check integration enabled state, key resolution, signature verification, rate
-limits, payload validation, and the integration failure view. Preserve the
-provider delivery identifier and timestamp when escalating a problem.
+1. Confirm the integration is enabled and belongs to the intended service.
+2. Verify the integration ID in the URL and rotate any key that may have been exposed.
+3. Inspect **Settings → Integrations → Failures** for validation or signature errors.
+4. Check for \`413\` before changing payload templates and \`429\` before retrying rapidly.
+5. Confirm the provider sends a state supported by the event mapping above.
+6. Preserve the provider delivery identifier and timestamp when escalating.
+
+## Related pages
+
+- [Integration troubleshooting](../../troubleshooting/integrations/webhook-rejected)
+- [Incident lifecycle](../../concepts/incidents)
+- [Services](../../concepts/services)
+- [Events API](../../reference/api/events)
 
 ## Security
 

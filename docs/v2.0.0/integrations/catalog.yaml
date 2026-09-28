@@ -1,3 +1,4 @@
+schemaVersion: 2
 generated: true
 providers:
   - &a1
@@ -8,12 +9,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/appdynamics
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: generic
@@ -25,7 +36,149 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
+    errors: []
   - &a2
+    id: azure
+    title: Azure Monitor
+    category: cloud
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/azure
+    handler: custom
+    tier: 1
+    acceptedActions:
+      - trigger
+      - resolve
+    authentication:
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
+    signatureVerification:
+      mode: not-declared
+      provider: azure
+      headers: []
+    deliveryIdentity: []
+    source: src/lib/integrations/azure.ts
+    route: src/app/api/integrations/azure/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+    errors: []
+  - &a3
+    id: better-uptime
+    title: Better Uptime
+    category: uptime
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/better-uptime
+    handler: custom
+    tier: 2
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
+    authentication:
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
+    source: src/lib/integrations/better-uptime.ts
+    route: src/app/api/integrations/better-uptime/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+    errors: []
+  - &a4
+    id: bitbucket
+    title: Bitbucket
+    category: webhooks
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/bitbucket
+    handler: custom
+    tier: 2
+    acceptedActions:
+      - trigger
+      - resolve
+    authentication:
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
+    source: src/lib/integrations/bitbucket.ts
+    route: src/app/api/integrations/bitbucket/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+    errors: []
+  - &a5
+    id: cloudwatch
+    title: Amazon CloudWatch
+    category: cloud
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/cloudwatch
+    handler: custom
+    tier: 1
+    acceptedActions:
+      - trigger
+      - resolve
+    authentication:
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
+    signatureVerification:
+      mode: not-declared
+      provider: cloudwatch
+      headers: []
+    deliveryIdentity: []
+    source: src/lib/integrations/cloudwatch.ts
+    route: src/app/api/integrations/cloudwatch/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+    errors: []
+  - &a6
     id: datadog
     title: Datadog
     category: monitoring
@@ -33,12 +186,26 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/datadog
     handler: shared
+    tier: 1
     acceptedActions:
       - trigger
       - resolve
     authentication:
-      - integration-id
       - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey:
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
+        - x-integration-key
+        - x-api-key
+        - integrationKey query parameter
     signatureVerification:
       mode: conditional-when-secret-configured
       provider: generic
@@ -50,7 +217,20 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a3
+    errors:
+      - status: 400
+        meaning: Invalid request or payload validation failed
+      - status: 401
+        meaning: Integration is disabled, mismatched, or unauthorized
+      - status: 404
+        meaning: Integration record was not found
+      - status: 413
+        meaning: Payload exceeds the one MiB body limit
+      - status: 429
+        meaning: Per-integration request rate exceeded
+      - status: 503
+        meaning: A matching delivery is already being processed
+  - &a7
     id: dynatrace
     title: Dynatrace
     category: monitoring
@@ -58,12 +238,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/dynatrace
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: generic
@@ -75,7 +265,8 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a4
+    errors: []
+  - &a8
     id: elastic
     title: Elastic
     category: monitoring
@@ -83,12 +274,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/elastic
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: generic
@@ -100,7 +301,118 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a5
+    errors: []
+  - &a9
+    id: github
+    title: GitHub
+    category: webhooks
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/github
+    handler: custom
+    tier: 2
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
+    authentication:
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
+    signatureVerification:
+      mode: conditional-when-secret-configured
+      provider: github
+      headers:
+        - x-hub-signature-256
+    deliveryIdentity:
+      - x-github-delivery
+    source: src/lib/integrations/github.ts
+    route: src/app/api/integrations/github/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+    errors: []
+  - &a10
+    id: gitlab
+    title: GitLab
+    category: webhooks
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/gitlab
+    handler: custom
+    tier: 2
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
+    authentication:
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
+    signatureVerification:
+      mode: not-declared
+      provider: gitlab
+      headers: []
+    deliveryIdentity: []
+    source: src/lib/integrations/gitlab.ts
+    route: src/app/api/integrations/gitlab/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+    errors: []
+  - &a11
+    id: google-cloud-monitoring
+    title: Google Cloud Monitoring
+    category: cloud
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/google-cloud-monitoring
+    handler: custom
+    tier: 1
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
+    authentication:
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
+    source: src/lib/integrations/google-cloud-monitoring.ts
+    route: src/app/api/integrations/google-cloud-monitoring/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+    errors: []
+  - &a12
     id: grafana
     title: Grafana
     category: monitoring
@@ -108,12 +420,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/grafana
     handler: custom
+    tier: 1
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: conditional-when-secret-configured
       provider: grafana
@@ -128,7 +450,8 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a6
+    errors: []
+  - &a13
     id: honeycomb
     title: Honeycomb
     category: monitoring
@@ -136,12 +459,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/honeycomb
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: generic
@@ -153,7 +486,8 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a7
+    errors: []
+  - &a14
     id: icinga
     title: Icinga
     category: monitoring
@@ -161,12 +495,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/icinga
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: generic
@@ -178,7 +522,8 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a8
+    errors: []
+  - &a15
     id: manageengine
     title: ManageEngine
     category: monitoring
@@ -186,12 +531,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/manageengine
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: generic
@@ -203,7 +558,8 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a9
+    errors: []
+  - &a16
     id: nagios
     title: Nagios
     category: monitoring
@@ -211,12 +567,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/nagios
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: generic
@@ -228,7 +594,8 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a10
+    errors: []
+  - &a17
     id: newrelic
     title: New Relic
     category: monitoring
@@ -236,12 +603,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/newrelic
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: newrelic
@@ -253,7 +630,79 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a11
+    errors: []
+  - &a18
+    id: pagerduty
+    title: PagerDuty Events API
+    category: webhooks
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/pagerduty
+    handler: custom
+    tier: 2
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
+    authentication: []
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
+    signatureVerification:
+      mode: not-declared
+      provider: pagerduty
+      headers: []
+    deliveryIdentity: []
+    source: src/lib/integrations/pagerduty.ts
+    route: src/app/api/integrations/pagerduty/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+    errors: []
+  - &a19
+    id: pingdom
+    title: Pingdom
+    category: uptime
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/pingdom
+    handler: custom
+    tier: 2
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
+    authentication:
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
+    source: src/lib/integrations/pingdom.ts
+    route: src/app/api/integrations/pingdom/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+    errors: []
+  - &a20
     id: prometheus
     title: Prometheus Alertmanager
     category: monitoring
@@ -261,12 +710,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/prometheus
     handler: custom
+    tier: 1
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: prometheus
@@ -278,7 +737,8 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a12
+    errors: []
+  - &a21
     id: sentry
     title: Sentry
     category: monitoring
@@ -286,12 +746,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/sentry
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: conditional-when-secret-configured
       provider: sentry
@@ -304,7 +774,8 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a13
+    errors: []
+  - &a22
     id: splunk-observability
     title: Splunk Observability
     category: monitoring
@@ -312,12 +783,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/splunk-observability
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: generic
@@ -329,7 +810,8 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a14
+    errors: []
+  - &a23
     id: splunk-oncall
     title: Splunk On-Call
     category: monitoring
@@ -337,12 +819,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/splunk-oncall
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: generic
@@ -354,155 +846,8 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a15
-    id: zabbix
-    title: Zabbix
-    category: monitoring
-    direction: inbound
-    protocol: webhook
-    endpoint: /api/integrations/zabbix
-    handler: custom
-    acceptedActions:
-      - trigger
-      - acknowledge
-      - resolve
-    authentication:
-      - integration-id
-    signatureVerification:
-      mode: not-declared
-      provider: generic
-      headers: []
-    deliveryIdentity: []
-    source: src/lib/integrations/zabbix.ts
-    route: src/app/api/integrations/zabbix/route.ts
-    sharedContracts:
-      - src/lib/integrations/handler.ts
-      - src/lib/integrations/request-security.ts
-      - src/lib/integrations/rate-limiter.ts
-  - &a16
-    id: azure
-    title: Azure Monitor
-    category: cloud
-    direction: inbound
-    protocol: webhook
-    endpoint: /api/integrations/azure
-    handler: custom
-    acceptedActions:
-      - trigger
-      - resolve
-    authentication:
-      - integration-id
-    signatureVerification:
-      mode: not-declared
-      provider: azure
-      headers: []
-    deliveryIdentity: []
-    source: src/lib/integrations/azure.ts
-    route: src/app/api/integrations/azure/route.ts
-    sharedContracts:
-      - src/lib/integrations/handler.ts
-      - src/lib/integrations/request-security.ts
-      - src/lib/integrations/rate-limiter.ts
-  - &a17
-    id: cloudwatch
-    title: Amazon CloudWatch
-    category: cloud
-    direction: inbound
-    protocol: webhook
-    endpoint: /api/integrations/cloudwatch
-    handler: custom
-    acceptedActions:
-      - trigger
-      - resolve
-    authentication:
-      - integration-id
-    signatureVerification:
-      mode: not-declared
-      provider: cloudwatch
-      headers: []
-    deliveryIdentity: []
-    source: src/lib/integrations/cloudwatch.ts
-    route: src/app/api/integrations/cloudwatch/route.ts
-    sharedContracts:
-      - src/lib/integrations/handler.ts
-      - src/lib/integrations/request-security.ts
-      - src/lib/integrations/rate-limiter.ts
-  - &a18
-    id: google-cloud-monitoring
-    title: Google Cloud Monitoring
-    category: cloud
-    direction: inbound
-    protocol: webhook
-    endpoint: /api/integrations/google-cloud-monitoring
-    handler: custom
-    acceptedActions:
-      - trigger
-      - acknowledge
-      - resolve
-    authentication:
-      - integration-id
-    signatureVerification:
-      mode: not-declared
-      provider: generic
-      headers: []
-    deliveryIdentity: []
-    source: src/lib/integrations/google-cloud-monitoring.ts
-    route: src/app/api/integrations/google-cloud-monitoring/route.ts
-    sharedContracts:
-      - src/lib/integrations/handler.ts
-      - src/lib/integrations/request-security.ts
-      - src/lib/integrations/rate-limiter.ts
-  - &a19
-    id: better-uptime
-    title: Better Uptime
-    category: uptime
-    direction: inbound
-    protocol: webhook
-    endpoint: /api/integrations/better-uptime
-    handler: custom
-    acceptedActions:
-      - trigger
-      - acknowledge
-      - resolve
-    authentication:
-      - integration-id
-    signatureVerification:
-      mode: not-declared
-      provider: generic
-      headers: []
-    deliveryIdentity: []
-    source: src/lib/integrations/better-uptime.ts
-    route: src/app/api/integrations/better-uptime/route.ts
-    sharedContracts:
-      - src/lib/integrations/handler.ts
-      - src/lib/integrations/request-security.ts
-      - src/lib/integrations/rate-limiter.ts
-  - &a20
-    id: pingdom
-    title: Pingdom
-    category: uptime
-    direction: inbound
-    protocol: webhook
-    endpoint: /api/integrations/pingdom
-    handler: custom
-    acceptedActions:
-      - trigger
-      - acknowledge
-      - resolve
-    authentication:
-      - integration-id
-    signatureVerification:
-      mode: not-declared
-      provider: generic
-      headers: []
-    deliveryIdentity: []
-    source: src/lib/integrations/pingdom.ts
-    route: src/app/api/integrations/pingdom/route.ts
-    sharedContracts:
-      - src/lib/integrations/handler.ts
-      - src/lib/integrations/request-security.ts
-      - src/lib/integrations/rate-limiter.ts
-  - &a21
+    errors: []
+  - &a24
     id: uptime-kuma
     title: Uptime Kuma
     category: uptime
@@ -510,11 +855,21 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/uptime-kuma
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: generic
@@ -526,7 +881,8 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a22
+    errors: []
+  - &a25
     id: uptimerobot
     title: UptimeRobot
     category: uptime
@@ -534,12 +890,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/uptimerobot
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: generic
@@ -551,108 +917,8 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a23
-    id: bitbucket
-    title: Bitbucket
-    category: webhooks
-    direction: inbound
-    protocol: webhook
-    endpoint: /api/integrations/bitbucket
-    handler: custom
-    acceptedActions:
-      - trigger
-      - resolve
-    authentication:
-      - integration-id
-    signatureVerification:
-      mode: not-declared
-      provider: generic
-      headers: []
-    deliveryIdentity: []
-    source: src/lib/integrations/bitbucket.ts
-    route: src/app/api/integrations/bitbucket/route.ts
-    sharedContracts:
-      - src/lib/integrations/handler.ts
-      - src/lib/integrations/request-security.ts
-      - src/lib/integrations/rate-limiter.ts
-  - &a24
-    id: github
-    title: GitHub
-    category: webhooks
-    direction: inbound
-    protocol: webhook
-    endpoint: /api/integrations/github
-    handler: custom
-    acceptedActions:
-      - trigger
-      - acknowledge
-      - resolve
-    authentication:
-      - integration-id
-    signatureVerification:
-      mode: conditional-when-secret-configured
-      provider: github
-      headers:
-        - x-hub-signature-256
-    deliveryIdentity:
-      - x-github-delivery
-    source: src/lib/integrations/github.ts
-    route: src/app/api/integrations/github/route.ts
-    sharedContracts:
-      - src/lib/integrations/handler.ts
-      - src/lib/integrations/request-security.ts
-      - src/lib/integrations/rate-limiter.ts
-  - &a25
-    id: gitlab
-    title: GitLab
-    category: webhooks
-    direction: inbound
-    protocol: webhook
-    endpoint: /api/integrations/gitlab
-    handler: custom
-    acceptedActions:
-      - trigger
-      - acknowledge
-      - resolve
-    authentication:
-      - integration-id
-    signatureVerification:
-      mode: not-declared
-      provider: gitlab
-      headers: []
-    deliveryIdentity: []
-    source: src/lib/integrations/gitlab.ts
-    route: src/app/api/integrations/gitlab/route.ts
-    sharedContracts:
-      - src/lib/integrations/handler.ts
-      - src/lib/integrations/request-security.ts
-      - src/lib/integrations/rate-limiter.ts
+    errors: []
   - &a26
-    id: pagerduty
-    title: PagerDuty Events API
-    category: webhooks
-    direction: inbound
-    protocol: webhook
-    endpoint: /api/integrations/pagerduty
-    handler: custom
-    acceptedActions:
-      - trigger
-      - acknowledge
-      - resolve
-    authentication:
-      - integration-id
-    signatureVerification:
-      mode: not-declared
-      provider: pagerduty
-      headers: []
-    deliveryIdentity: []
-    source: src/lib/integrations/pagerduty.ts
-    route: src/app/api/integrations/pagerduty/route.ts
-    sharedContracts:
-      - src/lib/integrations/handler.ts
-      - src/lib/integrations/request-security.ts
-      - src/lib/integrations/rate-limiter.ts
-  - &a27
     id: vercel
     title: Vercel
     category: webhooks
@@ -660,12 +926,22 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/vercel
     handler: custom
+    tier: 2
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
     signatureVerification:
       mode: not-declared
       provider: vercel
@@ -677,7 +953,8 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - &a28
+    errors: []
+  - &a27
     id: webhook
     title: Generic webhook
     category: webhooks
@@ -685,13 +962,27 @@ providers:
     protocol: webhook
     endpoint: /api/integrations/webhook
     handler: shared
+    tier: 3
     acceptedActions:
       - trigger
       - acknowledge
       - resolve
     authentication:
-      - integration-id
       - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey:
+        - "Authorization: Bearer"
+        - "Authorization: Token token="
+        - x-integration-key
+        - x-api-key
+        - integrationKey query parameter
     signatureVerification:
       mode: conditional-when-secret-configured
       provider: generic
@@ -703,6 +994,55 @@ providers:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
+    errors:
+      - status: 400
+        meaning: Invalid request or payload validation failed
+      - status: 401
+        meaning: Integration is disabled, mismatched, or unauthorized
+      - status: 404
+        meaning: Integration record was not found
+      - status: 413
+        meaning: Payload exceeds the one MiB body limit
+      - status: 429
+        meaning: Per-integration request rate exceeded
+      - status: 503
+        meaning: A matching delivery is already being processed
+  - &a28
+    id: zabbix
+    title: Zabbix
+    category: monitoring
+    direction: inbound
+    protocol: webhook
+    endpoint: /api/integrations/zabbix
+    handler: custom
+    tier: 2
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
+    authentication:
+      - integration-key
+    request:
+      method: POST
+      schema: shared provider schema
+      bodyLimitBytes: 1048576
+      rateLimit:
+        requests: 100
+        windowSeconds: 60
+      integrationId: query parameter
+      integrationKey: []
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
+    source: src/lib/integrations/zabbix.ts
+    route: src/app/api/integrations/zabbix/route.ts
+    sharedContracts:
+      - src/lib/integrations/handler.ts
+      - src/lib/integrations/request-security.ts
+      - src/lib/integrations/rate-limiter.ts
+    errors: []
 integrations:
   - *a1
   - *a2
