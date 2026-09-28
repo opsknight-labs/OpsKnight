@@ -1,10 +1,28 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-28T13:07:46.321Z",
+  "generatedAt": "2026-09-28T13:48:31.215Z",
   "baseURL": "http://127.0.0.1:15000",
   "version": "v2.0.0",
-  "routesChecked": 141,
-  "internalLinksChecked": 42,
-  "localImagesChecked": 13,
+  "routesChecked": 150,
+  "internalLinksChecked": 189,
+  "localImagesChecked": 7,
+  "accessibility": {
+    "pagesWithSingleH1": 150,
+    "imagesWithAlt": 155
+  },
+  "mobile": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "horizontalOverflowPixels": 0,
+    "sidebar": "passed",
+    "keyboardFocus": "passed"
+  },
+  "performance": {
+    "representativeRoute": "/docs/v2.0.0/start/configure-on-call/",
+    "javascriptBytes": 849455,
+    "javascriptBudgetBytes": 1500000
+  },
   "failures": []
 }
