@@ -398,6 +398,17 @@ export async function runLoadSeed(options?: {
     });
 
     // 8. Configure Notification Providers (SMTP + Web Push)
+    // Pre-flight safety check: ensure NO non-test notification providers exist in the database.
+    // Certification suite can only ever touch provider rows whose IDs start with 'lt-*'.
+    // Encountering ANY existing production provider must hard-fail before any mutation.
+    const allExistingProviders = await prisma.notificationProvider.findMany();
+    const nonTestProviders = allExistingProviders.filter(p => !p.id.startsWith('lt-'));
+    if (nonTestProviders.length > 0) {
+      throw new Error(
+        `Refusing to seed notification providers: Found ${nonTestProviders.length} non-test provider(s) in database (${nonTestProviders.map(p => `${p.provider}:${p.id}`).join(', ')}). Certification suite strictly requires a dedicated test database and refuses to mutate production notification providers.`
+      );
+    }
+
     const smtpConfig = (await encryptProviderConfig('smtp', {
       host: endpoints.smtpHost,
       port: endpoints.smtpPort,
@@ -409,47 +420,56 @@ export async function runLoadSeed(options?: {
     const existingSmtp = await prisma.notificationProvider.findUnique({
       where: { provider: 'smtp' },
     });
-    if (existingSmtp && !existingSmtp.id.startsWith('lt-')) {
-      throw new Error(
-        `Refusing to overwrite existing non-test SMTP provider (${existingSmtp.id}). Dedicated test database required.`
-      );
+    if (existingSmtp) {
+      if (!existingSmtp.id.startsWith('lt-')) {
+        throw new Error(
+          `Refusing to overwrite existing non-test SMTP provider (${existingSmtp.id}). Dedicated test database required.`
+        );
+      }
+      await prisma.notificationProvider.update({
+        where: { id: existingSmtp.id },
+        data: { enabled: true, config: smtpConfig },
+      });
+    } else {
+      await prisma.notificationProvider.create({
+        data: {
+          id: 'lt-np-smtp',
+          provider: 'smtp',
+          enabled: true,
+          config: smtpConfig,
+        },
+      });
     }
-
-    await prisma.notificationProvider.upsert({
-      where: { provider: 'smtp' },
-      update: { enabled: true, config: smtpConfig },
-      create: {
-        id: 'lt-np-smtp',
-        provider: 'smtp',
-        enabled: true,
-        config: smtpConfig,
-      },
-    });
 
     const existingPush = await prisma.notificationProvider.findUnique({
       where: { provider: 'web-push' },
     });
-    if (existingPush && !existingPush.id.startsWith('lt-')) {
-      throw new Error(
-        `Refusing to overwrite existing non-test web-push provider (${existingPush.id}). Dedicated test database required.`
-      );
-    }
-
     const pushConfig = (await encryptProviderConfig('web-push', {
       vapidSubject: `mailto:${endpoints.fromEmail}`,
       vapidPublicKey: endpoints.vapidPublicKey,
       vapidPrivateKey: endpoints.vapidPrivateKey,
     })) as Prisma.InputJsonValue;
-    await prisma.notificationProvider.upsert({
-      where: { provider: 'web-push' },
-      update: { enabled: true, config: pushConfig },
-      create: {
-        id: 'lt-np-web-push',
-        provider: 'web-push',
-        enabled: true,
-        config: pushConfig,
-      },
-    });
+
+    if (existingPush) {
+      if (!existingPush.id.startsWith('lt-')) {
+        throw new Error(
+          `Refusing to overwrite existing non-test web-push provider (${existingPush.id}). Dedicated test database required.`
+        );
+      }
+      await prisma.notificationProvider.update({
+        where: { id: existingPush.id },
+        data: { enabled: true, config: pushConfig },
+      });
+    } else {
+      await prisma.notificationProvider.create({
+        data: {
+          id: 'lt-np-web-push',
+          provider: 'web-push',
+          enabled: true,
+          config: pushConfig,
+        },
+      });
+    }
 
     // 9. Upsert StatusPage, StatusPageServices, StatusPageSubscriptions, StatusPageWebhooks
     await prisma.statusPage.upsert({

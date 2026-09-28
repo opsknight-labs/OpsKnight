@@ -115,22 +115,18 @@ function sanitizeJsonValue<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map(item => sanitizeJsonValue(item)) as unknown as T;
   }
-  const out = Object.create(null) as Record<string, unknown>;
-  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-    if (
-      key === '__proto__' ||
-      key === 'constructor' ||
-      key === 'prototype' ||
-      !Object.prototype.hasOwnProperty.call(value, key)
-    ) {
-      continue;
-    }
-    if (nested !== undefined) {
-      // eslint-disable-next-line security/detect-object-injection
-      out[key] = sanitizeJsonValue(nested);
-    }
-  }
-  return { ...out } as T;
+  const sanitizedEntries = Object.entries(value as Record<string, unknown>)
+    .filter(
+      ([key, nested]) =>
+        key !== '__proto__' &&
+        key !== 'constructor' &&
+        key !== 'prototype' &&
+        Object.prototype.hasOwnProperty.call(value, key) &&
+        nested !== undefined
+    )
+    .map(([key, nested]) => [key, sanitizeJsonValue(nested)] as const);
+
+  return Object.fromEntries(sanitizedEntries) as T;
 }
 
 /** Canonical success response. Legacy endpoints may continue using jsonOk during migration. */
