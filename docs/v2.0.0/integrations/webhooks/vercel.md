@@ -17,14 +17,14 @@ verification:
 ## What it does
 
 The Vercel adapter accepts inbound webhook events at
-`/api/integrations/vercel`, validates them through the shared integration handler,
+`/api/integrations/vercel`, validates them through its custom handler,
 normalizes provider payloads, and submits lifecycle events to the configured
 service.
 
 ## Prerequisites
 
 - An OpsKnight service and enabled integration record.
-- The integration identifier and generated integration key.
+- The integration identifier.
 - Permission to configure webhooks in Vercel.
 - A network path from the provider to the OpsKnight web runtime.
 
@@ -37,25 +37,24 @@ control.
 
 ## Authentication and request verification
 
-The shared handler resolves the integration, verifies the integration key,
-applies per-integration rate limiting, and uses provider signature verification
-when a signature secret and supported provider contract are configured. The
-exact accepted headers and payload schema are defined by `src/app/api/integrations/vercel/route.ts`
-and `src/lib/integrations/vercel.ts`.
+The endpoint requires the integration identifier.
+Signature verification is **not-declared** using the
+`vercel` verification contract.
+The exact payload schema is defined by `src/app/api/integrations/vercel/route.ts` and `src/lib/integrations/vercel.ts`.
 
 ## Event mapping and incident lifecycle
 
-The adapter maps provider states into normalized trigger, acknowledge, or resolve
-events. Correlation depends on a stable provider identity; display names alone
-are not reliable deduplication keys. Inspect the provider source before changing
-its mapping contract.
+The adapter emits the lifecycle actions found in its current source:
+- `trigger`
+- `acknowledge`
+- `resolve`
+Correlation depends on the provider identity selected by the adapter.
 
 ## Recovery and deduplication
 
-Deliveries with a genuine provider delivery identifier use the fenced inbound
-delivery claim. Replayed events must converge on the same service and correlation
-key. Failed deliveries are recorded for operational inspection without exposing
-stored secrets.
+This route does not declare a durable provider delivery identifier.
+Incident convergence still depends on the adapter correlation key. Failed
+deliveries are recorded for operational inspection without exposing secrets.
 
 ## Limits and testing
 

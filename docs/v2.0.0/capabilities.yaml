@@ -34,7 +34,7 @@ capabilities:
     guides: [guides/on-call/build-schedule.md, guides/on-call/overrides.md]
     reference: [reference/api/README.md]
     tests: [tests/integration/schedule-assignment-concurrency.test.ts]
-    sources: [src/lib/schedules]
+    sources: [src/lib/schedules, src/app/(app)/schedules, src/app/api/schedules]
     evidence: [generated/docs-evidence/current/on-call/schedules.png]
     roles: [responder, administrator]
   escalation:
@@ -58,7 +58,7 @@ capabilities:
     guides: [guides/notifications/configure-routing.md, guides/notifications/inspect-delivery.md]
     reference: [reference/api/README.md]
     tests: [tests/integration/notification-flow.test.ts, tests/integration/notification-policy-outcomes.test.ts]
-    sources: [src/lib/user-notifications.ts, src/lib/notification-providers.ts]
+    sources: [src/lib/user-notifications.ts, src/lib/notification-providers.ts, src/lib/notification-control-plane.ts, src/lib/notification-delivery.ts, src/lib/service-notifications.ts, src/lib/job-worker.ts, src/lib/microsoft-teams, src/app/api/admin/notifications, src/app/api/settings/notifications]
     evidence: [generated/docs-evidence/current/notifications/settings.png]
     roles: [responder, administrator, operator]
   status_pages:
@@ -70,7 +70,7 @@ capabilities:
     guides: [guides/status-pages/publish-update.md]
     reference: [reference/api/README.md]
     tests: [tests/integration/status-page-publication.test.ts, tests/integration/status-page-privacy-matrix.test.ts]
-    sources: [src/lib/status-page-projection.ts, src/lib/status-page-public-data.ts]
+    sources: [src/lib/status-page-projection.ts, src/lib/status-page-public-data.ts, src/lib/status-page-delivery.ts, src/app/(app)/settings/status-pages, src/app/api/status-page, src/app/api/settings/status-pages]
     evidence: [generated/docs-evidence/current/status-pages/list.png]
     roles: [responder, administrator]
   chatops:
@@ -82,7 +82,7 @@ capabilities:
     guides: [guides/chatops/create-war-room.md]
     reference: [integrations/communication/slack.md, integrations/communication/microsoft-teams.md]
     tests: [tests/architecture/war-room-provider-neutral-contract.test.ts]
-    sources: [src/lib/war-room]
+    sources: [src/lib/war-room, src/lib/chatops, src/lib/slack.ts, src/lib/microsoft-teams, src/app/api/slack, src/app/api/microsoft-teams]
     evidence: []
     roles: [responder, administrator]
   inbound_integrations:
@@ -118,7 +118,7 @@ capabilities:
     guides: [guides/identity/configure-oidc.md]
     reference: [reference/configuration/README.md]
     tests: [tests/lib/oidc-provider.test.ts, tests/lib/oidc-validation-provider-matrix.test.ts]
-    sources: [src/lib/oidc.ts]
+    sources: [src/lib/oidc.ts, src/app/api/auth/oidc]
     evidence: []
     roles: [administrator, operator]
   scim:
@@ -130,7 +130,7 @@ capabilities:
     guides: [guides/identity/configure-scim.md]
     reference: [reference/api/README.md]
     tests: [tests/api/scim-users.test.ts, tests/lib/scim.test.ts]
-    sources: [src/app/api/scim/v2/Users]
+    sources: [src/app/api/scim, src/lib/scim.ts]
     evidence: []
     roles: [administrator, operator]
   authorization:
@@ -154,7 +154,7 @@ capabilities:
     guides: [guides/administration/manage-users.md]
     reference: [reference/api/README.md]
     tests: [tests/lib/user-deletion.test.ts]
-    sources: [src/lib/users]
+    sources: [src/lib/users, src/app/(app)/users, src/app/api/users, src/app/api/user]
     evidence: [generated/docs-evidence/current/administration/users.png]
     roles: [administrator]
   analytics_and_reports:
@@ -226,7 +226,7 @@ capabilities:
     guides: [start/quickstart.md, start/production-install.md, operate/deploy/compose.md, operate/deploy/kubernetes.md, operate/deploy/split-runtime.md]
     reference: [reference/configuration/README.md, reference/health.md]
     tests: [tests/lib/deployment-config-unit.test.ts]
-    sources: [deploy/compose, deploy/kubernetes]
+    sources: [deploy/compose, deploy/kubernetes, deploy/swarm]
     evidence: []
     roles: [operator, administrator]
   observability:

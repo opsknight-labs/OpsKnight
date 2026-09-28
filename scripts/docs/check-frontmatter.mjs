@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 import YAML from 'yaml';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 import { exists, filesUnder, readRepositoryFile } from './discovery-lib.mjs';
 
-const allowedTypes = new Set(['tutorial', 'concept', 'how-to', 'reference', 'troubleshooting', 'deployment', 'integration', 'developer']);
-const allowedAudiences = new Set(['responder', 'administrator', 'operator', 'developer', 'viewer']);
+const schema = JSON.parse(readRepositoryFile('docs/v2.0.0/metadata.schema.json'));
+const ajv = new Ajv2020({ allErrors: true, strict: true });
+addFormats(ajv);
+const validate = ajv.compile(schema);
 const failures = [];
 
 for (const file of filesUnder('docs/v2.0.0', path => path.endsWith('.md'))) {
@@ -16,19 +20,15 @@ for (const file of filesUnder('docs/v2.0.0', path => path.endsWith('.md'))) {
   let metadata;
   try { metadata = YAML.parse(match[1]); }
   catch (error) { failures.push(`${file}: invalid YAML (${error.message})`); continue; }
-  for (const field of ['title', 'description', 'type', 'product_area', 'audience', 'verification']) {
-    if (metadata[field] === undefined || metadata[field] === '') failures.push(`${file}: missing ${field}`);
+  if (!validate(metadata)) {
+    for (const error of validate.errors ?? []) {
+      failures.push(`${file}: metadata${error.instancePath || '/'} ${error.message}`);
+    }
+    continue;
   }
-  if (!allowedTypes.has(metadata.type)) failures.push(`${file}: unsupported type ${metadata.type}`);
-  if (!Array.isArray(metadata.audience) || metadata.audience.length === 0) failures.push(`${file}: audience must be a non-empty array`);
-  else for (const audience of metadata.audience) if (!allowedAudiences.has(audience)) failures.push(`${file}: unsupported audience ${audience}`);
   const verification = metadata.verification;
-  if (!verification || !['draft', 'source', 'test', 'runtime'].includes(verification.level)) {
-    failures.push(`${file}: verification.level must be draft, source, test, or runtime`);
-  } else if (verification.level !== 'draft') {
-    if (!verification.verified_at) failures.push(`${file}: verified pages require verification.verified_at`);
-    if (!Array.isArray(verification.evidence) || verification.evidence.length === 0) failures.push(`${file}: verified pages require verification.evidence`);
-    else for (const evidence of verification.evidence) if (!exists(evidence)) failures.push(`${file}: missing verification evidence ${evidence}`);
+  if (verification.level !== 'draft') {
+    for (const evidence of verification.evidence) if (!exists(evidence)) failures.push(`${file}: missing verification evidence ${evidence}`);
   }
 }
 

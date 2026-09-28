@@ -26,7 +26,7 @@ for (const [id, capability] of Object.entries(inventory.capabilities ?? {})) {
     .flatMap(group => capability[group] ?? [])
     .map(path => `docs/v2.0.0/${path}`);
   const documentationChanges = changed.filter(file =>
-    mappedDocs.includes(file) || file === 'docs/v2.0.0/capabilities.yaml'
+    mappedDocs.includes(file)
   );
   const testChanges = changed.filter(file => (capability.tests ?? []).includes(file));
   rows.push({ id, productChanges, documentationChanges, testChanges, covered: documentationChanges.length > 0 });
@@ -47,4 +47,3 @@ if (strict && uncovered.length) {
   console.error(`\nMissing documentation impact updates: ${uncovered.map(row => row.id).join(', ')}`);
   process.exit(1);
 }
-

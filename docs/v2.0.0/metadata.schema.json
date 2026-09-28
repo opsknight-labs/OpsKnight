@@ -47,15 +47,29 @@
   "allOf": [
     {
       "if": {
+        "type": "object",
         "properties": {
           "verification": {
+            "type": "object",
             "properties": { "level": { "enum": ["source", "test", "runtime"] } }
           }
         }
       },
       "then": {
+        "type": "object",
         "properties": {
-          "verification": { "required": ["verified_at", "evidence"] }
+          "verification": {
+            "type": "object",
+            "required": ["verified_at", "evidence"],
+            "properties": {
+              "verified_at": { "type": "string", "format": "date" },
+              "evidence": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
         }
       }
     }
