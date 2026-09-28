@@ -40,6 +40,7 @@ export interface CorrectnessInvariantReport {
     providerIdempotencyCheck: {
       passed: boolean;
       duplicateDeliveryKeysByProvider: Record<string, number>;
+      totalDuplicateDeliveries?: number;
     };
   };
   totals: {
@@ -262,18 +263,17 @@ export async function verifyLoadCertificationResults(options?: {
       acknowledgedWithoutTimestamp === 0 &&
       resolvedWithoutTimestamp === 0 &&
       snoozedWithoutUntil === 0;
-    const isPriorityInversion =
-      deliveredBulkCount > 0 &&
-      deliveredCriticalCount === 0 &&
+    const starvationOccurred =
       pendingCriticalCount > 0 &&
       oldestPendingCriticalAgeMs > maxCriticalPendingAgeMs;
 
-    const isWorkerStalled =
-      deliveredCriticalCount === 0 &&
-      pendingCriticalCount > 0 &&
-      oldestPendingCriticalAgeMs > maxCriticalPendingAgeMs;
+    const zeroCriticalStarvationPassed = !starvationOccurred;
 
-    const zeroCriticalStarvationPassed = !isPriorityInversion && !isWorkerStalled;
+    const totalDuplicateDeliveries = Object.values(duplicateDeliveryKeysByProvider).reduce(
+      (sum, count) => sum + count,
+      0
+    );
+    const providerIdempotencyPassed = totalDuplicateDeliveries === 0;
 
     const report: CorrectnessInvariantReport = {
       passed:
@@ -281,7 +281,8 @@ export async function verifyLoadCertificationResults(options?: {
         zeroLostAcceptedAlertsPassed &&
         zeroFalseEscalationsPassed &&
         zeroCorruptedStatesPassed &&
-        zeroCriticalStarvationPassed,
+        zeroCriticalStarvationPassed &&
+        providerIdempotencyPassed,
       checkedAt: new Date().toISOString(),
       topology,
       invariants: {
@@ -315,8 +316,9 @@ export async function verifyLoadCertificationResults(options?: {
           deliveredBulkCount,
         },
         providerIdempotencyCheck: {
-          passed: true,
+          passed: providerIdempotencyPassed,
           duplicateDeliveryKeysByProvider,
+          totalDuplicateDeliveries,
         },
       },
       totals: {

@@ -33,7 +33,7 @@ function isRetryableTransactionError(error: unknown): boolean {
       code === 'P2002' ||
       code === 'P2028' ||
       code === 'P2024' ||
-      ['P1001', 'P1002', 'P1008', 'P1017'].includes(code)
+      (code !== null && ['P1001', 'P1002', 'P1008', 'P1017'].includes(code))
     );
   }
   const message = error instanceof Error ? error.message : '';

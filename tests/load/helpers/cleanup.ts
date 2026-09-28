@@ -16,15 +16,35 @@ export interface LoadCleanupSummary {
   emulatorResetOk: boolean;
 }
 
+function assertSafeCleanupDatabase(): void {
+  if (process.env.OPSKNIGHT_ALLOW_LOAD_DB_CLEANUP === 'true') {
+    return;
+  }
+  const dbUrl = process.env.DATABASE_URL || '';
+  const isLikelyTestDb =
+    dbUrl.includes('test') ||
+    dbUrl.includes('load') ||
+    dbUrl.includes('scratch') ||
+    dbUrl.includes('ci') ||
+    dbUrl.includes('staging');
+  if (!isLikelyTestDb) {
+    throw new Error(
+      `Refusing to run load cleanup: DATABASE_URL does not match test patterns (test, load, scratch, ci, staging) and OPSKNIGHT_ALLOW_LOAD_DB_CLEANUP is not 'true'. Target: ${dbUrl.replace(/:[^:@]+@/, ':***@')}`
+    );
+  }
+}
+
 export async function runLoadCleanup(options?: {
   controlBaseUrl?: string;
 }): Promise<LoadCleanupSummary> {
+  assertSafeCleanupDatabase();
+
   const controlBaseUrl =
     options?.controlBaseUrl ?? DEFAULT_EMULATOR_ENDPOINTS.controlBaseUrl;
   const prisma = new PrismaClient();
 
   try {
-    // 1. Delete notifications and delivery attempts tied to load-test incidents/users/status-page
+    // 1. Identify all load-test scoped entities by lt- prefix
     const loadServices = await prisma.service.findMany({
       where: { id: { startsWith: 'lt-' } },
       select: { id: true },
@@ -43,15 +63,33 @@ export async function runLoadCleanup(options?: {
     });
     const loadIncidentIds = loadIncidents.map(i => i.id);
 
-    // Null out non-cascading foreign keys on Notification and Alert before deleting incidents
-    // so in-flight worker writes cannot cause foreign key violations.
-    await prisma.$executeRawUnsafe('DELETE FROM "NotificationDeliveryAttempt"').catch(() => undefined);
-    await prisma.$executeRawUnsafe('DELETE FROM "Notification"').catch(() => undefined);
-    await prisma.$executeRawUnsafe(
-      'UPDATE "Alert" SET "incidentId" = NULL WHERE "incidentId" IS NOT NULL'
-    ).catch(() => undefined);
+    const loadNotifications = await prisma.notification.findMany({
+      where: {
+        OR: [
+          { id: { startsWith: 'lt-' } },
+          { incidentId: { in: loadIncidentIds } },
+          { userId: { startsWith: 'lt-' } },
+        ],
+      },
+      select: { id: true },
+    });
+    const loadNotificationIds = loadNotifications.map(n => n.id);
 
-    // 1. Atomically delete background jobs, notifications, alerts, and incidents in dependency order
+    // Strictly scoped foreign key disassociations for load test entities only
+    if (loadServiceIds.length > 0 || loadIncidentIds.length > 0) {
+      await prisma.alert.updateMany({
+        where: {
+          OR: [
+            { serviceId: { in: loadServiceIds } },
+            { incidentId: { in: loadIncidentIds } },
+            { dedupKey: { contains: 'lt-' } },
+          ],
+        },
+        data: { incidentId: null },
+      }).catch(() => undefined);
+    }
+
+    // 2. Atomically delete load-test background jobs, notifications, alerts, and incidents in dependency order
     const [
       deletedBackgroundJobs,
       _deletedAttempts,
@@ -62,9 +100,25 @@ export async function runLoadCleanup(options?: {
       deletedAlerts,
       deletedIncidents,
     ] = await prisma.$transaction([
-      prisma.backgroundJob.deleteMany({}),
-      prisma.notificationDeliveryAttempt.deleteMany({}),
-      prisma.notification.deleteMany({}),
+      prisma.backgroundJob.deleteMany({
+        where: {
+          OR: [
+            { id: { startsWith: 'lt-' } },
+            { payload: { string_contains: 'lt-' } },
+          ],
+        },
+      }),
+      prisma.notificationDeliveryAttempt.deleteMany({
+        where: {
+          OR: [
+            { id: { startsWith: 'lt-' } },
+            { notificationId: { in: loadNotificationIds } },
+          ],
+        },
+      }),
+      prisma.notification.deleteMany({
+        where: { id: { in: loadNotificationIds } },
+      }),
       prisma.notificationFanout.deleteMany({
         where: { statusPageId: { startsWith: 'lt-' } },
       }),
@@ -87,15 +141,56 @@ export async function runLoadCleanup(options?: {
         where: { id: { in: loadIncidentIds } },
       }),
     ]).catch(async () => {
-      await prisma.$executeRawUnsafe('DELETE FROM "NotificationDeliveryAttempt"').catch(() => undefined);
-      await prisma.$executeRawUnsafe('DELETE FROM "Notification"').catch(() => undefined);
-      await prisma.$executeRawUnsafe('DELETE FROM "NotificationFanout"').catch(() => undefined);
-      await prisma.$executeRawUnsafe('DELETE FROM "IncidentEvent"').catch(() => undefined);
-      await prisma.$executeRawUnsafe('DELETE FROM "IncidentReminder"').catch(() => undefined);
-      await prisma.$executeRawUnsafe('DELETE FROM "IncidentNote"').catch(() => undefined);
-      await prisma.$executeRawUnsafe('DELETE FROM "Alert"').catch(() => undefined);
-      await prisma.$executeRawUnsafe('DELETE FROM "Incident"').catch(() => undefined);
-      return [{ count: 0 }, { count: 0 }, { count: 0 }, { count: 0 }, { count: 0 }, { count: 0 }, { count: 0 }, { count: 0 }, { count: 0 }];
+      // Scoped fallback if transaction encounters serialization / deadlocks under load
+      const delAttempts = await prisma.notificationDeliveryAttempt.deleteMany({
+        where: {
+          OR: [
+            { id: { startsWith: 'lt-' } },
+            { notificationId: { in: loadNotificationIds } },
+          ],
+        },
+      }).catch(() => ({ count: 0 }));
+
+      const delNotifs = await prisma.notification.deleteMany({
+        where: { id: { in: loadNotificationIds } },
+      }).catch(() => ({ count: 0 }));
+
+      const delJobs = await prisma.backgroundJob.deleteMany({
+        where: {
+          OR: [
+            { id: { startsWith: 'lt-' } },
+            { payload: { string_contains: 'lt-' } },
+          ],
+        },
+      }).catch(() => ({ count: 0 }));
+
+      await prisma.notificationFanout.deleteMany({
+        where: { statusPageId: { startsWith: 'lt-' } },
+      }).catch(() => undefined);
+
+      await prisma.incidentEvent.deleteMany({
+        where: { incidentId: { in: loadIncidentIds } },
+      }).catch(() => undefined);
+
+      await prisma.incidentNote.deleteMany({
+        where: { incidentId: { in: loadIncidentIds } },
+      }).catch(() => undefined);
+
+      const delAlerts = await prisma.alert.deleteMany({
+        where: {
+          OR: [
+            { serviceId: { in: loadServiceIds } },
+            { incidentId: { in: loadIncidentIds } },
+            { dedupKey: { contains: 'lt-' } },
+          ],
+        },
+      }).catch(() => ({ count: 0 }));
+
+      const delIncs = await prisma.incident.deleteMany({
+        where: { id: { in: loadIncidentIds } },
+      }).catch(() => ({ count: 0 }));
+
+      return [delJobs, delAttempts, delNotifs, { count: 0 }, { count: 0 }, { count: 0 }, delAlerts, delIncs];
     });
 
     const deletedStatusPageSubscribers = await prisma.statusPageSubscription.deleteMany({
@@ -112,28 +207,6 @@ export async function runLoadCleanup(options?: {
     await prisma.integration.deleteMany({
       where: { id: { startsWith: 'lt-' } },
     });
-
-    await prisma.$executeRawUnsafe(
-      'DELETE FROM "NotificationDeliveryAttempt" WHERE "notificationId" IN (SELECT "id" FROM "Notification" WHERE "incidentId" IN (SELECT "id" FROM "Incident" WHERE "serviceId" LIKE \'lt-%\'))'
-    ).catch(() => undefined);
-    await prisma.$executeRawUnsafe(
-      'DELETE FROM "Notification" WHERE "incidentId" IN (SELECT "id" FROM "Incident" WHERE "serviceId" LIKE \'lt-%\')'
-    ).catch(() => undefined);
-    await prisma.$executeRawUnsafe(
-      'DELETE FROM "IncidentEvent" WHERE "incidentId" IN (SELECT "id" FROM "Incident" WHERE "serviceId" LIKE \'lt-%\')'
-    ).catch(() => undefined);
-    await prisma.$executeRawUnsafe(
-      'DELETE FROM "IncidentNote" WHERE "incidentId" IN (SELECT "id" FROM "Incident" WHERE "serviceId" LIKE \'lt-%\')'
-    ).catch(() => undefined);
-    await prisma.$executeRawUnsafe(
-      'DELETE FROM "IncidentReminder" WHERE "incidentId" IN (SELECT "id" FROM "Incident" WHERE "serviceId" LIKE \'lt-%\')'
-    ).catch(() => undefined);
-    await prisma.$executeRawUnsafe(
-      'DELETE FROM "Alert" WHERE "serviceId" LIKE \'lt-%\''
-    ).catch(() => undefined);
-    await prisma.$executeRawUnsafe(
-      'DELETE FROM "Incident" WHERE "serviceId" LIKE \'lt-%\''
-    ).catch(() => undefined);
 
     const deletedServices = await prisma.service.deleteMany({
       where: { id: { startsWith: 'lt-' } },

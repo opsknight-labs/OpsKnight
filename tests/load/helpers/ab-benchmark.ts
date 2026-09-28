@@ -1,5 +1,5 @@
-import { PrismaClient } from '@prisma/client';
-import { runReadCommittedTransaction } from '../../src/lib/db-utils';
+import { Prisma, PrismaClient } from '@prisma/client';
+import { runReadCommittedTransaction } from '@/lib/db-utils';
 
 export interface BenchmarkMetrics {
   profile: string;
@@ -60,7 +60,7 @@ export async function runContentionWorkload(
     for (let i = 0; i < iterations / concurrency; i++) {
       const t0 = Date.now();
       try {
-        await runReadCommittedTransaction(async tx => {
+        await runReadCommittedTransaction(async (tx: Prisma.TransactionClient) => {
           // Read service record and update state
           await tx.$queryRaw`SELECT 1`;
         });

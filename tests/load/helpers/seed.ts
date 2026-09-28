@@ -130,12 +130,34 @@ function parseCliArgs(argv: string[]): {
   return { scale, manifestPath, baseUrl };
 }
 
+function assertSafeSeedDatabase(): void {
+  if (
+    process.env.OPSKNIGHT_ALLOW_LOAD_DB_SEED === 'true' ||
+    process.env.OPSKNIGHT_ALLOW_LOAD_DB_OVERWRITE === 'true'
+  ) {
+    return;
+  }
+  const dbUrl = process.env.DATABASE_URL || '';
+  const isLikelyTestDb =
+    dbUrl.includes('test') ||
+    dbUrl.includes('load') ||
+    dbUrl.includes('scratch') ||
+    dbUrl.includes('ci') ||
+    dbUrl.includes('staging');
+  if (!isLikelyTestDb) {
+    throw new Error(
+      `Refusing to seed load fixtures: DATABASE_URL does not match test patterns and OPSKNIGHT_ALLOW_LOAD_DB_SEED is not 'true'. Target: ${dbUrl.replace(/:[^:@]+@/, ':***@')}`
+    );
+  }
+}
+
 export async function runLoadSeed(options?: {
   scale?: ScaleProfileName;
   manifestPath?: string;
   baseUrl?: string;
   endpoints?: LoadProviderEmulatorEndpoints;
 }): Promise<LoadSeedManifest> {
+  assertSafeSeedDatabase();
   const cli = parseCliArgs(process.argv.slice(2));
   const scaleName = options?.scale ?? cli.scale;
   const manifestPath = options?.manifestPath ?? cli.manifestPath;
@@ -384,6 +406,19 @@ export async function runLoadSeed(options?: {
       password: endpoints.smtpPassword,
       fromEmail: endpoints.fromEmail,
     })) as Prisma.InputJsonValue;
+    const existingSmtp = await prisma.notificationProvider.findUnique({
+      where: { provider: 'smtp' },
+    });
+    if (
+      existingSmtp &&
+      !existingSmtp.id.startsWith('lt-') &&
+      process.env.OPSKNIGHT_ALLOW_LOAD_DB_OVERWRITE !== 'true'
+    ) {
+      throw new Error(
+        `Refusing to overwrite existing non-test SMTP provider (${existingSmtp.id}). Dedicated test database required.`
+      );
+    }
+
     await prisma.notificationProvider.upsert({
       where: { provider: 'smtp' },
       update: { enabled: true, config: smtpConfig },
@@ -394,6 +429,19 @@ export async function runLoadSeed(options?: {
         config: smtpConfig,
       },
     });
+
+    const existingPush = await prisma.notificationProvider.findUnique({
+      where: { provider: 'web-push' },
+    });
+    if (
+      existingPush &&
+      !existingPush.id.startsWith('lt-') &&
+      process.env.OPSKNIGHT_ALLOW_LOAD_DB_OVERWRITE !== 'true'
+    ) {
+      throw new Error(
+        `Refusing to overwrite existing non-test web-push provider (${existingPush.id}). Dedicated test database required.`
+      );
+    }
 
     const pushConfig = (await encryptProviderConfig('web-push', {
       vapidSubject: `mailto:${endpoints.fromEmail}`,

@@ -391,6 +391,7 @@ export interface ScenarioExecutionRecord {
   p99Ms: number;
   rps: number;
   errorRate: number;
+  thresholdsPassed?: boolean;
 }
 
 export interface TopologyCertificationResult {
@@ -561,6 +562,8 @@ async function runK6Scenario(options: {
     // Summary file may not exist if k6 binary is not installed or exited early
   }
 
+  const thresholdsPassed = exitCode === 0 && errorRate <= 0.01;
+
   return {
     scenario: options.scenarioFile,
     loadLevel: options.loadLevel,
@@ -571,93 +574,140 @@ async function runK6Scenario(options: {
     p99Ms,
     rps,
     errorRate,
+    thresholdsPassed,
   };
 }
 
-const TOPOLOGY_CAPACITY_PROFILES: Record<
-  string,
-  {
-    sustainedAlertRps: string;
-    burstAlertRps: string;
-    notificationRate: string;
-    escalationRate: string;
-    concurrentUsers: string;
-    sseStreams: string;
-    statusFanout: string;
-    bottleneck: string;
+export interface DerivedCapacityProfile {
+  sustainedAlertRps: string;
+  burstAlertRps: string;
+  notificationRate: string;
+  escalationRate: string;
+  concurrentUsers: string;
+  sseStreams: string;
+  statusFanout: string;
+  bottleneck: string;
+}
+
+export function deriveCapacityFromScenarios(
+  topologyId: string,
+  records: ScenarioExecutionRecord[],
+  verification: CorrectnessInvariantReport
+): DerivedCapacityProfile {
+  if (records.length === 0) {
+    return {
+      sustainedAlertRps: 'Measured on run',
+      burstAlertRps: 'Measured on run',
+      notificationRate: 'Measured on run',
+      escalationRate: 'Measured on run',
+      concurrentUsers: 'Measured on run',
+      sseStreams: 'Measured on run',
+      statusFanout: 'Measured on run',
+      bottleneck: 'Pending execution',
+    };
   }
-> = {
-  compose_integrated_bundled_db: {
-    sustainedAlertRps: '15 – 30 RPS',
-    burstAlertRps: '45 RPS (30s)',
-    notificationRate: '~600 / min',
-    escalationRate: '5 / sec',
-    concurrentUsers: '25 – 50 VUs',
-    sseStreams: '~50 streams',
-    statusFanout: '250 req/min',
-    bottleneck: 'Shared Process Event Loop Contention',
-  },
-  compose_split_bundled_db: {
-    sustainedAlertRps: '40 – 80 RPS',
-    burstAlertRps: '120 RPS (30s)',
-    notificationRate: '~2,500 / min',
-    escalationRate: '15 / sec',
-    concurrentUsers: '100 – 150 VUs',
-    sseStreams: '~150 streams',
-    statusFanout: '1,000 req/min',
-    bottleneck: 'PostgreSQL Direct Connection Limit',
-  },
-  compose_split_pgbouncer: {
-    sustainedAlertRps: '80 – 150 RPS',
-    burstAlertRps: '250 RPS (30s)',
-    notificationRate: '~5,000 / min',
-    escalationRate: '25 / sec',
-    concurrentUsers: '150 – 250 VUs',
-    sseStreams: '~250 streams',
-    statusFanout: '2,500 req/min',
-    bottleneck: 'Host CPU & Disk IOPS Saturation',
-  },
-  swarm_single_node_split: {
-    sustainedAlertRps: '100 – 180 RPS',
-    burstAlertRps: '280 RPS (30s)',
-    notificationRate: '~6,000 / min',
-    escalationRate: '30 / sec',
-    concurrentUsers: '200 – 300 VUs',
-    sseStreams: '~350 streams',
-    statusFanout: '3,000 req/min',
-    bottleneck: 'Single Docker Daemon Network Overhead',
-  },
-  swarm_ha_split: {
-    sustainedAlertRps: '250 – 400 RPS',
-    burstAlertRps: '600 RPS (30s)',
-    notificationRate: '~18,000 / min',
-    escalationRate: '60 / sec',
-    concurrentUsers: '350 – 500 VUs',
-    sseStreams: '~1,000 streams',
-    statusFanout: '8,000 req/min',
-    bottleneck: 'Swarm Overlay Routing Mesh Overhead',
-  },
-  kind_helm_split_pgbouncer: {
-    sustainedAlertRps: '300 – 600 RPS',
-    burstAlertRps: '1,000 RPS (30s)',
-    notificationRate: '~40,000 / min',
-    escalationRate: '80 / sec',
-    concurrentUsers: '500 – 1,000 VUs',
-    sseStreams: '~2,500 streams',
-    statusFanout: '15,000 req/min',
-    bottleneck: 'Node CPU / Worker Pod Resource Limits',
-  },
-  kind_kustomize_split_pgbouncer: {
-    sustainedAlertRps: '300 – 600 RPS',
-    burstAlertRps: '1,000 RPS (30s)',
-    notificationRate: '~40,000 / min',
-    escalationRate: '80 / sec',
-    concurrentUsers: '500 – 1,000 VUs',
-    sseStreams: '~2,500 streams',
-    statusFanout: '15,000 req/min',
-    bottleneck: 'Node CPU / Worker Pod Resource Limits',
-  },
-};
+
+  // 1. Alert Ingestion
+  const alertRecords = records.filter(r => r.scenario.includes('alert-ingestion'));
+  const validAlertRecords = alertRecords.filter(
+    r => r.exitCode === 0 && r.thresholdsPassed !== false && r.errorRate <= 0.01 && r.p95Ms <= 500
+  );
+  const maxSustainedAlertRps = validAlertRecords.length > 0
+    ? Math.max(...validAlertRecords.map(r => r.rps))
+    : alertRecords.length > 0
+      ? Math.max(...alertRecords.filter(r => r.exitCode === 0).map(r => r.rps))
+      : 0;
+  const maxBurstAlertRps = alertRecords.length > 0
+    ? Math.max(...alertRecords.filter(r => r.errorRate <= 0.05).map(r => r.rps))
+    : 0;
+
+  // 2. Notifications
+  const notifRecords = records.filter(r => r.scenario.includes('notifications'));
+  const validNotifRecords = notifRecords.filter(
+    r => r.exitCode === 0 && r.thresholdsPassed !== false && r.errorRate <= 0.01
+  );
+  const maxNotifRps = validNotifRecords.length > 0
+    ? Math.max(...validNotifRecords.map(r => r.rps))
+    : notifRecords.length > 0
+      ? Math.max(...notifRecords.filter(r => r.exitCode === 0).map(r => r.rps))
+      : 0;
+
+  // 3. Escalations
+  const escRecords = records.filter(r => r.scenario.includes('escalation'));
+  const validEscRecords = escRecords.filter(
+    r => r.exitCode === 0 && r.thresholdsPassed !== false && r.errorRate <= 0.01
+  );
+  const maxEscRps = validEscRecords.length > 0
+    ? Math.max(...validEscRecords.map(r => r.rps))
+    : escRecords.length > 0
+      ? Math.max(...escRecords.filter(r => r.exitCode === 0).map(r => r.rps))
+      : 0;
+
+  // 4. Concurrent users (VUs)
+  const levelToVUs: Record<string, number> = { L0: 5, L1: 25, L2: 100, L3: 300, L4: 1000 };
+  const lifecycleRecords = records.filter(r => r.scenario.includes('incident-lifecycle'));
+  const validLifecycleRecords = lifecycleRecords.filter(
+    r => r.exitCode === 0 && r.thresholdsPassed !== false && r.p95Ms <= 1000
+  );
+  const maxVUs = validLifecycleRecords.length > 0
+    ? Math.max(...validLifecycleRecords.map(r => levelToVUs[r.loadLevel] || 25))
+    : lifecycleRecords.length > 0
+      ? Math.max(...lifecycleRecords.filter(r => r.exitCode === 0).map(r => levelToVUs[r.loadLevel] || 25))
+      : 0;
+
+  // 5. SSE Realtime Streams
+  const realtimeRecords = records.filter(r => r.scenario.includes('realtime'));
+  const maxSseVUs = realtimeRecords.length > 0
+    ? Math.max(...realtimeRecords.filter(r => r.exitCode === 0 && r.thresholdsPassed !== false).map(r => levelToVUs[r.loadLevel] || 10))
+    : 0;
+
+  // 6. Status Fanout
+  const fanoutRecords = records.filter(r => r.scenario.includes('status-fanout'));
+  const maxFanoutRps = fanoutRecords.length > 0
+    ? Math.max(...fanoutRecords.filter(r => r.exitCode === 0 && r.thresholdsPassed !== false).map(r => r.rps))
+    : 0;
+
+  // 7. Bottleneck Attribution
+  let bottleneck = 'Within headroom limits';
+  if (!verification.passed) {
+    const inv = verification.invariants;
+    if (!inv.zeroCriticalNotificationStarvation.passed) {
+      bottleneck = 'Critical notification queue starvation';
+    } else if (!inv.zeroDuplicateOpenIncidents.passed) {
+      bottleneck = 'Dedup concurrency conflict on incident creation';
+    } else if (!inv.providerIdempotencyCheck.passed) {
+      bottleneck = 'Provider webhook duplicate deliveries';
+    } else if (!inv.zeroLostAcceptedAlerts.passed) {
+      bottleneck = 'Unlinked accepted alerts buffer leak';
+    } else {
+      bottleneck = 'Correctness invariant violation under load';
+    }
+  } else {
+    const broken = records.find(r => r.exitCode !== 0 || r.errorRate > 0.01 || r.thresholdsPassed === false);
+    if (broken) {
+      if (topologyId.includes('integrated')) {
+        bottleneck = `Shared web+worker CPU loop saturation at ${broken.loadLevel}`;
+      } else if (topologyId.includes('bundled_db') && !topologyId.includes('pgbouncer')) {
+        bottleneck = `PostgreSQL client connection saturation without pooler at ${broken.loadLevel}`;
+      } else if (topologyId.includes('swarm')) {
+        bottleneck = `Swarm overlay network / ingress routing latency at ${broken.loadLevel}`;
+      } else {
+        bottleneck = `Worker pod resource / pool limits reached at ${broken.loadLevel}`;
+      }
+    }
+  }
+
+  return {
+    sustainedAlertRps: maxSustainedAlertRps > 0 ? `${Math.round(maxSustainedAlertRps)} RPS` : 'Measured on run',
+    burstAlertRps: maxBurstAlertRps > 0 ? `${Math.round(maxBurstAlertRps)} RPS` : 'Measured on run',
+    notificationRate: maxNotifRps > 0 ? `~${Math.round(maxNotifRps * 60)} / min` : 'Measured on run',
+    escalationRate: maxEscRps > 0 ? `${Math.round(maxEscRps)} / sec` : 'Measured on run',
+    concurrentUsers: maxVUs > 0 ? `${maxVUs} VUs` : 'Measured on run',
+    sseStreams: maxSseVUs > 0 ? `~${maxSseVUs} streams` : 'Measured on run',
+    statusFanout: maxFanoutRps > 0 ? `~${Math.round(maxFanoutRps * 60)} / min` : 'Measured on run',
+    bottleneck,
+  };
+}
 
 export function generateCertificationMarkdownReport(
   results: TopologyCertificationResult[]
@@ -674,16 +724,7 @@ export function generateCertificationMarkdownReport(
   ];
 
   for (const r of results) {
-    const prof = TOPOLOGY_CAPACITY_PROFILES[r.topologyId] ?? {
-      sustainedAlertRps: 'Measured',
-      burstAlertRps: 'Measured',
-      notificationRate: 'Measured',
-      escalationRate: 'Measured',
-      concurrentUsers: 'Measured',
-      sseStreams: 'Measured',
-      statusFanout: 'Measured',
-      bottleneck: 'CPU / DB Contention',
-    };
+    const prof = deriveCapacityFromScenarios(r.topologyId, r.scenarios, r.verification);
     const certBadge = r.certified ? '**CERTIFIED**' : '**FAILED**';
     lines.push(
       `| \`${r.topologyId}\` | ${prof.sustainedAlertRps} | ${prof.burstAlertRps} | ${prof.notificationRate} | ${prof.escalationRate} | ${prof.concurrentUsers} | ${prof.sseStreams} | ${prof.statusFanout} | ${prof.bottleneck} | ${certBadge} |`
@@ -872,13 +913,35 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
             `k6-${scenarioFile.replace(/\.js$/, '')}-${level}.json`
           );
 
-          // If running recovery.js and topology has recovery drills, trigger fault mid-run
-          let drillTimer: NodeJS.Timeout | null = null;
+          // If running recovery.js and topology has recovery drills, trigger all declared recovery drills
           if (scenarioFile === 'recovery.js' && topology.recoveryDrills.length > 0 && !opts.skipDeploy) {
-            const drill = topology.recoveryDrills[0];
-            drillTimer = setTimeout(() => {
-              void runShellCommand(drill.faultCommand).catch(() => undefined);
-            }, 5_000);
+            for (const drill of topology.recoveryDrills) {
+              const drillSummaryPath = path.join(
+                topologyDir,
+                `k6-recovery-${drill.name}-${level}.json`
+              );
+              let drillTimer: NodeJS.Timeout | null = null;
+              drillTimer = setTimeout(() => {
+                void runShellCommand(drill.faultCommand).catch(() => undefined);
+              }, 5_000);
+
+              const drillRecord = await runK6Scenario({
+                scenarioFile,
+                loadLevel: level,
+                durationProfile: opts.durationProfile,
+                baseUrl: topology.baseUrl,
+                manifestPath,
+                summaryJsonPath: drillSummaryPath,
+              });
+
+              if (drillTimer) clearTimeout(drillTimer);
+              drillRecord.scenario = `recovery-${drill.name}`;
+              console.log(
+                `  [Recovery Drill] ${drill.name} (${drill.role}) @ ${level}: exit=${drillRecord.exitCode} rps=${drillRecord.rps} p95=${drillRecord.p95Ms}ms err=${drillRecord.errorRate}`
+              );
+              scenarioRecords.push(drillRecord);
+            }
+            continue;
           }
 
           const record = await runK6Scenario({
@@ -890,7 +953,6 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
             summaryJsonPath,
           });
 
-          if (drillTimer) clearTimeout(drillTimer);
           console.log(
             `  [Scenario] ${scenarioFile} @ ${level}: exit=${record.exitCode} rps=${record.rps} p95=${record.p95Ms}ms p99=${record.p99Ms}ms err=${record.errorRate}`
           );
@@ -917,7 +979,9 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
         ...samples.map(s => s.postgres.oldestPendingJobAgeMs)
       );
 
-      const allScenariosPassed = scenarioRecords.every(s => s.exitCode === 0);
+      const allScenariosPassed = scenarioRecords.every(
+        s => s.exitCode === 0 && s.thresholdsPassed !== false && s.errorRate <= 0.01
+      );
       results.push({
         topologyId: topology.id,
         topologyName: topology.name,

@@ -7,6 +7,7 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    files: ['**/*.{js,jsx,ts,tsx,mjs,mts}'],
     rules: {
       // Enforce best practices
       'no-console': 'off',
@@ -116,6 +117,7 @@ const eslintConfig = defineConfig([
     "*.config.ts",
     "prisma/generated/**",
     "scripts/**",
+    "deploy/scripts/**",
     "coverage/**",
     "reports/**",
     "*.log",
