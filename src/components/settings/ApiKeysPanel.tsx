@@ -687,7 +687,10 @@ print(response.json()["incidents"])`}
 
       {/* 5. Create API Key Modal Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="w-[calc(100%-2rem)] max-w-4xl max-h-[90vh] overflow-x-hidden overflow-y-auto">
+        <DialogContent
+          className="w-[calc(100%-2rem)] max-h-[90vh] overflow-x-hidden overflow-y-auto sm:w-[94vw]"
+          style={{ maxWidth: '72rem' }}
+        >
           <DialogHeader>
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
@@ -781,23 +784,21 @@ print(response.json()["incidents"])`}
                         id={`scope-${scope.value}`}
                         className="mt-0.5 shrink-0"
                       />
-                      <div className="min-w-0 space-y-1.5">
-                        <label
-                          htmlFor={`scope-${scope.value}`}
-                          className="grid min-w-0 cursor-pointer gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
-                        >
-                          <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold leading-tight text-foreground">
-                            <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="min-w-0 whitespace-normal break-normal">{scope.title}</span>
-                          </span>
-                          <code className="max-w-full justify-self-start whitespace-nowrap rounded border border-border/50 bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:justify-self-end">
-                            {scope.value}
-                          </code>
-                        </label>
-                        <p className="max-w-prose text-[11px] leading-relaxed text-muted-foreground">
+                      <label
+                        htmlFor={`scope-${scope.value}`}
+                        className="grid min-w-0 cursor-pointer gap-2 sm:grid-cols-[minmax(9rem,0.8fr)_minmax(0,1.35fr)_auto] sm:items-center"
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold leading-tight text-foreground">
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 whitespace-normal break-normal">{scope.title}</span>
+                        </span>
+                        <span className="min-w-0 text-[11px] leading-relaxed text-muted-foreground">
                           {scope.detail}
-                        </p>
-                      </div>
+                        </span>
+                        <code className="max-w-full justify-self-start whitespace-nowrap rounded border border-border/50 bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:justify-self-end">
+                          {scope.value}
+                        </code>
+                      </label>
                     </div>
                   );
                 })}
