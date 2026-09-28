@@ -627,7 +627,10 @@
     {
       "route": "/api/auth/[...nextauth]",
       "file": "src/app/api/auth/[...nextauth]/route.ts",
-      "methods": []
+      "methods": [
+        "GET",
+        "POST"
+      ]
     },
     {
       "route": "/api/auth/forgot-password",
@@ -1234,7 +1237,9 @@
     {
       "route": "/api/integrations/pagerduty/v2/enqueue",
       "file": "src/app/api/integrations/pagerduty/v2/enqueue/route.ts",
-      "methods": []
+      "methods": [
+        "POST"
+      ]
     },
     {
       "route": "/api/integrations/pingdom",
@@ -1781,7 +1786,9 @@
     {
       "route": "/api/status-page/subscribe",
       "file": "src/app/api/status-page/subscribe/route.ts",
-      "methods": []
+      "methods": [
+        "POST"
+      ]
     },
     {
       "route": "/api/status-page/subscribers",
@@ -2031,7 +2038,9 @@
     {
       "route": "/api/v1/service-objectives/[id]/snapshots",
       "file": "src/app/api/v1/service-objectives/[id]/snapshots/route.ts",
-      "methods": []
+      "methods": [
+        "GET"
+      ]
     },
     {
       "route": "/api/v1/service-objectives/[id]/versions",
@@ -5466,32 +5475,18 @@
   ],
   "integrations": [
     {
-      "provider": "app-error",
-      "sources": [
-        "src/lib/integrations/app-error.ts"
-      ]
-    },
-    {
       "provider": "appdynamics",
+      "route": "src/app/api/integrations/appdynamics/route.ts",
+      "adapter": "src/lib/integrations/appdynamics.ts",
       "sources": [
         "src/lib/integrations/appdynamics.ts",
         "src/app/api/integrations/appdynamics/route.ts"
       ]
     },
     {
-      "provider": "auth",
-      "sources": [
-        "src/lib/integrations/auth.ts"
-      ]
-    },
-    {
-      "provider": "aws-sns-verification",
-      "sources": [
-        "src/lib/integrations/aws-sns-verification.ts"
-      ]
-    },
-    {
       "provider": "azure",
+      "route": "src/app/api/integrations/azure/route.ts",
+      "adapter": "src/lib/integrations/azure.ts",
       "sources": [
         "src/lib/integrations/azure.ts",
         "src/app/api/integrations/azure/route.ts"
@@ -5499,6 +5494,8 @@
     },
     {
       "provider": "better-uptime",
+      "route": "src/app/api/integrations/better-uptime/route.ts",
+      "adapter": "src/lib/integrations/better-uptime.ts",
       "sources": [
         "src/lib/integrations/better-uptime.ts",
         "src/app/api/integrations/better-uptime/route.ts"
@@ -5506,19 +5503,17 @@
     },
     {
       "provider": "bitbucket",
+      "route": "src/app/api/integrations/bitbucket/route.ts",
+      "adapter": "src/lib/integrations/bitbucket.ts",
       "sources": [
         "src/lib/integrations/bitbucket.ts",
         "src/app/api/integrations/bitbucket/route.ts"
       ]
     },
     {
-      "provider": "chatops",
-      "sources": [
-        "src/app/(app)/settings/integrations/chatops/page.tsx"
-      ]
-    },
-    {
       "provider": "cloudwatch",
+      "route": "src/app/api/integrations/cloudwatch/route.ts",
+      "adapter": "src/lib/integrations/cloudwatch.ts",
       "sources": [
         "src/lib/integrations/cloudwatch.ts",
         "src/app/api/integrations/cloudwatch/route.ts"
@@ -5526,6 +5521,8 @@
     },
     {
       "provider": "datadog",
+      "route": "src/app/api/integrations/datadog/route.ts",
+      "adapter": "src/lib/integrations/datadog.ts",
       "sources": [
         "src/lib/integrations/datadog.ts",
         "src/app/api/integrations/datadog/route.ts"
@@ -5533,6 +5530,8 @@
     },
     {
       "provider": "dynatrace",
+      "route": "src/app/api/integrations/dynatrace/route.ts",
+      "adapter": "src/lib/integrations/dynatrace.ts",
       "sources": [
         "src/lib/integrations/dynatrace.ts",
         "src/app/api/integrations/dynatrace/route.ts"
@@ -5540,25 +5539,17 @@
     },
     {
       "provider": "elastic",
+      "route": "src/app/api/integrations/elastic/route.ts",
+      "adapter": "src/lib/integrations/elastic.ts",
       "sources": [
         "src/lib/integrations/elastic.ts",
         "src/app/api/integrations/elastic/route.ts"
       ]
     },
     {
-      "provider": "errors",
-      "sources": [
-        "src/lib/integrations/errors.ts"
-      ]
-    },
-    {
-      "provider": "failures",
-      "sources": [
-        "src/app/api/integrations/failures/route.ts"
-      ]
-    },
-    {
       "provider": "github",
+      "route": "src/app/api/integrations/github/route.ts",
+      "adapter": "src/lib/integrations/github.ts",
       "sources": [
         "src/lib/integrations/github.ts",
         "src/app/api/integrations/github/route.ts"
@@ -5566,6 +5557,8 @@
     },
     {
       "provider": "gitlab",
+      "route": "src/app/api/integrations/gitlab/route.ts",
+      "adapter": "src/lib/integrations/gitlab.ts",
       "sources": [
         "src/lib/integrations/gitlab.ts",
         "src/app/api/integrations/gitlab/route.ts"
@@ -5573,6 +5566,8 @@
     },
     {
       "provider": "google-cloud-monitoring",
+      "route": "src/app/api/integrations/google-cloud-monitoring/route.ts",
+      "adapter": "src/lib/integrations/google-cloud-monitoring.ts",
       "sources": [
         "src/lib/integrations/google-cloud-monitoring.ts",
         "src/app/api/integrations/google-cloud-monitoring/route.ts"
@@ -5580,25 +5575,17 @@
     },
     {
       "provider": "grafana",
+      "route": "src/app/api/integrations/grafana/route.ts",
+      "adapter": "src/lib/integrations/grafana.ts",
       "sources": [
         "src/lib/integrations/grafana.ts",
         "src/app/api/integrations/grafana/route.ts"
       ]
     },
     {
-      "provider": "handler",
-      "sources": [
-        "src/lib/integrations/handler.ts"
-      ]
-    },
-    {
-      "provider": "health",
-      "sources": [
-        "src/app/api/integrations/health/route.ts"
-      ]
-    },
-    {
       "provider": "honeycomb",
+      "route": "src/app/api/integrations/honeycomb/route.ts",
+      "adapter": "src/lib/integrations/honeycomb.ts",
       "sources": [
         "src/lib/integrations/honeycomb.ts",
         "src/app/api/integrations/honeycomb/route.ts"
@@ -5606,38 +5593,26 @@
     },
     {
       "provider": "icinga",
+      "route": "src/app/api/integrations/icinga/route.ts",
+      "adapter": "src/lib/integrations/icinga.ts",
       "sources": [
         "src/lib/integrations/icinga.ts",
         "src/app/api/integrations/icinga/route.ts"
       ]
     },
     {
-      "provider": "jira",
-      "sources": [
-        "src/app/(app)/settings/integrations/jira/page.tsx"
-      ]
-    },
-    {
       "provider": "manageengine",
+      "route": "src/app/api/integrations/manageengine/route.ts",
+      "adapter": "src/lib/integrations/manageengine.ts",
       "sources": [
         "src/lib/integrations/manageengine.ts",
         "src/app/api/integrations/manageengine/route.ts"
       ]
     },
     {
-      "provider": "metrics",
-      "sources": [
-        "src/lib/integrations/metrics.ts"
-      ]
-    },
-    {
-      "provider": "microsoft-teams",
-      "sources": [
-        "src/app/(app)/settings/integrations/microsoft-teams/page.tsx"
-      ]
-    },
-    {
       "provider": "nagios",
+      "route": "src/app/api/integrations/nagios/route.ts",
+      "adapter": "src/lib/integrations/nagios.ts",
       "sources": [
         "src/lib/integrations/nagios.ts",
         "src/app/api/integrations/nagios/route.ts"
@@ -5645,27 +5620,26 @@
     },
     {
       "provider": "newrelic",
+      "route": "src/app/api/integrations/newrelic/route.ts",
+      "adapter": "src/lib/integrations/newrelic.ts",
       "sources": [
         "src/lib/integrations/newrelic.ts",
         "src/app/api/integrations/newrelic/route.ts"
       ]
     },
     {
-      "provider": "normalization",
-      "sources": [
-        "src/lib/integrations/normalization.ts"
-      ]
-    },
-    {
       "provider": "pagerduty",
+      "route": "src/app/api/integrations/pagerduty/route.ts",
+      "adapter": "src/lib/integrations/pagerduty.ts",
       "sources": [
         "src/lib/integrations/pagerduty.ts",
-        "src/app/api/integrations/pagerduty/route.ts",
-        "src/app/api/integrations/pagerduty/v2/enqueue/route.ts"
+        "src/app/api/integrations/pagerduty/route.ts"
       ]
     },
     {
       "provider": "pingdom",
+      "route": "src/app/api/integrations/pingdom/route.ts",
+      "adapter": "src/lib/integrations/pingdom.ts",
       "sources": [
         "src/lib/integrations/pingdom.ts",
         "src/app/api/integrations/pingdom/route.ts"
@@ -5673,62 +5647,26 @@
     },
     {
       "provider": "prometheus",
+      "route": "src/app/api/integrations/prometheus/route.ts",
+      "adapter": "src/lib/integrations/prometheus.ts",
       "sources": [
         "src/lib/integrations/prometheus.ts",
         "src/app/api/integrations/prometheus/route.ts"
       ]
     },
     {
-      "provider": "rate-limiter",
-      "sources": [
-        "src/lib/integrations/rate-limiter.ts"
-      ]
-    },
-    {
-      "provider": "reconciliation",
-      "sources": [
-        "src/lib/integrations/reconciliation.ts"
-      ]
-    },
-    {
-      "provider": "request-security",
-      "sources": [
-        "src/lib/integrations/request-security.ts"
-      ]
-    },
-    {
-      "provider": "route-helpers",
-      "sources": [
-        "src/lib/integrations/route-helpers.ts"
-      ]
-    },
-    {
-      "provider": "schemas",
-      "sources": [
-        "src/lib/integrations/schemas/index.ts"
-      ]
-    },
-    {
       "provider": "sentry",
+      "route": "src/app/api/integrations/sentry/route.ts",
+      "adapter": "src/lib/integrations/sentry.ts",
       "sources": [
         "src/lib/integrations/sentry.ts",
         "src/app/api/integrations/sentry/route.ts"
       ]
     },
     {
-      "provider": "signature-verification",
-      "sources": [
-        "src/lib/integrations/signature-verification.ts"
-      ]
-    },
-    {
-      "provider": "slack",
-      "sources": [
-        "src/app/(app)/settings/integrations/slack/page.tsx"
-      ]
-    },
-    {
       "provider": "splunk-observability",
+      "route": "src/app/api/integrations/splunk-observability/route.ts",
+      "adapter": "src/lib/integrations/splunk-observability.ts",
       "sources": [
         "src/lib/integrations/splunk-observability.ts",
         "src/app/api/integrations/splunk-observability/route.ts"
@@ -5736,6 +5674,8 @@
     },
     {
       "provider": "splunk-oncall",
+      "route": "src/app/api/integrations/splunk-oncall/route.ts",
+      "adapter": "src/lib/integrations/splunk-oncall.ts",
       "sources": [
         "src/lib/integrations/splunk-oncall.ts",
         "src/app/api/integrations/splunk-oncall/route.ts"
@@ -5743,6 +5683,8 @@
     },
     {
       "provider": "uptime-kuma",
+      "route": "src/app/api/integrations/uptime-kuma/route.ts",
+      "adapter": "src/lib/integrations/uptime-kuma.ts",
       "sources": [
         "src/lib/integrations/uptime-kuma.ts",
         "src/app/api/integrations/uptime-kuma/route.ts"
@@ -5750,6 +5692,8 @@
     },
     {
       "provider": "uptimerobot",
+      "route": "src/app/api/integrations/uptimerobot/route.ts",
+      "adapter": "src/lib/integrations/uptimerobot.ts",
       "sources": [
         "src/lib/integrations/uptimerobot.ts",
         "src/app/api/integrations/uptimerobot/route.ts"
@@ -5757,6 +5701,8 @@
     },
     {
       "provider": "vercel",
+      "route": "src/app/api/integrations/vercel/route.ts",
+      "adapter": "src/lib/integrations/vercel.ts",
       "sources": [
         "src/lib/integrations/vercel.ts",
         "src/app/api/integrations/vercel/route.ts"
@@ -5764,6 +5710,8 @@
     },
     {
       "provider": "webhook",
+      "route": "src/app/api/integrations/webhook/route.ts",
+      "adapter": "src/lib/integrations/webhook.ts",
       "sources": [
         "src/lib/integrations/webhook.ts",
         "src/app/api/integrations/webhook/route.ts"
@@ -5771,6 +5719,8 @@
     },
     {
       "provider": "zabbix",
+      "route": "src/app/api/integrations/zabbix/route.ts",
+      "adapter": "src/lib/integrations/zabbix.ts",
       "sources": [
         "src/lib/integrations/zabbix.ts",
         "src/app/api/integrations/zabbix/route.ts"
@@ -6391,9 +6341,13 @@
     ]
   },
   "runtime": {
-    "jobs": [
+    "jobFiles": [
       "src/jobs/service-objective-scheduler.ts",
       "src/jobs/sla-scheduler.ts"
+    ],
+    "jobTypes": [
+      "service-objective-scheduler",
+      "sla-scheduler"
     ],
     "queueSources": [
       "src/lib/cron-scheduler.ts",
@@ -6403,17 +6357,12 @@
       "src/lib/jobs/queue.ts",
       "src/lib/offline-queue.ts"
     ],
-    "queueNames": [
-      "BackgroundJob",
-      "BulkQueueBackpressureError",
-      "OPSKNIGHT_WORKER_BATCH_SIZE",
-      "OPSKNIGHT_WORKER_BUSY_POLL_MS",
-      "OPSKNIGHT_WORKER_CONCURRENCY",
-      "OPSKNIGHT_WORKER_IDLE_POLL_MS",
-      "cron-scheduler",
-      "cron_scheduler_state",
-      "request-queue",
-      "serviceWorker"
+    "workerLanes": [
+      "all",
+      "general",
+      "critical",
+      "bulk",
+      "projector"
     ]
   }
 }

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { inspectApi } from './inspect-api.mjs';
 import { inspectConfig } from './inspect-config.mjs';
@@ -7,7 +8,10 @@ import { inspectPermissions } from './inspect-permissions.mjs';
 import { repositoryRoot } from './discovery-lib.mjs';
 
 const root = resolve(repositoryRoot, 'docs/v2.0.0/reference');
-const date = new Date().toISOString().slice(0, 10);
+const date = execFileSync('git', ['log', '-1', '--format=%cs', '--', 'src', 'deploy', 'prisma'], {
+  cwd: repositoryRoot,
+  encoding: 'utf8',
+}).trim();
 const frontmatter = ({ title, description, area, evidence }) => `---
 title: ${title}
 description: ${description}

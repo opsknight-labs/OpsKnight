@@ -3,14 +3,11 @@ import { filesUnder, readRepositoryFile } from './discovery-lib.mjs';
 export function inspectRuntime() {
   const jobFiles = filesUnder('src/jobs', file => /\.ts$/.test(file));
   const queueSources = filesUnder('src/lib', file => /(?:queue|worker|scheduler)\.ts$/.test(file));
-  const queueNames = new Set();
-  for (const file of queueSources) {
-    for (const match of readRepositoryFile(file).matchAll(/['"]([a-z][a-z0-9_-]*(?:queue|job|worker|scheduler)[a-z0-9_-]*)['"]/gi)) {
-      queueNames.add(match[1]);
-    }
-  }
-  return { jobs: jobFiles, queueSources, queueNames: [...queueNames].sort() };
+  const workerSource = readRepositoryFile('src/lib/job-worker.ts');
+  const laneDeclaration = workerSource.match(/export\s+type\s+JobWorkerLane\s*=\s*([^;]+);/)?.[1] ?? '';
+  const workerLanes = [...laneDeclaration.matchAll(/['"]([^'"]+)['"]/g)].map(match => match[1]);
+  const jobTypes = jobFiles.map(file => file.replace(/^src\/jobs\//, '').replace(/\.ts$/, ''));
+  return { jobFiles, jobTypes, queueSources, workerLanes };
 }
 
 if (process.argv[1] === import.meta.filename) console.log(JSON.stringify(inspectRuntime(), null, 2));
-

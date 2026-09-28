@@ -1,6 +1,7 @@
 name: Documentation quality
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
     paths:
@@ -38,14 +39,37 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 20
           cache: npm
       - run: npm ci --ignore-scripts
+      - name: Test documentation tooling
+        run: npm run docs:test
+      - name: Regenerate documentation artifacts
+        run: |
+          npm run docs:discover:write
+          npm run docs:reference
+          npm run docs:integrations
+      - name: Reject generated documentation drift
+        run: git diff --exit-code -- generated/docs-discovery/current.json docs/v2.0.0/reference docs/v2.0.0/integrations
       - name: Validate 2.0.0 documentation contracts
-        run: npm run docs:lint
+        run: npm run docs:certify:static
       - name: Detect documentation impact
         if: github.event_name == 'pull_request'
         env:
           DOCS_IMPACT_BASE: origin/${{ github.base_ref }}
           DOCS_IMPACT_STRICT: 'true'
         run: npm run docs:impact
+
+  runtime-certification:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - name: Run full documentation certification
+        run: npm run docs:certify

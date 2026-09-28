@@ -33,7 +33,7 @@ response, and error contracts require dedicated schema-backed pages.
 - `GET /api/admin/war-rooms/[warRoomId]` — `src/app/api/admin/war-rooms/[warRoomId]/route.ts`
 - `GET /api/admin/war-rooms` — `src/app/api/admin/war-rooms/route.ts`
 - `GET /api/analytics/export` — `src/app/api/analytics/export/route.ts`
-- `method resolved at runtime /api/auth/[...nextauth]` — `src/app/api/auth/[...nextauth]/route.ts`
+- `GET, POST /api/auth/[...nextauth]` — `src/app/api/auth/[...nextauth]/route.ts`
 - `POST /api/auth/forgot-password` — `src/app/api/auth/forgot-password/route.ts`
 - `GET /api/auth/oidc/logout-url` — `src/app/api/auth/oidc/logout-url/route.ts`
 - `POST /api/auth/reset-password` — `src/app/api/auth/reset-password/route.ts`
@@ -118,7 +118,7 @@ response, and error contracts require dedicated schema-backed pages.
 - `POST /api/integrations/nagios` — `src/app/api/integrations/nagios/route.ts`
 - `POST /api/integrations/newrelic` — `src/app/api/integrations/newrelic/route.ts`
 - `POST /api/integrations/pagerduty` — `src/app/api/integrations/pagerduty/route.ts`
-- `method resolved at runtime /api/integrations/pagerduty/v2/enqueue` — `src/app/api/integrations/pagerduty/v2/enqueue/route.ts`
+- `POST /api/integrations/pagerduty/v2/enqueue` — `src/app/api/integrations/pagerduty/v2/enqueue/route.ts`
 - `POST /api/integrations/pingdom` — `src/app/api/integrations/pingdom/route.ts`
 - `POST /api/integrations/prometheus` — `src/app/api/integrations/prometheus/route.ts`
 - `POST /api/integrations/sentry` — `src/app/api/integrations/sentry/route.ts`
@@ -192,7 +192,7 @@ response, and error contracts require dedicated schema-backed pages.
 - `POST /api/slack/war-room` — `src/app/api/slack/war-room/route.ts`
 - `GET /api/status-page/domains` — `src/app/api/status-page/domains/route.ts`
 - `GET /api/status-page/logo/[id]` — `src/app/api/status-page/logo/[id]/route.ts`
-- `method resolved at runtime /api/status-page/subscribe` — `src/app/api/status-page/subscribe/route.ts`
+- `POST /api/status-page/subscribe` — `src/app/api/status-page/subscribe/route.ts`
 - `GET, DELETE /api/status-page/subscribers` — `src/app/api/status-page/subscribers/route.ts`
 - `GET, POST, PATCH, DELETE /api/status-page/webhooks` — `src/app/api/status-page/webhooks/route.ts`
 - `POST /api/status-page/webhooks/test` — `src/app/api/status-page/webhooks/test/route.ts`
@@ -226,7 +226,7 @@ response, and error contracts require dedicated schema-backed pages.
 - `GET /api/v1/service-objectives/[id]/evaluate` — `src/app/api/v1/service-objectives/[id]/evaluate/route.ts`
 - `GET /api/v1/service-objectives/[id]/history` — `src/app/api/v1/service-objectives/[id]/history/route.ts`
 - `GET, PATCH, DELETE /api/v1/service-objectives/[id]` — `src/app/api/v1/service-objectives/[id]/route.ts`
-- `method resolved at runtime /api/v1/service-objectives/[id]/snapshots` — `src/app/api/v1/service-objectives/[id]/snapshots/route.ts`
+- `GET /api/v1/service-objectives/[id]/snapshots` — `src/app/api/v1/service-objectives/[id]/snapshots/route.ts`
 - `GET /api/v1/service-objectives/[id]/versions` — `src/app/api/v1/service-objectives/[id]/versions/route.ts`
 - `GET, POST /api/v1/service-objectives` — `src/app/api/v1/service-objectives/route.ts`
 - `GET, PUT /api/v1/services/[id]/response-policy` — `src/app/api/v1/services/[id]/response-policy/route.ts`

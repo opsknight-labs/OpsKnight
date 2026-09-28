@@ -17,7 +17,7 @@ verification:
 ## What it does
 
 The Generic webhook adapter accepts inbound webhook events at
-`/api/integrations/webhook`, validates them through the shared integration handler,
+`/api/integrations/webhook`, validates them through its shared handler,
 normalizes provider payloads, and submits lifecycle events to the configured
 service.
 
@@ -37,25 +37,24 @@ control.
 
 ## Authentication and request verification
 
-The shared handler resolves the integration, verifies the integration key,
-applies per-integration rate limiting, and uses provider signature verification
-when a signature secret and supported provider contract are configured. The
-exact accepted headers and payload schema are defined by `src/app/api/integrations/webhook/route.ts`
-and `src/lib/integrations/webhook.ts`.
+The endpoint requires the integration identifier and validates the integration key.
+Signature verification is **conditional-when-secret-configured** using the
+`generic` verification contract.
+The exact payload schema is defined by `src/app/api/integrations/webhook/route.ts` and `src/lib/integrations/webhook.ts`.
 
 ## Event mapping and incident lifecycle
 
-The adapter maps provider states into normalized trigger, acknowledge, or resolve
-events. Correlation depends on a stable provider identity; display names alone
-are not reliable deduplication keys. Inspect the provider source before changing
-its mapping contract.
+The adapter emits the lifecycle actions found in its current source:
+- `trigger`
+- `acknowledge`
+- `resolve`
+Correlation depends on the provider identity selected by the adapter.
 
 ## Recovery and deduplication
 
-Deliveries with a genuine provider delivery identifier use the fenced inbound
-delivery claim. Replayed events must converge on the same service and correlation
-key. Failed deliveries are recorded for operational inspection without exposing
-stored secrets.
+When signature verification runs, the shared handler attempts provider-specific delivery identity before claiming the inbound-delivery fence.
+Incident convergence still depends on the adapter correlation key. Failed
+deliveries are recorded for operational inspection without exposing secrets.
 
 ## Limits and testing
 

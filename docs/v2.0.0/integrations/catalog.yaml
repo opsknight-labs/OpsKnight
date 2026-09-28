@@ -1,422 +1,805 @@
 generated: true
 providers:
-  - id: appdynamics
+  - &a1
+    id: appdynamics
     title: AppDynamics
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/appdynamics
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/appdynamics.ts
     route: src/app/api/integrations/appdynamics/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: datadog
+  - &a2
+    id: datadog
     title: Datadog
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/datadog
+    handler: shared
+    acceptedActions:
+      - trigger
+      - resolve
     authentication:
+      - integration-id
       - integration-key
-      - optional-provider-signature
+    signatureVerification:
+      mode: conditional-when-secret-configured
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/datadog.ts
     route: src/app/api/integrations/datadog/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: dynatrace
+  - &a3
+    id: dynatrace
     title: Dynatrace
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/dynatrace
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/dynatrace.ts
     route: src/app/api/integrations/dynatrace/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: elastic
+  - &a4
+    id: elastic
     title: Elastic
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/elastic
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/elastic.ts
     route: src/app/api/integrations/elastic/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: grafana
+  - &a5
+    id: grafana
     title: Grafana
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/grafana
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: conditional-when-secret-configured
+      provider: grafana
+      headers:
+        - x-grafana-signature
+    deliveryIdentity:
+      - x-request-id
+      - x-grafana-delivery
     source: src/lib/integrations/grafana.ts
     route: src/app/api/integrations/grafana/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: honeycomb
+  - &a6
+    id: honeycomb
     title: Honeycomb
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/honeycomb
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/honeycomb.ts
     route: src/app/api/integrations/honeycomb/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: icinga
+  - &a7
+    id: icinga
     title: Icinga
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/icinga
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/icinga.ts
     route: src/app/api/integrations/icinga/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: manageengine
+  - &a8
+    id: manageengine
     title: ManageEngine
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/manageengine
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/manageengine.ts
     route: src/app/api/integrations/manageengine/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: nagios
+  - &a9
+    id: nagios
     title: Nagios
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/nagios
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/nagios.ts
     route: src/app/api/integrations/nagios/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: newrelic
+  - &a10
+    id: newrelic
     title: New Relic
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/newrelic
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: newrelic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/newrelic.ts
     route: src/app/api/integrations/newrelic/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: prometheus
+  - &a11
+    id: prometheus
     title: Prometheus Alertmanager
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/prometheus
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: prometheus
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/prometheus.ts
     route: src/app/api/integrations/prometheus/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: sentry
+  - &a12
+    id: sentry
     title: Sentry
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/sentry
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: conditional-when-secret-configured
+      provider: sentry
+      headers:
+        - sentry-hook-signature
+    deliveryIdentity: []
     source: src/lib/integrations/sentry.ts
     route: src/app/api/integrations/sentry/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: splunk-observability
+  - &a13
+    id: splunk-observability
     title: Splunk Observability
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/splunk-observability
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/splunk-observability.ts
     route: src/app/api/integrations/splunk-observability/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: splunk-oncall
+  - &a14
+    id: splunk-oncall
     title: Splunk On-Call
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/splunk-oncall
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/splunk-oncall.ts
     route: src/app/api/integrations/splunk-oncall/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: zabbix
+  - &a15
+    id: zabbix
     title: Zabbix
     category: monitoring
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/zabbix
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/zabbix.ts
     route: src/app/api/integrations/zabbix/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: azure
+  - &a16
+    id: azure
     title: Azure Monitor
     category: cloud
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/azure
+    handler: custom
+    acceptedActions:
+      - trigger
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: azure
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/azure.ts
     route: src/app/api/integrations/azure/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: cloudwatch
+  - &a17
+    id: cloudwatch
     title: Amazon CloudWatch
     category: cloud
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/cloudwatch
+    handler: custom
+    acceptedActions:
+      - trigger
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: cloudwatch
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/cloudwatch.ts
     route: src/app/api/integrations/cloudwatch/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: google-cloud-monitoring
+  - &a18
+    id: google-cloud-monitoring
     title: Google Cloud Monitoring
     category: cloud
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/google-cloud-monitoring
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/google-cloud-monitoring.ts
     route: src/app/api/integrations/google-cloud-monitoring/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: better-uptime
+  - &a19
+    id: better-uptime
     title: Better Uptime
     category: uptime
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/better-uptime
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/better-uptime.ts
     route: src/app/api/integrations/better-uptime/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: pingdom
+  - &a20
+    id: pingdom
     title: Pingdom
     category: uptime
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/pingdom
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/pingdom.ts
     route: src/app/api/integrations/pingdom/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: uptime-kuma
+  - &a21
+    id: uptime-kuma
     title: Uptime Kuma
     category: uptime
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/uptime-kuma
+    handler: custom
+    acceptedActions:
+      - trigger
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/uptime-kuma.ts
     route: src/app/api/integrations/uptime-kuma/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: uptimerobot
+  - &a22
+    id: uptimerobot
     title: UptimeRobot
     category: uptime
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/uptimerobot
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/uptimerobot.ts
     route: src/app/api/integrations/uptimerobot/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: bitbucket
+  - &a23
+    id: bitbucket
     title: Bitbucket
     category: webhooks
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/bitbucket
+    handler: custom
+    acceptedActions:
+      - trigger
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/bitbucket.ts
     route: src/app/api/integrations/bitbucket/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: github
+  - &a24
+    id: github
     title: GitHub
     category: webhooks
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/github
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: conditional-when-secret-configured
+      provider: github
+      headers:
+        - x-hub-signature-256
+    deliveryIdentity:
+      - x-github-delivery
     source: src/lib/integrations/github.ts
     route: src/app/api/integrations/github/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: gitlab
+  - &a25
+    id: gitlab
     title: GitLab
     category: webhooks
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/gitlab
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: gitlab
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/gitlab.ts
     route: src/app/api/integrations/gitlab/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: pagerduty
+  - &a26
+    id: pagerduty
     title: PagerDuty Events API
     category: webhooks
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/pagerduty
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: pagerduty
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/pagerduty.ts
     route: src/app/api/integrations/pagerduty/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: vercel
+  - &a27
+    id: vercel
     title: Vercel
     category: webhooks
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/vercel
+    handler: custom
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
-      - integration-key
-      - optional-provider-signature
+      - integration-id
+    signatureVerification:
+      mode: not-declared
+      provider: vercel
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/vercel.ts
     route: src/app/api/integrations/vercel/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
-  - id: webhook
+  - &a28
+    id: webhook
     title: Generic webhook
     category: webhooks
     direction: inbound
     protocol: webhook
     endpoint: /api/integrations/webhook
+    handler: shared
+    acceptedActions:
+      - trigger
+      - acknowledge
+      - resolve
     authentication:
+      - integration-id
       - integration-key
-      - optional-provider-signature
+    signatureVerification:
+      mode: conditional-when-secret-configured
+      provider: generic
+      headers: []
+    deliveryIdentity: []
     source: src/lib/integrations/webhook.ts
     route: src/app/api/integrations/webhook/route.ts
     sharedContracts:
       - src/lib/integrations/handler.ts
       - src/lib/integrations/request-security.ts
       - src/lib/integrations/rate-limiter.ts
+integrations:
+  - *a1
+  - *a2
+  - *a3
+  - *a4
+  - *a5
+  - *a6
+  - *a7
+  - *a8
+  - *a9
+  - *a10
+  - *a11
+  - *a12
+  - *a13
+  - *a14
+  - *a15
+  - *a16
+  - *a17
+  - *a18
+  - *a19
+  - *a20
+  - *a21
+  - *a22
+  - *a23
+  - *a24
+  - *a25
+  - *a26
+  - *a27
+  - *a28
+  - id: slack-chatops
+    title: Slack ChatOps
+    category: collaboration
+    direction: bidirectional
+    sources:
+      - src/lib/chatops
+  - id: microsoft-teams
+    title: Microsoft Teams
+    category: collaboration
+    direction: bidirectional
+    sources:
+      - src/lib/microsoft-teams
+  - id: jira
+    title: Jira
+    category: work-management
+    direction: bidirectional
+    sources:
+      - src/lib/jira-sync.ts
+      - src/app/api/jira
+  - id: outbound-webhooks
+    title: Outbound webhooks
+    category: automation
+    direction: outbound
+    sources:
+      - src/app/api/webhooks
+  - id: email
+    title: Email notifications
+    category: notification-delivery
+    direction: outbound
+    sources:
+      - src/lib/email.ts
+      - src/lib/notification-providers.ts
+  - id: sms
+    title: SMS notifications
+    category: notification-delivery
+    direction: outbound
+    sources:
+      - src/lib/notification-providers.ts
+      - src/app/api/webhooks/notifications
+  - id: whatsapp
+    title: WhatsApp notifications
+    category: notification-delivery
+    direction: outbound
+    sources:
+      - src/lib/notification-providers.ts
+      - src/app/api/webhooks/notifications
+  - id: voice
+    title: Voice notifications
+    category: notification-delivery
+    direction: outbound
+    sources:
+      - src/lib/notification-providers.ts
+      - src/app/api/webhooks/notifications/twilio/voice
+  - id: push
+    title: Push notifications
+    category: notification-delivery
+    direction: outbound
+    sources:
+      - src/lib/notification-providers.ts
+  - id: oidc
+    title: OpenID Connect
+    category: identity
+    direction: bidirectional
+    sources:
+      - src/app/api/auth/oidc
+  - id: scim
+    title: SCIM 2.0
+    category: identity
+    direction: bidirectional
+    sources:
+      - src/app/api/scim
