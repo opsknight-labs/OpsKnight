@@ -1,4 +1,6 @@
-name: opsknight-docs
+# Dedicated to documentation journeys and screenshot capture. Do not reuse the
+# application development or integration-test Compose projects.
+name: opsknight-docs-v2-capture
 
 include:
   - ../../../deploy/compose/docker-compose.yml
@@ -6,7 +8,7 @@ include:
 services:
   opsknight-db:
     ports: !override
-      - '127.0.0.1:55432:5432'
+      - '127.0.0.1:15432:5432'
     environment:
       POSTGRES_USER: opsknight_docs
       POSTGRES_PASSWORD: opsknight_docs
@@ -18,13 +20,13 @@ services:
     image: ${DOCS_OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight-test@sha256:4364470f96e793e24a3c85cad62ed429cfe179f23aa5eb8a26ddcc864e2303dd}
     pull_policy: always
     ports: !override
-      - '127.0.0.1:3200:3000'
+      - '127.0.0.1:13200:3000'
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://opsknight_docs:opsknight_docs@opsknight-db:5432/opsknight_docs?schema=public
       DIRECT_DATABASE_URL: postgresql://opsknight_docs:opsknight_docs@opsknight-db:5432/opsknight_docs?schema=public
-      NEXTAUTH_URL: http://localhost:3200
-      NEXT_PUBLIC_APP_URL: http://localhost:3200
+      NEXTAUTH_URL: http://localhost:13200
+      NEXT_PUBLIC_APP_URL: http://localhost:13200
       NEXTAUTH_SECRET: docs-runtime-only-nextauth-secret
       ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
       NEXTAUTH_COOKIE_SECURE: 'false'

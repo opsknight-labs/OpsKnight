@@ -7,7 +7,7 @@ import YAML from 'yaml';
 const root = resolve(import.meta.dirname, '../..');
 const run = (file, args) => execFileSync(file, args, { cwd: root, stdio: 'inherit' });
 const fullRuntime = !process.argv.includes('--static');
-const composeArgs = ['compose', '-f', 'tests/docs/environment/compose.yaml'];
+const composeArgs = ['compose', '--project-name', 'opsknight-docs-v2-capture', '-f', 'tests/docs/environment/compose.yaml'];
 
 run('node', ['scripts/docs/discover-capabilities.mjs', '--output', 'generated/docs-discovery/current.json']);
 run('node', ['scripts/docs/generate-reference.mjs']);
