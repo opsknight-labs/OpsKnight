@@ -12,6 +12,9 @@ topologySpreadConstraints:
 # image:
 #   digest: sha256:<tested-split-runtime-manifest-digest>
 
+database:
+  maxApplicationConnections: 200
+
 web:
   replicaCount: 2
   database:
@@ -30,22 +33,22 @@ scheduler:
 generalWorker:
   replicaCount: 2
   database:
-    poolSize: 5
+    poolSize: 15
 
 criticalWorker:
   replicaCount: 2
   database:
-    poolSize: 5
+    poolSize: 15
 
 bulkWorker:
   replicaCount: 2
   database:
-    poolSize: 3
+    poolSize: 10
 
 statusProjector:
   replicaCount: 2
   database:
-    poolSize: 3
+    poolSize: 5
 
 # When enabled, two replicas with defaultPoolSize 10 replace the web tier's
 # 20 direct connections. Budget those backends together with 38 direct

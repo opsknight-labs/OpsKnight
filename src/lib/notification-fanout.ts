@@ -113,9 +113,8 @@ export async function getDeliverableBulkDepth(now = new Date()): Promise<number>
   const p = (async () => {
     try {
       const raw = prisma as unknown as Record<string, unknown>;
-      const q = raw.$queryRaw as ((s: unknown) => Promise<unknown>) | undefined;
-      if (q) {
-        const rows = (await q(deliverableBulkCountSql(now, staleClaimBefore))) as Array<{ count: number }>;
+      if (typeof raw.$queryRaw === 'function') {
+        const rows = (await prisma.$queryRaw(deliverableBulkCountSql(now, staleClaimBefore))) as Array<{ count: number }>;
         const depth = Number(rows[0]?.count ?? 0);
         bulkDepthCache.depth = depth;
         bulkDepthCache.at = Date.now();

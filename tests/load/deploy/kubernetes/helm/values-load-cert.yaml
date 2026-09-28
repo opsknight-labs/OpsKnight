@@ -1,0 +1,15 @@
+# Test-only Helm values overlay for load certification
+# Applies necessary egress rules for the local provider emulator without relaxing production NetworkPolicy.
+networkPolicy:
+  additionalEgressPorts:
+    - 80
+    - 8086
+    - 8088
+    - 2525
+
+secrets:
+  nextauthSecret: "load_cert_nextauth_secret_32_bytes_minimum_value_0123456789"
+
+extraEnv:
+  - name: OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS
+    value: "host.docker.internal,10.0.2.2,127.0.0.1,opsknight-emulator"

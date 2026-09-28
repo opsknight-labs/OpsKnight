@@ -49,6 +49,14 @@ spec:
       ports:
         - protocol: TCP
           port: 443
+        - protocol: TCP
+          port: 587
+        - protocol: TCP
+          port: 25
+        {{- range $root.Values.networkPolicy.additionalEgressPorts }}
+        - protocol: TCP
+          port: {{ . | int }}
+        {{- end }}
 ---
 {{- end }}
 {{- end }}

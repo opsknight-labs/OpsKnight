@@ -101,12 +101,41 @@ function responseHeaders(context: ApiResponseContext, init?: HeadersInit): Heade
   return headers;
 }
 
+function sanitizeJsonValue<T>(value: T): T {
+  if (typeof value === 'bigint') {
+    const asNumber = Number(value);
+    return (Number.isSafeInteger(asNumber) ? asNumber : value.toString()) as unknown as T;
+  }
+  if (value === null || value === undefined || typeof value !== 'object') {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => sanitizeJsonValue(item)) as unknown as T;
+  }
+  const sanitizedEntries = Object.entries(value as Record<string, unknown>)
+    .filter(
+      ([key, nested]) =>
+        key !== '__proto__' &&
+        key !== 'constructor' &&
+        key !== 'prototype' &&
+        Object.prototype.hasOwnProperty.call(value, key) &&
+        nested !== undefined
+    )
+    .map(([key, nested]) => [key, sanitizeJsonValue(nested)] as const);
+
+  return Object.fromEntries(sanitizedEntries) as T;
+}
+
 /** Canonical success response. Legacy endpoints may continue using jsonOk during migration. */
 export function jsonApiOk<T>(payload: T, options: ApiSuccessOptions = {}) {
   const context = options.context ?? createApiResponseContext();
+  const safePayload = sanitizeJsonValue(payload);
   const body: ApiSuccessEnvelope<T> = {
     success: true,
-    data: payload,
+    data: safePayload,
     dataState: options.dataState ?? (payload === null ? 'no_data' : 'available'),
     requestId: context.requestId,
     timestamp: context.timestamp,
@@ -135,7 +164,7 @@ export function jsonApiError(error: AppError | unknown, options: ApiErrorOptions
     fields: publicError.fields,
     requestId: context.requestId,
     timestamp: context.timestamp,
-    meta: options.meta,
+    meta: options.meta ? sanitizeJsonValue(options.meta) : undefined,
     ...(options.warnings?.length ? { warnings: options.warnings } : {}),
   };
 
@@ -152,6 +181,7 @@ export function jsonError(
   headers?: HeadersInit
 ) {
   const context = createApiResponseContext();
+  const safeMeta = meta ? sanitizeJsonValue(meta) : meta;
   if (isAppError(error)) {
     const publicError = toPublicAppError(error);
 
@@ -166,7 +196,7 @@ export function jsonError(
         action: publicError.action,
         retryable: publicError.retryable,
         fields: publicError.fields,
-        meta,
+        meta: safeMeta,
         requestId: context.requestId,
         timestamp: context.timestamp,
       },
@@ -185,7 +215,7 @@ export function jsonError(
         error,
         code: 'LEGACY_API_ERROR',
         retryable: (status ?? 500) >= 500,
-        meta,
+        meta: safeMeta,
         requestId: context.requestId,
         timestamp: context.timestamp,
       },
@@ -202,7 +232,7 @@ export function jsonError(
       action: publicError.action,
       retryable: publicError.retryable,
       fields: publicError.fields,
-      meta,
+      meta: safeMeta,
       success: false,
       dataState: 'unavailable',
       requestId: context.requestId,
@@ -219,15 +249,17 @@ export function jsonOk<T>(
   legacyAliases?: Record<string, unknown>
 ) {
   const context = createApiResponseContext();
+  const safePayload = sanitizeJsonValue(payload);
+  const safeLegacyAliases = legacyAliases ? sanitizeJsonValue(legacyAliases) : undefined;
   const aliases =
-    legacyAliases ??
-    (payload !== null && typeof payload === 'object' && !Array.isArray(payload)
-      ? (payload as Record<string, unknown>)
+    safeLegacyAliases ??
+    (safePayload !== null && typeof safePayload === 'object' && !Array.isArray(safePayload)
+      ? (safePayload as Record<string, unknown>)
       : {});
   const body: ApiSuccessEnvelope<T> & Record<string, unknown> = {
     ...aliases,
     success: true,
-    data: payload,
+    data: safePayload,
     dataState: payload === null ? 'no_data' : 'available',
     requestId: context.requestId,
     timestamp: context.timestamp,

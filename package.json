@@ -62,7 +62,13 @@
     "lint:report": "eslint . --format @microsoft/eslint-formatter-sarif --output-file reports/security.sarif",
     "docs:sync": "scripts/sync-docs-to-website.sh",
     "docs:links": "node scripts/check-docs-links.cjs",
-    "docs:capabilities": "node scripts/check-docs-capabilities.cjs"
+    "docs:capabilities": "node scripts/check-docs-capabilities.cjs",
+    "load:seed": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/seed.ts",
+    "load:cleanup": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/cleanup.ts",
+    "load:verify": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/verify-results.ts",
+    "load:metrics": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/metrics.ts",
+    "load:providers": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/providers/server.ts",
+    "load:certify": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/topology.ts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.971.0",

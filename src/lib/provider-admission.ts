@@ -373,9 +373,7 @@ export async function acquireProviderAdmission(
   );
   // DB quota window is best-effort. Per-file vi.mock('@/lib/prisma') often omits
   // $executeRaw/$queryRaw — degrade to in-memory allow rather than unhandled throw.
-  const rawExecute = safePrisma.$executeRaw;
-  const rawQuery = safePrisma.$queryRaw;
-  if (!rawExecute || !rawQuery) {
+  if (typeof safePrisma.$executeRaw !== 'function' || typeof safePrisma.$queryRaw !== 'function') {
     if (isProviderAdmissionTestEnv()) return { allowed: true };
     return tryEmergencyRateAdmission(
       scope,
@@ -386,13 +384,13 @@ export async function acquireProviderAdmission(
     );
   }
   try {
-    await rawExecute(Prisma.sql`
+    await safePrisma.$executeRaw(Prisma.sql`
     INSERT INTO "ProviderQuotaWindow"
       ("id", "providerKey", "channel", "windowStart", "globalUsed", "bulkUsed", "expiresAt", "updatedAt")
     VALUES (${id}, ${providerKey}, ${scope}, ${windowStart}, 0, 0, ${expiresAt}, NOW())
     ON CONFLICT ("id") DO NOTHING
   `);
-    const rows = (await rawQuery(Prisma.sql`
+    const rows = (await safePrisma.$queryRaw(Prisma.sql`
     WITH capacity AS (
       SELECT LEAST(
         ${requested},
@@ -447,9 +445,8 @@ export async function deferProviderAdmission(
       channel: scope as unknown as NotificationChannel,
       provider: providerKey,
     });
-    const deferRaw = safePrisma.$executeRaw;
-    if (deferRaw) {
-      await deferRaw(Prisma.sql`
+    if (typeof safePrisma.$executeRaw === 'function') {
+      await safePrisma.$executeRaw(Prisma.sql`
         INSERT INTO "RateLimit" ("key", "count", "expiresAt")
         VALUES (${key}, ${config.effectiveRatePerSecond}, ${retryAt})
         ON CONFLICT ("key") DO UPDATE SET
@@ -535,8 +532,7 @@ export async function acquireProviderConcurrency(
       laneCeiling,
       Math.max(demandSlots, Math.min(MAX_SLOTS_PER_WORKER, laneCeiling))
     );
-    const concQuery = safePrisma.$queryRaw;
-    if (!concQuery) {
+    if (typeof safePrisma.$queryRaw !== 'function') {
       // Missing Prisma method — only acceptable in unit tests
       if (isProviderAdmissionTestEnv()) {
         local = { reserved: laneCeiling, active: 0, expiresAt: now.getTime() + PROVIDER_LEASE_MS };
@@ -572,7 +568,7 @@ export async function acquireProviderConcurrency(
       }
     } else {
       try {
-        const rows = (await concQuery(Prisma.sql`
+        const rows = (await safePrisma.$queryRaw(Prisma.sql`
       WITH lock AS (
         SELECT pg_advisory_xact_lock(hashtextextended(${`provider-slots:${physicalPoolKey}`}, 0))
       ), available AS (
@@ -659,12 +655,11 @@ export async function acquireProviderConcurrency(
   // Expansion is strictly bounded by MAX_SLOTS_PER_WORKER to preserve multi-worker fairness.
   const workerCap = Math.min(MAX_SLOTS_PER_WORKER, laneCeiling);
   if (local.active >= local.reserved && local.reserved < workerCap) {
-    const concQuery = safePrisma.$queryRaw;
-    if (concQuery && !isProviderAdmissionTestEnv()) {
+    if (typeof safePrisma.$queryRaw === 'function' && !isProviderAdmissionTestEnv()) {
       try {
         const id = `${leaseOwner}:${scope}:${providerKey}`.slice(0, 240);
         const expandRequested = Math.min(workerCap, local.active + 2);
-        const rows = (await concQuery(Prisma.sql`
+        const rows = (await safePrisma.$queryRaw(Prisma.sql`
           WITH lock AS (
             SELECT pg_advisory_xact_lock(hashtextextended(${`provider-slots:${physicalPoolKey}`}, 0))
           ), available AS (

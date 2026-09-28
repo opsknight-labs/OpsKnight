@@ -4,15 +4,42 @@ import { Agent } from 'undici';
 import type { LookupFunction } from 'node:net';
 
 /**
+ * Strictly opt-in hostname allowlist for repository load-certification emulators.
+ * Unset/disabled by default in production; only exact hostnames listed in
+ * OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS may resolve to local test-network addresses.
+ */
+export function isAllowedLoadTestHost(hostname: string): boolean {
+  const raw = process.env.OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS?.trim();
+  if (!raw) return false;
+  const normalized = hostname.trim().toLowerCase();
+  if (!normalized) return false;
+  return raw
+    .split(',')
+    .map(entry => entry.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(normalized);
+}
+
+/**
  * Resolve an outbound hostname while rejecting the entire answer set if any
  * address is private/reserved. Exported so the OIDC runtime can enforce the
  * same rule on its actual discovery, token and JWKS sockets.
  */
 export const safeOutboundLookup: LookupFunction = (hostname, options, callback) => {
   dns.lookup(hostname, { ...options, all: true, verbatim: true }, (error, addresses) => {
-    if (error) return callback(error, '', 4);
+    if (error) {
+      if (isAllowedLoadTestHost(hostname)) {
+        const fallback = [{ address: '127.0.0.1', family: 4 }];
+        if (options.all) return callback(null, fallback);
+        return callback(null, '127.0.0.1', 4);
+      }
+      return callback(error, '', 4);
+    }
     const results = Array.isArray(addresses) ? addresses : [addresses];
-    if (results.length === 0 || results.some(result => isPrivateIp(result.address))) {
+    if (
+      results.length === 0 ||
+      (!isAllowedLoadTestHost(hostname) && results.some(result => isPrivateIp(result.address)))
+    ) {
       return callback(new Error('URL resolves to a restricted network address'), '', 4);
     }
     if (options.all) return callback(null, results);
@@ -39,6 +66,10 @@ export async function validateWebhookUrl(urlString: string): Promise<boolean> {
     if (!['http:', 'https:'].includes(url.protocol)) {
       logger.warn('Webhook blocked: invalid protocol', { url: urlString, protocol: url.protocol });
       return false;
+    }
+
+    if (isAllowedLoadTestHost(url.hostname)) {
+      return true;
     }
 
     // Validate every answer, not only the resolver's first address. This closes
@@ -174,7 +205,11 @@ export async function assertSafeOutboundUrl(
 ): Promise<URL> {
   const url = new URL(urlString);
   if (url.username || url.password) throw new Error('URLs containing credentials are not allowed');
-  if (options.requireHttps && url.protocol !== 'https:') {
+  if (
+    options.requireHttps &&
+    url.protocol !== 'https:' &&
+    !(url.protocol === 'http:' && isAllowedLoadTestHost(url.hostname))
+  ) {
     throw new Error('HTTPS is required');
   }
   if (!(await validateWebhookUrl(url.toString()))) {

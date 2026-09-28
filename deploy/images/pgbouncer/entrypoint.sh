@@ -8,6 +8,12 @@ WORK_DIR="/tmp/pgbouncer"
 mkdir -p "$WORK_DIR"
 chmod 700 "$WORK_DIR"
 
+# If a pre-configured pgbouncer.ini is mounted (e.g. via Kubernetes ConfigMap), execute directly
+if [ -f "/etc/pgbouncer/pgbouncer.ini" ] && [ -z "${FORCE_DYNAMIC_CONFIG:-}" ]; then
+  echo "[opsknight-pgbouncer] Using mounted configuration from /etc/pgbouncer/pgbouncer.ini"
+  exec /usr/bin/pgbouncer /etc/pgbouncer/pgbouncer.ini "$@"
+fi
+
 DB_HOST="${PGBOUNCER_DB_HOST:-}"
 TLS_CA_FILE="${PGBOUNCER_SERVER_TLS_CA_FILE:-/etc/ssl/certs/ca-certificates.crt}"
 

@@ -45,6 +45,15 @@
             "type": "string",
             "pattern": "^[0-9A-Fa-f:.]+/[0-9]{1,3}$"
           }
+        },
+        "additionalEgressPorts": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          }
         }
       }
     },
@@ -200,11 +209,11 @@
         "image": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["repository", "tag", "digest", "pullPolicy"],
+          "required": ["repository", "tag", "pullPolicy"],
           "properties": {
             "repository": { "type": "string", "minLength": 1 },
             "tag": { "type": "string", "minLength": 1 },
-            "digest": { "type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$" },
+            "digest": { "type": ["string", "null"], "pattern": "^$|^sha256:[a-fA-F0-9]{64}$" },
             "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
           }
         },

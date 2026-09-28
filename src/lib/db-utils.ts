@@ -1,8 +1,19 @@
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
 
-export const TRANSACTION_MAX_ATTEMPTS = 3;
-export const TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD = 5;
+export const TRANSACTION_MAX_ATTEMPTS = Number(
+  process.env.OPSKNIGHT_TX_MAX_ATTEMPTS ?? 3
+);
+export const TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD = Number(
+  process.env.OPSKNIGHT_TX_MAX_ATTEMPTS_HIGH_LOAD ?? 5
+);
+
+const TRANSACTION_TIMEOUT_MS = Number(
+  process.env.OPSKNIGHT_TX_TIMEOUT_MS ?? 10000
+);
+const TRANSACTION_MAX_WAIT_MS = Number(
+  process.env.OPSKNIGHT_TX_MAX_WAIT_MS ?? 2000
+);
 
 // Exponential backoff delays for retries (ms)
 const RETRY_DELAYS = [10, 25, 50, 100, 200];
@@ -13,10 +24,18 @@ function isRetryableTransactionError(error: unknown): boolean {
       ? String(error.code)
       : null;
   if (error instanceof Prisma.PrismaClientKnownRequestError || code !== null) {
+    // 40P01 = PostgreSQL deadlock detected
+    // 40001 = PostgreSQL serialization failure
     // P2034 = Transaction failed due to write conflict or deadlock
     // P2002 = Unique constraint violation (can be retryable in race conditions)
     // P2028 = Transaction API error
-    return code === 'P2034' || code === 'P2002' || code === 'P2028';
+    return (
+      code === '40P01' ||
+      code === '40001' ||
+      code === 'P2034' ||
+      code === 'P2002' ||
+      code === 'P2028'
+    );
   }
   const message = error instanceof Error ? error.message : '';
   return (
@@ -50,8 +69,8 @@ export async function runSerializableTransaction<T>(
     try {
       return await prisma.$transaction(tx => operation(tx), {
         isolationLevel: 'Serializable',
-        timeout: 10000,
-        maxWait: 2000,
+        timeout: TRANSACTION_TIMEOUT_MS,
+        maxWait: TRANSACTION_MAX_WAIT_MS,
       });
     } catch (error) {
       if (attempt < maxAttempts - 1 && isRetryableTransactionError(error)) {
@@ -82,8 +101,8 @@ export async function runReadCommittedTransaction<T>(
     try {
       return await prisma.$transaction(tx => operation(tx), {
         isolationLevel: 'ReadCommitted',
-        timeout: 10000,
-        maxWait: 2000,
+        timeout: TRANSACTION_TIMEOUT_MS,
+        maxWait: TRANSACTION_MAX_WAIT_MS,
       });
     } catch (error) {
       if (attempt < maxAttempts - 1 && isRetryableTransactionError(error)) {
