@@ -14,6 +14,8 @@ verification:
 
 # Configure notification routing
 
+![Notification provider configuration and delivery controls](/docs/v2.0.0/assets/notification-settings.png)
+
 Enable the intended service events and channels, then confirm each recipient has
 an enabled, healthy endpoint for those channels. Test with a synthetic incident
 and inspect notification history rather than assuming a successful save means a
@@ -21,4 +23,3 @@ provider delivery occurred.
 
 Quiet hours, opt-out state, endpoint health, provider capacity, retry policy, and
 event-specific service settings can all affect delivery eligibility.
-

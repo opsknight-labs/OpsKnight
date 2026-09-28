@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: provider-mocks
+  namespace: opsknight-docs
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: docs-provider-mocks }
+  template:
+    metadata:
+      labels: { app: docs-provider-mocks }
+    spec:
+      containers:
+        - { name: slack, image: "wiremock/wiremock:3.13.1", ports: [{ containerPort: 8080, name: slack }] }
+        - { name: teams, image: "wiremock/wiremock:3.13.1", args: [--port, "8081"], ports: [{ containerPort: 8081, name: teams }] }
+        - { name: jira, image: "wiremock/wiremock:3.13.1", args: [--port, "8082"], ports: [{ containerPort: 8082, name: jira }] }
+        - { name: webhook, image: "wiremock/wiremock:3.13.1", args: [--port, "8083"], ports: [{ containerPort: 8083, name: webhook }] }
+        - { name: smtp, image: "axllent/mailpit:v1.27", ports: [{ containerPort: 1025, name: smtp }, { containerPort: 8025, name: mail-ui }] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: provider-mocks
+  namespace: opsknight-docs
+spec:
+  selector: { app: docs-provider-mocks }
+  ports:
+    - { name: slack, port: 8080, targetPort: slack }
+    - { name: teams, port: 8081, targetPort: teams }
+    - { name: jira, port: 8082, targetPort: jira }
+    - { name: webhook, port: 8083, targetPort: webhook }
+    - { name: smtp, port: 1025, targetPort: smtp }
+    - { name: mail-ui, port: 8025, targetPort: mail-ui }

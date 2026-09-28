@@ -1,14 +1,16 @@
 # Ephemeral Kubernetes boundary
 
-These manifests create the isolated `opsknight-docs` namespace boundary used by
-documentation certification. They deliberately contain no production secrets or
-cluster-wide permissions.
+These manifests create a complete disposable documentation environment: an
+immutable OpsKnight test runtime, PostgreSQL, Slack/Teams/Jira/webhook mocks,
+Mailpit, namespace-scoped observation RBAC, quotas, and network isolation. They
+contain fixture-only credentials and no production secrets or cluster-wide
+permissions.
 
 ```sh
-kubectl apply -k tests/docs/environment/kubernetes
-kubectl wait --for=condition=Established namespace/opsknight-docs --timeout=60s
+sh scripts/docs/run-kubernetes-journeys.sh
 ```
 
-Deploy the runtime resources into this namespace, run the documentation
-journeys, and remove the namespace with `scripts/docs/cleanup-kubernetes.sh`.
-The cleanup script refuses any namespace except `opsknight-docs`.
+The runner waits for all workloads, forwards only the application and fixture
+database to loopback, seeds through the normal Playwright setup, runs the same
+journeys used by Compose certification, and deletes the namespace on exit. The
+cleanup script refuses any namespace except `opsknight-docs`.

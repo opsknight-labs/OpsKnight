@@ -19,7 +19,16 @@ install it in the intended tenant, and map destinations to OpsKnight services.
 Use a synthetic incident to verify Adaptive Card delivery, action validation,
 identity linking, participant synchronization, and war-room cleanup.
 
+Open **Services → your service → Notifications**, enable Microsoft Teams, and
+link up to three team/channel destinations. All linked destinations receive the
+service lifecycle messages. Test each channel independently and remove an old
+destination before adding a fourth. Tenant mode controls which installations
+may be selected; it does not replace the per-service destination mapping.
+
+For validation, trigger a synthetic incident, confirm a single Adaptive Card in
+each linked destination, use an action from one card, and verify that the other
+cards and the OpsKnight incident converge on the same state.
+
 Inbound activities must pass token, tenant, service-URL, and action-schema checks.
 Graph permissions are separate from bot messaging permissions. Preserve the
 activity identifier and trusted service URL when diagnosing delivery.
-

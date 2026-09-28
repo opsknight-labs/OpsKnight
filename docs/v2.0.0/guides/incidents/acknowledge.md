@@ -14,6 +14,8 @@ verification:
 
 # Acknowledge an incident
 
+![Incident detail with response controls and timeline](/docs/v2.0.0/assets/incident-detail.png)
+
 ## Prerequisites
 
 The incident must be visible to you and your effective permissions must include
@@ -33,4 +35,3 @@ or paused according to the lifecycle contract. Confirm the acknowledgement in
 the header and timeline.
 
 Acknowledgement is not assignment and does not resolve the incident.
-

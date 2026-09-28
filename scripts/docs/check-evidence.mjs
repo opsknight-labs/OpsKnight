@@ -1,12 +1,27 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import YAML from 'yaml';
 import { exists, filesUnder, readRepositoryFile, repositoryRoot } from './discovery-lib.mjs';
 
 const inventory = YAML.parse(readFileSync(resolve(repositoryRoot, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
 const failures = [];
+const assetManifest = YAML.parse(readRepositoryFile('docs/v2.0.0/assets/manifest.yaml'));
+for (const [asset, record] of Object.entries(assetManifest.assets ?? {})) {
+  const publicFile = `docs/v2.0.0/assets/${asset}`;
+  const evidenceFile = `${assetManifest.source}/${record.evidence}`;
+  for (const file of [publicFile, evidenceFile]) {
+    if (!exists(file)) failures.push(`reader asset ${asset}: missing ${file}`);
+  }
+  if (exists(publicFile) && exists(evidenceFile)) {
+    const publicHash = createHash('sha256').update(readFileSync(resolve(repositoryRoot, publicFile))).digest('hex');
+    const evidenceHash = createHash('sha256').update(readFileSync(resolve(repositoryRoot, evidenceFile))).digest('hex');
+    if (publicHash !== record.sha256) failures.push(`reader asset ${asset}: digest differs from manifest`);
+    if (publicHash !== evidenceHash) failures.push(`reader asset ${asset}: differs from provenance evidence`);
+  }
+}
 for (const [id, capability] of Object.entries(inventory.capabilities ?? {})) {
   for (const evidence of capability.evidence ?? []) {
     if (!exists(evidence)) failures.push(`${id}: missing evidence ${evidence}`);

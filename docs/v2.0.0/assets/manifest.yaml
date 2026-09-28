@@ -1,0 +1,9 @@
+schemaVersion: 1
+source: generated/docs-evidence/current
+assets:
+  escalation-policies.png: { evidence: escalation/policies.png, sha256: 5101328873d4c3f582dd3d4b9ae877bd5f4e5501dc4f5f734d68369bf7daf4aa }
+  incident-detail.png: { evidence: incidents/detail.png, sha256: 184fb1d84b1d577dd8ef22cdb844d1bc0393b8f822c0371c741a304efae0cd7e }
+  incidents-list.png: { evidence: incidents/list.png, sha256: 92bf214c520f5b72111409aa00609db5c88cc4c8f7fa762c3490cf3fe965ba2e }
+  notification-settings.png: { evidence: notifications/settings.png, sha256: b4ed9e4908e7581b9aa8df2685d10cbc8e087c59fc944d32e4d36f120d874711 }
+  on-call-schedules.png: { evidence: on-call/schedules.png, sha256: 1519be293c0987cf26cd4d8c3ff9e576575dd5867b9e9edbd843ae031b180d16 }
+  status-pages.png: { evidence: status-pages/list.png, sha256: dc2389aed7f960adb0e2452013b4ee3c702573f4f33010ac88116cbe50970393 }

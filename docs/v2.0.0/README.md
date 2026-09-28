@@ -44,7 +44,8 @@ documentation can help locate a topic, but it is never authoritative.
   uptime, source-control, communication, issue-tracking, and generic webhook
   providers.
 - Configure [Slack](./integrations/communication/slack),
-  [Microsoft Teams](./integrations/communication/microsoft-teams), or
+  [Microsoft Teams](./integrations/communication/microsoft-teams),
+  [voice paging](./integrations/communication/voice), or
   [Jira](./integrations/issue-tracking/jira).
 
 ## Run in production
