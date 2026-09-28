@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-28T04:38:38.597Z",
-  "sourceRevision": "bb3f0aff37ff2558ce46eba3e124d0c6384d7d0d",
+  "generatedAt": "2026-09-28T04:39:58.220Z",
+  "sourceRevision": "8aeba4eb5a00522b8ac98cc6a09602c6bd8464bb",
   "releaseState": "upcoming",
   "checks": {
     "frontmatter": "passed",
@@ -25,6 +25,9 @@
     "runtimeRoles": 8,
     "featureNodes": 1094,
     "unclassifiedFeatures": 0,
+    "evidenceBackedClaims": 1539,
+    "unsupportedClaims": 0,
+    "missingEvidence": 0,
     "supportedPublicApis": 40,
     "notificationProviders": 9,
     "publicLimits": 226,
