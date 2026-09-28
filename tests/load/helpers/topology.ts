@@ -8,6 +8,7 @@ import { runLoadCleanup } from './cleanup';
 import { startContinuousTelemetryCollector, TelemetrySample } from './metrics';
 import { runLoadSeed } from './seed';
 import { CorrectnessInvariantReport, verifyLoadCertificationResults } from './verify-results';
+import { PrismaClient } from '@prisma/client';
 
 const execFileAsync = promisify(execFile);
 
@@ -1034,6 +1035,144 @@ async function waitForHttpHealth(baseUrl: string, timeoutMs = 120_000): Promise<
   return false;
 }
 
+export interface QueueSnapshot {
+  timestamp: string;
+  stage: string;
+  pendingCritical: number;
+  oldestCriticalAgeSec: number;
+  pendingTransactional: number;
+  pendingBulk: number;
+  pendingBackgroundJobs: number;
+  oldestBackgroundJobAgeSec: number;
+  deliveredCritical: number;
+  deliveredBulk: number;
+  failedNotifications: number;
+  dbConnections: number;
+  containerStats?: string;
+}
+
+async function captureQueueSnapshot(prisma: PrismaClient, stage: string): Promise<QueueSnapshot> {
+  const now = new Date();
+  const [
+    pendingCritical,
+    oldestCritical,
+    pendingTransactional,
+    pendingBulk,
+    pendingBackgroundJobs,
+    oldestBackgroundJob,
+    deliveredCritical,
+    deliveredBulk,
+    failedNotifications,
+    dbConnectionsRaw,
+  ] = await Promise.all([
+    prisma.notification.count({
+      where: {
+        status: 'PENDING',
+        trafficClass: 'CRITICAL',
+        nextAttemptAt: { lte: now },
+      },
+    }),
+    prisma.notification.findFirst({
+      where: {
+        status: 'PENDING',
+        trafficClass: 'CRITICAL',
+        nextAttemptAt: { lte: now },
+      },
+      orderBy: { nextAttemptAt: 'asc' },
+      select: { nextAttemptAt: true },
+    }),
+    prisma.notification.count({
+      where: {
+        status: 'PENDING',
+        trafficClass: 'TRANSACTIONAL',
+      },
+    }),
+    prisma.notification.count({
+      where: {
+        status: 'PENDING',
+        trafficClass: 'BULK',
+      },
+    }),
+    prisma.backgroundJob.count({
+      where: {
+        status: { in: ['PENDING', 'PENDING_V2', 'PROCESSING', 'PROCESSING_V2'] },
+      },
+    }),
+    prisma.backgroundJob.findFirst({
+      where: {
+        status: { in: ['PENDING', 'PENDING_V2', 'PROCESSING', 'PROCESSING_V2'] },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { createdAt: true },
+    }),
+    prisma.notification.count({
+      where: {
+        status: { in: ['SENT', 'DELIVERED'] },
+        trafficClass: 'CRITICAL',
+      },
+    }),
+    prisma.notification.count({
+      where: {
+        status: { in: ['SENT', 'DELIVERED'] },
+        trafficClass: 'BULK',
+      },
+    }),
+    prisma.notification.count({
+      where: {
+        status: 'FAILED',
+      },
+    }),
+    prisma.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint AS count FROM pg_stat_activity WHERE datname = 'opsknight_db';`.catch(() => [{ count: BigInt(0) }]),
+  ]);
+
+  const oldestCriticalAgeSec = oldestCritical
+    ? Math.max(0, Math.round((now.getTime() - oldestCritical.nextAttemptAt.getTime()) / 1000))
+    : 0;
+  const oldestBackgroundJobAgeSec = oldestBackgroundJob
+    ? Math.max(0, Math.round((now.getTime() - oldestBackgroundJob.createdAt.getTime()) / 1000))
+    : 0;
+  const dbConnections = Number(dbConnectionsRaw[0]?.count ?? 0);
+
+  let containerStats = '';
+  try {
+    const { stdout } = await execFileAsync('docker', [
+      'stats',
+      '--no-stream',
+      '--format',
+      '{{.Name}}: CPU {{.CPUPerc}}, Mem {{.MemUsage}}',
+    ]);
+    containerStats = stdout
+      .trim()
+      .split('\n')
+      .filter(l => l.includes('opsknight'))
+      .join(' | ');
+  } catch {
+    // Non-fatal if docker stats unavailable or in non-docker environment
+  }
+
+  const snap: QueueSnapshot = {
+    timestamp: now.toISOString(),
+    stage,
+    pendingCritical,
+    oldestCriticalAgeSec,
+    pendingTransactional,
+    pendingBulk,
+    pendingBackgroundJobs,
+    oldestBackgroundJobAgeSec,
+    deliveredCritical,
+    deliveredBulk,
+    failedNotifications,
+    dbConnections,
+    containerStats: containerStats || undefined,
+  };
+
+  console.log(
+    `    [Queue Snapshot @ ${stage}] CRITICAL: ${snap.pendingCritical} (oldest: ${snap.oldestCriticalAgeSec}s) | TX: ${snap.pendingTransactional} | BULK: ${snap.pendingBulk} | BG Jobs: ${snap.pendingBackgroundJobs} (oldest: ${snap.oldestBackgroundJobAgeSec}s) | Delivered: ${snap.deliveredCritical} crit / ${snap.deliveredBulk} bulk | Failed: ${snap.failedNotifications} | DB Conns: ${snap.dbConnections}${snap.containerStats ? `\n      [Stats] ${snap.containerStats}` : ''}`
+  );
+
+  return snap;
+}
+
 async function runK6Scenario(options: {
   scenarioFile: string;
   loadLevel: string;
@@ -1470,6 +1609,9 @@ function parseOrchestratorArgs(argv: string[]) {
   let scale: ScaleProfileName = 'medium';
   let durationProfile = 'fast';
   let levelsOverride: string[] | null = null;
+  let scenariosFilter: string[] | null = null;
+  let skipScenarios: string[] | null = null;
+  let drainSeconds = 120;
   let skipDeploy = false;
 
   for (let i = 0; i < argv.length; i++) {
@@ -1486,6 +1628,12 @@ function parseOrchestratorArgs(argv: string[]) {
     else if (arg === '--duration' && argv[i + 1]) durationProfile = argv[++i];
     else if (arg.startsWith('--levels=')) levelsOverride = arg.split('=')[1].split(',');
     else if (arg === '--levels' && argv[i + 1]) levelsOverride = argv[++i].split(',');
+    else if (arg.startsWith('--scenarios=')) scenariosFilter = arg.split('=')[1].split(',');
+    else if (arg === '--scenarios' && argv[i + 1]) scenariosFilter = argv[++i].split(',');
+    else if (arg.startsWith('--skip-scenarios=')) skipScenarios = arg.split('=')[1].split(',');
+    else if (arg === '--skip-scenarios' && argv[i + 1]) skipScenarios = argv[++i].split(',');
+    else if (arg.startsWith('--drain-seconds=')) drainSeconds = Number(arg.split('=')[1]);
+    else if (arg === '--drain-seconds' && argv[i + 1]) drainSeconds = Number(argv[++i]);
   }
 
   return {
@@ -1495,6 +1643,9 @@ function parseOrchestratorArgs(argv: string[]) {
     scale,
     durationProfile,
     levelsOverride,
+    scenariosFilter,
+    skipScenarios,
+    drainSeconds,
     skipDeploy,
   };
 }
@@ -1596,10 +1747,17 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
       });
 
       const scenarioRecords: ScenarioExecutionRecord[] = [];
+      const queueSnapshots: QueueSnapshot[] = [];
+      const hostPrisma = new PrismaClient();
       const levels = opts.levelsOverride ?? topology.defaultLoadLevels;
+      const scenariosToRun = topology.scenarios.filter(s => {
+        if (opts.scenariosFilter && !opts.scenariosFilter.includes(s)) return false;
+        if (opts.skipScenarios && opts.skipScenarios.includes(s)) return false;
+        return true;
+      });
 
       for (const level of levels) {
-        for (const scenarioFile of topology.scenarios) {
+        for (const scenarioFile of scenariosToRun) {
           const summaryJsonPath = path.join(
             topologyDir,
             `k6-${scenarioFile.replace(/\.js$/, '')}-${level}.json`
@@ -1632,6 +1790,12 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
                 `  [Recovery Drill] ${drill.name} (${drill.role}) @ ${level}: exit=${drillRecord.exitCode} rps=${drillRecord.rps} p95=${drillRecord.p95Ms}ms err=${drillRecord.errorRate}`
               );
               scenarioRecords.push(drillRecord);
+
+              const drillSnap = await captureQueueSnapshot(
+                hostPrisma,
+                `recovery-${drill.name}@${level}`
+              );
+              queueSnapshots.push(drillSnap);
             }
             continue;
           }
@@ -1649,14 +1813,44 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
             `  [Scenario] ${scenarioFile} @ ${level}: exit=${record.exitCode} rps=${record.rps} p95=${record.p95Ms}ms p99=${record.p99Ms}ms err=${record.errorRate}`
           );
           scenarioRecords.push(record);
+
+          const snap = await captureQueueSnapshot(hostPrisma, `${scenarioFile}@${level}`);
+          queueSnapshots.push(snap);
         }
       }
+
+      if (opts.drainSeconds > 0) {
+        console.log(
+          `\n  === [Drain Observation] Holding topology with zero load for ${opts.drainSeconds}s ===`
+        );
+        const drainStart = Date.now();
+        const drainDeadline = drainStart + opts.drainSeconds * 1000;
+        while (Date.now() < drainDeadline) {
+          await new Promise(r => setTimeout(r, 15_000));
+          const elapsedSec = Math.round((Date.now() - drainStart) / 1000);
+          const snap = await captureQueueSnapshot(hostPrisma, `drain-${elapsedSec}s`);
+          queueSnapshots.push(snap);
+          if (snap.pendingCritical === 0 && snap.pendingBackgroundJobs === 0) {
+            console.log(
+              `    [Drain Complete] All queues completely drained to 0 in ${elapsedSec}s!`
+            );
+            break;
+          }
+        }
+      }
+
+      await fs.writeFile(
+        path.join(topologyDir, 'queue-snapshots.json'),
+        JSON.stringify(queueSnapshots, null, 2),
+        'utf8'
+      );
+      await hostPrisma.$disconnect().catch(() => undefined);
 
       const samples: TelemetrySample[] = await telemetry.stop();
       const verification = await verifyLoadCertificationResults({
         topology: topology.id,
         outputPath: path.join(topologyDir, 'verification-report.json'),
-        waitForDrainMs: 90_000,
+        waitForDrainMs: 30_000,
       });
       console.log(
         `  [Verify] ${topology.id} invariants passed=${verification.passed} incidents=${verification.totals.incidentsCreated} alerts=${verification.totals.alertsPersisted} notifications=${verification.totals.notificationsTotal}`

@@ -210,6 +210,15 @@ export async function runLoadCleanup(options?: {
     await prisma.integration.deleteMany({
       where: { id: { startsWith: 'lt-' } },
     });
+    await prisma.incident.deleteMany({
+      where: {
+        OR: [
+          { serviceId: { in: loadServiceIds } },
+          { id: { startsWith: 'lt-' } },
+          { id: { in: loadIncidentIds } },
+        ],
+      },
+    }).catch(() => ({ count: 0 }));
 
     const deletedServices = await prisma.service.deleteMany({
       where: { id: { startsWith: 'lt-' } },

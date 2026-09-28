@@ -1,6 +1,6 @@
 # OpsKnight Load & Scalability Certification Report
 
-Generated: `2026-09-28T17:02:51.980Z`
+Generated: `2026-09-28T18:23:39.102Z`
 
 ## 1. Executive Capacity & Sizing Envelope
 
@@ -14,6 +14,8 @@ Generated: `2026-09-28T17:02:51.980Z`
 | `kind_helm_split_pgbouncer` | No certified sustainable capacity | No certified sustainable capacity | 1 RPS | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Worker pod resource / pool limits reached at L0 | **FAILED** |
 | `kind_kustomize_split_pgbouncer` | No certified sustainable capacity | No certified sustainable capacity | 1 RPS | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Worker pod resource / pool limits reached at L0 | **FAILED** |
 | `phase6_compose_integrated` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
+| `phase6_compose_split` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
+| `phase6_compose_split_pgbouncer` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
 
 ## 2. Resource-Efficiency Comparison Matrix
 
@@ -27,6 +29,8 @@ Generated: `2026-09-28T17:02:51.980Z`
 | `kind_helm_split_pgbouncer` | 0 | 0 | 0 | N/A | Small scale / single-team setups (< 200 RPS). Simple, lowest overhead. |
 | `kind_kustomize_split_pgbouncer` | 0 | 0 | 0 | N/A | Small scale / single-team setups (< 200 RPS). Simple, lowest overhead. |
 | `phase6_compose_integrated` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
+| `phase6_compose_split` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
+| `phase6_compose_split_pgbouncer` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
 
 ## 3. Evidence-Based Deployment Sizing Guidance
 
@@ -54,7 +58,9 @@ Generated: `2026-09-28T17:02:51.980Z`
 | Phase 3 | `swarm_ha_split` | 8 | 56.7 | 4001.9 | 4002.1 | 9 | 90881 | FAIL | **FAILED** |
 | Phase 4 | `kind_helm_split_pgbouncer` | 8 | 2.8 | 41634.6 | 41804.5 | 9 | 289 | PASS | **FAILED** |
 | Phase 4 | `kind_kustomize_split_pgbouncer` | 8 | 2.8 | 38687.3 | 39010.6 | 13 | 627 | PASS | **FAILED** |
-| Phase 6 | `phase6_compose_integrated` | 10 | 38.0 | 18256.3 | 21843.8 | 31 | 702025 | FAIL | **FAILED** |
+| Phase 6 | `phase6_compose_integrated` | 10 | 44.3 | 20659.3 | 25290.9 | 17 | 976695 | FAIL | **FAILED** |
+| Phase 6 | `phase6_compose_split` | 11 | 82.4 | 6166.6 | 6837.6 | 10 | 826077 | FAIL | **FAILED** |
+| Phase 6 | `phase6_compose_split_pgbouncer` | 11 | 68.4 | 6859.2 | 7966.8 | 10 | 937100 | FAIL | **FAILED** |
 
 ## 5. Standardized Resource Profiles
 
@@ -77,4 +83,6 @@ Generated: `2026-09-28T17:02:51.980Z`
 | `swarm_ha_split` | PASS (0) | PASS (758) | PASS (0) | PASS (0) | FAIL |
 | `kind_helm_split_pgbouncer` | PASS (0) | PASS (30) | PASS (0) | PASS (0) | PASS (0ms) |
 | `kind_kustomize_split_pgbouncer` | PASS (0) | PASS (19) | PASS (0) | PASS (0) | PASS (2554ms) |
-| `phase6_compose_integrated` | PASS (0) | PASS (7285) | PASS (0) | PASS (0) | FAIL |
+| `phase6_compose_integrated` | PASS (0) | PASS (7937) | PASS (0) | PASS (0) | FAIL |
+| `phase6_compose_split` | PASS (0) | PASS (18002) | PASS (0) | PASS (0) | FAIL |
+| `phase6_compose_split_pgbouncer` | PASS (0) | PASS (17768) | PASS (0) | PASS (0) | FAIL |
