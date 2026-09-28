@@ -18,6 +18,10 @@ Slack supports configured destinations and provider-backed incident war rooms.
 Install the app with the generated manifest or configured OAuth flow, verify the
 workspace, map destinations to services, and test with a synthetic incident.
 
+For the complete workflow, use the [Slack ChatOps guide](./slack/), including
+OAuth, scopes, service channels, incident actions, identity linking, war rooms,
+and symptom-based troubleshooting.
+
 ## Link service destinations
 
 Open **Services → your service → Notifications**, enable Slack, and link as many
