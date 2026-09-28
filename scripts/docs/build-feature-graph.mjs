@@ -17,9 +17,15 @@ const areaPatterns = [
 const ownerFor = value => areaPatterns.find(([, pattern]) => pattern.test(value))?.[0] ?? 'platform';
 
 const catalog = YAML.parse(readFileSync(resolve(repositoryRoot, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
-const documentationGroups = ['concepts', 'guides', 'reference'];
+const documentationGroups = ['concepts', 'guides', 'reference', 'troubleshooting'];
 const normalizeSource = value => value.replace(/\/$/, '');
 const overlaps = (left, right) => left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`);
+const documentationIndex = filesUnder('docs/v2.0.0', file => file.endsWith('.md')).flatMap(file => {
+  const header = readRepositoryFile(file).match(/^---\n([\s\S]*?)\n---/)?.[1];
+  if (!header) return [];
+  const metadata = YAML.parse(header);
+  return [{ path: file.replace('docs/v2.0.0/', ''), type: metadata.type, area: metadata.product_area }];
+});
 
 function documentationFor(kind, id, sources, owner) {
   let matched = Object.values(catalog.capabilities ?? {}).filter(capability =>
@@ -35,6 +41,15 @@ function documentationFor(kind, id, sources, owner) {
     matched = Object.values(catalog.capabilities ?? {}).filter(capability => (aliases[owner] ?? []).includes(capability.product_area));
   }
   const documentation = Object.fromEntries(documentationGroups.map(group => [group, [...new Set(matched.flatMap(item => item[group] ?? []))]]));
+  const areaAliases = {
+    incident: ['incidents'], notification: ['notifications'], 'on-call': ['on-call'], escalation: ['escalation'],
+    'status-page': ['status-pages'], chatops: ['chatops'], identity: ['identity'], authorization: ['authorization'],
+    compliance: ['compliance'], privacy: ['privacy'], analytics: ['analytics'], integration: ['integrations', 'jira'],
+    deployment: ['deployment', 'observability'], platform: ['getting-started', 'mobile'],
+  };
+  for (const page of documentationIndex.filter(page => (areaAliases[owner] ?? []).includes(page.area))) {
+    if (page.type === 'troubleshooting') documentation.troubleshooting.push(page.path);
+  }
   if (kind === 'configuration') documentation.reference.push('reference/configuration/README.md');
   if (kind === 'limit') documentation.reference.push('reference/limits.md');
   if (['permission', 'authorization-action', 'api-scope'].includes(kind)) documentation.reference.push('reference/permissions.md');
@@ -95,6 +110,14 @@ export function buildFeatureGraph(discovery) {
     sources: evidence,
     contract,
     documentation,
+    tests: [...new Set(Object.values(catalog.capabilities ?? {}).filter(capability =>
+      (capability.sources ?? []).some(pattern => evidence.some(source => overlaps(normalizeSource(source), normalizeSource(pattern))))
+    ).flatMap(capability => capability.tests ?? []))].sort(),
+    runtimeEvidence: [...new Set(Object.values(catalog.capabilities ?? {}).filter(capability =>
+      (capability.sources ?? []).some(pattern => evidence.some(source => overlaps(normalizeSource(source), normalizeSource(pattern))))
+    ).flatMap(capability => capability.evidence ?? []))].sort(),
+    introducedVersion: 'unknown',
+    availability: 'unknown',
     claims,
   });
   };
@@ -125,6 +148,12 @@ export function buildFeatureGraph(discovery) {
   const claims = nodes.flatMap(node => node.claims);
   const unsupportedClaims = claims.filter(claim => claim.evidence.length === 0);
   const supported = nodes.filter(node => node.classification !== 'INTERNAL_IMPLEMENTATION');
+  for (const node of supported) {
+    node.relatedFeatures = supported
+      .filter(candidate => candidate.id !== node.id && candidate.owner === node.owner)
+      .slice(0, 12)
+      .map(candidate => candidate.id);
+  }
   const undocumented = supported.filter(node => !Object.values(node.documentation).some(paths => paths.length > 0));
   const unresolvedSemanticContracts = supported.filter(node =>
     node.kind === 'notification-provider' && (node.contract.enabledCondition === 'unknown' || node.contract.discovery !== 'implementation')
@@ -154,4 +183,4 @@ export function buildFeatureGraph(discovery) {
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import YAML from 'yaml';
-import { exists, repositoryRoot } from './discovery-lib.mjs';
+import { exists, filesUnder, readRepositoryFile, repositoryRoot } from './discovery-lib.mjs';

@@ -15,6 +15,7 @@ run('node', ['scripts/docs/generate-reference.mjs']);
 run('node', ['scripts/docs/generate-integrations.mjs']);
 run('node', ['scripts/docs/check-frontmatter.mjs']);
 run('node', ['scripts/check-docs-links.cjs']);
+run('node', ['scripts/docs/check-reader-quality.mjs']);
 run('node', ['scripts/check-docs-capabilities.cjs']);
 run('node', ['scripts/docs/check-evidence.mjs']);
 run('node', ['scripts/docs/check-feature-graph.mjs']);
@@ -57,6 +58,7 @@ const report = {
   checks: {
     frontmatter: 'passed',
     links: 'passed',
+    readerQuality: 'passed',
     capabilityCoverage: 'passed',
     featureClassification: discovery.featureGraph.unclassified.length === 0 ? 'passed' : 'failed',
     featureDocumentation: discovery.featureGraph.undocumented.length === 0 ? 'passed' : 'failed',
