@@ -1,5 +1,8 @@
 schemaVersion: 1
 source: generated/docs-evidence/current
+approvedSourceRevision: 877196fa145ae0d4e9077428d02542852eec89b5
+runtimeImage: ghcr.io/opsknight-labs/opsknight-test@sha256:4364470f96e793e24a3c85cad62ed429cfe179f23aa5eb8a26ddcc864e2303dd
+runtimeSourceRevision: 4359915fb530fe2c8dc89c89a58877d90c44cd2d
 assets:
   escalation-policies.png: { evidence: escalation/policies.png, sha256: 5101328873d4c3f582dd3d4b9ae877bd5f4e5501dc4f5f734d68369bf7daf4aa }
   incident-detail.png: { evidence: incidents/detail.png, sha256: 184fb1d84b1d577dd8ef22cdb844d1bc0393b8f822c0371c741a304efae0cd7e }
