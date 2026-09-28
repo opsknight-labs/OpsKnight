@@ -168,7 +168,7 @@ messages in source. A discovered constant is not automatically a public promise;
 use its source and owning feature to interpret scope. Scanner output is kept here
 to prevent copied values from silently drifting.
 
-${limits.map(limit => `## \`${limit.name}\`\n\n- Value: \`${limit.value}\`\n- Source expression: \`${limit.expression.replaceAll('`', '')}\`\n- Source: \`${limit.source}\``).join('\n\n')}
+${limits.filter(limit => limit.semanticClassification !== 'INTERNAL_IMPLEMENTATION' && limit.semanticClassification !== 'PROVIDER_CONSTRAINT').map(limit => `## \`${limit.name}\`\n\n- Classification: \`${limit.semanticClassification}\`\n- Value: \`${limit.value}\`\n- Source expression: \`${limit.expression.replaceAll('`', '')}\`\n- Source: \`${limit.source}\``).join('\n\n')}
 `;
 
 const discoveryForGraph = {
@@ -202,6 +202,10 @@ API promises.
 - Unclassified nodes: ${graph.summary.unclassified}
 - Evidence-backed generated claims: ${graph.summary.claims}
 - Unsupported generated claims: ${graph.summary.unsupportedClaims}
+- Supported product nodes: ${graph.summary.supported}
+- Documented supported nodes: ${graph.summary.documentedSupported}
+- Undocumented supported nodes: ${graph.summary.undocumentedSupported}
+- Unresolved semantic contracts: ${graph.summary.unresolvedSemanticContracts}
 
 ${Object.entries(graph.summary.byKind).map(([kind, count]) => `- \`${kind}\`: ${count}`).join('\n')}
 
