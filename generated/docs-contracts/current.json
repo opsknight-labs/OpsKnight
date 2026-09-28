@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "ea87f1def686b85132977847adfdb0cfce1732cb",
+  "sourceRevision": "d46659170d88f294ea6538ac354bb789cfbdd367",
   "contracts": [
     {
       "id": "api:/api/events",
