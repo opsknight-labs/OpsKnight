@@ -73,7 +73,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
       'Dedicated web, scheduler, general-worker, critical-worker, bulk-worker, status-projector',
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
-      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f tests/load/deploy/compose/load.override.yml up -d --wait',
+      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f tests/load/deploy/compose/load.split.override.yml up -d --wait',
     ],
     recoveryDrills: [
       {
@@ -112,7 +112,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
       'Full split runtime with transaction-pooled PgBouncer for web/workers and session-pooled PgBouncer for scheduler',
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
-      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f tests/load/deploy/compose/load.override.yml up -d --wait',
+      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f tests/load/deploy/compose/load.split.override.yml up -d --wait',
     ],
     recoveryDrills: [
       {
@@ -416,7 +416,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     description: 'Dedicated web, scheduler, and worker roles without PgBouncer under 25-min progressive workload',
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
-      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f tests/load/deploy/compose/load.override.yml up -d --wait',
+      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f tests/load/deploy/compose/load.split.override.yml up -d --wait',
     ],
     recoveryDrills: [
       {
@@ -457,7 +457,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     description: 'Split runtime with transaction-pooled PgBouncer under 25-min progressive workload',
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
-      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f tests/load/deploy/compose/load.override.yml up -d --wait',
+      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f tests/load/deploy/compose/load.split.override.yml up -d --wait',
     ],
     recoveryDrills: [
       {
@@ -1001,6 +1001,8 @@ function getAugmentedEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
     OPSKNIGHT_PGBOUNCER_IMAGE: 'opsknight-pgbouncer:1.26.0',
     AUTO_LABEL_DATABASE_NODE: 'true',
     SWARM_RESOLVE_IMAGE_NEVER: 'true',
+    OPSKNIGHT_LOAD_CERT_DB: 'true',
+    OPSKNIGHT_ALLOW_LOAD_DB_SEED: 'true',
     OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS:
       'host.docker.internal,webhook.emulator.opsknight.internal,push.emulator.opsknight.internal,127.0.0.1,localhost',
     ...extra,
@@ -1539,6 +1541,8 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
   process.env.DATABASE_URL =
     'postgresql://opsknight:devpassword@127.0.0.1:5432/opsknight_db?sslmode=disable&connection_limit=15';
   process.env.DIRECT_DATABASE_URL = process.env.DATABASE_URL;
+  process.env.OPSKNIGHT_LOAD_CERT_DB = 'true';
+  process.env.OPSKNIGHT_ALLOW_LOAD_DB_SEED = 'true';
   if (!process.env.ENCRYPTION_KEY) {
     process.env.ENCRYPTION_KEY =
       '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08';
