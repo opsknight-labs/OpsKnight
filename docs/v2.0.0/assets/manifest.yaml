@@ -1,12 +1,12 @@
 schemaVersion: 1
 source: generated/docs-evidence/current
-approvedSourceRevision: 877196fa145ae0d4e9077428d02542852eec89b5
-runtimeImage: ghcr.io/opsknight-labs/opsknight-test@sha256:4364470f96e793e24a3c85cad62ed429cfe179f23aa5eb8a26ddcc864e2303dd
-runtimeSourceRevision: 4359915fb530fe2c8dc89c89a58877d90c44cd2d
+approvedSourceRevision: 009be499944016a0c34ad72f3f025098e62e3d87
+runtimeImage: opsknight-docs-v2@sha256:230e01c8cef0d3f9da3ddd4f5ca038c624087c2c4ade1fee2cbdf3e7f21a8459
+runtimeSourceRevision: bb3f0aff37ff2558ce46eba3e124d0c6384d7d0d
 assets:
-  escalation-policies.png: { evidence: escalation/policies.png, sha256: 5101328873d4c3f582dd3d4b9ae877bd5f4e5501dc4f5f734d68369bf7daf4aa }
-  incident-detail.png: { evidence: incidents/detail.png, sha256: 184fb1d84b1d577dd8ef22cdb844d1bc0393b8f822c0371c741a304efae0cd7e }
-  incidents-list.png: { evidence: incidents/list.png, sha256: 92bf214c520f5b72111409aa00609db5c88cc4c8f7fa762c3490cf3fe965ba2e }
-  notification-settings.png: { evidence: notifications/settings.png, sha256: b4ed9e4908e7581b9aa8df2685d10cbc8e087c59fc944d32e4d36f120d874711 }
-  on-call-schedules.png: { evidence: on-call/schedules.png, sha256: 1519be293c0987cf26cd4d8c3ff9e576575dd5867b9e9edbd843ae031b180d16 }
-  status-pages.png: { evidence: status-pages/list.png, sha256: dc2389aed7f960adb0e2452013b4ee3c702573f4f33010ac88116cbe50970393 }
+  escalation-policies.png: { evidence: escalation/policies.png, sha256: 7243a8266fb166d00f8ae2998988d5bb7452affbbd5cdf0532bcea1284ba1614 }
+  incident-detail.png: { evidence: incidents/detail.png, sha256: c80958e54b5bbb272a246f3a18ca973e252d2e2e86d584521f146369690cb724 }
+  incidents-list.png: { evidence: incidents/list.png, sha256: 959d0b64c0aa5ee02e824d14a8fd18e61609b3e3400450a9038a0bfc33b51112 }
+  notification-settings.png: { evidence: notifications/settings.png, sha256: 576f51292b93b52b7bd812f12b0176838a80183a2c69f86f5b79dd54f93a9a5b }
+  on-call-schedules.png: { evidence: on-call/schedules.png, sha256: 60a8cea943ac3b621d50a9c1f738063efbbe6fa31c1faf52f9e1b496eeda3bc4 }
+  status-pages.png: { evidence: status-pages/list.png, sha256: 5af645b921f24b7f81007767dcf3dd49aff9bde6ef59f7d88e6a7e877dc7a6eb }
