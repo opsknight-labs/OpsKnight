@@ -687,7 +687,7 @@ print(response.json()["incidents"])`}
 
       {/* 5. Create API Key Modal Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="w-[calc(100%-2rem)] max-w-2xl max-h-[90vh] overflow-x-hidden overflow-y-auto">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-4xl max-h-[90vh] overflow-x-hidden overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
@@ -766,35 +766,35 @@ print(response.json()["incidents"])`}
                 </p>
               </div>
 
-              <div className="grid min-w-0 gap-2.5 md:grid-cols-2">
+              <div className="grid min-w-0 gap-2.5 xl:grid-cols-2">
                 {visibleScopes.map(scope => {
                   const Icon = scope.icon;
                   return (
                     <div
                       key={scope.value}
-                      className="flex min-w-0 items-start gap-2.5 rounded-xl border border-border/80 bg-background p-3 text-xs transition-all hover:border-primary/40 hover:bg-accent/30"
+                      className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-xl border border-border/80 bg-background p-3.5 text-xs transition-all hover:border-primary/40 hover:bg-accent/30"
                     >
                       <Checkbox
                         name="scopes"
                         value={scope.value}
                         defaultChecked={scope.defaultChecked}
                         id={`scope-${scope.value}`}
-                        className="mt-0.5"
+                        className="mt-0.5 shrink-0"
                       />
-                      <div className="min-w-0 flex-1 space-y-1">
+                      <div className="min-w-0 space-y-1.5">
                         <label
                           htmlFor={`scope-${scope.value}`}
-                          className="flex min-w-0 cursor-pointer flex-col gap-1.5 text-xs font-semibold leading-tight sm:flex-row sm:items-start sm:justify-between"
+                          className="grid min-w-0 cursor-pointer gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
                         >
-                          <span className="flex min-w-0 items-start gap-1.5 text-foreground">
-                            <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="min-w-0 break-words">{scope.title}</span>
+                          <span className="flex min-w-0 items-center gap-1.5 text-xs font-semibold leading-tight text-foreground">
+                            <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <span className="min-w-0 whitespace-normal break-normal">{scope.title}</span>
                           </span>
-                          <code className="max-w-full self-start break-all whitespace-normal rounded border border-border/50 bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:shrink-0">
+                          <code className="max-w-full justify-self-start whitespace-nowrap rounded border border-border/50 bg-muted px-1.5 py-0.5 font-mono text-[10px] sm:justify-self-end">
                             {scope.value}
                           </code>
                         </label>
-                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        <p className="max-w-prose text-[11px] leading-relaxed text-muted-foreground">
                           {scope.detail}
                         </p>
                       </div>
