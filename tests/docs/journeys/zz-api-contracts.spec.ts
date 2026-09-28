@@ -47,6 +47,7 @@ test.describe.serial('supported public API contracts', () => {
   });
 
   test('creates and idempotently replays an incident', async ({ request }) => {
+    const idempotencyKey = `docs-api-create-contract-${Date.now()}`;
     const payload = {
       title: 'Payments API synthetic contract incident',
       description: 'Created only in the disposable documentation environment.',
@@ -56,7 +57,7 @@ test.describe.serial('supported public API contracts', () => {
     };
     const headers = {
       Authorization: `Bearer ${DOCS_API_KEY}`,
-      'Idempotency-Key': 'docs-api-create-contract-v1',
+      'Idempotency-Key': idempotencyKey,
     };
     const created = await request.post('/api/incidents', { headers, data: payload });
     expect(created.status()).toBe(201);
@@ -77,7 +78,7 @@ test.describe.serial('supported public API contracts', () => {
     expect((await detail.json()).data.incident.id).toBe(incidentId);
 
     const updated = await request.patch(`/api/incidents/${incidentId}`, {
-      headers: { ...headers, 'Idempotency-Key': 'docs-api-patch-contract-v1' },
+      headers: { ...headers, 'Idempotency-Key': `docs-api-patch-${incidentId}` },
       data: { status: 'ACKNOWLEDGED' },
     });
     expect(updated.status()).toBe(200);
