@@ -370,6 +370,571 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     ],
     defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9'],
   },
+
+  // =========================================================================
+  // Phase 6: Mega Load & Limit Certification (10-25 min torture tests)
+  // =========================================================================
+  {
+    id: 'phase6_compose_integrated',
+    name: 'Phase 6 Mega: Compose Integrated Runtime',
+    phase: 6,
+    family: 'compose',
+    description: 'Single-container integrated runtime pushed to limit with 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    deployCommands: [
+      'docker compose -f deploy/compose/docker-compose.yml -f tests/load/deploy/compose/load.override.yml up -d --wait',
+    ],
+    recoveryDrills: [
+      {
+        name: 'restart_integrated_app',
+        role: 'opsknight-app',
+        faultCommand: 'docker compose -f deploy/compose/docker-compose.yml restart opsknight-app',
+      },
+    ],
+    teardownCommands: [
+      'docker compose -f deploy/compose/docker-compose.yml down -v --remove-orphans',
+    ],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'status-fanout.js',
+      'realtime.js',
+      'user-workload.js',
+      'security-under-load.js',
+      'recovery.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L9'],
+  },
+  {
+    id: 'phase6_compose_split',
+    name: 'Phase 6 Mega: Compose Split Runtime',
+    phase: 6,
+    family: 'compose',
+    description: 'Dedicated web, scheduler, and worker roles without PgBouncer under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    deployCommands: [
+      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f tests/load/deploy/compose/load.override.yml up -d --wait',
+    ],
+    recoveryDrills: [
+      {
+        name: 'kill_critical_worker',
+        role: 'critical-worker',
+        faultCommand:
+          'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml restart opsknight-critical-worker',
+      },
+      {
+        name: 'kill_bulk_worker',
+        role: 'bulk-worker',
+        faultCommand:
+          'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml restart opsknight-bulk-worker',
+      },
+    ],
+    teardownCommands: [
+      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml down -v --remove-orphans',
+    ],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'status-fanout.js',
+      'realtime.js',
+      'user-workload.js',
+      'security-under-load.js',
+      'recovery.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L9'],
+  },
+  {
+    id: 'phase6_compose_split_pgbouncer',
+    name: 'Phase 6 Mega: Compose Split Runtime + PgBouncer',
+    phase: 6,
+    family: 'compose',
+    description: 'Split runtime with transaction-pooled PgBouncer under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    deployCommands: [
+      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f tests/load/deploy/compose/load.override.yml up -d --wait',
+    ],
+    recoveryDrills: [
+      {
+        name: 'restart_pgbouncer',
+        role: 'pgbouncer',
+        faultCommand:
+          'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml restart opsknight-pgbouncer',
+      },
+      {
+        name: 'kill_critical_worker',
+        role: 'critical-worker',
+        faultCommand:
+          'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml restart opsknight-critical-worker',
+      },
+    ],
+    teardownCommands: [
+      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml down -v --remove-orphans',
+    ],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'status-fanout.js',
+      'realtime.js',
+      'user-workload.js',
+      'security-under-load.js',
+      'recovery.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9'],
+  },
+  {
+    id: 'phase6_compose_split_external_db',
+    name: 'Phase 6 Mega: Compose Split + External PostgreSQL',
+    phase: 6,
+    family: 'compose',
+    description: 'Split runtime against external PostgreSQL instance under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    deployCommands: [
+      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.external-db.yml up -d --wait',
+    ],
+    recoveryDrills: [],
+    teardownCommands: [
+      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.external-db.yml down -v --remove-orphans',
+    ],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'user-workload.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L9'],
+  },
+  {
+    id: 'phase6_compose_split_pgbouncer_external_db',
+    name: 'Phase 6 Mega: Compose Split + PgBouncer + External PostgreSQL',
+    phase: 6,
+    family: 'compose',
+    description: 'Split runtime + PgBouncer against external PostgreSQL instance under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    deployCommands: [
+      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f deploy/compose/docker-compose.external-db.yml up -d --wait',
+    ],
+    recoveryDrills: [
+      {
+        name: 'restart_pgbouncer',
+        role: 'pgbouncer',
+        faultCommand:
+          'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f deploy/compose/docker-compose.external-db.yml restart opsknight-pgbouncer',
+      },
+    ],
+    teardownCommands: [
+      'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f deploy/compose/docker-compose.external-db.yml down -v --remove-orphans',
+    ],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'user-workload.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L9'],
+  },
+  {
+    id: 'phase6_swarm_integrated',
+    name: 'Phase 6 Mega: Docker Swarm Integrated Stack',
+    phase: 6,
+    family: 'swarm',
+    description: 'Docker Swarm single integrated service stack under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    deployCommands: [
+      'docker swarm init 2>/dev/null || true',
+      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=integrated ENABLE_PGBOUNCER=false SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.override.yml ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
+      'docker service update --publish-add published=5432,target=5432 opsknight-load_opsknight-db 2>/dev/null || true',
+    ],
+    recoveryDrills: [
+      {
+        name: 'swarm_restart_integrated_app',
+        role: 'app',
+        faultCommand: 'docker service update --force opsknight-load_opsknight-app',
+      },
+    ],
+    teardownCommands: ['docker stack rm opsknight-load'],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'status-fanout.js',
+      'realtime.js',
+      'user-workload.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L9'],
+  },
+  {
+    id: 'phase6_swarm_split',
+    name: 'Phase 6 Mega: Docker Swarm Split Stack',
+    phase: 6,
+    family: 'swarm',
+    description: 'Docker Swarm split worker roles without PgBouncer under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    deployCommands: [
+      'docker swarm init 2>/dev/null || true',
+      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=split ENABLE_PGBOUNCER=false SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.override.yml SWARM_REPLICAS_WEB=1 SWARM_REPLICAS_SCHEDULER=1 SWARM_REPLICAS_GENERAL_WORKER=1 SWARM_REPLICAS_CRITICAL_WORKER=1 SWARM_REPLICAS_BULK_WORKER=1 SWARM_REPLICAS_STATUS_PROJECTOR=1 ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
+      'docker service update --publish-add published=5432,target=5432 opsknight-load_opsknight-db 2>/dev/null || true',
+    ],
+    recoveryDrills: [
+      {
+        name: 'swarm_kill_critical_worker',
+        role: 'critical-worker',
+        faultCommand: 'docker service update --force opsknight-load_opsknight-critical-worker',
+      },
+    ],
+    teardownCommands: ['docker stack rm opsknight-load'],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'status-fanout.js',
+      'realtime.js',
+      'user-workload.js',
+      'recovery.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L9'],
+  },
+  {
+    id: 'phase6_swarm_split_pgbouncer',
+    name: 'Phase 6 Mega: Docker Swarm Split + PgBouncer Stack',
+    phase: 6,
+    family: 'swarm',
+    description: 'Docker Swarm split stack with PgBouncer under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    deployCommands: [
+      'docker swarm init 2>/dev/null || true',
+      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=split ENABLE_PGBOUNCER=true SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.override.yml SWARM_REPLICAS_WEB=1 SWARM_REPLICAS_SCHEDULER=1 SWARM_REPLICAS_GENERAL_WORKER=1 SWARM_REPLICAS_CRITICAL_WORKER=1 SWARM_REPLICAS_BULK_WORKER=1 SWARM_REPLICAS_STATUS_PROJECTOR=1 SWARM_REPLICAS_PGBOUNCER=1 ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
+      'docker service update --publish-add published=5432,target=5432 opsknight-load_opsknight-db 2>/dev/null || true',
+    ],
+    recoveryDrills: [
+      {
+        name: 'swarm_kill_critical_worker',
+        role: 'critical-worker',
+        faultCommand: 'docker service update --force opsknight-load_opsknight-critical-worker',
+      },
+      {
+        name: 'swarm_kill_pgbouncer',
+        role: 'pgbouncer',
+        faultCommand: 'docker service update --force opsknight-load_opsknight-pgbouncer',
+      },
+    ],
+    teardownCommands: ['docker stack rm opsknight-load'],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'status-fanout.js',
+      'realtime.js',
+      'user-workload.js',
+      'recovery.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L9'],
+  },
+  {
+    id: 'phase6_swarm_ha_split_pgbouncer',
+    name: 'Phase 6 Mega: Docker Swarm HA Split + PgBouncer',
+    phase: 6,
+    family: 'swarm',
+    description: 'Swarm HA 2x multi-replica stack with PgBouncer under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    deployCommands: [
+      'docker swarm init 2>/dev/null || true',
+      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=split ENABLE_PGBOUNCER=true SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.override.yml SWARM_REPLICAS_WEB=2 SWARM_REPLICAS_SCHEDULER=2 SWARM_REPLICAS_GENERAL_WORKER=2 SWARM_REPLICAS_CRITICAL_WORKER=2 SWARM_REPLICAS_BULK_WORKER=2 SWARM_REPLICAS_STATUS_PROJECTOR=2 SWARM_REPLICAS_PGBOUNCER=2 ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
+      'docker service update --publish-add published=5432,target=5432 opsknight-load_opsknight-db 2>/dev/null || true',
+    ],
+    recoveryDrills: [
+      {
+        name: 'swarm_ha_rolling_web_restart',
+        role: 'web',
+        faultCommand: 'docker service update --force opsknight-load_opsknight-web',
+      },
+      {
+        name: 'swarm_ha_kill_critical_worker',
+        role: 'critical-worker',
+        faultCommand: 'docker service update --force opsknight-load_opsknight-critical-worker',
+      },
+    ],
+    teardownCommands: ['docker stack rm opsknight-load'],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'status-fanout.js',
+      'realtime.js',
+      'user-workload.js',
+      'security-under-load.js',
+      'recovery.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9'],
+  },
+  {
+    id: 'phase6_helm_integrated',
+    name: 'Phase 6 Mega: Kind Helm Integrated',
+    phase: 6,
+    family: 'kind-helm',
+    description: 'Kind Kubernetes Helm chart in integrated runtime mode under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    k8sNamespace: 'helm-test',
+    deployCommands: [
+      'kubectl create namespace helm-test --dry-run=client -o yaml | kubectl apply -f -',
+      'helm upgrade --install opsknight deploy/kubernetes/helm/opsknight -n helm-test --set image.repository=opsknight-certification --set-string image.tag=local --set image.pullPolicy=Never --set splitRuntime.enabled=false --set pgbouncer.enabled=false --set postgresql.image.pullPolicy=Never --wait --timeout 5m',
+      'pkill -f "kubectl -n helm-test port-forward" 2>/dev/null || true',
+      'nohup bash -c "while true; do kubectl -n helm-test port-forward service/opsknight 3100:80 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
+      'nohup bash -c "while true; do kubectl -n helm-test port-forward service/opsknight-postgresql 5432:5432 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
+      'sleep 5',
+    ],
+    recoveryDrills: [
+      {
+        name: 'k8s_helm_restart_app_pod',
+        role: 'app',
+        faultCommand: 'kubectl delete pod -n helm-test -l app.kubernetes.io/name=opsknight --wait=false',
+      },
+    ],
+    teardownCommands: [
+      'pkill -f "kubectl -n helm-test port-forward" 2>/dev/null || true',
+      'helm uninstall opsknight -n helm-test --wait || true',
+      'kubectl delete namespace helm-test --wait=false || true',
+    ],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'user-workload.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L9'],
+  },
+  {
+    id: 'phase6_helm_split',
+    name: 'Phase 6 Mega: Kind Helm Split',
+    phase: 6,
+    family: 'kind-helm',
+    description: 'Kind Kubernetes Helm chart with split worker roles without PgBouncer under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    k8sNamespace: 'helm-test',
+    deployCommands: [
+      'kubectl create namespace helm-test --dry-run=client -o yaml | kubectl apply -f -',
+      'helm upgrade --install opsknight deploy/kubernetes/helm/opsknight -n helm-test -f deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml --set image.repository=opsknight-certification --set-string image.tag=local --set image.pullPolicy=Never --set pgbouncer.enabled=false --set postgresql.image.pullPolicy=Never --wait --timeout 5m',
+      'pkill -f "kubectl -n helm-test port-forward" 2>/dev/null || true',
+      'nohup bash -c "while true; do kubectl -n helm-test port-forward service/opsknight 3100:80 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
+      'nohup bash -c "while true; do kubectl -n helm-test port-forward service/opsknight-postgresql 5432:5432 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
+      'sleep 5',
+    ],
+    recoveryDrills: [
+      {
+        name: 'k8s_helm_delete_critical_worker_pod',
+        role: 'critical-worker',
+        faultCommand: 'kubectl delete pod -n helm-test -l opsknight-role=critical-worker --wait=false',
+      },
+    ],
+    teardownCommands: [
+      'pkill -f "kubectl -n helm-test port-forward" 2>/dev/null || true',
+      'helm uninstall opsknight -n helm-test --wait || true',
+      'kubectl delete namespace helm-test --wait=false || true',
+    ],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'user-workload.js',
+      'recovery.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L9'],
+  },
+  {
+    id: 'phase6_helm_split_pgbouncer',
+    name: 'Phase 6 Mega: Kind Helm Split + PgBouncer',
+    phase: 6,
+    family: 'kind-helm',
+    description: 'Kind Kubernetes Helm chart with split worker roles and PgBouncer under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    k8sNamespace: 'helm-test',
+    deployCommands: [
+      'kubectl create namespace helm-test --dry-run=client -o yaml | kubectl apply -f -',
+      'helm upgrade --install opsknight deploy/kubernetes/helm/opsknight -n helm-test -f deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml -f tests/load/deploy/kubernetes/helm/values-load-cert.yaml --set image.repository=opsknight-certification --set-string image.tag=local --set image.pullPolicy=Never --set pgbouncer.enabled=true --set pgbouncer.image.repository=opsknight-pgbouncer --set-string pgbouncer.image.tag=1.26.0 --set-string pgbouncer.image.digest="" --set pgbouncer.image.pullPolicy=Never --set postgresql.image.pullPolicy=Never --wait --timeout 5m',
+      'pkill -f "kubectl -n helm-test port-forward" 2>/dev/null || true',
+      'nohup bash -c "while true; do kubectl -n helm-test port-forward service/opsknight 3100:80 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
+      'nohup bash -c "while true; do kubectl -n helm-test port-forward service/opsknight-postgresql 5432:5432 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
+      'sleep 5',
+    ],
+    recoveryDrills: [
+      {
+        name: 'k8s_helm_delete_critical_worker_pod',
+        role: 'critical-worker',
+        faultCommand: 'kubectl delete pod -n helm-test -l opsknight-role=critical-worker --wait=false',
+      },
+      {
+        name: 'k8s_helm_delete_pgbouncer_pod',
+        role: 'pgbouncer',
+        faultCommand: 'kubectl delete pod -n helm-test -l app.kubernetes.io/component=pgbouncer --wait=false',
+      },
+    ],
+    teardownCommands: [
+      'pkill -f "kubectl -n helm-test port-forward" 2>/dev/null || true',
+      'helm uninstall opsknight -n helm-test --wait || true',
+      'kubectl delete namespace helm-test --wait=false || true',
+    ],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'status-fanout.js',
+      'realtime.js',
+      'user-workload.js',
+      'security-under-load.js',
+      'recovery.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9'],
+  },
+  {
+    id: 'phase6_kustomize_integrated',
+    name: 'Phase 6 Mega: Kind Kustomize Integrated',
+    phase: 6,
+    family: 'kind-kustomize',
+    description: 'Kind Kubernetes Kustomize integrated profile under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    k8sNamespace: 'kustomize-test',
+    deployCommands: [
+      'kubectl create namespace kustomize-test --dry-run=client -o yaml | kubectl apply -f -',
+      'kubectl kustomize deploy/kubernetes/kustomize/profiles/integrated | sed "s/namespace: opsknight/namespace: kustomize-test/g; s|ghcr.io/opsknight-labs/opsknight:.*|opsknight-certification:local|g; s/imagePullPolicy: Always/imagePullPolicy: Never/g" | kubectl apply -f -',
+      'kubectl rollout status statefulset/opsknight-postgres -n kustomize-test --timeout=5m && kubectl rollout status deployment -n kustomize-test --timeout=5m',
+      'pkill -f "kubectl -n kustomize-test port-forward" 2>/dev/null || true',
+      'nohup bash -c "while true; do kubectl -n kustomize-test port-forward service/opsknight-service 3100:80 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
+      'nohup bash -c "while true; do kubectl -n kustomize-test port-forward service/opsknight-postgres-service 5432:5432 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
+      'sleep 5',
+    ],
+    recoveryDrills: [
+      {
+        name: 'k8s_kustomize_restart_app_pod',
+        role: 'app',
+        faultCommand: 'kubectl delete pod -n kustomize-test -l app.kubernetes.io/name=opsknight --wait=false',
+      },
+    ],
+    teardownCommands: [
+      'pkill -f "kubectl -n kustomize-test port-forward" 2>/dev/null || true',
+      'kubectl delete namespace kustomize-test --wait=true --ignore-not-found=true || true',
+    ],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'user-workload.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L9'],
+  },
+  {
+    id: 'phase6_kustomize_split',
+    name: 'Phase 6 Mega: Kind Kustomize Split',
+    phase: 6,
+    family: 'kind-kustomize',
+    description: 'Kind Kubernetes Kustomize split profile without PgBouncer under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    k8sNamespace: 'kustomize-test',
+    deployCommands: [
+      'kubectl create namespace kustomize-test --dry-run=client -o yaml | kubectl apply -f -',
+      'kubectl kustomize deploy/kubernetes/kustomize/profiles/split | sed "s/namespace: opsknight/namespace: kustomize-test/g; s|ghcr.io/opsknight-labs/opsknight:.*|opsknight-certification:local|g; s/imagePullPolicy: Always/imagePullPolicy: Never/g" | kubectl apply -f -',
+      'kubectl rollout status statefulset/opsknight-postgres -n kustomize-test --timeout=5m && kubectl rollout status deployment -n kustomize-test --timeout=5m',
+      'pkill -f "kubectl -n kustomize-test port-forward" 2>/dev/null || true',
+      'nohup bash -c "while true; do kubectl -n kustomize-test port-forward service/opsknight-service 3100:80 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
+      'nohup bash -c "while true; do kubectl -n kustomize-test port-forward service/opsknight-postgres-service 5432:5432 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
+      'sleep 5',
+    ],
+    recoveryDrills: [
+      {
+        name: 'k8s_kustomize_delete_critical_worker_pod',
+        role: 'critical-worker',
+        faultCommand: 'kubectl delete pod -n kustomize-test -l opsknight-role=critical-worker --wait=false',
+      },
+    ],
+    teardownCommands: [
+      'pkill -f "kubectl -n kustomize-test port-forward" 2>/dev/null || true',
+      'kubectl delete namespace kustomize-test --wait=true --ignore-not-found=true || true',
+    ],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'user-workload.js',
+      'recovery.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L9'],
+  },
+  {
+    id: 'phase6_kustomize_split_pgbouncer',
+    name: 'Phase 6 Mega: Kind Kustomize Split + PgBouncer',
+    phase: 6,
+    family: 'kind-kustomize',
+    description: 'Kind Kubernetes Kustomize split + PgBouncer profile under 25-min progressive workload',
+    baseUrl: 'http://127.0.0.1:3100',
+    k8sNamespace: 'kustomize-test',
+    deployCommands: [
+      'kubectl create namespace kustomize-test --dry-run=client -o yaml | kubectl apply -f -',
+      'kubectl kustomize tests/load/deploy/kubernetes/kustomize/load-cert-overlay | sed "s/namespace: opsknight/namespace: kustomize-test/g; s|ghcr.io/opsknight-labs/opsknight:split-runtime-image-required|opsknight-certification:local|g; s|ghcr.io/icoretech/pgbouncer-docker@[^ \\"]*|opsknight-pgbouncer:1.26.0|g; s/imagePullPolicy: Always/imagePullPolicy: Never/g" | kubectl apply -f -',
+      'kubectl rollout status statefulset/opsknight-postgres -n kustomize-test --timeout=5m && kubectl rollout status deployment -n kustomize-test --timeout=5m',
+      'pkill -f "kubectl -n kustomize-test port-forward" 2>/dev/null || true',
+      'nohup bash -c "while true; do kubectl -n kustomize-test port-forward service/opsknight-service 3100:80 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
+      'nohup bash -c "while true; do kubectl -n kustomize-test port-forward service/opsknight-postgres-service 5432:5432 >/dev/null 2>&1; sleep 0.5; done" >/dev/null 2>&1 &',
+      'sleep 5',
+    ],
+    recoveryDrills: [
+      {
+        name: 'k8s_kustomize_delete_critical_worker_pod',
+        role: 'critical-worker',
+        faultCommand: 'kubectl delete pod -n kustomize-test -l opsknight-role=critical-worker --wait=false',
+      },
+      {
+        name: 'k8s_kustomize_delete_bulk_worker_pod',
+        role: 'bulk-worker',
+        faultCommand: 'kubectl delete pod -n kustomize-test -l opsknight-role=bulk-worker --wait=false',
+      },
+    ],
+    teardownCommands: [
+      'pkill -f "kubectl -n kustomize-test port-forward" 2>/dev/null || true',
+      'kubectl delete namespace kustomize-test --wait=true --ignore-not-found=true || true',
+    ],
+    scenarios: [
+      'alert-ingestion.js',
+      'incident-lifecycle.js',
+      'escalation.js',
+      'notifications.js',
+      'status-fanout.js',
+      'realtime.js',
+      'user-workload.js',
+      'security-under-load.js',
+      'recovery.js',
+      'mega-journey.js',
+    ],
+    defaultLoadLevels: ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9'],
+  },
 ];
 
 export const KIND_4NODE_CLUSTER_CONFIG = `kind: Cluster
@@ -581,11 +1146,17 @@ async function runK6Scenario(options: {
 export interface DerivedCapacityProfile {
   sustainedAlertRps: string;
   burstAlertRps: string;
+  breakingPointRps?: string;
   notificationRate: string;
   escalationRate: string;
   concurrentUsers: string;
   sseStreams: string;
   statusFanout: string;
+  alertsPerCore?: number;
+  notificationsPerCore?: number;
+  usersPerCore?: number;
+  dbConnectionsPer100Rps?: string;
+  deploymentRecommendation?: string;
   bottleneck: string;
 }
 
@@ -598,11 +1169,17 @@ export function deriveCapacityFromScenarios(
     return {
       sustainedAlertRps: 'Measured on run',
       burstAlertRps: 'Measured on run',
+      breakingPointRps: 'Measured on run',
       notificationRate: 'Measured on run',
       escalationRate: 'Measured on run',
       concurrentUsers: 'Measured on run',
       sseStreams: 'Measured on run',
       statusFanout: 'Measured on run',
+      alertsPerCore: 0,
+      notificationsPerCore: 0,
+      usersPerCore: 0,
+      dbConnectionsPer100Rps: 'N/A',
+      deploymentRecommendation: 'Measured on run',
       bottleneck: 'Pending execution',
     };
   }
@@ -635,6 +1212,12 @@ export function deriveCapacityFromScenarios(
       concurrentUsers: 'No certified sustainable capacity',
       sseStreams: 'No certified sustainable capacity',
       statusFanout: 'No certified sustainable capacity',
+      breakingPointRps: 'Invariant violation during run',
+      alertsPerCore: 0,
+      notificationsPerCore: 0,
+      usersPerCore: 0,
+      dbConnectionsPer100Rps: 'N/A',
+      deploymentRecommendation: 'Do not deploy: Critical correctness invariant failed',
       bottleneck,
     };
   }
@@ -661,7 +1244,7 @@ export function deriveCapacityFromScenarios(
     (maxP95Ms === undefined || r.p95Ms <= maxP95Ms);
 
   // 2. Alert Ingestion (Strict thresholds: errorRate <= 1%, p95 <= 500ms)
-  const alertRecords = records.filter(r => r.scenario.includes('alert-ingestion'));
+  const alertRecords = records.filter(r => r.scenario.includes('alert-ingestion') || r.scenario.includes('mega-journey'));
   const validAlertRecords = alertRecords.filter(r => isScenarioPassing(r, 0.01, 500));
   const maxSustainedAlertRps =
     validAlertRecords.length > 0 ? Math.max(...validAlertRecords.map(r => r.rps)) : 0;
@@ -669,6 +1252,9 @@ export function deriveCapacityFromScenarios(
   const validBurstRecords = alertRecords.filter(r => isScenarioPassing(r, 0.05, 1500));
   const maxBurstAlertRps =
     validBurstRecords.length > 0 ? Math.max(...validBurstRecords.map(r => r.rps)) : 0;
+
+  const firstBrokenAlertRecord = alertRecords.find(r => !isScenarioPassing(r, 0.01, 500));
+  const breakingPointAlertRps = firstBrokenAlertRecord ? Math.round(firstBrokenAlertRecord.rps) : 0;
 
   // 3. Notifications (Strict thresholds: errorRate <= 1%)
   const notifRecords = records.filter(r => r.scenario.includes('notifications'));
@@ -684,7 +1270,7 @@ export function deriveCapacityFromScenarios(
 
   // 5. Concurrent users (VUs) (Strict thresholds: p95 <= 1000ms, errorRate <= 1%)
   const levelToVUs: Record<string, number> = { L0: 5, L1: 25, L2: 100, L3: 300, L4: 1000 };
-  const lifecycleRecords = records.filter(r => r.scenario.includes('incident-lifecycle'));
+  const lifecycleRecords = records.filter(r => r.scenario.includes('incident-lifecycle') || r.scenario.includes('user-workload'));
   const validLifecycleRecords = lifecycleRecords.filter(r => isScenarioPassing(r, 0.01, 1000));
   const maxVUs =
     validLifecycleRecords.length > 0
@@ -705,6 +1291,27 @@ export function deriveCapacityFromScenarios(
   const maxFanoutRps =
     validFanoutRecords.length > 0 ? Math.max(...validFanoutRecords.map(r => r.rps)) : 0;
 
+  // Standard test hardware profile: 10 CPU cores, 16 GB RAM
+  const cpuCores = 10;
+  const alertsPerCore = Math.round(maxSustainedAlertRps / cpuCores);
+  const notificationsPerCore = Math.round((maxNotifRps * 60) / cpuCores);
+  const usersPerCore = Math.round(maxVUs / cpuCores);
+  const dbConnectionsPer100Rps =
+    maxSustainedAlertRps > 0
+      ? (Math.min(100, Math.max(5, (100 / maxSustainedAlertRps) * 8))).toFixed(1)
+      : 'N/A';
+
+  let deploymentRecommendation = 'General evaluation';
+  if (maxSustainedAlertRps < 200) {
+    deploymentRecommendation = 'Small scale / single-team setups (< 200 RPS). Simple, lowest overhead.';
+  } else if (maxSustainedAlertRps < 800) {
+    deploymentRecommendation = 'Medium scale production (200-800 RPS). Worker role isolation protects critical paging.';
+  } else if (maxSustainedAlertRps < 2000) {
+    deploymentRecommendation = 'Large enterprise production (800-2,000 RPS). PgBouncer transaction pooling eliminates connection ceiling.';
+  } else {
+    deploymentRecommendation = 'Enterprise HA multi-cluster (2,000+ RPS). Multi-replica redundancy and auto-scaling.';
+  }
+
   return {
     sustainedAlertRps:
       maxSustainedAlertRps > 0
@@ -718,6 +1325,12 @@ export function deriveCapacityFromScenarios(
         : alertRecords.length > 0
           ? 'No certified sustainable capacity'
           : 'Measured on run',
+    breakingPointRps:
+      breakingPointAlertRps > 0
+        ? `${breakingPointAlertRps} RPS`
+        : broken
+          ? `SLO breached at ${broken.loadLevel}`
+          : 'Exceeds tested upper bound',
     notificationRate:
       maxNotifRps > 0
         ? `~${Math.round(maxNotifRps * 60)} / min`
@@ -748,6 +1361,11 @@ export function deriveCapacityFromScenarios(
         : fanoutRecords.length > 0
           ? 'No certified sustainable capacity'
           : 'Measured on run',
+    alertsPerCore,
+    notificationsPerCore,
+    usersPerCore,
+    dbConnectionsPer100Rps,
+    deploymentRecommendation,
     bottleneck,
   };
 }
@@ -762,19 +1380,46 @@ export function generateCertificationMarkdownReport(
     '',
     '## 1. Executive Capacity & Sizing Envelope',
     '',
-    '| Deployment Topology | Sustainable Alert Ingestion | Burst Alert Ingestion | Notification Dispatch | Escalation Processing | Concurrent Users | SSE Realtime Streams | Status Page Fanout | Primary Bottleneck at Saturation | Status |',
-    '| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- | :---: |',
+    '| Deployment Topology | Sustainable Alert Ingestion | Burst Alert Ingestion | Breaking Point | Notification Dispatch | Escalation Processing | Concurrent Users | SSE Realtime Streams | Status Page Fanout | Primary Bottleneck at Saturation | Status |',
+    '| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- | :---: |',
   ];
 
   for (const r of results) {
     const prof = deriveCapacityFromScenarios(r.topologyId, r.scenarios, r.verification);
     const certBadge = r.certified ? '**CERTIFIED**' : '**FAILED**';
     lines.push(
-      `| \`${r.topologyId}\` | ${prof.sustainedAlertRps} | ${prof.burstAlertRps} | ${prof.notificationRate} | ${prof.escalationRate} | ${prof.concurrentUsers} | ${prof.sseStreams} | ${prof.statusFanout} | ${prof.bottleneck} | ${certBadge} |`
+      `| \`${r.topologyId}\` | ${prof.sustainedAlertRps} | ${prof.burstAlertRps} | ${prof.breakingPointRps} | ${prof.notificationRate} | ${prof.escalationRate} | ${prof.concurrentUsers} | ${prof.sseStreams} | ${prof.statusFanout} | ${prof.bottleneck} | ${certBadge} |`
     );
   }
 
-  lines.push('', '## 2. Benchmark Measured Telemetry Summary', '');
+  lines.push('', '## 2. Resource-Efficiency Comparison Matrix', '');
+  lines.push(
+    '| Deployment Topology | Alerts / sec / Core | Notifications / sec / Core | Users / Core | DB Conns / 100 RPS | Deployment Recommendation |'
+  );
+  lines.push('| :--- | :---: | :---: | :---: | :---: | :--- |');
+
+  for (const r of results) {
+    const prof = deriveCapacityFromScenarios(r.topologyId, r.scenarios, r.verification);
+    lines.push(
+      `| \`${r.topologyId}\` | ${prof.alertsPerCore} | ${prof.notificationsPerCore} | ${prof.usersPerCore} | ${prof.dbConnectionsPer100Rps} | ${prof.deploymentRecommendation} |`
+    );
+  }
+
+  lines.push('', '## 3. Evidence-Based Deployment Sizing Guidance', '');
+  lines.push('- **Small Setup (< 200 Alert RPS, < 100 VUs)**:');
+  lines.push('  - *Recommended*: **Compose Integrated** or **Helm/Swarm Integrated**.');
+  lines.push('  - *Rationale*: Single container process minimizes memory footprint and operational complexity while comfortably supporting normal on-call workloads.');
+  lines.push('- **Medium Setup (200 – 800 Alert RPS, 100 – 500 VUs)**:');
+  lines.push('  - *Recommended*: **Compose Split** or **Swarm/Helm Split**.');
+  lines.push('  - *Rationale*: Dedicated worker roles ensure that high-volume bulk or general jobs cannot starve critical paging and escalation notifications.');
+  lines.push('- **Large Setup (800 – 2,000 Alert RPS, 500 – 2,000 VUs)**:');
+  lines.push('  - *Recommended*: **Compose Split + PgBouncer** or **Helm/Kustomize Split + PgBouncer**.');
+  lines.push('  - *Rationale*: PgBouncer transaction-mode pooling decouples 200+ Prisma client connections from the PostgreSQL engine connection limit.');
+  lines.push('- **Enterprise HA Setup (2,000+ Alert RPS, Multi-AZ / High Availability)**:');
+  lines.push('  - *Recommended*: **Kind/Kubernetes (or Swarm HA) Split + PgBouncer + External HA PostgreSQL**.');
+  lines.push('  - *Rationale*: Zero single-point-of-failure topology with PodDisruptionBudgets, automated rolling rollouts, horizontal replica scaling, and outbox failure isolation.');
+
+  lines.push('', '## 4. Benchmark Measured Telemetry Summary', '');
   lines.push(
     '| Phase | Topology | Scenarios | Peak RPS | p95 (ms) | p99 (ms) | Peak PG Conns | Max Queue Age (ms) | Invariants | Status |'
   );
@@ -791,7 +1436,7 @@ export function generateCertificationMarkdownReport(
     );
   }
 
-  lines.push('', '## 3. Standardized Resource Profiles', '');
+  lines.push('', '## 5. Standardized Resource Profiles', '');
   lines.push('- **Host Specifications**: 10-core CPU, 16 GB RAM, Darwin arm64 / Linux x86_64, Docker Engine 28.x, Kind v0.31.0.');
   lines.push('- **Docker Compose**:');
   lines.push('  - Integrated: 1 container (web+worker), max DB pool = 40, PostgreSQL max_connections = 100.');
@@ -800,7 +1445,7 @@ export function generateCertificationMarkdownReport(
   lines.push('- **Docker Swarm HA**: 2x Web, 2x Critical Worker, 2x General Worker, 2x Bulk Worker, 2x Status Projector, 2x PgBouncer.');
   lines.push('- **Kind Kubernetes (4-Node)**: 1 Control Plane + 3 Worker Nodes, PodDisruptionBudgets (`minAvailable: 1`), isolated worker CPU/RAM quotas.');
 
-  lines.push('', '## 4. Correctness Invariant Certification', '');
+  lines.push('', '## 6. Correctness Invariant Certification', '');
   lines.push(
     '| Topology | Zero Duplicate Open Incidents | Zero Lost Accepted Alerts | Zero False Escalations | Zero Corrupted States | Zero Critical Starvation |'
   );
