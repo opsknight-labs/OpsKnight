@@ -1,7 +1,11 @@
 {
-  "schemaVersion": 1,
-  "generatedAt": "2026-09-28T12:32:22.050Z",
-  "sourceRevision": "4dd8b282cf96a766472c2a56b9bb7286de925cd2",
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-28T13:06:34.651Z",
+  "sourceRevision": "3f63aa16031bec6d4bac45e54cd2135ad5ed3aad",
+  "documentationRevision": "3f63aa16031bec6d4bac45e54cd2135ad5ed3aad",
+  "productSourceRevision": "c361c6277983d511d906aaf6aee723a4891dcca0",
+  "runtimeSourceRevision": "c361c6277983d511d906aaf6aee723a4891dcca0",
+  "runtimeImageDigest": "opsknight-docs-v2@sha256:4666672ba9ee0af4528d3c4820da282cb0c4cb4a3b5209833c5144eb2560a81e",
   "releaseState": "upcoming",
   "checks": {
     "frontmatter": "passed",
@@ -57,9 +61,9 @@
       "generated/docs-evidence/current/status-pages/list.png"
     ],
     "runtime": {
-      "requestedImage": "opsknight-docs-v2@sha256:20f8101b18767c405e830ee2cf5bc1b131b75d8a48a5d78e1a1f7550619d60e2",
-      "digest": "opsknight-docs-v2@sha256:20f8101b18767c405e830ee2cf5bc1b131b75d8a48a5d78e1a1f7550619d60e2",
-      "sourceRevision": "2bc21b6126c24d39b37fce590d6da419859f843a"
+      "requestedImage": "opsknight-docs-v2@sha256:4666672ba9ee0af4528d3c4820da282cb0c4cb4a3b5209833c5144eb2560a81e",
+      "digest": "opsknight-docs-v2@sha256:4666672ba9ee0af4528d3c4820da282cb0c4cb4a3b5209833c5144eb2560a81e",
+      "sourceRevision": "c361c6277983d511d906aaf6aee723a4891dcca0"
     }
   }
 }
