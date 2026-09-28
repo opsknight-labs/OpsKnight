@@ -200,6 +200,8 @@ API promises.
 
 - Total classified nodes: ${graph.summary.total}
 - Unclassified nodes: ${graph.summary.unclassified}
+- Evidence-backed generated claims: ${graph.summary.claims}
+- Unsupported generated claims: ${graph.summary.unsupportedClaims}
 
 ${Object.entries(graph.summary.byKind).map(([kind, count]) => `- \`${kind}\`: ${count}`).join('\n')}
 

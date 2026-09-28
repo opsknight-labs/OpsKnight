@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-09-27
+  verified_at: 2026-09-28
   evidence:
     - src/
     - deploy/

@@ -7,6 +7,7 @@ import YAML from 'yaml';
 const root = resolve(import.meta.dirname, '../..');
 const run = (file, args) => execFileSync(file, args, { cwd: root, stdio: 'inherit' });
 const fullRuntime = !process.argv.includes('--static');
+const externalRuntime = process.argv.includes('--external-runtime');
 const composeArgs = ['compose', '--project-name', 'opsknight-docs-v2-capture', '-f', 'tests/docs/environment/compose.yaml'];
 
 run('node', ['scripts/docs/discover-capabilities.mjs', '--output', 'generated/docs-discovery/current.json']);
@@ -19,16 +20,16 @@ run('node', ['scripts/docs/check-evidence.mjs']);
 run('node', ['scripts/docs/check-feature-graph.mjs']);
 run('node', ['--test', ...readdirSync(join(root, 'tests/docs/tooling')).filter(name => name.endsWith('.test.mjs')).map(name => `tests/docs/tooling/${name}`)]);
 if (fullRuntime) {
-  run('docker', [...composeArgs, 'down', '--volumes', '--remove-orphans']);
+  if (!externalRuntime) run('docker', [...composeArgs, 'down', '--volumes', '--remove-orphans']);
   try {
     execFileSync('npx', ['playwright', 'test', '-c', 'playwright.docs.config.ts'], {
       cwd: root,
       stdio: 'inherit',
-      env: { ...process.env, CI: '1' },
+      env: { ...process.env, CI: '1', ...(externalRuntime ? { DOCS_EXTERNAL_RUNTIME: 'true' } : {}) },
     });
     run('node', ['scripts/docs/check-evidence.mjs']);
   } finally {
-    run('docker', [...composeArgs, 'down', '--volumes', '--remove-orphans']);
+    if (!externalRuntime) run('docker', [...composeArgs, 'down', '--volumes', '--remove-orphans']);
   }
 }
 
@@ -43,6 +44,10 @@ const capabilities = Object.values(catalog.capabilities);
 const evidence = walk(join(root, 'generated/docs-evidence/current')).filter(path => extname(path) === '.png');
 const journeys = walk(join(root, 'tests/docs/journeys')).filter(path => path.endsWith('.spec.ts'));
 const pages = walk(join(root, 'docs/v2.0.0')).filter(path => path.endsWith('.md'));
+const runtimeImage = fullRuntime ? process.env.DOCS_OPSKNIGHT_IMAGE : undefined;
+const runtimeInspection = runtimeImage ? JSON.parse(execFileSync(
+  'docker', ['image', 'inspect', runtimeImage], { cwd: root, encoding: 'utf8' }
+))[0] : undefined;
 
 const report = {
   schemaVersion: 1,
@@ -71,6 +76,9 @@ const report = {
     runtimeRoles: discovery.deployment.runtimeRoles.length,
     featureNodes: discovery.featureGraph.nodes.length,
     unclassifiedFeatures: discovery.featureGraph.unclassified.length,
+    evidenceBackedClaims: discovery.featureGraph.summary.claims,
+    unsupportedClaims: discovery.featureGraph.summary.unsupportedClaims,
+    missingEvidence: discovery.featureGraph.nodes.filter(item => item.sources.length === 0).length,
     supportedPublicApis: discovery.featureGraph.nodes.filter(item => item.kind === 'api' && item.classification === 'PUBLIC_API').length,
     notificationProviders: discovery.notificationProviders.length,
     publicLimits: discovery.limits.length,
@@ -81,6 +89,13 @@ const report = {
     discovery: 'generated/docs-discovery/current.json',
     capabilityCatalog: 'docs/v2.0.0/capabilities.yaml',
     evidence: evidence.map(relative),
+    ...(runtimeInspection ? {
+      runtime: {
+        requestedImage: runtimeImage,
+        digest: runtimeInspection.RepoDigests?.find(value => value.includes('@sha256:')),
+        sourceRevision: runtimeInspection.Config?.Labels?.['org.opencontainers.image.revision'],
+      },
+    } : {}),
   },
 };
 

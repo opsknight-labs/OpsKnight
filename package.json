@@ -76,6 +76,7 @@
     "docs:links": "node scripts/check-docs-links.cjs",
     "docs:capabilities": "node scripts/check-docs-capabilities.cjs",
     "docs:certify": "node scripts/docs/certify.mjs",
+    "docs:certify:external": "node scripts/docs/certify.mjs --external-runtime",
     "docs:certify:static": "node scripts/docs/certify.mjs --static",
     "docs:lint": "npm run docs:frontmatter && npm run docs:links && npm run docs:capabilities && npm run docs:evidence",
     "load:seed": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/seed.ts",

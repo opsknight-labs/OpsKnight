@@ -5,11 +5,13 @@ type: reference
 product_area: api
 audience: [developer, operator, administrator]
 verification:
-  level: source
+  level: runtime
   verified_at: 2026-09-27
   evidence:
     - src/lib/api-response.ts
     - src/lib/errors/registry.ts
+    - tests/docs/journeys/zz-api-contracts.spec.ts
+    - generated/docs-certification/current.json
 ---
 
 # API responses and errors

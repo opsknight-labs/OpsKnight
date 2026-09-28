@@ -6,7 +6,7 @@ product_area: platform
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-09-27
+  verified_at: 2026-09-28
   evidence:
     - generated/docs-discovery/current.json
     - generated/docs-contracts/current.json
@@ -21,6 +21,8 @@ API promises.
 
 - Total classified nodes: 1094
 - Unclassified nodes: 0
+- Evidence-backed generated claims: 1539
+- Unsupported generated claims: 0
 
 - `api`: 219
 - `api-scope`: 7

@@ -1,19 +1,20 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-28T03:22:37.590Z",
-  "sourceRevision": "38e9c140e07b8a9c32d9b8496931c5aee30876ff",
+  "generatedAt": "2026-09-28T04:38:38.597Z",
+  "sourceRevision": "bb3f0aff37ff2558ce46eba3e124d0c6384d7d0d",
   "releaseState": "upcoming",
   "checks": {
     "frontmatter": "passed",
     "links": "passed",
     "capabilityCoverage": "passed",
+    "featureClassification": "passed",
     "evidenceContract": "passed",
     "toolingTests": "passed",
     "runtimeJourneys": "passed",
     "websiteBuild": "release-gated"
   },
   "counts": {
-    "documentationPages": 112,
+    "documentationPages": 117,
     "capabilitiesDiscovered": 22,
     "capabilitiesDocumented": 22,
     "uiRoutes": 101,
@@ -22,7 +23,12 @@
     "integrationCandidates": 28,
     "databaseModels": 120,
     "runtimeRoles": 8,
-    "journeyFiles": 2,
+    "featureNodes": 1094,
+    "unclassifiedFeatures": 0,
+    "supportedPublicApis": 40,
+    "notificationProviders": 9,
+    "publicLimits": 226,
+    "journeyFiles": 3,
     "evidenceScreenshots": 9
   },
   "artifacts": {
@@ -38,6 +44,11 @@
       "generated/docs-evidence/current/notifications/settings.png",
       "generated/docs-evidence/current/on-call/schedules.png",
       "generated/docs-evidence/current/status-pages/list.png"
-    ]
+    ],
+    "runtime": {
+      "requestedImage": "opsknight-docs-v2@sha256:230e01c8cef0d3f9da3ddd4f5ca038c624087c2c4ade1fee2cbdf3e7f21a8459",
+      "digest": "opsknight-docs-v2@sha256:230e01c8cef0d3f9da3ddd4f5ca038c624087c2c4ade1fee2cbdf3e7f21a8459",
+      "sourceRevision": "bb3f0aff37ff2558ce46eba3e124d0c6384d7d0d"
+    }
   }
 }

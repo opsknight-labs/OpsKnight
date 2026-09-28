@@ -5,12 +5,14 @@ type: reference
 product_area: incidents
 audience: [developer, operator, administrator]
 verification:
-  level: source
+  level: runtime
   verified_at: 2026-09-27
   evidence:
     - src/app/api/incidents/route.ts
     - src/app/api/incidents/[id]/route.ts
     - src/lib/validation.ts
+    - tests/docs/journeys/zz-api-contracts.spec.ts
+    - generated/docs-certification/current.json
 ---
 
 # Incidents API
@@ -67,4 +69,3 @@ Set `assigneeId` to `null` to unassign. Updates also support
 
 Every success response includes both the canonical `data` object and legacy
 top-level aliases. New clients should read `data`.
-
