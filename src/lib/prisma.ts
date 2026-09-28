@@ -70,10 +70,6 @@ const prismaClientSingleton = () => {
       })
     );
   });
-  client.$queryRaw = client.$queryRaw.bind(client);
-  client.$executeRaw = client.$executeRaw.bind(client);
-  client.$queryRawUnsafe = client.$queryRawUnsafe.bind(client);
-  client.$executeRawUnsafe = client.$executeRawUnsafe.bind(client);
   return client;
 };
 

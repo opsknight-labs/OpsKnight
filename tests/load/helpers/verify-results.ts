@@ -39,8 +39,10 @@ export interface CorrectnessInvariantReport {
     };
     providerIdempotencyCheck: {
       passed: boolean;
+      emulatorAvailable: boolean;
+      emulatorError?: string | null;
       duplicateDeliveryKeysByProvider: Record<string, number>;
-      totalDuplicateDeliveries?: number;
+      totalDuplicateDeliveries: number;
     };
   };
   totals: {
@@ -58,6 +60,7 @@ export async function verifyLoadCertificationResults(options?: {
   controlBaseUrl?: string;
   outputPath?: string;
   waitForDrainMs?: number;
+  requireEmulator?: boolean;
 }): Promise<CorrectnessInvariantReport> {
   const topology = options?.topology ?? process.env.LOAD_TOPOLOGY ?? 'manual';
   const maxCriticalPendingAgeMs = options?.maxCriticalPendingAgeMs ?? 30_000;
@@ -219,7 +222,11 @@ export async function verifyLoadCertificationResults(options?: {
       : 0;
 
     // 6. Provider emulator duplicate idempotency check
+    const requireEmulator =
+      options?.requireEmulator ?? (process.env.LOAD_REQUIRE_EMULATOR !== 'false');
     const duplicateDeliveryKeysByProvider: Record<string, number> = {};
+    let emulatorAvailable = false;
+    let emulatorError: string | null = null;
     try {
       const res = await fetch(`${controlBaseUrl.replace(/\/$/, '')}/metrics`, {
         signal: AbortSignal.timeout(3_000),
@@ -232,14 +239,19 @@ export async function verifyLoadCertificationResults(options?: {
           >;
         };
         if (payload.providers) {
+          emulatorAvailable = true;
           for (const [providerName, stats] of Object.entries(payload.providers)) {
             duplicateDeliveryKeysByProvider[providerName] =
               stats.duplicateDeliveries ?? stats.duplicateRequests ?? 0;
           }
+        } else {
+          emulatorError = 'No providers field in emulator metrics response';
         }
+      } else {
+        emulatorError = `Emulator metrics returned HTTP ${res.status}`;
       }
-    } catch {
-      // Emulator may not be running in standalone DB checks
+    } catch (err) {
+      emulatorError = err instanceof Error ? err.message : String(err);
     }
 
     const [
@@ -273,7 +285,10 @@ export async function verifyLoadCertificationResults(options?: {
       (sum, count) => sum + count,
       0
     );
-    const providerIdempotencyPassed = totalDuplicateDeliveries === 0;
+    // Explicit invariant: emulator unavailable != PASS. Certification requires emulator telemetry availability AND zero duplicate deliveries.
+    const providerIdempotencyPassed = requireEmulator
+      ? (emulatorAvailable && totalDuplicateDeliveries === 0)
+      : (totalDuplicateDeliveries === 0);
 
     const report: CorrectnessInvariantReport = {
       passed:
@@ -317,6 +332,8 @@ export async function verifyLoadCertificationResults(options?: {
         },
         providerIdempotencyCheck: {
           passed: providerIdempotencyPassed,
+          emulatorAvailable,
+          emulatorError: emulatorError ?? undefined,
           duplicateDeliveryKeysByProvider,
           totalDuplicateDeliveries,
         },

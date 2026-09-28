@@ -409,11 +409,7 @@ export async function runLoadSeed(options?: {
     const existingSmtp = await prisma.notificationProvider.findUnique({
       where: { provider: 'smtp' },
     });
-    if (
-      existingSmtp &&
-      !existingSmtp.id.startsWith('lt-') &&
-      process.env.OPSKNIGHT_ALLOW_LOAD_DB_OVERWRITE !== 'true'
-    ) {
+    if (existingSmtp && !existingSmtp.id.startsWith('lt-')) {
       throw new Error(
         `Refusing to overwrite existing non-test SMTP provider (${existingSmtp.id}). Dedicated test database required.`
       );
@@ -433,11 +429,7 @@ export async function runLoadSeed(options?: {
     const existingPush = await prisma.notificationProvider.findUnique({
       where: { provider: 'web-push' },
     });
-    if (
-      existingPush &&
-      !existingPush.id.startsWith('lt-') &&
-      process.env.OPSKNIGHT_ALLOW_LOAD_DB_OVERWRITE !== 'true'
-    ) {
+    if (existingPush && !existingPush.id.startsWith('lt-')) {
       throw new Error(
         `Refusing to overwrite existing non-test web-push provider (${existingPush.id}). Dedicated test database required.`
       );

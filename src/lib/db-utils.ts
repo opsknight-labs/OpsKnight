@@ -16,7 +16,7 @@ const TRANSACTION_MAX_WAIT_MS = Number(
 );
 
 // Exponential backoff delays for retries (ms)
-const RETRY_DELAYS = [20, 50, 100, 200, 400];
+const RETRY_DELAYS = [10, 25, 50, 100, 200];
 
 function isRetryableTransactionError(error: unknown): boolean {
   const code =
@@ -24,16 +24,17 @@ function isRetryableTransactionError(error: unknown): boolean {
       ? String(error.code)
       : null;
   if (error instanceof Prisma.PrismaClientKnownRequestError || code !== null) {
+    // 40P01 = PostgreSQL deadlock detected
+    // 40001 = PostgreSQL serialization failure
     // P2034 = Transaction failed due to write conflict or deadlock
     // P2002 = Unique constraint violation (can be retryable in race conditions)
     // P2028 = Transaction API error
-    // P2024 = Connection pool timeout
     return (
+      code === '40P01' ||
+      code === '40001' ||
       code === 'P2034' ||
       code === 'P2002' ||
-      code === 'P2028' ||
-      code === 'P2024' ||
-      (code !== null && ['P1001', 'P1002', 'P1008', 'P1017'].includes(code))
+      code === 'P2028'
     );
   }
   const message = error instanceof Error ? error.message : '';
@@ -42,10 +43,7 @@ function isRetryableTransactionError(error: unknown): boolean {
     message.includes('deadlock') ||
     message.includes('write conflict') ||
     message.includes('could not serialize') ||
-    message.includes('concurrent update') ||
-    message.includes('connection pool') ||
-    message.includes('timed out') ||
-    message.includes('timeout')
+    message.includes('concurrent update')
   );
 }
 
