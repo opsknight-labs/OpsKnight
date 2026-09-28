@@ -49,11 +49,17 @@ const runtimeImage = fullRuntime ? process.env.DOCS_OPSKNIGHT_IMAGE : undefined;
 const runtimeInspection = runtimeImage ? JSON.parse(execFileSync(
   'docker', ['image', 'inspect', runtimeImage], { cwd: root, encoding: 'utf8' }
 ))[0] : undefined;
+const documentationRevision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+const runtimeSourceRevision = runtimeInspection?.Config?.Labels?.['org.opencontainers.image.revision'];
 
 const report = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   generatedAt: new Date().toISOString(),
-  sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+  sourceRevision: documentationRevision,
+  documentationRevision,
+  productSourceRevision: runtimeSourceRevision || documentationRevision,
+  runtimeSourceRevision: runtimeSourceRevision || null,
+  runtimeImageDigest: runtimeInspection?.RepoDigests?.find(value => value.includes('@sha256:')) || null,
   releaseState: 'upcoming',
   checks: {
     frontmatter: 'passed',

@@ -11,7 +11,7 @@ test.describe.serial('incident lifecycle documentation journey', () => {
 
     await page.getByRole('link', { name: DOCS_FIXTURES.incident, exact: true }).first().click();
     await expect(page).toHaveURL(/\/incidents\/[^/]+$/);
-    await expect(page.getByText(DOCS_FIXTURES.incident).first()).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: DOCS_FIXTURES.incident, exact: true })).toBeVisible();
     await captureEvidence(page, testInfo, 'incidents', 'detail');
 
     const acknowledge = page.getByRole('button', { name: 'Acknowledge', exact: true }).first();

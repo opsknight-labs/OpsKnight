@@ -12,6 +12,9 @@ verification:
 
 # Connect Slack using OAuth
 
+Slack OAuth connects an OpsKnight workspace to a Slack workspace without asking
+an administrator to copy a bot token into OpsKnight.
+
 ## Before you begin
 
 - Use an OpsKnight administrator account.
