@@ -20,6 +20,11 @@ Adaptive Card actions enter through the Bot messaging endpoint. OpsKnight
 validates the Bot token, tenant, trusted service URL, installation, destination,
 action schema, identity, and product authorization before applying a command.
 
+The normal incident card gives responders the incident status, service,
+urgency, assignee, priority, description, and creation time in one view.
+
+![Normal OpsKnight incident Adaptive Card in Microsoft Teams showing the incident status, service, urgency, assignee, and priority](/docs/v2.0.0/assets/teams-incident-card.png)
+
 1. Open the incident Adaptive Card.
 2. Choose an action available to your responder role.
 3. Complete identity linking if prompted.

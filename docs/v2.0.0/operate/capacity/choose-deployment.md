@@ -17,14 +17,14 @@ Do not select Split mode from an undocumented requests-per-second threshold.
 Select it when independent scaling, failure isolation, or notification-lane
 protection is an operational requirement.
 
-| Topology | Best fit | HA | Independent scaling | PgBouncer | Capacity status |
+| Topology | Best fit | Multi-node HA support | Independent scaling | PgBouncer support | Capacity status |
 |---|---|---:|---:|---:|---|
 | Integrated Compose | Simplest single-host operation | No | No | No | Not certified |
 | Split Compose | Single-host workload isolation | No | Yes | Optional | Not certified |
-| Split + PgBouncer | Isolation plus web connection pooling | No | Yes | Yes | Not certified |
-| Swarm HA | Docker-native multi-node operation | Yes | Yes | Yes | Not certified |
-| Kubernetes Helm | Packaged, schema-validated Kubernetes | Yes | Yes | Yes | Not certified |
-| Kubernetes Kustomize | GitOps and environment overlays | Yes | Yes | Yes | Not certified |
+| Split + PgBouncer | Isolation plus web connection pooling | No | Yes | Enabled | Not certified |
+| Swarm HA | Docker-native multi-node operation | Yes | Yes | Optional in Split | Not certified |
+| Kubernetes Helm | Packaged, schema-validated Kubernetes | Supported when configured | Yes | Optional in Split | Not certified |
+| Kubernetes Kustomize | GitOps and environment overlays | Supported when configured | Yes | Optional in Split | Not certified |
 
 ## Decision path
 
@@ -42,4 +42,3 @@ Integrated mode runs the web application and background work together. Split
 mode separates web, scheduler, general, critical, bulk, and status-projector
 roles. This allows a bulk backlog or provider slowdown to be isolated from
 critical paging and lets each constraint scale independently.
-

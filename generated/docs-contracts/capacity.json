@@ -1,10 +1,18 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-28T13:50:11.468Z",
+  "generatedAt": "2026-09-28T12:20:49.770Z",
   "source": {
     "path": "artifacts/load-certification/certification-summary.json",
     "pullRequest": 777,
-    "sourceRevision": "e2cd6e280"
+    "artifactGeneratedAt": "2026-09-28T12:20:49.770Z",
+    "sourceRevision": "52d6a3c5c791e7ad9ad21cd76f11cbdf11d3176f",
+    "testHarnessRevision": "e2cd6e28092f544eea2342ebe455cac680fd157b",
+    "environment": {
+      "cpu": "10-core",
+      "memory": "16 GB",
+      "dockerEngine": "28.x",
+      "kind": "v0.31.0"
+    }
   },
   "statusDefinitions": {
     "CERTIFIED": "All required scenarios, thresholds, and correctness invariants passed for the stated profile.",
@@ -30,6 +38,23 @@
       "peakActivePgConnections": 11,
       "peakOldestPendingJobAgeMs": 161262,
       "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "compose_integrated_external_db",
+      "topologyName": "Compose: Integrated Runtime + External PostgreSQL",
+      "status": "NOT TESTED",
+      "phase": null,
+      "startedAt": null,
+      "completedAt": null,
+      "testedLoadLevels": [],
+      "scenarioCount": 0,
+      "passedScenarios": 0,
+      "measuredPeakRps": null,
+      "measuredWorstP95Ms": null,
+      "peakActivePgConnections": null,
+      "peakOldestPendingJobAgeMs": null,
+      "invariantsPassed": null,
       "certifiedCapacity": null
     },
     {
@@ -68,6 +93,23 @@
       "peakActivePgConnections": 9,
       "peakOldestPendingJobAgeMs": 199660,
       "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "compose_split_pgbouncer_external_db_ca",
+      "topologyName": "Compose: Split Runtime + PgBouncer + External PostgreSQL with CA",
+      "status": "NOT TESTED",
+      "phase": null,
+      "startedAt": null,
+      "completedAt": null,
+      "testedLoadLevels": [],
+      "scenarioCount": 0,
+      "passedScenarios": 0,
+      "measuredPeakRps": null,
+      "measuredWorstP95Ms": null,
+      "peakActivePgConnections": null,
+      "peakOldestPendingJobAgeMs": null,
+      "invariantsPassed": null,
       "certifiedCapacity": null
     },
     {
