@@ -687,7 +687,7 @@ print(response.json()["incidents"])`}
 
       {/* 5. Create API Key Modal Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="w-[calc(100%-2rem)] max-w-none max-h-[90vh] overflow-x-hidden overflow-y-auto sm:w-[calc(100%-3rem)] sm:max-w-5xl">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-none max-h-[90vh] overflow-x-hidden overflow-y-auto sm:w-[calc(100%-3rem)] sm:max-w-[calc(100vw-3rem)] lg:w-full lg:max-w-[860px] min-[1440px]:max-w-[1080px] min-[1920px]:max-w-[1180px]">
           <DialogHeader>
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
