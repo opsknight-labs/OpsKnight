@@ -5,12 +5,14 @@ type: reference
 product_area: integrations
 audience: [developer, operator, administrator]
 verification:
-  level: source
+  level: runtime
   verified_at: 2026-09-27
   evidence:
     - src/app/api/events/route.ts
     - src/lib/validation.ts
     - src/lib/events.ts
+    - tests/docs/journeys/zz-api-contracts.spec.ts
+    - generated/docs-certification/current.json
 ---
 
 # Events API v2
@@ -53,4 +55,3 @@ A successful response uses the standard success envelope and contains
 `data.status` equal to `success` plus `data.result`. Keep the returned
 `requestId` for support correlation. Acknowledge and resolve actions must use a
 `dedup_key` previously sent by the same integration/service context.
-

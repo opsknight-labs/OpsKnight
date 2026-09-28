@@ -5,12 +5,14 @@ type: reference
 product_area: api
 audience: [developer, operator, administrator]
 verification:
-  level: source
+  level: runtime
   verified_at: 2026-09-27
   evidence:
     - src/lib/api-auth.ts
     - src/lib/api-keys.ts
     - prisma/schema.prisma
+    - tests/docs/journeys/zz-api-contracts.spec.ts
+    - generated/docs-certification/current.json
 ---
 
 # API authentication
@@ -45,4 +47,3 @@ Authorization: Token token=REDACTED_ROUTING_KEY
 That form is valid only for an enabled `EVENTS_API_V2` integration and binds
 events to the integration's service. Provider webhook keys are not accepted by
 the generic events endpoint.
-

@@ -8,6 +8,7 @@ const graph = discovery.featureGraph;
 if (!graph || graph.schemaVersion !== 1) throw new Error('Feature graph is missing or unsupported.');
 if (graph.unclassified.length > 0) throw new Error(`Unclassified feature nodes:\n${graph.unclassified.join('\n')}`);
 if (graph.duplicateIds.length > 0) throw new Error(`Duplicate feature node IDs:\n${graph.duplicateIds.join('\n')}`);
+if (graph.unsupportedClaims.length > 0) throw new Error(`Unsupported generated claims:\n${graph.unsupportedClaims.join('\n')}`);
 
 const requiredKinds = [
   'api', 'ui', 'model', 'enum', 'configuration', 'integration', 'notification-provider',
@@ -22,5 +23,13 @@ for (const node of supportedApis) {
   if (!node.contract.methods?.length) throw new Error(`Public API has no discovered methods: ${node.name}`);
   if (!node.sources.length) throw new Error(`Public API has no provenance: ${node.name}`);
 }
+for (const node of graph.nodes) {
+  if (!node.claims?.length) throw new Error(`Feature node has no claim provenance: ${node.id}`);
+  for (const claim of node.claims) {
+    if (!claim.text || !claim.verification || !claim.evidence?.length) {
+      throw new Error(`Incomplete claim provenance: ${claim.id}`);
+    }
+  }
+}
 
-console.log(`Feature graph contract passed: ${graph.nodes.length} classified nodes, 0 unclassified.`);
+console.log(`Feature graph contract passed: ${graph.nodes.length} classified nodes and ${graph.summary.claims} evidence-backed claims.`);

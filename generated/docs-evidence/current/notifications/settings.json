@@ -1,10 +1,10 @@
 {
   "release": "current",
-  "sourceRevision": "a41b97a90c4fa0ecae7ba2295f96449e9a0bea4c",
+  "sourceRevision": "bb3f0aff37ff2558ce46eba3e124d0c6384d7d0d",
   "runtime": {
-    "requestedImage": "ghcr.io/opsknight-labs/opsknight-test@sha256:4364470f96e793e24a3c85cad62ed429cfe179f23aa5eb8a26ddcc864e2303dd",
-    "digest": "ghcr.io/opsknight-labs/opsknight-test@sha256:4364470f96e793e24a3c85cad62ed429cfe179f23aa5eb8a26ddcc864e2303dd",
-    "sourceRevision": "4359915fb530fe2c8dc89c89a58877d90c44cd2d"
+    "requestedImage": "opsknight-docs-v2@sha256:230e01c8cef0d3f9da3ddd4f5ca038c624087c2c4ade1fee2cbdf3e7f21a8459",
+    "digest": "opsknight-docs-v2@sha256:230e01c8cef0d3f9da3ddd4f5ca038c624087c2c4ade1fee2cbdf3e7f21a8459",
+    "sourceRevision": "bb3f0aff37ff2558ce46eba3e124d0c6384d7d0d"
   },
   "route": "/settings/notifications",
   "journey": "notifications",
@@ -13,5 +13,5 @@
     "width": 1440,
     "height": 900
   },
-  "capturedAt": "2026-09-28T03:53:34.344Z"
+  "capturedAt": "2026-09-28T04:38:35.830Z"
 }

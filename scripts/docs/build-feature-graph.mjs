@@ -32,15 +32,38 @@ function uiClassification(route) {
 
 export function buildFeatureGraph(discovery) {
   const nodes = [];
-  const add = (kind, id, classification, owner, sources, contract = {}) => nodes.push({
-    id: `${kind}:${id}`,
+  const add = (kind, id, classification, owner, sources, contract = {}) => {
+    const nodeId = `${kind}:${id}`;
+    const evidence = [...new Set(sources)].sort();
+    const claims = [{
+      id: `${nodeId}:classification`,
+      text: `${id} is classified as ${classification} and owned by ${owner}.`,
+      evidence,
+      verification: 'source',
+    }];
+    if (kind === 'api' && contract.methods?.length) claims.push({
+      id: `${nodeId}:methods`,
+      text: `${id} implements ${contract.methods.join(', ')}.`,
+      evidence,
+      verification: 'source',
+    });
+    if (kind === 'limit') claims.push({
+      id: `${nodeId}:value`,
+      text: `${contract.name} has the discovered numeric value ${contract.value}.`,
+      evidence,
+      verification: 'source',
+    });
+    nodes.push({
+    id: nodeId,
     kind,
     name: id,
     owner,
     classification,
-    sources: [...new Set(sources)].sort(),
+    sources: evidence,
     contract,
+    claims,
   });
+  };
 
   for (const route of discovery.apiRoutes) add('api', route.route, apiClassification(route.route), ownerFor(route.route), [route.file], route);
   for (const route of discovery.uiRoutes) add('ui', route.route, uiClassification(route.route), ownerFor(route.route), [route.file], route);
@@ -61,5 +84,21 @@ export function buildFeatureGraph(discovery) {
   const unclassified = nodes.filter(node => !node.classification || !node.owner || node.sources.length === 0).map(node => node.id);
   const byKind = Object.fromEntries([...new Set(nodes.map(node => node.kind))].sort().map(kind => [kind, nodes.filter(node => node.kind === kind).length]));
   const byClassification = Object.fromEntries([...new Set(nodes.map(node => node.classification))].sort().map(value => [value, nodes.filter(node => node.classification === value).length]));
-  return { schemaVersion: 1, nodes, summary: { total: nodes.length, byKind, byClassification, unclassified: unclassified.length }, unclassified, duplicateIds };
+  const claims = nodes.flatMap(node => node.claims);
+  const unsupportedClaims = claims.filter(claim => claim.evidence.length === 0);
+  return {
+    schemaVersion: 1,
+    nodes,
+    summary: {
+      total: nodes.length,
+      claims: claims.length,
+      unsupportedClaims: unsupportedClaims.length,
+      byKind,
+      byClassification,
+      unclassified: unclassified.length,
+    },
+    unclassified,
+    duplicateIds,
+    unsupportedClaims: unsupportedClaims.map(claim => claim.id),
+  };
 }
