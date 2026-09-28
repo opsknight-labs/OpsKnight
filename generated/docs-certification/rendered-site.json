@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-28T13:07:46.321Z",
+  "baseURL": "http://127.0.0.1:15000",
+  "version": "v2.0.0",
+  "routesChecked": 141,
+  "internalLinksChecked": 42,
+  "localImagesChecked": 13,
+  "failures": []
+}
