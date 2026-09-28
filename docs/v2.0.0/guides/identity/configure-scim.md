@@ -22,3 +22,13 @@ Verify the provider external identifier, email uniqueness, active state, and
 role-source behavior. Deprovisioning affects access but must preserve incident,
 audit, and ownership references according to product policy.
 
+Scope the provisioning application to a pilot group and use a credential held
+only by that application. Exercise filtering and pagination as well as writes;
+the provider must reconcile by the stable SCIM identifier rather than creating
+duplicates after an email change.
+
+For rotation, create and validate the replacement token before retiring the old
+one, with the overlap limited to the planned maintenance window. Review failed
+requests by HTTP status, SCIM error body, request ID, and sanitized resource ID.
+Repeated retries cannot repair uniqueness conflicts or unsupported attributes;
+correct the source mapping first.

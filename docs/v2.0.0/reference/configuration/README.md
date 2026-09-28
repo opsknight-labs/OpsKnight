@@ -96,6 +96,105 @@ Bearer token required by the metrics endpoint when configured.
 - Apply behavior: restart required
 - Sensitivity: secret
 
+### `TRUST_PROXY_HEADERS`
+
+Allows forwarded host and protocol headers from a trusted reverse proxy to define the external request origin.
+
+- Type and valid value: boolean
+- Runtime role: web behind a trusted proxy
+- Apply behavior: restart required
+- Sensitivity: non-secret; enable only when untrusted clients cannot set forwarded headers
+
+### `SCIM_BEARER_TOKEN`
+
+Authenticates SCIM provisioning requests.
+
+- Type and valid value: high-entropy bearer token
+- Runtime role: web
+- Apply behavior: restart required; overlap old and new clients only through an intentional rotation window
+- Sensitivity: secret
+
+### `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT`
+
+Rejects OIDC identities whose provider does not assert a verified email.
+
+- Type and valid value: boolean
+- Runtime role: web
+- Apply behavior: restart required
+- Sensitivity: non-secret
+
+### `OIDC_CONFIG_CACHE_TTL_MS`
+
+Controls how long resolved OIDC provider configuration remains in the process cache.
+
+- Type and valid value: positive milliseconds
+- Runtime role: web
+- Apply behavior: restart required
+- Sensitivity: non-secret
+
+### `SLACK_BOT_TOKEN`
+
+Authorizes Slack Web API operations for the connected workspace.
+
+- Type and valid value: Slack bot token
+- Runtime role: web and notification workers
+- Apply behavior: restart required after secret replacement
+- Sensitivity: secret
+
+### `SLACK_SIGNING_SECRET`
+
+Verifies inbound Slack request signatures.
+
+- Type and valid value: Slack signing secret
+- Runtime role: web
+- Apply behavior: restart required; coordinate rotation with Slack configuration
+- Sensitivity: secret
+
+### `SLACK_CLIENT_SECRET`
+
+Authenticates the Slack OAuth client.
+
+- Type and valid value: Slack OAuth client secret
+- Runtime role: web
+- Apply behavior: restart required
+- Sensitivity: secret
+
+### `OPSKNIGHT_WORKER_CONCURRENCY`
+
+Sets general worker parallelism when a lane-specific override is absent.
+
+- Type and valid value: positive integer
+- Runtime role: worker
+- Apply behavior: restart required; increase only after checking database and provider capacity
+- Sensitivity: non-secret
+
+### `OPSKNIGHT_WORKER_BATCH_SIZE`
+
+Sets the general queue claim batch when a lane-specific override is absent.
+
+- Type and valid value: positive integer
+- Runtime role: worker
+- Apply behavior: restart required; keep aligned with concurrency and lease duration
+- Sensitivity: non-secret
+
+### `OPSKNIGHT_WORKER_BUSY_POLL_MS`
+
+Sets the polling interval while general work is available.
+
+- Type and valid value: positive milliseconds
+- Runtime role: worker
+- Apply behavior: restart required
+- Sensitivity: non-secret
+
+### `OPSKNIGHT_WORKER_IDLE_POLL_MS`
+
+Sets the polling interval while the general queue is idle.
+
+- Type and valid value: positive milliseconds
+- Runtime role: worker
+- Apply behavior: restart required
+- Sensitivity: non-secret
+
 
 ## Complete discovered inventory
 

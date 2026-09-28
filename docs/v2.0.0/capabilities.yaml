@@ -8,7 +8,7 @@ capabilities:
     required: { concepts: true, guides: true, reference: true, tests: true, evidence: true }
     concepts: [concepts/incidents.md, concepts/incident-response.md, concepts/incident-sla.md]
     guides: [guides/incidents/create.md, guides/incidents/acknowledge.md, guides/incidents/assign.md, guides/incidents/escalate.md, guides/incidents/resolve.md]
-    reference: [reference/api/README.md]
+    reference: [reference/api/incidents.md, reference/api/authentication.md, reference/api/errors.md]
     tests: [tests/docs/journeys/incident-lifecycle.spec.ts, tests/lib/incidents/lifecycle.test.ts]
     sources: [src/lib/incidents/lifecycle.ts, src/app/(app)/incidents/actions.ts]
     evidence: [generated/docs-evidence/current/incidents/list.png, generated/docs-evidence/current/incidents/detail.png, generated/docs-evidence/current/incidents/acknowledge.png]
@@ -92,7 +92,7 @@ capabilities:
     required: { concepts: false, guides: false, reference: true, tests: true, evidence: true }
     concepts: []
     guides: []
-    reference: [integrations/README.md, integrations/catalog.yaml]
+    reference: [integrations/README.md, integrations/catalog.yaml, reference/api/events.md, reference/api/authentication.md, reference/api/errors.md]
     tests: [tests/integration/event-resilience.test.ts, tests/integration/event-dedup-semantics.test.ts]
     sources: [src/lib/integrations, src/app/api/integrations]
     evidence: [generated/docs-evidence/current/integrations/settings.png]

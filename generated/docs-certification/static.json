@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-28T03:36:12.067Z",
-  "sourceRevision": "d51e2f71eb746f8b128d80f4b97146761e28f2f2",
+  "generatedAt": "2026-09-28T03:53:22.496Z",
+  "sourceRevision": "a41b97a90c4fa0ecae7ba2295f96449e9a0bea4c",
   "releaseState": "upcoming",
   "checks": {
     "frontmatter": "passed",
@@ -13,7 +13,7 @@
     "websiteBuild": "release-gated"
   },
   "counts": {
-    "documentationPages": 112,
+    "documentationPages": 116,
     "capabilitiesDiscovered": 22,
     "capabilitiesDocumented": 22,
     "uiRoutes": 101,
@@ -22,7 +22,7 @@
     "integrationCandidates": 28,
     "databaseModels": 120,
     "runtimeRoles": 8,
-    "journeyFiles": 2,
+    "journeyFiles": 3,
     "evidenceScreenshots": 9
   },
   "artifacts": {
