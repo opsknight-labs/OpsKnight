@@ -97,6 +97,10 @@ describe('ApiKeysPanel Component', () => {
     expect(screen.getByLabelText(/expiration duration/i)).toBeDefined();
     expect(screen.getByText('Response Policy Read')).toBeDefined();
     expect(screen.getByText('Response Policy Write')).toBeDefined();
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.getAttribute('style')).toContain('max-width: 72rem');
+    expect(dialog.className).toContain('sm:w-[94vw]');
   });
 
   it('keeps response-policy read available while hiding write scope without write access', () => {
