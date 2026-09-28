@@ -132,8 +132,8 @@ function parseCliArgs(argv: string[]): {
 
 function assertSafeSeedDatabase(): void {
   if (
-    process.env.OPSKNIGHT_ALLOW_LOAD_DB_SEED === 'true' ||
-    process.env.OPSKNIGHT_ALLOW_LOAD_DB_OVERWRITE === 'true'
+    process.env.OPSKNIGHT_LOAD_CERT_DB === 'true' ||
+    process.env.OPSKNIGHT_ALLOW_LOAD_DB_SEED === 'true'
   ) {
     return;
   }
@@ -141,12 +141,12 @@ function assertSafeSeedDatabase(): void {
   const isLikelyTestDb =
     dbUrl.includes('test') ||
     dbUrl.includes('load') ||
+    dbUrl.includes('cert') ||
     dbUrl.includes('scratch') ||
-    dbUrl.includes('ci') ||
-    dbUrl.includes('staging');
+    dbUrl.includes('ci');
   if (!isLikelyTestDb) {
     throw new Error(
-      `Refusing to seed load fixtures: DATABASE_URL does not match test patterns and OPSKNIGHT_ALLOW_LOAD_DB_SEED is not 'true'. Target: ${dbUrl.replace(/:[^:@]+@/, ':***@')}`
+      `Refusing to seed load fixtures: DATABASE_URL does not match test patterns (test, load, cert, scratch, ci) and OPSKNIGHT_LOAD_CERT_DB is not 'true'. Target: ${dbUrl.replace(/:[^:@]+@/, ':***@')}`
     );
   }
 }

@@ -15,7 +15,8 @@
         "p95Ms": 933.56,
         "p99Ms": 1022.35,
         "rps": 13.46,
-        "errorRate": 0
+        "errorRate": 0,
+        "thresholdsPassed": true
       },
       {
         "scenario": "incident-lifecycle.js",
@@ -26,7 +27,8 @@
         "p95Ms": 1594.78,
         "p99Ms": 2573.24,
         "rps": 11.79,
-        "errorRate": 0.3648
+        "errorRate": 0.3648,
+        "thresholdsPassed": false
       },
       {
         "scenario": "escalation.js",
@@ -37,7 +39,8 @@
         "p95Ms": 35920.19,
         "p99Ms": 36569.71,
         "rps": 0.3,
-        "errorRate": 1
+        "errorRate": 1,
+        "thresholdsPassed": false
       },
       {
         "scenario": "notifications.js",
@@ -48,7 +51,8 @@
         "p95Ms": 1525.95,
         "p99Ms": 1771.99,
         "rps": 12.03,
-        "errorRate": 0
+        "errorRate": 0,
+        "thresholdsPassed": true
       },
       {
         "scenario": "status-fanout.js",
@@ -59,7 +63,8 @@
         "p95Ms": 11967.63,
         "p99Ms": 19597.08,
         "rps": 1.79,
-        "errorRate": 0.0519
+        "errorRate": 0.0519,
+        "thresholdsPassed": false
       },
       {
         "scenario": "realtime.js",
@@ -70,11 +75,12 @@
         "p95Ms": 19154.67,
         "p99Ms": 19926.5,
         "rps": 2.53,
-        "errorRate": 0.6875
+        "errorRate": 0.6875,
+        "thresholdsPassed": false
       }
     ],
     "verification": {
-      "passed": true,
+      "passed": false,
       "checkedAt": "2026-09-27T16:38:22.587Z",
       "topology": "compose_integrated_bundled_db",
       "invariants": {
@@ -100,7 +106,7 @@
           "snoozedWithoutUntil": 0
         },
         "zeroCriticalNotificationStarvation": {
-          "passed": true,
+          "passed": false,
           "pendingCriticalCount": 301,
           "oldestPendingCriticalAgeMs": 93172,
           "pendingBulkCount": 0,
@@ -116,7 +122,9 @@
             "push": 0,
             "teams": 0,
             "webhook": 0
-          }
+          },
+          "emulatorAvailable": true,
+          "totalDuplicateDeliveries": 0
         }
       },
       "totals": {
@@ -129,7 +137,7 @@
     },
     "peakActivePgConnections": 11,
     "peakOldestPendingJobAgeMs": 161262,
-    "certified": true
+    "certified": false
   },
   {
     "topologyId": "compose_split_bundled_db",
@@ -147,7 +155,8 @@
         "p95Ms": 30147.03,
         "p99Ms": 30379.11,
         "rps": 1.33,
-        "errorRate": 0.614
+        "errorRate": 0.614,
+        "thresholdsPassed": false
       },
       {
         "scenario": "incident-lifecycle.js",
@@ -158,7 +167,8 @@
         "p95Ms": 23803.6,
         "p99Ms": 26569.16,
         "rps": 1.07,
-        "errorRate": 0.7391
+        "errorRate": 0.7391,
+        "thresholdsPassed": false
       },
       {
         "scenario": "escalation.js",
@@ -169,7 +179,8 @@
         "p95Ms": 20120.25,
         "p99Ms": 35365.98,
         "rps": 0.93,
-        "errorRate": 0.175
+        "errorRate": 0.175,
+        "thresholdsPassed": false
       },
       {
         "scenario": "notifications.js",
@@ -180,7 +191,8 @@
         "p95Ms": 28975.01,
         "p99Ms": 29102.55,
         "rps": 0.49,
-        "errorRate": 0.381
+        "errorRate": 0.381,
+        "thresholdsPassed": false
       },
       {
         "scenario": "status-fanout.js",
@@ -191,7 +203,8 @@
         "p95Ms": 34349.08,
         "p99Ms": 35438.29,
         "rps": 1.58,
-        "errorRate": 0.2667
+        "errorRate": 0.2667,
+        "thresholdsPassed": false
       },
       {
         "scenario": "realtime.js",
@@ -202,7 +215,8 @@
         "p95Ms": 22767.18,
         "p99Ms": 25570.3,
         "rps": 1.68,
-        "errorRate": 1
+        "errorRate": 1,
+        "thresholdsPassed": false
       },
       {
         "scenario": "recovery.js",
@@ -213,11 +227,12 @@
         "p95Ms": 20903.2,
         "p99Ms": 26177.32,
         "rps": 0.68,
-        "errorRate": 0.4615
+        "errorRate": 0.4615,
+        "thresholdsPassed": false
       }
     ],
     "verification": {
-      "passed": true,
+      "passed": false,
       "checkedAt": "2026-09-27T16:45:29.803Z",
       "topology": "compose_split_bundled_db",
       "invariants": {
@@ -243,7 +258,7 @@
           "snoozedWithoutUntil": 0
         },
         "zeroCriticalNotificationStarvation": {
-          "passed": true,
+          "passed": false,
           "pendingCriticalCount": 137,
           "oldestPendingCriticalAgeMs": 130775,
           "pendingBulkCount": 0,
@@ -259,7 +274,9 @@
             "push": 0,
             "teams": 0,
             "webhook": 0
-          }
+          },
+          "emulatorAvailable": true,
+          "totalDuplicateDeliveries": 0
         }
       },
       "totals": {
@@ -272,7 +289,7 @@
     },
     "peakActivePgConnections": 9,
     "peakOldestPendingJobAgeMs": 22823,
-    "certified": true
+    "certified": false
   },
   {
     "topologyId": "compose_split_pgbouncer",
@@ -290,7 +307,8 @@
         "p95Ms": 129.87,
         "p99Ms": 162.33,
         "rps": 14.14,
-        "errorRate": 0
+        "errorRate": 0,
+        "thresholdsPassed": true
       },
       {
         "scenario": "incident-lifecycle.js",
@@ -301,7 +319,8 @@
         "p95Ms": 502.05,
         "p99Ms": 30107.87,
         "rps": 6.14,
-        "errorRate": 0.2424
+        "errorRate": 0.2424,
+        "thresholdsPassed": false
       },
       {
         "scenario": "escalation.js",
@@ -312,7 +331,8 @@
         "p95Ms": 40276.41,
         "p99Ms": 40431.07,
         "rps": 0.44,
-        "errorRate": 0.9474
+        "errorRate": 0.9474,
+        "thresholdsPassed": false
       },
       {
         "scenario": "notifications.js",
@@ -323,7 +343,8 @@
         "p95Ms": 36348,
         "p99Ms": 38407.73,
         "rps": 0.47,
-        "errorRate": 0.6
+        "errorRate": 0.6,
+        "thresholdsPassed": false
       },
       {
         "scenario": "status-fanout.js",
@@ -334,7 +355,8 @@
         "p95Ms": 26172.61,
         "p99Ms": 29987.72,
         "rps": 1.81,
-        "errorRate": 0.4493
+        "errorRate": 0.4493,
+        "thresholdsPassed": false
       },
       {
         "scenario": "realtime.js",
@@ -345,7 +367,8 @@
         "p95Ms": 36587.35,
         "p99Ms": 37791.26,
         "rps": 2.11,
-        "errorRate": 1
+        "errorRate": 1,
+        "thresholdsPassed": false
       },
       {
         "scenario": "recovery.js",
@@ -356,7 +379,8 @@
         "p95Ms": 20387.94,
         "p99Ms": 20519.17,
         "rps": 0.87,
-        "errorRate": 0.4545
+        "errorRate": 0.4545,
+        "thresholdsPassed": false
       },
       {
         "scenario": "mixed-incident-storm.js",
@@ -367,11 +391,12 @@
         "p95Ms": 29903.45,
         "p99Ms": 30718.88,
         "rps": 2.84,
-        "errorRate": 0.8689
+        "errorRate": 0.8689,
+        "thresholdsPassed": false
       }
     ],
     "verification": {
-      "passed": true,
+      "passed": false,
       "checkedAt": "2026-09-27T16:52:54.875Z",
       "topology": "compose_split_pgbouncer",
       "invariants": {
@@ -397,7 +422,7 @@
           "snoozedWithoutUntil": 0
         },
         "zeroCriticalNotificationStarvation": {
-          "passed": true,
+          "passed": false,
           "pendingCriticalCount": 318,
           "oldestPendingCriticalAgeMs": 364836,
           "pendingBulkCount": 0,
@@ -413,7 +438,9 @@
             "push": 0,
             "teams": 0,
             "webhook": 0
-          }
+          },
+          "emulatorAvailable": true,
+          "totalDuplicateDeliveries": 0
         }
       },
       "totals": {
@@ -426,7 +453,7 @@
     },
     "peakActivePgConnections": 9,
     "peakOldestPendingJobAgeMs": 199660,
-    "certified": true
+    "certified": false
   },
   {
     "topologyId": "swarm_single_node_split",
@@ -444,7 +471,8 @@
         "p95Ms": 565.41,
         "p99Ms": 650.76,
         "rps": 14.04,
-        "errorRate": 0
+        "errorRate": 0,
+        "thresholdsPassed": true
       },
       {
         "scenario": "incident-lifecycle.js",
@@ -455,7 +483,8 @@
         "p95Ms": 10017.95,
         "p99Ms": 11092.43,
         "rps": 9.44,
-        "errorRate": 0.267
+        "errorRate": 0.267,
+        "thresholdsPassed": false
       },
       {
         "scenario": "escalation.js",
@@ -466,7 +495,8 @@
         "p95Ms": 35676.27,
         "p99Ms": 36723.04,
         "rps": 1.35,
-        "errorRate": 0.1034
+        "errorRate": 0.1034,
+        "thresholdsPassed": false
       },
       {
         "scenario": "notifications.js",
@@ -477,7 +507,8 @@
         "p95Ms": 36644.9,
         "p99Ms": 36806.17,
         "rps": 0.53,
-        "errorRate": 0.6957
+        "errorRate": 0.6957,
+        "thresholdsPassed": false
       },
       {
         "scenario": "status-fanout.js",
@@ -488,7 +519,8 @@
         "p95Ms": 35731.94,
         "p99Ms": 36184.99,
         "rps": 1.29,
-        "errorRate": 0.2857
+        "errorRate": 0.2857,
+        "thresholdsPassed": false
       },
       {
         "scenario": "realtime.js",
@@ -499,7 +531,8 @@
         "p95Ms": 4002.23,
         "p99Ms": 4136.56,
         "rps": 5.71,
-        "errorRate": 0.6146
+        "errorRate": 0.6146,
+        "thresholdsPassed": false
       },
       {
         "scenario": "recovery.js",
@@ -510,11 +543,12 @@
         "p95Ms": 9746.18,
         "p99Ms": 10059.81,
         "rps": 10.4,
-        "errorRate": 0
+        "errorRate": 0,
+        "thresholdsPassed": true
       }
     ],
     "verification": {
-      "passed": true,
+      "passed": false,
       "checkedAt": "2026-09-27T17:07:49.567Z",
       "topology": "swarm_single_node_split",
       "invariants": {
@@ -540,7 +574,7 @@
           "snoozedWithoutUntil": 0
         },
         "zeroCriticalNotificationStarvation": {
-          "passed": true,
+          "passed": false,
           "pendingCriticalCount": 427,
           "oldestPendingCriticalAgeMs": 253247,
           "pendingBulkCount": 0,
@@ -556,7 +590,9 @@
             "push": 0,
             "teams": 0,
             "webhook": 0
-          }
+          },
+          "emulatorAvailable": true,
+          "totalDuplicateDeliveries": 0
         }
       },
       "totals": {
@@ -569,7 +605,7 @@
     },
     "peakActivePgConnections": 14,
     "peakOldestPendingJobAgeMs": 179045,
-    "certified": true
+    "certified": false
   },
   {
     "topologyId": "swarm_ha_split",
@@ -587,7 +623,8 @@
         "p95Ms": 825.79,
         "p99Ms": 1002.98,
         "rps": 13.75,
-        "errorRate": 0
+        "errorRate": 0,
+        "thresholdsPassed": true
       },
       {
         "scenario": "incident-lifecycle.js",
@@ -598,7 +635,8 @@
         "p95Ms": 1315.66,
         "p99Ms": 1503.22,
         "rps": 16.58,
-        "errorRate": 0.3017
+        "errorRate": 0.3017,
+        "thresholdsPassed": false
       },
       {
         "scenario": "escalation.js",
@@ -609,7 +647,8 @@
         "p95Ms": 775.92,
         "p99Ms": 883.29,
         "rps": 16.15,
-        "errorRate": 0.0143
+        "errorRate": 0.0143,
+        "thresholdsPassed": false
       },
       {
         "scenario": "notifications.js",
@@ -620,7 +659,8 @@
         "p95Ms": 1543.83,
         "p99Ms": 1765.16,
         "rps": 11.86,
-        "errorRate": 0
+        "errorRate": 0,
+        "thresholdsPassed": true
       },
       {
         "scenario": "status-fanout.js",
@@ -631,7 +671,8 @@
         "p95Ms": 866.48,
         "p99Ms": 1616.92,
         "rps": 56.66,
-        "errorRate": 0
+        "errorRate": 0,
+        "thresholdsPassed": true
       },
       {
         "scenario": "realtime.js",
@@ -642,7 +683,8 @@
         "p95Ms": 4001.87,
         "p99Ms": 4002.12,
         "rps": 5.95,
-        "errorRate": 0.59
+        "errorRate": 0.59,
+        "thresholdsPassed": false
       },
       {
         "scenario": "recovery.js",
@@ -653,7 +695,8 @@
         "p95Ms": 280.22,
         "p99Ms": 518.65,
         "rps": 43.99,
-        "errorRate": 0
+        "errorRate": 0,
+        "thresholdsPassed": true
       },
       {
         "scenario": "mixed-incident-storm.js",
@@ -664,11 +707,12 @@
         "p95Ms": 3000.3,
         "p99Ms": 3001.05,
         "rps": 29.79,
-        "errorRate": 0.1276
+        "errorRate": 0.1276,
+        "thresholdsPassed": false
       }
     ],
     "verification": {
-      "passed": true,
+      "passed": false,
       "checkedAt": "2026-09-27T17:12:23.636Z",
       "topology": "swarm_ha_split",
       "invariants": {
@@ -694,7 +738,7 @@
           "snoozedWithoutUntil": 0
         },
         "zeroCriticalNotificationStarvation": {
-          "passed": true,
+          "passed": false,
           "pendingCriticalCount": 1417,
           "oldestPendingCriticalAgeMs": 202962,
           "pendingBulkCount": 0,
@@ -710,7 +754,9 @@
             "push": 0,
             "teams": 0,
             "webhook": 0
-          }
+          },
+          "emulatorAvailable": true,
+          "totalDuplicateDeliveries": 0
         }
       },
       "totals": {
@@ -723,7 +769,7 @@
     },
     "peakActivePgConnections": 9,
     "peakOldestPendingJobAgeMs": 90881,
-    "certified": true
+    "certified": false
   },
   {
     "topologyId": "kind_helm_split_pgbouncer",
@@ -741,7 +787,8 @@
         "p95Ms": 28720.91,
         "p99Ms": 29941.25,
         "rps": 1.33,
-        "errorRate": 0.5789
+        "errorRate": 0.5789,
+        "thresholdsPassed": false
       },
       {
         "scenario": "incident-lifecycle.js",
@@ -752,7 +799,8 @@
         "p95Ms": 28985.93,
         "p99Ms": 29056.17,
         "rps": 0.35,
-        "errorRate": 0.8667
+        "errorRate": 0.8667,
+        "thresholdsPassed": false
       },
       {
         "scenario": "escalation.js",
@@ -763,7 +811,8 @@
         "p95Ms": 41634.58,
         "p99Ms": 41804.46,
         "rps": 0.44,
-        "errorRate": 1
+        "errorRate": 1,
+        "thresholdsPassed": false
       },
       {
         "scenario": "notifications.js",
@@ -774,7 +823,8 @@
         "p95Ms": 25378.3,
         "p99Ms": 28752.52,
         "rps": 0.7,
-        "errorRate": 0.7667
+        "errorRate": 0.7667,
+        "thresholdsPassed": false
       },
       {
         "scenario": "status-fanout.js",
@@ -785,7 +835,8 @@
         "p95Ms": 26912.69,
         "p99Ms": 27545.85,
         "rps": 1.61,
-        "errorRate": 0.2459
+        "errorRate": 0.2459,
+        "thresholdsPassed": false
       },
       {
         "scenario": "realtime.js",
@@ -796,7 +847,8 @@
         "p95Ms": 31107.25,
         "p99Ms": 31764.54,
         "rps": 2.18,
-        "errorRate": 1
+        "errorRate": 1,
+        "thresholdsPassed": false
       },
       {
         "scenario": "recovery.js",
@@ -807,7 +859,8 @@
         "p95Ms": 23801.34,
         "p99Ms": 23887.19,
         "rps": 0.74,
-        "errorRate": 0.6786
+        "errorRate": 0.6786,
+        "thresholdsPassed": false
       },
       {
         "scenario": "mixed-incident-storm.js",
@@ -818,7 +871,8 @@
         "p95Ms": 23592.72,
         "p99Ms": 29384.53,
         "rps": 2.81,
-        "errorRate": 0.8678
+        "errorRate": 0.8678,
+        "thresholdsPassed": false
       }
     ],
     "verification": {
@@ -864,7 +918,9 @@
             "push": 0,
             "teams": 0,
             "webhook": 0
-          }
+          },
+          "emulatorAvailable": true,
+          "totalDuplicateDeliveries": 0
         }
       },
       "totals": {
@@ -877,7 +933,7 @@
     },
     "peakActivePgConnections": 9,
     "peakOldestPendingJobAgeMs": 289,
-    "certified": true
+    "certified": false
   },
   {
     "topologyId": "kind_kustomize_split_pgbouncer",
@@ -895,7 +951,8 @@
         "p95Ms": 28682.64,
         "p99Ms": 29335.11,
         "rps": 0.95,
-        "errorRate": 0.8293
+        "errorRate": 0.8293,
+        "thresholdsPassed": false
       },
       {
         "scenario": "incident-lifecycle.js",
@@ -906,7 +963,8 @@
         "p95Ms": 30811.3,
         "p99Ms": 37439.97,
         "rps": 0.86,
-        "errorRate": 0.7838
+        "errorRate": 0.7838,
+        "thresholdsPassed": false
       },
       {
         "scenario": "escalation.js",
@@ -917,7 +975,8 @@
         "p95Ms": 26561.54,
         "p99Ms": 26687.42,
         "rps": 0.44,
-        "errorRate": 1
+        "errorRate": 1,
+        "thresholdsPassed": false
       },
       {
         "scenario": "notifications.js",
@@ -928,7 +987,8 @@
         "p95Ms": 38687.34,
         "p99Ms": 39010.55,
         "rps": 0.53,
-        "errorRate": 0.6957
+        "errorRate": 0.6957,
+        "thresholdsPassed": false
       },
       {
         "scenario": "status-fanout.js",
@@ -939,7 +999,8 @@
         "p95Ms": 27678.28,
         "p99Ms": 28347.65,
         "rps": 1.84,
-        "errorRate": 0.3286
+        "errorRate": 0.3286,
+        "thresholdsPassed": false
       },
       {
         "scenario": "realtime.js",
@@ -950,7 +1011,8 @@
         "p95Ms": 28285.57,
         "p99Ms": 29622.89,
         "rps": 2.18,
-        "errorRate": 1
+        "errorRate": 1,
+        "thresholdsPassed": false
       },
       {
         "scenario": "recovery.js",
@@ -961,7 +1023,8 @@
         "p95Ms": 25934.32,
         "p99Ms": 26023.07,
         "rps": 0.71,
-        "errorRate": 0.7778
+        "errorRate": 0.7778,
+        "thresholdsPassed": false
       },
       {
         "scenario": "mixed-incident-storm.js",
@@ -972,7 +1035,8 @@
         "p95Ms": 20057.13,
         "p99Ms": 32539.47,
         "rps": 2.79,
-        "errorRate": 0.6917
+        "errorRate": 0.6917,
+        "thresholdsPassed": false
       }
     ],
     "verification": {
@@ -1018,7 +1082,9 @@
             "push": 0,
             "teams": 0,
             "webhook": 0
-          }
+          },
+          "emulatorAvailable": true,
+          "totalDuplicateDeliveries": 0
         }
       },
       "totals": {
@@ -1031,6 +1097,6 @@
     },
     "peakActivePgConnections": 13,
     "peakOldestPendingJobAgeMs": 627,
-    "certified": true
+    "certified": false
   }
 ]

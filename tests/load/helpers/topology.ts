@@ -607,67 +607,7 @@ export function deriveCapacityFromScenarios(
     };
   }
 
-  // 1. Alert Ingestion
-  const alertRecords = records.filter(r => r.scenario.includes('alert-ingestion'));
-  const validAlertRecords = alertRecords.filter(
-    r => r.exitCode === 0 && r.thresholdsPassed !== false && r.errorRate <= 0.01 && r.p95Ms <= 500
-  );
-  const maxSustainedAlertRps = validAlertRecords.length > 0
-    ? Math.max(...validAlertRecords.map(r => r.rps))
-    : alertRecords.length > 0
-      ? Math.max(...alertRecords.filter(r => r.exitCode === 0).map(r => r.rps))
-      : 0;
-  const maxBurstAlertRps = alertRecords.length > 0
-    ? Math.max(...alertRecords.filter(r => r.errorRate <= 0.05).map(r => r.rps))
-    : 0;
-
-  // 2. Notifications
-  const notifRecords = records.filter(r => r.scenario.includes('notifications'));
-  const validNotifRecords = notifRecords.filter(
-    r => r.exitCode === 0 && r.thresholdsPassed !== false && r.errorRate <= 0.01
-  );
-  const maxNotifRps = validNotifRecords.length > 0
-    ? Math.max(...validNotifRecords.map(r => r.rps))
-    : notifRecords.length > 0
-      ? Math.max(...notifRecords.filter(r => r.exitCode === 0).map(r => r.rps))
-      : 0;
-
-  // 3. Escalations
-  const escRecords = records.filter(r => r.scenario.includes('escalation'));
-  const validEscRecords = escRecords.filter(
-    r => r.exitCode === 0 && r.thresholdsPassed !== false && r.errorRate <= 0.01
-  );
-  const maxEscRps = validEscRecords.length > 0
-    ? Math.max(...validEscRecords.map(r => r.rps))
-    : escRecords.length > 0
-      ? Math.max(...escRecords.filter(r => r.exitCode === 0).map(r => r.rps))
-      : 0;
-
-  // 4. Concurrent users (VUs)
-  const levelToVUs: Record<string, number> = { L0: 5, L1: 25, L2: 100, L3: 300, L4: 1000 };
-  const lifecycleRecords = records.filter(r => r.scenario.includes('incident-lifecycle'));
-  const validLifecycleRecords = lifecycleRecords.filter(
-    r => r.exitCode === 0 && r.thresholdsPassed !== false && r.p95Ms <= 1000
-  );
-  const maxVUs = validLifecycleRecords.length > 0
-    ? Math.max(...validLifecycleRecords.map(r => levelToVUs[r.loadLevel] || 25))
-    : lifecycleRecords.length > 0
-      ? Math.max(...lifecycleRecords.filter(r => r.exitCode === 0).map(r => levelToVUs[r.loadLevel] || 25))
-      : 0;
-
-  // 5. SSE Realtime Streams
-  const realtimeRecords = records.filter(r => r.scenario.includes('realtime'));
-  const maxSseVUs = realtimeRecords.length > 0
-    ? Math.max(...realtimeRecords.filter(r => r.exitCode === 0 && r.thresholdsPassed !== false).map(r => levelToVUs[r.loadLevel] || 10))
-    : 0;
-
-  // 6. Status Fanout
-  const fanoutRecords = records.filter(r => r.scenario.includes('status-fanout'));
-  const maxFanoutRps = fanoutRecords.length > 0
-    ? Math.max(...fanoutRecords.filter(r => r.exitCode === 0 && r.thresholdsPassed !== false).map(r => r.rps))
-    : 0;
-
-  // 7. Bottleneck Attribution
+  // 1. Bottleneck Attribution
   let bottleneck = 'Within headroom limits';
   if (!verification.passed) {
     const inv = verification.invariants;
@@ -679,32 +619,135 @@ export function deriveCapacityFromScenarios(
       bottleneck = 'Provider webhook duplicate deliveries';
     } else if (!inv.zeroLostAcceptedAlerts.passed) {
       bottleneck = 'Unlinked accepted alerts buffer leak';
+    } else if (!inv.zeroFalseEscalationsAfterAckOrResolve.passed) {
+      bottleneck = 'False escalation after ACK or resolve';
+    } else if (!inv.zeroCorruptedIncidentStates.passed) {
+      bottleneck = 'Corrupted incident lifecycle state';
     } else {
       bottleneck = 'Correctness invariant violation under load';
     }
-  } else {
-    const broken = records.find(r => r.exitCode !== 0 || r.errorRate > 0.01 || r.thresholdsPassed === false);
-    if (broken) {
-      if (topologyId.includes('integrated')) {
-        bottleneck = `Shared web+worker CPU loop saturation at ${broken.loadLevel}`;
-      } else if (topologyId.includes('bundled_db') && !topologyId.includes('pgbouncer')) {
-        bottleneck = `PostgreSQL client connection saturation without pooler at ${broken.loadLevel}`;
-      } else if (topologyId.includes('swarm')) {
-        bottleneck = `Swarm overlay network / ingress routing latency at ${broken.loadLevel}`;
-      } else {
-        bottleneck = `Worker pod resource / pool limits reached at ${broken.loadLevel}`;
-      }
+
+    return {
+      sustainedAlertRps: 'No certified sustainable capacity',
+      burstAlertRps: 'No certified sustainable capacity',
+      notificationRate: 'No certified sustainable capacity',
+      escalationRate: 'No certified sustainable capacity',
+      concurrentUsers: 'No certified sustainable capacity',
+      sseStreams: 'No certified sustainable capacity',
+      statusFanout: 'No certified sustainable capacity',
+      bottleneck,
+    };
+  }
+
+  const broken = records.find(
+    r => r.exitCode !== 0 || r.errorRate > 0.01 || r.thresholdsPassed === false
+  );
+  if (broken) {
+    if (topologyId.includes('integrated')) {
+      bottleneck = `Shared web+worker CPU loop saturation at ${broken.loadLevel}`;
+    } else if (topologyId.includes('bundled_db') && !topologyId.includes('pgbouncer')) {
+      bottleneck = `PostgreSQL client connection saturation without pooler at ${broken.loadLevel}`;
+    } else if (topologyId.includes('swarm')) {
+      bottleneck = `Swarm overlay network / ingress routing latency at ${broken.loadLevel}`;
+    } else {
+      bottleneck = `Worker pod resource / pool limits reached at ${broken.loadLevel}`;
     }
   }
 
+  const isScenarioPassing = (r: ScenarioExecutionRecord, maxErrorRate = 0.01, maxP95Ms?: number) =>
+    r.exitCode === 0 &&
+    r.thresholdsPassed !== false &&
+    r.errorRate <= maxErrorRate &&
+    (maxP95Ms === undefined || r.p95Ms <= maxP95Ms);
+
+  // 2. Alert Ingestion (Strict thresholds: errorRate <= 1%, p95 <= 500ms)
+  const alertRecords = records.filter(r => r.scenario.includes('alert-ingestion'));
+  const validAlertRecords = alertRecords.filter(r => isScenarioPassing(r, 0.01, 500));
+  const maxSustainedAlertRps =
+    validAlertRecords.length > 0 ? Math.max(...validAlertRecords.map(r => r.rps)) : 0;
+
+  const validBurstRecords = alertRecords.filter(r => isScenarioPassing(r, 0.05, 1500));
+  const maxBurstAlertRps =
+    validBurstRecords.length > 0 ? Math.max(...validBurstRecords.map(r => r.rps)) : 0;
+
+  // 3. Notifications (Strict thresholds: errorRate <= 1%)
+  const notifRecords = records.filter(r => r.scenario.includes('notifications'));
+  const validNotifRecords = notifRecords.filter(r => isScenarioPassing(r, 0.01, 2000));
+  const maxNotifRps =
+    validNotifRecords.length > 0 ? Math.max(...validNotifRecords.map(r => r.rps)) : 0;
+
+  // 4. Escalations (Strict thresholds: errorRate <= 1%)
+  const escRecords = records.filter(r => r.scenario.includes('escalation'));
+  const validEscRecords = escRecords.filter(r => isScenarioPassing(r, 0.01, 2000));
+  const maxEscRps =
+    validEscRecords.length > 0 ? Math.max(...validEscRecords.map(r => r.rps)) : 0;
+
+  // 5. Concurrent users (VUs) (Strict thresholds: p95 <= 1000ms, errorRate <= 1%)
+  const levelToVUs: Record<string, number> = { L0: 5, L1: 25, L2: 100, L3: 300, L4: 1000 };
+  const lifecycleRecords = records.filter(r => r.scenario.includes('incident-lifecycle'));
+  const validLifecycleRecords = lifecycleRecords.filter(r => isScenarioPassing(r, 0.01, 1000));
+  const maxVUs =
+    validLifecycleRecords.length > 0
+      ? Math.max(...validLifecycleRecords.map(r => levelToVUs[r.loadLevel] || 25))
+      : 0;
+
+  // 6. SSE Realtime Streams
+  const realtimeRecords = records.filter(r => r.scenario.includes('realtime'));
+  const validRealtimeRecords = realtimeRecords.filter(r => isScenarioPassing(r, 0.01));
+  const maxSseVUs =
+    validRealtimeRecords.length > 0
+      ? Math.max(...validRealtimeRecords.map(r => levelToVUs[r.loadLevel] || 10))
+      : 0;
+
+  // 7. Status Fanout
+  const fanoutRecords = records.filter(r => r.scenario.includes('status-fanout'));
+  const validFanoutRecords = fanoutRecords.filter(r => isScenarioPassing(r, 0.01));
+  const maxFanoutRps =
+    validFanoutRecords.length > 0 ? Math.max(...validFanoutRecords.map(r => r.rps)) : 0;
+
   return {
-    sustainedAlertRps: maxSustainedAlertRps > 0 ? `${Math.round(maxSustainedAlertRps)} RPS` : 'Measured on run',
-    burstAlertRps: maxBurstAlertRps > 0 ? `${Math.round(maxBurstAlertRps)} RPS` : 'Measured on run',
-    notificationRate: maxNotifRps > 0 ? `~${Math.round(maxNotifRps * 60)} / min` : 'Measured on run',
-    escalationRate: maxEscRps > 0 ? `${Math.round(maxEscRps)} / sec` : 'Measured on run',
-    concurrentUsers: maxVUs > 0 ? `${maxVUs} VUs` : 'Measured on run',
-    sseStreams: maxSseVUs > 0 ? `~${maxSseVUs} streams` : 'Measured on run',
-    statusFanout: maxFanoutRps > 0 ? `~${Math.round(maxFanoutRps * 60)} / min` : 'Measured on run',
+    sustainedAlertRps:
+      maxSustainedAlertRps > 0
+        ? `${Math.round(maxSustainedAlertRps)} RPS`
+        : alertRecords.length > 0
+          ? 'No certified sustainable capacity'
+          : 'Measured on run',
+    burstAlertRps:
+      maxBurstAlertRps > 0
+        ? `${Math.round(maxBurstAlertRps)} RPS`
+        : alertRecords.length > 0
+          ? 'No certified sustainable capacity'
+          : 'Measured on run',
+    notificationRate:
+      maxNotifRps > 0
+        ? `~${Math.round(maxNotifRps * 60)} / min`
+        : notifRecords.length > 0
+          ? 'No certified sustainable capacity'
+          : 'Measured on run',
+    escalationRate:
+      maxEscRps > 0
+        ? `${Math.round(maxEscRps)} / sec`
+        : escRecords.length > 0
+          ? 'No certified sustainable capacity'
+          : 'Measured on run',
+    concurrentUsers:
+      maxVUs > 0
+        ? `${maxVUs} VUs`
+        : lifecycleRecords.length > 0
+          ? 'No certified sustainable capacity'
+          : 'Measured on run',
+    sseStreams:
+      maxSseVUs > 0
+        ? `~${maxSseVUs} streams`
+        : realtimeRecords.length > 0
+          ? 'No certified sustainable capacity'
+          : 'Measured on run',
+    statusFanout:
+      maxFanoutRps > 0
+        ? `~${Math.round(maxFanoutRps * 60)} / min`
+        : fanoutRecords.length > 0
+          ? 'No certified sustainable capacity'
+          : 'Measured on run',
     bottleneck,
   };
 }

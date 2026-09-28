@@ -17,19 +17,22 @@ export interface LoadCleanupSummary {
 }
 
 function assertSafeCleanupDatabase(): void {
-  if (process.env.OPSKNIGHT_ALLOW_LOAD_DB_CLEANUP === 'true') {
+  if (
+    process.env.OPSKNIGHT_LOAD_CERT_DB === 'true' ||
+    process.env.OPSKNIGHT_ALLOW_LOAD_DB_CLEANUP === 'true'
+  ) {
     return;
   }
   const dbUrl = process.env.DATABASE_URL || '';
   const isLikelyTestDb =
     dbUrl.includes('test') ||
     dbUrl.includes('load') ||
+    dbUrl.includes('cert') ||
     dbUrl.includes('scratch') ||
-    dbUrl.includes('ci') ||
-    dbUrl.includes('staging');
+    dbUrl.includes('ci');
   if (!isLikelyTestDb) {
     throw new Error(
-      `Refusing to run load cleanup: DATABASE_URL does not match test patterns (test, load, scratch, ci, staging) and OPSKNIGHT_ALLOW_LOAD_DB_CLEANUP is not 'true'. Target: ${dbUrl.replace(/:[^:@]+@/, ':***@')}`
+      `Refusing to run load cleanup: DATABASE_URL does not match test patterns (test, load, cert, scratch, ci) and OPSKNIGHT_LOAD_CERT_DB is not 'true'. Target: ${dbUrl.replace(/:[^:@]+@/, ':***@')}`
     );
   }
 }

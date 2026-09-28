@@ -21,6 +21,7 @@ import {
 } from '../load/fixtures/users';
 import { parsePrometheusText } from '../load/helpers/metrics';
 import {
+  deriveCapacityFromScenarios,
   generateCertificationMarkdownReport,
   KIND_4NODE_CLUSTER_CONFIG,
   runLoadCertificationOrchestrator,
@@ -300,7 +301,9 @@ opsknight_db_pool_active 18
             },
             providerIdempotencyCheck: {
               passed: true,
+              emulatorAvailable: true,
               duplicateDeliveryKeysByProvider: {},
+              totalDuplicateDeliveries: 0,
             },
           },
           totals: {
@@ -319,5 +322,77 @@ opsknight_db_pool_active 18
 
     expect(markdown).toContain('compose_split_pgbouncer');
     expect(markdown).toContain('**CERTIFIED**');
+  });
+
+  it('strictly derives certified capacity only from passing scenarios and rejects failed runs', () => {
+    const mockVerificationPass = {
+      passed: true,
+      checkedAt: new Date().toISOString(),
+      topology: 'compose_split_pgbouncer',
+      invariants: {
+        zeroDuplicateOpenIncidents: { passed: true, duplicateGroups: 0, samples: [] },
+        zeroLostAcceptedAlerts: { passed: true, totalLoadAlerts: 1000, unlinkedAlerts: 0 },
+        zeroFalseEscalationsAfterAckOrResolve: { passed: true, violationCount: 0, sampleIncidentIds: [] },
+        zeroCorruptedIncidentStates: { passed: true, acknowledgedWithoutTimestamp: 0, resolvedWithoutTimestamp: 0, snoozedWithoutUntil: 0 },
+        zeroCriticalNotificationStarvation: { passed: true, pendingCriticalCount: 0, oldestPendingCriticalAgeMs: 0, pendingBulkCount: 0, deliveredCriticalCount: 100, deliveredBulkCount: 100 },
+        providerIdempotencyCheck: { passed: true, emulatorAvailable: true, duplicateDeliveryKeysByProvider: {}, totalDuplicateDeliveries: 0 },
+      },
+      totals: { incidentsCreated: 100, alertsPersisted: 1000, notificationsTotal: 200, backgroundJobsPending: 0, backgroundJobsFailed: 0 },
+    };
+
+    // Case 1: Scenarios that failed thresholds or high error rate should NOT become certified capacity
+    const failedScenarios = [
+      {
+        scenario: 'alert-ingestion.js',
+        loadLevel: 'L2',
+        durationMs: 30000,
+        exitCode: 0,
+        p50Ms: 120,
+        p95Ms: 1800, // exceeds 500ms limit
+        p99Ms: 2500,
+        rps: 150,
+        errorRate: 0.15, // exceeds 1% limit
+        thresholdsPassed: false,
+      },
+    ];
+
+    const profFailed = deriveCapacityFromScenarios('compose_split_pgbouncer', failedScenarios, mockVerificationPass);
+    expect(profFailed.sustainedAlertRps).toBe('No certified sustainable capacity');
+    expect(profFailed.bottleneck).toContain('limits reached at L2');
+
+    // Case 2: Invariant failure sets all capacities to 'No certified sustainable capacity'
+    const mockVerificationFail = {
+      ...mockVerificationPass,
+      passed: false,
+      invariants: {
+        ...mockVerificationPass.invariants,
+        zeroCriticalNotificationStarvation: {
+          passed: false,
+          pendingCriticalCount: 50,
+          oldestPendingCriticalAgeMs: 45000,
+          pendingBulkCount: 0,
+          deliveredCriticalCount: 100,
+          deliveredBulkCount: 100,
+        },
+      },
+    };
+
+    const profInvFail = deriveCapacityFromScenarios('compose_split_pgbouncer', [
+      {
+        scenario: 'alert-ingestion.js',
+        loadLevel: 'L1',
+        durationMs: 30000,
+        exitCode: 0,
+        p50Ms: 20,
+        p95Ms: 80,
+        p99Ms: 120,
+        rps: 100,
+        errorRate: 0,
+        thresholdsPassed: true,
+      },
+    ], mockVerificationFail);
+
+    expect(profInvFail.sustainedAlertRps).toBe('No certified sustainable capacity');
+    expect(profInvFail.bottleneck).toBe('Critical notification queue starvation');
   });
 });
