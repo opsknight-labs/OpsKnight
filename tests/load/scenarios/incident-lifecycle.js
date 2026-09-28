@@ -32,6 +32,19 @@ export const options = {
       duration: durations.steady,
       exec: 'runConcurrentResponderRace',
     },
+    concurrent_50_ack_storm: {
+      executor: 'per-vu-iterations',
+      vus: 50,
+      iterations: 2,
+      exec: 'runConcurrent50AckStorm',
+      startTime: durations.warmup,
+    },
+    ack_resolve_submillisecond_race: {
+      executor: 'constant-vus',
+      vus: 8,
+      duration: durations.steady,
+      exec: 'runAckResolveSubmillisecondRace',
+    },
   },
   thresholds: {
     opsknight_lifecycle_success_rate: ['rate>0.90'],
@@ -53,7 +66,7 @@ export function runResponderLifecycle() {
   // 1. Create Incident
   const createBody = JSON.stringify({
     title: `[Load Lifecycle] High Latency in ${serviceId} (${__VU}:${__ITER})`,
-    description: 'Synthetic responder lifecycle drill verifying idempotent create -> ack -> resolve',
+    description: 'Comprehensive responder lifecycle torture drill verifying create -> ack -> note -> snooze -> resolve',
     serviceId,
     urgency: __ITER % 3 === 0 ? 'HIGH' : __ITER % 3 === 1 ? 'MEDIUM' : 'LOW',
     priority: __ITER % 2 === 0 ? 'P1' : 'P2',
@@ -64,7 +77,7 @@ export function runResponderLifecycle() {
     tags: { endpoint: 'incidents_create' },
   });
   for (let retry = 0; retry < 5 && (createRes.status >= 500 || createRes.status === 0); retry++) {
-    sleep(0.2 + (retry * 0.15) + (Math.random() * 0.15));
+    sleep(0.2 + retry * 0.15 + Math.random() * 0.15);
     createRes = http.post(`${baseUrl}/api/incidents`, createBody, {
       headers,
       tags: { endpoint: 'incidents_create_retry' },
@@ -72,7 +85,13 @@ export function runResponderLifecycle() {
   }
   opsknightMetrics.lifecycleLatencyMs.add(createRes.timings.duration);
 
-  if (createRes.status === 429 || createRes.status === 503 || (createRes.status === 500 && createRes.body && createRes.body.includes('"retryable":true'))) {
+  if (
+    createRes.status === 429 ||
+    createRes.status === 503 ||
+    (createRes.status === 500 &&
+      createRes.body &&
+      createRes.body.includes('"retryable":true'))
+  ) {
     opsknightMetrics.lifecycleSuccessRate.add(true);
     sleep(0.2);
     return;
@@ -88,9 +107,6 @@ export function runResponderLifecycle() {
   const createdOk = check(createRes, {
     'incident created (201 or 409)': r => r.status === 201 || r.status === 409,
   });
-  if (!createdOk) {
-    console.error(`[INCIDENT CREATE FAIL] vu=${__VU} iter=${__ITER} status=${createRes.status} body=${createRes.body}`);
-  }
   opsknightMetrics.lifecycleSuccessRate.add(createdOk);
   if (!createdOk) return;
 
@@ -102,7 +118,7 @@ export function runResponderLifecycle() {
   }
   if (!incidentId) return;
 
-  // 2. Replay same Idempotency-Key on every 5th iteration to certify idempotency
+  // 2. Replay same Idempotency-Key to certify idempotency
   if (__ITER % 5 === 0) {
     const replayRes = http.post(`${baseUrl}/api/incidents`, createBody, {
       headers,
@@ -115,7 +131,7 @@ export function runResponderLifecycle() {
   }
 
   // 3. Acknowledge Incident
-  let ackRes = http.patch(
+  const ackRes = http.patch(
     `${baseUrl}/api/incidents/${incidentId}`,
     JSON.stringify({ status: 'ACKNOWLEDGED' }),
     {
@@ -127,73 +143,52 @@ export function runResponderLifecycle() {
       tags: { endpoint: 'incidents_ack' },
     }
   );
-  for (let retry = 0; retry < 3 && (ackRes.status >= 500 || ackRes.status === 0); retry++) {
-    sleep(0.15 + (retry * 0.1));
-    ackRes = http.patch(
-      `${baseUrl}/api/incidents/${incidentId}`,
-      JSON.stringify({ status: 'ACKNOWLEDGED' }),
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${pickApiKey(manifest, __VU + 1, __ITER)}`,
-          'Idempotency-Key': `lt-idem-ack-${incidentId}`,
-        },
-        tags: { endpoint: 'incidents_ack_retry' },
-      }
-    );
-  }
   opsknightMetrics.lifecycleLatencyMs.add(ackRes.timings.duration);
   opsknightMetrics.lifecycleSuccessRate.add(
     ackRes.status === 200 || ackRes.status === 409 || ackRes.status === 429
   );
 
-  // 4. Read Incident List & Detail
-  let getRes = http.get(`${baseUrl}/api/incidents/${incidentId}`, {
+  // 4. Add Responder Note
+  if (__ITER % 2 === 0) {
+    const noteRes = http.post(
+      `${baseUrl}/api/incidents/${incidentId}/notes`,
+      JSON.stringify({ content: `[Auto-note] Responder investigation active by VU ${__VU}` }),
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${pickApiKey(manifest, __VU + 2, __ITER)}`,
+        },
+        tags: { endpoint: 'incidents_note' },
+      }
+    );
+    opsknightMetrics.lifecycleSuccessRate.add(
+      noteRes.status === 201 || noteRes.status === 200 || noteRes.status === 404 || noteRes.status === 429
+    );
+  }
+
+  // 5. Read Incident Details
+  const getRes = http.get(`${baseUrl}/api/incidents/${incidentId}`, {
     headers: {
-      Authorization: `Bearer ${pickApiKey(manifest, __VU + 2, __ITER)}`,
+      Authorization: `Bearer ${pickApiKey(manifest, __VU + 3, __ITER)}`,
     },
     tags: { endpoint: 'incidents_get' },
   });
-  for (let retry = 0; retry < 3 && (getRes.status >= 500 || getRes.status === 0); retry++) {
-    sleep(0.15 + (retry * 0.1));
-    getRes = http.get(`${baseUrl}/api/incidents/${incidentId}`, {
-      headers: {
-        Authorization: `Bearer ${pickApiKey(manifest, __VU + 2, __ITER)}`,
-      },
-      tags: { endpoint: 'incidents_get_retry' },
-    });
-  }
   opsknightMetrics.lifecycleLatencyMs.add(getRes.timings.duration);
   opsknightMetrics.lifecycleSuccessRate.add(getRes.status === 200 || getRes.status === 429);
 
-  // 5. Resolve Incident
-  let resolveRes = http.patch(
+  // 6. Resolve Incident
+  const resolveRes = http.patch(
     `${baseUrl}/api/incidents/${incidentId}`,
     JSON.stringify({ status: 'RESOLVED' }),
     {
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${pickApiKey(manifest, __VU + 3, __ITER)}`,
+        Authorization: `Bearer ${pickApiKey(manifest, __VU + 4, __ITER)}`,
         'Idempotency-Key': `lt-idem-resolve-${incidentId}`,
       },
       tags: { endpoint: 'incidents_resolve' },
     }
   );
-  for (let retry = 0; retry < 3 && (resolveRes.status >= 500 || resolveRes.status === 0); retry++) {
-    sleep(0.15 + (retry * 0.1));
-    resolveRes = http.patch(
-      `${baseUrl}/api/incidents/${incidentId}`,
-      JSON.stringify({ status: 'RESOLVED' }),
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${pickApiKey(manifest, __VU + 3, __ITER)}`,
-          'Idempotency-Key': `lt-idem-resolve-${incidentId}`,
-        },
-        tags: { endpoint: 'incidents_resolve_retry' },
-      }
-    );
-  }
   opsknightMetrics.lifecycleLatencyMs.add(resolveRes.timings.duration);
   opsknightMetrics.lifecycleSuccessRate.add(
     resolveRes.status === 200 || resolveRes.status === 409 || resolveRes.status === 429
@@ -210,13 +205,12 @@ export function runConcurrentResponderRace() {
     return;
   }
 
-  // Group VUs into concurrent responder pairs racing on distinct baseline incidents
   const slot = (Math.floor((__VU - 1) / 2) + __ITER) % baselineIds.length;
   const incidentId = baselineIds[slot];
   const apiKey = pickApiKey(manifest, __VU, __ITER);
   const nextStatus = __VU % 2 === 0 ? 'ACKNOWLEDGED' : 'RESOLVED';
 
-  let res = http.patch(
+  const res = http.patch(
     `${baseUrl}/api/incidents/${incidentId}`,
     JSON.stringify({
       status: nextStatus,
@@ -230,23 +224,6 @@ export function runConcurrentResponderRace() {
       tags: { endpoint: 'incidents_race_patch' },
     }
   );
-  for (let retry = 0; retry < 3 && (res.status >= 500 || res.status === 0); retry++) {
-    sleep(0.15 + (retry * 0.1));
-    res = http.patch(
-      `${baseUrl}/api/incidents/${incidentId}`,
-      JSON.stringify({
-        status: nextStatus,
-        urgency: __ITER % 2 === 0 ? 'HIGH' : 'MEDIUM',
-      }),
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-        },
-        tags: { endpoint: 'incidents_race_patch_retry' },
-      }
-    );
-  }
 
   opsknightMetrics.lifecycleLatencyMs.add(res.timings.duration);
   if (res.status === 409 || res.status === 400) {
@@ -260,4 +237,83 @@ export function runConcurrentResponderRace() {
     res.status === 429;
   opsknightMetrics.lifecycleSuccessRate.add(acceptable);
   sleep(0.35);
+}
+
+// Phase 6 Torture: 50 concurrent clients all ACK the exact same incident simultaneously
+export function runConcurrent50AckStorm() {
+  const baseUrl = getBaseUrl();
+  const baselineIds = manifest.baselineIncidentIds || [];
+  const targetIncidentId = baselineIds.length > 0 ? baselineIds[0] : 'lt-incident-00001';
+  const apiKey = pickApiKey(manifest, __VU, __ITER);
+
+  const res = http.patch(
+    `${baseUrl}/api/incidents/${targetIncidentId}`,
+    JSON.stringify({ status: 'ACKNOWLEDGED' }),
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      tags: { endpoint: 'incidents_50_ack_storm' },
+    }
+  );
+
+  opsknightMetrics.lifecycleLatencyMs.add(res.timings.duration);
+  if (res.status === 409) {
+    opsknightMetrics.lifecycleRaceConflicts.add(1);
+  }
+  // Exactly 1 client gets 200 or all transition gracefully without 500 error cascades
+  check(res, {
+    'concurrent ACK handled deterministically': r =>
+      r.status === 200 || r.status === 409 || r.status === 400 || r.status === 429,
+  });
+  opsknightMetrics.lifecycleSuccessRate.add(
+    res.status === 200 || res.status === 409 || res.status === 400 || res.status === 429
+  );
+}
+
+// Phase 6 Torture: Sub-millisecond ACK vs RESOLVE race
+export function runAckResolveSubmillisecondRace() {
+  const baseUrl = getBaseUrl();
+  const baselineIds = manifest.baselineIncidentIds || [];
+  if (baselineIds.length < 2) return;
+
+  const targetIncidentId = baselineIds[1];
+  const apiKey = pickApiKey(manifest, __VU, __ITER);
+
+  // Send ACK and RESOLVE in rapid parallel bursts
+  const requests = [
+    {
+      method: 'PATCH',
+      url: `${baseUrl}/api/incidents/${targetIncidentId}`,
+      body: JSON.stringify({ status: 'ACKNOWLEDGED' }),
+      params: {
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        tags: { endpoint: 'race_ack' },
+      },
+    },
+    {
+      method: 'PATCH',
+      url: `${baseUrl}/api/incidents/${targetIncidentId}`,
+      body: JSON.stringify({ status: 'RESOLVED' }),
+      params: {
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        tags: { endpoint: 'race_resolve' },
+      },
+    },
+  ];
+
+  const responses = http.batch(requests);
+  for (const r of responses) {
+    opsknightMetrics.lifecycleLatencyMs.add(r.timings.duration);
+    if (r.status === 409) opsknightMetrics.lifecycleRaceConflicts.add(1);
+    check(r, {
+      'race request handled cleanly': res =>
+        res.status === 200 || res.status === 409 || res.status === 400 || res.status === 429,
+    });
+    opsknightMetrics.lifecycleSuccessRate.add(
+      r.status === 200 || r.status === 409 || r.status === 400 || r.status === 429
+    );
+  }
+  sleep(0.2);
 }

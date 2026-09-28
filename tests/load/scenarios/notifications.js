@@ -17,7 +17,7 @@ const providerFaultMode = (__ENV.PROVIDER_FAULT_MODE || 'progressive').toLowerCa
 
 export const options = {
   scenarios: {
-    notification_generator: {
+    critical_notification_stream: {
       executor: 'ramping-arrival-rate',
       startRate: Math.max(5, Math.floor(level.targetRps * 0.2)),
       timeUnit: '1s',
@@ -28,7 +28,16 @@ export const options = {
         { target: Math.max(20, Math.floor(level.targetRps * 0.6)), duration: durations.steady },
         { target: 5, duration: durations.cooldown },
       ],
-      exec: 'runNotificationTraffic',
+      exec: 'runCriticalNotificationTraffic',
+    },
+    bulk_notification_backlog_storm: {
+      executor: 'constant-arrival-rate',
+      rate: Math.max(15, Math.floor(level.targetRps * 0.5)),
+      timeUnit: '1s',
+      duration: durations.steady,
+      preAllocatedVUs: 15,
+      maxVUs: 40,
+      exec: 'runBulkNotificationTraffic',
     },
     provider_fault_controller: {
       executor: 'per-vu-iterations',
@@ -42,13 +51,12 @@ export const options = {
   },
 };
 
-export function runNotificationTraffic() {
+export function runCriticalNotificationTraffic() {
   const baseUrl = getBaseUrl();
   const integrationKey = pickCapacityIntegrationKey(manifest, __VU, __ITER);
-  const dedupKey = `lt-notif-burst-${__VU}-${__ITER}-${Date.now()}`;
+  const dedupKey = `lt-notif-crit-${__VU}-${__ITER}-${Date.now()}`;
 
-  // Critical incidents trigger multi-channel notifications via outbox -> notification worker
-  // Because outbox is decoupled, /api/events must remain fast even when providers return 429/503
+  // Critical incidents trigger multi-channel notifications (EMAIL, SMS, PUSH, SLACK, WEBHOOK)
   const res = postEventApi(
     baseUrl,
     integrationKey,
@@ -56,28 +64,62 @@ export function runNotificationTraffic() {
       event_action: 'trigger',
       dedup_key: dedupKey,
       payload: {
-        summary: `[Notification Pipeline] Multi-channel critical dispatch ${dedupKey}`,
-        source: `k6-notif-driver-${__VU}`,
+        summary: `[CRITICAL Pipeline] Urgent paging dispatch ${dedupKey}`,
+        source: `k6-critical-notif-${__VU}`,
         severity: 'critical',
         custom_details: {
+          trafficClass: 'CRITICAL',
           channels: ['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK'],
           dedupKey,
+          queuedAt: Date.now(),
         },
       },
     },
-    { endpoint: 'events_api', scenario: 'notifications' }
+    { endpoint: 'events_api', scenario: 'notifications_critical' }
   );
 
   check(res, {
-    'event ingestion decoupled from provider latency (202 or 429)': r =>
-      r.status === 202 || r.status === 429,
+    'critical notification ingested (202 or 429)': r => r.status === 202 || r.status === 429,
+  });
+}
+
+export function runBulkNotificationTraffic() {
+  const baseUrl = getBaseUrl();
+  const integrationKey = pickCapacityIntegrationKey(manifest, __VU + 150, __ITER);
+  const dedupKey = `lt-notif-bulk-${__VU}-${__ITER}-${Date.now()}`;
+
+  // Low-urgency / informational traffic categorized as BULK notifications
+  const res = postEventApi(
+    baseUrl,
+    integrationKey,
+    {
+      event_action: 'trigger',
+      dedup_key: dedupKey,
+      payload: {
+        summary: `[BULK Notification Backlog] Background digest message ${dedupKey}`,
+        source: `k6-bulk-notif-${__VU}`,
+        severity: 'info',
+        custom_details: {
+          trafficClass: 'BULK',
+          channels: ['EMAIL', 'WEBHOOK'],
+          dedupKey,
+          queuedAt: Date.now(),
+        },
+      },
+    },
+    { endpoint: 'events_api', scenario: 'notifications_bulk' }
+  );
+
+  check(res, {
+    'bulk notification ingested': r => r.status === 202 || r.status === 429,
   });
 }
 
 export function runProviderFaultSchedule() {
   const controlBaseUrl = getControlBaseUrl();
   const isCert = (__ENV.LOAD_DURATION_PROFILE || 'fast').toLowerCase() === 'cert';
-  const stepSec = isCert ? 2 : 10;
+  const is25m = (__ENV.LOAD_DURATION_PROFILE || 'fast').toLowerCase() === 'mega25m';
+  const stepSec = isCert ? 2 : is25m ? 60 : 10;
 
   if (providerFaultMode === 'none' || providerFaultMode === '200_fast') {
     setEmulatorBehavior(controlBaseUrl, {
@@ -90,7 +132,7 @@ export function runProviderFaultSchedule() {
     return;
   }
 
-  // Phase 1: Healthy fast providers (200 OK, 15ms)
+  // Phase 1: Healthy baseline (200 OK, 15ms)
   setEmulatorBehavior(controlBaseUrl, {
     provider: 'all',
     mode: '200_fast',
@@ -100,47 +142,48 @@ export function runProviderFaultSchedule() {
   });
   sleep(stepSec);
 
-  // Phase 2: Slow downstream providers (500ms-1.5s latency)
+  // Phase 2: High latency degradation (500ms - 2s latency)
   setEmulatorBehavior(controlBaseUrl, {
     provider: 'slack',
     mode: '200_slow',
-    latencyMs: 650,
+    latencyMs: 800,
     jitterMs: 250,
   });
   setEmulatorBehavior(controlBaseUrl, {
     provider: 'webhook',
     mode: '200_slow',
-    latencyMs: 800,
-    jitterMs: 300,
+    latencyMs: 1500,
+    jitterMs: 400,
   });
   sleep(stepSec);
 
-  // Phase 3: Rate-limiting (HTTP 429 with Retry-After: 2s on 30% of requests)
+  // Phase 3: Downstream rate limiting (HTTP 429 with Retry-After)
   setEmulatorBehavior(controlBaseUrl, {
     provider: 'sms',
     mode: 'mixed',
-    errorRate: 0.3,
+    errorRate: 0.35,
     retryAfterSeconds: 2,
     latencyMs: 40,
   });
   setEmulatorBehavior(controlBaseUrl, {
     provider: 'push',
     mode: 'mixed',
-    errorRate: 0.25,
+    errorRate: 0.3,
     retryAfterSeconds: 2,
     latencyMs: 30,
   });
   sleep(stepSec);
 
-  // Phase 4: Brief 503 outage on webhook & slack, then full recovery to 200_fast
+  // Phase 4: Downstream 503 and complete outage simulation
   setEmulatorBehavior(controlBaseUrl, {
-    provider: 'webhook',
+    provider: 'all',
     mode: '503_outage',
     retryAfterSeconds: 3,
   });
-  sleep(Math.max(1, Math.floor(stepSec * 0.8)));
+  // Simulate complete provider outage (scaled to duration profile)
+  sleep(Math.max(2, Math.floor(stepSec * 1.5)));
 
-  // Phase 5: Restore all providers to 200_fast so retry queue drains cleanly
+  // Phase 5: Provider restoration and queue drain
   setEmulatorBehavior(controlBaseUrl, {
     provider: 'all',
     mode: '200_fast',

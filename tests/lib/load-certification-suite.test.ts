@@ -52,8 +52,11 @@ describe('OpsKnight Load & Scalability Certification Suite', () => {
       'tests/load/scenarios/notifications.js',
       'tests/load/scenarios/status-fanout.js',
       'tests/load/scenarios/realtime.js',
-      'tests/load/scenarios/mixed-incident-storm.js',
+      'tests/load/scenarios/user-workload.js',
+      'tests/load/scenarios/security-under-load.js',
       'tests/load/scenarios/recovery.js',
+      'tests/load/scenarios/mixed-incident-storm.js',
+      'tests/load/scenarios/mega-journey.js',
       'tests/load/fixtures/users/index.ts',
       'tests/load/fixtures/services/index.ts',
       'tests/load/fixtures/schedules/index.ts',
@@ -394,5 +397,103 @@ opsknight_db_pool_active 18
 
     expect(profInvFail.sustainedAlertRps).toBe('No certified sustainable capacity');
     expect(profInvFail.bottleneck).toBe('Critical notification queue starvation');
+  });
+
+  it('certifies Phase 6 Mega Load & Limit Certification matrix, bottleneck classification, and deployment recommendations', async () => {
+    const phase6Topologies = TOPOLOGY_MATRIX.filter(t => t.phase === 6);
+    expect(phase6Topologies.length).toBeGreaterThanOrEqual(14);
+
+    const dryRunPhase6 = await runLoadCertificationOrchestrator([
+      '--dry-run',
+      '--phase=6',
+    ]);
+    expect(dryRunPhase6).toHaveProperty('mode', 'dry-run');
+    expect(dryRunPhase6).toHaveProperty('topologiesCount', phase6Topologies.length);
+
+    // Verify all 4 deployment families have Phase 6 definitions
+    const families = new Set(phase6Topologies.map(t => t.family));
+    expect(families).toContain('compose');
+    expect(families).toContain('swarm');
+    expect(families).toContain('kind-helm');
+    expect(families).toContain('kind-kustomize');
+
+    // Test markdown report generation with Phase 6 executive envelope, efficiency metrics, and sizing recommendations
+    const markdown = generateCertificationMarkdownReport([
+      {
+        topologyId: 'phase6_compose_split_pgbouncer',
+        topologyName: 'Phase 6 Mega: Compose Split Runtime + PgBouncer',
+        phase: 6,
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        scenarios: [
+          {
+            scenario: 'alert-ingestion.js',
+            loadLevel: 'L4',
+            durationMs: 60000,
+            exitCode: 0,
+            p50Ms: 15.2,
+            p95Ms: 78.4,
+            p99Ms: 145.0,
+            rps: 1250,
+            errorRate: 0,
+            thresholdsPassed: true,
+          },
+          {
+            scenario: 'notifications.js',
+            loadLevel: 'L3',
+            durationMs: 60000,
+            exitCode: 0,
+            p50Ms: 25.0,
+            p95Ms: 110.0,
+            p99Ms: 210.0,
+            rps: 15,
+            errorRate: 0,
+            thresholdsPassed: true,
+          },
+          {
+            scenario: 'incident-lifecycle.js',
+            loadLevel: 'L3',
+            durationMs: 60000,
+            exitCode: 0,
+            p50Ms: 40.0,
+            p95Ms: 180.0,
+            p99Ms: 320.0,
+            rps: 20,
+            errorRate: 0,
+            thresholdsPassed: true,
+          },
+        ],
+        verification: {
+          passed: true,
+          checkedAt: new Date().toISOString(),
+          topology: 'phase6_compose_split_pgbouncer',
+          invariants: {
+            zeroDuplicateOpenIncidents: { passed: true, duplicateGroups: 0, samples: [] },
+            zeroLostAcceptedAlerts: { passed: true, totalLoadAlerts: 75000, unlinkedAlerts: 0 },
+            zeroFalseEscalationsAfterAckOrResolve: { passed: true, violationCount: 0, sampleIncidentIds: [] },
+            zeroCorruptedIncidentStates: { passed: true, acknowledgedWithoutTimestamp: 0, resolvedWithoutTimestamp: 0, snoozedWithoutUntil: 0 },
+            zeroCriticalNotificationStarvation: { passed: true, pendingCriticalCount: 0, oldestPendingCriticalAgeMs: 0, pendingBulkCount: 0, deliveredCriticalCount: 1500, deliveredBulkCount: 8500 },
+            providerIdempotencyCheck: { passed: true, emulatorAvailable: true, duplicateDeliveryKeysByProvider: {}, totalDuplicateDeliveries: 0 },
+          },
+          totals: {
+            incidentsCreated: 12500,
+            alertsPersisted: 75000,
+            notificationsTotal: 10000,
+            backgroundJobsPending: 0,
+            backgroundJobsFailed: 0,
+          },
+        },
+        peakActivePgConnections: 28,
+        peakOldestPendingJobAgeMs: 250,
+        certified: true,
+      },
+    ]);
+
+    expect(markdown).toContain('phase6_compose_split_pgbouncer');
+    expect(markdown).toContain('Phase 6');
+    expect(markdown).toContain('Resource-Efficiency Comparison Matrix');
+    expect(markdown).toContain('Evidence-Based Deployment Sizing Guidance');
+    expect(markdown).toContain('Breaking Point');
+    expect(markdown).toContain('Large enterprise production');
   });
 });

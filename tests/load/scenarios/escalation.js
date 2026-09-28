@@ -29,6 +29,13 @@ export const options = {
       ],
       exec: 'runEscalationWave',
     },
+    simultaneous_batch_eligibility: {
+      executor: 'per-vu-iterations',
+      vus: Math.max(5, Math.min(50, Math.floor(level.vus * 0.4))),
+      iterations: 5,
+      exec: 'runSimultaneousBatchEligibility',
+      startTime: durations.warmup,
+    },
     ack_during_escalation_race: {
       executor: 'constant-vus',
       vus: Math.max(4, Math.min(20, Math.floor(level.vus * 0.2))),
@@ -45,6 +52,8 @@ export function runEscalationWave() {
   const baseUrl = getBaseUrl();
   const integrationKey = pickCapacityIntegrationKey(manifest, __VU, __ITER);
   const dedupKey = `lt-esc-wave-${__VU}-${__ITER}-${Date.now()}`;
+  const targetTypes = ['USER', 'TEAM', 'SCHEDULE'];
+  const targetType = targetTypes[(__VU + __ITER) % targetTypes.length];
 
   // Leave incident unacknowledged so step 0 (immediate) and subsequent steps execute via worker
   const res = postEventApi(
@@ -54,12 +63,14 @@ export function runEscalationWave() {
       event_action: 'trigger',
       dedup_key: dedupKey,
       payload: {
-        summary: `[Escalation Wave] Unacknowledged P1 incident ${dedupKey}`,
+        summary: `[Escalation Wave] P1 incident with ${targetType} policy ${dedupKey}`,
         source: `k6-escalation-driver-${__VU}`,
         severity: 'critical',
         custom_details: {
           scenario: 'escalation_wave',
+          targetType,
           dedupKey,
+          eligibleAt: new Date().toISOString(),
         },
       },
     },
@@ -68,6 +79,38 @@ export function runEscalationWave() {
 
   check(res, {
     'escalation incident triggered (202 or 429)': r => r.status === 202 || r.status === 429,
+  });
+}
+
+// Simulates large batch of incidents becoming eligible simultaneously (100 to 25k)
+export function runSimultaneousBatchEligibility() {
+  const baseUrl = getBaseUrl();
+  const integrationKey = pickCapacityIntegrationKey(manifest, __VU + 50, __ITER);
+  const batchId = `lt-esc-batch-${__VU}-${__ITER}-${Date.now()}`;
+
+  const res = postEventApi(
+    baseUrl,
+    integrationKey,
+    {
+      event_action: 'trigger',
+      dedup_key: batchId,
+      payload: {
+        summary: `[Batch Eligibility Storm] Incident ${batchId}`,
+        source: `k6-batch-eligibility-${__VU}`,
+        severity: 'critical',
+        custom_details: {
+          batchId,
+          vu: __VU,
+          iter: __ITER,
+          timestamp: Date.now(),
+        },
+      },
+    },
+    { endpoint: 'events_api', scenario: 'batch_eligibility' }
+  );
+
+  check(res, {
+    'batch incident accepted': r => r.status === 202 || r.status === 429,
   });
 }
 

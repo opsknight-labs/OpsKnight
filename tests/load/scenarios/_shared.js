@@ -106,6 +106,11 @@ export const DURATION_PROFILES = {
     steady: '110m',
     cooldown: '5m',
   },
+  mega25m: {
+    warmup: '2m',
+    steady: '21m',
+    cooldown: '2m',
+  },
 };
 
 export const opsknightMetrics = {
@@ -124,6 +129,12 @@ export const opsknightMetrics = {
 
   sseConnectSuccessRate: new Rate('opsknight_sse_connect_success_rate'),
   sseConnectLatencyMs: new Trend('opsknight_sse_connect_latency_ms', true),
+
+  userWorkloadSuccessRate: new Rate('opsknight_user_workload_success_rate'),
+  userWorkloadLatencyMs: new Trend('opsknight_user_workload_latency_ms', true),
+
+  securityCheckSuccessRate: new Rate('opsknight_security_check_success_rate'),
+  securityCheckLatencyMs: new Trend('opsknight_security_check_latency_ms', true),
 };
 
 export function getActiveLoadLevel() {
