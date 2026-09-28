@@ -18,6 +18,7 @@ export function inspectConfig() {
         secret,
         scopes: [],
         defaults: [],
+        allowedValues: [],
       };
       if (!entry.sources.includes(file)) entry.sources.push(file);
       const scope = file.startsWith('deploy/') ? 'deployment' : 'runtime';
@@ -31,11 +32,28 @@ export function inspectConfig() {
           if (value && !entry.defaults.includes(value)) entry.defaults.push(value);
         }
       }
+      for (const comparison of source.matchAll(new RegExp(`process\\.env\\.${name}\\s*(?:===|!==)\\s*['"]([^'"]+)['"]`, 'g'))) {
+        if (!entry.allowedValues.includes(comparison[1])) entry.allowedValues.push(comparison[1]);
+      }
       variables.set(name, entry);
     }
   }
   return [...variables.values()]
-    .map(entry => ({ ...entry, sources: entry.sources.sort(), scopes: entry.scopes.sort(), defaults: entry.defaults.sort() }))
+    .map(entry => ({
+      ...entry,
+      type: entry.allowedValues.length ? 'enum/string' : entry.defaults.some(value => /^(?:true|false)$/.test(value)) ? 'boolean' : 'string',
+      sources: entry.sources.sort(),
+      scopes: entry.scopes.sort(),
+      defaults: entry.defaults.sort(),
+      allowedValues: entry.allowedValues.sort(),
+      requiredWhen: entry.required ? 'always' : 'conditional or optional; inspect cited source',
+      runtimeRoles: entry.sources.some(source => source.includes('worker')) ? ['worker'] : ['web or integrated runtime'],
+      deploymentSupport: entry.scopes.includes('deployment') ? ['manifest'] : ['runtime'],
+      restartRequired: true,
+      deprecated: false,
+      replacement: null,
+      confidence: entry.required || entry.defaults.length || entry.allowedValues.length ? 'derived' : 'incomplete',
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

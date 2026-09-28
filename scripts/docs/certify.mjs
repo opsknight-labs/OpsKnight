@@ -16,6 +16,7 @@ run('node', ['scripts/docs/check-frontmatter.mjs']);
 run('node', ['scripts/check-docs-links.cjs']);
 run('node', ['scripts/check-docs-capabilities.cjs']);
 run('node', ['scripts/docs/check-evidence.mjs']);
+run('node', ['scripts/docs/check-feature-graph.mjs']);
 run('node', ['--test', ...readdirSync(join(root, 'tests/docs/tooling')).filter(name => name.endsWith('.test.mjs')).map(name => `tests/docs/tooling/${name}`)]);
 if (fullRuntime) {
   run('docker', [...composeArgs, 'down', '--volumes', '--remove-orphans']);
@@ -52,6 +53,7 @@ const report = {
     frontmatter: 'passed',
     links: 'passed',
     capabilityCoverage: 'passed',
+    featureClassification: discovery.featureGraph.unclassified.length === 0 ? 'passed' : 'failed',
     evidenceContract: 'passed',
     toolingTests: 'passed',
     runtimeJourneys: fullRuntime ? 'passed' : 'not-run',
@@ -67,6 +69,11 @@ const report = {
     integrationCandidates: discovery.integrations.length,
     databaseModels: discovery.database.models.length,
     runtimeRoles: discovery.deployment.runtimeRoles.length,
+    featureNodes: discovery.featureGraph.nodes.length,
+    unclassifiedFeatures: discovery.featureGraph.unclassified.length,
+    supportedPublicApis: discovery.featureGraph.nodes.filter(item => item.kind === 'api' && item.classification === 'PUBLIC_API').length,
+    notificationProviders: discovery.notificationProviders.length,
+    publicLimits: discovery.limits.length,
     journeyFiles: journeys.length,
     evidenceScreenshots: evidence.length,
   },

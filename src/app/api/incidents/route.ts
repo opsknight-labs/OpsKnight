@@ -11,6 +11,7 @@ import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 import { authorizationDecisionError } from '@/lib/api-authorization-error';
 import { AppError } from '@/lib/errors';
 import { executeIdempotentIncidentCreation } from '@/lib/incidents/idempotent-commands';
+import { toIncidentApiDto, toIncidentApiDtos } from '@/lib/incidents/api-dto';
 
 const LEGACY_UNAUTHORIZED_MESSAGE =
   'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
@@ -92,7 +93,7 @@ async function getIncidents(req: NextRequest) {
     },
   });
 
-  return jsonOk({ incidents }, 200, {
+  return jsonOk({ incidents: toIncidentApiDtos(incidents) }, 200, {
     'Cache-Control': 'private, max-age=5, stale-while-revalidate=15',
   });
 }
@@ -219,7 +220,7 @@ async function postIncident(req: NextRequest) {
     });
 
     return jsonOk(
-      { incident, outcome: creation.outcome },
+      { incident: toIncidentApiDto(incident), outcome: creation.outcome },
       201,
       execution.replayed ? { 'Idempotency-Replayed': 'true' } : undefined
     );

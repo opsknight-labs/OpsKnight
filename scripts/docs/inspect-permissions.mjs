@@ -7,14 +7,16 @@ function valuesFromObject(source, name) {
 
 export function inspectPermissions() {
   const source = readRepositoryFile('src/lib/authorization.ts');
+  const policySource = readRepositoryFile('src/lib/authorization-policy.ts');
   return {
     roles: [...source.matchAll(/export const APP_ROLES = \[([^\]]+)\]/g)]
       .flatMap(match => [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map(value => value[1])),
     capabilities: valuesFromObject(source, 'CAPABILITIES'),
     apiScopes: valuesFromObject(source, 'API_SCOPES'),
+    actions: valuesFromObject(policySource, 'AUTHORIZATION_ACTIONS'),
     source: 'src/lib/authorization.ts',
+    policySource: 'src/lib/authorization-policy.ts',
   };
 }
 
 if (process.argv[1] === import.meta.filename) console.log(JSON.stringify(inspectPermissions(), null, 2));
-

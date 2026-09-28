@@ -1,19 +1,20 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-28T03:53:22.496Z",
-  "sourceRevision": "a41b97a90c4fa0ecae7ba2295f96449e9a0bea4c",
+  "generatedAt": "2026-09-28T04:23:19.260Z",
+  "sourceRevision": "9e8dd48f3ae0528c6d7158423e0fde6ea1185609",
   "releaseState": "upcoming",
   "checks": {
     "frontmatter": "passed",
     "links": "passed",
     "capabilityCoverage": "passed",
+    "featureClassification": "passed",
     "evidenceContract": "passed",
     "toolingTests": "passed",
     "runtimeJourneys": "not-run",
     "websiteBuild": "release-gated"
   },
   "counts": {
-    "documentationPages": 116,
+    "documentationPages": 117,
     "capabilitiesDiscovered": 22,
     "capabilitiesDocumented": 22,
     "uiRoutes": 101,
@@ -22,6 +23,11 @@
     "integrationCandidates": 28,
     "databaseModels": 120,
     "runtimeRoles": 8,
+    "featureNodes": 1094,
+    "unclassifiedFeatures": 0,
+    "supportedPublicApis": 40,
+    "notificationProviders": 9,
+    "publicLimits": 226,
     "journeyFiles": 3,
     "evidenceScreenshots": 9
   },

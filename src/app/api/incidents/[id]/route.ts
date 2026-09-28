@@ -10,6 +10,7 @@ import { AUTHORIZATION_ACTIONS, authorize } from '@/lib/authorization-policy';
 import { authorizationDecisionError } from '@/lib/api-authorization-error';
 import { AppError } from '@/lib/errors';
 import { applyRestIncidentPatch } from '@/lib/incidents/rest-patch';
+import { toIncidentApiDto } from '@/lib/incidents/api-dto';
 
 const LEGACY_UNAUTHORIZED_MESSAGE =
   'You do not have permission to perform this action. Please contact an administrator if you believe this is an error.';
@@ -121,7 +122,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     : visibleIncident;
 
-  return jsonOk({ incident: responseIncident }, 200);
+  return jsonOk({ incident: toIncidentApiDto(responseIncident) }, 200);
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -223,7 +224,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   });
 
   return jsonOk(
-    { incident },
+    { incident: toIncidentApiDto(incident) },
     200,
     idempotencyReplayed ? { 'Idempotency-Replayed': 'true' } : undefined
   );
