@@ -71,6 +71,7 @@
     "docs:integrations": "node scripts/docs/generate-integrations.mjs",
     "docs:frontmatter": "node scripts/docs/check-frontmatter.mjs",
     "docs:evidence": "node scripts/docs/check-evidence.mjs",
+    "docs:features": "node scripts/docs/check-feature-graph.mjs",
     "docs:impact": "node scripts/docs/check-impact.mjs",
     "docs:links": "node scripts/check-docs-links.cjs",
     "docs:capabilities": "node scripts/check-docs-capabilities.cjs",

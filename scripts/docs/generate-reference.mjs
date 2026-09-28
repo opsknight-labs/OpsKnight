@@ -5,6 +5,14 @@ import { resolve } from 'node:path';
 import { inspectApi } from './inspect-api.mjs';
 import { inspectConfig } from './inspect-config.mjs';
 import { inspectPermissions } from './inspect-permissions.mjs';
+import { inspectRoutes } from './inspect-routes.mjs';
+import { inspectDatabase } from './inspect-database.mjs';
+import { inspectDeployment } from './inspect-deployment.mjs';
+import { inspectIntegrations } from './inspect-integrations.mjs';
+import { inspectRuntime } from './inspect-runtime.mjs';
+import { inspectNotificationProviders } from './inspect-notification-providers.mjs';
+import { inspectLimits } from './inspect-limits.mjs';
+import { buildFeatureGraph } from './build-feature-graph.mjs';
 import { repositoryRoot } from './discovery-lib.mjs';
 
 const root = resolve(repositoryRoot, 'docs/v2.0.0/reference');
@@ -45,6 +53,10 @@ ${permissions.roles.map(role => `- \`${role}\``).join('\n')}
 ## Capabilities
 
 ${permissions.capabilities.map(capability => `- \`${capability}\``).join('\n')}
+
+## Authorization actions
+
+${permissions.actions.map(action => `- \`${action}\``).join('\n')}
 
 ## API scopes
 
@@ -102,7 +114,7 @@ ${criticalBody}
 
 ## Complete discovered inventory
 
-${variables.map(variable => `## \`${variable.name}\`\n\n- Required: ${variable.required ? 'yes' : 'no or conditionally required'}\n- Secret: ${variable.secret ? 'yes' : 'no'}\n- Scope: ${variable.scopes.join(', ')}\n- Static default: ${variable.secret ? 'not displayed' : variable.defaults.length ? variable.defaults.map(value => `\`${value}\``).join(', ') : 'none discovered'}\n- Sources: ${variable.sources.map(source => `\`${source}\``).join(', ')}\n`).join('\n')}
+${variables.map(variable => `## \`${variable.name}\`\n\n- Type: ${variable.type}\n- Required: ${variable.required ? 'yes' : variable.requiredWhen}\n- Allowed values: ${variable.allowedValues.length ? variable.allowedValues.map(value => `\`${value}\``).join(', ') : 'not statically complete'}\n- Secret: ${variable.secret ? 'yes' : 'no'}\n- Runtime roles: ${variable.runtimeRoles.join(', ')}\n- Deployment support: ${variable.deploymentSupport.join(', ')}\n- Apply behavior: ${variable.restartRequired ? 'restart required' : 'runtime reload supported'}\n- Deprecated: ${variable.deprecated ? `yes; use \`${variable.replacement}\`` : 'no'}\n- Extraction confidence: ${variable.confidence}\n- Static default: ${variable.secret ? 'not displayed' : variable.defaults.length ? variable.defaults.map(value => `\`${value}\``).join(', ') : 'none discovered'}\n- Sources: ${variable.sources.map(source => `\`${source}\``).join(', ')}\n`).join('\n')}
 `;
 
 const routes = inspectApi();
@@ -141,9 +153,69 @@ Supported general-purpose contracts are documented separately:
 ${routeSections}
 `;
 
+const limits = inspectLimits();
+const limitsBody = `${frontmatter({
+  title: 'Runtime limits',
+  description: 'Generated limits, timeouts, rates, concurrency bounds, and retention constants.',
+  area: 'configuration',
+  evidence: ['generated/docs-discovery/current.json', 'src/'],
+})}
+
+# Runtime limits
+
+This page is generated from named numeric constants and explicit maximum-value
+messages in source. A discovered constant is not automatically a public promise;
+use its source and owning feature to interpret scope. Scanner output is kept here
+to prevent copied values from silently drifting.
+
+${limits.map(limit => `## \`${limit.name}\`\n\n- Value: \`${limit.value}\`\n- Source expression: \`${limit.expression.replaceAll('`', '')}\`\n- Source: \`${limit.source}\``).join('\n\n')}
+`;
+
+const discoveryForGraph = {
+  apiRoutes: routes,
+  uiRoutes: inspectRoutes(),
+  configuration: variables,
+  integrations: inspectIntegrations(),
+  permissions,
+  deployment: inspectDeployment(),
+  database: inspectDatabase(),
+  runtime: inspectRuntime(),
+  notificationProviders: inspectNotificationProviders(),
+  limits,
+};
+const graph = buildFeatureGraph(discoveryForGraph);
+const featureBody = `${frontmatter({
+  title: 'Product feature classification',
+  description: 'Generated ownership and visibility classification for every discovered product surface.',
+  area: 'platform',
+  evidence: ['generated/docs-discovery/current.json', 'generated/docs-contracts/current.json'],
+})}
+
+# Product feature classification
+
+Certification fails if any discovered node lacks an owner, classification, or
+source. Public documentation is generated from public, administrator, and
+operator contracts; internal nodes remain classified without becoming public
+API promises.
+
+- Total classified nodes: ${graph.summary.total}
+- Unclassified nodes: ${graph.summary.unclassified}
+
+${Object.entries(graph.summary.byKind).map(([kind, count]) => `- \`${kind}\`: ${count}`).join('\n')}
+
+## Classification totals
+
+${Object.entries(graph.summary.byClassification).map(([classification, count]) => `- \`${classification}\`: ${count}`).join('\n')}
+
+The complete node-level contract, including provenance and extracted API
+semantics, is stored in \`generated/docs-contracts/current.json\`.
+`;
+
 mkdirSync(resolve(root, 'api'), { recursive: true });
 mkdirSync(resolve(root, 'configuration'), { recursive: true });
 writeFileSync(resolve(root, 'permissions.md'), permissionBody);
 writeFileSync(resolve(root, 'configuration/README.md'), configurationBody);
 writeFileSync(resolve(root, 'api/README.md'), apiBody);
+writeFileSync(resolve(root, 'limits.md'), limitsBody);
+writeFileSync(resolve(root, 'features.md'), featureBody);
 console.log(`Generated ${routes.length} API routes, ${variables.length} configuration entries, and ${permissions.capabilities.length} capabilities.`);

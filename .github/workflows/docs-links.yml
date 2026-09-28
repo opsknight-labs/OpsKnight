@@ -50,7 +50,7 @@ jobs:
           npm run docs:reference
           npm run docs:integrations
       - name: Reject generated documentation drift
-        run: git diff --exit-code -- generated/docs-discovery/current.json docs/v2.0.0/reference docs/v2.0.0/integrations
+        run: git diff --exit-code -- generated/docs-discovery/current.json generated/docs-contracts/current.json docs/v2.0.0/reference docs/v2.0.0/integrations
       - name: Validate 2.0.0 documentation contracts
         run: npm run docs:certify:static
       - name: Detect documentation impact

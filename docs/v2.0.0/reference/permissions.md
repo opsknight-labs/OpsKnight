@@ -63,6 +63,18 @@ resource scope remain authoritative.
 - `service.read.scoped`
 - `user.read.all`
 
+## Authorization actions
+
+- `event.create`
+- `incident.acknowledge`
+- `incident.create`
+- `incident.escalate`
+- `incident.manage`
+- `incident.note`
+- `incident.read`
+- `schedule.read`
+- `service.read`
+
 ## API scopes
 
 - `events:write`
