@@ -174,28 +174,17 @@ export default async function globalSetup() {
         create: { layerId: extraLayer.id, userId, position },
       })));
     }
+    await prisma.statusPage.deleteMany({ where: { name: 'Northstar Data Services Status' } });
     const primaryStatusPage = await prisma.statusPage.upsert({
       where: { name: DOCS_FIXTURES.statusPage },
       update: { enabled: true, slug: 'northstar-systems', organizationName: 'Northstar Systems', contactEmail: 'reliability@opsknight.com' },
       create: { name: DOCS_FIXTURES.statusPage, enabled: true, slug: 'northstar-systems', organizationName: 'Northstar Systems' },
     });
-    const regionalStatusPage = await prisma.statusPage.upsert({
-      where: { name: 'Northstar Data Services Status' },
-      update: { enabled: true, slug: 'northstar-data', organizationName: 'Northstar Systems', privacyMode: 'PUBLIC' },
-      create: { name: 'Northstar Data Services Status', enabled: true, slug: 'northstar-data', organizationName: 'Northstar Systems', privacyMode: 'PUBLIC' },
-    });
-    for (const [order, mappedService] of [service, additionalServices[0], additionalServices[1], additionalServices[2], additionalServices[4]].entries()) {
+    for (const [order, mappedService] of [service, ...additionalServices].entries()) {
       await prisma.statusPageService.upsert({
         where: { statusPageId_serviceId: { statusPageId: primaryStatusPage.id, serviceId: mappedService.id } },
         update: { order, showOnPage: true },
         create: { statusPageId: primaryStatusPage.id, serviceId: mappedService.id, order, showOnPage: true },
-      });
-    }
-    for (const [order, mappedService] of [additionalServices[2], additionalServices[3]].entries()) {
-      await prisma.statusPageService.upsert({
-        where: { statusPageId_serviceId: { statusPageId: regionalStatusPage.id, serviceId: mappedService.id } },
-        update: { order, showOnPage: true },
-        create: { statusPageId: regionalStatusPage.id, serviceId: mappedService.id, order, showOnPage: true },
       });
     }
     const existing = await prisma.incident.findFirst({ where: { title: DOCS_FIXTURES.incident, serviceId: service.id } });
