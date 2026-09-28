@@ -4,3 +4,5 @@ resources:
   - namespace.yaml
   - rbac.yaml
   - network-policy.yaml
+  - runtime.yaml
+  - mocks.yaml

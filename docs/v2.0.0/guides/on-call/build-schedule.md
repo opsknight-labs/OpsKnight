@@ -14,6 +14,8 @@ verification:
 
 # Build an on-call schedule
 
+![On-call schedules for a professional reliability team](/docs/v2.0.0/assets/on-call-schedules.png)
+
 Create a uniquely named schedule, select its time zone, then add a layer with a
 start time, rotation length, optional restrictions, and ordered responders.
 Preview at least one full rotation before connecting the schedule to an

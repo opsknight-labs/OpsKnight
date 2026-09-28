@@ -14,6 +14,8 @@ verification:
 
 # Configure an escalation policy
 
+![Escalation policy directory with operational ownership](/docs/v2.0.0/assets/escalation-policies.png)
+
 Create a policy, add ordered steps, select each user, team, or schedule target,
 choose the delay and notification channels, and save. Attach the policy to a
 test service and trigger an incident.
@@ -21,4 +23,3 @@ test service and trigger an incident.
 Verify that step order is unique, every target resolves to an eligible recipient,
 and configured channels have usable endpoints. A syntactically valid policy can
 still be operationally empty when its target has no active members or coverage.
-

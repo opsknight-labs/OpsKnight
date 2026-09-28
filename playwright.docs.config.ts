@@ -6,6 +6,7 @@ const databaseUrl =
 process.env.DOCS_DATABASE_URL = databaseUrl;
 process.env.DATABASE_URL = databaseUrl;
 process.env.DOCS_OPSKNIGHT_IMAGE ||= 'ghcr.io/opsknight-labs/opsknight-test@sha256:4364470f96e793e24a3c85cad62ed429cfe179f23aa5eb8a26ddcc864e2303dd';
+const baseURL = process.env.DOCS_BASE_URL || 'http://localhost:3200';
 
 export default defineConfig({
   testDir: './tests/docs/journeys',
@@ -17,7 +18,7 @@ export default defineConfig({
   expect: { timeout: 30_000 },
   reporter: [['line'], ['html', { outputFolder: 'generated/docs-test-report', open: 'never' }]],
   use: {
-    baseURL: 'http://localhost:3200',
+    baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     serviceWorkers: 'block',
@@ -32,7 +33,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 }, storageState: 'test-results/docs-auth.json' },
     },
   ],
-  webServer: {
+  webServer: process.env.DOCS_EXTERNAL_RUNTIME === 'true' ? undefined : {
     command: 'sh scripts/docs/serve-test-image.sh',
     url: 'http://localhost:3200/login',
     reuseExistingServer: !process.env.CI,

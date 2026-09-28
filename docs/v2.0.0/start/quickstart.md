@@ -15,6 +15,8 @@ verification:
 
 # Quickstart with Docker Compose
 
+![Incident list populated with realistic service and responder data](/docs/v2.0.0/assets/incidents-list.png)
+
 Use this path for an isolated evaluation. Choose an immutable tested image for
 the release you are evaluating; do not use a production database or credentials.
 
