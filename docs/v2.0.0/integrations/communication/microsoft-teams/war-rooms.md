@@ -22,6 +22,11 @@ delivery. Enable war-room permissions in the generated package, reinstall or
 update it in the target team, then select the war-room destination for the
 service.
 
+In a provisioned incident channel, the card can include the video bridge and
+the actions available to the signed-in responder.
+
+![OpsKnight Microsoft Teams incident war room with an Adaptive Card, video bridge, and responder actions](/docs/v2.0.0/assets/teams-chatops-war-room.png)
+
 1. Enable war-room permissions in the generated application package.
 2. Reinstall or update the package in the target team.
 3. Select the service destination that owns automatic war-room behavior.

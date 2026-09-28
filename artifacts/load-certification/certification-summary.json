@@ -1,4 +1,14 @@
-[
+{
+  "generatedAt": "2026-09-28T12:20:49.770Z",
+  "sourceRevision": "52d6a3c5c791e7ad9ad21cd76f11cbdf11d3176f",
+  "testHarnessRevision": "e2cd6e28092f544eea2342ebe455cac680fd157b",
+  "environment": {
+    "cpu": "10-core",
+    "memory": "16 GB",
+    "dockerEngine": "28.x",
+    "kind": "v0.31.0"
+  },
+  "results": [
   {
     "topologyId": "compose_integrated_bundled_db",
     "topologyName": "Compose: Integrated Runtime + Bundled PostgreSQL",
@@ -6675,4 +6685,5 @@
     "peakOldestPendingJobAgeMs": 1547324,
     "certified": false
   }
-]
+  ]
+}
