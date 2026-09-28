@@ -3,6 +3,12 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ApiKeysPanel, { type ApiKey } from '@/components/settings/ApiKeysPanel';
 import { revokeApiKey } from '@/app/(app)/settings/actions';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    refresh: vi.fn(),
+  }),
+}));
+
 // Mock server actions
 vi.mock('@/app/(app)/settings/actions', () => ({
   createApiKey: vi.fn(),
