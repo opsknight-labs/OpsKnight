@@ -4,6 +4,7 @@ description: Connect New Relic alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["New Relic webhook", "connect New Relic", "New Relic alerts", "New Relic integration"]
 verification:
   level: source
   verified_at: 2026-09-27

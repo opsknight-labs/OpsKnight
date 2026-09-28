@@ -4,6 +4,7 @@ description: Connect Nagios alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Nagios webhook", "connect Nagios", "Nagios alerts", "Nagios integration"]
 verification:
   level: source
   verified_at: 2026-09-27

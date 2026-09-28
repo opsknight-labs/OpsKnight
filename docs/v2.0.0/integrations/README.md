@@ -13,7 +13,7 @@ verification:
 
 # Integrations
 
-The machine-readable [catalog](./catalog.yaml) includes inbound alert adapters,
+The machine-readable `integrations/catalog.yaml` includes inbound alert adapters,
 Slack, Microsoft Teams, Jira, outbound webhooks, notification delivery, OIDC,
 and SCIM. Inbound provider pages are generated from source-derived contracts;
 the communication and identity pages are maintained as workflow documentation.

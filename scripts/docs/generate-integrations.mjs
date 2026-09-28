@@ -125,6 +125,7 @@ description: Connect ${provider.title} alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: [${JSON.stringify(`${provider.title} webhook`)}, ${JSON.stringify(`connect ${provider.title}`)}, ${JSON.stringify(`${provider.title} alerts`)}, ${JSON.stringify(`${provider.title} integration`)}${provider.id === 'grafana' ? ', "Grafana contact point"' : ''}${provider.id === 'prometheus' ? ', "Alertmanager webhook"' : ''}]
 verification:
   level: source
   verified_at: ${verifiedAt}

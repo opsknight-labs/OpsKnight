@@ -4,6 +4,7 @@ description: Connect Azure Monitor alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Azure Monitor webhook", "connect Azure Monitor", "Azure Monitor alerts", "Azure Monitor integration"]
 verification:
   level: source
   verified_at: 2026-09-27

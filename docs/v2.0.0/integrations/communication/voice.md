@@ -4,6 +4,7 @@ description: Configure and validate Twilio voice calls, SMS, and WhatsApp incide
 type: integration
 product_area: notifications
 audience: [administrator, operator, responder]
+keywords: [Twilio voice, Twilio SMS, WhatsApp, voice paging, WhatsApp notifications]
 verification:
   level: source
   verified_at: 2026-09-27

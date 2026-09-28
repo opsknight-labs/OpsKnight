@@ -4,6 +4,7 @@ description: Diagnose tenant, installation, destination, card, and war-room fail
 type: troubleshooting
 product_area: chatops
 audience: [administrator, responder]
+keywords: [Teams not sending cards, Teams card action failing, Teams troubleshooting, Adaptive Cards]
 verification:
   level: source
   verified_at: 2026-09-28
@@ -33,4 +34,3 @@ enforced before processing; oversized requests return `413`.
 Verify the target team granted the optional war-room RSC permissions. Inspect
 the collaboration operation before retrying because channel creation can
 succeed remotely even when the response is ambiguous.
-

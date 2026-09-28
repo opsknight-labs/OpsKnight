@@ -4,6 +4,7 @@ description: Provision and deactivate lifecycle-managed users through SCIM.
 type: how-to
 product_area: identity
 audience: [administrator, operator]
+keywords: [SCIM provisioning, user provisioning, SCIM users, identity lifecycle]
 verification:
   level: source
   verified_at: 2026-09-27

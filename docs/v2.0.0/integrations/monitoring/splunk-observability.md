@@ -4,6 +4,7 @@ description: Connect Splunk Observability alerts to OpsKnight incident ingestion
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Splunk Observability webhook", "connect Splunk Observability", "Splunk Observability alerts", "Splunk Observability integration"]
 verification:
   level: source
   verified_at: 2026-09-27

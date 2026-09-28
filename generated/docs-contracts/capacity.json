@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-28T13:46:30.023Z",
+  "source": {
+    "path": "artifacts/load-certification/certification-summary.json",
+    "pullRequest": 777,
+    "sourceRevision": "e2cd6e280"
+  },
+  "statusDefinitions": {
+    "CERTIFIED": "All required scenarios, thresholds, and correctness invariants passed for the stated profile.",
+    "MEASURED": "Measurements exist, but the record does not declare a certification result.",
+    "NOT CERTIFIED": "The topology was tested but did not pass the complete certification contract.",
+    "NOT TESTED": "No benchmark artifact exists for the topology."
+  },
+  "topologies": [
+    {
+      "topologyId": "compose_integrated_bundled_db",
+      "topologyName": "Compose: Integrated Runtime + Bundled PostgreSQL",
+      "status": "NOT CERTIFIED",
+      "phase": 1,
+      "startedAt": "2026-09-27T16:33:18.158Z",
+      "completedAt": "2026-09-27T16:38:22.594Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 6,
+      "passedScenarios": 2,
+      "measuredPeakRps": 13.46,
+      "measuredWorstP95Ms": 35920.19,
+      "peakActivePgConnections": 11,
+      "peakOldestPendingJobAgeMs": 161262,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "compose_split_bundled_db",
+      "topologyName": "Compose: Split Runtime + Bundled PostgreSQL",
+      "status": "NOT CERTIFIED",
+      "phase": 1,
+      "startedAt": "2026-09-27T16:38:24.958Z",
+      "completedAt": "2026-09-27T16:45:29.813Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 7,
+      "passedScenarios": 0,
+      "measuredPeakRps": 1.68,
+      "measuredWorstP95Ms": 34349.08,
+      "peakActivePgConnections": 9,
+      "peakOldestPendingJobAgeMs": 22823,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "compose_split_pgbouncer",
+      "topologyName": "Compose: Split Runtime + PgBouncer + Bundled PostgreSQL",
+      "status": "NOT CERTIFIED",
+      "phase": 1,
+      "startedAt": "2026-09-27T16:45:31.196Z",
+      "completedAt": "2026-09-27T16:52:54.886Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 8,
+      "passedScenarios": 1,
+      "measuredPeakRps": 14.14,
+      "measuredWorstP95Ms": 40276.41,
+      "peakActivePgConnections": 9,
+      "peakOldestPendingJobAgeMs": 199660,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "swarm_single_node_split",
+      "topologyName": "Docker Swarm: Single-Node Split Stack + PgBouncer",
+      "status": "NOT CERTIFIED",
+      "phase": 3,
+      "startedAt": "2026-09-27T17:00:53.481Z",
+      "completedAt": "2026-09-27T17:07:49.581Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 7,
+      "passedScenarios": 2,
+      "measuredPeakRps": 14.04,
+      "measuredWorstP95Ms": 36644.9,
+      "peakActivePgConnections": 14,
+      "peakOldestPendingJobAgeMs": 179045,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "swarm_ha_split",
+      "topologyName": "Docker Swarm: High-Availability (HA) Multi-Replica Split Stack",
+      "status": "NOT CERTIFIED",
+      "phase": 3,
+      "startedAt": "2026-09-27T17:08:00.021Z",
+      "completedAt": "2026-09-27T17:12:23.643Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 8,
+      "passedScenarios": 4,
+      "measuredPeakRps": 56.66,
+      "measuredWorstP95Ms": 4001.87,
+      "peakActivePgConnections": 9,
+      "peakOldestPendingJobAgeMs": 90881,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "kind_helm_split_pgbouncer",
+      "topologyName": "Kind Kubernetes (4-Node): Helm Split Runtime + PgBouncer + HPA/PDB",
+      "status": "NOT CERTIFIED",
+      "phase": 4,
+      "startedAt": "2026-09-27T18:25:20.479Z",
+      "completedAt": "2026-09-27T18:34:00.895Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 8,
+      "passedScenarios": 0,
+      "measuredPeakRps": 2.81,
+      "measuredWorstP95Ms": 41634.58,
+      "peakActivePgConnections": 9,
+      "peakOldestPendingJobAgeMs": 289,
+      "invariantsPassed": true,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "kind_kustomize_split_pgbouncer",
+      "topologyName": "Kind Kubernetes (4-Node): Kustomize Split + PgBouncer Profile",
+      "status": "NOT CERTIFIED",
+      "phase": 4,
+      "startedAt": "2026-09-28T03:13:03.920Z",
+      "completedAt": "2026-09-28T03:20:59.161Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 8,
+      "passedScenarios": 0,
+      "measuredPeakRps": 2.79,
+      "measuredWorstP95Ms": 38687.34,
+      "peakActivePgConnections": 13,
+      "peakOldestPendingJobAgeMs": 627,
+      "invariantsPassed": true,
+      "certifiedCapacity": null
+    }
+  ]
+}

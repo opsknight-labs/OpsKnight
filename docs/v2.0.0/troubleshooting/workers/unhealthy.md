@@ -4,6 +4,7 @@ description: Diagnose stalled claims, queue age, concurrency, and database capac
 type: troubleshooting
 product_area: operations
 audience: [operator]
+keywords: [worker unhealthy, worker queue stalled, scale workers, queue age]
 verification:
   level: source
   verified_at: 2026-09-27

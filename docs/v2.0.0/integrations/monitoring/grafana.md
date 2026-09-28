@@ -4,6 +4,7 @@ description: Connect Grafana alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Grafana webhook", "connect Grafana", "Grafana alerts", "Grafana integration", "Grafana contact point"]
 verification:
   level: source
   verified_at: 2026-09-27

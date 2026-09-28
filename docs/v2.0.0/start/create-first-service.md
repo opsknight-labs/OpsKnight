@@ -4,6 +4,7 @@ description: Create an owned service that can receive alerts and incidents.
 type: tutorial
 product_area: getting-started
 audience: [administrator]
+keywords: [create service, first service, service ownership, add service]
 verification:
   level: source
   verified_at: 2026-09-28
@@ -26,4 +27,3 @@ Sign in as an administrator and create or select an ownership team.
 
 Open the service detail page and confirm its ownership. Next, either
 [configure on-call](./configure-on-call) or [receive your first alert](./receive-first-alert).
-

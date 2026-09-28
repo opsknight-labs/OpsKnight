@@ -4,6 +4,7 @@ description: Start an evaluation environment and verify that OpsKnight is health
 type: tutorial
 product_area: deployment
 audience: [operator, administrator]
+keywords: [install OpsKnight, Docker Compose, local install, quick start, first boot]
 verification:
   level: runtime
   verified_at: 2026-09-27

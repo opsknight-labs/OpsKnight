@@ -4,6 +4,7 @@ description: Trace recipient eligibility, endpoint state, worker attempts, and p
 type: troubleshooting
 product_area: notifications
 audience: [operator, administrator]
+keywords: [notification failed, notification not delivered, missing page, provider failure, delivery troubleshooting]
 verification:
   level: source
   verified_at: 2026-09-27

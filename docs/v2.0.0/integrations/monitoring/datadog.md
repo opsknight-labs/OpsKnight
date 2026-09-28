@@ -4,6 +4,7 @@ description: Connect Datadog alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Datadog webhook", "connect Datadog", "Datadog alerts", "Datadog integration"]
 verification:
   level: source
   verified_at: 2026-09-27

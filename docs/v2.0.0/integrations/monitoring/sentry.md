@@ -4,6 +4,7 @@ description: Connect Sentry alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Sentry webhook", "connect Sentry", "Sentry alerts", "Sentry integration"]
 verification:
   level: source
   verified_at: 2026-09-27

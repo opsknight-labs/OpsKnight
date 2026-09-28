@@ -4,6 +4,7 @@ description: Connect GitHub alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["GitHub webhook", "connect GitHub", "GitHub alerts", "GitHub integration"]
 verification:
   level: source
   verified_at: 2026-09-27

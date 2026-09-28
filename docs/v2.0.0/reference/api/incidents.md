@@ -4,6 +4,7 @@ description: List, create, read, and update incidents through the supported REST
 type: reference
 product_area: incidents
 audience: [developer, operator, administrator]
+keywords: [incident API, create incident API, list incidents API, REST API, idempotency]
 verification:
   level: runtime
   verified_at: 2026-09-27

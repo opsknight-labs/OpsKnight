@@ -4,6 +4,7 @@ description: Connect Prometheus Alertmanager alerts to OpsKnight incident ingest
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Prometheus Alertmanager webhook", "connect Prometheus Alertmanager", "Prometheus Alertmanager alerts", "Prometheus Alertmanager integration", "Alertmanager webhook"]
 verification:
   level: source
   verified_at: 2026-09-27

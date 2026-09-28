@@ -4,6 +4,7 @@ description: Register the Entra and Azure Bot resources and install the generate
 type: how-to
 product_area: chatops
 audience: [administrator]
+keywords: [connect Teams, Microsoft Teams setup, Azure Bot, Entra app, Teams app package]
 verification:
   level: source
   verified_at: 2026-09-28

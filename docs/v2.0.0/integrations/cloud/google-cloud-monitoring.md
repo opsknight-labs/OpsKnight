@@ -4,6 +4,7 @@ description: Connect Google Cloud Monitoring alerts to OpsKnight incident ingest
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Google Cloud Monitoring webhook", "connect Google Cloud Monitoring", "Google Cloud Monitoring alerts", "Google Cloud Monitoring integration"]
 verification:
   level: source
   verified_at: 2026-09-27

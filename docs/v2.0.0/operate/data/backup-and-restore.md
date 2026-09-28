@@ -4,6 +4,7 @@ description: Protect PostgreSQL data and prove recoverability with restore drill
 type: deployment
 product_area: data
 audience: [operator, administrator]
+keywords: [backup OpsKnight, restore backup, PostgreSQL backup, disaster recovery]
 verification:
   level: source
   verified_at: 2026-09-27
@@ -23,4 +24,3 @@ Restore into an isolated environment, apply the intended application revision,
 and verify migrations, sign-in, services, incidents, audit history, integrations,
 and background processing. Record duration and evidence. A backup that has not
 been restored is not a proven recovery plan.
-

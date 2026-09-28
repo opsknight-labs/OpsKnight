@@ -13,6 +13,7 @@ const composeArgs = ['compose', '--project-name', 'opsknight-docs-v2-capture', '
 run('node', ['scripts/docs/discover-capabilities.mjs', '--output', 'generated/docs-discovery/current.json']);
 run('node', ['scripts/docs/generate-reference.mjs']);
 run('node', ['scripts/docs/generate-integrations.mjs']);
+run('node', ['scripts/docs/generate-capacity-reference.mjs']);
 run('node', ['scripts/docs/check-frontmatter.mjs']);
 run('node', ['scripts/check-docs-links.cjs']);
 run('node', ['scripts/docs/check-reader-quality.mjs']);

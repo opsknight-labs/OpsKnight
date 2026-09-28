@@ -10,6 +10,7 @@ on:
       - 'scripts/docs/**'
       - 'src/**'
       - 'deploy/**'
+      - 'artifacts/load-certification/certification-summary.json'
       - 'prisma/**'
       - 'scripts/check-docs-links.cjs'
       - 'scripts/check-docs-capabilities.cjs'
@@ -23,6 +24,7 @@ on:
       - 'scripts/docs/**'
       - 'src/**'
       - 'deploy/**'
+      - 'artifacts/load-certification/certification-summary.json'
       - 'prisma/**'
       - 'scripts/check-docs-links.cjs'
       - 'scripts/check-docs-capabilities.cjs'
@@ -49,8 +51,9 @@ jobs:
           npm run docs:discover:write
           npm run docs:reference
           npm run docs:integrations
+          npm run docs:capacity
       - name: Reject generated documentation drift
-        run: git diff --exit-code -- generated/docs-discovery/current.json generated/docs-contracts/current.json docs/v2.0.0/reference docs/v2.0.0/integrations
+        run: git diff --exit-code -- generated/docs-discovery/current.json generated/docs-contracts/current.json docs/v2.0.0/reference docs/v2.0.0/integrations docs/v2.0.0/operate/capacity/benchmark-results.md
       - name: Validate 2.0.0 documentation contracts
         run: npm run docs:certify:static
       - name: Detect documentation impact

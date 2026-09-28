@@ -4,6 +4,7 @@ description: Connect AppDynamics alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["AppDynamics webhook", "connect AppDynamics", "AppDynamics alerts", "AppDynamics integration"]
 verification:
   level: source
   verified_at: 2026-09-27

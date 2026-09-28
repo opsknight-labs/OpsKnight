@@ -4,6 +4,7 @@ description: Install or reconnect the OpsKnight Slack app and verify the workspa
 type: how-to
 product_area: chatops
 audience: [administrator]
+keywords: [slack oauth, connect slack, slack integration, slack app, rotate slack credential]
 verification:
   level: source
   verified_at: 2026-09-28

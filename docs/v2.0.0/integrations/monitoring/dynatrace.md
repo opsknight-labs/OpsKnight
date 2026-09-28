@@ -4,6 +4,7 @@ description: Connect Dynatrace alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+keywords: ["Dynatrace webhook", "connect Dynatrace", "Dynatrace alerts", "Dynatrace integration"]
 verification:
   level: source
   verified_at: 2026-09-27
