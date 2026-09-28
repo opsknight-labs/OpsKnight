@@ -15,7 +15,11 @@ verification:
 
 Use reference pages when you need an exact contract rather than a workflow:
 
-- [API inventory](./api/)
+- [API authentication](./api/authentication)
+- [Events API v2](./api/events)
+- [Incidents API](./api/incidents)
+- [API responses and errors](./api/errors)
+- [API implementation inventory](./api/)
 - [Configuration](./configuration/)
 - [Command line](./cli)
 - [Permissions](./permissions)

@@ -21,3 +21,12 @@ Interface visibility is only a hint. Server actions and API routes must enforce
 capability, resource scope, and tenant ownership. Re-test OIDC role mappings and
 active sessions after any identity-policy change.
 
+Before changing a role, record the business task and the resources it must
+touch. Apply the role to a synthetic or low-risk account first, then verify read
+and mutation behavior for owned, team-scoped, and unrelated records. Include API
+keys owned by that user because they inherit the owner's authorization.
+
+After promotion or demotion, confirm the audit entry and reauthenticate the test
+account. If access is broader than expected, restore the previous assignment,
+capture the denied/allowed resource identifiers and route, and inspect policy
+resolution rather than relying on hidden navigation items.

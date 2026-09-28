@@ -24,3 +24,6 @@ export const DOCS_FIXTURES = {
   statusPage: 'Northstar Systems Status',
   incident: 'Checkout API p95 latency above SLO',
 } as const;
+
+// Dedicated to the disposable documentation database and runtime only.
+export const DOCS_API_KEY = 'ok_test_docs_contract_7f3c9a2e6d814b50';

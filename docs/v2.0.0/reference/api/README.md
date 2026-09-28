@@ -19,6 +19,13 @@ contracts live in the provider pages; webhook, health, metrics, SCIM, and OIDC
 surfaces use their dedicated references. Everything in the internal section is
 explicitly unsupported for third-party automation.
 
+Supported general-purpose contracts are documented separately:
+
+- [Authentication](./authentication)
+- [Events API v2](./events)
+- [Incidents API](./incidents)
+- [Responses and errors](./errors)
+
 ## Application and internal UI endpoints
 
 > These routes support the OpsKnight UI and are not a supported external API contract. Do not build external automation against them unless a dedicated contract page says otherwise.

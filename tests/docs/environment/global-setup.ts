@@ -1,6 +1,7 @@
 import { PrismaClient, type Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { DOCS_ADMIN, DOCS_FIXTURES, DOCS_RESPONDER, DOCS_VIEWER } from '../fixtures/constants';
+import { createHmac } from 'node:crypto';
+import { DOCS_ADMIN, DOCS_API_KEY, DOCS_FIXTURES, DOCS_RESPONDER, DOCS_VIEWER } from '../fixtures/constants';
 
 export default async function globalSetup() {
   const databaseUrl = process.env.DOCS_DATABASE_URL || process.env.DATABASE_URL;
@@ -35,6 +36,22 @@ export default async function globalSetup() {
       create: { email: fixture.email, name: fixture.name, role, status: 'ACTIVE', passwordHash: await bcrypt.hash(fixture.password, 10) },
     })));
     const [admin, responder, viewer] = users;
+    const apiKeySecret = process.env.API_KEY_SECRET || process.env.NEXTAUTH_SECRET || 'docs-runtime-only-nextauth-secret';
+    const tokenHash = createHmac('sha256', apiKeySecret)
+      .update(`opsknight:api-key:v2:${DOCS_API_KEY}`)
+      .digest('hex');
+    await prisma.apiKey.upsert({
+      where: { id: 'docs-api-contract-key' },
+      update: { tokenHash, userId: admin.id, revokedAt: null, expiresAt: null },
+      create: {
+        id: 'docs-api-contract-key',
+        name: 'Documentation contract verification',
+        prefix: DOCS_API_KEY.slice(0, 12),
+        tokenHash,
+        scopes: ['incidents:read', 'incidents:write', 'events:write'],
+        userId: admin.id,
+      },
+    });
     const team = await prisma.team.upsert({
       where: { name: DOCS_FIXTURES.team },
       update: { description: 'Reliability ownership for customer checkout services', teamLeadId: responder.id },

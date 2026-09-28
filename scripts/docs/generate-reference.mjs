@@ -63,6 +63,17 @@ const criticalConfiguration = {
   PROMETHEUS_SCRAPE_TOKEN: ['Bearer token required by the metrics endpoint when configured.', 'opaque token', 'web', 'restart required', 'secret'],
   OPSKNIGHT_RUNTIME_ROLE: ['Selects integrated, web, scheduler, or worker process behavior in split deployments.', 'enumerated runtime role', 'each runtime deployment', 'restart required', 'non-secret'],
   OPSKNIGHT_WORKER_LANE: ['Selects the all, general, critical, bulk, or projector queue lane.', 'all | general | critical | bulk | projector', 'worker', 'restart required', 'non-secret'],
+  TRUST_PROXY_HEADERS: ['Allows forwarded host and protocol headers from a trusted reverse proxy to define the external request origin.', 'boolean', 'web behind a trusted proxy', 'restart required', 'non-secret; enable only when untrusted clients cannot set forwarded headers'],
+  SCIM_BEARER_TOKEN: ['Authenticates SCIM provisioning requests.', 'high-entropy bearer token', 'web', 'restart required; overlap old and new clients only through an intentional rotation window', 'secret'],
+  OIDC_REQUIRE_EMAIL_VERIFIED_STRICT: ['Rejects OIDC identities whose provider does not assert a verified email.', 'boolean', 'web', 'restart required', 'non-secret'],
+  OIDC_CONFIG_CACHE_TTL_MS: ['Controls how long resolved OIDC provider configuration remains in the process cache.', 'positive milliseconds', 'web', 'restart required', 'non-secret'],
+  SLACK_BOT_TOKEN: ['Authorizes Slack Web API operations for the connected workspace.', 'Slack bot token', 'web and notification workers', 'restart required after secret replacement', 'secret'],
+  SLACK_SIGNING_SECRET: ['Verifies inbound Slack request signatures.', 'Slack signing secret', 'web', 'restart required; coordinate rotation with Slack configuration', 'secret'],
+  SLACK_CLIENT_SECRET: ['Authenticates the Slack OAuth client.', 'Slack OAuth client secret', 'web', 'restart required', 'secret'],
+  OPSKNIGHT_WORKER_CONCURRENCY: ['Sets general worker parallelism when a lane-specific override is absent.', 'positive integer', 'worker', 'restart required; increase only after checking database and provider capacity', 'non-secret'],
+  OPSKNIGHT_WORKER_BATCH_SIZE: ['Sets the general queue claim batch when a lane-specific override is absent.', 'positive integer', 'worker', 'restart required; keep aligned with concurrency and lease duration', 'non-secret'],
+  OPSKNIGHT_WORKER_BUSY_POLL_MS: ['Sets the polling interval while general work is available.', 'positive milliseconds', 'worker', 'restart required', 'non-secret'],
+  OPSKNIGHT_WORKER_IDLE_POLL_MS: ['Sets the polling interval while the general queue is idle.', 'positive milliseconds', 'worker', 'restart required', 'non-secret'],
 };
 const criticalBody = Object.entries(criticalConfiguration)
   .filter(([name]) => variables.some(variable => variable.name === name))
@@ -119,6 +130,13 @@ implementation inventory, not a public stability promise. Alert-ingestion
 contracts live in the provider pages; webhook, health, metrics, SCIM, and OIDC
 surfaces use their dedicated references. Everything in the internal section is
 explicitly unsupported for third-party automation.
+
+Supported general-purpose contracts are documented separately:
+
+- [Authentication](./authentication)
+- [Events API v2](./events)
+- [Incidents API](./incidents)
+- [Responses and errors](./errors)
 
 ${routeSections}
 `;
