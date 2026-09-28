@@ -14,6 +14,13 @@ verification:
 
 # Escalate an incident
 
+## Before you begin
+
+Open an active incident whose service has a valid escalation policy.
+
+1. Review the current step and next eligible target.
+2. Escalate and verify the timeline and notification operation.
+
 Before escalating, confirm that the incident is active and the service has a
 valid escalation policy. Use the incident escalation action to advance the
 current response step. Verify the next step, resolved targets, and notification
@@ -22,4 +29,3 @@ intent in the timeline and notification history.
 Do not repeatedly escalate while a request is pending. Target resolution and
 notification creation are idempotent boundaries, but repeated operator actions
 make diagnosis harder.
-

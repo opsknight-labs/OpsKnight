@@ -14,6 +14,13 @@ verification:
 
 # Publish a status update
 
+## Before you begin
+
+Configure the single supported status page and map the affected services.
+
+1. Open the status-page settings and prepare the public update.
+2. Publish, then verify the public page and mapped service state.
+
 ![Status page administration for production services](/docs/v2.0.0/assets/status-pages.png)
 
 Confirm the intended page, audience, affected services, and privacy controls.

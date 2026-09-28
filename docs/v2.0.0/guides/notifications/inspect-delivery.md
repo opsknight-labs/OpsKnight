@@ -14,6 +14,10 @@ verification:
 
 # Inspect notification delivery
 
+## Before you begin
+
+Identify the incident, recipient, channel, and approximate delivery time.
+
 Open notification history from the incident or administration view. Follow the
 record from recipient resolution through scheduled and attempted delivery to the
 latest provider outcome. A sent request is not the same as confirmed delivery.

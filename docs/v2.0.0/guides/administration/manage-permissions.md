@@ -14,6 +14,13 @@ verification:
 
 # Manage roles and permissions
 
+## Before you begin
+
+Sign in as an administrator and identify the minimum business task and resource scope.
+
+1. Apply the least-privileged role to a low-risk test account.
+2. Verify allowed and denied behavior before changing the production account.
+
 Choose the least-privileged stable role that supplies the required capability
 bundle. Test the actor against both an in-scope and out-of-scope resource.
 

@@ -14,6 +14,13 @@ verification:
 
 # Configure an escalation policy
 
+## Before you begin
+
+Create the target users, teams, or schedules and confirm they are eligible.
+
+1. Create the policy and add ordered targets with explicit delays.
+2. Attach it to a test service and verify the escalation preview.
+
 ![Escalation policy directory with operational ownership](/docs/v2.0.0/assets/escalation-policies.png)
 
 Create a policy, add ordered steps, select each user, team, or schedule target,

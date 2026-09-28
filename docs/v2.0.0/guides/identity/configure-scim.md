@@ -14,6 +14,13 @@ verification:
 
 # Configure SCIM provisioning
 
+## Before you begin
+
+Create a high-entropy SCIM bearer token and choose a non-production provisioning group.
+
+1. Configure the OpsKnight SCIM base URL and token in the identity provider.
+2. Provision and deactivate a test user, then verify both transitions.
+
 Generate a dedicated SCIM credential, configure the provider base URL, and test
 user create, read, update, patch, and deactivation against synthetic identities.
 Do not reuse an OIDC client secret as a SCIM token.

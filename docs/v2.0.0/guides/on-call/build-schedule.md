@@ -14,6 +14,13 @@ verification:
 
 # Build an on-call schedule
 
+## Before you begin
+
+Activate the responders and choose the schedule's authoritative time zone.
+
+1. Create the schedule and add an ordered rotation layer.
+2. Preview a full rotation and verify current and boundary-time assignments.
+
 ![On-call schedules for a professional reliability team](/docs/v2.0.0/assets/on-call-schedules.png)
 
 Create a uniquely named schedule, select its time zone, then add a layer with a

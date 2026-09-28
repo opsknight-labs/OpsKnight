@@ -20,6 +20,11 @@ verification:
 Use this path for an isolated evaluation. Choose an immutable tested image for
 the release you are evaluating; do not use a production database or credentials.
 
+## Before you begin
+
+Install Docker with Compose support and reserve a host that is not using the
+evaluation ports. Prepare unique secrets before starting the stack.
+
 1. Clone the repository and enter it.
 2. Export unique database, authentication, and encryption secrets.
 3. Set `OPSKNIGHT_IMAGE` to the tested image tag or digest.

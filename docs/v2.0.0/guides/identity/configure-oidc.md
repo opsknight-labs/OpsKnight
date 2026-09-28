@@ -14,6 +14,13 @@ verification:
 
 # Configure OIDC
 
+## Before you begin
+
+Obtain the issuer metadata and client credentials from the identity provider.
+
+1. Configure the provider and callback settings in OpsKnight.
+2. Test sign-in with a low-risk account and verify role and email policy.
+
 Register the exact OpsKnight redirect URI with the identity provider. Configure
 issuer, client identifier, encrypted client secret, scopes, and provisioning or
 role rules. Keep a tested local administrator available during rollout.

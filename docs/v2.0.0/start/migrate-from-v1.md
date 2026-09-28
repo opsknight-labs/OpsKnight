@@ -15,6 +15,11 @@ verification:
 
 # Migrate from OpsKnight 1.x
 
+## Before you begin
+
+Back up the database and encrypted configuration, record the current image, and
+test the migration against a restored copy.
+
 Treat the migration as a data and runtime-topology change, not a container tag
 swap.
 
