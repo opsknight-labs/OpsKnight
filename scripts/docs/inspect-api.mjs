@@ -34,16 +34,17 @@ function resolveImport(fromFile, specifier) {
 /** Resolve local imports so a route contract describes effective behavior, not only its thin wrapper. */
 export function effectiveRouteSources(file) {
   const visited = new Set();
-  const visit = current => {
+  const visit = (current, depth) => {
     if (visited.has(current)) return;
     visited.add(current);
+    if (depth >= 2) return;
     const source = readRepositoryFile(current);
     for (const match of source.matchAll(/(?:import[\s\S]*?from\s*|import\s*)['"]([^'"]+)['"]/g)) {
       const resolved = resolveImport(current, match[1]);
-      if (resolved) visit(resolved);
+      if (resolved) visit(resolved, depth + 1);
     }
   };
-  visit(file);
+  visit(file, 0);
   return [...visited].sort();
 }
 
