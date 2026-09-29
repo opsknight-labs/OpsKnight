@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { logger } from '@/lib/logger';
+import { notify as toast } from '@/lib/toast';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   Card,
@@ -35,6 +36,7 @@ import {
   ChevronRight,
   Clock3,
   Download,
+  Loader2,
   XCircle,
   MinusCircle,
   Activity,
@@ -80,6 +82,7 @@ export default function NotificationHistory() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [limit] = useState(50);
@@ -214,40 +217,77 @@ export default function NotificationHistory() {
     setOffset(0);
   };
 
-  const exportCsv = () => {
-    const headers = [
-      'ID',
-      'Channel',
-      'Status',
-      'Incident',
-      'Attempts',
-      'Latency(ms)',
-      'Dispatched At',
-      'Error',
-    ];
-    const csvRows = [
-      headers,
-      ...notifications.map(n => [
-        n.id,
-        n.channel,
-        n.status,
-        n.incident?.title || 'General Alert',
-        n.attempts,
-        n.latencyMs ?? '',
-        n.deliveredAt || n.sentAt || n.failedAt || n.createdAt,
-        n.errorMsg || '',
-      ]),
-    ];
-    const csv = csvRows
-      .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `my-notification-history-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportCsv = async () => {
+    setIsExporting(true);
+    try {
+      // Fetch the full result set respecting current filters (max 200 per request)
+      const allRows: Notification[] = [];
+      let currentOffset = 0;
+      const PAGE_LIMIT = 200;
+      let hasMore = true;
+
+      while (hasMore) {
+        const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(currentOffset) });
+        if (filterChannel && filterChannel !== 'all') params.set('channel', filterChannel);
+        if (filterStatus && filterStatus !== 'all') params.set('status', filterStatus);
+        if (debouncedQuery) params.set('q', debouncedQuery);
+        const fromIso = resolveDateToIso(fromDate, false);
+        const toIso = resolveDateToIso(toDate, true);
+        if (fromIso) params.set('from', fromIso);
+        if (toIso) params.set('to', toIso);
+
+        const response = await fetch(`/api/notifications/history?${params.toString()}`);
+        if (!response.ok) throw new Error('Failed to fetch notifications for export');
+        const data = await response.json();
+        const page: Notification[] = data.notifications || [];
+        allRows.push(...page);
+        if (page.length < PAGE_LIMIT) {
+          hasMore = false;
+        } else {
+          currentOffset += PAGE_LIMIT;
+        }
+      }
+
+      const headers = [
+        'ID',
+        'Channel',
+        'Status',
+        'Incident',
+        'Attempts',
+        'Latency(ms)',
+        'Dispatched At',
+        'Error',
+      ];
+      const csvRows = [
+        headers,
+        ...allRows.map(n => [
+          n.id,
+          n.channel,
+          n.status,
+          n.incident?.title || 'General Alert',
+          n.attempts,
+          n.latencyMs ?? '',
+          n.deliveredAt || n.sentAt || n.failedAt || n.createdAt,
+          n.errorMsg || '',
+        ]),
+      ];
+      const csv = csvRows
+        .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `my-notification-history-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${allRows.length} notifications to CSV.`);
+    } catch (err) {
+      logger.error('exportCsv failed', { error: String(err) });
+      toast.error('Export failed; no file was generated.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -460,11 +500,15 @@ export default function NotificationHistory() {
                 variant="outline"
                 size="sm"
                 onClick={exportCsv}
-                disabled={notifications.length === 0}
+                disabled={notifications.length === 0 || isExporting}
                 className="h-8 text-xs font-semibold gap-1.5 border-border/80 hover:bg-accent"
               >
-                <Download className="h-3.5 w-3.5" />
-                Export CSV
+                {isExporting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                {isExporting ? 'Exporting...' : 'Export CSV'}
               </Button>
               <Button
                 variant="outline"

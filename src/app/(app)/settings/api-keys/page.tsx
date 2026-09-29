@@ -8,9 +8,13 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { Key, ShieldCheck, ShieldAlert, Clock } from 'lucide-react';
+import { getAppUrl } from '@/lib/app-url';
 
 export default async function ApiKeysSettingsPage() {
-  const session = await getServerSession(await getAuthOptions());
+  const [session, appUrl] = await Promise.all([
+    getServerSession(await getAuthOptions()),
+    getAppUrl(),
+  ]);
   const email = session?.user?.email ?? null;
   const user = email
     ? await prisma.user.findUnique({
@@ -125,6 +129,7 @@ export default async function ApiKeysSettingsPage() {
           canCreateWriteKeys={
             user ? hasCapability(user.role, CAPABILITIES.OPERATIONS_MANAGE) : false
           }
+          appUrl={appUrl}
         />
       </SettingsSection>
     </div>
