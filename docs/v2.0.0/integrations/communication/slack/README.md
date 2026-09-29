@@ -21,10 +21,15 @@ map service destinations.
 
 - [Connect Slack using OAuth](./connect-with-oauth)
 - [Configure service channels](./configure-service-channels)
-- [Use incident actions and commands](./incident-actions)
+- [Send and verify a test](./send-test)
+- [Understand incident notifications](./incident-notifications)
+- [Acknowledge and resolve incidents](./acknowledge-resolve)
+- [Use incident actions](./incident-actions) and [commands](./commands)
 - [Create and operate war rooms](./war-rooms)
 - [Link responder identities](./user-identity-linking)
 - [Review permissions and scopes](./permissions-and-scopes)
+- [Review rate limits](./rate-limits)
+- [Disconnect or reconnect](./disconnect-reconnect)
 - [Troubleshoot Slack](./troubleshooting)
 
 ## How the pieces relate
@@ -33,4 +38,3 @@ The OAuth installation authorizes the OpsKnight bot. Service destinations
 control routine lifecycle delivery. Identity links authorize user-attributed
 actions. War rooms are separate incident-scoped channels with their own
 lifecycle. Configuring one does not implicitly configure the others.
-

@@ -18,8 +18,11 @@ and Adaptive Cards. It is not a Slack configuration with renamed fields.
 
 - [Connect Microsoft Teams](./connect)
 - [Configure service destinations](./configure-destinations)
+- [Send and verify a test](./send-test)
+- [Understand normal incident cards](./incident-notifications)
 - [Use Adaptive Card actions](./incident-actions)
+- [Link responder identities](./identity-linking)
 - [Configure Teams war rooms](./war-rooms)
 - [Review permissions](./permissions)
+- [Disconnect or reconnect](./disconnect-reconnect)
 - [Troubleshoot Teams](./troubleshooting)
-
