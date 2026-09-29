@@ -1,9 +1,12 @@
 ---
 title: Review audit logs
 description: Search administrative changes, inspect record details, and export the current result page as CSV.
-type: how-to
+type: tutorial
 product_area: administration
 audience: [administrator, operator]
+reader:
+  status: READER_COMPLETE
+  task: Search, interpret, paginate, and export audit records.
 verification:
   level: source
   verified_at: 2026-09-29

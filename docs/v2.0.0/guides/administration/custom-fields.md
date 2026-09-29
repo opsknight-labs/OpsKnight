@@ -1,9 +1,12 @@
 ---
 title: Configure incident custom fields
 description: Create, validate, display, edit, and safely remove organization-specific incident fields.
-type: how-to
+type: tutorial
 product_area: administration
 audience: [administrator]
+reader:
+  status: READER_COMPLETE
+  task: Create, validate, edit, use, and delete incident custom fields.
 verification:
   level: source
   verified_at: 2026-09-29

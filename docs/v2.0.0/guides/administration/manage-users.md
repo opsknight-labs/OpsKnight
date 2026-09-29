@@ -1,9 +1,12 @@
 ---
 title: Manage users and account lifecycle
 description: Invite, activate, update, disable, transfer, and safely delete OpsKnight users.
-type: how-to
+type: tutorial
 product_area: users
 audience: [administrator]
+reader:
+  status: READER_COMPLETE
+  task: Invite, review, update, deactivate, reactivate, and offboard users safely.
 keywords: [invite users, disable account, delete user, user roles, team membership, offboarding]
 verification:
   level: source
