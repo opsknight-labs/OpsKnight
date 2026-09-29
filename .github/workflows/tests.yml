@@ -119,6 +119,9 @@ jobs:
       - name: Verify idempotent index installation contract
         run: npm run prisma:indexes:status-platform
 
+      - name: Authorization regression gate
+        run: npm run test:authorization
+
       - name: Database integration tests
         # Enable real database for integration and resilience tests
         env:

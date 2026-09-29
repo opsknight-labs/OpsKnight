@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
+import { assertCanListPolicies, getUserPermissions } from '@/lib/rbac';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
@@ -23,7 +23,7 @@ export default async function PoliciesPage({
   if (!session?.user?.email) {
     redirect('/login?callbackUrl=/policies');
   }
-  await getCurrentUser();
+  await assertCanListPolicies();
   const [policies, permissions] = await Promise.all([
     prisma.escalationPolicy.findMany({
       include: {
