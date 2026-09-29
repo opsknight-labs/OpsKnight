@@ -41,6 +41,26 @@ npm run prisma:migrate:safe
 
 That command validates migrations, checks database health, runs `prisma migrate deploy`, and verifies the separately managed status-platform, SLA-scheduler, and voice-attempt indexes.
 
+### SLA scheduler index boundary
+
+The SLA scheduler index is optional while the scheduler remains in `LEGACY` or
+`SHADOW` mode, but it is mandatory before an administrator can enable `INDEXED`
+mode. The settings action verifies that
+`idx_incident_next_sla_transition` exists and is valid before accepting that
+transition. The source command installs it safely and repairs an invalid
+concurrent build:
+
+```bash
+DATABASE_URL="$DIRECT_DATABASE_URL" npm run prisma:indexes:sla-scheduler
+```
+
+The current container entrypoint and Helm migration Job install the status-page
+and voice-attempt online indexes but do not invoke the SLA scheduler installer.
+Run the command explicitly during the `SHADOW` rollout before selecting
+`INDEXED`. Do not assume the index exists merely because schema migrations or
+the deployment migration Job completed; the UI will reject Indexed mode until
+the database check passes.
+
 ## Apply migrations by deployment type
 
 ### Docker Compose
