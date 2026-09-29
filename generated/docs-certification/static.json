@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-29T17:34:01.133Z",
-  "sourceRevision": "2eeaaef253db88bc3e9f6bb38018e5f21542b188",
-  "documentationRevision": "2eeaaef253db88bc3e9f6bb38018e5f21542b188",
-  "productSourceRevision": "2eeaaef253db88bc3e9f6bb38018e5f21542b188",
+  "generatedAt": "2026-09-29T17:48:58.637Z",
+  "sourceRevision": "3c97510399b0dac8a7d67869724e11aa00fea261",
+  "documentationRevision": "3c97510399b0dac8a7d67869724e11aa00fea261",
+  "productSourceRevision": "3c97510399b0dac8a7d67869724e11aa00fea261",
   "runtimeSourceRevision": null,
   "runtimeImageDigest": null,
   "releaseState": "upcoming",
@@ -11,6 +11,8 @@
     "frontmatter": "passed",
     "links": "passed",
     "readerQuality": "passed",
+    "readerCompleteness": "pending",
+    "humanTaskVerification": "pending",
     "capabilityCoverage": "passed",
     "featureClassification": "passed",
     "featureDocumentationAlarm": "clear",
@@ -53,11 +55,16 @@
     "humanReviewAreasFailed": 0,
     "v15Topics": 1604,
     "v15TopicsReviewed": 0,
-    "v15TopicsPending": 1604
+    "v15TopicsPending": 1604,
+    "taskDocumentationPages": 116,
+    "readerCompleteTaskPages": 0,
+    "humanVerifiedTaskPages": 0,
+    "runtimeVerifiedTaskPages": 0
   },
   "artifacts": {
     "discovery": "generated/docs-discovery/current.json",
     "capabilityCatalog": "docs/v2.0.0/capabilities.yaml",
+    "readerAudit": "generated/docs-certification/page-audit.json",
     "evidence": [
       "generated/docs-evidence/current/administration/users.png",
       "generated/docs-evidence/current/escalation/policies.png",

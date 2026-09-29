@@ -1512,7 +1512,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `scripts/compliance/validate-sbom.mjs`, `scripts/docs/certify.mjs`, `scripts/docs/crawl-rendered-site.mjs`, `scripts/docs/discover-capabilities.mjs`, `scripts/docs/generate-capacity-reference.mjs`, `scripts/docs/generate-integrations.mjs`, `scripts/docs/generate-route-contract.mjs`, `scripts/test-integrations.ts`, `src/app/api/events/stream/route.ts`, `src/app/api/sla/stream/route.ts`, `src/app/api/widgets/stream/route.ts`, `src/lib/idempotency.ts`, `src/lib/logger.ts`, `src/lib/status-pages/publication-policy.ts`
+- Sources: `scripts/compliance/validate-sbom.mjs`, `scripts/docs/audit-reader-completeness.mjs`, `scripts/docs/certify.mjs`, `scripts/docs/crawl-rendered-site.mjs`, `scripts/docs/discover-capabilities.mjs`, `scripts/docs/generate-capacity-reference.mjs`, `scripts/docs/generate-integrations.mjs`, `scripts/docs/generate-route-contract.mjs`, `scripts/test-integrations.ts`, `src/app/api/events/stream/route.ts`, `src/app/api/sla/stream/route.ts`, `src/app/api/widgets/stream/route.ts`, `src/lib/idempotency.ts`, `src/lib/logger.ts`, `src/lib/status-pages/publication-policy.ts`
 
 ## `KEY_PREFIX`
 
