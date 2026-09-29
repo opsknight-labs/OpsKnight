@@ -1,0 +1,2379 @@
+{
+  "schemaVersion": 1,
+  "routes": [
+    {
+      "route": "/action-items",
+      "file": "src/app/(app)/action-items/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/analytics",
+      "file": "src/app/(app)/analytics/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/analytics.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md",
+          "reference/metrics.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/audit",
+      "file": "src/app/(app)/audit/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/events",
+      "file": "src/app/(app)/events/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incident-response.md",
+          "concepts/incident-sla.md",
+          "concepts/incidents.md",
+          "concepts/postmortem-workflow.md",
+          "concepts/postmortems.md"
+        ],
+        "guides": [
+          "guides/incidents/acknowledge.md",
+          "guides/incidents/assign.md",
+          "guides/incidents/create.md",
+          "guides/incidents/escalate.md",
+          "guides/incidents/resolve.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/api/authentication.md",
+          "reference/api/errors.md",
+          "reference/api/incidents.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/events/test",
+      "file": "src/app/(app)/events/test/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incident-response.md",
+          "concepts/incident-sla.md",
+          "concepts/incidents.md",
+          "concepts/postmortem-workflow.md",
+          "concepts/postmortems.md"
+        ],
+        "guides": [
+          "guides/incidents/acknowledge.md",
+          "guides/incidents/assign.md",
+          "guides/incidents/create.md",
+          "guides/incidents/escalate.md",
+          "guides/incidents/resolve.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/api/authentication.md",
+          "reference/api/errors.md",
+          "reference/api/incidents.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/help",
+      "file": "src/app/(app)/help/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/incidents/[id]",
+      "file": "src/app/(app)/incidents/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incident-response.md",
+          "concepts/incident-sla.md",
+          "concepts/incidents.md",
+          "concepts/postmortem-workflow.md",
+          "concepts/postmortems.md"
+        ],
+        "guides": [
+          "guides/incidents/acknowledge.md",
+          "guides/incidents/assign.md",
+          "guides/incidents/create.md",
+          "guides/incidents/escalate.md",
+          "guides/incidents/resolve.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/api/authentication.md",
+          "reference/api/errors.md",
+          "reference/api/incidents.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/incidents/create",
+      "file": "src/app/(app)/incidents/create/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incident-response.md",
+          "concepts/incident-sla.md",
+          "concepts/incidents.md",
+          "concepts/postmortem-workflow.md",
+          "concepts/postmortems.md"
+        ],
+        "guides": [
+          "guides/incidents/acknowledge.md",
+          "guides/incidents/assign.md",
+          "guides/incidents/create.md",
+          "guides/incidents/escalate.md",
+          "guides/incidents/resolve.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/api/authentication.md",
+          "reference/api/errors.md",
+          "reference/api/incidents.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/incidents",
+      "file": "src/app/(app)/incidents/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incident-response.md",
+          "concepts/incident-sla.md",
+          "concepts/incidents.md",
+          "concepts/postmortem-workflow.md",
+          "concepts/postmortems.md"
+        ],
+        "guides": [
+          "guides/incidents/acknowledge.md",
+          "guides/incidents/assign.md",
+          "guides/incidents/create.md",
+          "guides/incidents/escalate.md",
+          "guides/incidents/resolve.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/api/authentication.md",
+          "reference/api/errors.md",
+          "reference/api/incidents.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/incidents/templates/create",
+      "file": "src/app/(app)/incidents/templates/create/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incident-response.md",
+          "concepts/incident-sla.md",
+          "concepts/incidents.md",
+          "concepts/postmortem-workflow.md",
+          "concepts/postmortems.md"
+        ],
+        "guides": [
+          "guides/incidents/acknowledge.md",
+          "guides/incidents/assign.md",
+          "guides/incidents/create.md",
+          "guides/incidents/escalate.md",
+          "guides/incidents/resolve.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/api/authentication.md",
+          "reference/api/errors.md",
+          "reference/api/incidents.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/incidents/templates",
+      "file": "src/app/(app)/incidents/templates/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incident-response.md",
+          "concepts/incident-sla.md",
+          "concepts/incidents.md",
+          "concepts/postmortem-workflow.md",
+          "concepts/postmortems.md"
+        ],
+        "guides": [
+          "guides/incidents/acknowledge.md",
+          "guides/incidents/assign.md",
+          "guides/incidents/create.md",
+          "guides/incidents/escalate.md",
+          "guides/incidents/resolve.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/api/authentication.md",
+          "reference/api/errors.md",
+          "reference/api/incidents.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/",
+      "file": "src/app/(app)/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/policies/[id]",
+      "file": "src/app/(app)/policies/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/policies/create",
+      "file": "src/app/(app)/policies/create/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/policies",
+      "file": "src/app/(app)/policies/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/postmortems/[incidentId]",
+      "file": "src/app/(app)/postmortems/[incidentId]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/postmortem-workflow.md",
+          "concepts/postmortems.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/postmortems/create",
+      "file": "src/app/(app)/postmortems/create/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/postmortem-workflow.md",
+          "concepts/postmortems.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/postmortems",
+      "file": "src/app/(app)/postmortems/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/postmortem-workflow.md",
+          "concepts/postmortems.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/reports/executive/[id]",
+      "file": "src/app/(app)/reports/executive/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/analytics.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md",
+          "reference/metrics.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/reports/executive/new",
+      "file": "src/app/(app)/reports/executive/new/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/analytics.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md",
+          "reference/metrics.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/reports/executive",
+      "file": "src/app/(app)/reports/executive/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/analytics.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md",
+          "reference/metrics.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/reports",
+      "file": "src/app/(app)/reports/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/analytics.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md",
+          "reference/metrics.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/schedules/[id]",
+      "file": "src/app/(app)/schedules/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/schedules.md"
+        ],
+        "guides": [
+          "guides/on-call/build-schedule.md",
+          "guides/on-call/overrides.md"
+        ],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/schedules",
+      "file": "src/app/(app)/schedules/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/schedules.md"
+        ],
+        "guides": [
+          "guides/on-call/build-schedule.md",
+          "guides/on-call/overrides.md"
+        ],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/services/[id]/integrations",
+      "file": "src/app/(app)/services/[id]/integrations/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md",
+          "concepts/teams.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": [
+          "integrations/issue-tracking/jira/troubleshooting.md",
+          "troubleshooting/integrations/webhook-rejected.md"
+        ]
+      }
+    },
+    {
+      "route": "/services/[id]/notifications",
+      "file": "src/app/(app)/services/[id]/notifications/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md",
+          "concepts/teams.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/notifications/not-delivered.md"
+        ]
+      }
+    },
+    {
+      "route": "/services/[id]",
+      "file": "src/app/(app)/services/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md",
+          "concepts/teams.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/services/[id]/settings",
+      "file": "src/app/(app)/services/[id]/settings/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md",
+          "concepts/teams.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/services/[id]/webhooks/[webhookId]/edit",
+      "file": "src/app/(app)/services/[id]/webhooks/[webhookId]/edit/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md",
+          "concepts/teams.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": [
+          "integrations/issue-tracking/jira/troubleshooting.md",
+          "troubleshooting/integrations/webhook-rejected.md"
+        ]
+      }
+    },
+    {
+      "route": "/services/[id]/webhooks/new",
+      "file": "src/app/(app)/services/[id]/webhooks/new/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md",
+          "concepts/teams.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": [
+          "integrations/issue-tracking/jira/troubleshooting.md",
+          "troubleshooting/integrations/webhook-rejected.md"
+        ]
+      }
+    },
+    {
+      "route": "/services",
+      "file": "src/app/(app)/services/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md",
+          "concepts/teams.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/settings/api-keys",
+      "file": "src/app/(app)/settings/api-keys/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/settings/chatops/link",
+      "file": "src/app/(app)/settings/chatops/link/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/settings/custom-fields",
+      "file": "src/app/(app)/settings/custom-fields/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/settings/incident-sla",
+      "file": "src/app/(app)/settings/incident-sla/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incident-response.md",
+          "concepts/incident-sla.md",
+          "concepts/incidents.md",
+          "concepts/postmortem-workflow.md",
+          "concepts/postmortems.md"
+        ],
+        "guides": [
+          "guides/incidents/acknowledge.md",
+          "guides/incidents/assign.md",
+          "guides/incidents/create.md",
+          "guides/incidents/escalate.md",
+          "guides/incidents/resolve.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/api/authentication.md",
+          "reference/api/errors.md",
+          "reference/api/incidents.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/settings/integrations/chatops",
+      "file": "src/app/(app)/settings/integrations/chatops/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/chatops.md"
+        ],
+        "guides": [
+          "guides/chatops/create-war-room.md",
+          "guides/jira/connect-jira.md"
+        ],
+        "reference": [
+          "integrations/README.md",
+          "integrations/catalog.yaml",
+          "integrations/communication/microsoft-teams.md",
+          "integrations/communication/slack.md",
+          "integrations/issue-tracking/jira.md",
+          "reference/api/authentication.md",
+          "reference/api/errors.md",
+          "reference/api/events.md"
+        ],
+        "troubleshooting": [
+          "integrations/issue-tracking/jira/troubleshooting.md",
+          "troubleshooting/integrations/webhook-rejected.md"
+        ]
+      }
+    },
+    {
+      "route": "/settings/integrations/jira",
+      "file": "src/app/(app)/settings/integrations/jira/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/chatops.md"
+        ],
+        "guides": [
+          "guides/chatops/create-war-room.md",
+          "guides/jira/connect-jira.md"
+        ],
+        "reference": [
+          "integrations/README.md",
+          "integrations/catalog.yaml",
+          "integrations/communication/microsoft-teams.md",
+          "integrations/communication/slack.md",
+          "integrations/issue-tracking/jira.md",
+          "reference/api/authentication.md",
+          "reference/api/errors.md",
+          "reference/api/events.md"
+        ],
+        "troubleshooting": [
+          "integrations/issue-tracking/jira/troubleshooting.md",
+          "troubleshooting/integrations/webhook-rejected.md"
+        ]
+      }
+    },
+    {
+      "route": "/settings/integrations/microsoft-teams",
+      "file": "src/app/(app)/settings/integrations/microsoft-teams/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/chatops.md"
+        ],
+        "guides": [
+          "guides/chatops/create-war-room.md"
+        ],
+        "reference": [
+          "integrations/communication/microsoft-teams.md",
+          "integrations/communication/slack.md"
+        ],
+        "troubleshooting": [
+          "integrations/communication/microsoft-teams/troubleshooting.md",
+          "integrations/communication/slack/troubleshooting.md"
+        ]
+      }
+    },
+    {
+      "route": "/settings/integrations",
+      "file": "src/app/(app)/settings/integrations/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/chatops.md"
+        ],
+        "guides": [
+          "guides/chatops/create-war-room.md",
+          "guides/jira/connect-jira.md"
+        ],
+        "reference": [
+          "integrations/README.md",
+          "integrations/catalog.yaml",
+          "integrations/communication/microsoft-teams.md",
+          "integrations/communication/slack.md",
+          "integrations/issue-tracking/jira.md",
+          "reference/api/authentication.md",
+          "reference/api/errors.md",
+          "reference/api/events.md"
+        ],
+        "troubleshooting": [
+          "integrations/issue-tracking/jira/troubleshooting.md",
+          "troubleshooting/integrations/webhook-rejected.md"
+        ]
+      }
+    },
+    {
+      "route": "/settings/integrations/slack",
+      "file": "src/app/(app)/settings/integrations/slack/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/chatops.md"
+        ],
+        "guides": [
+          "guides/chatops/create-war-room.md"
+        ],
+        "reference": [
+          "integrations/communication/microsoft-teams.md",
+          "integrations/communication/slack.md"
+        ],
+        "troubleshooting": [
+          "integrations/communication/microsoft-teams/troubleshooting.md",
+          "integrations/communication/slack/troubleshooting.md"
+        ]
+      }
+    },
+    {
+      "route": "/settings/notifications/history",
+      "file": "src/app/(app)/settings/notifications/history/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/notifications.md"
+        ],
+        "guides": [
+          "guides/notifications/configure-routing.md",
+          "guides/notifications/inspect-delivery.md"
+        ],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/notifications/not-delivered.md"
+        ]
+      }
+    },
+    {
+      "route": "/settings/notifications/operations",
+      "file": "src/app/(app)/settings/notifications/operations/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/notifications.md"
+        ],
+        "guides": [
+          "guides/notifications/configure-routing.md",
+          "guides/notifications/inspect-delivery.md"
+        ],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/notifications/not-delivered.md"
+        ]
+      }
+    },
+    {
+      "route": "/settings/notifications",
+      "file": "src/app/(app)/settings/notifications/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/notifications.md"
+        ],
+        "guides": [
+          "guides/notifications/configure-routing.md",
+          "guides/notifications/inspect-delivery.md"
+        ],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/notifications/not-delivered.md"
+        ]
+      }
+    },
+    {
+      "route": "/settings",
+      "file": "src/app/(app)/settings/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/settings/privacy-requests",
+      "file": "src/app/(app)/settings/privacy-requests/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/privacy.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/settings/profile",
+      "file": "src/app/(app)/settings/profile/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/settings/security-compliance",
+      "file": "src/app/(app)/settings/security-compliance/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/compliance.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/settings/security",
+      "file": "src/app/(app)/settings/security/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/settings/service-objectives",
+      "file": "src/app/(app)/settings/service-objectives/page.tsx",
+      "kind": "ui",
+      "classification": "HIDDEN",
+      "documentation": {
+        "concepts": [
+          "concepts/analytics.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md",
+          "reference/metrics.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/settings/status-page",
+      "file": "src/app/(app)/settings/status-page/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/status-pages/not-updating.md"
+        ]
+      }
+    },
+    {
+      "route": "/settings/status-pages/[pageId]",
+      "file": "src/app/(app)/settings/status-pages/[pageId]/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/status-pages/not-updating.md"
+        ]
+      }
+    },
+    {
+      "route": "/settings/status-pages",
+      "file": "src/app/(app)/settings/status-pages/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/status-pages/not-updating.md"
+        ]
+      }
+    },
+    {
+      "route": "/settings/system/health",
+      "file": "src/app/(app)/settings/system/health/page.tsx",
+      "kind": "ui",
+      "classification": "OPERATOR_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "operate/reliability/health-and-metrics.md",
+          "operate/reliability/scaling.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md",
+          "reference/metrics.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/installation/startup-fails.md",
+          "troubleshooting/kubernetes/pods-not-ready.md"
+        ]
+      }
+    },
+    {
+      "route": "/settings/system",
+      "file": "src/app/(app)/settings/system/page.tsx",
+      "kind": "ui",
+      "classification": "OPERATOR_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/settings/system/performance",
+      "file": "src/app/(app)/settings/system/performance/page.tsx",
+      "kind": "ui",
+      "classification": "OPERATOR_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/shortcuts",
+      "file": "src/app/(app)/shortcuts/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/system-logs",
+      "file": "src/app/(app)/system-logs/page.tsx",
+      "kind": "ui",
+      "classification": "OPERATOR_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/teams/[id]",
+      "file": "src/app/(app)/teams/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md",
+          "concepts/teams.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/teams",
+      "file": "src/app/(app)/teams/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md",
+          "concepts/teams.md"
+        ],
+        "guides": [],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/users/[id]",
+      "file": "src/app/(app)/users/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/administration/manage-users.md"
+        ],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/login/oidc-access.md"
+        ]
+      }
+    },
+    {
+      "route": "/users",
+      "file": "src/app/(app)/users/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/administration/manage-users.md"
+        ],
+        "reference": [
+          "reference/api/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/login/oidc-access.md"
+        ]
+      }
+    },
+    {
+      "route": "/m/analytics",
+      "file": "src/app/(mobile)/m/analytics/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/help",
+      "file": "src/app/(mobile)/m/help/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/incidents/[id]",
+      "file": "src/app/(mobile)/m/incidents/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/m/incidents/create",
+      "file": "src/app/(mobile)/m/incidents/create/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/m/incidents",
+      "file": "src/app/(mobile)/m/incidents/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/m/more",
+      "file": "src/app/(mobile)/m/more/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/notifications",
+      "file": "src/app/(mobile)/m/notifications/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": [
+          "troubleshooting/notifications/not-delivered.md"
+        ]
+      }
+    },
+    {
+      "route": "/m",
+      "file": "src/app/(mobile)/m/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/policies/[id]",
+      "file": "src/app/(mobile)/m/policies/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/policies",
+      "file": "src/app/(mobile)/m/policies/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/postmortems/[id]",
+      "file": "src/app/(mobile)/m/postmortems/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/postmortems",
+      "file": "src/app/(mobile)/m/postmortems/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/schedules/[id]",
+      "file": "src/app/(mobile)/m/schedules/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/schedules",
+      "file": "src/app/(mobile)/m/schedules/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/services/[id]",
+      "file": "src/app/(mobile)/m/services/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/services",
+      "file": "src/app/(mobile)/m/services/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/status",
+      "file": "src/app/(mobile)/m/status/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/teams/[id]",
+      "file": "src/app/(mobile)/m/teams/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/teams",
+      "file": "src/app/(mobile)/m/teams/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/users/[id]",
+      "file": "src/app/(mobile)/m/users/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": [
+          "troubleshooting/login/oidc-access.md"
+        ]
+      }
+    },
+    {
+      "route": "/m/users",
+      "file": "src/app/(mobile)/m/users/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": [
+          "troubleshooting/login/oidc-access.md"
+        ]
+      }
+    },
+    {
+      "route": "/logs",
+      "file": "src/app/(public)/logs/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/m/forgot-password",
+      "file": "src/app/(public)/m/forgot-password/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/authentication.md",
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "guides/identity/configure-oidc.md",
+          "guides/identity/configure-scim.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/login/oidc-access.md"
+        ]
+      }
+    },
+    {
+      "route": "/m/login",
+      "file": "src/app/(public)/m/login/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/status/[slug]",
+      "file": "src/app/(public)/status/[slug]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/status/[slug]/postmortems/[incidentId]",
+      "file": "src/app/(public)/status/[slug]/postmortems/[incidentId]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incident-response.md",
+          "concepts/incident-sla.md",
+          "concepts/incidents.md",
+          "concepts/postmortem-workflow.md",
+          "concepts/postmortems.md"
+        ],
+        "guides": [
+          "guides/incidents/acknowledge.md",
+          "guides/incidents/assign.md",
+          "guides/incidents/create.md",
+          "guides/incidents/escalate.md",
+          "guides/incidents/resolve.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/api/authentication.md",
+          "reference/api/errors.md",
+          "reference/api/incidents.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/status/[slug]/unsubscribe/[token]",
+      "file": "src/app/(public)/status/[slug]/unsubscribe/[token]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/status/[slug]/verify/[token]",
+      "file": "src/app/(public)/status/[slug]/verify/[token]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/status",
+      "file": "src/app/(public)/status/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/status/postmortems/[incidentId]",
+      "file": "src/app/(public)/status/postmortems/[incidentId]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incident-response.md",
+          "concepts/incident-sla.md",
+          "concepts/incidents.md",
+          "concepts/postmortem-workflow.md",
+          "concepts/postmortems.md"
+        ],
+        "guides": [
+          "guides/incidents/acknowledge.md",
+          "guides/incidents/assign.md",
+          "guides/incidents/create.md",
+          "guides/incidents/escalate.md",
+          "guides/incidents/resolve.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/api/authentication.md",
+          "reference/api/errors.md",
+          "reference/api/incidents.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/incidents/lifecycle-stuck.md"
+        ]
+      }
+    },
+    {
+      "route": "/status/unsubscribe/[token]",
+      "file": "src/app/(public)/status/unsubscribe/[token]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/status/verify/[token]",
+      "file": "src/app/(public)/status/verify/[token]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/auth/signout",
+      "file": "src/app/auth/signout/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/authentication.md",
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "guides/identity/configure-oidc.md",
+          "guides/identity/configure-scim.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/login/oidc-access.md"
+        ]
+      }
+    },
+    {
+      "route": "/clear-desktop-preference",
+      "file": "src/app/clear-desktop-preference/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/debug-mobile",
+      "file": "src/app/debug-mobile/page.tsx",
+      "kind": "ui",
+      "classification": "INTERNAL",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/forgot-password",
+      "file": "src/app/forgot-password/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/authentication.md",
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "guides/identity/configure-oidc.md",
+          "guides/identity/configure-scim.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/login/oidc-access.md"
+        ]
+      }
+    },
+    {
+      "route": "/login",
+      "file": "src/app/login/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    },
+    {
+      "route": "/reset-password",
+      "file": "src/app/reset-password/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/authentication.md",
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "guides/identity/configure-oidc.md",
+          "guides/identity/configure-scim.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/login/oidc-access.md"
+        ]
+      }
+    },
+    {
+      "route": "/set-password",
+      "file": "src/app/set-password/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/authentication.md",
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "guides/identity/configure-oidc.md",
+          "guides/identity/configure-scim.md"
+        ],
+        "reference": [
+          "reference/api/README.md",
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": [
+          "troubleshooting/login/oidc-access.md"
+        ]
+      }
+    },
+    {
+      "route": "/setup",
+      "file": "src/app/setup/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "operate/capacity/README.md",
+          "operate/capacity/choose-deployment.md",
+          "operate/capacity/scaling-signals.md",
+          "operate/capacity/sizing.md",
+          "operate/deploy/compose.md",
+          "operate/deploy/helm.md",
+          "operate/deploy/kubernetes.md",
+          "operate/deploy/kustomize.md",
+          "operate/deploy/split-runtime.md",
+          "operate/deploy/swarm.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
+        "reference": [
+          "operate/capacity/benchmark-results.md",
+          "operate/capacity/certification-methodology.md",
+          "reference/configuration/README.md",
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      }
+    }
+  ]
+}

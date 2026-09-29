@@ -15,6 +15,12 @@ verification:
 
 # Configure OIDC
 
+## 2.0.0 support boundary
+
+Supported: one configured OIDC provider for the workspace. Not supported:
+multiple selectable identity providers on the sign-in screen. Keep local
+break-glass access while changing the configured issuer.
+
 ## Before you begin
 
 Obtain the issuer metadata and client credentials from the identity provider.
@@ -41,3 +47,20 @@ disabled provider user can no longer establish a session and that an existing
 session follows the configured session policy. If callbacks fail, collect the
 request ID, external origin, issuer, callback URL, and provider error without
 recording authorization codes, tokens, or the client secret.
+
+## Provider and lifecycle checklist
+
+- Perform issuer validation against the exact discovery issuer and use a stable
+  identity key from the provider subject, not a display name.
+- Decide whether first sign-in requires prior account linking or whether
+  auto-provisioning is enabled. Test profile mapping and role mapping with a
+  least-privileged account.
+- For Microsoft Entra, Google Workspace, Okta, Auth0, and generic OIDC, follow
+  the provider's application-registration steps while keeping OpsKnight's exact
+  callback URL, issuer, scopes, and claim contract unchanged.
+- Maintain a tested break-glass local administrator before enabling SSO-only
+  access. Apply the documented session policy to both new and existing sessions.
+- Treat issuer migration as an identity migration: pilot linking, confirm stable
+  subjects, preserve emergency access, and only then retire the old issuer.
+
+For troubleshooting, use [OIDC access problems](../../troubleshooting/login/oidc-access/).

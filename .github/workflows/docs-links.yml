@@ -52,8 +52,12 @@ jobs:
           npm run docs:reference
           npm run docs:integrations
           npm run docs:capacity
+          npm run docs:routes
+          npm run docs:v15-parity
+          npm run docs:depth
+          npm run docs:claims
       - name: Reject generated documentation drift
-        run: git diff --exit-code -- generated/docs-discovery/current.json generated/docs-contracts/current.json generated/docs-contracts/capacity.json docs/v2.0.0/reference docs/v2.0.0/integrations docs/v2.0.0/operate/capacity/benchmark-results.md
+        run: git diff --exit-code -- generated/docs-discovery/current.json generated/docs-contracts/current.json generated/docs-contracts/capacity.json generated/docs-contracts/routes.json generated/docs-certification/depth.json generated/docs-certification/v15-parity-report.md docs/internal/certification/v1.5-to-v2-parity.yaml docs/v2.0.0/reference docs/v2.0.0/integrations docs/v2.0.0/operate/capacity/benchmark-results.md
       - name: Validate 2.0.0 documentation contracts
         run: npm run docs:certify:static
       - name: Detect documentation impact
