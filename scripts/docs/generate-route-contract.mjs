@@ -17,7 +17,7 @@ const routes = discovery.uiRoutes.map(route => {
       : operator.test(route.route) ? 'OPERATOR_FEATURE'
         : admin.test(route.route) ? 'ADMIN_FEATURE' : 'PUBLIC_FEATURE';
   const documentation = node?.documentation ?? { concepts: [], guides: [], reference: [], troubleshooting: [] };
-  return { ...route, classification, documentation };
+  return { ...route, classification, documentation, documentationMapping: node?.documentationMapping ?? 'unmapped' };
 });
 const contract = { schemaVersion: 1, routes };
 const destination = resolve(root, 'generated/docs-contracts/routes.json');

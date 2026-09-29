@@ -10,6 +10,9 @@ if (graph.unclassified.length > 0) throw new Error(`Unclassified feature nodes:\
 if (graph.duplicateIds.length > 0) throw new Error(`Duplicate feature node IDs:\n${graph.duplicateIds.join('\n')}`);
 if (graph.unsupportedClaims.length > 0) throw new Error(`Unsupported generated claims:\n${graph.unsupportedClaims.join('\n')}`);
 if (graph.undocumented.length > 0) throw new Error(`Supported feature nodes without documentation:\n${graph.undocumented.join('\n')}`);
+if (graph.uiRoutesWithoutExplicitDocumentation?.length > 0) {
+  throw new Error(`UI routes without explicit semantic documentation:\n${graph.uiRoutesWithoutExplicitDocumentation.join('\n')}`);
+}
 if (graph.unresolvedSemanticContracts.length > 0) throw new Error(`Unresolved semantic contracts:\n${graph.unresolvedSemanticContracts.join('\n')}`);
 
 const requiredKinds = [
@@ -39,6 +42,9 @@ for (const node of graph.nodes) {
       try { readFileSync(resolve(root, 'docs/v2.0.0', path)); }
       catch { throw new Error(`Feature documentation does not exist: ${node.id} -> ${path}`); }
     }
+  }
+  if (node.kind === 'ui' && node.classification !== 'INTERNAL_IMPLEMENTATION' && node.documentationMapping !== 'explicit-route-rule') {
+    throw new Error(`UI route uses non-semantic documentation fallback: ${node.id}`);
   }
 }
 
