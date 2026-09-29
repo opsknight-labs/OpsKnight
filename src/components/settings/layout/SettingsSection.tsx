@@ -25,7 +25,7 @@ export function SettingsSection({
     <Card className={cn('overflow-hidden', className)}>
       {/* Header */}
       <div className="px-4 py-4 md:px-6 md:py-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
           <div className="space-y-1">
             <h3 className="text-lg font-bold leading-none tracking-tight">{title}</h3>
             {description && (

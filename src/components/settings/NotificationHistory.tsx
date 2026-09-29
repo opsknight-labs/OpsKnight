@@ -214,40 +214,72 @@ export default function NotificationHistory() {
     setOffset(0);
   };
 
-  const exportCsv = () => {
-    const headers = [
-      'ID',
-      'Channel',
-      'Status',
-      'Incident',
-      'Attempts',
-      'Latency(ms)',
-      'Dispatched At',
-      'Error',
-    ];
-    const csvRows = [
-      headers,
-      ...notifications.map(n => [
-        n.id,
-        n.channel,
-        n.status,
-        n.incident?.title || 'General Alert',
-        n.attempts,
-        n.latencyMs ?? '',
-        n.deliveredAt || n.sentAt || n.failedAt || n.createdAt,
-        n.errorMsg || '',
-      ]),
-    ];
-    const csv = csvRows
-      .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `my-notification-history-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const exportCsv = async () => {
+    try {
+      // Fetch the full result set respecting current filters (max 200 per request)
+      const allRows: Notification[] = [];
+      let currentOffset = 0;
+      const PAGE_LIMIT = 200;
+      let hasMore = true;
+
+      while (hasMore) {
+        const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(currentOffset) });
+        if (filterChannel && filterChannel !== 'all') params.set('channel', filterChannel);
+        if (filterStatus && filterStatus !== 'all') params.set('status', filterStatus);
+        if (debouncedQuery) params.set('q', debouncedQuery);
+        const fromIso = resolveDateToIso(fromDate, false);
+        const toIso = resolveDateToIso(toDate, true);
+        if (fromIso) params.set('from', fromIso);
+        if (toIso) params.set('to', toIso);
+
+        const response = await fetch(`/api/notifications/history?${params.toString()}`);
+        if (!response.ok) throw new Error('Failed to fetch notifications for export');
+        const data = await response.json();
+        const page: Notification[] = data.notifications || [];
+        allRows.push(...page);
+        if (page.length < PAGE_LIMIT) {
+          hasMore = false;
+        } else {
+          currentOffset += PAGE_LIMIT;
+        }
+      }
+
+      const headers = [
+        'ID',
+        'Channel',
+        'Status',
+        'Incident',
+        'Attempts',
+        'Latency(ms)',
+        'Dispatched At',
+        'Error',
+      ];
+      const csvRows = [
+        headers,
+        ...allRows.map(n => [
+          n.id,
+          n.channel,
+          n.status,
+          n.incident?.title || 'General Alert',
+          n.attempts,
+          n.latencyMs ?? '',
+          n.deliveredAt || n.sentAt || n.failedAt || n.createdAt,
+          n.errorMsg || '',
+        ]),
+      ];
+      const csv = csvRows
+        .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `my-notification-history-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      logger.error('exportCsv failed', { error: String(err) });
+    }
   };
 
   const getStatusBadge = (status: string) => {

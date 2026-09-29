@@ -15,22 +15,24 @@ export default function SettingsSubpageNav() {
     return null;
   }
 
-  // Find the current item and section from navConfig
+  // Find the current item and section from navConfig — use longest prefix match
+  // to ensure /settings/notifications/operations wins over /settings/notifications
   let currentItem = null;
   let currentSection = null;
+  let bestMatchLength = -1;
 
   for (const section of SETTINGS_NAV_SECTIONS) {
     for (const item of section.items) {
-      if (
-        pathname === item.href ||
-        (item.href !== '/settings' && pathname.startsWith(`${item.href}/`))
-      ) {
-        currentItem = item;
-        currentSection = section;
-        break;
+      const isExact = pathname === item.href;
+      const isPrefix = item.href !== '/settings' && pathname.startsWith(`${item.href}/`);
+      if (isExact || isPrefix) {
+        if (item.href.length > bestMatchLength) {
+          bestMatchLength = item.href.length;
+          currentItem = item;
+          currentSection = section;
+        }
       }
     }
-    if (currentItem) break;
   }
 
   const isDeepChild = Boolean(currentItem && pathname !== currentItem.href);

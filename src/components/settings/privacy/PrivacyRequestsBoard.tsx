@@ -173,7 +173,8 @@ export default function PrivacyRequestsBoard({
         { cache: 'no-store' }
       )
         .then(readJson)
-        .then(body => setSubjectMatches((body?.data?.users as RequestUser[]) ?? []));
+        .then(body => setSubjectMatches((body?.data?.users as RequestUser[]) ?? []))
+        .catch(() => showToast('Failed to search subjects. Please try again.', 'error'));
     }, 250);
     return () => window.clearTimeout(timer);
   }, [subjectQuery, subjectType, subjectUsers]);
@@ -225,6 +226,8 @@ export default function PrivacyRequestsBoard({
         }
         setRequests(prev => [...prev, ...(body.data.requests as PrivacyRequestRow[])]);
         setNextCursor(body.data.nextCursor ?? null);
+      } catch {
+        showToast('A network error occurred. Please try again.', 'error');
       } finally {
         setIsLoadingMore(false);
       }

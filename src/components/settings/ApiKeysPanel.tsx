@@ -233,6 +233,9 @@ export default function ApiKeysPanel({
     });
   }, [keys, searchQuery, statusFilter]);
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
+    (typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com');
+
   return (
     <div className="space-y-6">
       {/* 1. Reveal Token Banner / Modal if just created */}
@@ -534,7 +537,7 @@ export default function ApiKeysPanel({
                 </span>
                 <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
                   <pre className="leading-relaxed">
-                    {`curl -X POST https://api.opsknight.com/api/events \\
+                    {`curl -X POST ${baseUrl}/api/events \\
   -H "Authorization: Bearer ${state?.token || 'ok_live_your_api_key'}" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -560,7 +563,7 @@ export default function ApiKeysPanel({
                 </span>
                 <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
                   <pre className="leading-relaxed">
-                    {`curl -X GET "https://api.opsknight.com/api/incidents?status=OPEN&limit=25" \\
+                    {`curl -X GET "${baseUrl}/api/incidents?status=OPEN&limit=25" \\
   -H "Authorization: Bearer ${state?.token || 'ok_live_your_api_key'}"`}
                   </pre>
                 </div>
@@ -575,7 +578,7 @@ export default function ApiKeysPanel({
                 </span>
                 <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
                   <pre className="leading-relaxed">
-                    {`const response = await fetch('https://api.opsknight.com/api/events', {
+                    {`const response = await fetch('${baseUrl}/api/events', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer ${state?.token || 'ok_live_your_api_key'}',
@@ -608,7 +611,7 @@ console.log(result);`}
                 </span>
                 <div className="relative rounded-xl bg-muted/40 border border-border/80 p-3.5 font-mono text-xs overflow-x-auto text-foreground">
                   <pre className="leading-relaxed">
-                    {`const response = await fetch('https://api.opsknight.com/api/incidents?status=OPEN&limit=25', {
+                    {`const response = await fetch('${baseUrl}/api/incidents?status=OPEN&limit=25', {
   headers: {
     'Authorization': 'Bearer ${state?.token || 'ok_live_your_api_key'}',
   },
@@ -632,7 +635,7 @@ console.log(data.incidents);`}
                     {`import requests
 
 response = requests.post(
-    "https://api.opsknight.com/api/events",
+    "${baseUrl}/api/events",
     headers={
         "Authorization": "Bearer ${state?.token || 'ok_live_your_api_key'}",
         "Content-Type": "application/json",
@@ -666,7 +669,7 @@ print(response.json())`}
                     {`import requests
 
 response = requests.get(
-    "https://api.opsknight.com/api/incidents",
+    "${baseUrl}/api/incidents",
     headers={
         "Authorization": "Bearer ${state?.token || 'ok_live_your_api_key'}",
     },
