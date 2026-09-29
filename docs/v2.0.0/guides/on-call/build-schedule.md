@@ -1,9 +1,12 @@
 ---
 title: Build an on-call schedule
 description: Create a schedule, define rotation layers, add responders, and verify coverage.
-type: how-to
+type: tutorial
 product_area: on-call
 audience: [administrator, responder]
+reader:
+  status: READER_COMPLETE
+  task: Build and test a complete on-call schedule with rotation coverage.
 verification:
   level: source
   verified_at: 2026-09-29
