@@ -1,17 +1,17 @@
-/* eslint-disable security/detect-non-literal-fs-filename */
-import { readFileSync, readdirSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { getAuthorizedNavItems } from '@/config/navigation';
 
-const source = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
+const pageSources = import.meta.glob('../../src/app/**/page.tsx', {
+  eager: true,
+  import: 'default',
+  query: '?raw',
+}) as Record<string, string>;
 
-function pageFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
-    const path = resolve(directory, entry.name);
-    if (entry.isDirectory()) return pageFiles(path);
-    return entry.name === 'page.tsx' ? [path] : [];
-  });
-}
+const source = (path: string) => {
+  const entry = Object.entries(pageSources).find(([key]) => key.endsWith(path));
+  if (!entry) throw new Error(`Page source not found: ${path}`);
+  return entry[1];
+};
 
 const guardedPages = [
   ['src/app/(app)/users/page.tsx', 'assertCanListUsers()'],
@@ -31,6 +31,16 @@ const guardedPages = [
 ] as const;
 
 describe('RBAC page guard contract', () => {
+  it('hides organization-wide user and policy routes from ordinary-user navigation', () => {
+    const userHrefs = getAuthorizedNavItems('USER').map(item => item.href);
+    const responderHrefs = getAuthorizedNavItems('RESPONDER').map(item => item.href);
+
+    expect(userHrefs).not.toContain('/users');
+    expect(userHrefs).not.toContain('/policies');
+    expect(responderHrefs).toContain('/users');
+    expect(responderHrefs).toContain('/policies');
+  });
+
   for (const [path, guard] of guardedPages) {
     it(`${path} authorizes before its first direct Prisma read`, () => {
       const page = source(path);
@@ -51,21 +61,31 @@ describe('RBAC page guard contract', () => {
   });
 
   it('requires every non-public page with a direct Prisma read to declare authorization', () => {
-    const appRoot = resolve(process.cwd(), 'src/app');
     const exempt = new Set([
-      resolve(appRoot, '(public)/status/verify/[token]/page.tsx'),
-      resolve(appRoot, 'setup/page.tsx'),
+      // Public/bootstrap pages intentionally query before an application actor exists.
+      'src/app/(public)/status/verify/[token]/page.tsx',
+      'src/app/(public)/status/postmortems/[incidentId]/page.tsx',
+      'src/app/login/page.tsx',
+      'src/app/setup/page.tsx',
+      // These pages constrain every protected query to the authenticated user's own id.
+      'src/app/(app)/reports/page.tsx',
+      'src/app/(app)/settings/api-keys/page.tsx',
+      'src/app/(app)/settings/security/page.tsx',
+      'src/app/(mobile)/m/more/page.tsx',
       // This route redirects unconditionally before its retained, unreachable implementation.
-      resolve(appRoot, '(app)/settings/service-objectives/page.tsx'),
+      'src/app/(app)/settings/service-objectives/page.tsx',
     ]);
     const authorizationDecision =
-      /assertCan|assertCapability|getCurrentAuthorizationActor|getRequestActorContext|ReadWhere\(|getViewable|assertAdmin|assertResponder|assertAuditor|getCurrentUser|getServerSession|getUserPermissions/;
+      /assertCan|assertCapability|getCurrentAuthorizationActor|ReadWhere\(|getViewable|assertAdmin|assertResponder|assertAuditor|permissions\.(capabilities\.includes|isAdmin|isResponderOrAbove|isAuditor)|user\.role\s*[!=]==?/;
 
-    const unguarded = pageFiles(appRoot)
-      .filter(path => !exempt.has(path))
-      .filter(path => /prisma\.[A-Za-z0-9_]+\.(findUnique|findFirst|findMany|count|groupBy|aggregate)/.test(source(path)))
-      .filter(path => !authorizationDecision.test(source(path)))
-      .map(path => path.slice(process.cwd().length + 1));
+    const unguarded = Object.entries(pageSources)
+      .map(([key, page]) => ({ path: key.slice(key.indexOf('src/app/')), page }))
+      .filter(({ path }) => !exempt.has(path))
+      .filter(({ page }) =>
+        /prisma\.[A-Za-z0-9_]+\.(findUnique|findFirst|findMany|count|groupBy|aggregate)/.test(page)
+      )
+      .filter(({ page }) => !authorizationDecision.test(page))
+      .map(({ path }) => path);
 
     expect(unguarded).toEqual([]);
   });

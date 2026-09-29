@@ -129,6 +129,7 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     label: 'Escalation Policies',
     icon: ShieldAlert,
     section: 'ON_CALL',
+    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
   },
   {
     href: '/teams',
@@ -141,6 +142,7 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     label: 'Users',
     icon: User,
     section: 'ON_CALL',
+    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
   },
 
   // ── ANALYTICS ─────────────────────────────────────────────────────────────
