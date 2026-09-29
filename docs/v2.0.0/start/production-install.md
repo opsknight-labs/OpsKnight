@@ -22,14 +22,16 @@ uncertified requests-per-second claim.
 
 ## Choose a topology
 
-- Single host and simplest operation: [Integrated Compose](../operate/deploy/compose/).
-- Single host with worker isolation: [Split Compose](../operate/deploy/split-runtime/).
+- Single host and simplest operation: [Integrated Compose](../operate/deploy/docker-compose/integrated).
+- Single host with worker isolation: [Split Compose](../operate/deploy/docker-compose/split).
 - Split runtime with web/database connection pressure: calculate the connection
   budget, then add supported PgBouncer transaction pooling.
 - Docker-native multi-node HA: [Docker Swarm](../operate/deploy/swarm/).
 - Existing Kubernetes platform: [Kubernetes](../operate/deploy/kubernetes/).
 - Packaged, schema-validated Kubernetes: [Helm](../operate/deploy/helm/).
 - GitOps or owned overlays: [Kustomize](../operate/deploy/kustomize/).
+
+Start with the [deployment landing page](../operate/deploy/) for the current decision and acceptance path.
 
 Use the complete [deployment decision table](../operate/capacity/choose-deployment/)
 and [capacity methodology](../operate/capacity/certification-methodology/) before

@@ -13,7 +13,7 @@ verification:
 
 # Operate OpsKnight
 
-- **Deploy** — Compose, Kubernetes, Helm, Kustomize, and runtime topology.
+- **Deploy** — [Choose a topology](./deploy/), then follow the complete Compose, Kubernetes, Helm, Kustomize, or Swarm path.
 - **Configure** — supported environment and application configuration.
 - **Reliability** — health, observability, scaling, and failure recovery.
 - **Security** — secrets, identity, network boundaries, and hardening.

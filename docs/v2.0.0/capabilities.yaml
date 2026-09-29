@@ -221,9 +221,9 @@ capabilities:
     title: Deploy integrated and split runtimes
     product_area: deployment
     status: documented
-    required: { concepts: false, guides: true, reference: true, tests: true, evidence: false }
-    concepts: []
-    guides: [start/quickstart.md, start/production-install.md, operate/deploy/compose.md, operate/deploy/kubernetes.md, operate/deploy/split-runtime.md]
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
+    concepts: [operate/deploy/README.md, operate/deploy/architecture/integrated-vs-split.md, operate/deploy/architecture/runtime-roles.md, operate/deploy/architecture/database-connections.md]
+    guides: [start/quickstart.md, start/production-install.md, operate/deploy/docker-compose/prerequisites.md, operate/deploy/docker-compose/integrated.md, operate/deploy/docker-compose/split.md, operate/deploy/docker-compose/external-postgres.md, operate/deploy/docker-compose/pgbouncer.md, operate/deploy/docker-compose/reverse-proxy.md, operate/deploy/docker-compose/upgrade.md, operate/deploy/docker-compose/troubleshooting.md, operate/deploy/docker-compose/production-checklist.md, operate/deploy/kubernetes.md, operate/deploy/swarm.md, operate/deploy/helm.md, operate/deploy/kustomize.md]
     reference: [reference/configuration/README.md, reference/health.md]
     tests: [tests/lib/deployment-config-unit.test.ts]
     sources: [deploy/compose, deploy/kubernetes, deploy/swarm]
