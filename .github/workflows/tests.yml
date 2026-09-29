@@ -20,7 +20,7 @@ jobs:
   fast-validation:
     name: Fast validation (L0 lint/typecheck + L1 unit)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7

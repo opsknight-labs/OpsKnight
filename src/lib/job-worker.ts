@@ -14,6 +14,9 @@ import {
   criticalNotificationCycleWasBusy,
   runCriticalNotificationCycle,
 } from './notification-recovery';
+import { certifyNotificationControlPlane } from './provider-admission';
+import { isBulkNotificationDeliveryPaused } from './notification-capacity-control';
+import { processCentralNotificationQueue } from './notification-control-plane';
 
 const DEFAULT_BATCH_SIZE = 100;
 const DEFAULT_CONCURRENCY = 15;
@@ -178,7 +181,6 @@ async function runOnce(): Promise<void> {
     if (now - workerState.lastControlPlaneProbeAt >= 30_000) {
       workerState.lastControlPlaneProbeAt = now;
       try {
-        const { certifyNotificationControlPlane } = await import('./provider-admission');
         await certifyNotificationControlPlane();
         workerState.controlPlaneState = 'HEALTHY';
         workerState.lastError = null;
@@ -248,14 +250,12 @@ async function runOnce(): Promise<void> {
         scheduleNextRun(withIdleJitter(workerState.workerConfig.idlePollMs));
         return;
       }
-      const { isBulkNotificationDeliveryPaused } = await import('./notification-capacity-control');
       if (await isBulkNotificationDeliveryPaused()) {
         workerState.lastSuccessAt = new Date();
         workerState.lastError = null;
         scheduleNextRun(withIdleJitter(workerState.workerConfig.idlePollMs));
         return;
       }
-      const { processCentralNotificationQueue } = await import('./notification-control-plane');
       const notifications = await processCentralNotificationQueue({
         trafficClasses: ['PUBLIC_INCIDENT', 'BULK'],
         batchSize: workerState.workerConfig.batchSize,
@@ -457,7 +457,6 @@ export function startJobWorker(
   // ensuring work is never claimed until the state is certified HEALTHY or EMERGENCY_LOCAL.
   void (async () => {
     try {
-      const { certifyNotificationControlPlane } = await import('./provider-admission');
       await certifyNotificationControlPlane();
       workerState.controlPlaneState = 'HEALTHY';
       logger.info('[JobWorker] Control plane startup certification passed');

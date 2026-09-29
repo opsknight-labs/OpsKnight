@@ -455,10 +455,10 @@ export async function deletePolicyStep(stepId: string): Promise<{ error?: string
       });
 
       // Update step orders to be sequential
-      for (let i = 0; i < remainingSteps.length; i++) {
-        if (remainingSteps[i].stepOrder !== i) {
+      for (const [i, step] of remainingSteps.entries()) {
+        if (step.stepOrder !== i) {
           await tx.escalationRule.update({
-            where: { id: remainingSteps[i].id },
+            where: { id: step.id },
             data: { stepOrder: i },
           });
         }

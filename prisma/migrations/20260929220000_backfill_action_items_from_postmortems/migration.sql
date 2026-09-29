@@ -1,3 +1,17 @@
+-- Safe date parser that catches any malformed legacy date and returns NULL instead of failing
+CREATE OR REPLACE FUNCTION opsknight_try_parse_timestamptz(val text)
+RETURNS timestamptz AS $$
+BEGIN
+  IF val IS NULL OR btrim(val) = '' THEN
+    RETURN NULL;
+  END IF;
+  RETURN val::timestamptz;
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
 -- Backfill legacy Postmortem.actionItems JSON into normalized ActionItem rows.
 -- Idempotent: skips if ActionItem rows already exist for the postmortem.
 INSERT INTO "ActionItem" (
@@ -22,10 +36,7 @@ SELECT
   COALESCE(NULLIF(TRIM(elem->>'title'), ''), 'Untitled action item'),
   NULLIF(TRIM(elem->>'description'), ''),
   u.id,
-  CASE
-    WHEN elem->>'dueDate' ~ '^\d{4}-\d{2}-\d{2}' THEN (elem->>'dueDate')::timestamptz
-    ELSE NULL
-  END,
+  opsknight_try_parse_timestamptz(elem->>'dueDate'),
   CASE
     WHEN elem->>'status' IN ('OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED') THEN (elem->>'status')::"ActionItemStatus"
     ELSE 'OPEN'::"ActionItemStatus"
@@ -54,3 +65,6 @@ WHERE p."actionItems" IS NOT NULL
     SELECT 1 FROM "ActionItem" ai WHERE ai."postmortemId" = p.id
   )
 ON CONFLICT ("id") DO NOTHING;
+
+-- Clean up temporary parsing helper
+DROP FUNCTION IF EXISTS opsknight_try_parse_timestamptz(text);

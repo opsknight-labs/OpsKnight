@@ -10,12 +10,7 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { CheckSquare, Circle, Clock, CheckCircle2, AlertOctagon } from 'lucide-react';
 import { getJiraCapabilitiesByServiceIds } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
-import {
-  formatActionItemDueDate,
-  getStoredActionItemId,
-  normalizeLegacyActionItems,
-  parseActionItemDueDate,
-} from '@/lib/action-items';
+import { formatActionItemDueDate } from '@/lib/action-items';
 import {
   parsePageParam,
   calculatePaginationBounds,
@@ -87,64 +82,14 @@ export default async function ActionItemsPage({
 
   const now = new Date();
 
-  // Ensure any legacy postmortem JSON action items are backfilled into ActionItem rows
-  const unmigratedPostmortems = await prisma.postmortem.findMany({
-    where: {
-      actionItems: { not: Prisma.JsonNull },
-      actionItemRecords: { none: {} },
-    },
-    select: {
-      id: true,
-      incidentId: true,
-      actionItems: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
-
-  if (unmigratedPostmortems.length > 0) {
-    const rowsToInsert: Prisma.ActionItemCreateManyInput[] = [];
-    for (const pm of unmigratedPostmortems) {
-      const legacyItems = normalizeLegacyActionItems(pm.actionItems, {
-        legacyIdPrefix: `postmortem-${pm.id}`,
-      });
-      legacyItems.forEach((item, index) => {
-        rowsToInsert.push({
-          id: getStoredActionItemId({
-            postmortemId: pm.id,
-            legacyId: item.id,
-            index,
-          }),
-          postmortemId: pm.id,
-          incidentId: pm.incidentId,
-          title: item.title.trim() || 'Untitled action item',
-          description: item.description?.trim() || null,
-          ownerId: item.owner ?? null,
-          dueDate: parseActionItemDueDate(item.dueDate) ?? null,
-          status: item.status,
-          priority: item.priority,
-          source: 'POSTMORTEM' as const,
-          completedAt: item.status === 'COMPLETED' ? pm.updatedAt : null,
-          createdAt: pm.createdAt,
-          updatedAt: pm.updatedAt,
-        });
-      });
-    }
-    if (rowsToInsert.length > 0) {
-      await prisma.actionItem.createMany({
-        data: rowsToInsert,
-        skipDuplicates: true,
-      });
-    }
-  }
-
   // Aggregate stats directly from database
   const [
     statusCounts,
     overdueCount,
     highPriorityCount,
     totalCount,
-    users,
+    seedUsers,
+    selectedOwnerUser,
   ] = await Promise.all([
     prisma.actionItem.groupBy({
       by: ['status'],
@@ -173,9 +118,21 @@ export default async function ActionItemsPage({
     prisma.user.findMany({
       where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
       select: { id: true, name: true, email: true },
-      orderBy: { name: 'asc' },
+      orderBy: [{ name: 'asc' }, { email: 'asc' }],
+      take: 25,
     }),
+    owner
+      ? prisma.user.findUnique({
+          where: { id: owner },
+          select: { id: true, name: true, email: true },
+        })
+      : Promise.resolve(null),
   ]);
+
+  const users =
+    selectedOwnerUser && !seedUsers.some(u => u.id === selectedOwnerUser.id)
+      ? [selectedOwnerUser, ...seedUsers]
+      : seedUsers;
 
   const statusMap = new Map(statusCounts.map(s => [s.status, s._count._all]));
   const stats = {
@@ -195,6 +152,13 @@ export default async function ActionItemsPage({
   });
 
   const actionItemInclude = {
+    owner: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    },
     postmortem: {
       select: {
         id: true,
@@ -249,6 +213,7 @@ export default async function ActionItemsPage({
     title: record.title,
     description: record.description ?? '',
     owner: record.ownerId ?? undefined,
+    ownerName: record.owner?.name ?? undefined,
     dueDate: formatActionItemDueDate(record.dueDate),
     status: record.status,
     priority: record.priority,

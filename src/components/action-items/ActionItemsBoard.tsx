@@ -33,6 +33,15 @@ import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/service/Pagination';
 import { exportToCsv } from '@/lib/export-csv';
 import { updateActionItemStatus } from '@/app/(app)/action-items/actions';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/shadcn/command';
 import {
   Download,
   LayoutGrid,
@@ -42,9 +51,13 @@ import {
   AlertOctagon,
   Circle,
   MoreVertical,
+  ChevronsUpDown,
+  Check,
+  Loader2,
 } from 'lucide-react';
 
 export interface BoardActionItem extends ActionItem {
+  ownerName?: string;
   postmortemId: string;
   postmortemTitle: string;
   incidentId: string;
@@ -138,8 +151,10 @@ const PRIORITY_CONFIG = {
 
 function getOwnerName(
   ownerId: string | undefined,
-  users: Array<{ id: string; name: string; email: string }>
+  users: Array<{ id: string; name: string; email: string }>,
+  ownerName?: string
 ) {
+  if (ownerName) return ownerName;
   if (!ownerId) return 'Unassigned';
   return users.find(user => user.id === ownerId)?.name || 'Unknown';
 }
@@ -296,7 +311,7 @@ function ActionItemCard({
       <div className="pt-2 border-t border-slate-100 flex flex-col gap-1 text-[11px] text-muted-foreground">
         <div className="flex items-center justify-between">
           <span className="font-medium text-foreground truncate max-w-[150px]">
-            👤 {getOwnerName(item.owner, users)}
+            👤 {getOwnerName(item.owner, users, item.ownerName)}
           </span>
           <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-700 truncate max-w-[100px]">
             {item.serviceName}
@@ -337,6 +352,10 @@ export default function ActionItemsBoard({
   const [selectedStatus, setSelectedStatus] = useState(filters.status || '');
   const [selectedOwner, setSelectedOwner] = useState(filters.owner || '');
   const [selectedPriority, setSelectedPriority] = useState(filters.priority || '');
+  const [ownerPopoverOpen, setOwnerPopoverOpen] = useState(false);
+  const [ownerSearch, setOwnerSearch] = useState('');
+  const [ownerOptions, setOwnerOptions] = useState<Array<{ id: string; name: string; email: string }>>(users);
+  const [isSearchingOwners, setIsSearchingOwners] = useState(false);
   const jiraCapabilities = useMemo(
     () => new Map<string, JiraCapability>(Object.entries(jiraCapabilitiesByServiceId)),
     [jiraCapabilitiesByServiceId]
@@ -361,6 +380,53 @@ export default function ActionItemsBoard({
   useEffect(() => {
     setSelectedPriority(filters.priority || '');
   }, [filters.priority]);
+
+  useEffect(() => {
+    if (!ownerSearch.trim()) {
+      setOwnerOptions(users);
+    }
+  }, [users, ownerSearch]);
+
+  useEffect(() => {
+    if (!ownerSearch.trim()) {
+      setOwnerOptions(users);
+      setIsSearchingOwners(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setIsSearchingOwners(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/action-items/owners?q=${encodeURIComponent(ownerSearch.trim())}&limit=30`,
+          { signal: controller.signal, cache: 'no-store' }
+        );
+        if (!res.ok) throw new Error('Search failed');
+        const data = await res.json();
+        const foundUsers = Array.isArray(data.users) ? data.users : [];
+        const selected = users.find(u => u.id === selectedOwner);
+        if (selected && !foundUsers.some((u: { id: string }) => u.id === selected.id)) {
+          setOwnerOptions([selected, ...foundUsers]);
+        } else {
+          setOwnerOptions(foundUsers);
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name !== 'AbortError') {
+          // Keep current options on error
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsSearchingOwners(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [ownerSearch, users, selectedOwner]);
 
   const handleStatusChange = async (itemId: string, newStatus: ActionItemStatus) => {
     setItems(previous =>
@@ -443,7 +509,7 @@ export default function ActionItemsBoard({
         { header: 'Title', accessor: 'title' },
         { header: 'Status', accessor: 'status' },
         { header: 'Priority', accessor: 'priority' },
-        { header: 'Owner', accessor: row => getOwnerName(row.owner, users) },
+        { header: 'Owner', accessor: row => getOwnerName(row.owner, users, row.ownerName) },
         {
           header: 'Due Date',
           accessor: row => (row.dueDate ? new Date(row.dueDate).toISOString().slice(0, 10) : ''),
@@ -468,6 +534,7 @@ export default function ActionItemsBoard({
     setSelectedStatus('');
     setSelectedOwner('');
     setSelectedPriority('');
+    setOwnerSearch('');
     startTransition(() => router.push('/action-items'));
   };
 
@@ -505,26 +572,85 @@ export default function ActionItemsBoard({
               </SelectContent>
             </Select>
 
-            <Select
-              value={selectedOwner || 'all'}
-              onValueChange={value => {
-                const next = value === 'all' ? '' : value;
-                setSelectedOwner(next);
-                startTransition(() => router.push(buildFilterUrl({ owner: next })));
-              }}
-            >
-              <SelectTrigger className="h-9 w-[140px] bg-slate-50/60 text-xs">
-                <SelectValue placeholder="Owner" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Owners</SelectItem>
-                {users.map(user => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {user.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={ownerPopoverOpen} onOpenChange={setOwnerPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={ownerPopoverOpen}
+                  aria-label="Filter by owner"
+                  className="h-9 w-[150px] justify-between bg-slate-50/60 text-xs font-normal border-slate-200 hover:bg-slate-100/60"
+                >
+                  <span className="truncate">
+                    {selectedOwner
+                      ? (users.find(u => u.id === selectedOwner)?.name ||
+                         ownerOptions.find(u => u.id === selectedOwner)?.name ||
+                         'Owner')
+                      : 'All Owners'}
+                  </span>
+                  <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[240px] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="Search owners..."
+                    value={ownerSearch}
+                    onValueChange={setOwnerSearch}
+                    className="h-8 text-xs"
+                  />
+                  <CommandList className="max-h-[220px]">
+                    {isSearchingOwners ? (
+                      <div className="flex items-center justify-center p-4 text-xs text-muted-foreground gap-2">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Searching owners...
+                      </div>
+                    ) : ownerOptions.length === 0 ? (
+                      <CommandEmpty className="py-4 text-center text-xs text-muted-foreground">
+                        No owners found.
+                      </CommandEmpty>
+                    ) : (
+                      <CommandGroup>
+                        <CommandItem
+                          value="all"
+                          onSelect={() => {
+                            setSelectedOwner('');
+                            setOwnerPopoverOpen(false);
+                            startTransition(() => router.push(buildFilterUrl({ owner: '' })));
+                          }}
+                          className="cursor-pointer text-xs flex items-center justify-between"
+                        >
+                          <span>All Owners</span>
+                          {!selectedOwner && <Check className="h-3.5 w-3.5 text-primary ml-2 shrink-0" />}
+                        </CommandItem>
+                        {ownerOptions.map(user => (
+                          <CommandItem
+                            key={user.id}
+                            value={user.id}
+                            onSelect={() => {
+                              setSelectedOwner(user.id);
+                              setOwnerPopoverOpen(false);
+                              startTransition(() => router.push(buildFilterUrl({ owner: user.id })));
+                            }}
+                            className="cursor-pointer text-xs flex items-center justify-between"
+                          >
+                            <div className="flex flex-col min-w-0">
+                              <span className="truncate font-medium">{user.name}</span>
+                              {user.email && (
+                                <span className="truncate text-[10px] text-muted-foreground">{user.email}</span>
+                              )}
+                            </div>
+                            {selectedOwner === user.id && (
+                              <Check className="h-3.5 w-3.5 text-primary ml-2 shrink-0" />
+                            )}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
 
             <Select
               value={selectedPriority || 'all'}
@@ -752,7 +878,7 @@ export default function ActionItemsBoard({
                   </div>
 
                   <div className="flex gap-4 pt-2.5 border-t border-slate-100 text-xs text-muted-foreground flex-wrap items-center">
-                    <span>👤 {getOwnerName(item.owner, users)}</span>
+                    <span>👤 {getOwnerName(item.owner, users, item.ownerName)}</span>
                     <span>
                       📋{' '}
                       <Link
