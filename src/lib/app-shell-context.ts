@@ -40,6 +40,7 @@ export type AppShellContext = {
   statusLabel: string;
   statusDetail: string;
   incidentCountsUnavailable?: boolean;
+  accessContextUnavailable?: boolean;
 };
 
 /** Canonical actor-scoped server read model for authenticated application chrome. */
@@ -77,14 +78,16 @@ export async function getAppShellContext(
 
   let accessContext: AccessContext = {
     mode: 'NONE',
-    teamIds: [],
-    serviceIds: [],
-    scheduleIds: [],
-    userIds: [context.user.id],
+    canOperate: false,
+    teamCount: 0,
+    serviceCount: 0,
+    incidentCount: 0,
   };
+  let accessContextUnavailable = false;
   if (accessContextResult.status === 'fulfilled') {
     accessContext = accessContextResult.value;
   } else {
+    accessContextUnavailable = true;
     logger.warn('[App Shell] Failed to resolve access context, degrading to default mode', {
       error: accessContextResult.reason,
     });
@@ -113,10 +116,12 @@ export async function getAppShellContext(
   let statusLabel = 'Green Corridor';
   let statusDetail = 'All systems fully operational';
 
-  if (incidentCountsUnavailable) {
+  if (incidentCountsUnavailable || accessContextUnavailable) {
     systemStatus = 'neutral';
-    statusLabel = 'Metrics Unavailable';
-    statusDetail = 'Operational status temporarily unavailable';
+    statusLabel = accessContextUnavailable ? 'Scope Unavailable' : 'Metrics Unavailable';
+    statusDetail = accessContextUnavailable
+      ? 'Operational scope temporarily unavailable'
+      : 'Operational status temporarily unavailable';
   } else if (accessContext.mode === 'NONE') {
     systemStatus = 'neutral';
     statusLabel = 'No operational scope';
@@ -126,15 +131,30 @@ export async function getAppShellContext(
     statusDetail = 'No active incidents in your operational scope';
   }
 
-  if (!incidentCountsUnavailable && accessContext.mode !== 'NONE' && high > 0) {
+  if (
+    !incidentCountsUnavailable &&
+    !accessContextUnavailable &&
+    accessContext.mode !== 'NONE' &&
+    high > 0
+  ) {
     systemStatus = 'danger';
     statusLabel = 'Red Alert';
     statusDetail = `${high} critical incident${high === 1 ? '' : 's'} active`;
-  } else if (!incidentCountsUnavailable && accessContext.mode !== 'NONE' && medium > 0) {
+  } else if (
+    !incidentCountsUnavailable &&
+    !accessContextUnavailable &&
+    accessContext.mode !== 'NONE' &&
+    medium > 0
+  ) {
     systemStatus = 'warning';
     statusLabel = 'Yellow Alert';
     statusDetail = `${medium} warning sign${medium === 1 ? '' : 's'} detected`;
-  } else if (!incidentCountsUnavailable && accessContext.mode !== 'NONE' && low > 0) {
+  } else if (
+    !incidentCountsUnavailable &&
+    !accessContextUnavailable &&
+    accessContext.mode !== 'NONE' &&
+    low > 0
+  ) {
     statusLabel = 'Systems Normal';
     statusDetail = `${low} low urgency item${low === 1 ? '' : 's'}`;
   }
@@ -158,5 +178,6 @@ export async function getAppShellContext(
     statusLabel,
     statusDetail,
     incidentCountsUnavailable,
+    accessContextUnavailable,
   };
 }

@@ -30,6 +30,7 @@ import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
 import DueDateBadge from '@/components/action-items/DueDateBadge';
 import SearchFilterBar from '@/components/ui/SearchFilterBar';
 import EmptyState from '@/components/ui/EmptyState';
+import Pagination from '@/components/service/Pagination';
 import { exportToCsv } from '@/lib/export-csv';
 import { updateActionItemStatus } from '@/app/(app)/action-items/actions';
 import {
@@ -67,6 +68,12 @@ export interface ActionItemsBoardProps {
   };
   /** Per-service capability contract. Aggregate screens must never use one workspace capability. */
   jiraCapabilitiesByServiceId: Record<string, JiraCapability>;
+  pagination?: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+  };
 }
 
 interface ActionItemCardProps {
@@ -184,6 +191,7 @@ function ActionItemCard({
       )}
       onClick={() => router.push(`/postmortems/${item.incidentId}`)}
       onKeyDown={event => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           router.push(`/postmortems/${item.incidentId}`);
@@ -315,6 +323,7 @@ export default function ActionItemsBoard({
   view,
   filters,
   jiraCapabilitiesByServiceId,
+  pagination,
 }: ActionItemsBoardProps) {
   const router = useRouter();
   const { userTimeZone } = useTimezone();
@@ -663,6 +672,7 @@ export default function ActionItemsBoard({
                   )}
                   onClick={() => router.push(`/postmortems/${item.incidentId}`)}
                   onKeyDown={event => {
+                    if (event.target !== event.currentTarget) return;
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
                       router.push(`/postmortems/${item.incidentId}`);
@@ -768,6 +778,16 @@ export default function ActionItemsBoard({
             })
           )}
         </div>
+      )}
+
+      {pagination && (
+        <Pagination
+          currentPage={pagination.currentPage}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
+          itemsPerPage={pagination.itemsPerPage}
+          itemLabel="action item"
+        />
       )}
     </div>
   );

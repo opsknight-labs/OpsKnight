@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { X, Users } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
+import Pagination from '@/components/service/Pagination';
 import TeamDirectoryCard from './TeamDirectoryCard';
 
 type TeamItem = {
@@ -39,9 +40,15 @@ type TeamItem = {
 
 type TeamDirectoryListProps = {
   teams: TeamItem[];
+  pagination?: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+  };
 };
 
-export default function TeamDirectoryList({ teams }: TeamDirectoryListProps) {
+export default function TeamDirectoryList({ teams, pagination }: TeamDirectoryListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'configured' | 'needs-lead' | 'needs-services'
@@ -188,6 +195,16 @@ export default function TeamDirectoryList({ teams }: TeamDirectoryListProps) {
             <TeamDirectoryCard key={team.id} team={team} />
           ))}
         </div>
+      )}
+
+      {pagination && (
+        <Pagination
+          currentPage={pagination.currentPage}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
+          itemsPerPage={pagination.itemsPerPage}
+          itemLabel="team"
+        />
       )}
     </div>
   );

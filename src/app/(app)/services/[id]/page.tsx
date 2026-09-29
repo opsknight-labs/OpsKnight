@@ -38,6 +38,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/shadcn/aler
 import {
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
   XCircle,
   Globe,
   ShieldCheck,
@@ -351,51 +352,91 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       : Promise.resolve(null),
   ]);
 
-  const slaMetrics = slaMetricsResult.status === 'fulfilled' ? slaMetricsResult.value : null;
-  const uptimeByService = (uptimeResult.status === 'fulfilled' ? uptimeResult.value : {}) as Record<string, number>;
+  const isSlaMetricsAvailable =
+    slaMetricsResult.status === 'fulfilled' && Boolean(slaMetricsResult.value);
+  const slaMetrics = isSlaMetricsAvailable ? slaMetricsResult.value : null;
+  const uptimeByService = (uptimeResult.status === 'fulfilled' ? uptimeResult.value : {}) as Record<
+    string,
+    number
+  >;
+  const isUptimeAvailable =
+    uptimeResult.status === 'fulfilled' && uptimeByService[id] !== undefined;
   const teams = teamsResult.status === 'fulfilled' ? teamsResult.value : [];
   const policies = policiesResult.status === 'fulfilled' ? policiesResult.value : [];
   const globalSlackIntegration = slackResult.status === 'fulfilled' ? slackResult.value : null;
   const jiraConfig = jiraResult.status === 'fulfilled' ? jiraResult.value : null;
   const chatOpsConfig = chatOpsResult.status === 'fulfilled' ? chatOpsResult.value : null;
-  const globalWarRoomPolicy = globalWarRoomResult.status === 'fulfilled' ? globalWarRoomResult.value : null;
-  const serviceWarRoomPolicy = serviceWarRoomResult.status === 'fulfilled' ? serviceWarRoomResult.value : null;
-  const teamsDestination = teamsDestinationResult.status === 'fulfilled' ? teamsDestinationResult.value : null;
-  const incidentSlaPolicy = incidentSlaPolicyResult.status === 'fulfilled' ? incidentSlaPolicyResult.value : null;
-  const workspaceIncidentSlaPolicy = workspaceIncidentSlaPolicyResult.status === 'fulfilled' ? workspaceIncidentSlaPolicyResult.value : null;
-  const incidentClassificationPolicy = incidentClassificationPolicyResult.status === 'fulfilled' ? incidentClassificationPolicyResult.value : null;
-  const integrationClassificationPolicies = integrationClassificationPoliciesResult.status === 'fulfilled' ? integrationClassificationPoliciesResult.value : [];
-  const responseSupportHoursPolicy = responseSupportHoursPolicyResult.status === 'fulfilled' ? responseSupportHoursPolicyResult.value : null;
+  const globalWarRoomPolicy =
+    globalWarRoomResult.status === 'fulfilled' ? globalWarRoomResult.value : null;
+  const serviceWarRoomPolicy =
+    serviceWarRoomResult.status === 'fulfilled' ? serviceWarRoomResult.value : null;
+  const teamsDestination =
+    teamsDestinationResult.status === 'fulfilled' ? teamsDestinationResult.value : null;
+  const incidentSlaPolicy =
+    incidentSlaPolicyResult.status === 'fulfilled' ? incidentSlaPolicyResult.value : null;
+  const workspaceIncidentSlaPolicy =
+    workspaceIncidentSlaPolicyResult.status === 'fulfilled'
+      ? workspaceIncidentSlaPolicyResult.value
+      : null;
+  const incidentClassificationPolicy =
+    incidentClassificationPolicyResult.status === 'fulfilled'
+      ? incidentClassificationPolicyResult.value
+      : null;
+  const integrationClassificationPolicies =
+    integrationClassificationPoliciesResult.status === 'fulfilled'
+      ? integrationClassificationPoliciesResult.value
+      : [];
+  const responseSupportHoursPolicy =
+    responseSupportHoursPolicyResult.status === 'fulfilled'
+      ? responseSupportHoursPolicyResult.value
+      : null;
 
   if (slaMetricsResult.status === 'rejected') {
-    logger.warn('[Service Detail] Failed to compute SLA metrics', { error: slaMetricsResult.reason });
+    logger.warn('[Service Detail] Failed to compute SLA metrics', {
+      error: slaMetricsResult.reason,
+    });
+  }
+  if (uptimeResult.status === 'rejected') {
+    logger.warn('[Service Detail] Failed to calculate service uptime', {
+      error: uptimeResult.reason,
+    });
   }
   if (jiraResult.status === 'rejected') {
     logger.warn('[Service Detail] Failed to load Jira config', { error: jiraResult.reason });
   }
   if (slackResult.status === 'rejected') {
-    logger.warn('[Service Detail] Failed to load Slack integration', { error: slackResult.reason });
+    logger.warn('[Service Detail] Failed to load Slack integration', {
+      error: slackResult.reason,
+    });
   }
   if (chatOpsResult.status === 'rejected') {
-    logger.warn('[Service Detail] Failed to load ChatOps config', { error: chatOpsResult.reason });
+    logger.warn('[Service Detail] Failed to load ChatOps config', {
+      error: chatOpsResult.reason,
+    });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = serviceRaw as any;
   const canDeleteService = currentUser.role === 'ADMIN';
 
-  // SLA and Health Computations with fallback defaults
-  const dynamicStatus = slaMetrics?.dynamicStatus ?? 'OPERATIONAL';
-  const activeIncidentsCount = slaMetrics?.activeIncidents ?? 0;
-  const windowTotalIncidents = slaMetrics?.totalIncidents ?? 0;
-  const slaCompliance = slaMetrics?.resolveCompliance ?? 100;
-  const mttr = slaMetrics?.mttr ? slaMetrics.mttr / 60 : undefined;
-  const effectiveDurationDays = slaMetrics
-    ? (slaMetrics.effectiveEnd.getTime() - slaMetrics.effectiveStart.getTime()) / (1000 * 60 * 60 * 24)
-    : 30;
+  // SLA and Health Computations with truthful failure degradation
+  const dynamicStatus: 'OPERATIONAL' | 'DEGRADED' | 'CRITICAL' | 'UNKNOWN' = isSlaMetricsAvailable
+    ? slaMetrics?.dynamicStatus ?? 'UNKNOWN'
+    : 'UNKNOWN';
+  const activeIncidentsCount = isSlaMetricsAvailable ? slaMetrics?.activeIncidents ?? 0 : undefined;
+  const windowTotalIncidents = isSlaMetricsAvailable ? slaMetrics?.totalIncidents ?? 0 : undefined;
+  const slaCompliance = isSlaMetricsAvailable ? slaMetrics?.resolveCompliance ?? null : null;
+  const mttr = isSlaMetricsAvailable && slaMetrics?.mttr ? slaMetrics.mttr / 60 : undefined;
+  const effectiveDurationDays =
+    isSlaMetricsAvailable && slaMetrics
+      ? (slaMetrics.effectiveEnd.getTime() - slaMetrics.effectiveStart.getTime()) /
+        (1000 * 60 * 60 * 24)
+      : 30;
   const incidentsPerMonth =
-    effectiveDurationDays > 0 ? (windowTotalIncidents / effectiveDurationDays) * 30 : 0;
-  const availability = Math.max(0, Math.min(100, uptimeByService[id] ?? 100));
+    isSlaMetricsAvailable && windowTotalIncidents !== undefined && effectiveDurationDays > 0
+      ? (windowTotalIncidents / effectiveDurationDays) * 30
+      : undefined;
+  const availability = isUptimeAvailable ? Math.max(0, Math.min(100, uptimeByService[id])) : null;
 
   const boundUpdateService = updateService.bind(null, service.id);
   const boundDeleteService = async () => {
@@ -1053,7 +1094,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                   ? 'success'
                   : dynamicStatus === 'DEGRADED'
                     ? 'warning'
-                    : 'danger'
+                    : dynamicStatus === 'CRITICAL'
+                      ? 'danger'
+                      : 'secondary'
               }
               size="xs"
               className="uppercase font-bold text-[10px] gap-1"
@@ -1061,7 +1104,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               {dynamicStatus === 'OPERATIONAL' && <CheckCircle2 className="h-3 w-3" />}
               {dynamicStatus === 'DEGRADED' && <AlertTriangle className="h-3 w-3" />}
               {dynamicStatus === 'CRITICAL' && <XCircle className="h-3 w-3" />}
-              {dynamicStatus}
+              {dynamicStatus === 'UNKNOWN' && <AlertCircle className="h-3 w-3" />}
+              {dynamicStatus === 'UNKNOWN' ? 'Unavailable' : dynamicStatus}
             </Badge>
 
             {service.team && (
@@ -1110,7 +1154,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         stats={[
           {
             label: 'Availability',
-            value: `${availability.toFixed(2)}%`,
+            value: availability !== null ? `${availability.toFixed(2)}%` : 'Unavailable',
             icon: <Activity className="h-3.5 w-3.5" />,
           },
           {
@@ -1122,17 +1166,24 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                   : mttr < 24
                     ? `${mttr.toFixed(1)}h`
                     : `${(mttr / 24).toFixed(1)}d`
-                : '-',
+                : isSlaMetricsAvailable
+                  ? '-'
+                  : 'Unavailable',
             icon: <Clock className="h-3.5 w-3.5" />,
           },
           {
             label: 'Incidents/mo',
-            value: incidentsPerMonth < 1 ? '<1' : incidentsPerMonth.toFixed(1),
+            value:
+              incidentsPerMonth !== undefined
+                ? incidentsPerMonth < 1
+                  ? '<1'
+                  : incidentsPerMonth.toFixed(1)
+                : 'Unavailable',
             icon: <Flame className="h-3.5 w-3.5" />,
           },
           {
             label: 'SLA Compliance',
-            value: slaCompliance !== null ? `${slaCompliance.toFixed(1)}%` : '-',
+            value: slaCompliance !== null ? `${slaCompliance.toFixed(1)}%` : 'Unavailable',
             icon: <ShieldCheck className="h-3.5 w-3.5" />,
           },
         ]}
@@ -1141,7 +1192,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       {/* Tabbed Workspace */}
       <ServiceDetailTabs
         defaultTab={activeTab}
-        activeIncidentCount={activeIncidentsCount}
+        activeIncidentCount={activeIncidentsCount ?? 0}
         integrationCount={service.integrations?.length || 0}
         notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}

@@ -142,6 +142,7 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
             gender: true,
           },
           orderBy: { name: 'asc' },
+          take: 200,
         })
       : Promise.resolve([]),
     canUpdateTeam

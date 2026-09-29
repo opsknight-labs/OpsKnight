@@ -10,7 +10,12 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { CheckSquare, Circle, Clock, CheckCircle2, AlertOctagon } from 'lucide-react';
 import { getJiraCapabilitiesByServiceIds } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
-import { parsePageParam, calculatePaginationBounds, parseEnumValue } from '@/lib/pagination-parser';
+import { resolveStoredActionItems, formatActionItemDueDate } from '@/lib/action-items';
+import {
+  parsePageParam,
+  calculatePaginationBounds,
+  parseEnumValue,
+} from '@/lib/pagination-parser';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,34 +61,106 @@ export default async function ActionItemsPage({
 
   const now = new Date();
 
-  // Aggregate stats directly from database
-  const [statusCounts, overdueCount, highPriorityCount, totalCount, users] = await Promise.all([
-    prisma.actionItem.groupBy({
-      by: ['status'],
-      where: baseWhere,
-      _count: { _all: true },
-    }),
-    prisma.actionItem.count({
-      where: {
-        ...baseWhere,
-        dueDate: { lt: now },
-        status: { not: 'COMPLETED' },
-      },
-    }),
-    prisma.actionItem.count({
-      where: {
-        ...baseWhere,
-        priority: 'HIGH',
-        status: { not: 'COMPLETED' },
-      },
-    }),
-    prisma.actionItem.count({ where: filterWhere }),
-    prisma.user.findMany({
-      where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
-      select: { id: true, name: true, email: true },
-      orderBy: { name: 'asc' },
-    }),
-  ]);
+  // Aggregate stats directly from database + unmigrated legacy postmortem records
+  const [statusCounts, overdueCount, highPriorityCount, totalCount, users, unmigratedPostmortems] =
+    await Promise.all([
+      prisma.actionItem.groupBy({
+        by: ['status'],
+        where: baseWhere,
+        _count: { _all: true },
+      }),
+      prisma.actionItem.count({
+        where: {
+          ...baseWhere,
+          dueDate: { lt: now },
+          status: { not: 'COMPLETED' },
+        },
+      }),
+      prisma.actionItem.count({
+        where: {
+          ...baseWhere,
+          priority: 'HIGH',
+          status: { not: 'COMPLETED' },
+        },
+      }),
+      prisma.actionItem.count({ where: filterWhere }),
+      prisma.user.findMany({
+        where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
+        select: { id: true, name: true, email: true },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.postmortem.findMany({
+        where: {
+          AND: [
+            postmortemReadWhere(actor),
+            { actionItems: { not: Prisma.JsonNull } },
+            { actionItemRecords: { none: {} } },
+          ],
+        },
+        select: {
+          id: true,
+          title: true,
+          incidentId: true,
+          createdAt: true,
+          actionItems: true,
+          incident: {
+            select: {
+              id: true,
+              title: true,
+              service: {
+                select: { id: true, name: true },
+              },
+              externalIssueLinks: {
+                where: { provider: 'JIRA' },
+                orderBy: { createdAt: 'desc' },
+                select: {
+                  id: true,
+                  provider: true,
+                  externalKey: true,
+                  externalUrl: true,
+                  externalStatus: true,
+                  externalAssignee: true,
+                  syncState: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+  const legacyItems: BoardActionItem[] = unmigratedPostmortems.flatMap(pm => {
+    const items = resolveStoredActionItems({
+      records: [],
+      legacy: pm.actionItems,
+      legacyIdPrefix: `postmortem-${pm.id}`,
+    });
+    const incidentJiraIssues = pm.incident.externalIssueLinks.map(serializeJiraIssueReference);
+    return items.map(item => ({
+      ...item,
+      description: item.description ?? '',
+      owner: item.owner,
+      dueDate: item.dueDate,
+      source: 'POSTMORTEM' as const,
+      postmortemId: pm.id,
+      postmortemTitle: pm.title,
+      incidentId: pm.incidentId,
+      incidentTitle: pm.incident.title,
+      serviceId: pm.incident.service.id,
+      serviceName: pm.incident.service.name,
+      incidentJiraIssues,
+      createdAt: pm.createdAt,
+      completedAt: item.completedAt,
+    }));
+  });
+
+  const matchingLegacyItems = legacyItems.filter(item => {
+    if (owner && item.owner !== owner) return false;
+    if (priority && item.priority !== priority) return false;
+    if (status && item.status !== status) return false;
+    return true;
+  });
 
   const statusMap = new Map(statusCounts.map(s => [s.status, s._count._all]));
   const stats = {
@@ -96,8 +173,28 @@ export default async function ActionItemsPage({
     highPriority: highPriorityCount,
   };
 
+  for (const item of legacyItems) {
+    if (owner && item.owner !== owner) continue;
+    if (priority && item.priority !== priority) continue;
+
+    stats.total++;
+    if (item.status === 'OPEN') stats.open++;
+    else if (item.status === 'IN_PROGRESS') stats.inProgress++;
+    else if (item.status === 'COMPLETED') stats.completed++;
+    else if (item.status === 'BLOCKED') stats.blocked++;
+
+    if (item.dueDate && item.status !== 'COMPLETED' && new Date(item.dueDate) < now) {
+      stats.overdue++;
+    }
+    if (item.priority === 'HIGH' && item.status !== 'COMPLETED') {
+      stats.highPriority++;
+    }
+  }
+
+  const totalFilteredCount = totalCount + matchingLegacyItems.length;
+
   const pagination = calculatePaginationBounds({
-    totalItems: totalCount,
+    totalItems: totalFilteredCount,
     page: requestedPage,
     pageSize: 100,
   });
@@ -150,16 +247,16 @@ export default async function ActionItemsPage({
       },
     },
     orderBy: { createdAt: 'desc' },
-    skip: pagination.skip,
-    take: pagination.take,
+    skip: matchingLegacyItems.length === 0 ? pagination.skip : undefined,
+    take: matchingLegacyItems.length === 0 ? pagination.take : undefined,
   });
 
-  const filteredItems: BoardActionItem[] = records.map(record => ({
+  const normalizedItems: BoardActionItem[] = records.map(record => ({
     id: record.id,
     title: record.title,
-    description: record.description,
-    owner: record.ownerId,
-    dueDate: record.dueDate ? record.dueDate.toISOString() : null,
+    description: record.description ?? '',
+    owner: record.ownerId ?? undefined,
+    dueDate: formatActionItemDueDate(record.dueDate),
     status: record.status,
     priority: record.priority,
     source: record.source,
@@ -169,13 +266,22 @@ export default async function ActionItemsPage({
     incidentTitle: record.postmortem.incident.title,
     serviceId: record.postmortem.incident.service.id,
     serviceName: record.postmortem.incident.service.name,
-    incidentJiraIssues: record.postmortem.incident.externalIssueLinks.map(serializeJiraIssueReference),
+    incidentJiraIssues: record.postmortem.incident.externalIssueLinks.map(
+      serializeJiraIssueReference
+    ),
     externalIssue: record.externalIssueLinks[0]
       ? serializeJiraIssueReference(record.externalIssueLinks[0])
       : undefined,
     createdAt: record.createdAt,
     completedAt: record.completedAt,
   }));
+
+  const filteredItems: BoardActionItem[] =
+    matchingLegacyItems.length === 0
+      ? normalizedItems
+      : [...normalizedItems, ...matchingLegacyItems]
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(pagination.skip, pagination.skip + pagination.take);
 
   const canManage = permissions.isResponderOrAbove;
   const jiraCapabilitiesByServiceId = await getJiraCapabilitiesByServiceIds(
@@ -254,13 +360,19 @@ export default async function ActionItemsPage({
       />
 
       <ActionItemsBoard
-        key={`${status || 'all'}-${owner || 'all'}-${priority || 'all'}-${view}`}
+        key={`${status || 'all'}-${owner || 'all'}-${priority || 'all'}-${view}-${pagination.page}`}
         actionItems={filteredItems}
         users={users}
         canManage={canManage}
         view={view}
         filters={{ status, owner, priority }}
         jiraCapabilitiesByServiceId={jiraCapabilitiesByServiceId}
+        pagination={{
+          currentPage: pagination.page,
+          totalPages: pagination.totalPages,
+          totalItems: pagination.totalItems,
+          itemsPerPage: pagination.pageSize,
+        }}
       />
     </div>
   );

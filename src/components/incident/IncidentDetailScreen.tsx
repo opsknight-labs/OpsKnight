@@ -106,7 +106,7 @@ export default async function IncidentDetailScreen({
   const canAcknowledgeIncident = permissions.capabilities.includes('incident.acknowledge.scoped');
   const canAddIncidentNote = permissions.capabilities.includes('incident.note.scoped');
 
-  const [users, teams, customFields] = await Promise.all([
+  const [users, teams, customFields, totalEventsCount, totalNotesCount] = await Promise.all([
     canManageIncident
       ? prisma.user.findMany({
           where: { status: 'ACTIVE' },
@@ -116,6 +116,8 @@ export default async function IncidentDetailScreen({
       : Promise.resolve([]),
     canManageIncident ? prisma.team.findMany({ orderBy: { name: 'asc' } }) : Promise.resolve([]),
     prisma.customField.findMany({ orderBy: { order: 'asc' } }),
+    prisma.incidentEvent.count({ where: { incidentId: id } }),
+    prisma.incidentNote.count({ where: { incidentId: id } }),
   ]);
 
   const incidentJiraCapability = await getJiraCapabilities({
@@ -163,6 +165,7 @@ export default async function IncidentDetailScreen({
 
   const activityContent = (
     <IncidentNotes
+      incidentId={id}
       notes={incident.notes.map(note => ({
         id: note.id,
         content: note.content,
@@ -171,11 +174,13 @@ export default async function IncidentDetailScreen({
       }))}
       canManage={canManageIncident || canAddIncidentNote}
       onAddNote={handleAddNote}
+      totalNotesCount={totalNotesCount}
     />
   );
 
   const timelineContent = (
     <IncidentTimeline
+      incidentId={id}
       events={incident.events.map(event => ({
         id: event.id,
         message: event.message,
@@ -203,6 +208,7 @@ export default async function IncidentDetailScreen({
       incidentCreatedAt={incident.createdAt}
       incidentAcknowledgedAt={incident.acknowledgedAt}
       incidentResolvedAt={incident.resolvedAt}
+      totalEventsCount={totalEventsCount}
     />
   );
 
@@ -512,8 +518,8 @@ export default async function IncidentDetailScreen({
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
         <div className="min-w-0 space-y-4 lg:col-span-8 lg:space-y-6 2xl:col-span-9">
           <IncidentDetailTabs
-            eventCount={incident.events.length}
-            noteCount={incident.notes.length}
+            eventCount={totalEventsCount}
+            noteCount={totalNotesCount}
             activityContent={activityContent}
             timelineContent={timelineContent}
             postmortemContent={postmortemContent}

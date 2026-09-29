@@ -7,17 +7,25 @@ import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { X, ShieldAlert, Layers } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import PolicyDirectoryCard, { type PolicyDirectoryItem } from './PolicyDirectoryCard';
+import Pagination from '@/components/service/Pagination';
 
 type FilterType = 'all' | 'in-use' | 'unassigned';
 
 type PolicyDirectoryListProps = {
   policies: PolicyDirectoryItem[];
   canManage?: boolean;
+  pagination?: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+  };
 };
 
 export default function PolicyDirectoryList({
   policies,
   canManage = false,
+  pagination,
 }: PolicyDirectoryListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
@@ -173,7 +181,6 @@ export default function PolicyDirectoryList({
         </div>
       )}
 
-      {/* Policy Card Grid */}
       {filteredPolicies.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredPolicies.map(policy => (
@@ -200,6 +207,16 @@ export default function PolicyDirectoryList({
               </Button>
             ) : undefined
           }
+        />
+      )}
+
+      {pagination && (
+        <Pagination
+          currentPage={pagination.currentPage}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
+          itemsPerPage={pagination.itemsPerPage}
+          itemLabel="policy"
         />
       )}
     </div>

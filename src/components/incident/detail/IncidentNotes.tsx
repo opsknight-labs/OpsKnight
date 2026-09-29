@@ -1,9 +1,11 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import NoteCard from '../NoteCard';
 import { Button } from '@/components/ui/shadcn/button';
 import { Textarea } from '@/components/ui/shadcn/textarea';
-import { MessageSquare, Send, Lock } from 'lucide-react';
+import { MessageSquare, Send, Lock, Loader2 } from 'lucide-react';
+import { loadOlderIncidentNotes } from './actions';
 
 type Note = {
   id: string;
@@ -19,12 +21,51 @@ type Note = {
 };
 
 type IncidentNotesProps = {
+  incidentId?: string;
   notes: Note[];
   canManage: boolean;
   onAddNote: (formData: FormData) => void;
+  totalNotesCount?: number;
 };
 
-export default function IncidentNotes({ notes, canManage, onAddNote }: IncidentNotesProps) {
+export default function IncidentNotes({
+  incidentId,
+  notes,
+  canManage,
+  onAddNote,
+  totalNotesCount,
+}: IncidentNotesProps) {
+  const [loadedNotes, setLoadedNotes] = useState<Note[]>(notes);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  useEffect(() => {
+    setLoadedNotes(notes);
+  }, [notes]);
+
+  const hasMoreNotes =
+    incidentId && totalNotesCount ? totalNotesCount > loadedNotes.length : false;
+
+  const handleLoadOlderNotes = async () => {
+    if (!incidentId || isLoadingMore || loadedNotes.length === 0) return;
+    setIsLoadingMore(true);
+    try {
+      const oldestNote = loadedNotes[loadedNotes.length - 1];
+      const older = await loadOlderIncidentNotes(
+        incidentId,
+        new Date(oldestNote.createdAt).toISOString()
+      );
+      if (older.length > 0) {
+        setLoadedNotes(prev => [
+          ...prev,
+          ...older.map(n => ({ ...n, createdAt: new Date(n.createdAt) })),
+        ]);
+      }
+    } catch (err) {
+      console.error('Failed to load older notes', err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
   return (
     <div className="space-y-4">
       {/* Add Note Form */}
@@ -73,7 +114,7 @@ export default function IncidentNotes({ notes, canManage, onAddNote }: IncidentN
 
       {/* Notes List */}
       <div className="space-y-3">
-        {notes.length === 0 ? (
+        {loadedNotes.length === 0 ? (
           <div className="text-center py-6 border border-dashed border-slate-200/80 dark:border-slate-800 rounded-lg bg-slate-50/40 dark:bg-slate-800/20">
             <MessageSquare className="h-6 w-6 mx-auto text-slate-300 dark:text-slate-600 mb-1.5" />
             <h3 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -84,7 +125,7 @@ export default function IncidentNotes({ notes, canManage, onAddNote }: IncidentN
             </p>
           </div>
         ) : (
-          notes.map(note => (
+          loadedNotes.map(note => (
             <NoteCard
               key={note.id}
               content={note.content}
@@ -96,6 +137,30 @@ export default function IncidentNotes({ notes, canManage, onAddNote }: IncidentN
               isResolution={note.content.startsWith('Resolution:')}
             />
           ))
+        )}
+
+        {hasMoreNotes && (
+          <div className="mt-4 flex flex-col items-center justify-center p-3 border rounded-lg bg-slate-50 dark:bg-slate-800/40 text-xs text-muted-foreground gap-2">
+            <span>
+              Showing {loadedNotes.length} of {totalNotesCount} notes
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLoadOlderNotes}
+              disabled={isLoadingMore}
+              className="h-8 gap-1.5"
+            >
+              {isLoadingMore ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Loading older notes...</span>
+                </>
+              ) : (
+                <span>Load older notes</span>
+              )}
+            </Button>
+          </div>
         )}
       </div>
     </div>

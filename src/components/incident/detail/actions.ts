@@ -1,6 +1,8 @@
 'use server';
 
 import { z } from 'zod';
+import prisma from '@/lib/prisma';
+import { assertCanViewIncident } from '@/lib/rbac';
 import {
   addNote,
   addWatcher,
@@ -58,4 +60,61 @@ export async function updateIncidentDetailDescription(
     incidentId(incidentIdValue),
     descriptionSchema.parse(description)
   );
+}
+
+export async function loadOlderIncidentEvents(
+  incidentIdValue: string,
+  beforeDateISO: string,
+  limit = 200
+) {
+  const parsedIncidentId = incidentId(incidentIdValue);
+  await assertCanViewIncident(parsedIncidentId);
+  const events = await prisma.incidentEvent.findMany({
+    where: {
+      incidentId: parsedIncidentId,
+      createdAt: { lt: new Date(beforeDateISO) },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(Math.max(1, limit), 500),
+  });
+  return events.map(e => ({
+    id: e.id,
+    message: e.message,
+    type: e.type,
+    createdAt: e.createdAt,
+  }));
+}
+
+export async function loadOlderIncidentNotes(
+  incidentIdValue: string,
+  beforeDateISO: string,
+  limit = 100
+) {
+  const parsedIncidentId = incidentId(incidentIdValue);
+  await assertCanViewIncident(parsedIncidentId);
+  const notes = await prisma.incidentNote.findMany({
+    where: {
+      incidentId: parsedIncidentId,
+      createdAt: { lt: new Date(beforeDateISO) },
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatarUrl: true,
+          gender: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(Math.max(1, limit), 200),
+  });
+  return notes.map(n => ({
+    id: n.id,
+    content: n.content,
+    createdAt: n.createdAt,
+    user: n.user,
+  }));
 }

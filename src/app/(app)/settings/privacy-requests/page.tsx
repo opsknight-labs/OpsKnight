@@ -28,6 +28,7 @@ export default async function PrivacyRequestsPage() {
         where: { status: 'ACTIVE' },
         select: { id: true, name: true, email: true },
         orderBy: { name: 'asc' },
+        take: 200,
       }),
       Promise.all([
         prisma.privacyRequest.count(),

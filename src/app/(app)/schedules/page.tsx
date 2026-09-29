@@ -17,14 +17,43 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-export default async function SchedulesPage() {
+import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
+
+export default async function SchedulesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ page?: string }>;
+} = {}) {
+  const params = await searchParams;
+  const requestedPage = parsePageParam(params?.page);
+
   const [permissions, actor] = await Promise.all([
     getUserPermissions(),
     getCurrentAuthorizationActor(),
   ]);
 
+  const where = scheduleReadWhere(actor);
+
+  const [totalSchedulesCount, totalLayersCount, responderAgg] = await Promise.all([
+    prisma.onCallSchedule.count({ where }),
+    prisma.onCallLayer.count({ where: { schedule: where } }),
+    prisma.onCallLayerUser.findMany({
+      where: { layer: { schedule: where }, user: { status: 'ACTIVE' } },
+      select: { userId: true },
+      distinct: ['userId'],
+    }),
+  ]);
+
+  const pagination = calculatePaginationBounds({
+    totalItems: totalSchedulesCount,
+    page: requestedPage,
+    pageSize: 50,
+  });
+
   const schedules = await prisma.onCallSchedule.findMany({
-    where: scheduleReadWhere(actor),
+    where,
+    skip: pagination.skip,
+    take: pagination.take,
     include: {
       layers: {
         include: {
@@ -48,13 +77,9 @@ export default async function SchedulesPage() {
     orderBy: { createdAt: 'desc' },
   });
 
-  const totalLayers = schedules.reduce((sum, schedule) => sum + schedule.layers.length, 0);
-  const totalUniqueResponders = new Set(
-    schedules.flatMap(s => s.layers.flatMap(l => l.users.map(u => u.userId)))
-  ).size;
-  const hasConfiguredResponders = schedules.some(schedule =>
-    schedule.layers.some(layer => layer.users.length > 0)
-  );
+  const totalLayers = totalLayersCount;
+  const totalUniqueResponders = responderAgg.length;
+  const hasConfiguredResponders = totalUniqueResponders > 0;
 
   const canManageSchedules = permissions.isAdminOrResponder;
 
@@ -123,7 +148,15 @@ export default async function SchedulesPage() {
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
         {/* Schedules List with Live Search & Filters */}
         <div className="xl:col-span-3 space-y-4">
-          <ScheduleDirectoryList schedules={schedules} />
+          <ScheduleDirectoryList
+            schedules={schedules}
+            pagination={{
+              currentPage: pagination.page,
+              totalPages: pagination.totalPages,
+              totalItems: pagination.totalItems,
+              itemsPerPage: pagination.pageSize,
+            }}
+          />
         </div>
 
         {/* Sidebar: Step Guide & Quick Links */}

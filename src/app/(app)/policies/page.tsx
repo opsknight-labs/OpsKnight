@@ -10,6 +10,7 @@ import { ShieldAlert, Server, Layers, HelpCircle, ArrowRight, Calendar, Users } 
 import PolicyCreateForm from '@/components/policies/PolicyCreateForm';
 import PolicyDirectoryList from '@/components/policies/PolicyDirectoryList';
 import { createPolicyAction } from './actions';
+import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 import type { PolicyDirectoryItem } from '@/components/policies/PolicyDirectoryCard';
 
 export const revalidate = 0;
@@ -17,42 +18,60 @@ export const revalidate = 0;
 export default async function PoliciesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string }>;
+  searchParams?: Promise<{ error?: string; page?: string }>;
 }) {
   const session = await getServerSession(await getAuthOptions());
   if (!session?.user?.email) {
     redirect('/login?callbackUrl=/policies');
   }
   await assertCanListPolicies();
-  const [policies, permissions] = await Promise.all([
-    prisma.escalationPolicy.findMany({
-      include: {
-        steps: {
-          include: {
-            targetUser: { select: { id: true, name: true } },
-            targetTeam: { select: { id: true, name: true } },
-            targetSchedule: { select: { id: true, name: true } },
-          },
-          orderBy: { stepOrder: 'asc' },
-        },
-        services: {
-          select: { id: true, name: true },
-          orderBy: { name: 'asc' },
-        },
-      },
-      orderBy: { name: 'asc' },
-    }),
+
+  const resolvedSearchParams = await searchParams;
+  const errorCode = resolvedSearchParams?.error;
+  const requestedPage = parsePageParam(resolvedSearchParams?.page);
+
+  const [
+    totalPoliciesCount,
+    inUsePoliciesCount,
+    totalStepsCount,
+    permissions,
+  ] = await Promise.all([
+    prisma.escalationPolicy.count(),
+    prisma.escalationPolicy.count({ where: { services: { some: {} } } }),
+    prisma.escalationRule.count(),
     getUserPermissions(),
   ]);
 
-  const canManagePolicies = permissions.isAdmin;
-  const resolvedSearchParams = await searchParams;
-  const errorCode = resolvedSearchParams?.error;
+  const pagination = calculatePaginationBounds({
+    totalItems: totalPoliciesCount,
+    page: requestedPage,
+    pageSize: 50,
+  });
 
-  // Compute aggregated stats
-  const totalPolicies = policies.length;
-  const inUsePoliciesCount = policies.filter(p => p.services.length > 0).length;
-  const totalStepsCount = policies.reduce((acc, p) => acc + p.steps.length, 0);
+  const policies = await prisma.escalationPolicy.findMany({
+    skip: pagination.skip,
+    take: pagination.take,
+    include: {
+      steps: {
+        include: {
+          targetUser: { select: { id: true, name: true } },
+          targetTeam: { select: { id: true, name: true } },
+          targetSchedule: { select: { id: true, name: true } },
+        },
+        orderBy: { stepOrder: 'asc' },
+      },
+      services: {
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      },
+    },
+    orderBy: { name: 'asc' },
+  });
+
+  const canManagePolicies = permissions.isAdmin;
+
+  // Aggregated stats
+  const totalPolicies = totalPoliciesCount;
 
   // Transform policies into directory items
   const policyDirectoryItems: PolicyDirectoryItem[] = policies.map(p => ({
@@ -126,7 +145,16 @@ export default async function PoliciesPage({
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Left 3 Cols: Policy Directory List */}
         <div className="lg:col-span-3 space-y-4">
-          <PolicyDirectoryList policies={policyDirectoryItems} canManage={canManagePolicies} />
+          <PolicyDirectoryList
+            policies={policyDirectoryItems}
+            canManage={canManagePolicies}
+            pagination={{
+              currentPage: pagination.page,
+              totalPages: pagination.totalPages,
+              totalItems: pagination.totalItems,
+              itemsPerPage: pagination.pageSize,
+            }}
+          />
         </div>
 
         {/* Right 1 Col: Quick Links & Documentation */}

@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import _TimelineEvent from '../TimelineEvent';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { loadOlderIncidentEvents } from './actions';
 import { cn } from '@/lib/utils';
 import {
   Clock,
@@ -14,6 +16,7 @@ import {
   Activity,
   MessageSquare,
   BellRing,
+  Loader2,
 } from 'lucide-react';
 
 type TimelineFilter =
@@ -137,24 +140,59 @@ export type Note = {
 };
 
 export type IncidentTimelineProps = {
+  incidentId?: string;
   events: Event[];
   notes?: Note[];
   notifications?: IncidentTimelineNotification[];
   incidentCreatedAt?: Date;
   incidentAcknowledgedAt?: Date | null;
   incidentResolvedAt?: Date | null;
+  totalEventsCount?: number;
 };
 
 export default function IncidentTimeline({
+  incidentId,
   events,
   notes = [],
   notifications = [],
   incidentCreatedAt,
   incidentAcknowledgedAt,
   incidentResolvedAt,
+  totalEventsCount,
 }: IncidentTimelineProps) {
   const { userTimeZone } = useTimezone();
   const [activeFilter, setActiveFilter] = useState<TimelineFilter>('ALL');
+  const [loadedEvents, setLoadedEvents] = useState<Event[]>(events);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  useEffect(() => {
+    setLoadedEvents(events);
+  }, [events]);
+
+  const hasMoreEvents =
+    incidentId && totalEventsCount ? totalEventsCount > loadedEvents.length : false;
+
+  const handleLoadOlderEvents = async () => {
+    if (!incidentId || isLoadingMore || loadedEvents.length === 0) return;
+    setIsLoadingMore(true);
+    try {
+      const oldestEvent = loadedEvents[loadedEvents.length - 1];
+      const older = await loadOlderIncidentEvents(
+        incidentId,
+        new Date(oldestEvent.createdAt).toISOString()
+      );
+      if (older.length > 0) {
+        setLoadedEvents(prev => [
+          ...prev,
+          ...older.map(e => ({ ...e, createdAt: new Date(e.createdAt) })),
+        ]);
+      }
+    } catch (err) {
+      console.error('Failed to load older events', err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   const formatEscalationMessage = (message: string) => {
     return message.replace(/\[\[scheduledAt=([^\]]+)\]\]/g, (_match, scheduledAtRaw) => {
@@ -180,7 +218,7 @@ export default function IncidentTimeline({
     let hasAckDbEvent = false;
     let hasResolveDbEvent = false;
 
-    for (const e of events) {
+    for (const e of loadedEvents) {
       if (!hasCreatedDbEvent && /triggered|created/i.test(e.message)) hasCreatedDbEvent = true;
       if (!hasAckDbEvent && /acknowledged/i.test(e.message)) hasAckDbEvent = true;
       if (!hasResolveDbEvent && /resolved/i.test(e.message)) hasResolveDbEvent = true;
@@ -228,7 +266,7 @@ export default function IncidentTimeline({
     }));
 
     // Add regular events
-    events.forEach(event => {
+    loadedEvents.forEach(event => {
       const isNoteEvent =
         event.type === 'NOTE' ||
         event.type === 'COMMENT' ||
@@ -284,7 +322,7 @@ export default function IncidentTimeline({
 
     // Track matched voice call events to deduplicate synthesized voice deliveries
     const matchedVoiceEventIds = new Set<string>();
-    const voiceEvents = events
+    const voiceEvents = loadedEvents
       .filter(e => /voice call connected/i.test(e.message))
       .map(e => ({
         id: e.id,
@@ -363,7 +401,14 @@ export default function IncidentTimeline({
     });
 
     return eventsList;
-  }, [events, notes, notifications, incidentCreatedAt, incidentAcknowledgedAt, incidentResolvedAt]);
+  }, [
+    loadedEvents,
+    notes,
+    notifications,
+    incidentCreatedAt,
+    incidentAcknowledgedAt,
+    incidentResolvedAt,
+  ]);
 
   const filteredEvents = useMemo(() => {
     return activeFilter === 'ALL'
@@ -534,6 +579,30 @@ export default function IncidentTimeline({
           );
         })}
       </div>
+
+      {hasMoreEvents && (
+        <div className="mt-4 flex flex-col items-center justify-center p-3 border rounded-lg bg-slate-50 dark:bg-slate-800/40 text-xs text-muted-foreground gap-2">
+          <span>
+            Showing {loadedEvents.length} of {totalEventsCount} events
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLoadOlderEvents}
+            disabled={isLoadingMore}
+            className="h-8 gap-1.5"
+          >
+            {isLoadingMore ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Loading older events...</span>
+              </>
+            ) : (
+              <span>Load older events</span>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

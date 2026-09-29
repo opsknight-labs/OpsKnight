@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { X, Calendar } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
+import Pagination from '@/components/service/Pagination';
 
 type ScheduleItem = {
   id: string;
@@ -25,9 +26,18 @@ type ScheduleItem = {
 
 type ScheduleDirectoryListProps = {
   schedules: ScheduleItem[];
+  pagination?: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+  };
 };
 
-export default function ScheduleDirectoryList({ schedules }: ScheduleDirectoryListProps) {
+export default function ScheduleDirectoryList({
+  schedules,
+  pagination,
+}: ScheduleDirectoryListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'configured' | 'needs-setup'>('all');
 
@@ -165,6 +175,16 @@ export default function ScheduleDirectoryList({ schedules }: ScheduleDirectoryLi
             <ScheduleCard key={schedule.id} schedule={schedule} index={index} />
           ))}
         </div>
+      )}
+
+      {pagination && (
+        <Pagination
+          currentPage={pagination.currentPage}
+          totalPages={pagination.totalPages}
+          totalItems={pagination.totalItems}
+          itemsPerPage={pagination.itemsPerPage}
+          itemLabel="schedule"
+        />
       )}
     </div>
   );
