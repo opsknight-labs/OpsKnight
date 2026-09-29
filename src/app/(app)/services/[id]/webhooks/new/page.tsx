@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { ChevronLeft, AlertCircle, Webhook } from 'lucide-react';
+import { assertCanModifyService } from '@/lib/rbac';
 
 export default async function NewWebhookPage({
   params,
@@ -23,6 +24,7 @@ export default async function NewWebhookPage({
   searchParams?: Promise<{ error?: string }>;
 }) {
   const { id } = await params;
+  await assertCanModifyService(id);
   const resolvedSearchParams = await searchParams;
   const errorCode = resolvedSearchParams?.error;
   const service = await prisma.service.findUnique({
@@ -37,7 +39,7 @@ export default async function NewWebhookPage({
           <CardContent className="flex flex-col items-center justify-center p-6 text-center">
             <h2 className="text-2xl font-bold mb-2">Service Not Found</h2>
             <p className="text-muted-foreground mb-6">
-              The service you're looking for doesn't exist.
+              The service you&apos;re looking for doesn&apos;t exist.
             </p>
             <Button asChild>
               <Link href="/services">Back to Services</Link>

@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Users, UserCheck, UserPlus, UserX } from 'lucide-react';
 import { isAppRole } from '@/lib/authorization';
+import { assertCanListUsers } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,6 +67,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
   if (!session) {
     redirect('/login?callbackUrl=/users');
   }
+  await assertCanListUsers();
 
   const userCount = await prisma.user.count();
   if (userCount === 0) {

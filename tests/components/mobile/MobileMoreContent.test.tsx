@@ -37,13 +37,21 @@ describe('MobileMoreContent', () => {
     expect(screen.getByText('Admin')).toBeInTheDocument();
   });
 
-  it('renders shortcut tiles', () => {
-    render(<MobileMoreContent name="User" email="" role="User" />);
+  it('renders organization-wide directories for authorized roles', () => {
+    render(<MobileMoreContent name="Admin" email="" role="ADMIN" />);
 
     expect(screen.getByRole('link', { name: /Teams/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Users/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Schedules/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Policies/i })).toBeInTheDocument();
+  });
+
+  it('hides organization-wide directories from ordinary users', () => {
+    render(<MobileMoreContent name="User" email="" role="USER" />);
+
+    expect(screen.getByRole('link', { name: /Teams/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Users/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Policies/i })).not.toBeInTheDocument();
   });
 
   it('renders preference toggles', () => {
