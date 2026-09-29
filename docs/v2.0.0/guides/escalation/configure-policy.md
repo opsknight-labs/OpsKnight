@@ -1,9 +1,12 @@
 ---
 title: Configure an escalation policy
 description: Build, attach, and test ordered incident notification steps.
-type: how-to
+type: tutorial
 product_area: escalation
 audience: [administrator]
+reader:
+  status: READER_COMPLETE
+  task: Build, attach, and test a complete escalation policy.
 keywords: [escalation policy, change escalation, responder tiers, escalation delay]
 verification:
   level: source
