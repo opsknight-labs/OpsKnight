@@ -1,15 +1,20 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useSyncExternalStore } from 'react';
 import { Search } from 'lucide-react';
 
-export default function SettingsSearchTrigger() {
-  const [shortcutLabel, setShortcutLabel] = useState('⌘K');
+const emptySubscribe = () => () => {};
 
-  useEffect(() => {
-    const isMac = /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform || navigator.userAgent);
-    setShortcutLabel(isMac ? '⌘K' : 'Ctrl+K');
-  }, []);
+export default function SettingsSearchTrigger() {
+  const shortcutLabel = useSyncExternalStore(
+    emptySubscribe,
+    () =>
+      typeof navigator !== 'undefined' &&
+      /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform || navigator.userAgent)
+        ? '⌘K'
+        : 'Ctrl+K',
+    () => '⌘K'
+  );
 
   const handleClick = () => {
     const isMac =
