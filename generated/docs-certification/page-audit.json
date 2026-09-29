@@ -3,14 +3,14 @@
   "purpose": "Reader-completeness audit. Mapping and source verification do not imply task usability.",
   "counts": {
     "DISCOVERED": 0,
-    "MAPPED": 158,
+    "MAPPED": 159,
     "DRAFTED": 0,
-    "READER_COMPLETE": 73,
+    "READER_COMPLETE": 79,
     "HUMAN_VERIFIED": 0,
     "RUNTIME_VERIFIED": 0
   },
-  "taskPages": 173,
-  "readerCompleteTaskPages": 73,
+  "taskPages": 177,
+  "readerCompleteTaskPages": 79,
   "humanVerifiedTaskPages": 0,
   "runtimeVerifiedTaskPages": 0,
   "pages": [
@@ -554,10 +554,21 @@
       "runtimeVerified": false
     },
     {
-      "page": "guides/notifications/configure-routing.md",
+      "page": "guides/notifications/configure-provider.md",
       "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
+      "userTask": "Configure and verify an OpsKnight notification provider.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/notifications/configure-routing.md",
+      "type": "tutorial",
+      "userTask": "Configure and validate an end-to-end notification route.",
+      "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
@@ -566,9 +577,42 @@
     },
     {
       "page": "guides/notifications/inspect-delivery.md",
+      "type": "tutorial",
+      "userTask": "Trace and verify a notification from intent through provider outcome.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/notifications/retry-failures.md",
       "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
+      "userTask": "Diagnose and safely retry a failed notification.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/notifications/test-notification.md",
+      "type": "how-to",
+      "userTask": "Test and verify notification delivery end to end.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/notifications/user-preferences.md",
+      "type": "how-to",
+      "userTask": "Configure and verify a responder's notification preferences.",
+      "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
@@ -2282,6 +2326,39 @@
     },
     {
       "page": "reference/notifications/README.md",
+      "type": "reference",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "reference/notifications/delivery-states.md",
+      "type": "reference",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "reference/notifications/providers.md",
+      "type": "reference",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "reference/notifications/rate-limits.md",
       "type": "reference",
       "userTask": null,
       "status": "MAPPED",
