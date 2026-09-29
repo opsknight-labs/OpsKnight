@@ -7,7 +7,9 @@ audience:
   - operator
   - administrator
 verification:
-  level: draft
+  level: source
+  verified_at: 2026-09-29
+  evidence: [docs/versions.json, scripts/sync-docs-to-website.sh]
 ---
 
 # OpsKnight 2.0.0 documentation

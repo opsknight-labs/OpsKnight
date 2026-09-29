@@ -1,0 +1,17 @@
+schemaVersion: 1
+features:
+  custom_fields:
+    pages: [guides/administration/custom-fields.md]
+    required_topics: [supported types, key validation, required fields, default values, select options, incident list, status page visibility, permissions, deletion, troubleshooting]
+  oidc:
+    pages: [guides/identity/configure-oidc.md, troubleshooting/login/oidc-access.md]
+    required_topics: [callback URL, issuer validation, identity key, first sign-in, auto-provisioning, role mapping, profile mapping, Entra, Google Workspace, Okta, Auth0, generic OIDC, break-glass, SSO-only, session policy, issuer migration, troubleshooting]
+  mobile:
+    pages: [concepts/mobile.md]
+    required_topics: [supported routes, installability, secure origin, push, offline boundaries, offline queue, queued, confirmed, retry, authentication, conflict, service worker update, disabled PWA, troubleshooting]
+  api_keys:
+    pages: [guides/administration/api-keys.md, reference/permissions.md]
+    required_topics: [create, scopes, prefix, secret, expiration, rotation, revoke, last used, audit, troubleshooting]
+  backup_restore:
+    pages: [operate/data/backup-and-restore.md]
+    required_topics: [PostgreSQL, encryption key, attachments, backup, restore, validation, recovery point, recovery time, drill, troubleshooting]

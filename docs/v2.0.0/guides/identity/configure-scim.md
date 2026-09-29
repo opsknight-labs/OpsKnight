@@ -15,6 +15,12 @@ verification:
 
 # Configure SCIM provisioning
 
+## 2.0.0 support boundary
+
+Supported: SCIM 2.0 user provisioning and deactivation through the documented
+`Users` resources. Not supported: SCIM Groups provisioning. Team membership and
+product authorization must follow the documented OpsKnight administration flow.
+
 ## Before you begin
 
 Create a high-entropy SCIM bearer token and choose a non-production provisioning group.

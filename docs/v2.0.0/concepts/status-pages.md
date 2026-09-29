@@ -12,6 +12,14 @@ verification:
 
 # Status pages
 
+## 2.0.0 support boundary
+
+Supported: one status page per installation, service/component mapping,
+controlled incident projection, subscribers, and the configured custom-domain
+flow. Not supported: multiple independently administered status pages in one
+installation. A database model or internal route does not expand this public
+support boundary.
+
 Status pages publish deliberately scoped service and incident information.
 Their audience, subscriptions, custom domains, and projections are separate
 from internal incident access.

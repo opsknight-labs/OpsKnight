@@ -14,9 +14,13 @@ run('node', ['scripts/docs/discover-capabilities.mjs', '--output', 'generated/do
 run('node', ['scripts/docs/generate-reference.mjs']);
 run('node', ['scripts/docs/generate-integrations.mjs']);
 run('node', ['scripts/docs/generate-capacity-reference.mjs']);
+run('node', ['scripts/docs/generate-route-contract.mjs']);
+run('node', ['scripts/docs/generate-v15-parity.mjs']);
+run('node', ['scripts/docs/generate-depth-report.mjs']);
 run('node', ['scripts/docs/check-frontmatter.mjs']);
 run('node', ['scripts/check-docs-links.cjs']);
 run('node', ['scripts/docs/check-reader-quality.mjs']);
+run('node', ['scripts/docs/check-dangerous-claims.mjs']);
 run('node', ['scripts/check-docs-capabilities.cjs']);
 run('node', ['scripts/docs/check-evidence.mjs']);
 run('node', ['scripts/docs/check-feature-graph.mjs']);
