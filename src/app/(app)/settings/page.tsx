@@ -105,12 +105,15 @@ const itemThemes: Record<string, { bg: string; text: string }> = {
 export default async function SettingsOverviewPage() {
   const permissions = await getUserPermissions();
 
+  const now = new Date();
   const activeApiKeysCountPromise = (permissions.authenticated && permissions.id)
     ? prisma.apiKey
         .count({
-          where: permissions.isAdmin
-            ? { revokedAt: null }
-            : { userId: permissions.id, revokedAt: null },
+          where: {
+            revokedAt: null,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+            ...(permissions.isAdmin ? {} : { userId: permissions.id }),
+          },
         })
         .catch(() => 0)
     : Promise.resolve(0);

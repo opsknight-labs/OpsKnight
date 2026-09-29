@@ -55,6 +55,7 @@ export async function GET(req: NextRequest) {
       'SLACK',
       'WEBHOOK',
       'WHATSAPP',
+      'MICROSOFT_TEAMS',
     ]);
     const allowedStatuses = new Set(['PENDING', 'SENT', 'DELIVERED', 'FAILED', 'SKIPPED']);
 
