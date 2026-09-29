@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-28T16:28:30.703Z",
+  "generatedAt": "2026-09-29T03:30:59.194Z",
   "baseURL": "http://127.0.0.1:15000",
   "version": "v2.0.0",
-  "routesChecked": 150,
-  "internalLinksChecked": 189,
+  "routesChecked": 160,
+  "internalLinksChecked": 199,
   "localImagesChecked": 9,
   "accessibility": {
-    "pagesWithSingleH1": 150,
-    "imagesWithAlt": 157
+    "pagesWithSingleH1": 160,
+    "imagesWithAlt": 167
   },
   "mobile": {
     "viewport": {
