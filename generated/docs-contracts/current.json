@@ -454,6 +454,11 @@
           "reference/metrics.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -663,6 +668,11 @@
           "reference/metrics.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -5694,7 +5704,9 @@
           "reference/api/errors.md",
           "reference/api/events.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/on-call/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -15585,13 +15597,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -15753,13 +15777,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -18335,13 +18371,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -18351,6 +18399,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -18435,13 +18488,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -18451,6 +18516,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -18534,13 +18604,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -18550,6 +18632,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -18705,13 +18792,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -18720,7 +18819,9 @@
           "reference/configuration/README.md",
           "reference/health.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/on-call/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -18801,13 +18902,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -18899,13 +19012,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -18993,6 +19118,11 @@
           "reference/configuration/README.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -19094,13 +19224,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -19351,13 +19493,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -19738,6 +19892,11 @@
           "reference/configuration/README.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -19814,7 +19973,9 @@
         "reference": [
           "reference/configuration/README.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/escalation/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [],
@@ -20716,13 +20877,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -21049,7 +21222,9 @@
         "reference": [
           "reference/configuration/README.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/escalation/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [],
@@ -21266,13 +21441,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -21359,13 +21546,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -21445,13 +21644,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -21537,13 +21748,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -21630,13 +21853,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -22302,13 +22537,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -24174,7 +24421,9 @@
           "reference/api/README.md",
           "reference/configuration/README.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/escalation/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -26202,17 +26451,28 @@
           "concepts/chatops.md",
           "concepts/notifications.md",
           "concepts/services.md",
-          "concepts/teams.md"
+          "concepts/teams.md",
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
         ],
         "guides": [
           "guides/chatops/create-war-room.md",
           "guides/notifications/configure-routing.md",
           "guides/notifications/inspect-delivery.md",
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -26620,6 +26880,11 @@
           "reference/configuration/README.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -26785,13 +27050,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -26935,17 +27212,28 @@
           "concepts/chatops.md",
           "concepts/notifications.md",
           "concepts/services.md",
-          "concepts/teams.md"
+          "concepts/teams.md",
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
         ],
         "guides": [
           "guides/chatops/create-war-room.md",
           "guides/notifications/configure-routing.md",
           "guides/notifications/inspect-delivery.md",
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -27409,13 +27697,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -27964,13 +28264,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -28058,13 +28370,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -28148,13 +28472,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -28239,6 +28575,11 @@
           "reference/configuration/README.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -28310,13 +28651,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -28397,13 +28750,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -28497,13 +28862,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -28660,13 +29037,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -28747,13 +29136,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -28835,13 +29236,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -28919,13 +29332,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -29012,13 +29437,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -29157,13 +29594,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -29172,7 +29621,9 @@
           "reference/configuration/README.md",
           "reference/health.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/escalation/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -29248,13 +29699,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -29263,7 +29726,9 @@
           "reference/configuration/README.md",
           "reference/health.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/on-call/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -29340,7 +29805,9 @@
         "reference": [
           "reference/configuration/README.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/on-call/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [],
@@ -29409,13 +29876,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -29786,13 +30265,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -29876,13 +30367,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -29892,6 +30395,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -29967,13 +30475,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -29983,6 +30503,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30056,13 +30581,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -30072,6 +30609,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30145,13 +30687,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -30161,6 +30715,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30238,13 +30797,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -30254,6 +30825,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30329,13 +30905,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -30345,6 +30933,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30418,13 +31011,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -30434,6 +31039,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30507,13 +31117,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -30523,6 +31145,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30600,13 +31227,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -30616,6 +31255,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30691,13 +31335,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -30707,6 +31363,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30780,13 +31441,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -30796,6 +31469,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30869,13 +31547,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -30885,6 +31575,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30970,6 +31665,11 @@
           "reference/configuration/README.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -31051,13 +31751,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -31067,6 +31779,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -31142,13 +31859,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -31158,6 +31887,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -31231,13 +31965,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -31247,6 +31993,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -31320,13 +32071,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -31336,6 +32099,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -32011,13 +32779,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -32104,13 +32884,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -32194,13 +32986,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -32282,13 +33086,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -32375,13 +33191,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -32468,13 +33296,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -32562,13 +33402,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -32722,13 +33574,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -32810,13 +33674,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -32897,13 +33773,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -32987,13 +33875,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -33075,13 +33975,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -33166,13 +34078,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -33254,13 +34178,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -33341,13 +34277,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -33584,13 +34532,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -33676,13 +34636,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -33773,13 +34745,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -33869,13 +34853,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -33968,13 +34964,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -34147,13 +35155,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "operate/reliability/health-and-metrics.md",
           "operate/reliability/scaling.md",
@@ -34764,13 +35784,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -34780,6 +35812,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -35005,7 +36042,9 @@
           "reference/health.md",
           "reference/metrics.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/on-call/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -35384,7 +36423,9 @@
         "reference": [
           "reference/configuration/README.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/escalation/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [],
@@ -38708,13 +39749,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -38799,13 +39852,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -38815,6 +39880,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -38888,13 +39958,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -38904,6 +39986,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -38977,13 +40064,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -38993,6 +40092,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -39066,13 +40170,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -39152,13 +40268,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -39167,7 +40295,9 @@
           "reference/configuration/README.md",
           "reference/health.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/on-call/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -39238,13 +40368,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -39324,13 +40466,25 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -39408,13 +40562,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -39424,6 +40590,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -40602,6 +41773,11 @@
           "reference/configuration/README.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -40750,13 +41926,25 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -40917,6 +42105,11 @@
           "reference/configuration/README.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -44846,7 +46039,9 @@
         "reference": [
           "reference/permissions.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/escalation/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -45428,7 +46623,9 @@
         "reference": [
           "reference/permissions.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/on-call/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -45483,7 +46680,9 @@
         "reference": [
           "reference/permissions.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/on-call/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -46051,7 +47250,9 @@
         "reference": [
           "reference/permissions.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/on-call/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [],
@@ -46322,7 +47523,9 @@
         "reference": [
           "reference/permissions.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/escalation/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -46375,7 +47578,9 @@
         "reference": [
           "reference/permissions.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/escalation/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -46428,7 +47633,9 @@
         "reference": [
           "reference/permissions.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/on-call/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -46540,6 +47747,11 @@
           "reference/api/README.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -46601,6 +47813,11 @@
           "reference/api/README.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -46662,6 +47879,11 @@
           "reference/api/README.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -46723,6 +47945,11 @@
           "reference/api/README.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -46784,6 +48011,11 @@
           "reference/api/README.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -46867,13 +48099,25 @@
       ],
       "contract": {},
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -46883,6 +48127,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -46984,13 +48233,25 @@
       ],
       "contract": {},
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -47000,6 +48261,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -47083,13 +48349,25 @@
       ],
       "contract": {},
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -47099,6 +48377,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -47176,13 +48459,25 @@
       ],
       "contract": {},
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -47192,6 +48487,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -47269,13 +48569,25 @@
       ],
       "contract": {},
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -47285,6 +48597,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -47362,13 +48679,25 @@
       ],
       "contract": {},
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -47378,6 +48707,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -47481,13 +48815,25 @@
       ],
       "contract": {},
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -47497,6 +48843,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -47615,13 +48966,25 @@
       ],
       "contract": {},
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -47631,6 +48994,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -47714,13 +49082,25 @@
       ],
       "contract": {},
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -47730,6 +49110,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -47816,13 +49201,25 @@
       ],
       "contract": {},
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -47832,6 +49229,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -47943,13 +49345,25 @@
       ],
       "contract": {},
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -47959,6 +49373,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -48057,13 +49476,25 @@
       ],
       "contract": {},
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
         "guides": [
-          "operate/deploy/compose.md",
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
           "operate/deploy/helm.md",
           "operate/deploy/kubernetes.md",
           "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
           "operate/deploy/swarm.md",
           "start/production-install.md",
           "start/quickstart.md"
@@ -48073,6 +49504,11 @@
           "reference/health.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -50042,6 +51478,11 @@
           "reference/limits.md"
         ],
         "troubleshooting": [
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/helm/troubleshooting.md",
+          "operate/deploy/kubernetes/troubleshooting.md",
+          "operate/deploy/kustomize/troubleshooting.md",
+          "operate/deploy/swarm/troubleshooting.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -50636,7 +52077,9 @@
         "reference": [
           "reference/limits.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/escalation/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [],
@@ -50698,7 +52141,9 @@
         "reference": [
           "reference/limits.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/escalation/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [],
@@ -50763,7 +52208,9 @@
           "reference/api/README.md",
           "reference/limits.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/escalation/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
