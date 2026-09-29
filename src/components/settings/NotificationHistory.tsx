@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { logger } from '@/lib/logger';
+import { notify as toast } from '@/lib/toast';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   Card,
@@ -35,6 +36,7 @@ import {
   ChevronRight,
   Clock3,
   Download,
+  Loader2,
   XCircle,
   MinusCircle,
   Activity,
@@ -80,6 +82,7 @@ export default function NotificationHistory() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [limit] = useState(50);
@@ -215,6 +218,7 @@ export default function NotificationHistory() {
   };
 
   const exportCsv = async () => {
+    setIsExporting(true);
     try {
       // Fetch the full result set respecting current filters (max 200 per request)
       const allRows: Notification[] = [];
@@ -277,8 +281,12 @@ export default function NotificationHistory() {
       a.download = `my-notification-history-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
+      toast.success(`Exported ${allRows.length} notifications to CSV.`);
     } catch (err) {
       logger.error('exportCsv failed', { error: String(err) });
+      toast.error('Export failed; no file was generated.');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -492,11 +500,15 @@ export default function NotificationHistory() {
                 variant="outline"
                 size="sm"
                 onClick={exportCsv}
-                disabled={notifications.length === 0}
+                disabled={notifications.length === 0 || isExporting}
                 className="h-8 text-xs font-semibold gap-1.5 border-border/80 hover:bg-accent"
               >
-                <Download className="h-3.5 w-3.5" />
-                Export CSV
+                {isExporting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                {isExporting ? 'Exporting...' : 'Export CSV'}
               </Button>
               <Button
                 variant="outline"

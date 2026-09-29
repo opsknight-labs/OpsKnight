@@ -105,6 +105,16 @@ const itemThemes: Record<string, { bg: string; text: string }> = {
 export default async function SettingsOverviewPage() {
   const permissions = await getUserPermissions();
 
+  const activeApiKeysCountPromise = (permissions.authenticated && permissions.id)
+    ? prisma.apiKey
+        .count({
+          where: permissions.isAdmin
+            ? { revokedAt: null }
+            : { userId: permissions.id, revokedAt: null },
+        })
+        .catch(() => 0)
+    : Promise.resolve(0);
+
   const adminDataPromise = permissions.isAdmin
     ? Promise.all([
         prisma.slackIntegration
@@ -130,11 +140,6 @@ export default async function SettingsOverviewPage() {
             select: { enabled: true },
           })
           .catch(() => null),
-        prisma.apiKey
-          .count({
-            where: { revokedAt: null },
-          })
-          .catch(() => 0),
         prisma.notificationProvider
           .count({
             where: { enabled: true },
@@ -147,18 +152,20 @@ export default async function SettingsOverviewPage() {
           .catch(() => null),
         prisma.customField.count().catch(() => 0),
       ])
-    : Promise.resolve([null, null, null, null, 0, 0, null, 0] as const);
+    : Promise.resolve([null, null, null, null, 0, null, 0] as const);
 
   const [
-    slackIntegration,
-    jiraConfig,
-    chatOpsConfig,
-    teamsConfig,
+    [
+      slackIntegration,
+      jiraConfig,
+      chatOpsConfig,
+      teamsConfig,
+      notificationProvidersCount,
+      statusPage,
+      customFieldsCount,
+    ],
     activeApiKeysCount,
-    notificationProvidersCount,
-    statusPage,
-    customFieldsCount,
-  ] = await adminDataPromise;
+  ] = await Promise.all([adminDataPromise, activeApiKeysCountPromise]);
 
   const itemStatuses: Record<string, ItemLiveStatus> = {
     slack: slackIntegration?.enabled
@@ -236,9 +243,9 @@ export default async function SettingsOverviewPage() {
         </div>
       </div>
 
-      {/* Metric Capsules — Admin only */}
-      {permissions.isAdmin && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      {/* Metric Capsules */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        {permissions.isAdmin && (
           <Link
             href="/settings/integrations/slack"
             className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-purple-500/40 hover:bg-purple-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
@@ -260,78 +267,82 @@ export default async function SettingsOverviewPage() {
               <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
             </div>
           </Link>
+        )}
 
-          <Link
-            href="/settings/api-keys"
-            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-emerald-500/40 hover:bg-emerald-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-          >
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform shrink-0 border border-emerald-500/20 shadow-2xs">
-                <KeyRound className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  API Keys
-                </p>
-                <p className="text-base font-bold text-foreground truncate mt-0.5">
-                  {activeApiKeysCount} Active
-                </p>
-              </div>
+        <Link
+          href="/settings/api-keys"
+          className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-emerald-500/40 hover:bg-emerald-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+        >
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform shrink-0 border border-emerald-500/20 shadow-2xs">
+              <KeyRound className="h-5 w-5" />
             </div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-emerald-500/10 transition-all shrink-0 ml-2">
-              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                API Keys
+              </p>
+              <p className="text-base font-bold text-foreground truncate mt-0.5">
+                {activeApiKeysCount} Active
+              </p>
             </div>
-          </Link>
+          </div>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-emerald-500/10 transition-all shrink-0 ml-2">
+            <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </Link>
 
-          <Link
-            href="/settings/custom-fields"
-            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-indigo-500/40 hover:bg-indigo-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-          >
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform shrink-0 border border-indigo-500/20 shadow-2xs">
-                <SlidersHorizontal className="h-5 w-5" />
+        {permissions.isAdmin && (
+          <>
+            <Link
+              href="/settings/custom-fields"
+              className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-indigo-500/40 hover:bg-indigo-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+            >
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform shrink-0 border border-indigo-500/20 shadow-2xs">
+                  <SlidersHorizontal className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Custom Fields
+                  </p>
+                  <p className="text-base font-bold text-foreground truncate mt-0.5">
+                    {customFieldsCount} Defined
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Custom Fields
-                </p>
-                <p className="text-base font-bold text-foreground truncate mt-0.5">
-                  {customFieldsCount} Defined
-                </p>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-indigo-500/10 transition-all shrink-0 ml-2">
+                <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
               </div>
-            </div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-indigo-500/10 transition-all shrink-0 ml-2">
-              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-            </div>
-          </Link>
+            </Link>
 
-          <Link
-            href="/settings/status-pages"
-            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-cyan-500/40 hover:bg-cyan-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-          >
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 group-hover:scale-105 transition-transform shrink-0 border border-cyan-500/20 shadow-2xs">
-                <Globe className="h-5 w-5" />
+            <Link
+              href="/settings/status-pages"
+              className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-cyan-500/40 hover:bg-cyan-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+            >
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 group-hover:scale-105 transition-transform shrink-0 border border-cyan-500/20 shadow-2xs">
+                  <Globe className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    Status Page
+                  </p>
+                  <p className="text-base font-bold text-foreground truncate mt-0.5">
+                    {statusPage?.enabled
+                      ? statusPage.privacyMode === 'PUBLIC'
+                        ? 'Public'
+                        : 'Active'
+                      : 'Disabled'}
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Status Page
-                </p>
-                <p className="text-base font-bold text-foreground truncate mt-0.5">
-                  {statusPage?.enabled
-                    ? statusPage.privacyMode === 'PUBLIC'
-                      ? 'Public'
-                      : 'Active'
-                    : 'Disabled'}
-                </p>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-cyan-500/10 transition-all shrink-0 ml-2">
+                <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
               </div>
-            </div>
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-cyan-500/10 transition-all shrink-0 ml-2">
-              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-            </div>
-          </Link>
-        </div>
-      )}
+            </Link>
+          </>
+        )}
+      </div>
 
       {/* Settings Sections - Grouped List Rows */}
       <div className="space-y-8">

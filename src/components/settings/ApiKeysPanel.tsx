@@ -171,9 +171,11 @@ const SCOPES_CONFIG = [
 export default function ApiKeysPanel({
   keys,
   canCreateWriteKeys,
+  appUrl,
 }: {
   keys: ApiKey[];
   canCreateWriteKeys: boolean;
+  appUrl?: string;
 }) {
   const [state, formAction] = useActionState<State, FormData>(createApiKey, {
     error: null,
@@ -233,8 +235,7 @@ export default function ApiKeysPanel({
     });
   }, [keys, searchQuery, statusFilter]);
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
-    (typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com');
+  const baseUrl = appUrl || process.env.NEXT_PUBLIC_APP_URL || 'https://api.opsknight.com';
 
   return (
     <div className="space-y-6">

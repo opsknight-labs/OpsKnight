@@ -41,6 +41,7 @@ import {
   TableRow,
 } from '@/components/ui/shadcn/table';
 import { logger } from '@/lib/logger';
+import { notify as toast } from '@/lib/toast';
 import Link from 'next/link';
 import {
   TwilioLogo,
@@ -164,6 +165,7 @@ export default function NotificationOperations({
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [bulkRetrying, setBulkRetrying] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [page, setPage] = useState(1);
   const requestSequence = useRef(0);
 
@@ -327,6 +329,7 @@ export default function NotificationOperations({
   };
 
   const exportCsv = async () => {
+    setIsExporting(true);
     try {
       // Start from what we already have, then fetch remaining pages if hasMore
       let allRows = [...rows];
@@ -344,7 +347,9 @@ export default function NotificationOperations({
         params.set('cursor', nextPageCursor);
 
         const response = await fetch(`/api/admin/notifications/operations?${params}`, { cache: 'no-store' });
-        if (!response.ok) break;
+        if (!response.ok) {
+          throw new Error(`Export fetch failed with status ${response.status}`);
+        }
         const body = await response.json();
         allRows = [...allRows, ...body.notifications];
         nextPageCursor = body.pagination.nextCursor;
@@ -390,8 +395,12 @@ export default function NotificationOperations({
       a.download = `notification-operations-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
+      toast.success(`Exported ${allRows.length} notification operations to CSV.`);
     } catch (err) {
       logger.error('notification_operations.export_failed', { error: String(err) });
+      toast.error('Export failed; no file was generated.');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -450,11 +459,15 @@ export default function NotificationOperations({
                 variant="outline"
                 size="sm"
                 onClick={exportCsv}
-                disabled={rows.length === 0}
+                disabled={rows.length === 0 || isExporting}
                 className="text-xs font-semibold h-8 gap-1.5 border-border/80 hover:bg-accent"
               >
-                <Download className="h-3.5 w-3.5" />
-                Export CSV
+                {isExporting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                {isExporting ? 'Exporting...' : 'Export CSV'}
               </Button>
               <Button
                 variant="outline"
