@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { assertCanViewTeam, getUserPermissions } from '@/lib/rbac';
@@ -31,7 +30,6 @@ import {
 } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
-  ArrowLeft,
   Users,
   Shield,
   UserCheck,
@@ -144,7 +142,6 @@ export default async function TeamDetailPage({ params, searchParams }: TeamDetai
             gender: true,
           },
           orderBy: { name: 'asc' },
-          take: 100,
         })
       : Promise.resolve([]),
     canUpdateTeam

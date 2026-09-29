@@ -9,6 +9,7 @@ import {
   type AuthenticatedRequestActorContext,
 } from '@/lib/request-actor-context';
 import { resolveAccessContext, type AccessContext } from '@/lib/access-context';
+import { logger } from '@/lib/logger';
 
 export type AppShellContext = {
   user: {
@@ -38,6 +39,7 @@ export type AppShellContext = {
   systemStatus: 'neutral' | 'ok' | 'warning' | 'danger';
   statusLabel: string;
   statusDetail: string;
+  incidentCountsUnavailable?: boolean;
 };
 
 /** Canonical actor-scoped server read model for authenticated application chrome. */
@@ -47,7 +49,8 @@ export async function getAppShellContext(
   const context = requestContext ?? (await getRequestActorContext());
   if (!context) return null;
 
-  const [urgencyCounts, statusPages, accessContext] = await Promise.all([
+  // Run shell dependencies independently with graceful degradation
+  const [urgencyResult, statusPagesResult, accessContextResult] = await Promise.allSettled([
     prisma.incident.groupBy({
       by: ['urgency'],
       where: {
@@ -63,13 +66,46 @@ export async function getAppShellContext(
     resolveAccessContext(context.actor),
   ]);
 
+  let statusPages: AppShellContext['statusPages'] = [];
+  if (statusPagesResult.status === 'fulfilled') {
+    statusPages = statusPagesResult.value;
+  } else {
+    logger.warn('[App Shell] Failed to load status pages, degrading to empty list', {
+      error: statusPagesResult.reason,
+    });
+  }
+
+  let accessContext: AccessContext = {
+    mode: 'NONE',
+    teamIds: [],
+    serviceIds: [],
+    scheduleIds: [],
+    userIds: [context.user.id],
+  };
+  if (accessContextResult.status === 'fulfilled') {
+    accessContext = accessContextResult.value;
+  } else {
+    logger.warn('[App Shell] Failed to resolve access context, degrading to default mode', {
+      error: accessContextResult.reason,
+    });
+  }
+
   let high = 0;
   let medium = 0;
   let low = 0;
-  for (const entry of urgencyCounts) {
-    if (entry.urgency === 'HIGH') high = entry._count._all;
-    else if (entry.urgency === 'MEDIUM') medium = entry._count._all;
-    else if (entry.urgency === 'LOW') low = entry._count._all;
+  let incidentCountsUnavailable = false;
+
+  if (urgencyResult.status === 'fulfilled') {
+    for (const entry of urgencyResult.value) {
+      if (entry.urgency === 'HIGH') high = entry._count._all;
+      else if (entry.urgency === 'MEDIUM') medium = entry._count._all;
+      else if (entry.urgency === 'LOW') low = entry._count._all;
+    }
+  } else {
+    incidentCountsUnavailable = true;
+    logger.warn('[App Shell] Failed to load incident counts, degrading to unavailable', {
+      error: urgencyResult.reason,
+    });
   }
 
   const active = high + medium + low;
@@ -77,7 +113,11 @@ export async function getAppShellContext(
   let statusLabel = 'Green Corridor';
   let statusDetail = 'All systems fully operational';
 
-  if (accessContext.mode === 'NONE') {
+  if (incidentCountsUnavailable) {
+    systemStatus = 'neutral';
+    statusLabel = 'Metrics Unavailable';
+    statusDetail = 'Operational status temporarily unavailable';
+  } else if (accessContext.mode === 'NONE') {
     systemStatus = 'neutral';
     statusLabel = 'No operational scope';
     statusDetail = 'Join a team or receive an incident assignment to see operational status';
@@ -86,15 +126,15 @@ export async function getAppShellContext(
     statusDetail = 'No active incidents in your operational scope';
   }
 
-  if (accessContext.mode !== 'NONE' && high > 0) {
+  if (!incidentCountsUnavailable && accessContext.mode !== 'NONE' && high > 0) {
     systemStatus = 'danger';
     statusLabel = 'Red Alert';
     statusDetail = `${high} critical incident${high === 1 ? '' : 's'} active`;
-  } else if (accessContext.mode !== 'NONE' && medium > 0) {
+  } else if (!incidentCountsUnavailable && accessContext.mode !== 'NONE' && medium > 0) {
     systemStatus = 'warning';
     statusLabel = 'Yellow Alert';
     statusDetail = `${medium} warning sign${medium === 1 ? '' : 's'} detected`;
-  } else if (accessContext.mode !== 'NONE' && low > 0) {
+  } else if (!incidentCountsUnavailable && accessContext.mode !== 'NONE' && low > 0) {
     statusLabel = 'Systems Normal';
     statusDetail = `${low} low urgency item${low === 1 ? '' : 's'}`;
   }
@@ -117,5 +157,6 @@ export async function getAppShellContext(
     systemStatus,
     statusLabel,
     statusDetail,
+    incidentCountsUnavailable,
   };
 }

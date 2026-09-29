@@ -68,6 +68,10 @@ type UserListProps = {
   getUserDependencyReport: (
     userId: string
   ) => Promise<{ report?: UserDependencyReport; error?: string }>;
+  bulkUpdateUsers?: (
+    prevState: { error?: string | null; success?: boolean; message?: string },
+    formData: FormData
+  ) => Promise<{ error?: string | null; success?: boolean; message?: string }>;
 };
 
 export default function UserList({
@@ -82,6 +86,7 @@ export default function UserList({
   deleteUser,
   generateInvite,
   getUserDependencyReport,
+  bulkUpdateUsers,
 }: UserListProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkActionPending, setIsBulkActionPending] = useState(false);
@@ -119,29 +124,45 @@ export default function UserList({
     setIsBulkActionPending(true);
 
     try {
-      const results = await Promise.all(
-        Array.from(selectedIds).map(async id => {
-          if (action === 'DEACTIVATE') return { id, result: await deactivateUser(id) };
-          if (action === 'ACTIVATE') return { id, result: await reactivateUser(id) };
-          return { id, result: await deleteUser(id) };
-        })
-      );
-      const failures = results.filter(entry => entry.result?.error);
-      const succeeded = results.length - failures.length;
+      if (bulkUpdateUsers) {
+        const formData = new FormData();
+        formData.set('bulkAction', action.toLowerCase());
+        Array.from(selectedIds).forEach(id => formData.append('userIds', id));
+        const res = await bulkUpdateUsers({}, formData);
+        if (res?.error) {
+          toast.error(res.error);
+        } else {
+          toast.success(
+            res?.message ||
+              `${action === 'DELETE' ? 'Deleted' : action === 'ACTIVATE' ? 'Activated' : 'Deactivated'} ${selectedIds.size} user(s)`
+          );
+          setSelectedIds(new Set());
+        }
+      } else {
+        const results = await Promise.all(
+          Array.from(selectedIds).map(async id => {
+            if (action === 'DEACTIVATE') return { id, result: await deactivateUser(id) };
+            if (action === 'ACTIVATE') return { id, result: await reactivateUser(id) };
+            return { id, result: await deleteUser(id) };
+          })
+        );
+        const failures = results.filter(entry => entry.result?.error);
+        const succeeded = results.length - failures.length;
 
-      if (succeeded > 0) {
-        toast.success(
-          `${action === 'DELETE' ? 'Deleted' : action === 'ACTIVATE' ? 'Activated' : 'Deactivated'} ${succeeded} user${succeeded === 1 ? '' : 's'}`
-        );
+        if (succeeded > 0) {
+          toast.success(
+            `${action === 'DELETE' ? 'Deleted' : action === 'ACTIVATE' ? 'Activated' : 'Deactivated'} ${succeeded} user${succeeded === 1 ? '' : 's'}`
+          );
+        }
+        if (failures.length > 0) {
+          toast.error(
+            failures.length === 1
+              ? failures[0].result?.error || 'The user operation failed.'
+              : `${failures.length} users could not be updated. ${failures[0].result?.error || ''}`
+          );
+        }
+        setSelectedIds(new Set(failures.map(entry => entry.id)));
       }
-      if (failures.length > 0) {
-        toast.error(
-          failures.length === 1
-            ? failures[0].result?.error || 'The user operation failed.'
-            : `${failures.length} users could not be updated. ${failures[0].result?.error || ''}`
-        );
-      }
-      setSelectedIds(new Set(failures.map(entry => entry.id)));
     } catch {
       toast.error('Failed to perform bulk action');
     } finally {

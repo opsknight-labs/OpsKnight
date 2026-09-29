@@ -23,6 +23,7 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { AlertTriangle, User, AlertCircle, CheckCircle2, Clock, ShieldOff } from 'lucide-react';
 import { RealtimeProvider } from '@/hooks/useRealtime';
 import { resolveAccessContext } from '@/lib/access-context';
+import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 
 export const revalidate = 0;
 
@@ -62,8 +63,7 @@ export default async function IncidentsPage({
     createdAfter && !Number.isNaN(createdAfter.getTime()) ? createdAfter : undefined;
   const validCreatedBefore =
     createdBefore && !Number.isNaN(createdBefore.getTime()) ? createdBefore : undefined;
-  const currentPage = parseInt(params.page || '1', 10);
-  const skip = (currentPage - 1) * ITEMS_PER_PAGE;
+  const requestedPage = parsePageParam(params.page);
 
   const [permissions, actor] = await Promise.all([
     getUserPermissions(),
@@ -149,14 +149,20 @@ export default async function IncidentsPage({
   const suppressedCount = statusCountMap.get('SUPPRESSED') || 0;
 
   const totalCount = await prisma.incident.count({ where: effectiveWhere });
-  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+  const pagination = calculatePaginationBounds({
+    totalItems: totalCount,
+    page: requestedPage,
+    pageSize: ITEMS_PER_PAGE,
+  });
+  const currentPage = pagination.page;
+  const totalPages = pagination.totalPages;
 
   const incidents = await prisma.incident.findMany({
     where: effectiveWhere,
     select: incidentListSelect,
     orderBy,
-    skip,
-    take: ITEMS_PER_PAGE,
+    skip: pagination.skip,
+    take: pagination.take,
   });
 
   const users = canCreateIncident

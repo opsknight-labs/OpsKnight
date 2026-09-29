@@ -19,6 +19,7 @@ import { Server, AlertTriangle, XCircle, CheckCircle2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { resolveAccessContext } from '@/lib/access-context';
+import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 
 export const revalidate = 0;
 
@@ -92,10 +93,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const teamFilter = typeof params?.team === 'string' ? params.team : '';
   const sortBy = typeof params?.sort === 'string' ? params.sort : 'name_asc';
   const errorCode = typeof params?.error === 'string' ? params.error : '';
-  const currentPage = Math.max(
-    1,
-    parseInt(typeof params?.page === 'string' ? params.page : '1', 10)
-  );
+  const requestedPage = parsePageParam(params?.page);
 
   const [permissions, actor] = await Promise.all([
     getUserPermissions(),
@@ -164,17 +162,20 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     orderBy = { name: 'desc' };
   } else if (sortBy === 'status') {
     orderBy = { status: 'asc' };
+  } else if (sortBy === 'incidents_desc') {
+    orderBy = { incidents: { _count: 'desc' } };
+  } else if (sortBy === 'incidents_asc') {
+    orderBy = { incidents: { _count: 'asc' } };
   }
 
-  const isIncidentCountSort = sortBy === 'incidents_desc' || sortBy === 'incidents_asc';
-  const [totalFilteredItems, countSortServices] = await Promise.all([
-    prisma.service.count({ where }),
-    isIncidentCountSort
-      ? prisma.service.findMany({ where, select: { id: true, name: true } })
-      : Promise.resolve([]),
-  ]);
-  const totalPages = Math.ceil(totalFilteredItems / ITEMS_PER_PAGE);
-  const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
+  const totalFilteredItems = await prisma.service.count({ where });
+  const pagination = calculatePaginationBounds({
+    totalItems: totalFilteredItems,
+    page: requestedPage,
+    pageSize: ITEMS_PER_PAGE,
+  });
+  const currentPage = pagination.page;
+  const totalPages = pagination.totalPages;
 
   const serviceSelect = {
     id: true,
@@ -186,51 +187,14 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     team: true,
     policy: { select: { id: true, name: true } },
   } as const;
-  const countSortActiveCounts = isIncidentCountSort
-    ? await prisma.incident.groupBy({
-        by: ['serviceId'],
-        where: {
-          AND: [
-            incidentAccess,
-            { status: { in: activeIncidentStatuses() } },
-            { serviceId: { in: countSortServices.map(service => service.id) } },
-          ],
-        },
-        _count: { _all: true },
-      })
-    : [];
-  const countByServiceId = new Map(
-    countSortActiveCounts.map(count => [count.serviceId, count._count._all])
-  );
-  const orderedCountSortIds = isIncidentCountSort
-    ? countSortServices
-        .sort((left, right) => {
-          const difference =
-            (countByServiceId.get(left.id) ?? 0) - (countByServiceId.get(right.id) ?? 0);
-          return (
-            (sortBy === 'incidents_desc' ? -difference : difference) ||
-            left.name.localeCompare(right.name)
-          );
-        })
-        .map(service => service.id)
-    : [];
-  const pageServiceIds = orderedCountSortIds.slice(startIdx, startIdx + ITEMS_PER_PAGE);
-  const services = isIncidentCountSort
-    ? await prisma.service.findMany({
-        where: { id: { in: pageServiceIds } },
-        select: serviceSelect,
-      })
-    : await prisma.service.findMany({
-        where,
-        skip: startIdx,
-        take: ITEMS_PER_PAGE,
-        select: serviceSelect,
-        orderBy,
-      });
-  if (isIncidentCountSort) {
-    const position = new Map(pageServiceIds.map((id, index) => [id, index]));
-    services.sort((left, right) => (position.get(left.id) ?? 0) - (position.get(right.id) ?? 0));
-  }
+
+  const services = await prisma.service.findMany({
+    where,
+    skip: pagination.skip,
+    take: pagination.take,
+    select: serviceSelect,
+    orderBy,
+  });
 
   const { calculateActorSLAMetrics } = await import('@/lib/actor-metrics');
   const slaWindowDays = 30;

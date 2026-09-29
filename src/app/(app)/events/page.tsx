@@ -10,6 +10,7 @@ import { Activity, Sparkles, Layers, Clock } from 'lucide-react';
 import { assertAdmin } from '@/lib/rbac';
 
 import EventsListTable from '@/components/events/EventsListTable';
+import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,7 @@ type EventLogsPageProps = {
 export default async function EventLogsPage({ searchParams }: EventLogsPageProps) {
   await assertAdmin();
   const params = await searchParams;
-  const page = Math.max(1, Number.parseInt(params?.page || '1', 10) || 1);
+  const requestedPage = parsePageParam(params?.page);
   const pageSize = 50;
   const search = params?.search?.trim().slice(0, 200) || undefined;
   const service = params?.service?.trim().slice(0, 200) || undefined;
@@ -51,25 +52,33 @@ export default async function EventLogsPage({ searchParams }: EventLogsPageProps
   }
   const where: Prisma.IncidentEventWhereInput = filters.length > 0 ? { AND: filters } : {};
 
-  const [events, totalEvents, services] = await Promise.all([
-    prisma.incidentEvent.findMany({
-      where,
-      include: {
-        incident: {
-          select: {
-            id: true,
-            title: true,
-            service: { select: { name: true } },
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
+  const [totalEvents, services] = await Promise.all([
     prisma.incidentEvent.count({ where }),
     prisma.service.findMany({ select: { name: true }, orderBy: { name: 'asc' } }),
   ]);
+
+  const pagination = calculatePaginationBounds({
+    totalItems: totalEvents,
+    page: requestedPage,
+    pageSize,
+  });
+  const page = pagination.page;
+
+  const events = await prisma.incidentEvent.findMany({
+    where,
+    include: {
+      incident: {
+        select: {
+          id: true,
+          title: true,
+          service: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    skip: pagination.skip,
+    take: pagination.take,
+  });
 
   const uniqueIncidents = new Set(events.map(e => e.incident.id)).size;
   const uniqueServices = new Set(events.map(e => e.incident.service.name)).size;

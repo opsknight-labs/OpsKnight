@@ -1,18 +1,21 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type ActionItemStatus, type ActionItemPriority } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import { dashboardUserReadWhere, postmortemReadWhere } from '@/lib/authorization-filters';
-import ActionItemsBoard from '@/components/action-items/ActionItemsBoard';
+import ActionItemsBoard, { type BoardActionItem } from '@/components/action-items/ActionItemsBoard';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { CheckSquare, Circle, Clock, CheckCircle2, AlertOctagon } from 'lucide-react';
-import { resolveStoredActionItems, type ActionItem } from '@/lib/action-items';
 import { getJiraCapabilitiesByServiceIds } from '@/lib/jira-capabilities';
-import { serializeJiraIssueReference, type JiraIssueReference } from '@/lib/jira-references';
+import { serializeJiraIssueReference } from '@/lib/jira-references';
+import { parsePageParam, calculatePaginationBounds, parseEnumValue } from '@/lib/pagination-parser';
 
 export const dynamic = 'force-dynamic';
+
+const ALLOWED_STATUSES = ['OPEN', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED'] as const;
+const ALLOWED_PRIORITIES = ['HIGH', 'MEDIUM', 'LOW'] as const;
 
 export default async function ActionItemsPage({
   searchParams,
@@ -22,159 +25,161 @@ export default async function ActionItemsPage({
     owner?: string;
     priority?: string;
     view?: 'board' | 'list';
+    page?: string;
   }>;
 }) {
   const session = await getServerSession(await getAuthOptions());
   if (!session) redirect('/login');
 
   const params = await searchParams;
-  const status = params.status as 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED' | undefined;
+  const status = parseEnumValue(params.status, ALLOWED_STATUSES);
   const owner = params.owner;
-  const priority = params.priority as 'HIGH' | 'MEDIUM' | 'LOW' | undefined;
+  const priority = parseEnumValue(params.priority, ALLOWED_PRIORITIES);
   const view = params.view || 'board';
+  const requestedPage = parsePageParam(params.page);
+
   const [permissions, actor] = await Promise.all([
     getUserPermissions(),
     getCurrentAuthorizationActor(),
   ]);
 
-  const postmortems = await prisma.postmortem.findMany({
-    where: {
-      AND: [
-        postmortemReadWhere(actor),
-        {
-          OR: [{ actionItems: { not: Prisma.JsonNull } }, { actionItemRecords: { some: {} } }],
-        },
-      ],
-    },
+  const baseWhere: Prisma.ActionItemWhereInput = {
+    postmortem: postmortemReadWhere(actor),
+    ...(owner ? { ownerId: owner } : {}),
+    ...(priority ? { priority: priority as ActionItemPriority } : {}),
+  };
+
+  const filterWhere: Prisma.ActionItemWhereInput = {
+    ...baseWhere,
+    ...(status ? { status: status as ActionItemStatus } : {}),
+  };
+
+  const now = new Date();
+
+  // Aggregate stats directly from database
+  const [statusCounts, overdueCount, highPriorityCount, totalCount, users] = await Promise.all([
+    prisma.actionItem.groupBy({
+      by: ['status'],
+      where: baseWhere,
+      _count: { _all: true },
+    }),
+    prisma.actionItem.count({
+      where: {
+        ...baseWhere,
+        dueDate: { lt: now },
+        status: { not: 'COMPLETED' },
+      },
+    }),
+    prisma.actionItem.count({
+      where: {
+        ...baseWhere,
+        priority: 'HIGH',
+        status: { not: 'COMPLETED' },
+      },
+    }),
+    prisma.actionItem.count({ where: filterWhere }),
+    prisma.user.findMany({
+      where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: 'asc' },
+    }),
+  ]);
+
+  const statusMap = new Map(statusCounts.map(s => [s.status, s._count._all]));
+  const stats = {
+    total: statusCounts.reduce((acc, curr) => acc + curr._count._all, 0),
+    open: statusMap.get('OPEN') || 0,
+    inProgress: statusMap.get('IN_PROGRESS') || 0,
+    completed: statusMap.get('COMPLETED') || 0,
+    blocked: statusMap.get('BLOCKED') || 0,
+    overdue: overdueCount,
+    highPriority: highPriorityCount,
+  };
+
+  const pagination = calculatePaginationBounds({
+    totalItems: totalCount,
+    page: requestedPage,
+    pageSize: 100,
+  });
+
+  const records = await prisma.actionItem.findMany({
+    where: filterWhere,
     include: {
-      incident: {
+      postmortem: {
         select: {
           id: true,
           title: true,
-          service: {
+          incidentId: true,
+          createdAt: true,
+          incident: {
             select: {
               id: true,
-              name: true,
-            },
-          },
-          externalIssueLinks: {
-            where: { provider: 'JIRA' },
-            orderBy: { createdAt: 'desc' as const },
-            select: {
-              id: true,
-              provider: true,
-              externalKey: true,
-              externalUrl: true,
-              externalStatus: true,
-              externalAssignee: true,
-              syncState: true,
+              title: true,
+              service: {
+                select: { id: true, name: true },
+              },
+              externalIssueLinks: {
+                where: { provider: 'JIRA' },
+                orderBy: { createdAt: 'desc' },
+                select: {
+                  id: true,
+                  provider: true,
+                  externalKey: true,
+                  externalUrl: true,
+                  externalStatus: true,
+                  externalAssignee: true,
+                  syncState: true,
+                },
+              },
             },
           },
         },
       },
-      createdBy: {
-        select: { id: true, name: true, email: true },
-      },
-      actionItemRecords: {
-        include: {
-          externalIssueLinks: {
-            orderBy: { createdAt: 'desc' as const },
-            take: 1,
-            select: {
-              id: true,
-              provider: true,
-              externalKey: true,
-              externalUrl: true,
-              externalStatus: true,
-              externalAssignee: true,
-              syncState: true,
-            },
-          },
+      externalIssueLinks: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: {
+          id: true,
+          provider: true,
+          externalKey: true,
+          externalUrl: true,
+          externalStatus: true,
+          externalAssignee: true,
+          syncState: true,
         },
-        orderBy: { createdAt: 'asc' as const },
       },
     },
     orderBy: { createdAt: 'desc' },
+    skip: pagination.skip,
+    take: pagination.take,
   });
 
-  const allActionItems: Array<
-    ActionItem & {
-      postmortemId: string;
-      postmortemTitle: string;
-      incidentId: string;
-      incidentTitle: string;
-      serviceId: string;
-      serviceName: string;
-      incidentJiraIssues: JiraIssueReference[];
-      createdAt: Date;
-    }
-  > = [];
-
-  postmortems.forEach(postmortem => {
-    const actionItems = resolveStoredActionItems({
-      records: postmortem.actionItemRecords,
-      legacy: postmortem.actionItems,
-      legacyIdPrefix: `postmortem-${postmortem.id}`,
-    });
-    const incidentJiraIssues = postmortem.incident.externalIssueLinks.map(
-      serializeJiraIssueReference
-    );
-
-    actionItems.forEach(item => {
-      allActionItems.push({
-        ...item,
-        postmortemId: postmortem.id,
-        postmortemTitle: postmortem.title,
-        incidentId: postmortem.incidentId,
-        incidentTitle: postmortem.incident.title,
-        serviceId: postmortem.incident.service.id,
-        serviceName: postmortem.incident.service.name,
-        incidentJiraIssues,
-        createdAt: postmortem.createdAt,
-      });
-    });
-  });
-
-  const now = new Date();
-  const stats = {
-    total: 0,
-    open: 0,
-    inProgress: 0,
-    completed: 0,
-    blocked: 0,
-    overdue: 0,
-    highPriority: 0,
-  };
-
-  const filteredItems: typeof allActionItems = [];
-
-  for (const item of allActionItems) {
-    if (owner && item.owner !== owner) continue;
-    if (priority && item.priority !== priority) continue;
-
-    stats.total++;
-    if (item.status === 'OPEN') stats.open++;
-    else if (item.status === 'IN_PROGRESS') stats.inProgress++;
-    else if (item.status === 'COMPLETED') stats.completed++;
-    else if (item.status === 'BLOCKED') stats.blocked++;
-
-    if (item.dueDate && item.status !== 'COMPLETED' && new Date(item.dueDate) < now)
-      stats.overdue++;
-    if (item.priority === 'HIGH' && item.status !== 'COMPLETED') stats.highPriority++;
-
-    if (status && item.status !== status) continue;
-    filteredItems.push(item);
-  }
-
-  const users = await prisma.user.findMany({
-    where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
-    select: { id: true, name: true, email: true },
-    orderBy: { name: 'asc' },
-  });
+  const filteredItems: BoardActionItem[] = records.map(record => ({
+    id: record.id,
+    title: record.title,
+    description: record.description,
+    owner: record.ownerId,
+    dueDate: record.dueDate ? record.dueDate.toISOString() : null,
+    status: record.status,
+    priority: record.priority,
+    source: record.source,
+    postmortemId: record.postmortem.id,
+    postmortemTitle: record.postmortem.title,
+    incidentId: record.postmortem.incidentId,
+    incidentTitle: record.postmortem.incident.title,
+    serviceId: record.postmortem.incident.service.id,
+    serviceName: record.postmortem.incident.service.name,
+    incidentJiraIssues: record.postmortem.incident.externalIssueLinks.map(serializeJiraIssueReference),
+    externalIssue: record.externalIssueLinks[0]
+      ? serializeJiraIssueReference(record.externalIssueLinks[0])
+      : undefined,
+    createdAt: record.createdAt,
+    completedAt: record.completedAt,
+  }));
 
   const canManage = permissions.isResponderOrAbove;
   const jiraCapabilitiesByServiceId = await getJiraCapabilitiesByServiceIds(
-    allActionItems.map(item => item.serviceId),
+    filteredItems.map(item => item.serviceId),
     canManage
   );
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import _TimelineEvent from '../TimelineEvent';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
@@ -167,191 +167,209 @@ export default function IncidentTimeline({
   };
 
   // Create a comprehensive timeline with incident lifecycle events and notes
-  const timelineEvents: Array<{
-    id: string;
-    message: string;
-    createdAt: Date;
-    type: string;
-    sortPriority: number;
-  }> = [];
+  const timelineEvents = useMemo(() => {
+    const eventsList: Array<{
+      id: string;
+      message: string;
+      createdAt: Date;
+      type: string;
+      sortPriority: number;
+    }> = [];
 
-  const hasCreatedDbEvent = events.some(e => /triggered|created/i.test(e.message));
-  const hasAckDbEvent = events.some(e => /acknowledged/i.test(e.message));
-  const hasResolveDbEvent = events.some(e => /resolved/i.test(e.message));
+    let hasCreatedDbEvent = false;
+    let hasAckDbEvent = false;
+    let hasResolveDbEvent = false;
 
-  // Add incident creation
-  if (incidentCreatedAt && !hasCreatedDbEvent) {
-    timelineEvents.push({
-      id: 'incident-created',
-      message: 'Incident triggered and created',
-      createdAt: incidentCreatedAt,
-      type: 'CREATED',
-      sortPriority: 0,
-    });
-  }
-
-  // Add acknowledgment
-  if (incidentAcknowledgedAt && !hasAckDbEvent) {
-    timelineEvents.push({
-      id: 'incident-acknowledged',
-      message: 'Incident acknowledged by responder',
-      createdAt: incidentAcknowledgedAt,
-      type: 'ACKNOWLEDGED',
-      sortPriority: 1,
-    });
-  }
-
-  // Add resolution
-  if (incidentResolvedAt && !hasResolveDbEvent) {
-    timelineEvents.push({
-      id: 'incident-resolved',
-      message: 'Incident marked as resolved',
-      createdAt: incidentResolvedAt,
-      type: 'RESOLVED',
-      sortPriority: 2,
-    });
-  }
-
-  // Track matched notes to prevent duplicates when an incidentEvent already exists for a note
-  const matchedNoteIds = new Set<string>();
-
-  // Add regular events
-  events.forEach(event => {
-    const isNoteEvent =
-      event.type === 'NOTE' ||
-      event.type === 'COMMENT' ||
-      /\bnote\b|pinned message|comment/i.test(event.message);
-
-    let message = event.message;
-    let eventType = event.type || 'EVENT';
-
-    if (isNoteEvent) {
-      eventType = 'NOTE';
-      if (notes && notes.length > 0) {
-        const eventTime = new Date(event.createdAt).getTime();
-        const matchingNote = notes.find(n => {
-          if (matchedNoteIds.has(n.id)) return false;
-          const noteTime = new Date(n.createdAt).getTime();
-          return Math.abs(eventTime - noteTime) <= 15000;
-        });
-
-        if (matchingNote) {
-          matchedNoteIds.add(matchingNote.id);
-          if (!message.includes(matchingNote.content)) {
-            message = `${message}:\n${matchingNote.content}`;
-          }
-        }
-      }
+    for (const e of events) {
+      if (!hasCreatedDbEvent && /triggered|created/i.test(e.message)) hasCreatedDbEvent = true;
+      if (!hasAckDbEvent && /acknowledged/i.test(e.message)) hasAckDbEvent = true;
+      if (!hasResolveDbEvent && /resolved/i.test(e.message)) hasResolveDbEvent = true;
     }
 
-    timelineEvents.push({
-      ...event,
-      message,
-      type: eventType,
-      sortPriority: 3,
-    });
-  });
+    // Add incident creation
+    if (incidentCreatedAt && !hasCreatedDbEvent) {
+      eventsList.push({
+        id: 'incident-created',
+        message: 'Incident triggered and created',
+        createdAt: incidentCreatedAt,
+        type: 'CREATED',
+        sortPriority: 0,
+      });
+    }
 
-  // Synthesize timeline events for any notes that do not have a matching incidentEvent
-  if (notes && notes.length > 0) {
-    notes.forEach(note => {
-      if (!matchedNoteIds.has(note.id)) {
-        const author = note.user?.name || note.user?.email || 'Responder';
-        const formattedMsg = note.content.startsWith('📌')
-          ? note.content
-          : `Note added by ${author}:\n${note.content}`;
+    // Add acknowledgment
+    if (incidentAcknowledgedAt && !hasAckDbEvent) {
+      eventsList.push({
+        id: 'incident-acknowledged',
+        message: 'Incident acknowledged by responder',
+        createdAt: incidentAcknowledgedAt,
+        type: 'ACKNOWLEDGED',
+        sortPriority: 1,
+      });
+    }
 
-        timelineEvents.push({
-          id: `note-${note.id}`,
-          message: formattedMsg,
-          createdAt: note.createdAt,
-          type: 'NOTE',
-          sortPriority: 3,
-        });
-      }
-    });
-  }
+    // Add resolution
+    if (incidentResolvedAt && !hasResolveDbEvent) {
+      eventsList.push({
+        id: 'incident-resolved',
+        message: 'Incident marked as resolved',
+        createdAt: incidentResolvedAt,
+        type: 'RESOLVED',
+        sortPriority: 2,
+      });
+    }
 
-  // Track matched voice call events to deduplicate synthesized voice deliveries
-  const matchedVoiceEventIds = new Set<string>();
+    // Track matched notes to prevent duplicates when an incidentEvent already exists for a note
+    const matchedNoteIds = new Set<string>();
+    const noteLookup = (notes || []).map(n => ({
+      id: n.id,
+      content: n.content,
+      time: new Date(n.createdAt).getTime(),
+    }));
 
-  // Synthesize timeline events for incident notifications
-  if (notifications && notifications.length > 0) {
-    notifications.forEach(notif => {
-      let timestamp: string | Date | undefined;
-      switch (notif.status) {
-        case 'FAILED':
-        case 'UNKNOWN':
-          timestamp = notif.failedAt || notif.sentAt || notif.createdAt;
-          break;
-        case 'DELIVERED':
-          timestamp = notif.deliveredAt || notif.sentAt || notif.createdAt;
-          break;
-        case 'SENT':
-          timestamp = notif.sentAt || notif.deliveredAt || notif.createdAt;
-          break;
-        default:
-          timestamp = notif.deliveredAt || notif.failedAt || notif.sentAt || notif.createdAt;
-          break;
-      }
+    // Add regular events
+    events.forEach(event => {
+      const isNoteEvent =
+        event.type === 'NOTE' ||
+        event.type === 'COMMENT' ||
+        /\bnote\b|pinned message|comment/i.test(event.message);
 
-      // Suppress synthesized entry when an equivalent persisted voice call connected event exists for this responder
-      if (notif.channel?.toUpperCase() === 'VOICE' && notif.status?.toUpperCase() === 'DELIVERED') {
-        const notifTime = timestamp ? new Date(timestamp).getTime() : 0;
-        const recipientName = notif.user?.name?.trim().toLowerCase();
-        const recipientEmail = notif.user?.email?.trim().toLowerCase();
-        const recipientPhone = notif.recipientDisplay?.trim().toLowerCase();
+      let message = event.message;
+      let eventType = event.type || 'EVENT';
 
-        const matchingEvent = events.find(e => {
-          if (matchedVoiceEventIds.has(e.id)) return false;
-          if (!/voice call connected/i.test(e.message)) return false;
-          const eventTime = new Date(e.createdAt).getTime();
-          if (Math.abs(eventTime - notifTime) > 120_000) return false;
+      if (isNoteEvent) {
+        eventType = 'NOTE';
+        if (noteLookup.length > 0) {
+          const eventTime = new Date(event.createdAt).getTime();
+          const matchingNote = noteLookup.find(
+            n => !matchedNoteIds.has(n.id) && Math.abs(eventTime - n.time) <= 15000
+          );
 
-          const msgLower = e.message.toLowerCase();
-          if (recipientName && msgLower.includes(recipientName)) return true;
-          if (recipientEmail && msgLower.includes(recipientEmail)) return true;
-          if (recipientPhone && msgLower.includes(recipientPhone)) return true;
-          if (
-            !recipientName &&
-            !recipientEmail &&
-            !recipientPhone &&
-            msgLower.includes('responder')
-          ) {
-            return true;
+          if (matchingNote) {
+            matchedNoteIds.add(matchingNote.id);
+            if (!message.includes(matchingNote.content)) {
+              message = `${message}:\n${matchingNote.content}`;
+            }
           }
-          return false;
-        });
-        if (matchingEvent) {
-          matchedVoiceEventIds.add(matchingEvent.id);
-          return;
         }
       }
 
-      timelineEvents.push({
-        id: `notif-${notif.id}`,
-        message: formatNotificationMessage(notif),
-        createdAt: timestamp ? new Date(timestamp) : new Date(),
-        type: 'NOTIFICATION',
+      eventsList.push({
+        ...event,
+        message,
+        type: eventType,
         sortPriority: 3,
       });
     });
-  }
 
-  // Sort by date (oldest first for timeline) with secondary ID tie-breaker for same-millisecond events
-  timelineEvents.sort((a, b) => {
-    const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    if (diff !== 0) return diff;
-    if (a.sortPriority !== b.sortPriority) {
-      return a.sortPriority - b.sortPriority;
+    // Synthesize timeline events for any notes that do not have a matching incidentEvent
+    if (notes && notes.length > 0) {
+      notes.forEach(note => {
+        if (!matchedNoteIds.has(note.id)) {
+          const author = note.user?.name || note.user?.email || 'Responder';
+          const formattedMsg = note.content.startsWith('📌')
+            ? note.content
+            : `Note added by ${author}:\n${note.content}`;
+
+          eventsList.push({
+            id: `note-${note.id}`,
+            message: formattedMsg,
+            createdAt: note.createdAt,
+            type: 'NOTE',
+            sortPriority: 3,
+          });
+        }
+      });
     }
-    return String(a.id || '').localeCompare(String(b.id || ''));
-  });
 
-  const filteredEvents =
-    activeFilter === 'ALL'
+    // Track matched voice call events to deduplicate synthesized voice deliveries
+    const matchedVoiceEventIds = new Set<string>();
+    const voiceEvents = events
+      .filter(e => /voice call connected/i.test(e.message))
+      .map(e => ({
+        id: e.id,
+        time: new Date(e.createdAt).getTime(),
+        msgLower: e.message.toLowerCase(),
+      }));
+
+    // Synthesize timeline events for incident notifications
+    if (notifications && notifications.length > 0) {
+      notifications.forEach(notif => {
+        let timestamp: string | Date | undefined;
+        switch (notif.status) {
+          case 'FAILED':
+          case 'UNKNOWN':
+            timestamp = notif.failedAt || notif.sentAt || notif.createdAt;
+            break;
+          case 'DELIVERED':
+            timestamp = notif.deliveredAt || notif.sentAt || notif.createdAt;
+            break;
+          case 'SENT':
+            timestamp = notif.sentAt || notif.deliveredAt || notif.createdAt;
+            break;
+          default:
+            timestamp = notif.deliveredAt || notif.failedAt || notif.sentAt || notif.createdAt;
+            break;
+        }
+
+        // Suppress synthesized entry when an equivalent persisted voice call connected event exists for this responder
+        if (notif.channel?.toUpperCase() === 'VOICE' && notif.status?.toUpperCase() === 'DELIVERED') {
+          const notifTime = timestamp ? new Date(timestamp).getTime() : 0;
+          const recipientName = notif.user?.name?.trim().toLowerCase();
+          const recipientEmail = notif.user?.email?.trim().toLowerCase();
+          const recipientPhone = notif.recipientDisplay?.trim().toLowerCase();
+
+          const matchingEvent = voiceEvents.find(e => {
+            if (matchedVoiceEventIds.has(e.id)) return false;
+            if (Math.abs(e.time - notifTime) > 120_000) return false;
+
+            if (recipientName && e.msgLower.includes(recipientName)) return true;
+            if (recipientEmail && e.msgLower.includes(recipientEmail)) return true;
+            if (recipientPhone && e.msgLower.includes(recipientPhone)) return true;
+            if (
+              !recipientName &&
+              !recipientEmail &&
+              !recipientPhone &&
+              e.msgLower.includes('responder')
+            ) {
+              return true;
+            }
+            return false;
+          });
+          if (matchingEvent) {
+            matchedVoiceEventIds.add(matchingEvent.id);
+            return;
+          }
+        }
+
+        eventsList.push({
+          id: `notif-${notif.id}`,
+          message: formatNotificationMessage(notif),
+          createdAt: timestamp ? new Date(timestamp) : new Date(),
+          type: 'NOTIFICATION',
+          sortPriority: 3,
+        });
+      });
+    }
+
+    // Sort by date (oldest first for timeline) with secondary ID tie-breaker for same-millisecond events
+    eventsList.sort((a, b) => {
+      const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      if (diff !== 0) return diff;
+      if (a.sortPriority !== b.sortPriority) {
+        return a.sortPriority - b.sortPriority;
+      }
+      return String(a.id || '').localeCompare(String(b.id || ''));
+    });
+
+    return eventsList;
+  }, [events, notes, notifications, incidentCreatedAt, incidentAcknowledgedAt, incidentResolvedAt]);
+
+  const filteredEvents = useMemo(() => {
+    return activeFilter === 'ALL'
       ? timelineEvents
       : timelineEvents.filter(e => categorize(e.type, e.message) === activeFilter);
+  }, [timelineEvents, activeFilter]);
 
   const getEventConfig = (type: string) => {
     switch (type) {

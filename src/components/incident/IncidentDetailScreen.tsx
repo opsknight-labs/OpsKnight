@@ -73,8 +73,8 @@ export default async function IncidentDetailScreen({
       },
       assignee: true,
       team: true,
-      events: { orderBy: { createdAt: 'desc' } },
-      notes: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+      events: { orderBy: { createdAt: 'desc' }, take: 200 },
+      notes: { include: { user: true }, orderBy: { createdAt: 'desc' }, take: 100 },
       notifications: {
         select: {
           id: true,

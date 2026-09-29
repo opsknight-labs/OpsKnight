@@ -183,6 +183,14 @@ function ActionItemCard({
         isUpdating && 'opacity-60 pointer-events-none'
       )}
       onClick={() => router.push(`/postmortems/${item.incidentId}`)}
+      onKeyDown={event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          router.push(`/postmortems/${item.incidentId}`);
+        }
+      }}
+      role="button"
+      tabIndex={0}
     >
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -654,6 +662,14 @@ export default function ActionItemsBoard({
                     isUpdating && 'opacity-60 pointer-events-none'
                   )}
                   onClick={() => router.push(`/postmortems/${item.incidentId}`)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      router.push(`/postmortems/${item.incidentId}`);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
                   <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-2">
                     <div className="flex-1 min-w-0">
