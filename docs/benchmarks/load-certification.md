@@ -1,6 +1,6 @@
 # OpsKnight Load & Scalability Certification Report
 
-Generated: `2026-09-29T06:24:55.304Z`
+Generated: `2026-09-29T18:27:24.601Z`
 
 ## 1. Executive Capacity & Sizing Envelope
 
@@ -15,16 +15,16 @@ Generated: `2026-09-29T06:24:55.304Z`
 | `kind_kustomize_split_pgbouncer` | No certified sustainable capacity | No certified sustainable capacity | 1 RPS | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Worker pod resource / pool limits reached at L0 | **FAILED** |
 | `phase6_compose_integrated` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
 | `phase6_compose_split` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
-| `phase6_compose_split_pgbouncer` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
 | `phase6_swarm_integrated` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
 | `phase6_swarm_split` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
 | `phase6_swarm_split_pgbouncer` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
-| `phase6_swarm_ha_split_pgbouncer` | No certified sustainable capacity | No certified sustainable capacity | 30 RPS | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Swarm overlay network / ingress routing latency at L0 | **FAILED** |
 | `phase6_helm_integrated` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
 | `phase6_helm_split` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
-| `phase6_helm_split_pgbouncer` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
 | `phase6_kustomize_integrated` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
 | `phase6_kustomize_split` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
+| `phase6_compose_split_pgbouncer` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
+| `phase6_swarm_ha_split_pgbouncer` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
+| `phase6_helm_split_pgbouncer` | No certified sustainable capacity | No certified sustainable capacity | 19 RPS | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Worker pod resource / pool limits reached at L1 | **FAILED** |
 | `phase6_kustomize_split_pgbouncer` | No certified sustainable capacity | No certified sustainable capacity | Invariant violation during run | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | No certified sustainable capacity | Critical notification queue starvation | **FAILED** |
 
 ## 2. Resource-Efficiency Comparison Matrix
@@ -40,16 +40,16 @@ Generated: `2026-09-29T06:24:55.304Z`
 | `kind_kustomize_split_pgbouncer` | 0 | 0 | 0 | N/A | Small scale / single-team setups (< 200 RPS). Simple, lowest overhead. |
 | `phase6_compose_integrated` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
 | `phase6_compose_split` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
-| `phase6_compose_split_pgbouncer` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
 | `phase6_swarm_integrated` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
 | `phase6_swarm_split` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
 | `phase6_swarm_split_pgbouncer` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
-| `phase6_swarm_ha_split_pgbouncer` | 0 | 0 | 0 | N/A | Small scale / single-team setups (< 200 RPS). Simple, lowest overhead. |
 | `phase6_helm_integrated` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
 | `phase6_helm_split` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
-| `phase6_helm_split_pgbouncer` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
 | `phase6_kustomize_integrated` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
 | `phase6_kustomize_split` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
+| `phase6_compose_split_pgbouncer` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
+| `phase6_swarm_ha_split_pgbouncer` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
+| `phase6_helm_split_pgbouncer` | 0 | 0 | 0 | N/A | Small scale / single-team setups (< 200 RPS). Simple, lowest overhead. |
 | `phase6_kustomize_split_pgbouncer` | 0 | 0 | 0 | N/A | Do not deploy: Critical correctness invariant failed |
 
 ## 3. Evidence-Based Deployment Sizing Guidance
@@ -80,17 +80,17 @@ Generated: `2026-09-29T06:24:55.304Z`
 | Phase 4 | `kind_kustomize_split_pgbouncer` | 8 | 2.8 | 38687.3 | 39010.6 | 13 | 627 | PASS | **FAILED** |
 | Phase 6 | `phase6_compose_integrated` | 10 | 44.3 | 20659.3 | 25290.9 | 17 | 976695 | FAIL | **FAILED** |
 | Phase 6 | `phase6_compose_split` | 11 | 82.4 | 6166.6 | 6837.6 | 10 | 826077 | FAIL | **FAILED** |
-| Phase 6 | `phase6_compose_split_pgbouncer` | 11 | 68.4 | 6859.2 | 7966.8 | 10 | 937100 | FAIL | **FAILED** |
 | Phase 6 | `phase6_swarm_integrated` | 8 | 484.8 | 4001.2 | 11795.0 | 24 | 123087018 | FAIL | **FAILED** |
 | Phase 6 | `phase6_swarm_split` | 9 | 49.5 | 11096.7 | 13919.1 | 20 | 2258192 | FAIL | **FAILED** |
 | Phase 6 | `phase6_swarm_split_pgbouncer` | 10 | 33.7 | 14118.6 | 17443.3 | 14 | 124917459 | FAIL | **FAILED** |
-| Phase 6 | `phase6_swarm_ha_split_pgbouncer` | 11 | 45.0 | 20752.6 | 27834.2 | 28 | 4578894 | PASS | **FAILED** |
 | Phase 6 | `phase6_helm_integrated` | 6 | 19.2 | 28125.0 | 32419.4 | 27 | 591320 | FAIL | **FAILED** |
 | Phase 6 | `phase6_helm_split` | 7 | 32.5 | 15066.9 | 18708.0 | 27 | 771431 | FAIL | **FAILED** |
-| Phase 6 | `phase6_helm_split_pgbouncer` | 11 | 39.3 | 16394.4 | 18135.6 | 27 | 867612 | FAIL | **FAILED** |
 | Phase 6 | `phase6_kustomize_integrated` | 6 | 14.9 | 30013.0 | 33152.9 | 13 | 704087 | FAIL | **FAILED** |
 | Phase 6 | `phase6_kustomize_split` | 7 | 32.1 | 16843.4 | 21290.7 | 29 | 588802 | FAIL | **FAILED** |
-| Phase 6 | `phase6_kustomize_split_pgbouncer` | 11 | 34.6 | 18835.0 | 24970.2 | 36 | 1035568 | FAIL | **FAILED** |
+| Phase 6 | `phase6_compose_split_pgbouncer` | 99 | 230.5 | 60004.1 | 60024.5 | 17 | 3697326 | FAIL | **FAILED** |
+| Phase 6 | `phase6_swarm_ha_split_pgbouncer` | 99 | 104.6 | 32062.4 | 53284.3 | 33 | 39148467 | FAIL | **FAILED** |
+| Phase 6 | `phase6_helm_split_pgbouncer` | 99 | 95.5 | 34577.6 | 38590.6 | 48 | 6129653 | PASS | **FAILED** |
+| Phase 6 | `phase6_kustomize_split_pgbouncer` | 20 | 66.1 | 30228.8 | 30759.5 | 36 | 1547324 | FAIL | **FAILED** |
 
 ## 5. Standardized Resource Profiles
 
@@ -115,14 +115,14 @@ Generated: `2026-09-29T06:24:55.304Z`
 | `kind_kustomize_split_pgbouncer` | PASS (0) | PASS (19) | PASS (0) | PASS (0) | PASS (2554ms) |
 | `phase6_compose_integrated` | PASS (0) | PASS (7937) | PASS (0) | PASS (0) | FAIL |
 | `phase6_compose_split` | PASS (0) | PASS (18002) | PASS (0) | PASS (0) | FAIL |
-| `phase6_compose_split_pgbouncer` | PASS (0) | PASS (17768) | PASS (0) | PASS (0) | FAIL |
 | `phase6_swarm_integrated` | PASS (0) | PASS (5802) | PASS (0) | PASS (0) | FAIL |
 | `phase6_swarm_split` | PASS (0) | PASS (13262) | PASS (0) | PASS (0) | FAIL |
 | `phase6_swarm_split_pgbouncer` | PASS (0) | PASS (11428) | PASS (0) | PASS (0) | FAIL |
-| `phase6_swarm_ha_split_pgbouncer` | PASS (0) | PASS (11206) | PASS (0) | PASS (0) | PASS (0ms) |
 | `phase6_helm_integrated` | PASS (0) | PASS (3441) | PASS (0) | PASS (0) | FAIL |
 | `phase6_helm_split` | PASS (0) | PASS (8115) | PASS (0) | PASS (0) | FAIL |
-| `phase6_helm_split_pgbouncer` | PASS (0) | PASS (8363) | PASS (0) | PASS (0) | FAIL |
 | `phase6_kustomize_integrated` | PASS (0) | PASS (2841) | PASS (0) | PASS (0) | FAIL |
 | `phase6_kustomize_split` | PASS (0) | PASS (8054) | PASS (0) | PASS (0) | FAIL |
-| `phase6_kustomize_split_pgbouncer` | PASS (0) | PASS (8456) | PASS (0) | PASS (0) | FAIL |
+| `phase6_compose_split_pgbouncer` | PASS (0) | PASS (59196) | PASS (0) | PASS (0) | FAIL |
+| `phase6_swarm_ha_split_pgbouncer` | PASS (0) | PASS (41669) | PASS (0) | PASS (0) | FAIL |
+| `phase6_helm_split_pgbouncer` | PASS (0) | PASS (0) | PASS (0) | PASS (0) | PASS (0ms) |
+| `phase6_kustomize_split_pgbouncer` | PASS (0) | PASS (1703) | PASS (0) | PASS (0) | FAIL |

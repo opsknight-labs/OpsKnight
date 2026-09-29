@@ -231,6 +231,7 @@ export async function runLoadCleanup(options?: {
     const targetIncidentCondition = {
       OR: [
         { serviceId: { in: loadServiceIds } },
+        { serviceId: { startsWith: 'lt-' } },
         { id: { startsWith: 'lt-' } },
         { id: { in: loadIncidentIds } },
       ],
@@ -338,8 +339,13 @@ export async function runLoadCleanup(options?: {
     }).catch(() => ({ count: 0 }));
 
     const deletedServices = await prisma.service.deleteMany({
-      where: { id: { startsWith: 'lt-' } },
-    });
+      where: {
+        OR: [
+          { id: { startsWith: 'lt-' } },
+          { id: { in: loadServiceIds } },
+        ],
+      },
+    }).catch(() => ({ count: 0 }));
 
     await prisma.slackIntegration.deleteMany({
       where: { id: { startsWith: 'lt-' } },
