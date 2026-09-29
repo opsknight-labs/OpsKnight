@@ -42,6 +42,26 @@
           "items": { "type": "string", "minLength": 1 }
         }
       }
+    },
+    "reader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "enum": ["DISCOVERED", "MAPPED", "DRAFTED", "READER_COMPLETE", "HUMAN_VERIFIED", "RUNTIME_VERIFIED"]
+        },
+        "task": { "type": "string", "minLength": 1 },
+        "reviewer": { "type": ["string", "null"] },
+        "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+        "revision": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+        "journey": { "type": ["string", "null"] },
+        "evidence": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
     }
   },
   "allOf": [

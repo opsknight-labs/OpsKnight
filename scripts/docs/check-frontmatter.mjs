@@ -30,6 +30,13 @@ for (const file of filesUnder('docs/v2.0.0', path => path.endsWith('.md'))) {
   if (verification.level !== 'draft') {
     for (const evidence of verification.evidence) if (!exists(evidence)) failures.push(`${file}: missing verification evidence ${evidence}`);
   }
+  const reader = metadata.reader;
+  if (reader?.status === 'HUMAN_VERIFIED' || reader?.status === 'RUNTIME_VERIFIED') {
+    for (const evidence of reader.evidence ?? []) if (!exists(evidence)) failures.push(`${file}: missing reader evidence ${evidence}`);
+  }
+  if (reader?.status === 'RUNTIME_VERIFIED' && reader.journey && !exists(reader.journey)) {
+    failures.push(`${file}: missing reader journey ${reader.journey}`);
+  }
 }
 
 if (failures.length) {

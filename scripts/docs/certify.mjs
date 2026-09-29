@@ -18,9 +18,10 @@ run('node', ['scripts/docs/generate-capacity-reference.mjs']);
 run('node', ['scripts/docs/generate-route-contract.mjs']);
 run('node', ['scripts/docs/generate-v15-parity.mjs']);
 run('node', ['scripts/docs/check-v15-parity.mjs', ...(releaseCertification ? ['--release'] : [])]);
+run('node', ['scripts/docs/audit-reader-completeness.mjs']);
 run('node', ['scripts/docs/check-frontmatter.mjs']);
 run('node', ['scripts/check-docs-links.cjs']);
-run('node', ['scripts/docs/check-reader-quality.mjs']);
+run('node', ['scripts/docs/check-reader-quality.mjs', ...(releaseCertification ? ['--release'] : [])]);
 run('node', ['scripts/docs/check-dangerous-claims.mjs']);
 run('node', ['scripts/check-docs-capabilities.cjs']);
 run('node', ['scripts/docs/check-evidence.mjs']);
@@ -54,6 +55,7 @@ const v15Inventory = YAML.parse(readFileSync(join(root, 'docs/internal/certifica
 const v15Review = YAML.parse(readFileSync(join(root, 'docs/internal/certification/v1.5-to-v2-parity.yaml'), 'utf8'));
 const v15InventoryIds = new Set((v15Inventory.topics ?? []).map(item => item.id));
 const v15Reviewed = (v15Review.dispositions ?? []).filter(item => v15InventoryIds.has(item.id));
+const readerAudit = JSON.parse(readFileSync(join(root, 'generated/docs-certification/page-audit.json'), 'utf8'));
 const capabilities = Object.values(catalog.capabilities);
 const evidence = walk(join(root, 'generated/docs-evidence/current')).filter(path => extname(path) === '.png');
 const journeys = walk(join(root, 'tests/docs/journeys')).filter(path => path.endsWith('.spec.ts'));
@@ -78,6 +80,8 @@ const report = {
     frontmatter: 'passed',
     links: 'passed',
     readerQuality: 'passed',
+    readerCompleteness: readerAudit.readerCompleteTaskPages === readerAudit.taskPages ? 'passed' : 'pending',
+    humanTaskVerification: readerAudit.humanVerifiedTaskPages === readerAudit.taskPages ? 'passed' : 'pending',
     capabilityCoverage: 'passed',
     featureClassification: discovery.featureGraph.unclassified.length === 0 ? 'passed' : 'failed',
     featureDocumentationAlarm: discovery.featureGraph.undocumented.length === 0 ? 'clear' : 'attention-required',
@@ -121,10 +125,15 @@ const report = {
     v15Topics: v15InventoryIds.size,
     v15TopicsReviewed: v15Reviewed.length,
     v15TopicsPending: v15InventoryIds.size - v15Reviewed.length,
+    taskDocumentationPages: readerAudit.taskPages,
+    readerCompleteTaskPages: readerAudit.readerCompleteTaskPages,
+    humanVerifiedTaskPages: readerAudit.humanVerifiedTaskPages,
+    runtimeVerifiedTaskPages: readerAudit.runtimeVerifiedTaskPages,
   },
   artifacts: {
     discovery: 'generated/docs-discovery/current.json',
     capabilityCatalog: 'docs/v2.0.0/capabilities.yaml',
+    readerAudit: 'generated/docs-certification/page-audit.json',
     evidence: evidence.map(relative),
     ...(runtimeInspection ? {
       runtime: {
