@@ -52,7 +52,8 @@ export default function IncidentNotes({
       const oldestNote = loadedNotes[loadedNotes.length - 1];
       const older = await loadOlderIncidentNotes(
         incidentId,
-        new Date(oldestNote.createdAt).toISOString()
+        new Date(oldestNote.createdAt).toISOString(),
+        oldestNote.id
       );
       if (older.length > 0) {
         setLoadedNotes(prev => [

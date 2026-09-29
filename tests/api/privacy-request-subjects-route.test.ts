@@ -48,12 +48,27 @@ describe('privacy request subject search', () => {
     expect(body.data.users).toHaveLength(1);
   });
 
-  it('rejects underspecified searches before querying users', async () => {
+  it('returns matching users for short searches instead of rejecting them', async () => {
+    mocks.findMany.mockResolvedValue([
+      { id: 'csubject00002', name: 'Alice B', email: 'alice@example.com' },
+    ]);
+
     const response = await GET(
       new NextRequest('https://example.com/api/compliance/privacy-requests/subjects?search=a')
     );
 
-    expect(response.status).toBe(400);
-    expect(mocks.findMany).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(mocks.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          status: 'ACTIVE',
+          OR: [
+            { name: { contains: 'a', mode: 'insensitive' } },
+            { email: { contains: 'a', mode: 'insensitive' } },
+          ],
+        },
+        take: 50,
+      })
+    );
   });
 });

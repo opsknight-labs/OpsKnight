@@ -10,20 +10,51 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Users, Shield, ArrowUpRight, Sparkles, UserCheck } from 'lucide-react';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 
+import { Prisma } from '@prisma/client';
+
 export default async function TeamsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ page?: string }>;
+  searchParams?: Promise<{ page?: string; q?: string; search?: string; status?: string }>;
 } = {}) {
   const params = await searchParams;
   const requestedPage = parsePageParam(params?.page);
+  const searchQuery = (params?.q || params?.search || '').trim();
+  const statusFilter = params?.status || 'all';
   const teamScope = await getViewableTeamWhere();
 
+  const filterConditions: Prisma.TeamWhereInput[] = [teamScope];
+
+  if (searchQuery) {
+    filterConditions.push({
+      OR: [
+        { name: { contains: searchQuery, mode: 'insensitive' } },
+        { description: { contains: searchQuery, mode: 'insensitive' } },
+        { teamLead: { name: { contains: searchQuery, mode: 'insensitive' } } },
+      ],
+    });
+  }
+
+  if (statusFilter === 'configured') {
+    filterConditions.push({
+      AND: [{ teamLeadId: { not: null } }, { members: { some: {} } }],
+    });
+  } else if (statusFilter === 'needs-lead') {
+    filterConditions.push({ teamLeadId: null });
+  } else if (statusFilter === 'needs-services') {
+    filterConditions.push({ services: { none: {} } });
+  }
+
+  const where: Prisma.TeamWhereInput =
+    filterConditions.length === 1 ? teamScope : { AND: filterConditions };
+
   const [
-    totalTeamsCount,
+    allTeamsCount,
     totalMembersCount,
     totalServicesCount,
     configuredTeamsCount,
+    needsLeadTeamsCount,
+    totalFilteredCount,
     permissions,
   ] = await Promise.all([
     prisma.team.count({ where: teamScope }),
@@ -34,17 +65,23 @@ export default async function TeamsPage({
         AND: [teamScope, { teamLeadId: { not: null } }, { members: { some: {} } }],
       },
     }),
+    prisma.team.count({
+      where: {
+        AND: [teamScope, { teamLeadId: null }],
+      },
+    }),
+    prisma.team.count({ where }),
     getUserPermissions(),
   ]);
 
   const pagination = calculatePaginationBounds({
-    totalItems: totalTeamsCount,
+    totalItems: totalFilteredCount,
     page: requestedPage,
     pageSize: 50,
   });
 
   const teams = await prisma.team.findMany({
-    where: teamScope,
+    where,
     skip: pagination.skip,
     take: pagination.take,
     include: {
@@ -113,7 +150,7 @@ export default async function TeamsPage({
           </div>
 
           <TeamStatsCapsule
-            totalTeams={totalTeamsCount}
+            totalTeams={allTeamsCount}
             totalMembers={totalMembersCount}
             totalServices={totalServicesCount}
             configuredCount={configuredTeamsCount}
@@ -136,6 +173,13 @@ export default async function TeamsPage({
               totalItems: pagination.totalItems,
               itemsPerPage: pagination.pageSize,
             }}
+            filterCounts={{
+              total: allTeamsCount,
+              configured: configuredTeamsCount,
+              needsLead: needsLeadTeamsCount,
+            }}
+            currentSearch={searchQuery}
+            currentStatus={statusFilter}
           />
         </div>
 

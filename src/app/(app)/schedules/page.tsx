@@ -17,35 +17,92 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+import { Prisma } from '@prisma/client';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 
 export default async function SchedulesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ page?: string }>;
+  searchParams?: Promise<{ page?: string; q?: string; search?: string; status?: string }>;
 } = {}) {
   const params = await searchParams;
   const requestedPage = parsePageParam(params?.page);
+  const searchQuery = (params?.q || params?.search || '').trim();
+  const statusFilter = params?.status || 'all';
 
   const [permissions, actor] = await Promise.all([
     getUserPermissions(),
     getCurrentAuthorizationActor(),
   ]);
 
-  const where = scheduleReadWhere(actor);
+  const baseWhere = scheduleReadWhere(actor);
+  const filterConditions: Prisma.OnCallScheduleWhereInput[] = [baseWhere];
 
-  const [totalSchedulesCount, totalLayersCount, responderAgg] = await Promise.all([
-    prisma.onCallSchedule.count({ where }),
-    prisma.onCallLayer.count({ where: { schedule: where } }),
+  if (searchQuery) {
+    filterConditions.push({
+      OR: [
+        { name: { contains: searchQuery, mode: 'insensitive' } },
+        { timeZone: { contains: searchQuery, mode: 'insensitive' } },
+        {
+          layers: {
+            some: {
+              users: {
+                some: {
+                  user: {
+                    name: { contains: searchQuery, mode: 'insensitive' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    });
+  }
+
+  if (statusFilter === 'configured') {
+    filterConditions.push({
+      layers: { some: { users: { some: {} } } },
+    });
+  } else if (statusFilter === 'needs-setup') {
+    filterConditions.push({
+      NOT: { layers: { some: { users: { some: {} } } } },
+    });
+  }
+
+  const where: Prisma.OnCallScheduleWhereInput =
+    filterConditions.length === 1 ? baseWhere : { AND: filterConditions };
+
+  const [
+    allSchedulesCount,
+    totalLayersCount,
+    responderAgg,
+    configuredSchedulesCount,
+    needsSetupSchedulesCount,
+    totalFilteredCount,
+  ] = await Promise.all([
+    prisma.onCallSchedule.count({ where: baseWhere }),
+    prisma.onCallLayer.count({ where: { schedule: baseWhere } }),
     prisma.onCallLayerUser.findMany({
-      where: { layer: { schedule: where }, user: { status: 'ACTIVE' } },
+      where: { layer: { schedule: baseWhere }, user: { status: 'ACTIVE' } },
       select: { userId: true },
       distinct: ['userId'],
     }),
+    prisma.onCallSchedule.count({
+      where: {
+        AND: [baseWhere, { layers: { some: { users: { some: {} } } } }],
+      },
+    }),
+    prisma.onCallSchedule.count({
+      where: {
+        AND: [baseWhere, { NOT: { layers: { some: { users: { some: {} } } } } }],
+      },
+    }),
+    prisma.onCallSchedule.count({ where }),
   ]);
 
   const pagination = calculatePaginationBounds({
-    totalItems: totalSchedulesCount,
+    totalItems: totalFilteredCount,
     page: requestedPage,
     pageSize: 50,
   });
@@ -156,6 +213,13 @@ export default async function SchedulesPage({
               totalItems: pagination.totalItems,
               itemsPerPage: pagination.pageSize,
             }}
+            filterCounts={{
+              total: allSchedulesCount,
+              configured: configuredSchedulesCount,
+              needsSetup: needsSetupSchedulesCount,
+            }}
+            currentSearch={searchQuery}
+            currentStatus={statusFilter}
           />
         </div>
 

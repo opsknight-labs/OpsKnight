@@ -355,12 +355,14 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const isSlaMetricsAvailable =
     slaMetricsResult.status === 'fulfilled' && Boolean(slaMetricsResult.value);
   const slaMetrics = isSlaMetricsAvailable ? slaMetricsResult.value : null;
-  const uptimeByService = (uptimeResult.status === 'fulfilled' ? uptimeResult.value : {}) as Record<
-    string,
-    number
-  >;
+  const uptimeByService = new Map<string, number>(
+    uptimeResult.status === 'fulfilled' && uptimeResult.value && typeof uptimeResult.value === 'object'
+      ? Object.entries(uptimeResult.value as Record<string, number>)
+      : []
+  );
+  const serviceUptime = uptimeByService.get(id);
   const isUptimeAvailable =
-    uptimeResult.status === 'fulfilled' && uptimeByService[id] !== undefined;
+    uptimeResult.status === 'fulfilled' && typeof serviceUptime === 'number';
   const teams = teamsResult.status === 'fulfilled' ? teamsResult.value : [];
   const policies = policiesResult.status === 'fulfilled' ? policiesResult.value : [];
   const globalSlackIntegration = slackResult.status === 'fulfilled' ? slackResult.value : null;
@@ -436,7 +438,10 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     isSlaMetricsAvailable && windowTotalIncidents !== undefined && effectiveDurationDays > 0
       ? (windowTotalIncidents / effectiveDurationDays) * 30
       : undefined;
-  const availability = isUptimeAvailable ? Math.max(0, Math.min(100, uptimeByService[id])) : null;
+  const availability =
+    isUptimeAvailable && typeof serviceUptime === 'number'
+      ? Math.max(0, Math.min(100, serviceUptime))
+      : null;
 
   const boundUpdateService = updateService.bind(null, service.id);
   const boundDeleteService = async () => {

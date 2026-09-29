@@ -62,19 +62,30 @@ export async function updateIncidentDetailDescription(
   );
 }
 
+import { redactNotificationError } from '@/lib/notification-operations';
+
 export async function loadOlderIncidentEvents(
   incidentIdValue: string,
   beforeDateISO: string,
+  beforeId?: string,
   limit = 200
 ) {
   const parsedIncidentId = incidentId(incidentIdValue);
   await assertCanViewIncident(parsedIncidentId);
+  const cursorDate = new Date(beforeDateISO);
   const events = await prisma.incidentEvent.findMany({
     where: {
       incidentId: parsedIncidentId,
-      createdAt: { lt: new Date(beforeDateISO) },
+      ...(beforeId
+        ? {
+            OR: [
+              { createdAt: { lt: cursorDate } },
+              { createdAt: cursorDate, id: { lt: beforeId } },
+            ],
+          }
+        : { createdAt: { lt: cursorDate } }),
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: Math.min(Math.max(1, limit), 500),
   });
   return events.map(e => ({
@@ -88,14 +99,23 @@ export async function loadOlderIncidentEvents(
 export async function loadOlderIncidentNotes(
   incidentIdValue: string,
   beforeDateISO: string,
+  beforeId?: string,
   limit = 100
 ) {
   const parsedIncidentId = incidentId(incidentIdValue);
   await assertCanViewIncident(parsedIncidentId);
+  const cursorDate = new Date(beforeDateISO);
   const notes = await prisma.incidentNote.findMany({
     where: {
       incidentId: parsedIncidentId,
-      createdAt: { lt: new Date(beforeDateISO) },
+      ...(beforeId
+        ? {
+            OR: [
+              { createdAt: { lt: cursorDate } },
+              { createdAt: cursorDate, id: { lt: beforeId } },
+            ],
+          }
+        : { createdAt: { lt: cursorDate } }),
     },
     include: {
       user: {
@@ -108,7 +128,7 @@ export async function loadOlderIncidentNotes(
         },
       },
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: Math.min(Math.max(1, limit), 200),
   });
   return notes.map(n => ({
@@ -117,4 +137,100 @@ export async function loadOlderIncidentNotes(
     createdAt: n.createdAt,
     user: n.user,
   }));
+}
+
+export async function loadOlderIncidentTimelineActivity(
+  incidentIdValue: string,
+  beforeDateISO: string,
+  beforeId?: string,
+  limit = 100
+) {
+  const parsedIncidentId = incidentId(incidentIdValue);
+  await assertCanViewIncident(parsedIncidentId);
+  const cursorDate = new Date(beforeDateISO);
+  const cursorFilter = beforeId
+    ? {
+        OR: [
+          { createdAt: { lt: cursorDate } },
+          { createdAt: cursorDate, id: { lt: beforeId } },
+        ],
+      }
+    : { createdAt: { lt: cursorDate } };
+
+  const [events, notes, notifications] = await Promise.all([
+    prisma.incidentEvent.findMany({
+      where: {
+        incidentId: parsedIncidentId,
+        ...cursorFilter,
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: Math.min(Math.max(1, limit), 200),
+    }),
+    prisma.incidentNote.findMany({
+      where: {
+        incidentId: parsedIncidentId,
+        ...cursorFilter,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+            gender: true,
+          },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: Math.min(Math.max(1, limit), 200),
+    }),
+    prisma.notification.findMany({
+      where: {
+        incidentId: parsedIncidentId,
+        ...cursorFilter,
+      },
+      select: {
+        id: true,
+        channel: true,
+        status: true,
+        recipientDisplay: true,
+        errorMsg: true,
+        createdAt: true,
+        sentAt: true,
+        deliveredAt: true,
+        failedAt: true,
+        user: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: Math.min(Math.max(1, limit), 200),
+    }),
+  ]);
+
+  return {
+    events: events.map(e => ({
+      id: e.id,
+      message: e.message,
+      type: e.type,
+      createdAt: e.createdAt,
+    })),
+    notes: notes.map(n => ({
+      id: n.id,
+      content: n.content,
+      createdAt: n.createdAt,
+      user: n.user,
+    })),
+    notifications: notifications.map(notif => ({
+      id: notif.id,
+      channel: notif.channel,
+      status: notif.status,
+      recipientDisplay: notif.recipientDisplay,
+      errorMsg: redactNotificationError(notif.errorMsg),
+      createdAt: notif.createdAt,
+      sentAt: notif.sentAt,
+      deliveredAt: notif.deliveredAt,
+      failedAt: notif.failedAt,
+      user: notif.user,
+    })),
+  };
 }

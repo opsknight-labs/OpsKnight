@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -66,6 +66,7 @@ export interface ActionItemsBoardProps {
     owner?: string;
     priority?: string;
   };
+  initialSearch?: string;
   /** Per-service capability contract. Aggregate screens must never use one workspace capability. */
   jiraCapabilitiesByServiceId: Record<string, JiraCapability>;
   pagination?: {
@@ -322,15 +323,17 @@ export default function ActionItemsBoard({
   canManage,
   view,
   filters,
+  initialSearch = '',
   jiraCapabilitiesByServiceId,
   pagination,
 }: ActionItemsBoardProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { userTimeZone } = useTimezone();
   const [, startTransition] = useTransition();
   const [items, setItems] = useState<BoardActionItem[]>(initialItems);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [selectedStatus, setSelectedStatus] = useState(filters.status || '');
   const [selectedOwner, setSelectedOwner] = useState(filters.owner || '');
   const [selectedPriority, setSelectedPriority] = useState(filters.priority || '');
@@ -342,6 +345,10 @@ export default function ActionItemsBoard({
   useEffect(() => {
     setItems(initialItems);
   }, [initialItems]);
+
+  useEffect(() => {
+    setSearch(initialSearch);
+  }, [initialSearch]);
 
   useEffect(() => {
     setSelectedStatus(filters.status || '');
@@ -384,46 +391,39 @@ export default function ActionItemsBoard({
     owner?: string;
     priority?: string;
     view?: string;
+    search?: string;
   }) => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(searchParams ? searchParams.toString() : '');
     const targetStatus = updates.status !== undefined ? updates.status : selectedStatus;
     const targetOwner = updates.owner !== undefined ? updates.owner : selectedOwner;
     const targetPriority = updates.priority !== undefined ? updates.priority : selectedPriority;
     const targetView = updates.view !== undefined ? updates.view : view;
+    const targetSearch = updates.search !== undefined ? updates.search : search;
 
     if (targetStatus && targetStatus !== 'all') params.set('status', targetStatus);
+    else params.delete('status');
+
     if (targetOwner && targetOwner !== 'all') params.set('owner', targetOwner);
+    else params.delete('owner');
+
     if (targetPriority && targetPriority !== 'all') params.set('priority', targetPriority);
-    if (targetView) params.set('view', targetView);
-    return `/action-items?${params.toString()}`;
+    else params.delete('priority');
+
+    if (targetView && targetView !== 'board') params.set('view', targetView);
+    else params.delete('view');
+
+    if (targetSearch && targetSearch.trim()) params.set('search', targetSearch.trim());
+    else {
+      params.delete('search');
+      params.delete('q');
+    }
+
+    params.delete('page');
+    const qs = params.toString();
+    return qs ? `/action-items?${qs}` : '/action-items';
   };
 
-  const filteredItems = useMemo(() => {
-    let result = items;
-    if (selectedStatus && selectedStatus !== 'all') {
-      result = result.filter(item => item.status === selectedStatus);
-    }
-    if (selectedOwner && selectedOwner !== 'all') {
-      result = result.filter(item => item.owner === selectedOwner);
-    }
-    if (selectedPriority && selectedPriority !== 'all') {
-      result = result.filter(item => item.priority === selectedPriority);
-    }
-    if (search.trim()) {
-      const query = search.toLowerCase();
-      result = result.filter(item => {
-        const ownerName = getOwnerName(item.owner, users).toLowerCase();
-        return (
-          item.title.toLowerCase().includes(query) ||
-          (item.description && item.description.toLowerCase().includes(query)) ||
-          item.incidentTitle.toLowerCase().includes(query) ||
-          item.serviceName.toLowerCase().includes(query) ||
-          ownerName.includes(query)
-        );
-      });
-    }
-    return result;
-  }, [items, search, selectedStatus, selectedOwner, selectedPriority, users]);
+  const filteredItems = items;
 
   const groupedByStatus = useMemo(
     () => ({
@@ -475,7 +475,11 @@ export default function ActionItemsBoard({
     <div className="space-y-4">
       <SearchFilterBar
         searchValue={search}
-        onSearchChange={setSearch}
+        onSearchChange={val => {
+          setSearch(val);
+          startTransition(() => router.push(buildFilterUrl({ search: val })));
+        }}
+        searchDebounceMs={300}
         searchPlaceholder="Search action items, postmortems, owners..."
         hasActiveFilters={hasActiveFilters}
         onResetFilters={handleReset}

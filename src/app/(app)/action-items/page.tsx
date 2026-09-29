@@ -31,6 +31,8 @@ export default async function ActionItemsPage({
     priority?: string;
     view?: 'board' | 'list';
     page?: string;
+    search?: string;
+    q?: string;
   }>;
 }) {
   const session = await getServerSession(await getAuthOptions());
@@ -42,6 +44,7 @@ export default async function ActionItemsPage({
   const priority = parseEnumValue(params.priority, ALLOWED_PRIORITIES);
   const view = params.view || 'board';
   const requestedPage = parsePageParam(params.page);
+  const searchQuery = (params.search || params.q || '').trim();
 
   const [permissions, actor] = await Promise.all([
     getUserPermissions(),
@@ -59,76 +62,100 @@ export default async function ActionItemsPage({
     ...(status ? { status: status as ActionItemStatus } : {}),
   };
 
+  if (searchQuery) {
+    filterWhere.OR = [
+      { title: { contains: searchQuery, mode: 'insensitive' } },
+      { description: { contains: searchQuery, mode: 'insensitive' } },
+      { postmortem: { title: { contains: searchQuery, mode: 'insensitive' } } },
+      { postmortem: { incident: { title: { contains: searchQuery, mode: 'insensitive' } } } },
+      { postmortem: { incident: { service: { name: { contains: searchQuery, mode: 'insensitive' } } } } },
+    ];
+  }
+
   const now = new Date();
 
+  const unmigratedWhere: Prisma.PostmortemWhereInput = {
+    AND: [
+      postmortemReadWhere(actor),
+      { actionItems: { not: Prisma.JsonNull } },
+      { actionItemRecords: { none: {} } },
+    ],
+  };
+
   // Aggregate stats directly from database + unmigrated legacy postmortem records
-  const [statusCounts, overdueCount, highPriorityCount, totalCount, users, unmigratedPostmortems] =
-    await Promise.all([
-      prisma.actionItem.groupBy({
-        by: ['status'],
-        where: baseWhere,
-        _count: { _all: true },
-      }),
-      prisma.actionItem.count({
-        where: {
-          ...baseWhere,
-          dueDate: { lt: now },
-          status: { not: 'COMPLETED' },
-        },
-      }),
-      prisma.actionItem.count({
-        where: {
-          ...baseWhere,
-          priority: 'HIGH',
-          status: { not: 'COMPLETED' },
-        },
-      }),
-      prisma.actionItem.count({ where: filterWhere }),
-      prisma.user.findMany({
-        where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
-        select: { id: true, name: true, email: true },
-        orderBy: { name: 'asc' },
-      }),
-      prisma.postmortem.findMany({
-        where: {
-          AND: [
-            postmortemReadWhere(actor),
-            { actionItems: { not: Prisma.JsonNull } },
-            { actionItemRecords: { none: {} } },
-          ],
-        },
-        select: {
-          id: true,
-          title: true,
-          incidentId: true,
-          createdAt: true,
-          actionItems: true,
-          incident: {
-            select: {
-              id: true,
-              title: true,
-              service: {
-                select: { id: true, name: true },
-              },
-              externalIssueLinks: {
-                where: { provider: 'JIRA' },
-                orderBy: { createdAt: 'desc' },
-                select: {
-                  id: true,
-                  provider: true,
-                  externalKey: true,
-                  externalUrl: true,
-                  externalStatus: true,
-                  externalAssignee: true,
-                  syncState: true,
+  const [
+    statusCounts,
+    overdueCount,
+    highPriorityCount,
+    totalCount,
+    users,
+    unmigratedPostmortemsCount,
+  ] = await Promise.all([
+    prisma.actionItem.groupBy({
+      by: ['status'],
+      where: baseWhere,
+      _count: { _all: true },
+    }),
+    prisma.actionItem.count({
+      where: {
+        ...baseWhere,
+        dueDate: { lt: now },
+        status: { not: 'COMPLETED' },
+      },
+    }),
+    prisma.actionItem.count({
+      where: {
+        ...baseWhere,
+        priority: 'HIGH',
+        status: { not: 'COMPLETED' },
+      },
+    }),
+    prisma.actionItem.count({ where: filterWhere }),
+    prisma.user.findMany({
+      where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.postmortem.count({ where: unmigratedWhere }),
+  ]);
+
+  const unmigratedPostmortems =
+    unmigratedPostmortemsCount > 0
+      ? await prisma.postmortem.findMany({
+          where: unmigratedWhere,
+          select: {
+            id: true,
+            title: true,
+            incidentId: true,
+            createdAt: true,
+            actionItems: true,
+            incident: {
+              select: {
+                id: true,
+                title: true,
+                service: {
+                  select: { id: true, name: true },
+                },
+                externalIssueLinks: {
+                  where: { provider: 'JIRA' },
+                  orderBy: { createdAt: 'desc' },
+                  select: {
+                    id: true,
+                    provider: true,
+                    externalKey: true,
+                    externalUrl: true,
+                    externalStatus: true,
+                    externalAssignee: true,
+                    syncState: true,
+                  },
                 },
               },
             },
           },
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
-    ]);
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        })
+      : [];
 
   const legacyItems: BoardActionItem[] = unmigratedPostmortems.flatMap(pm => {
     const items = resolveStoredActionItems({
@@ -159,6 +186,16 @@ export default async function ActionItemsPage({
     if (owner && item.owner !== owner) return false;
     if (priority && item.priority !== priority) return false;
     if (status && item.status !== status) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matches =
+        item.title.toLowerCase().includes(q) ||
+        (item.description && item.description.toLowerCase().includes(q)) ||
+        item.postmortemTitle.toLowerCase().includes(q) ||
+        item.incidentTitle.toLowerCase().includes(q) ||
+        item.serviceName.toLowerCase().includes(q);
+      if (!matches) return false;
+    }
     return true;
   });
 
@@ -191,7 +228,8 @@ export default async function ActionItemsPage({
     }
   }
 
-  const totalFilteredCount = totalCount + matchingLegacyItems.length;
+  const normalizedTotal = totalCount;
+  const totalFilteredCount = normalizedTotal + matchingLegacyItems.length;
 
   const pagination = calculatePaginationBounds({
     totalItems: totalFilteredCount,
@@ -199,59 +237,57 @@ export default async function ActionItemsPage({
     pageSize: 100,
   });
 
-  const records = await prisma.actionItem.findMany({
-    where: filterWhere,
-    include: {
-      postmortem: {
-        select: {
-          id: true,
-          title: true,
-          incidentId: true,
-          createdAt: true,
-          incident: {
-            select: {
-              id: true,
-              title: true,
-              service: {
-                select: { id: true, name: true },
-              },
-              externalIssueLinks: {
-                where: { provider: 'JIRA' },
-                orderBy: { createdAt: 'desc' },
-                select: {
-                  id: true,
-                  provider: true,
-                  externalKey: true,
-                  externalUrl: true,
-                  externalStatus: true,
-                  externalAssignee: true,
-                  syncState: true,
-                },
+  const actionItemInclude = {
+    postmortem: {
+      select: {
+        id: true,
+        title: true,
+        incidentId: true,
+        createdAt: true,
+        incident: {
+          select: {
+            id: true,
+            title: true,
+            service: {
+              select: { id: true, name: true },
+            },
+            externalIssueLinks: {
+              where: { provider: 'JIRA' },
+              orderBy: { createdAt: 'desc' },
+              select: {
+                id: true,
+                provider: true,
+                externalKey: true,
+                externalUrl: true,
+                externalStatus: true,
+                externalAssignee: true,
+                syncState: true,
               },
             },
           },
         },
       },
-      externalIssueLinks: {
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-        select: {
-          id: true,
-          provider: true,
-          externalKey: true,
-          externalUrl: true,
-          externalStatus: true,
-          externalAssignee: true,
-          syncState: true,
-        },
+    },
+    externalIssueLinks: {
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+      select: {
+        id: true,
+        provider: true,
+        externalKey: true,
+        externalUrl: true,
+        externalStatus: true,
+        externalAssignee: true,
+        syncState: true,
       },
     },
-    orderBy: { createdAt: 'desc' },
-    skip: matchingLegacyItems.length === 0 ? pagination.skip : undefined,
-    take: matchingLegacyItems.length === 0 ? pagination.take : undefined,
-  });
+  } as const;
 
-  const normalizedItems: BoardActionItem[] = records.map(record => ({
+  type ActionItemRecord = Prisma.ActionItemGetPayload<{
+    include: typeof actionItemInclude;
+  }>;
+
+  const mapRecordToBoardItem = (record: ActionItemRecord): BoardActionItem => ({
     id: record.id,
     title: record.title,
     description: record.description ?? '',
@@ -259,7 +295,6 @@ export default async function ActionItemsPage({
     dueDate: formatActionItemDueDate(record.dueDate),
     status: record.status,
     priority: record.priority,
-    source: record.source,
     postmortemId: record.postmortem.id,
     postmortemTitle: record.postmortem.title,
     incidentId: record.postmortem.incidentId,
@@ -274,14 +309,43 @@ export default async function ActionItemsPage({
       : undefined,
     createdAt: record.createdAt,
     completedAt: record.completedAt,
-  }));
+  });
 
-  const filteredItems: BoardActionItem[] =
-    matchingLegacyItems.length === 0
-      ? normalizedItems
-      : [...normalizedItems, ...matchingLegacyItems]
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .slice(pagination.skip, pagination.skip + pagination.take);
+  let filteredItems: BoardActionItem[] = [];
+
+  if (matchingLegacyItems.length === 0) {
+    // 100% database-level pagination - zero overhead
+    const records = await prisma.actionItem.findMany({
+      where: filterWhere,
+      include: actionItemInclude,
+      orderBy: { createdAt: 'desc' },
+      skip: pagination.skip,
+      take: pagination.take,
+    });
+    filteredItems = records.map(mapRecordToBoardItem);
+  } else {
+    // Partition-based hybrid paging: NEVER load all normalized rows!
+    if (pagination.skip < normalizedTotal) {
+      const neededFromNormalized = Math.min(pagination.take, normalizedTotal - pagination.skip);
+      const records = await prisma.actionItem.findMany({
+        where: filterWhere,
+        include: actionItemInclude,
+        orderBy: { createdAt: 'desc' },
+        skip: pagination.skip,
+        take: neededFromNormalized,
+      });
+      const normalizedItems = records.map(mapRecordToBoardItem);
+
+      const neededFromLegacy = pagination.take - normalizedItems.length;
+      const legacySlice =
+        neededFromLegacy > 0 ? matchingLegacyItems.slice(0, neededFromLegacy) : [];
+      filteredItems = [...normalizedItems, ...legacySlice];
+    } else {
+      // Entire page falls into legacy partition
+      const legacyOffset = pagination.skip - normalizedTotal;
+      filteredItems = matchingLegacyItems.slice(legacyOffset, legacyOffset + pagination.take);
+    }
+  }
 
   const canManage = permissions.isResponderOrAbove;
   const jiraCapabilitiesByServiceId = await getJiraCapabilitiesByServiceIds(
@@ -295,6 +359,7 @@ export default async function ActionItemsPage({
     if (owner) p.set('owner', owner);
     if (priority) p.set('priority', priority);
     if (view && view !== 'board') p.set('view', view);
+    if (searchQuery) p.set('search', searchQuery);
     const qs = p.toString();
     return qs ? `/action-items?${qs}` : '/action-items';
   };
@@ -360,12 +425,13 @@ export default async function ActionItemsPage({
       />
 
       <ActionItemsBoard
-        key={`${status || 'all'}-${owner || 'all'}-${priority || 'all'}-${view}-${pagination.page}`}
+        key={`${status || 'all'}-${owner || 'all'}-${priority || 'all'}-${view}-${pagination.page}-${searchQuery}`}
         actionItems={filteredItems}
         users={users}
         canManage={canManage}
         view={view}
         filters={{ status, owner, priority }}
+        initialSearch={searchQuery}
         jiraCapabilitiesByServiceId={jiraCapabilitiesByServiceId}
         pagination={{
           currentPage: pagination.page,

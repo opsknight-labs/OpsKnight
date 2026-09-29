@@ -13,12 +13,14 @@ import { createPolicyAction } from './actions';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 import type { PolicyDirectoryItem } from '@/components/policies/PolicyDirectoryCard';
 
+import { Prisma } from '@prisma/client';
+
 export const revalidate = 0;
 
 export default async function PoliciesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string; page?: string }>;
+  searchParams?: Promise<{ error?: string; page?: string; q?: string; search?: string; status?: string }>;
 }) {
   const session = await getServerSession(await getAuthOptions());
   if (!session?.user?.email) {
@@ -29,26 +31,54 @@ export default async function PoliciesPage({
   const resolvedSearchParams = await searchParams;
   const errorCode = resolvedSearchParams?.error;
   const requestedPage = parsePageParam(resolvedSearchParams?.page);
+  const searchQuery = (resolvedSearchParams?.q || resolvedSearchParams?.search || '').trim();
+  const statusFilter = resolvedSearchParams?.status || 'all';
+
+  const filterConditions: Prisma.EscalationPolicyWhereInput[] = [];
+
+  if (searchQuery) {
+    filterConditions.push({
+      OR: [
+        { name: { contains: searchQuery, mode: 'insensitive' } },
+        { description: { contains: searchQuery, mode: 'insensitive' } },
+        { services: { some: { name: { contains: searchQuery, mode: 'insensitive' } } } },
+      ],
+    });
+  }
+
+  if (statusFilter === 'in-use') {
+    filterConditions.push({ services: { some: {} } });
+  } else if (statusFilter === 'unassigned') {
+    filterConditions.push({ services: { none: {} } });
+  }
+
+  const where: Prisma.EscalationPolicyWhereInput =
+    filterConditions.length > 0 ? { AND: filterConditions } : {};
 
   const [
-    totalPoliciesCount,
+    allPoliciesCount,
     inUsePoliciesCount,
+    unassignedPoliciesCount,
     totalStepsCount,
+    totalFilteredCount,
     permissions,
   ] = await Promise.all([
     prisma.escalationPolicy.count(),
     prisma.escalationPolicy.count({ where: { services: { some: {} } } }),
+    prisma.escalationPolicy.count({ where: { services: { none: {} } } }),
     prisma.escalationRule.count(),
+    prisma.escalationPolicy.count({ where }),
     getUserPermissions(),
   ]);
 
   const pagination = calculatePaginationBounds({
-    totalItems: totalPoliciesCount,
+    totalItems: totalFilteredCount,
     page: requestedPage,
     pageSize: 50,
   });
 
   const policies = await prisma.escalationPolicy.findMany({
+    where,
     skip: pagination.skip,
     take: pagination.take,
     include: {
@@ -71,7 +101,7 @@ export default async function PoliciesPage({
   const canManagePolicies = permissions.isAdmin;
 
   // Aggregated stats
-  const totalPolicies = totalPoliciesCount;
+  const totalPolicies = allPoliciesCount;
 
   // Transform policies into directory items
   const policyDirectoryItems: PolicyDirectoryItem[] = policies.map(p => ({
@@ -154,6 +184,13 @@ export default async function PoliciesPage({
               totalItems: pagination.totalItems,
               itemsPerPage: pagination.pageSize,
             }}
+            filterCounts={{
+              total: allPoliciesCount,
+              inUse: inUsePoliciesCount,
+              unassigned: unassignedPoliciesCount,
+            }}
+            currentSearch={searchQuery}
+            currentStatus={statusFilter}
           />
         </div>
 

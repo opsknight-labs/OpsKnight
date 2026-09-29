@@ -6,7 +6,7 @@ import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
-import { loadOlderIncidentEvents } from './actions';
+import { loadOlderIncidentTimelineActivity } from './actions';
 import { cn } from '@/lib/utils';
 import {
   Clock,
@@ -148,6 +148,9 @@ export type IncidentTimelineProps = {
   incidentAcknowledgedAt?: Date | null;
   incidentResolvedAt?: Date | null;
   totalEventsCount?: number;
+  totalNotesCount?: number;
+  totalNotificationsCount?: number;
+  totalActivityCount?: number;
 };
 
 export default function IncidentTimeline({
@@ -159,36 +162,134 @@ export default function IncidentTimeline({
   incidentAcknowledgedAt,
   incidentResolvedAt,
   totalEventsCount,
+  totalNotesCount,
+  totalNotificationsCount,
+  totalActivityCount,
 }: IncidentTimelineProps) {
   const { userTimeZone } = useTimezone();
   const [activeFilter, setActiveFilter] = useState<TimelineFilter>('ALL');
   const [loadedEvents, setLoadedEvents] = useState<Event[]>(events);
+  const [loadedNotes, setLoadedNotes] = useState<Note[]>(notes);
+  const [loadedNotifications, setLoadedNotifications] =
+    useState<IncidentTimelineNotification[]>(notifications);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasExhaustedOlder, setHasExhaustedOlder] = useState(false);
 
   useEffect(() => {
     setLoadedEvents(events);
   }, [events]);
 
-  const hasMoreEvents =
-    incidentId && totalEventsCount ? totalEventsCount > loadedEvents.length : false;
+  useEffect(() => {
+    setLoadedNotes(notes);
+  }, [notes]);
 
-  const handleLoadOlderEvents = async () => {
-    if (!incidentId || isLoadingMore || loadedEvents.length === 0) return;
+  useEffect(() => {
+    setLoadedNotifications(notifications);
+  }, [notifications]);
+
+  const totalItemsCount =
+    totalActivityCount ??
+    ((totalEventsCount ?? 0) + (totalNotesCount ?? 0) + (totalNotificationsCount ?? 0));
+  const currentItemsCount =
+    loadedEvents.length + loadedNotes.length + loadedNotifications.length;
+  const hasMoreActivity =
+    Boolean(incidentId) &&
+    !hasExhaustedOlder &&
+    (totalItemsCount > 0 ? totalItemsCount > currentItemsCount : false);
+
+  const handleLoadOlderActivity = async () => {
+    if (!incidentId || isLoadingMore || currentItemsCount === 0) return;
+
+    let oldestDate: Date | null = null;
+    let oldestId: string | undefined = undefined;
+
+    for (const e of loadedEvents) {
+      const d = new Date(e.createdAt);
+      if (
+        !oldestDate ||
+        d.getTime() < oldestDate.getTime() ||
+        (d.getTime() === oldestDate.getTime() && (!oldestId || e.id < oldestId))
+      ) {
+        oldestDate = d;
+        oldestId = e.id;
+      }
+    }
+    for (const n of loadedNotes) {
+      const d = new Date(n.createdAt);
+      if (
+        !oldestDate ||
+        d.getTime() < oldestDate.getTime() ||
+        (d.getTime() === oldestDate.getTime() && (!oldestId || n.id < oldestId))
+      ) {
+        oldestDate = d;
+        oldestId = n.id;
+      }
+    }
+    for (const notif of loadedNotifications) {
+      const d = new Date(notif.createdAt);
+      if (
+        !oldestDate ||
+        d.getTime() < oldestDate.getTime() ||
+        (d.getTime() === oldestDate.getTime() && (!oldestId || notif.id < oldestId))
+      ) {
+        oldestDate = d;
+        oldestId = notif.id;
+      }
+    }
+
+    if (!oldestDate) return;
+
     setIsLoadingMore(true);
     try {
-      const oldestEvent = loadedEvents[loadedEvents.length - 1];
-      const older = await loadOlderIncidentEvents(
+      const older = await loadOlderIncidentTimelineActivity(
         incidentId,
-        new Date(oldestEvent.createdAt).toISOString()
+        oldestDate.toISOString(),
+        oldestId
       );
-      if (older.length > 0) {
-        setLoadedEvents(prev => [
-          ...prev,
-          ...older.map(e => ({ ...e, createdAt: new Date(e.createdAt) })),
-        ]);
+
+      if (
+        older.events.length === 0 &&
+        older.notes.length === 0 &&
+        older.notifications.length === 0
+      ) {
+        setHasExhaustedOlder(true);
+      } else {
+        if (older.events.length > 0) {
+          setLoadedEvents(prev => {
+            const existingIds = new Set(prev.map(e => e.id));
+            const newEvents = older.events
+              .filter(e => !existingIds.has(e.id))
+              .map(e => ({ ...e, createdAt: new Date(e.createdAt) }));
+            return [...prev, ...newEvents];
+          });
+        }
+        if (older.notes.length > 0) {
+          setLoadedNotes(prev => {
+            const existingIds = new Set(prev.map(n => n.id));
+            const newNotes = older.notes
+              .filter(n => !existingIds.has(n.id))
+              .map(n => ({ ...n, createdAt: new Date(n.createdAt) }));
+            return [...prev, ...newNotes];
+          });
+        }
+        if (older.notifications.length > 0) {
+          setLoadedNotifications(prev => {
+            const existingIds = new Set(prev.map(notif => notif.id));
+            const newNotifs = older.notifications
+              .filter(notif => !existingIds.has(notif.id))
+              .map(notif => ({
+                ...notif,
+                createdAt: new Date(notif.createdAt),
+                sentAt: notif.sentAt ? new Date(notif.sentAt) : null,
+                deliveredAt: notif.deliveredAt ? new Date(notif.deliveredAt) : null,
+                failedAt: notif.failedAt ? new Date(notif.failedAt) : null,
+              }));
+            return [...prev, ...newNotifs];
+          });
+        }
       }
     } catch (err) {
-      console.error('Failed to load older events', err);
+      console.error('Failed to load older activity', err);
     } finally {
       setIsLoadingMore(false);
     }
@@ -259,7 +360,7 @@ export default function IncidentTimeline({
 
     // Track matched notes to prevent duplicates when an incidentEvent already exists for a note
     const matchedNoteIds = new Set<string>();
-    const noteLookup = (notes || []).map(n => ({
+    const noteLookup = (loadedNotes || []).map(n => ({
       id: n.id,
       content: n.content,
       time: new Date(n.createdAt).getTime(),
@@ -301,8 +402,8 @@ export default function IncidentTimeline({
     });
 
     // Synthesize timeline events for any notes that do not have a matching incidentEvent
-    if (notes && notes.length > 0) {
-      notes.forEach(note => {
+    if (loadedNotes && loadedNotes.length > 0) {
+      loadedNotes.forEach(note => {
         if (!matchedNoteIds.has(note.id)) {
           const author = note.user?.name || note.user?.email || 'Responder';
           const formattedMsg = note.content.startsWith('📌')
@@ -331,8 +432,8 @@ export default function IncidentTimeline({
       }));
 
     // Synthesize timeline events for incident notifications
-    if (notifications && notifications.length > 0) {
-      notifications.forEach(notif => {
+    if (loadedNotifications && loadedNotifications.length > 0) {
+      loadedNotifications.forEach(notif => {
         let timestamp: string | Date | undefined;
         switch (notif.status) {
           case 'FAILED':
@@ -403,8 +504,8 @@ export default function IncidentTimeline({
     return eventsList;
   }, [
     loadedEvents,
-    notes,
-    notifications,
+    loadedNotes,
+    loadedNotifications,
     incidentCreatedAt,
     incidentAcknowledgedAt,
     incidentResolvedAt,
@@ -580,25 +681,25 @@ export default function IncidentTimeline({
         })}
       </div>
 
-      {hasMoreEvents && (
+      {hasMoreActivity && (
         <div className="mt-4 flex flex-col items-center justify-center p-3 border rounded-lg bg-slate-50 dark:bg-slate-800/40 text-xs text-muted-foreground gap-2">
           <span>
-            Showing {loadedEvents.length} of {totalEventsCount} events
+            Showing {currentItemsCount} of {totalItemsCount} activity items
           </span>
           <Button
             variant="outline"
             size="sm"
-            onClick={handleLoadOlderEvents}
+            onClick={handleLoadOlderActivity}
             disabled={isLoadingMore}
             className="h-8 gap-1.5"
           >
             {isLoadingMore ? (
               <>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>Loading older events...</span>
+                <span>Loading older activity...</span>
               </>
             ) : (
-              <span>Load older events</span>
+              <span>Load older activity</span>
             )}
           </Button>
         </div>

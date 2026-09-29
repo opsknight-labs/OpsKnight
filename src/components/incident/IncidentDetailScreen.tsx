@@ -106,19 +106,23 @@ export default async function IncidentDetailScreen({
   const canAcknowledgeIncident = permissions.capabilities.includes('incident.acknowledge.scoped');
   const canAddIncidentNote = permissions.capabilities.includes('incident.note.scoped');
 
-  const [users, teams, customFields, totalEventsCount, totalNotesCount] = await Promise.all([
-    canManageIncident
-      ? prisma.user.findMany({
-          where: { status: 'ACTIVE' },
-          select: { id: true, name: true, email: true, avatarUrl: true, gender: true, role: true },
-          orderBy: { name: 'asc' },
-        })
-      : Promise.resolve([]),
-    canManageIncident ? prisma.team.findMany({ orderBy: { name: 'asc' } }) : Promise.resolve([]),
-    prisma.customField.findMany({ orderBy: { order: 'asc' } }),
-    prisma.incidentEvent.count({ where: { incidentId: id } }),
-    prisma.incidentNote.count({ where: { incidentId: id } }),
-  ]);
+  const [users, teams, customFields, totalEventsCount, totalNotesCount, totalNotificationsCount] =
+    await Promise.all([
+      canManageIncident
+        ? prisma.user.findMany({
+            where: { status: 'ACTIVE' },
+            select: { id: true, name: true, email: true, avatarUrl: true, gender: true, role: true },
+            orderBy: { name: 'asc' },
+          })
+        : Promise.resolve([]),
+      canManageIncident ? prisma.team.findMany({ orderBy: { name: 'asc' } }) : Promise.resolve([]),
+      prisma.customField.findMany({ orderBy: { order: 'asc' } }),
+      prisma.incidentEvent.count({ where: { incidentId: id } }),
+      prisma.incidentNote.count({ where: { incidentId: id } }),
+      prisma.notification.count({ where: { incidentId: id } }),
+    ]);
+
+  const totalActivityCount = totalEventsCount + totalNotesCount + totalNotificationsCount;
 
   const incidentJiraCapability = await getJiraCapabilities({
     serviceId: incident.serviceId,
@@ -209,6 +213,9 @@ export default async function IncidentDetailScreen({
       incidentAcknowledgedAt={incident.acknowledgedAt}
       incidentResolvedAt={incident.resolvedAt}
       totalEventsCount={totalEventsCount}
+      totalNotesCount={totalNotesCount}
+      totalNotificationsCount={totalNotificationsCount}
+      totalActivityCount={totalActivityCount}
     />
   );
 
