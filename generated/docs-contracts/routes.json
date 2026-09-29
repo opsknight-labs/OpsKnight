@@ -7,31 +7,14 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/incidents/action-items.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/analytics",
@@ -44,11 +27,11 @@
         ],
         "guides": [],
         "reference": [
-          "reference/api/README.md",
           "reference/metrics.md"
         ],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/audit",
@@ -56,31 +39,14 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/administration/audit-logs.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/events",
@@ -88,30 +54,16 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/incident-response.md",
-          "concepts/incident-sla.md",
-          "concepts/incidents.md",
-          "concepts/postmortem-workflow.md",
-          "concepts/postmortems.md"
-        ],
+        "concepts": [],
         "guides": [
-          "guides/incidents/acknowledge.md",
-          "guides/incidents/assign.md",
-          "guides/incidents/create.md",
-          "guides/incidents/escalate.md",
-          "guides/incidents/resolve.md"
+          "integrations/README.md"
         ],
         "reference": [
-          "reference/api/README.md",
-          "reference/api/authentication.md",
-          "reference/api/errors.md",
-          "reference/api/incidents.md"
+          "reference/api/events.md"
         ],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/events/test",
@@ -119,30 +71,16 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/incident-response.md",
-          "concepts/incident-sla.md",
-          "concepts/incidents.md",
-          "concepts/postmortem-workflow.md",
-          "concepts/postmortems.md"
-        ],
+        "concepts": [],
         "guides": [
-          "guides/incidents/acknowledge.md",
-          "guides/incidents/assign.md",
-          "guides/incidents/create.md",
-          "guides/incidents/escalate.md",
-          "guides/incidents/resolve.md"
+          "integrations/README.md"
         ],
         "reference": [
-          "reference/api/README.md",
-          "reference/api/authentication.md",
-          "reference/api/errors.md",
-          "reference/api/incidents.md"
+          "reference/api/events.md"
         ],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/help",
@@ -151,30 +89,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "README.md"
         ],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/README.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/incidents/[id]",
@@ -183,29 +106,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/incident-response.md",
-          "concepts/incident-sla.md",
           "concepts/incidents.md",
-          "concepts/postmortem-workflow.md",
-          "concepts/postmortems.md"
+          "concepts/incident-response.md"
         ],
         "guides": [
-          "guides/incidents/acknowledge.md",
-          "guides/incidents/assign.md",
-          "guides/incidents/create.md",
-          "guides/incidents/escalate.md",
-          "guides/incidents/resolve.md"
+          "guides/incidents/acknowledge.md"
         ],
-        "reference": [
-          "reference/api/README.md",
-          "reference/api/authentication.md",
-          "reference/api/errors.md",
-          "reference/api/incidents.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/incidents/create",
@@ -213,30 +123,14 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/incident-response.md",
-          "concepts/incident-sla.md",
-          "concepts/incidents.md",
-          "concepts/postmortem-workflow.md",
-          "concepts/postmortems.md"
-        ],
+        "concepts": [],
         "guides": [
-          "guides/incidents/acknowledge.md",
-          "guides/incidents/assign.md",
-          "guides/incidents/create.md",
-          "guides/incidents/escalate.md",
-          "guides/incidents/resolve.md"
+          "guides/incidents/create.md"
         ],
-        "reference": [
-          "reference/api/README.md",
-          "reference/api/authentication.md",
-          "reference/api/errors.md",
-          "reference/api/incidents.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/incidents",
@@ -245,29 +139,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/incident-response.md",
-          "concepts/incident-sla.md",
           "concepts/incidents.md",
-          "concepts/postmortem-workflow.md",
-          "concepts/postmortems.md"
+          "concepts/incident-response.md"
         ],
         "guides": [
-          "guides/incidents/acknowledge.md",
-          "guides/incidents/assign.md",
-          "guides/incidents/create.md",
-          "guides/incidents/escalate.md",
-          "guides/incidents/resolve.md"
+          "guides/incidents/acknowledge.md"
         ],
-        "reference": [
-          "reference/api/README.md",
-          "reference/api/authentication.md",
-          "reference/api/errors.md",
-          "reference/api/incidents.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/incidents/templates/create",
@@ -275,30 +156,14 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/incident-response.md",
-          "concepts/incident-sla.md",
-          "concepts/incidents.md",
-          "concepts/postmortem-workflow.md",
-          "concepts/postmortems.md"
-        ],
+        "concepts": [],
         "guides": [
-          "guides/incidents/acknowledge.md",
-          "guides/incidents/assign.md",
-          "guides/incidents/create.md",
-          "guides/incidents/escalate.md",
-          "guides/incidents/resolve.md"
+          "guides/incidents/incident-templates.md"
         ],
-        "reference": [
-          "reference/api/README.md",
-          "reference/api/authentication.md",
-          "reference/api/errors.md",
-          "reference/api/incidents.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/incidents/templates",
@@ -306,30 +171,14 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/incident-response.md",
-          "concepts/incident-sla.md",
-          "concepts/incidents.md",
-          "concepts/postmortem-workflow.md",
-          "concepts/postmortems.md"
-        ],
+        "concepts": [],
         "guides": [
-          "guides/incidents/acknowledge.md",
-          "guides/incidents/assign.md",
-          "guides/incidents/create.md",
-          "guides/incidents/escalate.md",
-          "guides/incidents/resolve.md"
+          "guides/incidents/incident-templates.md"
         ],
-        "reference": [
-          "reference/api/README.md",
-          "reference/api/authentication.md",
-          "reference/api/errors.md",
-          "reference/api/incidents.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/",
@@ -338,30 +187,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "start/what-is-opsknight.md"
         ],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "start/README.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/policies/[id]",
@@ -370,30 +204,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/escalation-policies.md"
         ],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/escalation/configure-policy.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/policies/create",
@@ -402,30 +221,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/escalation-policies.md"
         ],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/escalation/configure-policy.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/policies",
@@ -434,30 +238,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/escalation-policies.md"
         ],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/escalation/configure-policy.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/postmortems/[incidentId]",
@@ -466,17 +255,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/postmortem-workflow.md",
-          "concepts/postmortems.md"
+          "concepts/postmortems.md",
+          "concepts/postmortem-workflow.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/api/README.md"
+        "guides": [
+          "guides/incidents/action-items.md"
         ],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/postmortems/create",
@@ -485,15 +273,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/postmortem-workflow.md",
-          "concepts/postmortems.md"
+          "concepts/postmortems.md",
+          "concepts/postmortem-workflow.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/api/README.md"
+        "guides": [
+          "guides/incidents/action-items.md"
         ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/postmortems",
@@ -502,15 +291,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/postmortem-workflow.md",
-          "concepts/postmortems.md"
+          "concepts/postmortems.md",
+          "concepts/postmortem-workflow.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/api/README.md"
+        "guides": [
+          "guides/incidents/action-items.md"
         ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/reports/executive/[id]",
@@ -523,11 +313,11 @@
         ],
         "guides": [],
         "reference": [
-          "reference/api/README.md",
           "reference/metrics.md"
         ],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/reports/executive/new",
@@ -540,11 +330,11 @@
         ],
         "guides": [],
         "reference": [
-          "reference/api/README.md",
           "reference/metrics.md"
         ],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/reports/executive",
@@ -557,11 +347,11 @@
         ],
         "guides": [],
         "reference": [
-          "reference/api/README.md",
           "reference/metrics.md"
         ],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/reports",
@@ -574,11 +364,11 @@
         ],
         "guides": [],
         "reference": [
-          "reference/api/README.md",
           "reference/metrics.md"
         ],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/schedules/[id]",
@@ -593,11 +383,10 @@
           "guides/on-call/build-schedule.md",
           "guides/on-call/overrides.md"
         ],
-        "reference": [
-          "reference/api/README.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/schedules",
@@ -612,11 +401,10 @@
           "guides/on-call/build-schedule.md",
           "guides/on-call/overrides.md"
         ],
-        "reference": [
-          "reference/api/README.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/services/[id]/integrations",
@@ -625,18 +413,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/services.md",
-          "concepts/teams.md"
+          "concepts/services.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/api/README.md"
+        "guides": [
+          "integrations/README.md"
         ],
-        "troubleshooting": [
-          "integrations/issue-tracking/jira/troubleshooting.md",
-          "troubleshooting/integrations/webhook-rejected.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/services/[id]/notifications",
@@ -645,17 +430,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/services.md",
-          "concepts/teams.md"
+          "concepts/services.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/api/README.md"
+        "guides": [
+          "guides/notifications/configure-routing.md"
         ],
-        "troubleshooting": [
-          "troubleshooting/notifications/not-delivered.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/services/[id]",
@@ -668,11 +451,10 @@
           "concepts/teams.md"
         ],
         "guides": [],
-        "reference": [
-          "reference/api/README.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/services/[id]/settings",
@@ -685,11 +467,10 @@
           "concepts/teams.md"
         ],
         "guides": [],
-        "reference": [
-          "reference/api/README.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/services/[id]/webhooks/[webhookId]/edit",
@@ -698,18 +479,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/services.md",
-          "concepts/teams.md"
+          "concepts/services.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/api/README.md"
+        "guides": [
+          "integrations/webhooks/webhook.md"
         ],
-        "troubleshooting": [
-          "integrations/issue-tracking/jira/troubleshooting.md",
-          "troubleshooting/integrations/webhook-rejected.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/services/[id]/webhooks/new",
@@ -718,18 +496,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/services.md",
-          "concepts/teams.md"
+          "concepts/services.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/api/README.md"
+        "guides": [
+          "integrations/webhooks/webhook.md"
         ],
-        "troubleshooting": [
-          "integrations/issue-tracking/jira/troubleshooting.md",
-          "troubleshooting/integrations/webhook-rejected.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/services",
@@ -742,11 +517,10 @@
           "concepts/teams.md"
         ],
         "guides": [],
-        "reference": [
-          "reference/api/README.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/api-keys",
@@ -754,31 +528,14 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/administration/api-keys.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/chatops/link",
@@ -786,31 +543,14 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "integrations/communication/slack/user-identity-linking.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/custom-fields",
@@ -818,31 +558,14 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/administration/custom-fields.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/incident-sla",
@@ -851,29 +574,13 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/incident-response.md",
-          "concepts/incident-sla.md",
-          "concepts/incidents.md",
-          "concepts/postmortem-workflow.md",
-          "concepts/postmortems.md"
+          "concepts/incident-sla.md"
         ],
-        "guides": [
-          "guides/incidents/acknowledge.md",
-          "guides/incidents/assign.md",
-          "guides/incidents/create.md",
-          "guides/incidents/escalate.md",
-          "guides/incidents/resolve.md"
-        ],
-        "reference": [
-          "reference/api/README.md",
-          "reference/api/authentication.md",
-          "reference/api/errors.md",
-          "reference/api/incidents.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/integrations/chatops",
@@ -885,24 +592,12 @@
           "concepts/chatops.md"
         ],
         "guides": [
-          "guides/chatops/create-war-room.md",
-          "guides/jira/connect-jira.md"
+          "guides/chatops/create-war-room.md"
         ],
-        "reference": [
-          "integrations/README.md",
-          "integrations/catalog.yaml",
-          "integrations/communication/microsoft-teams.md",
-          "integrations/communication/slack.md",
-          "integrations/issue-tracking/jira.md",
-          "reference/api/authentication.md",
-          "reference/api/errors.md",
-          "reference/api/events.md"
-        ],
-        "troubleshooting": [
-          "integrations/issue-tracking/jira/troubleshooting.md",
-          "troubleshooting/integrations/webhook-rejected.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/integrations/jira",
@@ -910,28 +605,15 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/chatops.md"
-        ],
+        "concepts": [],
         "guides": [
-          "guides/chatops/create-war-room.md",
-          "guides/jira/connect-jira.md"
+          "integrations/issue-tracking/jira/README.md",
+          "integrations/issue-tracking/jira/connect.md"
         ],
-        "reference": [
-          "integrations/README.md",
-          "integrations/catalog.yaml",
-          "integrations/communication/microsoft-teams.md",
-          "integrations/communication/slack.md",
-          "integrations/issue-tracking/jira.md",
-          "reference/api/authentication.md",
-          "reference/api/errors.md",
-          "reference/api/events.md"
-        ],
-        "troubleshooting": [
-          "integrations/issue-tracking/jira/troubleshooting.md",
-          "troubleshooting/integrations/webhook-rejected.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/integrations/microsoft-teams",
@@ -939,21 +621,15 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/chatops.md"
-        ],
+        "concepts": [],
         "guides": [
-          "guides/chatops/create-war-room.md"
+          "integrations/communication/microsoft-teams/README.md",
+          "integrations/communication/microsoft-teams/connect.md"
         ],
-        "reference": [
-          "integrations/communication/microsoft-teams.md",
-          "integrations/communication/slack.md"
-        ],
-        "troubleshooting": [
-          "integrations/communication/microsoft-teams/troubleshooting.md",
-          "integrations/communication/slack/troubleshooting.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/integrations",
@@ -961,28 +637,14 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/chatops.md"
-        ],
+        "concepts": [],
         "guides": [
-          "guides/chatops/create-war-room.md",
-          "guides/jira/connect-jira.md"
+          "integrations/README.md"
         ],
-        "reference": [
-          "integrations/README.md",
-          "integrations/catalog.yaml",
-          "integrations/communication/microsoft-teams.md",
-          "integrations/communication/slack.md",
-          "integrations/issue-tracking/jira.md",
-          "reference/api/authentication.md",
-          "reference/api/errors.md",
-          "reference/api/events.md"
-        ],
-        "troubleshooting": [
-          "integrations/issue-tracking/jira/troubleshooting.md",
-          "troubleshooting/integrations/webhook-rejected.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/integrations/slack",
@@ -990,21 +652,15 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/chatops.md"
-        ],
+        "concepts": [],
         "guides": [
-          "guides/chatops/create-war-room.md"
+          "integrations/communication/slack/README.md",
+          "integrations/communication/slack/connect-with-oauth.md"
         ],
-        "reference": [
-          "integrations/communication/microsoft-teams.md",
-          "integrations/communication/slack.md"
-        ],
-        "troubleshooting": [
-          "integrations/communication/microsoft-teams/troubleshooting.md",
-          "integrations/communication/slack/troubleshooting.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/notifications/history",
@@ -1012,20 +668,14 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/notifications.md"
-        ],
+        "concepts": [],
         "guides": [
-          "guides/notifications/configure-routing.md",
           "guides/notifications/inspect-delivery.md"
         ],
-        "reference": [
-          "reference/api/README.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/notifications/not-delivered.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/notifications/operations",
@@ -1037,16 +687,12 @@
           "concepts/notifications.md"
         ],
         "guides": [
-          "guides/notifications/configure-routing.md",
           "guides/notifications/inspect-delivery.md"
         ],
-        "reference": [
-          "reference/api/README.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/notifications/not-delivered.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/notifications",
@@ -1058,16 +704,12 @@
           "concepts/notifications.md"
         ],
         "guides": [
-          "guides/notifications/configure-routing.md",
-          "guides/notifications/inspect-delivery.md"
+          "guides/notifications/configure-routing.md"
         ],
-        "reference": [
-          "reference/api/README.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/notifications/not-delivered.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings",
@@ -1075,31 +717,16 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/administration/manage-permissions.md"
         ],
         "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
+          "reference/configuration/README.md"
         ],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/privacy-requests",
@@ -1111,11 +738,10 @@
           "concepts/privacy.md"
         ],
         "guides": [],
-        "reference": [
-          "reference/api/README.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/profile",
@@ -1124,30 +750,15 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/authentication.md"
         ],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/administration/manage-users.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/security-compliance",
@@ -1158,12 +769,13 @@
         "concepts": [
           "concepts/compliance.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/api/README.md"
+        "guides": [
+          "operate/security/hardening.md"
         ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/security",
@@ -1172,30 +784,15 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/authentication.md"
         ],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "operate/security/hardening.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/service-objectives",
@@ -1207,12 +804,10 @@
           "concepts/analytics.md"
         ],
         "guides": [],
-        "reference": [
-          "reference/api/README.md",
-          "reference/metrics.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/status-page",
@@ -1226,13 +821,10 @@
         "guides": [
           "guides/status-pages/publish-update.md"
         ],
-        "reference": [
-          "reference/api/README.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/status-pages/not-updating.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/status-pages/[pageId]",
@@ -1246,13 +838,10 @@
         "guides": [
           "guides/status-pages/publish-update.md"
         ],
-        "reference": [
-          "reference/api/README.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/status-pages/not-updating.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/status-pages",
@@ -1266,13 +855,10 @@
         "guides": [
           "guides/status-pages/publish-update.md"
         ],
-        "reference": [
-          "reference/api/README.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/status-pages/not-updating.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/system/health",
@@ -1282,33 +868,14 @@
       "documentation": {
         "concepts": [],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "operate/reliability/health-and-metrics.md",
-          "operate/reliability/scaling.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "operate/reliability/health-center.md"
         ],
         "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md",
-          "reference/metrics.md"
+          "reference/health.md"
         ],
-        "troubleshooting": [
-          "troubleshooting/installation/startup-fails.md",
-          "troubleshooting/kubernetes/pods-not-ready.md"
-        ]
-      }
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/system",
@@ -1316,31 +883,16 @@
       "kind": "ui",
       "classification": "OPERATOR_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "operate/reliability/health-and-metrics.md"
         ],
         "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
+          "reference/configuration/README.md"
         ],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/settings/system/performance",
@@ -1348,31 +900,15 @@
       "kind": "ui",
       "classification": "OPERATOR_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "operate/reliability/scaling.md",
+          "operate/capacity/scaling-signals.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/shortcuts",
@@ -1380,31 +916,14 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
-        "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
-        ],
+        "concepts": [],
+        "guides": [],
         "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
+          "reference/features.md"
         ],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/system-logs",
@@ -1412,31 +931,14 @@
       "kind": "ui",
       "classification": "OPERATOR_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "operate/reliability/system-logs.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/teams/[id]",
@@ -1445,15 +947,14 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/services.md",
-          "concepts/teams.md"
+          "concepts/teams.md",
+          "concepts/services.md"
         ],
         "guides": [],
-        "reference": [
-          "reference/api/README.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/teams",
@@ -1462,15 +963,14 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/services.md",
-          "concepts/teams.md"
+          "concepts/teams.md",
+          "concepts/services.md"
         ],
         "guides": [],
-        "reference": [
-          "reference/api/README.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/users/[id]",
@@ -1478,17 +978,16 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "concepts/permissions.md"
+        ],
         "guides": [
           "guides/administration/manage-users.md"
         ],
-        "reference": [
-          "reference/api/README.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/login/oidc-access.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/users",
@@ -1496,17 +995,16 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "concepts/permissions.md"
+        ],
         "guides": [
           "guides/administration/manage-users.md"
         ],
-        "reference": [
-          "reference/api/README.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/login/oidc-access.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/analytics",
@@ -1515,12 +1013,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/analytics.md"
         ],
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/help",
@@ -1534,7 +1034,8 @@
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/incidents/[id]",
@@ -1543,14 +1044,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/incidents.md"
         ],
         "guides": [],
         "reference": [],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/incidents/create",
@@ -1561,12 +1062,13 @@
         "concepts": [
           "concepts/mobile.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/incidents/create.md"
+        ],
         "reference": [],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/incidents",
@@ -1575,14 +1077,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/incidents.md"
         ],
         "guides": [],
         "reference": [],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/more",
@@ -1596,7 +1098,8 @@
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/notifications",
@@ -1605,14 +1108,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/notifications.md"
         ],
         "guides": [],
         "reference": [],
-        "troubleshooting": [
-          "troubleshooting/notifications/not-delivered.md"
-        ]
-      }
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m",
@@ -1626,7 +1129,8 @@
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/policies/[id]",
@@ -1635,12 +1139,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/escalation-policies.md"
         ],
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/policies",
@@ -1649,12 +1155,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/escalation-policies.md"
         ],
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/postmortems/[id]",
@@ -1663,12 +1171,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/postmortems.md"
         ],
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/postmortems",
@@ -1677,12 +1187,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/postmortems.md"
         ],
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/schedules/[id]",
@@ -1691,12 +1203,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/schedules.md"
         ],
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/schedules",
@@ -1705,12 +1219,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/schedules.md"
         ],
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/services/[id]",
@@ -1719,12 +1235,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/services.md"
         ],
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/services",
@@ -1733,12 +1251,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/services.md"
         ],
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/status",
@@ -1747,12 +1267,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/status-pages.md"
         ],
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/teams/[id]",
@@ -1761,12 +1283,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/teams.md"
         ],
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/teams",
@@ -1775,12 +1299,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/teams.md"
         ],
         "guides": [],
         "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/users/[id]",
@@ -1791,12 +1317,13 @@
         "concepts": [
           "concepts/mobile.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/administration/manage-users.md"
+        ],
         "reference": [],
-        "troubleshooting": [
-          "troubleshooting/login/oidc-access.md"
-        ]
-      }
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/users",
@@ -1807,12 +1334,13 @@
         "concepts": [
           "concepts/mobile.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/administration/manage-users.md"
+        ],
         "reference": [],
-        "troubleshooting": [
-          "troubleshooting/login/oidc-access.md"
-        ]
-      }
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/logs",
@@ -1820,31 +1348,14 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "operate/reliability/system-logs.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/forgot-password",
@@ -1853,21 +1364,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/authentication.md",
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/authentication.md"
         ],
-        "guides": [
-          "guides/identity/configure-oidc.md",
-          "guides/identity/configure-scim.md"
-        ],
-        "reference": [
-          "reference/api/README.md",
-          "reference/configuration/README.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/login/oidc-access.md"
-        ]
-      }
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/m/login",
@@ -1876,30 +1380,14 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/mobile.md",
+          "concepts/authentication.md"
         ],
-        "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
-        ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "guides": [],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/status/[slug]",
@@ -1908,30 +1396,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/status-pages.md"
         ],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/status-pages/publish-update.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/status/[slug]/postmortems/[incidentId]",
@@ -1940,29 +1413,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/incident-response.md",
-          "concepts/incident-sla.md",
-          "concepts/incidents.md",
-          "concepts/postmortem-workflow.md",
-          "concepts/postmortems.md"
+          "concepts/status-pages.md"
         ],
         "guides": [
-          "guides/incidents/acknowledge.md",
-          "guides/incidents/assign.md",
-          "guides/incidents/create.md",
-          "guides/incidents/escalate.md",
-          "guides/incidents/resolve.md"
+          "guides/status-pages/publish-update.md"
         ],
-        "reference": [
-          "reference/api/README.md",
-          "reference/api/authentication.md",
-          "reference/api/errors.md",
-          "reference/api/incidents.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/status/[slug]/unsubscribe/[token]",
@@ -1971,30 +1430,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/status-pages.md"
         ],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/status-pages/publish-update.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/status/[slug]/verify/[token]",
@@ -2003,30 +1447,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/status-pages.md"
         ],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/status-pages/publish-update.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/status",
@@ -2035,30 +1464,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/status-pages.md"
         ],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/status-pages/publish-update.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/status/postmortems/[incidentId]",
@@ -2067,29 +1481,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/incident-response.md",
-          "concepts/incident-sla.md",
-          "concepts/incidents.md",
-          "concepts/postmortem-workflow.md",
-          "concepts/postmortems.md"
+          "concepts/status-pages.md"
         ],
         "guides": [
-          "guides/incidents/acknowledge.md",
-          "guides/incidents/assign.md",
-          "guides/incidents/create.md",
-          "guides/incidents/escalate.md",
-          "guides/incidents/resolve.md"
+          "guides/status-pages/publish-update.md"
         ],
-        "reference": [
-          "reference/api/README.md",
-          "reference/api/authentication.md",
-          "reference/api/errors.md",
-          "reference/api/incidents.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/incidents/lifecycle-stuck.md"
-        ]
-      }
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/status/unsubscribe/[token]",
@@ -2098,30 +1498,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/status-pages.md"
         ],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/status-pages/publish-update.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/status/verify/[token]",
@@ -2130,30 +1515,15 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/status-pages.md"
         ],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "guides/status-pages/publish-update.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/auth/signout",
@@ -2162,21 +1532,13 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/authentication.md",
-          "concepts/mobile.md"
+          "concepts/authentication.md"
         ],
-        "guides": [
-          "guides/identity/configure-oidc.md",
-          "guides/identity/configure-scim.md"
-        ],
-        "reference": [
-          "reference/api/README.md",
-          "reference/configuration/README.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/login/oidc-access.md"
-        ]
-      }
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/clear-desktop-preference",
@@ -2187,28 +1549,11 @@
         "concepts": [
           "concepts/mobile.md"
         ],
-        "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
-        ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "guides": [],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/debug-mobile",
@@ -2216,31 +1561,14 @@
       "kind": "ui",
       "classification": "INTERNAL",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "develop/local-development.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/forgot-password",
@@ -2249,21 +1577,13 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/authentication.md",
-          "concepts/mobile.md"
+          "concepts/authentication.md"
         ],
-        "guides": [
-          "guides/identity/configure-oidc.md",
-          "guides/identity/configure-scim.md"
-        ],
-        "reference": [
-          "reference/api/README.md",
-          "reference/configuration/README.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/login/oidc-access.md"
-        ]
-      }
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/login",
@@ -2272,30 +1592,13 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md"
+          "concepts/authentication.md"
         ],
-        "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
-        ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "guides": [],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/reset-password",
@@ -2304,21 +1607,13 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/authentication.md",
-          "concepts/mobile.md"
+          "concepts/authentication.md"
         ],
-        "guides": [
-          "guides/identity/configure-oidc.md",
-          "guides/identity/configure-scim.md"
-        ],
-        "reference": [
-          "reference/api/README.md",
-          "reference/configuration/README.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/login/oidc-access.md"
-        ]
-      }
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/set-password",
@@ -2327,21 +1622,13 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/authentication.md",
-          "concepts/mobile.md"
+          "concepts/authentication.md"
         ],
-        "guides": [
-          "guides/identity/configure-oidc.md",
-          "guides/identity/configure-scim.md"
-        ],
-        "reference": [
-          "reference/api/README.md",
-          "reference/configuration/README.md"
-        ],
-        "troubleshooting": [
-          "troubleshooting/login/oidc-access.md"
-        ]
-      }
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule"
     },
     {
       "route": "/setup",
@@ -2349,31 +1636,15 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
-          "operate/capacity/README.md",
-          "operate/capacity/choose-deployment.md",
-          "operate/capacity/scaling-signals.md",
-          "operate/capacity/sizing.md",
-          "operate/deploy/compose.md",
-          "operate/deploy/helm.md",
-          "operate/deploy/kubernetes.md",
-          "operate/deploy/kustomize.md",
-          "operate/deploy/split-runtime.md",
-          "operate/deploy/swarm.md",
-          "start/production-install.md",
-          "start/quickstart.md"
+          "start/quickstart.md",
+          "start/production-install.md"
         ],
-        "reference": [
-          "operate/capacity/benchmark-results.md",
-          "operate/capacity/certification-methodology.md",
-          "reference/configuration/README.md",
-          "reference/health.md"
-        ],
+        "reference": [],
         "troubleshooting": []
-      }
+      },
+      "documentationMapping": "explicit-route-rule"
     }
   ]
 }

@@ -11,6 +11,7 @@ test('every UI route is explicitly classified and public surfaces have documenta
     assert.ok(['PUBLIC_FEATURE', 'ADMIN_FEATURE', 'OPERATOR_FEATURE', 'HIDDEN', 'INTERNAL'].includes(route.classification), `${route.route}: unclassified`);
     const pages = Object.values(route.documentation ?? {}).flat();
     if (publicClasses.has(route.classification)) {
+      assert.equal(route.documentationMapping, 'explicit-route-rule', `${route.route}: documentation is not route-specific`);
       assert.ok(pages.length > 0, `${route.route}: no documentation mapping`);
       for (const page of pages) assert.ok(existsSync(`docs/v2.0.0/${page}`), `${route.route}: missing ${page}`);
     }
