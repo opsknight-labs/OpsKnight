@@ -1,36 +1,43 @@
-schemaVersion: 1
+schemaVersion: 2
 purpose: Human code-to-doc review prompts; presence checks do not certify content completeness.
 areas:
   custom_fields:
+    signoff: { status: pending, reviewer: null, reviewedAt: null, sourceRevision: null, evidence: [] }
     pages: [guides/administration/custom-fields.md]
     review:
       - Compare all field types, normalization, validation, edit, and deletion behavior with current server actions and schemas.
       - Verify UI labels, permissions, incident-table visibility, and public exposure boundaries by using the product.
   oidc:
+    signoff: { status: pending, reviewer: null, reviewedAt: null, sourceRevision: null, evidence: [] }
     pages: [guides/identity/configure-oidc.md, troubleshooting/login/oidc-access.md]
     review:
       - Exercise Entra, Google, Okta, Auth0, and generic-provider setup against the current callback and claim logic.
       - Review account linking, provisioning, role mapping, session policy, denied-user behavior, and break-glass recovery.
   scim:
+    signoff: { status: pending, reviewer: null, reviewedAt: null, sourceRevision: null, evidence: [] }
     pages: [guides/identity/configure-scim.md]
     review:
       - Compare Users methods, attributes, filters, pagination, uniqueness, deactivation, deletion, and token behavior with routes and tests.
       - Confirm the current Groups boundary and provider-specific Entra and Okta procedures.
   mobile:
+    signoff: { status: pending, reviewer: null, reviewedAt: null, sourceRevision: null, evidence: [] }
     pages: [concepts/mobile.md]
     review:
       - Test installability, push permission, supported routes, offline queue, retry, conflict, authentication, and service-worker updates.
       - Confirm secure-origin and DISABLE_PWA behavior in production builds.
   api_keys:
+    signoff: { status: pending, reviewer: null, reviewedAt: null, sourceRevision: null, evidence: [] }
     pages: [guides/administration/api-keys.md, reference/permissions.md]
     review:
       - Compare scopes, owner-authority intersection, expiry, copy-once secret, last-used, rotation, revocation, and 401/403 behavior with code.
   backup_restore:
+    signoff: { status: pending, reviewer: null, reviewedAt: null, sourceRevision: null, evidence: [] }
     pages: [operate/data/backup-and-restore.md]
     review:
       - Rehearse backup and isolated restore for PostgreSQL, attachments, configuration, image digest, and every required secret.
       - Measure RPO/RTO and verify application, authentication, decryption, queues, and integrations after restore.
   permissions:
+    signoff: { status: pending, reviewer: null, reviewedAt: null, sourceRevision: null, evidence: [] }
     pages: [reference/permissions.md, guides/administration/manage-permissions.md]
     review:
       - Compare USER, AUDITOR, RESPONDER, and ADMIN navigation and mutations with server authorization and page guards.
