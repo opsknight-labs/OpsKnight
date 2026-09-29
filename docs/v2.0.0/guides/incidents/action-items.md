@@ -4,6 +4,9 @@ description: Create, own, prioritize, review, export, and optionally link remedi
 type: how-to
 product_area: incidents
 audience: [responder, administrator]
+reader:
+  status: READER_COMPLETE
+  task: Create, manage, verify, and close incident follow-up action items.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -24,7 +27,11 @@ Identify the parent incident or postmortem, the expected outcome, a responsible 
 
 If the item will use Jira, the workspace Jira connection must be healthy and the parent service must have an enabled Jira project/mapping that permits action-item operations.
 
-## Create an effective action item
+## Open the feature
+
+Open the parent incident or postmortem and its **Action items** section. Use **Action Items** in the main navigation to work across incidents.
+
+## Configure an effective action item
 
 Action items are authored in postmortem action-item surfaces and then appear on the global **Action Items** board.
 
@@ -38,6 +45,10 @@ Action items are authored in postmortem action-item surfaces and then appear on 
 8. Save the postmortem or action-item change.
 
 A strong item is verifiable: `Add a restore test that proves the latest production backup reaches application health checks in staging.` A weak item is vague: `Improve backups.`
+
+## What OpsKnight does
+
+OpsKnight keeps the action item attached to its incident/postmortem while also projecting it onto the global board for ownership, due-date, priority, and status review.
 
 ## Use the global board
 
@@ -89,6 +100,10 @@ Before marking an item completed:
 3. Confirm the parent postmortem and global board show the same status.
 4. If linked to Jira, sync and reconcile meaningful status differences according to your team's source-of-truth policy.
 5. Mark the item **Completed** and confirm its completion time appears.
+
+## Undo or change an action item update
+
+Correct the supported owner, due date, priority, Jira link, or status from the action-item controls and record why a completed item was reopened. Do not delete or mark work complete merely to remove it from an active view; preserve the audit trail and create a replacement item when the required outcome changed materially.
 
 ## Troubleshooting
 

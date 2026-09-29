@@ -4,6 +4,9 @@ description: Advance an open incident to its next escalation-policy step and ver
 type: how-to
 product_area: escalation
 audience: [responder, administrator]
+reader:
+  status: READER_COMPLETE
+  task: Escalate an open incident and verify the next policy action.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -30,7 +33,11 @@ Before escalating, confirm:
 
 An acknowledged incident normally means somebody accepted response ownership. Coordinate with that owner instead of reopening or manipulating state merely to send another page.
 
-## Request escalation
+## Open the feature
+
+Open **Incidents → select the incident** and locate the escalation control in the response actions.
+
+## Configure and request escalation
 
 Use an authenticated surface that exposes **Escalate**, such as a supported Slack or Microsoft Teams incident card. Web, mobile, REST, Slack, and Teams transports share the same authorization boundary when they implement this command.
 
@@ -61,6 +68,10 @@ Interactive providers and API clients should supply an idempotency context. A re
 
 If the UI times out, inspect the canonical incident timeline, audit log, and notification operations before retrying. Repeated clicks can make the response harder to interpret even though the underlying engine protects generation and delivery boundaries.
 
+## Undo or correct an escalation
+
+An emitted page cannot be recalled. Acknowledge/resolve the incident or correct the policy/service configuration according to the real response state, notify mistakenly paged responders, and document the correction. Do not repeatedly escalate to compensate for an unknown first result.
+
 ## Troubleshooting
 
 ### Escalate is unavailable
@@ -89,3 +100,6 @@ The incident remains open but escalation shows completed or maximum step reached
 - [Acknowledge an incident](acknowledge.md)
 - [Inspect notification delivery](../notifications/inspect-delivery.md)
 - [Incident response](../../concepts/incident-response.md)
+## What OpsKnight does
+
+OpsKnight serializes the request against current incident state and escalation generation, plans the current policy step, enqueues eligible notifications, and records the result. It does not make an invalid/empty policy usable or bypass authorization.

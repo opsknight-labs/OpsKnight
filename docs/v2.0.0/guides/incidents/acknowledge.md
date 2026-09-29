@@ -4,6 +4,9 @@ description: Take response ownership, verify escalation stops, and handle acknow
 type: how-to
 product_area: incidents
 audience: [responder, administrator]
+reader:
+  status: READER_COMPLETE
+  task: Acknowledge an incident and verify ownership and escalation effects.
 verification:
   level: test
   verified_at: 2026-09-29
@@ -32,7 +35,11 @@ Before selecting the action:
 3. Check the assignee. Assignment and acknowledgement are independent, so decide whether you also need to assign yourself or a response team.
 4. Check for a banner or recent activity indicating another responder is changing the incident.
 
-## Acknowledge from the incident page
+## Open the feature
+
+Open **Incidents → select the incident** and locate the response controls on the incident detail page.
+
+## Configure and acknowledge from the incident page
 
 1. Open **Incidents** and select the incident.
 2. Review the service, urgency, priority, current assignee, and response timer.
@@ -59,7 +66,7 @@ Mobile, supported ChatOps actions, voice workflows, and authenticated API client
 
 Never share an interactive action URL or authentication credential to let another person acknowledge as you.
 
-## How acknowledgement interacts with other states
+## How acknowledgement works with other states
 
 - **Open:** acknowledgement changes the incident to **Acknowledged** and completes active escalation work.
 - **Snoozed:** acknowledgement accepts the response and leaves the incident acknowledged rather than waiting for the snooze to expire.
@@ -67,7 +74,7 @@ Never share an interactive action URL or authentication credential to let anothe
 - **Resolved:** a resolved incident must be reopened before it can enter the response lifecycle again.
 - **Already acknowledged:** refresh before retrying. Repeating an already-applied command is unnecessary even where the lifecycle treats an identical transition safely.
 
-## Unacknowledge
+## Undo acknowledgement
 
 Use **Unacknowledge** only when the incident genuinely needs to return to the open response path—for example, ownership was accepted by mistake and no responder is now handling it.
 
@@ -100,7 +107,7 @@ Refresh the incident before retrying. If acknowledgement is already recorded, co
 
 First confirm the canonical status and escalation generation on the incident. Then inspect queued jobs and provider delivery status. A delayed projection does not mean the acknowledgement should be repeated.
 
-## Continue the response
+## Next steps
 
 Acknowledgement is the start of owned response work. Confirm assignment, communicate impact, add investigation notes, create action items where useful, and resolve only after service health is restored.
 
