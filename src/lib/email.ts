@@ -105,7 +105,6 @@ async function getSmtpTransport(emailConfig: EmailConfig): Promise<SmtpTransport
   )
     return cachedSmtpTransport.transporter;
   cachedSmtpTransport?.transporter.close?.();
-  // @ts-expect-error nodemailer lacks bundled type declarations in this project
   const nodemailerModule = await import('nodemailer');
   const nodemailer = (nodemailerModule.default || nodemailerModule) as unknown as {
     createTransport: (options: Record<string, unknown>) => SmtpTransporter & {
