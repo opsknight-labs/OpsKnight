@@ -334,6 +334,14 @@ helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \
 
 The pre-install migration hook must complete before workload resources become ready. With `--atomic`, a failed install is removed, but external database changes already committed by a migration are not reversed.
 
+The hook installs Prisma migrations plus the maintained status-platform and voice-attempt online indexes. It does **not** install the optional SLA scheduler index. `LEGACY` and `SHADOW` SLA scheduler modes do not require that index. Before enabling `INDEXED`, run the installer once against the direct database from the matching release image or trusted administration environment:
+
+```sh
+DATABASE_URL="$DIRECT_DATABASE_URL" npm run prisma:indexes:sla-scheduler
+```
+
+A successful Helm migration hook therefore does not prove that the SLA scheduler index exists. Verify it separately as described in [Database migrations](../upgrades/database-migrations).
+
 Verify:
 
 ```sh
