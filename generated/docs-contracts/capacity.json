@@ -187,6 +187,25 @@
       "peakOldestPendingJobAgeMs": 627,
       "invariantsPassed": true,
       "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_compose_integrated",
+      "topologyName": "Phase 6 Mega: Compose Integrated Runtime",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-28T16:46:09.079Z",
+      "completedAt": "2026-09-28T17:02:47.338Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 10,
+      "passedScenarios": 0,
+      "measuredPeakRps": 38.05,
+      "measuredWorstP95Ms": 18256.26,
+      "peakActivePgConnections": 31,
+      "peakOldestPendingJobAgeMs": 702025,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
     }
   ]
 }

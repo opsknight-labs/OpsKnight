@@ -5,7 +5,9 @@ import { dirname, resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '../..');
 const input = resolve(root, 'artifacts/load-certification/certification-summary.json');
 const contractPath = resolve(root, 'generated/docs-contracts/capacity.json');
-const pagePath = resolve(root, 'docs/v2.0.0/operate/capacity/benchmark-results.md');
+// Keep the evidence-derived rendering as a maintainer snapshot. The public
+// benchmark page is reviewed and edited as ordinary Markdown.
+const pagePath = resolve(root, 'generated/docs-reference/capacity/benchmark-results.md');
 const artifact = JSON.parse(readFileSync(input, 'utf8'));
 
 if (!artifact.generatedAt || !artifact.sourceRevision || !artifact.testHarnessRevision || !artifact.environment || !Array.isArray(artifact.results)) {
@@ -22,6 +24,7 @@ const supportedTopologies = [
   ['swarm_ha_split', 'Swarm: Multi-node HA + Split Runtime'],
   ['kind_helm_split_pgbouncer', 'Kubernetes: Helm + Split Runtime + PgBouncer'],
   ['kind_kustomize_split_pgbouncer', 'Kubernetes: Kustomize + Split Runtime + PgBouncer'],
+  ['phase6_compose_integrated', 'Phase 6: Compose Integrated Runtime'],
 ];
 
 const evidenceByTopology = new Map(artifact.results.map(item => [item.topologyId, item]));

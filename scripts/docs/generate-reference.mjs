@@ -15,7 +15,9 @@ import { inspectLimits } from './inspect-limits.mjs';
 import { buildFeatureGraph } from './build-feature-graph.mjs';
 import { repositoryRoot } from './discovery-lib.mjs';
 
-const root = resolve(repositoryRoot, 'docs/v2.0.0/reference');
+// Public reference pages are maintained by people. This script emits review
+// snapshots only, so discovery can flag drift without rewriting reader docs.
+const root = resolve(repositoryRoot, 'generated/docs-reference/reference');
 const date = execFileSync('git', ['log', '-1', '--format=%cs', '--', 'src', 'deploy', 'prisma'], {
   cwd: repositoryRoot,
   encoding: 'utf8',

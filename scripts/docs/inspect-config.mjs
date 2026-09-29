@@ -4,12 +4,15 @@ export function inspectConfig() {
   const files = [
     ...filesUnder('src', file => /\.(?:ts|tsx)$/.test(file)),
     ...filesUnder('deploy', file => /\.(?:ya?ml|env|tpl)$/.test(file)),
+    ...filesUnder('scripts', file => /\.(?:cjs|mjs|js|ts|sh)$/.test(file)),
+    'next.config.ts',
+    'env.example',
   ];
   const variables = new Map();
   for (const file of files) {
     const source = readRepositoryFile(file);
-    for (const match of source.matchAll(/(?:process\.env\.|\$\{|env:\s*|name:\s*)([A-Z][A-Z0-9_]{2,})/g)) {
-      const name = match[1];
+    for (const match of source.matchAll(/(?:process\.env\.|process\.env\[['"]|\$\{|env:\s*|name:\s*)([A-Z][A-Z0-9_]{2,})(?:['"]\])?|^#?\s*([A-Z][A-Z0-9_]{2,})\s*=/gm)) {
+      const name = match[1] ?? match[2];
       const secret = /(?:SECRET|PASSWORD|TOKEN|PRIVATE|CREDENTIAL|ENCRYPTION_KEY|DATABASE_URL)/.test(name);
       const entry = variables.get(name) ?? {
         name,
@@ -21,7 +24,13 @@ export function inspectConfig() {
         allowedValues: [],
       };
       if (!entry.sources.includes(file)) entry.sources.push(file);
-      const scope = file.startsWith('deploy/') ? 'deployment' : 'runtime';
+      const scope = file.startsWith('deploy/') || file === 'env.example'
+        ? 'deployment'
+        : file === 'next.config.ts'
+          ? 'build'
+          : file.startsWith('scripts/')
+            ? 'operation'
+            : 'runtime';
       if (!entry.scopes.includes(scope)) entry.scopes.push(scope);
       const requiredPattern = new RegExp(`process\\.env\\.${name}(?:!|\\s*\\?\\?\\s*throw)|\\$\\{${name}:\\?`);
       if (requiredPattern.test(source)) entry.required = true;
@@ -47,8 +56,20 @@ export function inspectConfig() {
       defaults: entry.defaults.sort(),
       allowedValues: entry.allowedValues.sort(),
       requiredWhen: entry.required ? 'always' : 'conditional or optional; inspect cited source',
-      runtimeRoles: entry.sources.some(source => source.includes('worker')) ? ['worker'] : ['web or integrated runtime'],
-      deploymentSupport: entry.scopes.includes('deployment') ? ['manifest'] : ['runtime'],
+      runtimeRoles: entry.scopes.includes('build')
+        ? ['build-time web bundle']
+        : entry.scopes.includes('operation') && !entry.scopes.includes('runtime')
+          ? ['operator command or startup script']
+          : entry.sources.some(source => source.includes('worker'))
+            ? ['worker']
+            : ['web or integrated runtime'],
+      deploymentSupport: entry.scopes.includes('deployment')
+        ? ['manifest']
+        : entry.scopes.includes('build')
+          ? ['build']
+          : entry.scopes.includes('operation') && !entry.scopes.includes('runtime')
+            ? ['operation']
+            : ['runtime'],
       restartRequired: true,
       deprecated: false,
       replacement: null,

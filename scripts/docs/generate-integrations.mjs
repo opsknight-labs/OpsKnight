@@ -106,13 +106,15 @@ for (const integration of platformIntegrations) {
   if (!integration.sources.length) throw new Error(`Platform integration ${integration.id} has no source evidence`);
 }
 const catalog = { schemaVersion: 2, generated: true, providers, integrations: [...providers, ...platformIntegrations] };
-const docsRoot = resolve(repositoryRoot, 'docs/v2.0.0/integrations');
+const publicDocsRoot = resolve(repositoryRoot, 'docs/v2.0.0/integrations');
+// Generated provider prose is a reviewer snapshot, never the published page.
+const docsRoot = resolve(repositoryRoot, 'generated/docs-reference/integrations');
 const verifiedAt = execFileSync(
   'git',
   ['log', '-1', '--format=%cs', '--', 'src/lib/integrations', 'src/app/api/integrations'],
   { cwd: repositoryRoot, encoding: 'utf8' }
 ).trim();
-writeFileSync(resolve(docsRoot, 'catalog.yaml'), YAML.stringify(catalog));
+writeFileSync(resolve(publicDocsRoot, 'catalog.yaml'), YAML.stringify(catalog));
 mkdirSync(resolve(repositoryRoot, 'generated/docs-contracts'), { recursive: true });
 writeFileSync(resolve(repositoryRoot, 'generated/docs-contracts/integrations.json'), `${JSON.stringify({ schemaVersion: 1, providers }, null, 2)}\n`);
 
