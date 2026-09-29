@@ -1,9 +1,12 @@
 ---
 title: Manage roles and permissions
 description: Assign workspace and team roles, verify resource scope, and audit effective access.
-type: how-to
+type: tutorial
 product_area: authorization
 audience: [administrator, operator]
+reader:
+  status: READER_COMPLETE
+  task: Grant, verify, review, and remove least-privileged access.
 keywords: [RBAC, roles, permissions, team owner, API scopes, access review]
 verification:
   level: source
