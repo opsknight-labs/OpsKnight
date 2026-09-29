@@ -17,6 +17,7 @@ run('node', ['scripts/docs/generate-integrations.mjs']);
 run('node', ['scripts/docs/generate-capacity-reference.mjs']);
 run('node', ['scripts/docs/generate-route-contract.mjs']);
 run('node', ['scripts/docs/generate-v15-parity.mjs']);
+run('node', ['scripts/docs/check-v15-parity.mjs', ...(releaseCertification ? ['--release'] : [])]);
 run('node', ['scripts/docs/check-frontmatter.mjs']);
 run('node', ['scripts/check-docs-links.cjs']);
 run('node', ['scripts/docs/check-reader-quality.mjs']);
@@ -49,6 +50,10 @@ const discovery = JSON.parse(readFileSync(join(root, 'generated/docs-discovery/c
 const catalog = YAML.parse(readFileSync(join(root, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
 const reviewerChecklists = YAML.parse(readFileSync(join(root, 'docs/internal/certification/reviewer-checklists.yaml'), 'utf8'));
 const reviewerSignoffs = Object.values(reviewerChecklists.areas ?? {}).map(item => item.signoff?.status ?? 'pending');
+const v15Inventory = YAML.parse(readFileSync(join(root, 'docs/internal/certification/v1.5-topic-inventory.yaml'), 'utf8'));
+const v15Review = YAML.parse(readFileSync(join(root, 'docs/internal/certification/v1.5-to-v2-parity.yaml'), 'utf8'));
+const v15InventoryIds = new Set((v15Inventory.topics ?? []).map(item => item.id));
+const v15Reviewed = (v15Review.dispositions ?? []).filter(item => v15InventoryIds.has(item.id));
 const capabilities = Object.values(catalog.capabilities);
 const evidence = walk(join(root, 'generated/docs-evidence/current')).filter(path => extname(path) === '.png');
 const journeys = walk(join(root, 'tests/docs/journeys')).filter(path => path.endsWith('.spec.ts'));
@@ -80,6 +85,7 @@ const report = {
     evidenceContract: 'passed',
     toolingTests: 'passed',
     humanReviewSignoffs: reviewerSignoffs.every(status => status === 'passed') ? 'passed' : 'pending',
+    v15KnowledgeParity: v15Reviewed.length === v15InventoryIds.size ? 'passed' : 'pending',
     runtimeJourneys: fullRuntime ? 'passed' : 'not-run',
     websiteBuild: 'release-gated',
   },
@@ -112,6 +118,9 @@ const report = {
     humanReviewAreasPassed: reviewerSignoffs.filter(status => status === 'passed').length,
     humanReviewAreasPending: reviewerSignoffs.filter(status => status === 'pending').length,
     humanReviewAreasFailed: reviewerSignoffs.filter(status => status === 'failed').length,
+    v15Topics: v15InventoryIds.size,
+    v15TopicsReviewed: v15Reviewed.length,
+    v15TopicsPending: v15InventoryIds.size - v15Reviewed.length,
   },
   artifacts: {
     discovery: 'generated/docs-discovery/current.json',

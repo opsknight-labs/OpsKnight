@@ -6,4 +6,6 @@ instructions:
   - Verify that behavior against current 2.0 code, tests, UI, and runtime behavior.
   - Record PORT or UPDATED with an existing 2.0 destination.
   - Record NO_LONGER_APPLICABLE or INTERNAL only with concrete evidence.
+  - Every disposition must name the human reviewer, ISO review time, and full source revision.
+  - PORT and UPDATED require an existing destination; NO_LONGER_APPLICABLE and INTERNAL require a rationale.
 dispositions: []

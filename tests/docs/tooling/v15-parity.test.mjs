@@ -15,10 +15,16 @@ test('generated v1.5 inventory is complete and manual dispositions are evidenced
   for (const item of review.dispositions) {
     assert.ok(inventoryIds.has(item.id), `${item.id}: not present in generated inventory`);
     assert.ok(allowed.has(item.status), `${item.id}: invalid status`);
+    assert.match(item.reviewer, /\S/, `${item.id}: missing reviewer`);
+    assert.match(item.reviewedAt, /^\d{4}-\d{2}-\d{2}T/, `${item.id}: missing reviewedAt`);
+    assert.match(item.sourceRevision, /^[0-9a-f]{40}$/, `${item.id}: missing source revision`);
     assert.ok(item.evidence?.length, `${item.id}: manual review requires evidence`);
     if (['PORT', 'UPDATED'].includes(item.status)) {
       assert.ok(item.destination, `${item.id}: missing v2 destination`);
       assert.ok(existsSync(item.destination), `${item.id}: missing destination ${item.destination}`);
+    }
+    if (['NO_LONGER_APPLICABLE', 'INTERNAL'].includes(item.status)) {
+      assert.match(item.rationale, /\S/, `${item.id}: missing rationale`);
     }
     for (const evidence of item.evidence) assert.ok(existsSync(evidence), `${item.id}: missing evidence ${evidence}`);
   }

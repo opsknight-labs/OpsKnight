@@ -18,3 +18,11 @@ content check.
 Normal static certification reports pending reviews without pretending that
 they passed. Release certification runs the same contract with `--release` and
 fails unless every area has an evidence-backed `passed` sign-off.
+
+## v1.5 knowledge parity
+
+The generated topic inventory is not a parity claim. Each disposition must be a
+human-reviewed record tied to the current source revision and evidence. Static
+certification reports reviewed and pending totals. Release certification fails
+until all inventory topics have valid dispositions; bulk title matching or an
+automated destination guess does not qualify as manual review.
