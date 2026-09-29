@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-29T17:29:59.765Z",
-  "sourceRevision": "f074b5f41571fde534d823b6c9ecb002eaf01ba2",
-  "documentationRevision": "f074b5f41571fde534d823b6c9ecb002eaf01ba2",
-  "productSourceRevision": "f074b5f41571fde534d823b6c9ecb002eaf01ba2",
+  "generatedAt": "2026-09-29T17:31:38.591Z",
+  "sourceRevision": "e1db15128f45398d4bfe6eef6fb8fc0ae3c2cbb2",
+  "documentationRevision": "e1db15128f45398d4bfe6eef6fb8fc0ae3c2cbb2",
+  "productSourceRevision": "e1db15128f45398d4bfe6eef6fb8fc0ae3c2cbb2",
   "runtimeSourceRevision": null,
   "runtimeImageDigest": null,
   "releaseState": "upcoming",
@@ -18,6 +18,7 @@
     "evidenceContract": "passed",
     "toolingTests": "passed",
     "humanReviewSignoffs": "pending",
+    "v15KnowledgeParity": "pending",
     "runtimeJourneys": "not-run",
     "websiteBuild": "release-gated"
   },
@@ -49,7 +50,10 @@
     "humanReviewAreas": 7,
     "humanReviewAreasPassed": 0,
     "humanReviewAreasPending": 7,
-    "humanReviewAreasFailed": 0
+    "humanReviewAreasFailed": 0,
+    "v15Topics": 1604,
+    "v15TopicsReviewed": 0,
+    "v15TopicsPending": 1604
   },
   "artifacts": {
     "discovery": "generated/docs-discovery/current.json",
