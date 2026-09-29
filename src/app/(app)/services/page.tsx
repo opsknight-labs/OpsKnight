@@ -203,27 +203,33 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     });
   } else if (sortBy === 'incidents_desc') {
     // Services with active incidents (> 0) come first, ordered descending
-    const activeIncidentGroups = await prisma.incident.groupBy({
-      by: ['serviceId'],
-      where: {
-        AND: [
-          incidentAccess,
-          { status: { in: activeIncidentStatuses() } },
-          { service: where },
-        ],
-      },
-      _count: { serviceId: true },
-      orderBy: { _count: { serviceId: 'desc' } },
-    });
+    const activeCondition: Prisma.ServiceWhereInput = {
+      AND: [where, { incidents: { some: activeIncidentCondition } }],
+    };
+    const zeroCondition: Prisma.ServiceWhereInput = {
+      AND: [where, { incidents: { none: activeIncidentCondition } }],
+    };
 
-    const activeServiceIds = activeIncidentGroups.map(g => g.serviceId);
-    const activeCount = activeServiceIds.length;
+    const activeCount = await prisma.service.count({ where: activeCondition });
 
     if (pagination.skip < activeCount) {
-      const activeIdsOnPage = activeServiceIds.slice(
-        pagination.skip,
-        pagination.skip + pagination.take
-      );
+      const neededActive = Math.min(pagination.take, activeCount - pagination.skip);
+      const activeIncidentGroups = await prisma.incident.groupBy({
+        by: ['serviceId'],
+        where: {
+          AND: [
+            incidentAccess,
+            { status: { in: activeIncidentStatuses() } },
+            { service: where },
+          ],
+        },
+        _count: { serviceId: true },
+        orderBy: { _count: { serviceId: 'desc' } },
+        skip: pagination.skip,
+        take: neededActive,
+      });
+
+      const activeIdsOnPage = activeIncidentGroups.map(g => g.serviceId);
       const activeServices = await prisma.service.findMany({
         where: { id: { in: activeIdsOnPage } },
         select: serviceSelect,
@@ -236,9 +242,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
       const remainingSlots = pagination.take - sortedActiveServices.length;
       if (remainingSlots > 0) {
         const zeroIncidentServices = await prisma.service.findMany({
-          where: {
-            AND: [where, { id: { notIn: activeServiceIds } }],
-          },
+          where: zeroCondition,
           take: remainingSlots,
           select: serviceSelect,
           orderBy: { name: 'asc' },
@@ -251,9 +255,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
       // Entire page falls into 0-incident services
       const zeroSkip = pagination.skip - activeCount;
       services = await prisma.service.findMany({
-        where: {
-          AND: [where, { id: { notIn: activeServiceIds } }],
-        },
+        where: zeroCondition,
         skip: zeroSkip,
         take: pagination.take,
         select: serviceSelect,
@@ -289,8 +291,9 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
           },
           _count: { serviceId: true },
           orderBy: { _count: { serviceId: 'asc' } },
+          take: remainingSlots,
         });
-        const activeIds = activeIncidentGroups.map(g => g.serviceId).slice(0, remainingSlots);
+        const activeIds = activeIncidentGroups.map(g => g.serviceId);
         const activeServices = await prisma.service.findMany({
           where: { id: { in: activeIds } },
           select: serviceSelect,
@@ -317,10 +320,10 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
         },
         _count: { serviceId: true },
         orderBy: { _count: { serviceId: 'asc' } },
+        skip: activeSkip,
+        take: pagination.take,
       });
-      const activeIdsOnPage = activeIncidentGroups
-        .map(g => g.serviceId)
-        .slice(activeSkip, activeSkip + pagination.take);
+      const activeIdsOnPage = activeIncidentGroups.map(g => g.serviceId);
       const activeServices = await prisma.service.findMany({
         where: { id: { in: activeIdsOnPage } },
         select: serviceSelect,

@@ -200,52 +200,66 @@ export default function IncidentTimeline({
   const handleLoadOlderActivity = async () => {
     if (!incidentId || isLoadingMore || currentItemsCount === 0) return;
 
-    let oldestDate: Date | null = null;
-    let oldestId: string | undefined = undefined;
-
+    let oldestEventDate: Date | null = null;
+    let oldestEventId: string | null = null;
     for (const e of loadedEvents) {
       const d = new Date(e.createdAt);
       if (
-        !oldestDate ||
-        d.getTime() < oldestDate.getTime() ||
-        (d.getTime() === oldestDate.getTime() && (!oldestId || e.id < oldestId))
+        !oldestEventDate ||
+        d.getTime() < oldestEventDate.getTime() ||
+        (d.getTime() === oldestEventDate.getTime() && (!oldestEventId || e.id < oldestEventId))
       ) {
-        oldestDate = d;
-        oldestId = e.id;
+        oldestEventDate = d;
+        oldestEventId = e.id;
       }
     }
+
+    let oldestNoteDate: Date | null = null;
+    let oldestNoteId: string | null = null;
     for (const n of loadedNotes) {
       const d = new Date(n.createdAt);
       if (
-        !oldestDate ||
-        d.getTime() < oldestDate.getTime() ||
-        (d.getTime() === oldestDate.getTime() && (!oldestId || n.id < oldestId))
+        !oldestNoteDate ||
+        d.getTime() < oldestNoteDate.getTime() ||
+        (d.getTime() === oldestNoteDate.getTime() && (!oldestNoteId || n.id < oldestNoteId))
       ) {
-        oldestDate = d;
-        oldestId = n.id;
+        oldestNoteDate = d;
+        oldestNoteId = n.id;
       }
     }
+
+    let oldestNotifDate: Date | null = null;
+    let oldestNotifId: string | null = null;
     for (const notif of loadedNotifications) {
       const d = new Date(notif.createdAt);
       if (
-        !oldestDate ||
-        d.getTime() < oldestDate.getTime() ||
-        (d.getTime() === oldestDate.getTime() && (!oldestId || notif.id < oldestId))
+        !oldestNotifDate ||
+        d.getTime() < oldestNotifDate.getTime() ||
+        (d.getTime() === oldestNotifDate.getTime() && (!oldestNotifId || notif.id < oldestNotifId))
       ) {
-        oldestDate = d;
-        oldestId = notif.id;
+        oldestNotifDate = d;
+        oldestNotifId = notif.id;
       }
     }
 
-    if (!oldestDate) return;
+    if (!oldestEventDate && !oldestNoteDate && !oldestNotifDate) return;
 
     setIsLoadingMore(true);
     try {
-      const older = await loadOlderIncidentTimelineActivity(
-        incidentId,
-        oldestDate.toISOString(),
-        oldestId
-      );
+      const older = await loadOlderIncidentTimelineActivity(incidentId, {
+        eventCursor:
+          oldestEventDate && oldestEventId
+            ? { createdAt: oldestEventDate.toISOString(), id: oldestEventId }
+            : undefined,
+        noteCursor:
+          oldestNoteDate && oldestNoteId
+            ? { createdAt: oldestNoteDate.toISOString(), id: oldestNoteId }
+            : undefined,
+        notificationCursor:
+          oldestNotifDate && oldestNotifId
+            ? { createdAt: oldestNotifDate.toISOString(), id: oldestNotifId }
+            : undefined,
+      });
 
       if (
         older.events.length === 0 &&

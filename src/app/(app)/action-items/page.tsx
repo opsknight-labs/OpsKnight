@@ -10,7 +10,12 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { CheckSquare, Circle, Clock, CheckCircle2, AlertOctagon } from 'lucide-react';
 import { getJiraCapabilitiesByServiceIds } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
-import { resolveStoredActionItems, formatActionItemDueDate } from '@/lib/action-items';
+import {
+  formatActionItemDueDate,
+  getStoredActionItemId,
+  normalizeLegacyActionItems,
+  parseActionItemDueDate,
+} from '@/lib/action-items';
 import {
   parsePageParam,
   calculatePaginationBounds,
@@ -69,27 +74,77 @@ export default async function ActionItemsPage({
       { postmortem: { title: { contains: searchQuery, mode: 'insensitive' } } },
       { postmortem: { incident: { title: { contains: searchQuery, mode: 'insensitive' } } } },
       { postmortem: { incident: { service: { name: { contains: searchQuery, mode: 'insensitive' } } } } },
+      {
+        owner: {
+          OR: [
+            { name: { contains: searchQuery, mode: 'insensitive' } },
+            { email: { contains: searchQuery, mode: 'insensitive' } },
+          ],
+        },
+      },
     ];
   }
 
   const now = new Date();
 
-  const unmigratedWhere: Prisma.PostmortemWhereInput = {
-    AND: [
-      postmortemReadWhere(actor),
-      { actionItems: { not: Prisma.JsonNull } },
-      { actionItemRecords: { none: {} } },
-    ],
-  };
+  // Ensure any legacy postmortem JSON action items are backfilled into ActionItem rows
+  const unmigratedPostmortems = await prisma.postmortem.findMany({
+    where: {
+      actionItems: { not: Prisma.JsonNull },
+      actionItemRecords: { none: {} },
+    },
+    select: {
+      id: true,
+      incidentId: true,
+      actionItems: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
 
-  // Aggregate stats directly from database + unmigrated legacy postmortem records
+  if (unmigratedPostmortems.length > 0) {
+    const rowsToInsert: Prisma.ActionItemCreateManyInput[] = [];
+    for (const pm of unmigratedPostmortems) {
+      const legacyItems = normalizeLegacyActionItems(pm.actionItems, {
+        legacyIdPrefix: `postmortem-${pm.id}`,
+      });
+      legacyItems.forEach((item, index) => {
+        rowsToInsert.push({
+          id: getStoredActionItemId({
+            postmortemId: pm.id,
+            legacyId: item.id,
+            index,
+          }),
+          postmortemId: pm.id,
+          incidentId: pm.incidentId,
+          title: item.title.trim() || 'Untitled action item',
+          description: item.description?.trim() || null,
+          ownerId: item.owner ?? null,
+          dueDate: parseActionItemDueDate(item.dueDate) ?? null,
+          status: item.status,
+          priority: item.priority,
+          source: 'POSTMORTEM' as const,
+          completedAt: item.status === 'COMPLETED' ? pm.updatedAt : null,
+          createdAt: pm.createdAt,
+          updatedAt: pm.updatedAt,
+        });
+      });
+    }
+    if (rowsToInsert.length > 0) {
+      await prisma.actionItem.createMany({
+        data: rowsToInsert,
+        skipDuplicates: true,
+      });
+    }
+  }
+
+  // Aggregate stats directly from database
   const [
     statusCounts,
     overdueCount,
     highPriorityCount,
     totalCount,
     users,
-    unmigratedPostmortemsCount,
   ] = await Promise.all([
     prisma.actionItem.groupBy({
       by: ['status'],
@@ -98,16 +153,20 @@ export default async function ActionItemsPage({
     }),
     prisma.actionItem.count({
       where: {
-        ...baseWhere,
-        dueDate: { lt: now },
-        status: { not: 'COMPLETED' },
+        AND: [
+          baseWhere,
+          { dueDate: { lt: now } },
+          { status: { not: 'COMPLETED' } },
+        ],
       },
     }),
     prisma.actionItem.count({
       where: {
-        ...baseWhere,
-        priority: 'HIGH',
-        status: { not: 'COMPLETED' },
+        AND: [
+          baseWhere,
+          { priority: 'HIGH' },
+          { status: { not: 'COMPLETED' } },
+        ],
       },
     }),
     prisma.actionItem.count({ where: filterWhere }),
@@ -116,88 +175,7 @@ export default async function ActionItemsPage({
       select: { id: true, name: true, email: true },
       orderBy: { name: 'asc' },
     }),
-    prisma.postmortem.count({ where: unmigratedWhere }),
   ]);
-
-  const unmigratedPostmortems =
-    unmigratedPostmortemsCount > 0
-      ? await prisma.postmortem.findMany({
-          where: unmigratedWhere,
-          select: {
-            id: true,
-            title: true,
-            incidentId: true,
-            createdAt: true,
-            actionItems: true,
-            incident: {
-              select: {
-                id: true,
-                title: true,
-                service: {
-                  select: { id: true, name: true },
-                },
-                externalIssueLinks: {
-                  where: { provider: 'JIRA' },
-                  orderBy: { createdAt: 'desc' },
-                  select: {
-                    id: true,
-                    provider: true,
-                    externalKey: true,
-                    externalUrl: true,
-                    externalStatus: true,
-                    externalAssignee: true,
-                    syncState: true,
-                  },
-                },
-              },
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 50,
-        })
-      : [];
-
-  const legacyItems: BoardActionItem[] = unmigratedPostmortems.flatMap(pm => {
-    const items = resolveStoredActionItems({
-      records: [],
-      legacy: pm.actionItems,
-      legacyIdPrefix: `postmortem-${pm.id}`,
-    });
-    const incidentJiraIssues = pm.incident.externalIssueLinks.map(serializeJiraIssueReference);
-    return items.map(item => ({
-      ...item,
-      description: item.description ?? '',
-      owner: item.owner,
-      dueDate: item.dueDate,
-      source: 'POSTMORTEM' as const,
-      postmortemId: pm.id,
-      postmortemTitle: pm.title,
-      incidentId: pm.incidentId,
-      incidentTitle: pm.incident.title,
-      serviceId: pm.incident.service.id,
-      serviceName: pm.incident.service.name,
-      incidentJiraIssues,
-      createdAt: pm.createdAt,
-      completedAt: item.completedAt,
-    }));
-  });
-
-  const matchingLegacyItems = legacyItems.filter(item => {
-    if (owner && item.owner !== owner) return false;
-    if (priority && item.priority !== priority) return false;
-    if (status && item.status !== status) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matches =
-        item.title.toLowerCase().includes(q) ||
-        (item.description && item.description.toLowerCase().includes(q)) ||
-        item.postmortemTitle.toLowerCase().includes(q) ||
-        item.incidentTitle.toLowerCase().includes(q) ||
-        item.serviceName.toLowerCase().includes(q);
-      if (!matches) return false;
-    }
-    return true;
-  });
 
   const statusMap = new Map(statusCounts.map(s => [s.status, s._count._all]));
   const stats = {
@@ -210,29 +188,8 @@ export default async function ActionItemsPage({
     highPriority: highPriorityCount,
   };
 
-  for (const item of legacyItems) {
-    if (owner && item.owner !== owner) continue;
-    if (priority && item.priority !== priority) continue;
-
-    stats.total++;
-    if (item.status === 'OPEN') stats.open++;
-    else if (item.status === 'IN_PROGRESS') stats.inProgress++;
-    else if (item.status === 'COMPLETED') stats.completed++;
-    else if (item.status === 'BLOCKED') stats.blocked++;
-
-    if (item.dueDate && item.status !== 'COMPLETED' && new Date(item.dueDate) < now) {
-      stats.overdue++;
-    }
-    if (item.priority === 'HIGH' && item.status !== 'COMPLETED') {
-      stats.highPriority++;
-    }
-  }
-
-  const normalizedTotal = totalCount;
-  const totalFilteredCount = normalizedTotal + matchingLegacyItems.length;
-
   const pagination = calculatePaginationBounds({
-    totalItems: totalFilteredCount,
+    totalItems: totalCount,
     page: requestedPage,
     pageSize: 100,
   });
@@ -311,41 +268,15 @@ export default async function ActionItemsPage({
     completedAt: record.completedAt,
   });
 
-  let filteredItems: BoardActionItem[] = [];
-
-  if (matchingLegacyItems.length === 0) {
-    // 100% database-level pagination - zero overhead
-    const records = await prisma.actionItem.findMany({
-      where: filterWhere,
-      include: actionItemInclude,
-      orderBy: { createdAt: 'desc' },
-      skip: pagination.skip,
-      take: pagination.take,
-    });
-    filteredItems = records.map(mapRecordToBoardItem);
-  } else {
-    // Partition-based hybrid paging: NEVER load all normalized rows!
-    if (pagination.skip < normalizedTotal) {
-      const neededFromNormalized = Math.min(pagination.take, normalizedTotal - pagination.skip);
-      const records = await prisma.actionItem.findMany({
-        where: filterWhere,
-        include: actionItemInclude,
-        orderBy: { createdAt: 'desc' },
-        skip: pagination.skip,
-        take: neededFromNormalized,
-      });
-      const normalizedItems = records.map(mapRecordToBoardItem);
-
-      const neededFromLegacy = pagination.take - normalizedItems.length;
-      const legacySlice =
-        neededFromLegacy > 0 ? matchingLegacyItems.slice(0, neededFromLegacy) : [];
-      filteredItems = [...normalizedItems, ...legacySlice];
-    } else {
-      // Entire page falls into legacy partition
-      const legacyOffset = pagination.skip - normalizedTotal;
-      filteredItems = matchingLegacyItems.slice(legacyOffset, legacyOffset + pagination.take);
-    }
-  }
+  // Unified 100% database-level pagination in true global createdAt: 'desc' order
+  const records = await prisma.actionItem.findMany({
+    where: filterWhere,
+    include: actionItemInclude,
+    orderBy: { createdAt: 'desc' },
+    skip: pagination.skip,
+    take: pagination.take,
+  });
+  const filteredItems = records.map(mapRecordToBoardItem);
 
   const canManage = permissions.isResponderOrAbove;
   const jiraCapabilitiesByServiceId = await getJiraCapabilitiesByServiceIds(

@@ -139,29 +139,70 @@ export async function loadOlderIncidentNotes(
   }));
 }
 
+export type TableCursor = {
+  createdAt: string;
+  id: string;
+};
+
+export type TimelineActivityCursors = {
+  eventCursor?: TableCursor;
+  noteCursor?: TableCursor;
+  notificationCursor?: TableCursor;
+};
+
+function buildTableCursorFilter(cursor?: TableCursor) {
+  if (!cursor) return {};
+  const cursorDate = new Date(cursor.createdAt);
+  return {
+    OR: [
+      { createdAt: { lt: cursorDate } },
+      { createdAt: cursorDate, id: { lt: cursor.id } },
+    ],
+  };
+}
+
 export async function loadOlderIncidentTimelineActivity(
   incidentIdValue: string,
-  beforeDateISO: string,
-  beforeId?: string,
-  limit = 100
+  cursorsOrBeforeDateISO: TimelineActivityCursors | string,
+  beforeIdOrLimit?: string | number,
+  limitParam = 100
 ) {
   const parsedIncidentId = incidentId(incidentIdValue);
   await assertCanViewIncident(parsedIncidentId);
-  const cursorDate = new Date(beforeDateISO);
-  const cursorFilter = beforeId
-    ? {
-        OR: [
-          { createdAt: { lt: cursorDate } },
-          { createdAt: cursorDate, id: { lt: beforeId } },
-        ],
-      }
-    : { createdAt: { lt: cursorDate } };
+
+  let eventFilter = {};
+  let noteFilter = {};
+  let notifFilter = {};
+  let limit = limitParam;
+
+  if (typeof cursorsOrBeforeDateISO === 'object' && cursorsOrBeforeDateISO !== null) {
+    eventFilter = buildTableCursorFilter(cursorsOrBeforeDateISO.eventCursor);
+    noteFilter = buildTableCursorFilter(cursorsOrBeforeDateISO.noteCursor);
+    notifFilter = buildTableCursorFilter(cursorsOrBeforeDateISO.notificationCursor);
+    if (typeof beforeIdOrLimit === 'number') {
+      limit = beforeIdOrLimit;
+    }
+  } else {
+    const cursorDate = new Date(cursorsOrBeforeDateISO);
+    const cursorFilter =
+      typeof beforeIdOrLimit === 'string' && beforeIdOrLimit
+        ? {
+            OR: [
+              { createdAt: { lt: cursorDate } },
+              { createdAt: cursorDate, id: { lt: beforeIdOrLimit } },
+            ],
+          }
+        : { createdAt: { lt: cursorDate } };
+    eventFilter = cursorFilter;
+    noteFilter = cursorFilter;
+    notifFilter = cursorFilter;
+  }
 
   const [events, notes, notifications] = await Promise.all([
     prisma.incidentEvent.findMany({
       where: {
         incidentId: parsedIncidentId,
-        ...cursorFilter,
+        ...eventFilter,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: Math.min(Math.max(1, limit), 200),
@@ -169,7 +210,7 @@ export async function loadOlderIncidentTimelineActivity(
     prisma.incidentNote.findMany({
       where: {
         incidentId: parsedIncidentId,
-        ...cursorFilter,
+        ...noteFilter,
       },
       include: {
         user: {
@@ -188,7 +229,7 @@ export async function loadOlderIncidentTimelineActivity(
     prisma.notification.findMany({
       where: {
         incidentId: parsedIncidentId,
-        ...cursorFilter,
+        ...notifFilter,
       },
       select: {
         id: true,

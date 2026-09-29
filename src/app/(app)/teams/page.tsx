@@ -31,6 +31,25 @@ export default async function TeamsPage({
         { name: { contains: searchQuery, mode: 'insensitive' } },
         { description: { contains: searchQuery, mode: 'insensitive' } },
         { teamLead: { name: { contains: searchQuery, mode: 'insensitive' } } },
+        {
+          members: {
+            some: {
+              user: {
+                OR: [
+                  { name: { contains: searchQuery, mode: 'insensitive' } },
+                  { email: { contains: searchQuery, mode: 'insensitive' } },
+                ],
+              },
+            },
+          },
+        },
+        {
+          services: {
+            some: {
+              name: { contains: searchQuery, mode: 'insensitive' },
+            },
+          },
+        },
       ],
     });
   }
