@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
+import { assertCanViewPolicy, getUserPermissions } from '@/lib/rbac';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
@@ -57,7 +57,7 @@ export default async function PolicyDetailPage({
   if (!session?.user?.email) {
     redirect(`/login?callbackUrl=/policies/${id}`);
   }
-  await getCurrentUser();
+  await assertCanViewPolicy(id);
   const errorCode = resolvedSearchParams?.error;
   const defaultTab = resolvedSearchParams?.tab;
 

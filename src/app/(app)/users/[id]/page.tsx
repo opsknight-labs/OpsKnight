@@ -2,7 +2,12 @@ import prisma from '@/lib/prisma';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { getCurrentUser, getUserPermissions } from '@/lib/rbac';
+import {
+  assertCanViewUser,
+  getCurrentAuthorizationActor,
+  getUserPermissions,
+} from '@/lib/rbac';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
   Mail,
@@ -50,7 +55,8 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
   if (!session?.user?.email) {
     redirect(`/login?callbackUrl=/users/${id}`);
   }
-  await getCurrentUser();
+  await assertCanViewUser(id);
+  const actor = await getCurrentAuthorizationActor();
 
   const [user, permissions, currentUser] = await Promise.all([
     prisma.user.findUnique({
@@ -87,6 +93,7 @@ export default async function UserDetailPage({ params, searchParams }: UserDetai
           orderBy: { stepOrder: 'asc' },
         },
         assignedIncidents: {
+          where: incidentReadWhere(actor),
           select: {
             id: true,
             title: true,

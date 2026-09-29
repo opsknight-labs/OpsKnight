@@ -93,6 +93,9 @@ jobs:
           mkdir -p reports
           npm run test:ci:unit
 
+      - name: Authorization regression gate
+        run: npm run test:authorization
+
       - name: Database integration tests
         # Enable real database for integration and resilience tests
         env:
