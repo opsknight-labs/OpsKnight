@@ -52,9 +52,9 @@ documentation can help locate a topic, but it is never authoritative.
 
 ## Run in production
 
-- Deploy with [Compose](./operate/deploy/compose),
-  [Kubernetes](./operate/deploy/kubernetes), or the
-  [split runtime](./operate/deploy/split-runtime).
+- [Choose a deployment topology](./operate/deploy/), then follow the complete
+  [Compose](./operate/deploy/docker-compose/),
+  [Kubernetes](./operate/deploy/kubernetes/), or multi-node path.
 - Plan [scaling](./operate/reliability/scaling),
   [hardening](./operate/security/hardening),
   [backup and restore](./operate/data/backup-and-restore), and
