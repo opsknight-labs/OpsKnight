@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-28T16:27:13.451Z",
-  "sourceRevision": "d46659170d88f294ea6538ac354bb789cfbdd367",
-  "documentationRevision": "d46659170d88f294ea6538ac354bb789cfbdd367",
-  "productSourceRevision": "d46659170d88f294ea6538ac354bb789cfbdd367",
+  "generatedAt": "2026-09-29T03:29:13.187Z",
+  "sourceRevision": "0431570e2224e7cf2a14971ae17a76a858afd08b",
+  "documentationRevision": "0431570e2224e7cf2a14971ae17a76a858afd08b",
+  "productSourceRevision": "0431570e2224e7cf2a14971ae17a76a858afd08b",
   "runtimeSourceRevision": null,
   "runtimeImageDigest": null,
   "releaseState": "upcoming",
@@ -21,7 +21,7 @@
     "websiteBuild": "release-gated"
   },
   "counts": {
-    "documentationPages": 150,
+    "documentationPages": 160,
     "capabilitiesDiscovered": 23,
     "capabilitiesDocumented": 23,
     "uiRoutes": 101,
