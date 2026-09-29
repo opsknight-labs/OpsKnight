@@ -122,8 +122,12 @@ export default async function ActionItemsPage({
       take: 25,
     }),
     owner
-      ? prisma.user.findUnique({
-          where: { id: owner },
+      ? prisma.user.findFirst({
+          where: {
+            id: owner,
+            status: 'ACTIVE',
+            AND: [dashboardUserReadWhere(actor)],
+          },
           select: { id: true, name: true, email: true },
         })
       : Promise.resolve(null),
@@ -237,7 +241,7 @@ export default async function ActionItemsPage({
   const records = await prisma.actionItem.findMany({
     where: filterWhere,
     include: actionItemInclude,
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     skip: pagination.skip,
     take: pagination.take,
   });

@@ -68,3 +68,6 @@ ON CONFLICT ("id") DO NOTHING;
 
 -- Clean up temporary parsing helper
 DROP FUNCTION IF EXISTS opsknight_try_parse_timestamptz(text);
+
+-- CreateIndex for deterministic paginated sorting on ActionItem
+CREATE INDEX IF NOT EXISTS "ActionItem_createdAt_id_idx" ON "ActionItem"("createdAt", "id");

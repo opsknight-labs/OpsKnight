@@ -156,12 +156,12 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
       : selectedNonStatusWhere;
   const where: Prisma.ServiceWhereInput = { AND: [serviceAccess, selectedWhere] };
 
-  // Build orderBy clause
-  let orderBy: Prisma.ServiceOrderByWithRelationInput = { name: 'asc' };
+  // Build orderBy clause with deterministic tiebreaker
+  let orderBy: Prisma.ServiceOrderByWithRelationInput[] = [{ name: 'asc' }, { id: 'asc' }];
   if (sortBy === 'name_desc') {
-    orderBy = { name: 'desc' };
+    orderBy = [{ name: 'desc' }, { id: 'desc' }];
   } else if (sortBy === 'status') {
-    orderBy = { status: 'asc' };
+    orderBy = [{ status: 'asc' }, { id: 'asc' }];
   }
 
   const isIncidentCountSort = sortBy === 'incidents_desc' || sortBy === 'incidents_asc';
@@ -224,7 +224,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
           ],
         },
         _count: { serviceId: true },
-        orderBy: { _count: { serviceId: 'desc' } },
+        orderBy: [{ _count: { serviceId: 'desc' } }, { serviceId: 'asc' }],
         skip: pagination.skip,
         take: neededActive,
       });
@@ -245,7 +245,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
           where: zeroCondition,
           take: remainingSlots,
           select: serviceSelect,
-          orderBy: { name: 'asc' },
+          orderBy: [{ name: 'asc' }, { id: 'asc' }],
         });
         services = [...sortedActiveServices, ...zeroIncidentServices];
       } else {
@@ -259,7 +259,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
         skip: zeroSkip,
         take: pagination.take,
         select: serviceSelect,
-        orderBy: { name: 'asc' },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
       });
     }
   } else {
@@ -275,7 +275,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
         skip: pagination.skip,
         take: pagination.take,
         select: serviceSelect,
-        orderBy: { name: 'asc' },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
       });
 
       const remainingSlots = pagination.take - zeroServices.length;
@@ -290,7 +290,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
             ],
           },
           _count: { serviceId: true },
-          orderBy: { _count: { serviceId: 'asc' } },
+          orderBy: [{ _count: { serviceId: 'asc' } }, { serviceId: 'asc' }],
           take: remainingSlots,
         });
         const activeIds = activeIncidentGroups.map(g => g.serviceId);
@@ -319,7 +319,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
           ],
         },
         _count: { serviceId: true },
-        orderBy: { _count: { serviceId: 'asc' } },
+        orderBy: [{ _count: { serviceId: 'asc' } }, { serviceId: 'asc' }],
         skip: activeSkip,
         take: pagination.take,
       });

@@ -73,8 +73,12 @@ export default async function IncidentDetailScreen({
       },
       assignee: true,
       team: true,
-      events: { orderBy: { createdAt: 'desc' }, take: 200 },
-      notes: { include: { user: true }, orderBy: { createdAt: 'desc' }, take: 100 },
+      events: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 200 },
+      notes: {
+        include: { user: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 100,
+      },
       notifications: {
         select: {
           id: true,
@@ -88,7 +92,7 @@ export default async function IncidentDetailScreen({
           failedAt: true,
           user: { select: { id: true, name: true, email: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 50,
       },
       watchers: { include: { user: true }, orderBy: { createdAt: 'asc' } },
