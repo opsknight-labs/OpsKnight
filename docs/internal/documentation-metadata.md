@@ -32,3 +32,20 @@ runtime evidence. A materially changed page returns to `draft` until recertified
 
 Generated files such as `capabilities.yaml`, JSON schemas, and evidence metadata
 do not use page frontmatter.
+
+## Reader completeness
+
+`verification` proves accuracy; it does not prove that a reader can complete a
+task. Task pages use the separate `reader` record defined in the
+[authoring standard](documentation-authoring-standard.md):
+
+```yaml
+reader:
+  status: READER_COMPLETE
+  task: A new administrator connects Slack and sends a controlled test incident
+  evidence: []
+```
+
+Pages without `reader` metadata remain `MAPPED` in the audit. Human and runtime
+states require reviewer/revision/evidence fields and must never be inferred by
+automation.
