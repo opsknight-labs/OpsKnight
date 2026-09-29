@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { ChevronLeft, AlertCircle, Save, Webhook } from 'lucide-react';
+import { assertCanModifyService } from '@/lib/rbac';
 
 export default async function EditWebhookPage({
   params,
@@ -25,6 +26,7 @@ export default async function EditWebhookPage({
   searchParams?: Promise<{ error?: string }>;
 }) {
   const { id, webhookId } = await params;
+  await assertCanModifyService(id);
   const resolvedSearchParams = await searchParams;
   const errorCode = resolvedSearchParams?.error;
 
