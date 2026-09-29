@@ -16751,6 +16751,7 @@
       "name": "JSON",
       "sources": [
         "scripts/compliance/validate-sbom.mjs",
+        "scripts/docs/audit-reader-completeness.mjs",
         "scripts/docs/certify.mjs",
         "scripts/docs/crawl-rendered-site.mjs",
         "scripts/docs/discover-capabilities.mjs",
@@ -83491,6 +83492,7 @@
         "classification": "OPERATOR_FEATURE",
         "sources": [
           "scripts/compliance/validate-sbom.mjs",
+          "scripts/docs/audit-reader-completeness.mjs",
           "scripts/docs/certify.mjs",
           "scripts/docs/crawl-rendered-site.mjs",
           "scripts/docs/discover-capabilities.mjs",
@@ -83509,6 +83511,7 @@
           "name": "JSON",
           "sources": [
             "scripts/compliance/validate-sbom.mjs",
+            "scripts/docs/audit-reader-completeness.mjs",
             "scripts/docs/certify.mjs",
             "scripts/docs/crawl-rendered-site.mjs",
             "scripts/docs/discover-capabilities.mjs",
@@ -83563,6 +83566,7 @@
             "text": "JSON is classified as OPERATOR_FEATURE and owned by platform.",
             "evidence": [
               "scripts/compliance/validate-sbom.mjs",
+              "scripts/docs/audit-reader-completeness.mjs",
               "scripts/docs/certify.mjs",
               "scripts/docs/crawl-rendered-site.mjs",
               "scripts/docs/discover-capabilities.mjs",
