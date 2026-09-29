@@ -1686,5 +1686,1717 @@
     "peakActivePgConnections": 10,
     "peakOldestPendingJobAgeMs": 937100,
     "certified": false
+  },
+  {
+    "topologyId": "phase6_swarm_integrated",
+    "topologyName": "Phase 6 Mega: Docker Swarm Integrated Stack",
+    "phase": 6,
+    "startedAt": "2026-09-29T03:02:30.107Z",
+    "completedAt": "2026-09-29T03:22:11.443Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 76179,
+        "exitCode": 99,
+        "p50Ms": 334.13,
+        "p95Ms": 1205.78,
+        "p99Ms": 9848.64,
+        "rps": 24.9,
+        "errorRate": 0.8741,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 105442,
+        "exitCode": 99,
+        "p50Ms": 188.06,
+        "p95Ms": 1934.7,
+        "p99Ms": 5403.36,
+        "rps": 23.86,
+        "errorRate": 0.7828,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 76853,
+        "exitCode": 99,
+        "p50Ms": 283.11,
+        "p95Ms": 1052.81,
+        "p99Ms": 2752.52,
+        "rps": 30.2,
+        "errorRate": 1,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 76428,
+        "exitCode": 99,
+        "p50Ms": 231.8,
+        "p95Ms": 3719.25,
+        "p99Ms": 6440.01,
+        "rps": 33.3,
+        "errorRate": 0.9972,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "status-fanout.js",
+        "loadLevel": "L0",
+        "durationMs": 76921,
+        "exitCode": 99,
+        "p50Ms": 272.98,
+        "p95Ms": 1863.84,
+        "p99Ms": 4277.03,
+        "rps": 46.22,
+        "errorRate": 0.1746,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "realtime.js",
+        "loadLevel": "L0",
+        "durationMs": 78352,
+        "exitCode": 99,
+        "p50Ms": 5.7,
+        "p95Ms": 4001.24,
+        "p99Ms": 5532.37,
+        "rps": 27.78,
+        "errorRate": 0.9755,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "user-workload.js",
+        "loadLevel": "L0",
+        "durationMs": 76716,
+        "exitCode": 99,
+        "p50Ms": 6.89,
+        "p95Ms": 1401.84,
+        "p99Ms": 11795.01,
+        "rps": 13.5,
+        "errorRate": 0.8768,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "mega-journey.js",
+        "loadLevel": "L0",
+        "durationMs": 163568,
+        "exitCode": 99,
+        "p50Ms": 0.99,
+        "p95Ms": 29.95,
+        "p99Ms": 884.02,
+        "rps": 484.79,
+        "errorRate": 0.9981,
+        "thresholdsPassed": false
+      }
+    ],
+    "verification": {
+      "passed": false,
+      "checkedAt": "2026-09-29T03:22:11.436Z",
+      "topology": "phase6_swarm_integrated",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 5802,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": false,
+          "pendingCriticalCount": 1120,
+          "oldestPendingCriticalAgeMs": 409665,
+          "pendingBulkCount": 0,
+          "deliveredCriticalCount": 378,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "emulatorAvailable": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          },
+          "totalDuplicateDeliveries": 0
+        }
+      },
+      "totals": {
+        "incidentsCreated": 2315,
+        "alertsPersisted": 5802,
+        "notificationsTotal": 3380,
+        "backgroundJobsPending": 8956,
+        "backgroundJobsFailed": 2
+      }
+    },
+    "peakActivePgConnections": 24,
+    "peakOldestPendingJobAgeMs": 123087018,
+    "certified": false
+  },
+  {
+    "topologyId": "phase6_swarm_split",
+    "topologyName": "Phase 6 Mega: Docker Swarm Split Stack",
+    "phase": 6,
+    "startedAt": "2026-09-29T03:29:01.934Z",
+    "completedAt": "2026-09-29T03:46:20.430Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 76293,
+        "exitCode": 99,
+        "p50Ms": 232.84,
+        "p95Ms": 1181.07,
+        "p99Ms": 5299.73,
+        "rps": 30.03,
+        "errorRate": 0.8828,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 78149,
+        "exitCode": 99,
+        "p50Ms": 169.83,
+        "p95Ms": 1020.2,
+        "p99Ms": 2957.23,
+        "rps": 37.68,
+        "errorRate": 0.4684,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 76013,
+        "exitCode": 99,
+        "p50Ms": 249.17,
+        "p95Ms": 567.2,
+        "p99Ms": 702.07,
+        "rps": 37.99,
+        "errorRate": 1,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 75986,
+        "exitCode": 99,
+        "p50Ms": 1068.09,
+        "p95Ms": 1592.8,
+        "p99Ms": 1827.19,
+        "rps": 38.05,
+        "errorRate": 0.9903,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "status-fanout.js",
+        "loadLevel": "L0",
+        "durationMs": 75582,
+        "exitCode": 99,
+        "p50Ms": 378.66,
+        "p95Ms": 1232.72,
+        "p99Ms": 2079.11,
+        "rps": 44.6,
+        "errorRate": 0.173,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "realtime.js",
+        "loadLevel": "L0",
+        "durationMs": 76039,
+        "exitCode": 0,
+        "p50Ms": 48.29,
+        "p95Ms": 4001.87,
+        "p99Ms": 4002.12,
+        "rps": 9.58,
+        "errorRate": 0.8,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "user-workload.js",
+        "loadLevel": "L0",
+        "durationMs": 76109,
+        "exitCode": 99,
+        "p50Ms": 15.1,
+        "p95Ms": 50.77,
+        "p99Ms": 168.19,
+        "rps": 34.14,
+        "errorRate": 0.4675,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "recovery-swarm_kill_critical_worker",
+        "loadLevel": "L0",
+        "durationMs": 46448,
+        "exitCode": 99,
+        "p50Ms": 273.49,
+        "p95Ms": 664.05,
+        "p99Ms": 906.59,
+        "rps": 49.52,
+        "errorRate": 0.7789,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "mega-journey.js",
+        "loadLevel": "L0",
+        "durationMs": 155858,
+        "exitCode": 99,
+        "p50Ms": 4526.26,
+        "p95Ms": 11096.7,
+        "p99Ms": 13919.15,
+        "rps": 42.9,
+        "errorRate": 0.7611,
+        "thresholdsPassed": false
+      }
+    ],
+    "verification": {
+      "passed": false,
+      "checkedAt": "2026-09-29T03:46:20.420Z",
+      "topology": "phase6_swarm_split",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 13262,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": false,
+          "pendingCriticalCount": 1546,
+          "oldestPendingCriticalAgeMs": 1145928,
+          "pendingBulkCount": 0,
+          "deliveredCriticalCount": 264,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "emulatorAvailable": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          },
+          "totalDuplicateDeliveries": 0
+        }
+      },
+      "totals": {
+        "incidentsCreated": 5644,
+        "alertsPersisted": 13262,
+        "notificationsTotal": 4028,
+        "backgroundJobsPending": 27326,
+        "backgroundJobsFailed": 21
+      }
+    },
+    "peakActivePgConnections": 20,
+    "peakOldestPendingJobAgeMs": 2258192,
+    "certified": false
+  },
+  {
+    "topologyId": "phase6_swarm_split_pgbouncer",
+    "topologyName": "Phase 6 Mega: Docker Swarm Split + PgBouncer Stack",
+    "phase": 6,
+    "startedAt": "2026-09-29T03:48:08.699Z",
+    "completedAt": "2026-09-29T04:06:15.498Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 76224,
+        "exitCode": 99,
+        "p50Ms": 343.86,
+        "p95Ms": 1172.32,
+        "p99Ms": 1874.1,
+        "rps": 27.55,
+        "errorRate": 0.8676,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 78396,
+        "exitCode": 99,
+        "p50Ms": 398.63,
+        "p95Ms": 2678.29,
+        "p99Ms": 4962.14,
+        "rps": 21.98,
+        "errorRate": 0.6071,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 76268,
+        "exitCode": 99,
+        "p50Ms": 390.78,
+        "p95Ms": 879.65,
+        "p99Ms": 1239.75,
+        "rps": 30.52,
+        "errorRate": 1,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 76067,
+        "exitCode": 99,
+        "p50Ms": 1220.42,
+        "p95Ms": 1893.21,
+        "p99Ms": 2489.64,
+        "rps": 33.73,
+        "errorRate": 0.9957,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "status-fanout.js",
+        "loadLevel": "L0",
+        "durationMs": 75803,
+        "exitCode": 99,
+        "p50Ms": 599.04,
+        "p95Ms": 2177.07,
+        "p99Ms": 3250.41,
+        "rps": 31.58,
+        "errorRate": 0.2221,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "realtime.js",
+        "loadLevel": "L0",
+        "durationMs": 76077,
+        "exitCode": 0,
+        "p50Ms": 73.23,
+        "p95Ms": 4001.82,
+        "p99Ms": 4030.83,
+        "rps": 9.54,
+        "errorRate": 0.7978,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "user-workload.js",
+        "loadLevel": "L0",
+        "durationMs": 76864,
+        "exitCode": 99,
+        "p50Ms": 27.98,
+        "p95Ms": 290.81,
+        "p99Ms": 623.73,
+        "rps": 28.56,
+        "errorRate": 0.5198,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "recovery-swarm_kill_critical_worker",
+        "loadLevel": "L0",
+        "durationMs": 46664,
+        "exitCode": 99,
+        "p50Ms": 404.66,
+        "p95Ms": 1373.92,
+        "p99Ms": 1939.46,
+        "rps": 32.79,
+        "errorRate": 0.7748,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "recovery-swarm_kill_pgbouncer",
+        "loadLevel": "L0",
+        "durationMs": 47055,
+        "exitCode": 99,
+        "p50Ms": 479.6,
+        "p95Ms": 1971.21,
+        "p99Ms": 3758.68,
+        "rps": 26.75,
+        "errorRate": 0.77,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "mega-journey.js",
+        "loadLevel": "L0",
+        "durationMs": 161167,
+        "exitCode": 99,
+        "p50Ms": 5892.84,
+        "p95Ms": 14118.6,
+        "p99Ms": 17443.35,
+        "rps": 31.03,
+        "errorRate": 0.7691,
+        "thresholdsPassed": false
+      }
+    ],
+    "verification": {
+      "passed": false,
+      "checkedAt": "2026-09-29T04:06:15.462Z",
+      "topology": "phase6_swarm_split_pgbouncer",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 11428,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": false,
+          "pendingCriticalCount": 1190,
+          "oldestPendingCriticalAgeMs": 582928,
+          "pendingBulkCount": 0,
+          "deliveredCriticalCount": 143,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "emulatorAvailable": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          },
+          "totalDuplicateDeliveries": 0
+        }
+      },
+      "totals": {
+        "incidentsCreated": 8424,
+        "alertsPersisted": 11428,
+        "notificationsTotal": 4127,
+        "backgroundJobsPending": 40236,
+        "backgroundJobsFailed": 31
+      }
+    },
+    "peakActivePgConnections": 14,
+    "peakOldestPendingJobAgeMs": 124917459,
+    "certified": false
+  },
+  {
+    "topologyId": "phase6_swarm_ha_split_pgbouncer",
+    "topologyName": "Phase 6 Mega: Docker Swarm HA Split + PgBouncer",
+    "phase": 6,
+    "startedAt": "2026-09-29T04:06:49.253Z",
+    "completedAt": "2026-09-29T04:26:19.352Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 76502,
+        "exitCode": 99,
+        "p50Ms": 308.38,
+        "p95Ms": 1249.11,
+        "p99Ms": 1707.46,
+        "rps": 29.89,
+        "errorRate": 0.8754,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 78589,
+        "exitCode": 99,
+        "p50Ms": 168.1,
+        "p95Ms": 1006.07,
+        "p99Ms": 1719.37,
+        "rps": 36.21,
+        "errorRate": 0.5172,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 75899,
+        "exitCode": 99,
+        "p50Ms": 348.09,
+        "p95Ms": 1287.33,
+        "p99Ms": 2231.37,
+        "rps": 27.56,
+        "errorRate": 1,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 82370,
+        "exitCode": 99,
+        "p50Ms": 1185.88,
+        "p95Ms": 2431.35,
+        "p99Ms": 3163.85,
+        "rps": 26.45,
+        "errorRate": 0.9968,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "status-fanout.js",
+        "loadLevel": "L0",
+        "durationMs": 75985,
+        "exitCode": 99,
+        "p50Ms": 339.15,
+        "p95Ms": 2747.06,
+        "p99Ms": 5746.38,
+        "rps": 37.5,
+        "errorRate": 0.2114,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "realtime.js",
+        "loadLevel": "L0",
+        "durationMs": 76040,
+        "exitCode": 0,
+        "p50Ms": 145.18,
+        "p95Ms": 4000.95,
+        "p99Ms": 4001.86,
+        "rps": 9.52,
+        "errorRate": 0.7944,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "user-workload.js",
+        "loadLevel": "L0",
+        "durationMs": 76039,
+        "exitCode": 99,
+        "p50Ms": 41.65,
+        "p95Ms": 396.55,
+        "p99Ms": 1543.25,
+        "rps": 25.22,
+        "errorRate": 0.7006,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "security-under-load.js",
+        "loadLevel": "L0",
+        "durationMs": 45399,
+        "exitCode": 0,
+        "p50Ms": 42.87,
+        "p95Ms": 253.29,
+        "p99Ms": 815.11,
+        "rps": 4.98,
+        "errorRate": 0.75,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "recovery-swarm_ha_rolling_web_restart",
+        "loadLevel": "L0",
+        "durationMs": 49056,
+        "exitCode": 99,
+        "p50Ms": 397.03,
+        "p95Ms": 1962.93,
+        "p99Ms": 2993.34,
+        "rps": 28.42,
+        "errorRate": 0.7518,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "recovery-swarm_ha_kill_critical_worker",
+        "loadLevel": "L0",
+        "durationMs": 46890,
+        "exitCode": 99,
+        "p50Ms": 257.62,
+        "p95Ms": 1015.41,
+        "p99Ms": 1347.35,
+        "rps": 45.02,
+        "errorRate": 0.7541,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "mega-journey.js",
+        "loadLevel": "L0",
+        "durationMs": 154791,
+        "exitCode": 99,
+        "p50Ms": 5491.27,
+        "p95Ms": 20752.6,
+        "p99Ms": 27834.16,
+        "rps": 30.93,
+        "errorRate": 0.8122,
+        "thresholdsPassed": false
+      }
+    ],
+    "verification": {
+      "passed": true,
+      "checkedAt": "2026-09-29T04:26:19.322Z",
+      "topology": "phase6_swarm_ha_split_pgbouncer",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 11206,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": true,
+          "pendingCriticalCount": 0,
+          "oldestPendingCriticalAgeMs": 0,
+          "pendingBulkCount": 0,
+          "deliveredCriticalCount": 75,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "emulatorAvailable": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          },
+          "totalDuplicateDeliveries": 0
+        }
+      },
+      "totals": {
+        "incidentsCreated": 2930,
+        "alertsPersisted": 11206,
+        "notificationsTotal": 189,
+        "backgroundJobsPending": 32482,
+        "backgroundJobsFailed": 31
+      }
+    },
+    "peakActivePgConnections": 28,
+    "peakOldestPendingJobAgeMs": 4578894,
+    "certified": false
+  },
+  {
+    "topologyId": "phase6_helm_integrated",
+    "topologyName": "Phase 6 Mega: Kind Helm Integrated",
+    "phase": 6,
+    "startedAt": "2026-09-29T04:32:01.480Z",
+    "completedAt": "2026-09-29T04:48:21.121Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 80245,
+        "exitCode": 99,
+        "p50Ms": 1603.03,
+        "p95Ms": 4257.43,
+        "p99Ms": 5043.91,
+        "rps": 11.93,
+        "errorRate": 0.8799,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 84219,
+        "exitCode": 99,
+        "p50Ms": 2399.53,
+        "p95Ms": 13225.47,
+        "p99Ms": 20332.03,
+        "rps": 6.83,
+        "errorRate": 0.7133,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 79200,
+        "exitCode": 99,
+        "p50Ms": 1631.99,
+        "p95Ms": 10030.08,
+        "p99Ms": 12236.25,
+        "rps": 8.23,
+        "errorRate": 1,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 79346,
+        "exitCode": 99,
+        "p50Ms": 3498.94,
+        "p95Ms": 8475.52,
+        "p99Ms": 11592.33,
+        "rps": 10.28,
+        "errorRate": 0.9914,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "user-workload.js",
+        "loadLevel": "L0",
+        "durationMs": 78025,
+        "exitCode": 99,
+        "p50Ms": 322.95,
+        "p95Ms": 2689.14,
+        "p99Ms": 14551.39,
+        "rps": 9.18,
+        "errorRate": 0.701,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "mega-journey.js",
+        "loadLevel": "L0",
+        "durationMs": 177889,
+        "exitCode": 99,
+        "p50Ms": 10885.66,
+        "p95Ms": 28125.02,
+        "p99Ms": 32419.39,
+        "rps": 19.18,
+        "errorRate": 0.8942,
+        "thresholdsPassed": false
+      }
+    ],
+    "verification": {
+      "passed": false,
+      "checkedAt": "2026-09-29T04:48:21.076Z",
+      "topology": "phase6_helm_integrated",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 3441,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": false,
+          "pendingCriticalCount": 867,
+          "oldestPendingCriticalAgeMs": 363829,
+          "pendingBulkCount": 20,
+          "deliveredCriticalCount": 525,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "emulatorAvailable": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          },
+          "totalDuplicateDeliveries": 0
+        }
+      },
+      "totals": {
+        "incidentsCreated": 922,
+        "alertsPersisted": 3441,
+        "notificationsTotal": 2694,
+        "backgroundJobsPending": 3164,
+        "backgroundJobsFailed": 1
+      }
+    },
+    "peakActivePgConnections": 27,
+    "peakOldestPendingJobAgeMs": 591320,
+    "certified": false
+  },
+  {
+    "topologyId": "phase6_helm_split",
+    "topologyName": "Phase 6 Mega: Kind Helm Split",
+    "phase": 6,
+    "startedAt": "2026-09-29T04:50:06.304Z",
+    "completedAt": "2026-09-29T05:04:46.013Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 77276,
+        "exitCode": 99,
+        "p50Ms": 426.87,
+        "p95Ms": 1815.23,
+        "p99Ms": 2342.09,
+        "rps": 24.91,
+        "errorRate": 0.8766,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 79153,
+        "exitCode": 99,
+        "p50Ms": 469.96,
+        "p95Ms": 2550.9,
+        "p99Ms": 4835.07,
+        "rps": 22.29,
+        "errorRate": 0.599,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 76634,
+        "exitCode": 99,
+        "p50Ms": 531.51,
+        "p95Ms": 1166.84,
+        "p99Ms": 1402.34,
+        "rps": 24.91,
+        "errorRate": 1,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 76750,
+        "exitCode": 99,
+        "p50Ms": 1680.59,
+        "p95Ms": 2940.77,
+        "p99Ms": 3349.77,
+        "rps": 23.8,
+        "errorRate": 0.9961,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "user-workload.js",
+        "loadLevel": "L0",
+        "durationMs": 76493,
+        "exitCode": 99,
+        "p50Ms": 27.51,
+        "p95Ms": 177.33,
+        "p99Ms": 460.57,
+        "rps": 30.93,
+        "errorRate": 0.6273,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "recovery-k8s_helm_delete_critical_worker_pod",
+        "loadLevel": "L0",
+        "durationMs": 47522,
+        "exitCode": 99,
+        "p50Ms": 427.79,
+        "p95Ms": 1340.85,
+        "p99Ms": 1795.98,
+        "rps": 32.51,
+        "errorRate": 0.7408,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "mega-journey.js",
+        "loadLevel": "L0",
+        "durationMs": 162932,
+        "exitCode": 99,
+        "p50Ms": 8343.33,
+        "p95Ms": 15066.93,
+        "p99Ms": 18707.95,
+        "rps": 26.68,
+        "errorRate": 0.811,
+        "thresholdsPassed": false
+      }
+    ],
+    "verification": {
+      "passed": false,
+      "checkedAt": "2026-09-29T05:04:46.006Z",
+      "topology": "phase6_helm_split",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 8115,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": false,
+          "pendingCriticalCount": 3399,
+          "oldestPendingCriticalAgeMs": 779284,
+          "pendingBulkCount": 20,
+          "deliveredCriticalCount": 1805,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "emulatorAvailable": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          },
+          "totalDuplicateDeliveries": 0
+        }
+      },
+      "totals": {
+        "incidentsCreated": 2122,
+        "alertsPersisted": 8115,
+        "notificationsTotal": 8766,
+        "backgroundJobsPending": 2816,
+        "backgroundJobsFailed": 9
+      }
+    },
+    "peakActivePgConnections": 27,
+    "peakOldestPendingJobAgeMs": 771431,
+    "certified": false
+  },
+  {
+    "topologyId": "phase6_helm_split_pgbouncer",
+    "topologyName": "Phase 6 Mega: Kind Helm Split + PgBouncer",
+    "phase": 6,
+    "startedAt": "2026-09-29T05:06:04.535Z",
+    "completedAt": "2026-09-29T05:25:12.326Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 76418,
+        "exitCode": 99,
+        "p50Ms": 539.28,
+        "p95Ms": 1747.82,
+        "p99Ms": 2234.32,
+        "rps": 21.54,
+        "errorRate": 0.8457,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 78151,
+        "exitCode": 99,
+        "p50Ms": 547.51,
+        "p95Ms": 2346.83,
+        "p99Ms": 4041.4,
+        "rps": 20.96,
+        "errorRate": 0.5924,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 76731,
+        "exitCode": 99,
+        "p50Ms": 626.72,
+        "p95Ms": 1486.2,
+        "p99Ms": 2326.1,
+        "rps": 21.98,
+        "errorRate": 1,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 76147,
+        "exitCode": 99,
+        "p50Ms": 2492.99,
+        "p95Ms": 4040.44,
+        "p99Ms": 4436.56,
+        "rps": 18.58,
+        "errorRate": 0.995,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "status-fanout.js",
+        "loadLevel": "L0",
+        "durationMs": 76059,
+        "exitCode": 99,
+        "p50Ms": 408.98,
+        "p95Ms": 1804.05,
+        "p99Ms": 2511.17,
+        "rps": 39.3,
+        "errorRate": 0.1965,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "realtime.js",
+        "loadLevel": "L0",
+        "durationMs": 76163,
+        "exitCode": 0,
+        "p50Ms": 578.71,
+        "p95Ms": 4003.57,
+        "p99Ms": 4014.91,
+        "rps": 9.51,
+        "errorRate": 0.8056,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "user-workload.js",
+        "loadLevel": "L0",
+        "durationMs": 76238,
+        "exitCode": 99,
+        "p50Ms": 53.84,
+        "p95Ms": 394.81,
+        "p99Ms": 729.47,
+        "rps": 25.43,
+        "errorRate": 0.5845,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "security-under-load.js",
+        "loadLevel": "L0",
+        "durationMs": 45845,
+        "exitCode": 0,
+        "p50Ms": 36.93,
+        "p95Ms": 136.77,
+        "p99Ms": 230.4,
+        "rps": 5,
+        "errorRate": 0.7478,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "recovery-k8s_helm_delete_critical_worker_pod",
+        "loadLevel": "L0",
+        "durationMs": 47547,
+        "exitCode": 99,
+        "p50Ms": 667.67,
+        "p95Ms": 1582.36,
+        "p99Ms": 2092.02,
+        "rps": 25.27,
+        "errorRate": 0.7689,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "recovery-k8s_helm_delete_pgbouncer_pod",
+        "loadLevel": "L0",
+        "durationMs": 47661,
+        "exitCode": 99,
+        "p50Ms": 685.06,
+        "p95Ms": 2134.35,
+        "p99Ms": 3017.1,
+        "rps": 22.31,
+        "errorRate": 0.7662,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "mega-journey.js",
+        "loadLevel": "L0",
+        "durationMs": 166200,
+        "exitCode": 99,
+        "p50Ms": 8423.93,
+        "p95Ms": 16394.38,
+        "p99Ms": 18135.64,
+        "rps": 24.68,
+        "errorRate": 0.8158,
+        "thresholdsPassed": false
+      }
+    ],
+    "verification": {
+      "passed": false,
+      "checkedAt": "2026-09-29T05:25:12.316Z",
+      "topology": "phase6_helm_split_pgbouncer",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 8363,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": false,
+          "pendingCriticalCount": 3427,
+          "oldestPendingCriticalAgeMs": 1062115,
+          "pendingBulkCount": 40,
+          "deliveredCriticalCount": 2013,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "emulatorAvailable": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          },
+          "totalDuplicateDeliveries": 0
+        }
+      },
+      "totals": {
+        "incidentsCreated": 2202,
+        "alertsPersisted": 8363,
+        "notificationsTotal": 10176,
+        "backgroundJobsPending": 2956,
+        "backgroundJobsFailed": 10
+      }
+    },
+    "peakActivePgConnections": 27,
+    "peakOldestPendingJobAgeMs": 867612,
+    "certified": false
+  },
+  {
+    "topologyId": "phase6_kustomize_integrated",
+    "topologyName": "Phase 6 Mega: Kind Kustomize Integrated",
+    "phase": 6,
+    "startedAt": "2026-09-29T05:27:09.484Z",
+    "completedAt": "2026-09-29T05:44:56.343Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 78479,
+        "exitCode": 99,
+        "p50Ms": 979.4,
+        "p95Ms": 6081.87,
+        "p99Ms": 9592.58,
+        "rps": 13.12,
+        "errorRate": 0.8901,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 94223,
+        "exitCode": 99,
+        "p50Ms": 1532.77,
+        "p95Ms": 16901.41,
+        "p99Ms": 17953.88,
+        "rps": 6.83,
+        "errorRate": 0.8328,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 78781,
+        "exitCode": 99,
+        "p50Ms": 1542.23,
+        "p95Ms": 4066.26,
+        "p99Ms": 12071.68,
+        "rps": 9.39,
+        "errorRate": 1,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 80374,
+        "exitCode": 99,
+        "p50Ms": 3532.72,
+        "p95Ms": 7547.09,
+        "p99Ms": 10608.16,
+        "rps": 10.1,
+        "errorRate": 0.9913,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "user-workload.js",
+        "loadLevel": "L0",
+        "durationMs": 77467,
+        "exitCode": 99,
+        "p50Ms": 291.8,
+        "p95Ms": 1044.46,
+        "p99Ms": 10504.02,
+        "rps": 11.74,
+        "errorRate": 0.7011,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "mega-journey.js",
+        "loadLevel": "L0",
+        "durationMs": 180662,
+        "exitCode": 99,
+        "p50Ms": 12989.28,
+        "p95Ms": 30012.96,
+        "p99Ms": 33152.94,
+        "rps": 14.91,
+        "errorRate": 0.9527,
+        "thresholdsPassed": false
+      }
+    ],
+    "verification": {
+      "passed": false,
+      "checkedAt": "2026-09-29T05:44:56.327Z",
+      "topology": "phase6_kustomize_integrated",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 2841,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": false,
+          "pendingCriticalCount": 1058,
+          "oldestPendingCriticalAgeMs": 689770,
+          "pendingBulkCount": 20,
+          "deliveredCriticalCount": 0,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "emulatorAvailable": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          },
+          "totalDuplicateDeliveries": 0
+        }
+      },
+      "totals": {
+        "incidentsCreated": 787,
+        "alertsPersisted": 2841,
+        "notificationsTotal": 2358,
+        "backgroundJobsPending": 2730,
+        "backgroundJobsFailed": 6
+      }
+    },
+    "peakActivePgConnections": 13,
+    "peakOldestPendingJobAgeMs": 704087,
+    "certified": false
+  },
+  {
+    "topologyId": "phase6_kustomize_split",
+    "topologyName": "Phase 6 Mega: Kind Kustomize Split",
+    "phase": 6,
+    "startedAt": "2026-09-29T05:46:56.826Z",
+    "completedAt": "2026-09-29T06:03:36.278Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 76984,
+        "exitCode": 99,
+        "p50Ms": 502.29,
+        "p95Ms": 1339.94,
+        "p99Ms": 1615.87,
+        "rps": 25.51,
+        "errorRate": 0.8803,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 78802,
+        "exitCode": 99,
+        "p50Ms": 304.71,
+        "p95Ms": 1740.24,
+        "p99Ms": 3115.4,
+        "rps": 27.77,
+        "errorRate": 0.4887,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 77078,
+        "exitCode": 99,
+        "p50Ms": 543.22,
+        "p95Ms": 1084.74,
+        "p99Ms": 1404.95,
+        "rps": 25,
+        "errorRate": 1,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 76407,
+        "exitCode": 99,
+        "p50Ms": 1188.12,
+        "p95Ms": 3259.23,
+        "p99Ms": 3905.24,
+        "rps": 26.8,
+        "errorRate": 0.9966,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "user-workload.js",
+        "loadLevel": "L0",
+        "durationMs": 76199,
+        "exitCode": 99,
+        "p50Ms": 25.19,
+        "p95Ms": 122.58,
+        "p99Ms": 329.77,
+        "rps": 31.58,
+        "errorRate": 0.5577,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "recovery-k8s_kustomize_delete_critical_worker_pod",
+        "loadLevel": "L0",
+        "durationMs": 47041,
+        "exitCode": 99,
+        "p50Ms": 452.58,
+        "p95Ms": 1259.73,
+        "p99Ms": 2222.55,
+        "rps": 32.08,
+        "errorRate": 0.7658,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "mega-journey.js",
+        "loadLevel": "L0",
+        "durationMs": 164126,
+        "exitCode": 99,
+        "p50Ms": 9405.77,
+        "p95Ms": 16843.43,
+        "p99Ms": 21290.7,
+        "rps": 23.79,
+        "errorRate": 0.8198,
+        "thresholdsPassed": false
+      }
+    ],
+    "verification": {
+      "passed": false,
+      "checkedAt": "2026-09-29T06:03:36.264Z",
+      "topology": "phase6_kustomize_split",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 8054,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": false,
+          "pendingCriticalCount": 3560,
+          "oldestPendingCriticalAgeMs": 808320,
+          "pendingBulkCount": 40,
+          "deliveredCriticalCount": 1750,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "emulatorAvailable": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          },
+          "totalDuplicateDeliveries": 0
+        }
+      },
+      "totals": {
+        "incidentsCreated": 2144,
+        "alertsPersisted": 8054,
+        "notificationsTotal": 8882,
+        "backgroundJobsPending": 2802,
+        "backgroundJobsFailed": 1
+      }
+    },
+    "peakActivePgConnections": 29,
+    "peakOldestPendingJobAgeMs": 588802,
+    "certified": false
+  },
+  {
+    "topologyId": "phase6_kustomize_split_pgbouncer",
+    "topologyName": "Phase 6 Mega: Kind Kustomize Split + PgBouncer",
+    "phase": 6,
+    "startedAt": "2026-09-29T06:04:31.524Z",
+    "completedAt": "2026-09-29T06:23:39.769Z",
+    "scenarios": [
+      {
+        "scenario": "alert-ingestion.js",
+        "loadLevel": "L0",
+        "durationMs": 76718,
+        "exitCode": 99,
+        "p50Ms": 637.23,
+        "p95Ms": 1692.47,
+        "p99Ms": 2216.97,
+        "rps": 22.98,
+        "errorRate": 0.8775,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "incident-lifecycle.js",
+        "loadLevel": "L0",
+        "durationMs": 78627,
+        "exitCode": 99,
+        "p50Ms": 588.5,
+        "p95Ms": 5827.28,
+        "p99Ms": 8013.49,
+        "rps": 14.73,
+        "errorRate": 0.7778,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "escalation.js",
+        "loadLevel": "L0",
+        "durationMs": 76045,
+        "exitCode": 99,
+        "p50Ms": 567.22,
+        "p95Ms": 1220.91,
+        "p99Ms": 1805.48,
+        "rps": 24.18,
+        "errorRate": 1,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "notifications.js",
+        "loadLevel": "L0",
+        "durationMs": 76356,
+        "exitCode": 99,
+        "p50Ms": 1733.37,
+        "p95Ms": 2997.54,
+        "p99Ms": 3958.38,
+        "rps": 23.12,
+        "errorRate": 0.996,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "status-fanout.js",
+        "loadLevel": "L0",
+        "durationMs": 75757,
+        "exitCode": 99,
+        "p50Ms": 569.23,
+        "p95Ms": 1690.27,
+        "p99Ms": 2575.33,
+        "rps": 34.64,
+        "errorRate": 0.2386,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "realtime.js",
+        "loadLevel": "L0",
+        "durationMs": 76127,
+        "exitCode": 0,
+        "p50Ms": 237.18,
+        "p95Ms": 4001.83,
+        "p99Ms": 4008.13,
+        "rps": 9.56,
+        "errorRate": 0.8022,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "user-workload.js",
+        "loadLevel": "L0",
+        "durationMs": 76378,
+        "exitCode": 99,
+        "p50Ms": 107.87,
+        "p95Ms": 606.53,
+        "p99Ms": 1198.29,
+        "rps": 20.42,
+        "errorRate": 0.7006,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "security-under-load.js",
+        "loadLevel": "L0",
+        "durationMs": 45855,
+        "exitCode": 0,
+        "p50Ms": 161.41,
+        "p95Ms": 1191.93,
+        "p99Ms": 1633.92,
+        "rps": 4.89,
+        "errorRate": 0.7523,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "recovery-k8s_kustomize_delete_critical_worker_pod",
+        "loadLevel": "L0",
+        "durationMs": 49025,
+        "exitCode": 99,
+        "p50Ms": 1008.56,
+        "p95Ms": 2406.88,
+        "p99Ms": 3015.96,
+        "rps": 17.7,
+        "errorRate": 0.7634,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "recovery-k8s_kustomize_delete_bulk_worker_pod",
+        "loadLevel": "L0",
+        "durationMs": 49357,
+        "exitCode": 99,
+        "p50Ms": 904.46,
+        "p95Ms": 2025.56,
+        "p99Ms": 2779.29,
+        "rps": 19.53,
+        "errorRate": 0.7679,
+        "thresholdsPassed": false
+      },
+      {
+        "scenario": "mega-journey.js",
+        "loadLevel": "L0",
+        "durationMs": 164253,
+        "exitCode": 99,
+        "p50Ms": 10890.69,
+        "p95Ms": 18834.97,
+        "p99Ms": 24970.16,
+        "rps": 21.53,
+        "errorRate": 0.8167,
+        "thresholdsPassed": false
+      }
+    ],
+    "verification": {
+      "passed": false,
+      "checkedAt": "2026-09-29T06:23:39.758Z",
+      "topology": "phase6_kustomize_split_pgbouncer",
+      "invariants": {
+        "zeroDuplicateOpenIncidents": {
+          "passed": true,
+          "duplicateGroups": 0,
+          "samples": []
+        },
+        "zeroLostAcceptedAlerts": {
+          "passed": true,
+          "totalLoadAlerts": 8456,
+          "unlinkedAlerts": 0
+        },
+        "zeroFalseEscalationsAfterAckOrResolve": {
+          "passed": true,
+          "violationCount": 0,
+          "sampleIncidentIds": []
+        },
+        "zeroCorruptedIncidentStates": {
+          "passed": true,
+          "acknowledgedWithoutTimestamp": 0,
+          "resolvedWithoutTimestamp": 0,
+          "snoozedWithoutUntil": 0
+        },
+        "zeroCriticalNotificationStarvation": {
+          "passed": false,
+          "pendingCriticalCount": 3469,
+          "oldestPendingCriticalAgeMs": 1064560,
+          "pendingBulkCount": 40,
+          "deliveredCriticalCount": 1961,
+          "deliveredBulkCount": 0
+        },
+        "providerIdempotencyCheck": {
+          "passed": true,
+          "emulatorAvailable": true,
+          "duplicateDeliveryKeysByProvider": {
+            "email": 0,
+            "slack": 0,
+            "sms": 0,
+            "push": 0,
+            "teams": 0,
+            "webhook": 0
+          },
+          "totalDuplicateDeliveries": 0
+        }
+      },
+      "totals": {
+        "incidentsCreated": 2235,
+        "alertsPersisted": 8456,
+        "notificationsTotal": 10512,
+        "backgroundJobsPending": 2917,
+        "backgroundJobsFailed": 4
+      }
+    },
+    "peakActivePgConnections": 36,
+    "peakOldestPendingJobAgeMs": 1035568,
+    "certified": false
   }
 ]
