@@ -7,6 +7,7 @@ import YAML from 'yaml';
 const root = resolve(import.meta.dirname, '../..');
 const run = (file, args) => execFileSync(file, args, { cwd: root, stdio: 'inherit' });
 const fullRuntime = !process.argv.includes('--static');
+const releaseCertification = process.argv.includes('--release');
 const externalRuntime = process.argv.includes('--external-runtime');
 const composeArgs = ['compose', '--project-name', 'opsknight-docs-v2-capture', '-f', 'tests/docs/environment/compose.yaml'];
 
@@ -22,6 +23,7 @@ run('node', ['scripts/docs/check-reader-quality.mjs']);
 run('node', ['scripts/docs/check-dangerous-claims.mjs']);
 run('node', ['scripts/check-docs-capabilities.cjs']);
 run('node', ['scripts/docs/check-evidence.mjs']);
+run('node', ['scripts/docs/check-review-signoffs.mjs', ...(releaseCertification ? ['--release'] : [])]);
 run('node', ['scripts/docs/check-feature-graph.mjs']);
 run('node', ['--test', ...readdirSync(join(root, 'tests/docs/tooling')).filter(name => name.endsWith('.test.mjs')).map(name => `tests/docs/tooling/${name}`)]);
 if (fullRuntime) {
@@ -45,6 +47,8 @@ const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMa
 const relative = path => path.slice(root.length + 1);
 const discovery = JSON.parse(readFileSync(join(root, 'generated/docs-discovery/current.json'), 'utf8'));
 const catalog = YAML.parse(readFileSync(join(root, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
+const reviewerChecklists = YAML.parse(readFileSync(join(root, 'docs/internal/certification/reviewer-checklists.yaml'), 'utf8'));
+const reviewerSignoffs = Object.values(reviewerChecklists.areas ?? {}).map(item => item.signoff?.status ?? 'pending');
 const capabilities = Object.values(catalog.capabilities);
 const evidence = walk(join(root, 'generated/docs-evidence/current')).filter(path => extname(path) === '.png');
 const journeys = walk(join(root, 'tests/docs/journeys')).filter(path => path.endsWith('.spec.ts'));
@@ -75,6 +79,7 @@ const report = {
     semanticContractAlarm: discovery.featureGraph.unresolvedSemanticContracts.length === 0 ? 'clear' : 'attention-required',
     evidenceContract: 'passed',
     toolingTests: 'passed',
+    humanReviewSignoffs: reviewerSignoffs.every(status => status === 'passed') ? 'passed' : 'pending',
     runtimeJourneys: fullRuntime ? 'passed' : 'not-run',
     websiteBuild: 'release-gated',
   },
@@ -103,6 +108,10 @@ const report = {
     publicLimits: discovery.limits.filter(item => !['INTERNAL_IMPLEMENTATION', 'PROVIDER_CONSTRAINT'].includes(item.semanticClassification)).length,
     journeyFiles: journeys.length,
     evidenceScreenshots: evidence.length,
+    humanReviewAreas: reviewerSignoffs.length,
+    humanReviewAreasPassed: reviewerSignoffs.filter(status => status === 'passed').length,
+    humanReviewAreasPending: reviewerSignoffs.filter(status => status === 'pending').length,
+    humanReviewAreasFailed: reviewerSignoffs.filter(status => status === 'failed').length,
   },
   artifacts: {
     discovery: 'generated/docs-discovery/current.json',
