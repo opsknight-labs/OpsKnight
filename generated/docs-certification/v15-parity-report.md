@@ -1,13 +1,11 @@
-# v1.5 to 2.0.0 topic parity
+# v1.5 to 2.0.0 knowledge review
 
-Generated from 134 v1.5 pages. This ledger tracks topic disposition; semantic-depth contracts separately verify required 2.0 behavior.
+This is a human-review tracker, not a documentation-completeness certificate. The generated inventory contains 1604 headings from 134 v1.5 pages. A disposition is counted only after a reviewer checks current 2.0 code and records the destination or evidence manually.
 
-- Topics inspected: 1604
-- PORTED: 1125
-- CHANGED: 419
-- REMOVED: 0
-- INTERNAL: 60
-- DEPRECATED: 0
-- NOT_APPLICABLE: 0
-- Unclassified: 0
-- Missing destinations: 0
+- Inventory topics: 1604
+- Manually reviewed: 0
+- PORT: 0
+- UPDATED: 0
+- NO_LONGER_APPLICABLE: 0
+- INTERNAL: 0
+- Awaiting human review: 1604

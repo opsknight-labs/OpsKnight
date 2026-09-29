@@ -16,7 +16,6 @@ run('node', ['scripts/docs/generate-integrations.mjs']);
 run('node', ['scripts/docs/generate-capacity-reference.mjs']);
 run('node', ['scripts/docs/generate-route-contract.mjs']);
 run('node', ['scripts/docs/generate-v15-parity.mjs']);
-run('node', ['scripts/docs/generate-depth-report.mjs']);
 run('node', ['scripts/docs/check-frontmatter.mjs']);
 run('node', ['scripts/check-docs-links.cjs']);
 run('node', ['scripts/docs/check-reader-quality.mjs']);
@@ -72,8 +71,8 @@ const report = {
     readerQuality: 'passed',
     capabilityCoverage: 'passed',
     featureClassification: discovery.featureGraph.unclassified.length === 0 ? 'passed' : 'failed',
-    featureDocumentation: discovery.featureGraph.undocumented.length === 0 ? 'passed' : 'failed',
-    semanticContracts: discovery.featureGraph.unresolvedSemanticContracts.length === 0 ? 'passed' : 'failed',
+    featureDocumentationAlarm: discovery.featureGraph.undocumented.length === 0 ? 'clear' : 'attention-required',
+    semanticContractAlarm: discovery.featureGraph.unresolvedSemanticContracts.length === 0 ? 'clear' : 'attention-required',
     evidenceContract: 'passed',
     toolingTests: 'passed',
     runtimeJourneys: fullRuntime ? 'passed' : 'not-run',

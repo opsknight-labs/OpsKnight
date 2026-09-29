@@ -9,7 +9,7 @@ const supportedTopologyIds = [
   'compose_split_bundled_db', 'compose_split_pgbouncer',
   'compose_split_pgbouncer_external_db_ca', 'swarm_single_node_split',
   'swarm_ha_split', 'kind_helm_split_pgbouncer',
-  'kind_kustomize_split_pgbouncer',
+  'kind_kustomize_split_pgbouncer', 'phase6_compose_integrated',
 ];
 
 test('capacity documentation remains evidence driven', () => {
