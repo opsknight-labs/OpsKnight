@@ -4,6 +4,9 @@ description: Assign, reassign, or unassign an incident without confusing ownersh
 type: how-to
 product_area: incidents
 audience: [responder, administrator]
+reader:
+  status: READER_COMPLETE
+  task: Assign, reassign, or unassign an incident and verify ownership.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -31,7 +34,11 @@ Choose the assignment type deliberately:
 
 Only active users are eligible. A team must still exist. Assignment does not bypass private-incident visibility or service-scope rules, so verify the chosen owner can open the incident.
 
-## Assign a user or team
+## Open the feature
+
+Open **Incidents → select the incident** and locate the **Assignee** control in incident details.
+
+## Configure and assign a user or team
 
 1. Open the incident detail page.
 2. Locate **Assignee**.
@@ -66,7 +73,7 @@ Reassignment changes the recorded owner immediately, so coordinate the handoff b
 
 Do not unacknowledge solely to change the owner. Acknowledgement records that response began; assignment records who owns it now.
 
-## Unassign an incident
+## Remove the assignment
 
 Unassign only when removing an incorrect owner or returning the incident to explicit triage:
 
@@ -109,3 +116,6 @@ Refresh the canonical incident page first. If it is correct, inspect provider de
 - [Escalate an incident](escalate.md)
 - [Incident lifecycle](../../concepts/incidents.md)
 - [Teams and ownership](../../concepts/teams.md)
+## What OpsKnight does
+
+OpsKnight stores either one user assignment, one team assignment, or no assignment and records the change in incident state/timeline. Assignment does not acknowledge the incident or stop escalation.

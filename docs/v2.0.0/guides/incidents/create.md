@@ -4,6 +4,9 @@ description: Create a manual incident with the right service, response settings,
 type: how-to
 product_area: incidents
 audience: [responder, administrator]
+reader:
+  status: READER_COMPLETE
+  task: Create and validate a manual incident.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -32,7 +35,11 @@ Check the target service before a production test:
 
 If no service is available in the form, ask an administrator to grant service access or create/configure the service first. See [Manage services](../../concepts/services.md).
 
-## Create the incident
+## Open the feature
+
+Open **Incidents** and select **Create incident**.
+
+## Configure and create the incident
 
 1. Open **Incidents**.
 2. Select **Create incident**.
@@ -73,6 +80,10 @@ On the incident detail page, confirm:
 6. Refresh the page and confirm the same incident and state remain visible.
 
 For a drill, tell responders that the incident is synthetic before submitting it. Exercise the intended acknowledgement and resolution path, then resolve the incident with a clear test note so it does not remain in active queues or reports.
+
+## Change or undo creation
+
+Creating an incident is auditable and cannot be made as though it never happened. Correct supported incident fields if they were entered incorrectly. For an accidental exercise, add a clear timeline note and resolve it with an accurate summary; do not use deletion to hide the event.
 
 ## Troubleshooting
 

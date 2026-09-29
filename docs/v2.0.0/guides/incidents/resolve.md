@@ -4,6 +4,9 @@ description: Close active response with an auditable resolution record, or safel
 type: how-to
 product_area: incidents
 audience: [responder, administrator]
+reader:
+  status: READER_COMPLETE
+  task: Resolve an incident with evidence or reopen it safely.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -31,7 +34,11 @@ Before resolving, confirm:
 
 You need responder-level incident management access or broader authorization.
 
-## Resolve the incident
+## Open the feature
+
+Open **Incidents → select the incident** and locate **Resolve** in the response controls.
+
+## Configure and resolve the incident
 
 1. Open the incident and review its latest timeline entries, status, assignee, and response health.
 2. Select **Resolve**.
@@ -54,7 +61,7 @@ Confirm:
 
 Do not repeatedly resolve because a provider card is stale. Verify canonical state, then diagnose the projection.
 
-## Reopen an incident
+## Undo resolution by reopening
 
 Reopen when the same operational event returns and the existing context remains the right response record. Create a new incident when the event is unrelated, requires separate reporting, or should not share the original deduplication identity.
 
@@ -90,8 +97,11 @@ Only a resolved incident can be reopened. Confirm access and refresh the page. F
 
 Compare the service, deduplication key, resolution time, and inbound event. The same identity inside the reopen window is expected to reuse recent context. Fix an overly broad upstream key rather than repeatedly closing the incident.
 
-## After resolution
+## Next steps
 
 Communicate final status, reconcile any public status incident, review delivery failures, and decide whether a postmortem is required. Track remediation through owned action items with due dates.
 
 See [Track incident action items](action-items.md), [Postmortem workflow](../../concepts/postmortem-workflow.md), and the [incident lifecycle](../../concepts/incidents.md).
+## What OpsKnight does
+
+OpsKnight validates required custom fields and current state, records the resolution actor/summary/timing, ends active escalation, and reconciles notifications/ChatOps/status projections while preserving history.
