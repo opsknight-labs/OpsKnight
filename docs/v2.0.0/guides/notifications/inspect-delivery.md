@@ -1,9 +1,12 @@
 ---
 title: Inspect notification delivery
 description: Trace notification intent, attempts, provider outcomes, and retries.
-type: how-to
+type: tutorial
 product_area: notifications
 audience: [administrator, operator, responder]
+reader:
+  status: READER_COMPLETE
+  task: Trace and verify a notification from intent through provider outcome.
 verification:
   level: source
   verified_at: 2026-09-27

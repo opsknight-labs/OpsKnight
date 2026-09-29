@@ -1,9 +1,12 @@
 ---
 title: Configure notification routing
 description: Enable channels and route incident events to eligible endpoints.
-type: how-to
+type: tutorial
 product_area: notifications
 audience: [administrator, responder]
+reader:
+  status: READER_COMPLETE
+  task: Configure and validate an end-to-end notification route.
 verification:
   level: source
   verified_at: 2026-09-27
