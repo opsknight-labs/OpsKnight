@@ -4,6 +4,9 @@ description: Interpret runtime readiness, dependencies, workers, queues, and pro
 type: how-to
 product_area: observability
 audience: [operator, administrator]
+reader:
+  status: READER_COMPLETE
+  task: Diagnose a degraded workflow from Health Center and prove recovery.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -17,6 +20,16 @@ verification:
 Sign in as an `ADMIN`, then identify the affected workflow, runtime role, and
 time window. The page is at **Settings → System → Health** and is generated on
 request; it is not a historical monitoring system.
+
+## Open the feature
+
+Open **Settings → System → Health**. Record the UTC time, failed or unknown checks, and affected workflow before restarting anything.
+
+## Configure the diagnostic context
+
+Open Prometheus and centralized logs for the same time window. Determine whether each check is cluster-wide, provider-scoped, or process-local; in split runtime, inspect the role that owns the work.
+
+## Understand how Health Center works
 
 1. Open the Health Center and inspect failed, warning, and unknown checks.
 2. Identify the owning dependency or runtime role.
@@ -93,3 +106,25 @@ original failure evidence.
   web replicas. Use instance-labelled Prometheus metrics and centralized logs.
 - **A check is unknown after upgrade:** verify the database migration Job and
   permissions for the tables queried by Health Center before assuming no issue.
+
+## Verify recovery
+
+Refresh until the owning check is healthy, then run the smallest synthetic workflow that proves the user outcome: ingest an alert, create or correlate an incident, deliver to a controlled destination, acknowledge, and resolve.
+
+## Undo the mitigation
+
+Roll back temporary replica, concurrency, log-level, or provider-routing changes through their source of truth. Keep a mitigation only after its capacity and security effects are reviewed.
+
+## Troubleshooting
+
+**The result changes on refresh:** requests are probably reaching different web replicas; use instance-labelled metrics and centralized logs.
+
+**Everything is green but delivery fails:** inspect inbound integration, incident, paging coverage, notification operation, and provider outcome in order.
+
+**Unknown has no details:** inspect the serving process logs and permissions for the underlying query; unknown is not healthy.
+
+## Next steps
+
+- [Health and metrics](./health-and-metrics)
+- [System logs](./system-logs)
+- [Notification not delivered](../../troubleshooting/notifications/not-delivered)

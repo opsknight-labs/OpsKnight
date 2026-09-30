@@ -5,6 +5,9 @@ type: deployment
 product_area: data
 audience: [operator, administrator]
 keywords: [backup OpsKnight, restore backup, PostgreSQL backup, disaster recovery]
+reader:
+  status: READER_COMPLETE
+  task: Produce, validate, rehearse, and restore a complete OpsKnight recovery set.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -18,7 +21,7 @@ verification:
 
 A recoverable OpsKnight backup is a matched recovery set: PostgreSQL data, the exact encryption/authentication secrets needed to interpret it, deployment configuration, and a known-compatible immutable application image. A database dump alone is not a proven recovery.
 
-## Define recovery objectives and ownership
+## Prerequisites and recovery objectives
 
 Before choosing a backup method, document:
 
@@ -31,7 +34,7 @@ Before choosing a backup method, document:
 
 Logical dumps are portable and inspectable but may not meet a low RPO by themselves. Managed PostgreSQL continuous backup/PITR can reduce RPO, but still needs restore rehearsal and the matching OpsKnight secrets.
 
-## Recovery inventory
+## Configure the recovery inventory
 
 Protect and version these together:
 
@@ -154,7 +157,7 @@ Verify and record:
 
 Save reviewer, date, source and image revision, backup identifier/checksum, recovered timestamp, duration, results, and logs/screenshots in an access-controlled evidence location.
 
-## Restore production
+## Run a production restore
 
 1. Declare the recovery incident, identify the approved recovery point, and stop ingress plus every write-capable Web/worker/scheduler/projector role.
 2. Preserve the failed/current database separately for forensic or reconciliation needs.
@@ -168,7 +171,7 @@ Save reviewer, date, source and image revision, backup identifier/checksum, reco
 
 `pg_restore --clean --if-exists` is destructive. Use it only against an explicitly verified recovery target after preserving its current state.
 
-## Key-loss and secret mismatch boundaries
+## Production considerations and key-loss boundaries
 
 - Missing `ENCRYPTION_KEY`/keyring: encrypted provider and integration values may be unreadable even though ordinary relational data exists. Restore the matching key or re-enter affected credentials; do not delete evidence while diagnosing.
 - Changed `NEXTAUTH_SECRET`: existing sessions/tokens may be invalidated. Plan forced reauthentication.

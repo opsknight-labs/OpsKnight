@@ -4,6 +4,9 @@ description: Validate, apply, verify, and recover OpsKnight PostgreSQL migration
 type: deployment
 product_area: upgrades
 audience: [operator]
+reader:
+  status: READER_COMPLETE
+  task: Validate, apply, verify, and recover OpsKnight database migrations.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -22,7 +25,7 @@ Set `DIRECT_DATABASE_URL` to PostgreSQL itself. Do not point migration commands 
 
 Stop or hold the rollout if you cannot identify a single migration owner. A Helm migration Job, Swarm migration service, Compose migration-only container, or one integrated container can own the operation. Do not start every replica with migrations enabled at the same time.
 
-## Validate the migration set
+## Configure and validate the migration set
 
 From the release checkout, with database variables set for the target:
 
@@ -121,6 +124,10 @@ psql "$DIRECT_DATABASE_URL" -c \
 ```
 
 Success means there are no active records with `finished_at IS NULL` and `rolled_back_at IS NULL`. Then verify application readiness, administrator login, incident read/write, scheduler and worker health, queue processing, and one synthetic notification before ending the rollout soak period.
+
+## Operate migrations in production
+
+Retain migration logs, image digest, schema-health output, and approval with the release record. Run exactly one migration owner, preserve a direct database route, and rehearse restore-based recovery whenever the previous image is incompatible with the new schema.
 
 ## If a migration fails
 

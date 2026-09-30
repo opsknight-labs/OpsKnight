@@ -4,6 +4,9 @@ description: Scale each runtime role from measured demand while preserving datab
 type: deployment
 product_area: operations
 audience: [operator]
+reader:
+  status: READER_COMPLETE
+  task: Scale the constrained runtime role and verify capacity without breaking correctness.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -32,7 +35,7 @@ Before changing capacity, collect a representative baseline covering a normal pe
 
 Confirm whether the installation is **integrated** or **split**, whether web traffic uses PgBouncer, and which roles connect directly to PostgreSQL. Review [Choose a deployment model](../capacity/choose-deployment.md) and [Sizing](../capacity/sizing.md).
 
-## Choose what to scale
+## Configure the scaling target
 
 Use the symptom to identify the constrained role:
 
@@ -94,6 +97,10 @@ Throughput alone is not success. A change that drains jobs faster while increasi
 Return to the recorded replica/concurrency values when database headroom falls below the approved threshold, tail latency or errors rise, readiness becomes unstable, or provider throttling increases. Wait for excess replicas to terminate cleanly, then confirm queue claims and scheduled work still have an active owner.
 
 Do not reduce a worker role to zero unless that role is intentionally disabled and its work is owned elsewhere. Preserve at least one supported scheduler owner.
+
+## Operate in production
+
+Record each accepted change with its workload window, database budget, provider headroom, and rollback threshold. Repeat the same synthetic workload after upgrades or topology changes; a replica count that was safe for one runtime contract is not automatically safe for another.
 
 ## Troubleshooting
 

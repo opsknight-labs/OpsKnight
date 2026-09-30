@@ -4,6 +4,9 @@ description: Select and execute an image, configuration, forward-fix, or restore
 type: deployment
 product_area: upgrades
 audience: [operator]
+reader:
+  status: READER_COMPLETE
+  task: Select and execute the safest image, forward-fix, or restore recovery path.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -31,7 +34,7 @@ Before every upgrade, retain:
 
 If these are missing during an incident, pause writes and investigate rather than guessing that an image rollback is safe.
 
-## Select the recovery path
+## Configure the recovery path
 
 ### Image/configuration rollback
 
@@ -124,7 +127,7 @@ When image-only rollback is unsafe:
 
 Follow [Back up and restore data](../data/backup-and-restore.md). Never restore production over the failed database before proving the backup is readable.
 
-## Post-rollback verification
+## Validation after rollback
 
 Verify the same surfaces used to accept an upgrade:
 
@@ -161,7 +164,7 @@ Confirm each lane has exactly the intended owner, old jobs remain compatible, pr
 
 Verify the matching encryption keyring and provider secrets were restored. Database data alone is insufficient for encrypted configuration.
 
-## Close the recovery
+## Operate after recovery
 
 Record trigger, decision, digests, schema state, backup recovery point, lost/reconciled writes, commands, evidence, verification result, and follow-up actions. Preserve the failed artifacts for postmortem analysis and update the rehearsal so the same ambiguity cannot recur.
 

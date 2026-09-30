@@ -4,6 +4,9 @@ description: Securely collect OpsKnight metrics in Compose, Swarm, Helm, and Kus
 type: deployment
 product_area: observability
 audience: [operator]
+reader:
+  status: READER_COMPLETE
+  task: Configure, secure, verify, and rotate Prometheus scraping for OpsKnight.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -63,7 +66,13 @@ reference it with `bearerTokenSecret` in a `ServiceMonitor`, and select the web
 Service. For Kustomize, keep that Secret, ServiceMonitor or scrape annotation,
 and NetworkPolicy in an owned overlay rather than editing the base.
 
-## Interpret and alert
+## Run the first scrape
+
+Trigger one collection from the Prometheus target page or query the endpoint with the configured bearer token. Confirm the target is up before relying on dashboards.
+
+## Validation and alert configuration
+
+Run the authenticated scrape shown above before enabling collection. A successful response is Prometheus text, not an HTML login page or JSON authorization error.
 
 Use `rate()` or `increase()` for counters ending in `_total`; do not sum gauges
 across replicas unless the metric represents replica-local work that should be
@@ -84,6 +93,10 @@ OpsKnight accepts one scrape token; it has no overlap set. Update the secret and
 all web replicas, then update Prometheus. Expect a short scrape interruption
 unless your deployment can coordinate those changes atomically. Confirm a 200
 response with the new token and verify the old token returns 401.
+
+## Operate in production
+
+Scrape every Web target required by the metric scope in the [metrics reference](../../reference/metrics). Protect the token in the monitoring secret store, alert on scrape absence separately from application health, and retain enough history to compare queue age and provider latency across deployments.
 
 ## Troubleshooting
 
