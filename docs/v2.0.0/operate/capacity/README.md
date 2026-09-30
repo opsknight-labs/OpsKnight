@@ -2,7 +2,7 @@
 title: Deployment and capacity
 order: 1
 description: Choose a topology, budget database connections, observe saturation, and interpret certified capacity.
-type: deployment
+type: concept
 product_area: deployment
 audience: [operator, administrator]
 keywords: [deployment capacity, deployment topology, sizing OpsKnight, high availability]
@@ -29,4 +29,3 @@ and correctness invariants are certified.
    comparing a measurement to your environment.
 
 No tested PR #777 topology currently has a certified production envelope.
-

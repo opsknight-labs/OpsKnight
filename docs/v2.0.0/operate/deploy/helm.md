@@ -5,6 +5,9 @@ type: deployment
 product_area: deployment
 audience: [operator, administrator]
 keywords: [Helm install, values production, split runtime, PgBouncer, external PostgreSQL]
+reader:
+  status: READER_COMPLETE
+  task: Configure, install, verify, operate, and upgrade an OpsKnight Helm release.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -33,7 +36,7 @@ kubectl auth can-i create deployment -n opsknight
 kubectl auth can-i create job -n opsknight
 ```
 
-## Understand the important value groups
+## Configuration value groups
 
 - `runtime.mode`: `integrated` or `split`. PgBouncer requires `split`.
 - `image`: repository, tag/digest, pull policy, and pull Secrets. Digest takes precedence over tag.
@@ -299,7 +302,7 @@ metrics:
 
 The template fails deliberately if ServiceMonitor is enabled without an existing scrape-token Secret. Confirm the CRD exists before installation.
 
-## Validate before installation
+## Validation before installation
 
 Run all validation against the exact production values and chart revision:
 

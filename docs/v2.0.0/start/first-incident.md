@@ -4,6 +4,9 @@ description: Verify the basic incident response lifecycle in a test service.
 type: tutorial
 product_area: incidents
 audience: [responder, administrator]
+reader:
+  status: READER_COMPLETE
+  task: Exercise and verify the complete incident lifecycle in a safe test service.
 verification:
   level: test
   verified_at: 2026-09-27

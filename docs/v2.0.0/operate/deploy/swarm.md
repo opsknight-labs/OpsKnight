@@ -5,6 +5,9 @@ type: deployment
 product_area: deployment
 audience: [operator, administrator]
 keywords: [Docker Swarm, Swarm HA, multi-node Docker, high availability]
+reader:
+  status: READER_COMPLETE
+  task: Deploy, verify, operate, upgrade, and recover OpsKnight on Docker Swarm.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -112,7 +115,7 @@ The deploy script labels the current manager automatically only for a
 single-node Swarm. In a multi-node cluster it fails until you explicitly label a
 database node, unless you deliberately set `AUTO_LABEL_DATABASE_NODE=true`.
 
-## 2. Configure public URLs and secrets
+## Configuration: public URLs and secrets
 
 Run deployments from a manager in a protected administrative session. Export
 values through your CI secret store or shell without committing them:
@@ -204,7 +207,7 @@ script runs the repository capacity validator and stops when its configured
 budget is unsafe. See [choose a deployment](../capacity/choose-deployment/) and
 [benchmark results](../capacity/benchmark-results/) before increasing replicas.
 
-## 5. Deploy in a controlled sequence
+## Deploy in a controlled sequence
 
 From the repository root on a manager, deploy the default split topology:
 
@@ -259,7 +262,7 @@ Verify index creation before enabling `INDEXED` on scheduler replicas. See
 [database migrations](../upgrades/database-migrations/) for the rollout and
 rollback boundary.
 
-## 6. Verify the installation
+## Verify the installation
 
 The deploy script calls the health checker automatically. Re-run it after load
 balancer or network changes:

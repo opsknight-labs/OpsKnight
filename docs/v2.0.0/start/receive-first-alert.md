@@ -4,6 +4,9 @@ description: Connect a generic webhook, send a safe trigger, and verify incident
 type: tutorial
 product_area: getting-started
 audience: [administrator, operator]
+reader:
+  status: READER_COMPLETE
+  task: Connect a generic webhook and verify trigger, deduplication, and recovery behavior.
 verification:
   level: source
   verified_at: 2026-09-29

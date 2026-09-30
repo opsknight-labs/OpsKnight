@@ -4,6 +4,9 @@ description: Verify notification delivery, acknowledge ownership, investigate, a
 type: tutorial
 product_area: getting-started
 audience: [responder]
+reader:
+  status: READER_COMPLETE
+  task: Acknowledge, investigate, and resolve the first incident and verify its evidence.
 verification:
   level: source
   verified_at: 2026-09-29

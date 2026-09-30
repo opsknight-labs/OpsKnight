@@ -5,6 +5,9 @@ type: tutorial
 product_area: getting-started
 audience: [administrator]
 keywords: [configure on-call, on-call schedule, responder rotation, escalation policy]
+reader:
+  status: READER_COMPLETE
+  task: Configure and verify on-call coverage and escalation for the first service.
 verification:
   level: source
   verified_at: 2026-09-29

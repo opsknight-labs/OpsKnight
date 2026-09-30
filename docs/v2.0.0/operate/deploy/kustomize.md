@@ -5,6 +5,9 @@ type: deployment
 product_area: deployment
 audience: [operator, administrator]
 keywords: [Kustomize, GitOps deployment, Kubernetes overlays, split PgBouncer]
+reader:
+  status: READER_COMPLETE
+  task: Build, apply, verify, promote, and upgrade an OpsKnight Kustomize overlay.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -21,6 +24,10 @@ verification:
 Use Kustomize when your platform team owns manifests, environment overlays, and GitOps promotion. Keep the maintained profile as the base and express only environment differences in your overlay. Do not copy the rendered resources into an independent manifest set.
 
 Read [Kubernetes](./kubernetes) for platform requirements and [Split runtime](./split-runtime) before selecting a topology.
+
+## Prerequisites
+
+Prepare `kubectl` with Kustomize support, namespace access, an immutable OpsKnight image digest, a TLS ingress path, and a secret-management workflow that does not commit credentials to Git.
 
 ## Maintained profiles
 
@@ -41,7 +48,7 @@ kubectl kustomize deploy/kubernetes/kustomize/profiles/split-pgbouncer > /tmp/sp
 
 Inspect Services, images, Deployments, StatefulSets, PDBs, NetworkPolicies, ingress, and Secrets. Split profiles require a tested 2.0 split-runtime image; the checked-in placeholder cannot run production.
 
-## Create an environment overlay
+## Configure an environment overlay
 
 Use a repository-owned directory such as:
 
@@ -237,7 +244,7 @@ kubectl -n opsknight create secret generic opsknight-metrics \
 
 Patch the ServiceMonitor selector/labels and token reference for your Prometheus installation. Render and inspect it with the rest of the overlay.
 
-## Validate in CI
+## Validation in CI
 
 ```sh
 kubectl kustomize deploy/environments/production > /tmp/opsknight.yaml
