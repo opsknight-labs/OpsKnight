@@ -2,7 +2,7 @@
 title: Integrations
 order: 4
 description: Connect monitoring, cloud, communication, issue-tracking, uptime, and webhook systems.
-type: integration
+type: concept
 product_area: integrations
 audience: [administrator, operator]
 verification:

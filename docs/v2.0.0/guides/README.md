@@ -2,7 +2,7 @@
 title: Guides
 order: 3
 description: Task-oriented workflows for responders and administrators.
-type: how-to
+type: concept
 product_area: platform
 audience: [responder, administrator]
 verification:

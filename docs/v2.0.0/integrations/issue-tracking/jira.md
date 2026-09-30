@@ -1,7 +1,7 @@
 ---
 title: Jira
 description: Configure Jira issue creation, linking, synchronization, and webhooks.
-type: integration
+type: concept
 product_area: jira
 audience: [administrator, responder]
 verification:
