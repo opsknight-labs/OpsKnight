@@ -6,7 +6,7 @@ product_area: authorization
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-09-29
+  verified_at: 2026-09-30
   evidence:
     - src/lib/authorization.ts
 ---

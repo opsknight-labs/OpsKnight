@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-09-29
+  verified_at: 2026-09-30
   evidence:
     - src/
     - deploy/
@@ -2099,8 +2099,8 @@ Sets the polling interval while the general queue is idle.
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
-- Static default: `http://localhost:3000`
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `src/app/(app)/services/[id]/page.tsx`, `src/app/(app)/settings/system/page.tsx`, `src/app/api/settings/app-url/route.ts`, `src/app/api/slack/oauth/callback/route.ts`, `src/app/robots.ts`, `src/app/setup/actions.ts`, `src/app/setup/page.tsx`, `src/lib/admin-health.ts`, `src/lib/app-url.ts`, `src/lib/auth-cookies.ts`, `src/lib/auth-public-origin.ts`, `src/lib/email-components.ts`, `src/lib/env-validation.ts`, `src/lib/notification-providers.ts`, `src/lib/request-host.ts`, `src/lib/status-page-resolver.ts`, `src/lib/status-pages/status-auth.ts`, `src/middleware.ts`
+- Static default: `http://localhost:3000`, `https://api.opsknight.com`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `src/app/(app)/services/[id]/page.tsx`, `src/app/(app)/settings/system/page.tsx`, `src/app/api/settings/app-url/route.ts`, `src/app/api/slack/oauth/callback/route.ts`, `src/app/robots.ts`, `src/app/setup/actions.ts`, `src/app/setup/page.tsx`, `src/components/settings/ApiKeysPanel.tsx`, `src/lib/admin-health.ts`, `src/lib/app-url.ts`, `src/lib/auth-cookies.ts`, `src/lib/auth-public-origin.ts`, `src/lib/email-components.ts`, `src/lib/env-validation.ts`, `src/lib/notification-providers.ts`, `src/lib/request-host.ts`, `src/lib/status-page-resolver.ts`, `src/lib/status-pages/status-auth.ts`, `src/middleware.ts`
 
 ## `NEXT_PUBLIC_APP_VERSION`
 
@@ -2226,7 +2226,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `development`
-- Sources: `next.config.ts`, `src/app/(app)/settings/system/page.tsx`, `src/app/api/health/route.ts`, `src/app/api/jira/webhook/route.ts`, `src/app/api/microsoft-teams/messages/route.ts`, `src/app/api/search/route.ts`, `src/app/api/slack/oauth/route.ts`, `src/app/providers.tsx`, `src/app/setup/page.tsx`, `src/components/DashboardRealtimeWrapper.tsx`, `src/components/WebVitalsReporter.tsx`, `src/components/ui/ErrorBoundary.tsx`, `src/lib/admin-health.ts`, `src/lib/api-keys.ts`, `src/lib/app-url.ts`, `src/lib/auth-cookies.ts`, `src/lib/auth-public-origin.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`, `src/lib/incident-collaboration/meeting-store.ts`, `src/lib/logger.ts`, `src/lib/microsoft-teams/auth.ts`, `src/lib/monitoring/sentry.ts`, `src/lib/provider-admission.ts`, `src/lib/retention-policy.ts`, `src/lib/secret-manager.ts`, `src/middleware.ts`
+- Sources: `next.config.ts`, `src/app/(app)/settings/system/page.tsx`, `src/app/api/health/route.ts`, `src/app/api/jira/webhook/route.ts`, `src/app/api/microsoft-teams/messages/route.ts`, `src/app/api/search/route.ts`, `src/app/api/slack/oauth/route.ts`, `src/app/providers.tsx`, `src/app/setup/page.tsx`, `src/components/DashboardRealtimeWrapper.tsx`, `src/components/DatabaseOffline.tsx`, `src/components/WebVitalsReporter.tsx`, `src/components/ui/ErrorBoundary.tsx`, `src/lib/admin-health.ts`, `src/lib/api-keys.ts`, `src/lib/app-url.ts`, `src/lib/auth-cookies.ts`, `src/lib/auth-public-origin.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`, `src/lib/incident-collaboration/meeting-store.ts`, `src/lib/logger.ts`, `src/lib/microsoft-teams/auth.ts`, `src/lib/monitoring/sentry.ts`, `src/lib/provider-admission.ts`, `src/lib/retention-policy.ts`, `src/lib/secret-manager.ts`, `src/middleware.ts`
 
 ## `NONCE_COOKIE_NAME`
 
