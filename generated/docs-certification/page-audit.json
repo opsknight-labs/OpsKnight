@@ -3,14 +3,14 @@
   "purpose": "Reader-completeness audit. Mapping and source verification do not imply task usability.",
   "counts": {
     "DISCOVERED": 0,
-    "MAPPED": 130,
+    "MAPPED": 129,
     "DRAFTED": 0,
-    "READER_COMPLETE": 108,
+    "READER_COMPLETE": 109,
     "HUMAN_VERIFIED": 0,
     "RUNTIME_VERIFIED": 0
   },
   "taskPages": 170,
-  "readerCompleteTaskPages": 108,
+  "readerCompleteTaskPages": 109,
   "humanVerifiedTaskPages": 0,
   "runtimeVerifiedTaskPages": 0,
   "pages": [
@@ -699,8 +699,8 @@
     {
       "page": "guides/status-pages/publish-update.md",
       "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
+      "userTask": "Publish, verify, update, and close an incident on the single supported status page.",
+      "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
