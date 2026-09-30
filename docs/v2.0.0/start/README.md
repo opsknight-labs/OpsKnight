@@ -2,7 +2,7 @@
 title: Start here
 order: 1
 description: Install OpsKnight and complete your first incident workflow.
-type: tutorial
+type: concept
 product_area: getting-started
 audience: [operator, administrator, responder]
 verification:

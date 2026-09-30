@@ -5,6 +5,9 @@ type: tutorial
 product_area: deployment
 audience: [operator, administrator]
 keywords: [install OpsKnight, Docker Compose, local install, quick start, first boot]
+reader:
+  status: READER_COMPLETE
+  task: Install an isolated OpsKnight evaluation and verify the first incident workflow.
 verification:
   level: source
   verified_at: 2026-09-29

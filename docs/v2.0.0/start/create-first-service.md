@@ -5,6 +5,9 @@ type: tutorial
 product_area: getting-started
 audience: [administrator]
 keywords: [create service, create team, first service, service ownership, add responder]
+reader:
+  status: READER_COMPLETE
+  task: Create and verify the first team, responder, and service ownership boundary.
 verification:
   level: source
   verified_at: 2026-09-29

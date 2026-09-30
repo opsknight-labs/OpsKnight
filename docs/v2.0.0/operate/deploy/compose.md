@@ -5,6 +5,9 @@ type: deployment
 product_area: deployment
 audience: [operator, administrator]
 keywords: [Docker Compose, split runtime, PgBouncer, external PostgreSQL, backup, upgrade]
+reader:
+  status: READER_COMPLETE
+  task: Deploy, secure, verify, operate, and upgrade OpsKnight with Docker Compose.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -30,7 +33,7 @@ The checked-in Compose files support a single-host integrated runtime, isolated 
 
 Compose is still a single-host orchestrator. It does not provide multi-node rescheduling. Use [Swarm](./swarm), [Helm](./helm), or [Kustomize](./kustomize) when host failure must be tolerated automatically.
 
-## Host and network prerequisites
+## Prerequisites for the host and network
 
 Install Docker Engine and Compose v2. Provide enough memory, CPU, disk IOPS, and PostgreSQL connections for the chosen roles. Reserve host port `3000` for the web application and, with the bundled database, loopback port `5432` unless overridden.
 
@@ -264,7 +267,7 @@ This preserves the named database volume. `down --volumes` destroys bundled Post
 
 **Workers are healthy but work is delayed:** inspect lane-specific backlog and provider admission state. Restarting all roles can hide the signal without correcting capacity or provider throttling.
 
-## Production acceptance checklist
+## Validation and production acceptance checklist
 
 - Image and PgBouncer images are pinned; no `latest` tag is used.
 - Placeholder secrets are absent and stable secrets are backed up.

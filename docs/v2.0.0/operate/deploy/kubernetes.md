@@ -5,6 +5,9 @@ type: deployment
 product_area: deployment
 audience: [operator, administrator]
 keywords: [Kubernetes install, production deployment, ingress, NetworkPolicy, high availability]
+reader:
+  status: READER_COMPLETE
+  task: Plan, install, secure, verify, and operate OpsKnight on Kubernetes.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -19,7 +22,7 @@ verification:
 
 OpsKnight provides two maintained Kubernetes packaging paths. [Helm](./helm) supplies schema-validated values and a migration hook. [Kustomize](./kustomize) supplies bases and profiles for platform-owned overlays. Both use the same application image, runtime roles, database contracts, health endpoints, and public-origin requirements.
 
-## Production prerequisites
+## Prerequisites for production
 
 Prepare:
 
@@ -56,7 +59,7 @@ kubectl get namespace opsknight
 
 The ServiceAccount does not automatically mount an API token. OpsKnight does not require Kubernetes API access during normal operation. Do not add broad RBAC permissions unless an independently deployed platform component needs them.
 
-## Create production secrets
+## Configure production secrets
 
 Never apply the placeholder values in `kustomize/base/secret.yaml`. Create the Secret from your secret manager or from a protected administration shell:
 
@@ -226,7 +229,7 @@ kubectl -n opsknight get servicemonitor
 
 Check that Prometheus sends the configured token and can reach the selected Service through NetworkPolicy. Use [Prometheus](../reliability/prometheus) and the [metrics reference](../../reference/metrics).
 
-## Installation verification
+## Verify the installation
 
 After migration succeeds and manifests are applied:
 

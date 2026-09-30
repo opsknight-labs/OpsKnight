@@ -44,4 +44,3 @@ the pooled URL.
 Run a representative synthetic load and observe the signals in
 [Scaling signals](./scaling-signals/). Increase one constrained resource at a
 time and repeat the same workload before changing the documented budget.
-

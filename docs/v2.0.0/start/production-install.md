@@ -1,7 +1,7 @@
 ---
 title: Plan a production installation
 description: Choose and validate an OpsKnight deployment topology.
-type: deployment
+type: concept
 product_area: deployment
 audience: [operator, administrator]
 keywords: [production install, choose deployment, Docker Compose, Kubernetes, Swarm, high availability]
