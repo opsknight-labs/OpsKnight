@@ -2,6 +2,9 @@
 title: Notifications are not delivered
 description: Trace recipient eligibility, endpoint state, worker attempts, and provider feedback.
 type: troubleshooting
+reader:
+  status: READER_COMPLETE
+  task: Diagnose, recover, and verify not delivered.
 product_area: notifications
 audience: [operator, administrator]
 keywords: [notification failed, notification not delivered, missing page, provider failure, delivery troubleshooting]

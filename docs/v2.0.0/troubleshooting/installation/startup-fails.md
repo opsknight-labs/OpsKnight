@@ -2,6 +2,9 @@
 title: Application startup fails
 description: Diagnose migration, configuration, database, and runtime startup failures.
 type: troubleshooting
+reader:
+  status: READER_COMPLETE
+  task: Diagnose, recover, and verify startup fails.
 product_area: deployment
 audience: [operator]
 verification:

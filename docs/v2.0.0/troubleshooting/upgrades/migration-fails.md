@@ -2,6 +2,9 @@
 title: Upgrade migration fails
 description: Preserve data and diagnose migration ordering, drift, locks, and compatibility.
 type: troubleshooting
+reader:
+  status: READER_COMPLETE
+  task: Diagnose, recover, and verify migration fails.
 product_area: upgrades
 audience: [operator]
 verification:

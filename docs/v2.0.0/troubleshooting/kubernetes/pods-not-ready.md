@@ -2,6 +2,9 @@
 title: Kubernetes pods are not ready
 description: Diagnose migrations, probes, configuration, policy, resources, and dependencies.
 type: troubleshooting
+reader:
+  status: READER_COMPLETE
+  task: Diagnose, recover, and verify pods not ready.
 product_area: deployment
 audience: [operator]
 verification:

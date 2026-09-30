@@ -2,6 +2,9 @@
 title: Incident lifecycle action is stuck
 description: Diagnose an acknowledgement, assignment, escalation, or resolution that does not converge.
 type: troubleshooting
+reader:
+  status: READER_COMPLETE
+  task: Diagnose, recover, and verify lifecycle stuck.
 product_area: incidents
 audience: [operator, responder]
 verification:

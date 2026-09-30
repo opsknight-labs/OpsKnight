@@ -2,6 +2,9 @@
 title: Database or PgBouncer connections fail
 description: Diagnose URLs, TLS, authentication, pool mode, and connection budgets.
 type: troubleshooting
+reader:
+  status: READER_COMPLETE
+  task: Diagnose, recover, and verify connection failures.
 product_area: data
 audience: [operator]
 verification:
