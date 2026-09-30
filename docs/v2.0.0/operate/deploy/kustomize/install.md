@@ -22,7 +22,113 @@ Complete [Kubernetes prerequisites](../kubernetes/prerequisites), secrets, datab
 
 ## Prepare the overlay
 
-Create an environment overlay that references exactly one profile. Patch the image digest, public URLs, ingress/TLS, database/storage, policy, replicas/resources, probes, PDBs, and topology spread. Delete the placeholder Secret; make the secret controller create the expected keys.
+Create this directory outside the maintained profile:
+
+```text
+deploy/environments/production/
+├── kustomization.yaml
+├── delete-placeholder-secret.yaml
+├── config-patch.yaml
+├── ingress-patch.yaml
+└── deployment-patch.yaml
+```
+
+`kustomization.yaml` selects exactly one profile, pins the image digest, and applies the environment patches:
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: opsknight
+resources:
+  - ../../kubernetes/kustomize/profiles/integrated
+patches:
+  - path: delete-placeholder-secret.yaml
+  - path: config-patch.yaml
+  - path: ingress-patch.yaml
+  - path: deployment-patch.yaml
+images:
+  - name: ghcr.io/opsknight-labs/opsknight
+    newName: ghcr.io/opsknight-labs/opsknight
+    digest: sha256:<tested-opsknight-image-digest>
+```
+
+Delete the example Secret rendered by the base. Your External Secrets or CSI controller must create `opsknight-secrets` separately:
+
+```yaml
+# delete-placeholder-secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: opsknight-secrets
+  namespace: opsknight
+$patch: delete
+```
+
+Set both public origins:
+
+```yaml
+# config-patch.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opsknight-config
+  namespace: opsknight
+data:
+  NEXTAUTH_URL: https://opsknight.example.com
+  NEXT_PUBLIC_APP_URL: https://opsknight.example.com
+```
+
+Patch ingress to match your cluster:
+
+```yaml
+# ingress-patch.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: opsknight-ingress
+  namespace: opsknight
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: opsknight.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: opsknight-service
+                port: { number: 80 }
+  tls:
+    - hosts: [opsknight.example.com]
+      secretName: opsknight-tls
+```
+
+Set explicit replica and resource values instead of inheriting evaluation defaults:
+
+```yaml
+# deployment-patch.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsknight-app
+  namespace: opsknight
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: opsknight-app
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "1", memory: 1Gi }
+```
+
+Create `opsknight-secrets` with `DATABASE_URL`, `DIRECT_DATABASE_URL`, `NEXTAUTH_SECRET`, and `ENCRYPTION_KEY` before applying the overlay. If you retain bundled PostgreSQL, also provide `POSTGRES_USER` and `POSTGRES_PASSWORD`. For external PostgreSQL, patch out the bundled Service and StatefulSet and narrow database egress as described in [External PostgreSQL](./external-postgres).
+
+Patch storage, NetworkPolicy, probes, PDBs, and topology spread for the target cluster rather than accepting unknown defaults. Then render and validate the complete result:
 
 ```sh
 kubectl kustomize deploy/environments/production > rendered.yaml
@@ -70,4 +176,3 @@ Use reviewed overlay revisions and explicit migration/rollback procedures. Befor
 
 - [GitOps lifecycle](./gitops)
 - [Kustomize troubleshooting](./troubleshooting)
-

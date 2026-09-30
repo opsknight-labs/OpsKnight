@@ -22,7 +22,100 @@ Complete the [Kubernetes prerequisites](../kubernetes/prerequisites), [secrets](
 
 ## Prepare production values
 
-Create namespace and the externally managed Secret, then create `values.production.yaml` with:
+The following starter uses integrated runtime, external PostgreSQL, nginx ingress, cert-manager TLS, two application replicas, and an externally managed Secret. Create the namespace and Secret first:
+
+```sh
+kubectl create namespace opsknight
+kubectl -n opsknight create secret generic opsknight-secrets \
+  --from-literal=DATABASE_URL='postgresql://opsknight:<encoded-password>@postgres.example.internal:5432/opsknight?schema=public&sslmode=require&connection_limit=20&pool_timeout=30' \
+  --from-literal=DIRECT_DATABASE_URL='postgresql://opsknight:<encoded-password>@postgres.example.internal:5432/opsknight?schema=public&sslmode=require&connection_limit=5&pool_timeout=30' \
+  --from-literal=NEXTAUTH_SECRET="$(openssl rand -base64 32)" \
+  --from-literal=ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+  --from-literal=PROMETHEUS_SCRAPE_TOKEN="$(openssl rand -base64 32)"
+```
+
+Percent-encode reserved characters in database credentials. Prefer an External Secrets or CSI controller in production so plaintext values do not remain in shell history.
+
+Save this baseline as `values.production.yaml`, replace every value in angle brackets, and adjust resources from measured demand:
+
+```yaml
+runtime:
+  mode: integrated
+replicaCount: 2
+
+image:
+  repository: ghcr.io/opsknight-labs/opsknight
+  tag: ""
+  digest: "sha256:<tested-opsknight-image-digest>"
+  pullPolicy: IfNotPresent
+
+secrets:
+  existingSecret: opsknight-secrets
+  keys:
+    databaseUrl: DATABASE_URL
+    nextauthSecret: NEXTAUTH_SECRET
+    encryptionKey: ENCRYPTION_KEY
+
+migrations:
+  job:
+    enabled: true
+
+config:
+  nodeEnv: production
+  nextauthUrl: https://opsknight.example.com
+  nextPublicAppUrl: https://opsknight.example.com
+  notificationControlPlanePersonal: "true"
+
+postgresql:
+  enabled: false
+database:
+  port: 5432
+  maxApplicationConnections: 40
+
+resources:
+  requests: { cpu: 250m, memory: 512Mi }
+  limits: { cpu: "1", memory: 1Gi }
+autoscaling:
+  enabled: false
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: opsknight.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: opsknight-tls
+      hosts: [opsknight.example.com]
+
+networkPolicy:
+  enabled: true
+  ingressNamespaceLabels:
+    kubernetes.io/metadata.name: ingress-nginx
+  externalDatabaseCIDRs: [<database-cidr>]
+
+metrics:
+  enabled: true
+  scrapeTokenSecret:
+    existingSecret: opsknight-secrets
+    key: PROMETHEUS_SCRAPE_TOKEN
+  serviceMonitor:
+    enabled: false
+```
+
+This is a starting contract, not a universal capacity recommendation. Confirm the database CIDR, ingress namespace label, and aggregate connection ceiling. The production file must contain:
 
 - exact image digest;
 - `secrets.existingSecret` and correct key mappings;
@@ -95,4 +188,3 @@ Use [Helm upgrade](./upgrade) for changes. Before uninstalling, take a verified 
 - [Configure ingress](./ingress)
 - [Production checklist](../kubernetes/production-checklist)
 - [Upgrade Helm](./upgrade)
-
