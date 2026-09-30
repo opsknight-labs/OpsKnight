@@ -134,7 +134,7 @@
   "optionalDependencies": {
     "@aws-sdk/client-sns": "^3.971.0",
     "@sendgrid/mail": "^8.1.6",
-    "nodemailer": "10.0.2",
+    "nodemailer": "10.0.12",
     "resend": "^4.0.0",
     "twilio": "^5.11.1"
   },
