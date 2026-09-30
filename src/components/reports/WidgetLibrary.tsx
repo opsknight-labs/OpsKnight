@@ -6,9 +6,7 @@ import {
   Search,
   Plus,
   BarChart2,
-  Gauge,
   Table2,
-  Lightbulb,
   TrendingUp,
   Activity,
   AlertTriangle,
@@ -31,7 +29,7 @@ interface WidgetLibraryProps {
   isOpen: boolean;
   onClose: () => void;
   onAddWidget: (widget: WidgetDefinition) => void;
-  existingWidgetKeys?: string[];
+  existingWidgetDefIds?: string[];
 }
 
 const CATEGORY_ICONS: Record<WidgetCategory, React.ElementType> = {
@@ -46,13 +44,6 @@ const CATEGORY_LABELS: Record<WidgetCategory, string> = {
   charts: 'Charts & Graphs',
   tables: 'Data Tables',
   special: 'Special Widgets',
-};
-
-const CATEGORY_DESCRIPTIONS: Record<WidgetCategory, string> = {
-  metrics: 'KPIs with trend indicators and gauges',
-  charts: 'Line, bar, and heatmap visualizations',
-  tables: 'Tabular data for detailed analysis',
-  special: 'AI insights and on-call info',
 };
 
 // Widget type icons
@@ -77,7 +68,7 @@ const WidgetLibrary = memo(function WidgetLibrary({
   isOpen,
   onClose,
   onAddWidget,
-  existingWidgetKeys = [],
+  existingWidgetDefIds = [],
 }: WidgetLibraryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<WidgetCategory | 'all'>('all');
@@ -213,7 +204,7 @@ const WidgetLibrary = memo(function WidgetLibrary({
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {widgets.map(widget => {
-                  const isAdded = existingWidgetKeys.includes(widget.metricKey);
+                  const isAdded = existingWidgetDefIds.includes(widget.id);
                   const Icon = getWidgetIcon(widget.id);
                   const metricDefinition = getMetricDefinition(widget.metricKey);
 
@@ -294,8 +285,8 @@ const WidgetLibrary = memo(function WidgetLibrary({
         <div className="p-4 border-t border-border bg-muted/30 flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
             {filteredWidgets.length} widgets available
-            {existingWidgetKeys.length > 0 && (
-              <span> • {existingWidgetKeys.length} already added</span>
+            {existingWidgetDefIds.length > 0 && (
+              <span> • {existingWidgetDefIds.length} already added</span>
             )}
           </p>
           <button

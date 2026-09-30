@@ -32,12 +32,13 @@ import {
   getPreviousPeriodValue,
 } from './widgets';
 import type { SerializedSLAMetrics } from '@/lib/sla';
-import { getWidgetById } from '@/lib/reports/widget-registry';
+import { getWidgetById, getAllWidgets } from '@/lib/reports/widget-registry';
 
 type Widget = {
   id: string;
   widgetType: string;
   metricKey: string;
+  widgetDefinitionId?: string;
   title?: string | null;
   position: { x: number; y: number; w: number; h: number };
   config: Record<string, any>;
@@ -253,12 +254,12 @@ const SortableWidgetItem = memo(function SortableWidgetItem({
         <div
           {...attributes}
           {...listeners}
-          className="absolute inset-0 z-10 cursor-grab active:cursor-grabbing"
+          className="absolute top-0 left-0 right-0 h-8 z-10 flex items-center justify-center cursor-grab active:cursor-grabbing"
           style={{ touchAction: 'none' }}
         >
           {/* Visible drag indicator */}
           <div className="absolute top-1 left-1/2 -translate-x-1/2 opacity-0 group-hover/widget:opacity-100 transition-opacity z-20">
-            <div className="flex items-center gap-1 px-2 py-1 bg-primary text-primary-foreground text-xs rounded-full shadow-lg">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/80 text-muted-foreground text-xs">
               <GripVertical className="h-3 w-3" />
               <span>Drag</span>
             </div>
@@ -336,7 +337,9 @@ const WidgetContent = memo(function WidgetContent({
   onConfigure?: () => void;
 }) {
   // Get widget definition for default title
-  const definition = getWidgetById(widget.metricKey.replace('Widget', '').toLowerCase());
+  const definition = widget.widgetDefinitionId
+    ? getWidgetById(widget.widgetDefinitionId)
+    : getAllWidgets().find(w => w.metricKey === widget.metricKey);
   const title = widget.title || definition?.name || widget.metricKey;
 
   // Get metric data

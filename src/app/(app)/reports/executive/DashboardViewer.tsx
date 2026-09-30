@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { notify } from '@/lib/toast';
 import DashboardGrid from '@/components/reports/DashboardGrid';
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -32,6 +33,7 @@ import {
   Sparkles,
   Plus,
   Trash2,
+  Loader2,
 } from 'lucide-react';
 import type { SerializedSLAMetrics } from '@/lib/sla';
 import type { DashboardTemplate } from '@/lib/reports/dashboard-templates';
@@ -42,6 +44,7 @@ type Widget = {
   id: string;
   widgetType: string;
   metricKey: string;
+  widgetDefinitionId?: string;
   title?: string | null;
   position: { x: number; y: number; w: number; h: number };
   config: Record<string, any>;
@@ -66,6 +69,7 @@ type DashboardViewerProps = {
   currentTemplateId?: string;
   isTemplate: boolean;
   dashboardId?: string;
+  layout?: { columns?: number; rowHeight?: number };
 };
 
 const TIME_WINDOWS = [
@@ -90,13 +94,24 @@ export default function DashboardViewer({
   currentTemplateId,
   isTemplate,
   dashboardId,
+  layout,
 }: DashboardViewerProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isWidgetLibraryOpen, setIsWidgetLibraryOpen] = useState(false);
+  const [savedBaseline, setSavedBaseline] = useState(widgets);
   const [localWidgets, setLocalWidgets] = useState(widgets);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Sync localWidgets when dashboard/template changes
+  useEffect(() => {
+    setSavedBaseline(widgets);
+    setLocalWidgets(widgets);
+  }, [dashboardId, currentTemplateId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isDirty = JSON.stringify(localWidgets) !== JSON.stringify(savedBaseline);
 
   // Handle adding a new widget from the library
   const handleAddWidget = (widgetDef: WidgetDefinition) => {
@@ -108,6 +123,7 @@ export default function DashboardViewer({
       id: `temp-${Date.now()}`,
       widgetType: widgetDef.type,
       metricKey: widgetDef.metricKey,
+      widgetDefinitionId: widgetDef.id,
       title: widgetDef.name,
       position: {
         x: 0,
@@ -115,14 +131,16 @@ export default function DashboardViewer({
         w: widgetDef.defaultSize.w,
         h: widgetDef.defaultSize.h,
       },
-      config: {},
+      config: widgetDef.config ?? {},
     };
 
     setLocalWidgets(prev => [...prev, newWidget]);
   };
 
   // Get existing widget keys for the library
-  const existingWidgetKeys = localWidgets.map(w => w.metricKey);
+  const existingWidgetDefIds = localWidgets
+    .map(w => w.widgetDefinitionId)
+    .filter((id): id is string => !!id);
 
   // Clone dashboard from template
   const handleCloneDashboard = async () => {
@@ -136,10 +154,11 @@ export default function DashboardViewer({
         body: JSON.stringify({
           name: `My ${dashboardName}`,
           description: dashboardDescription,
-          templateId: currentTemplateId,
-          widgets: widgets.map(w => ({
+          sourceTemplate: currentTemplateId,
+          widgets: localWidgets.map(w => ({
             widgetType: w.widgetType,
             metricKey: w.metricKey,
+            widgetDefinitionId: w.widgetDefinitionId,
             title: w.title,
             position: w.position,
             config: w.config,
@@ -185,15 +204,63 @@ export default function DashboardViewer({
       params.set('serviceId', currentFilters.serviceId);
     }
 
-    return `/reports/executive?${params.toString()}`;
+    const basePath = dashboardId
+      ? `/reports/executive/${dashboardId}`
+      : '/reports/executive';
+    return `${basePath}?${params.toString()}`;
   };
 
   const handleFilterChange = (key: string, value: string) => {
     router.push(buildFilterUrl(key, value));
   };
 
+  const handleSaveChanges = async () => {
+    if (!dashboardId || isSaving) return;
+    setIsSaving(true);
+    try {
+      const response = await fetch(`/api/dashboards/${dashboardId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          widgets: localWidgets.map(w => ({
+            widgetType: w.widgetType,
+            metricKey: w.metricKey,
+            widgetDefinitionId: w.widgetDefinitionId,
+            title: w.title,
+            position: w.position,
+            config: w.config,
+          })),
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to save dashboard');
+      }
+      const data = await response.json();
+      // Update baseline to match saved state
+      const updatedWidgets = (data.dashboard?.widgets || localWidgets).map((w: any) => ({
+        id: w.id,
+        widgetType: w.widgetType,
+        metricKey: w.metricKey,
+        widgetDefinitionId: w.widgetDefinitionId,
+        title: w.title,
+        position: w.position as { x: number; y: number; w: number; h: number },
+        config: w.config as Record<string, any>,
+      }));
+      setSavedBaseline(updatedWidgets);
+      setLocalWidgets(updatedWidgets);
+      setIsEditing(false);
+      notify.success('Dashboard saved successfully');
+    } catch (error) {
+      console.error('Failed to save dashboard:', error);
+      notify.error(error instanceof Error ? error.message : 'Failed to save dashboard');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
-    <div className="w-full px-4 py-6 space-y-6 [zoom:0.8]">
+    <div className="w-full px-4 py-6 space-y-6">
       {/* Header */}
       <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
@@ -239,6 +306,7 @@ export default function DashboardViewer({
                 <Button
                   variant="secondary"
                   size="icon"
+                  aria-label="Dashboard settings"
                   className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white"
                 >
                   <Settings className="h-4 w-4" />
@@ -306,7 +374,7 @@ export default function DashboardViewer({
             Updated: {lastUpdated}
           </span>
           <span>•</span>
-          <span>{widgets.length} widgets</span>
+          <span>{localWidgets.length} widgets</span>
         </div>
       </div>
 
@@ -375,11 +443,13 @@ export default function DashboardViewer({
           <Select
             value={currentTemplateId || 'custom'}
             onValueChange={value => {
-              if (value === 'custom') {
-                router.push('/reports/executive');
-              } else {
-                router.push(`/reports/executive?template=${value}`);
-              }
+              const params = new URLSearchParams();
+              if (value !== 'custom') params.set('template', value);
+              if (currentFilters.windowDays !== 7) params.set('window', String(currentFilters.windowDays));
+              if (currentFilters.teamId) params.set('teamId', currentFilters.teamId);
+              if (currentFilters.serviceId) params.set('serviceId', currentFilters.serviceId);
+              const qs = params.toString();
+              router.push(`/reports/executive${qs ? `?${qs}` : ''}`);
             }}
           >
             <SelectTrigger className="w-[180px]">
@@ -403,8 +473,8 @@ export default function DashboardViewer({
         metrics={metrics}
         isEditing={isEditing}
         isLoading={false}
-        columns={4}
-        rowHeight={150}
+        columns={layout?.columns ?? 4}
+        rowHeight={layout?.rowHeight ?? 150}
         gap={16}
         onAddWidget={() => setIsWidgetLibraryOpen(true)}
         onUpdateLayout={newWidgets => setLocalWidgets(newWidgets)}
@@ -428,19 +498,40 @@ export default function DashboardViewer({
             </Button>
           </div>
           <div className="flex gap-2">
+            {isDirty && (
+              <span className="text-xs text-amber-400 self-center mr-1">Unsaved changes</span>
+            )}
             <Button
               variant="outline"
               onClick={() => {
-                setLocalWidgets(widgets);
+                setLocalWidgets(savedBaseline);
                 setIsEditing(false);
               }}
             >
               Cancel
             </Button>
-            <Button className="gap-2" onClick={() => setIsEditing(false)}>
-              <Save className="h-4 w-4" />
-              Save Changes
-            </Button>
+            {dashboardId ? (
+              <Button
+                className="gap-2"
+                onClick={handleSaveChanges}
+                disabled={isSaving || !isDirty}
+              >
+                {isSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            ) : (
+              <Button
+                className="gap-2"
+                onClick={() => setIsEditing(false)}
+              >
+                <Save className="h-4 w-4" />
+                Done
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -450,7 +541,7 @@ export default function DashboardViewer({
         isOpen={isWidgetLibraryOpen}
         onClose={() => setIsWidgetLibraryOpen(false)}
         onAddWidget={handleAddWidget}
-        existingWidgetKeys={existingWidgetKeys}
+        existingWidgetDefIds={existingWidgetDefIds}
       />
     </div>
   );

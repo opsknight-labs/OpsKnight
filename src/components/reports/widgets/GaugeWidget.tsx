@@ -42,6 +42,7 @@ const GaugeWidget = memo(function GaugeWidget({
     }
 
     // Auto color based on value
+    if (value == null) return '#9ca3af'; // neutral gray
     if (displayValue >= 95) return '#22c55e'; // green
     if (displayValue >= 80) return '#eab308'; // yellow
     return '#ef4444'; // red
@@ -112,7 +113,7 @@ const GaugeWidget = memo(function GaugeWidget({
 
       {/* Value */}
       <div className="text-2xl font-bold" style={{ color }}>
-        {value !== null ? `${value.toFixed(0)}%` : '--'}
+        {value != null ? `${value.toFixed(0)}%` : 'N/A'}
       </div>
 
       {/* Label */}

@@ -1,14 +1,23 @@
 'use client';
 
-import { useState, useEffect, memo } from 'react';
+import { useSyncExternalStore, memo } from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { SerializedSLAMetrics } from '@/lib/sla';
+
+const subscribe = () => () => {};
+const getSnapshot = () => true;
+const getServerSnapshot = () => false;
+
+function useIsMounted() {
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
 
 // Import chart components directly
 import LineChart from '@/components/analytics/LineChart';
 import BarChart from '@/components/analytics/BarChart';
+import PieChart from '@/components/analytics/PieChart';
 
-type ChartType = 'line' | 'bar' | 'area';
+type ChartType = 'line' | 'bar' | 'area' | 'pie' | 'mttaVsMttr' | 'slaCompliance' | 'heatmap';
 
 interface ChartWidgetProps {
   metricKey: string;
@@ -20,6 +29,7 @@ interface ChartWidgetProps {
     height?: number;
     showLegend?: boolean;
     showTrend?: boolean;
+    [key: string]: any;
   };
 }
 
@@ -33,17 +43,14 @@ const CHART_COLORS = {
   secondary: '#64748b',
 };
 
+const PIE_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6b7280'];
+
 const ChartWidget = memo(function ChartWidget({
   metricKey,
   metrics,
   config = {},
 }: ChartWidgetProps) {
-  const [isMounted, setIsMounted] = useState(false);
-
-  // Handle client-side mounting to avoid hydration issues
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  const isMounted = useIsMounted();
 
   const {
     chartType = 'line',
@@ -54,7 +61,7 @@ const ChartWidget = memo(function ChartWidget({
   } = config;
 
   // Map metricKey to chart data
-  const chartData = getChartData(metricKey, metrics);
+  const chartData = getChartData(metricKey, metrics, config);
 
   if (!chartData || chartData.length === 0) {
     return (
@@ -101,11 +108,47 @@ const ChartWidget = memo(function ChartWidget({
 
       {/* Chart */}
       <div className="flex-1 min-h-0">
-        {chartType === 'bar' ? (
+        {chartType === 'heatmap' ? (
+          <div className="h-full flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed border-muted rounded-lg p-4">
+             <span className="text-sm font-medium">Heatmap visualization</span>
+             <span className="text-xs mt-1">Data points: {chartData.length}</span>
+             {/* TODO: Implement HeatmapCalendar component */}
+          </div>
+        ) : chartType === 'pie' ? (
+          <div className="h-full flex items-center justify-center">
+            <PieChart
+              data={chartData.map((d, i) => ({
+                label: d.name || d.label || '',
+                value: d.value ?? 0,
+                color: PIE_COLORS[i % PIE_COLORS.length],
+              }))}
+              size={Math.min(height, 160)}
+              showLegend={showLegend}
+            />
+          </div>
+        ) : chartType === 'mttaVsMttr' || chartType === 'slaCompliance' ? (
+          <LineChart
+            data={chartData}
+            lines={[
+              {
+                key: 'value',
+                color: CHART_COLORS.primary,
+                label: chartType === 'mttaVsMttr' ? 'MTTA' : 'Ack Compliance',
+              },
+              {
+                key: 'value2',
+                color: CHART_COLORS.success,
+                label: chartType === 'mttaVsMttr' ? 'MTTR' : 'Resolve Compliance',
+              },
+            ]}
+            height={height}
+            showLegend={showLegend || true}
+          />
+        ) : chartType === 'bar' ? (
           <BarChart
             data={chartData.map((d, i) => ({
               key: String(i),
-              label: d.label || '',
+              label: d.label || d.name || '',
               count: d.value,
             }))}
             maxValue={
@@ -119,7 +162,7 @@ const ChartWidget = memo(function ChartWidget({
         ) : (
           <LineChart
             data={chartData.map(d => ({
-              label: d.label || '',
+              label: d.label || d.name || '',
               value: d.value,
             }))}
             lines={[{ key: 'value', color, label: metricKey }]}
@@ -137,11 +180,26 @@ export default ChartWidget;
 // Extract chart data from metrics based on metricKey
 export function getChartData(
   metricKey: string,
-  metrics: SerializedSLAMetrics
-): Array<{ label: string; value: number | null }> {
+  metrics: SerializedSLAMetrics,
+  config?: Record<string, unknown>
+): Array<any> {
   switch (metricKey) {
     case 'incidentTrend':
     case 'trendSeries':
+      if (config?.chartType === 'mttaVsMttr') {
+        return (metrics.trendSeries || []).map(d => ({
+          label: d.label,
+          value: d.mtta ?? 0,
+          value2: d.mttr ?? 0,
+        }));
+      }
+      if (config?.chartType === 'slaCompliance') {
+        return (metrics.trendSeries || []).map(d => ({
+          label: d.label,
+          value: d.ackCompliance ?? 0,
+          value2: d.resolveCompliance ?? 0,
+        }));
+      }
       return (metrics.trendSeries || []).map(d => ({
         label: d.label,
         value: d.count,
@@ -157,6 +215,7 @@ export function getChartData(
     case 'urgencyDistribution':
     case 'urgencyMix':
       return (metrics.urgencyMix || []).map(d => ({
+        name: d.urgency.charAt(0).toUpperCase() + d.urgency.slice(1),
         label: d.urgency.charAt(0).toUpperCase() + d.urgency.slice(1),
         value: d.count,
       }));
@@ -165,6 +224,7 @@ export function getChartData(
     case 'statusDistribution':
     case 'statusMix':
       return (metrics.statusMix || []).map(d => ({
+        name: d.status.charAt(0).toUpperCase() + d.status.slice(1).toLowerCase(),
         label: d.status.charAt(0).toUpperCase() + d.status.slice(1).toLowerCase(),
         value: d.count,
       }));

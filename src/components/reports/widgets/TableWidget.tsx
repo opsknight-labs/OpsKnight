@@ -11,6 +11,15 @@ import {
 } from '@/components/ui/shadcn/table';
 import { formatTimeMinutesMs } from '@/lib/time-format';
 
+function resolveNestedPath(obj: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((acc, key) => {
+    if (acc && typeof acc === 'object' && key in (acc as Record<string, unknown>)) {
+      return (acc as Record<string, unknown>)[key];
+    }
+    return undefined;
+  }, obj);
+}
+
 type TableWidgetProps = {
   data: Array<Record<string, any>>;
   metricKey: string;
@@ -59,14 +68,17 @@ const TableWidget = memo(function TableWidget({ data, metricKey, maxRows = 5 }: 
         <TableBody>
           {displayData.map((row, idx) => (
             <TableRow key={row.id || idx} className="hover:bg-muted/50">
-              {columns.map(col => (
-                <TableCell
-                  key={col.key}
-                  className={`text-xs py-2 ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''}`}
-                >
-                  {col.format ? col.format(row[col.key]) : (row[col.key] ?? '--')}
-                </TableCell>
-              ))}
+              {columns.map(col => {
+                const cellValue = resolveNestedPath(row, col.key);
+                return (
+                  <TableCell
+                    key={col.key}
+                    className={`text-xs py-2 ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''}`}
+                  >
+                    {col.format ? col.format(cellValue) : (cellValue as React.ReactNode ?? '--')}
+                  </TableCell>
+                );
+              })}
             </TableRow>
           ))}
         </TableBody>
@@ -121,12 +133,12 @@ function getColumnsForMetric(metricKey: string): ColumnConfig[] {
     ],
     serviceSlaTable: [
       { key: 'name', label: 'Service' },
-      { key: 'ackRate', label: 'Ack Rate', align: 'right', format: v => `${(v ?? 0).toFixed(0)}%` },
+      { key: 'ackRate', label: 'Ack Rate', align: 'right', format: v => v != null ? `${Number(v).toFixed(0)}%` : '–' },
       {
         key: 'resolveRate',
         label: 'Resolve Rate',
         align: 'right',
-        format: v => `${(v ?? 0).toFixed(0)}%`,
+        format: v => v != null ? `${Number(v).toFixed(0)}%` : '–',
       },
       { key: 'total', label: 'Total', align: 'right' },
     ],

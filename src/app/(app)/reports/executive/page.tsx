@@ -55,36 +55,19 @@ export default async function ExecutiveDashboardPage({
   const templateId = params?.template;
 
   // If template specified, use template widgets
-  let widgets: any[] = [];
-  let dashboardName = 'Executive Dashboard';
-  let dashboardDescription = 'Operational health overview';
+  const selectedTemplate = templateId ? getTemplateById(templateId) : null;
+  const activeTemplate = selectedTemplate || DASHBOARD_TEMPLATES[0];
 
-  if (templateId) {
-    const template = getTemplateById(templateId);
-    if (template) {
-      widgets = template.widgets.map((w, idx) => ({
-        id: `template-${idx}`,
-        widgetType: w.widgetType,
-        metricKey: w.metricKey,
-        title: w.title || null,
-        position: w.position,
-        config: w.config,
-      }));
-      dashboardName = template.name;
-      dashboardDescription = template.description;
-    }
-  } else {
-    // Default: use executive summary template
-    const defaultTemplate = DASHBOARD_TEMPLATES[0];
-    widgets = defaultTemplate.widgets.map((w, idx) => ({
-      id: `default-${idx}`,
-      widgetType: w.widgetType,
-      metricKey: w.metricKey,
-      title: w.title || null,
-      position: w.position,
-      config: w.config,
-    }));
-  }
+  const widgets = activeTemplate.widgets.map((w, idx) => ({
+    id: `template-${idx}`,
+    widgetType: w.widgetType,
+    metricKey: w.metricKey,
+    title: w.title || null,
+    position: w.position,
+    config: w.config,
+  }));
+  const dashboardName = activeTemplate.name;
+  const dashboardDescription = activeTemplate.description;
 
   // Fetch metrics
   const metrics = await calculateActorSLAMetrics(actor, {
@@ -128,8 +111,8 @@ export default async function ExecutiveDashboardPage({
         services: teamId ? services.filter(s => s.teamId === teamId) : services,
       }}
       templates={DASHBOARD_TEMPLATES}
-      currentTemplateId={templateId}
-      isTemplate={!!templateId}
+      currentTemplateId={activeTemplate.id}
+      isTemplate={true}
     />
   );
 }

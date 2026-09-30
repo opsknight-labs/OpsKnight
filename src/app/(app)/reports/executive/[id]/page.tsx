@@ -34,7 +34,7 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true, timeZone: true },
+    select: { id: true, timeZone: true, teamMemberships: { select: { teamId: true } } },
   });
 
   if (!user) {
@@ -51,8 +51,13 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
     notFound();
   }
 
-  // Check access
-  if (dashboard.userId !== user.id && dashboard.visibility === 'PRIVATE') {
+  // Check access — mirror the API's authorization logic
+  const isOwner = dashboard.userId === user.id;
+  const isTeamMember = !!(dashboard.teamId &&
+    user.teamMemberships.some((m: { teamId: string }) => m.teamId === dashboard.teamId));
+  const isPublicOrTemplate = dashboard.visibility === 'PUBLIC' || dashboard.isTemplate;
+
+  if (!isOwner && !isTeamMember && !isPublicOrTemplate) {
     notFound();
   }
 
@@ -117,6 +122,7 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
       }}
       templates={DASHBOARD_TEMPLATES}
       isTemplate={false}
+      layout={dashboard.layout as { columns?: number; rowHeight?: number } | undefined}
       dashboardId={dashboard.id}
     />
   );
