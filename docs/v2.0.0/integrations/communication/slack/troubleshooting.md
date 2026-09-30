@@ -4,6 +4,9 @@ description: Diagnose OAuth, delivery, interactive-action, identity, and war-roo
 type: troubleshooting
 product_area: chatops
 audience: [administrator, responder]
+reader:
+  status: READER_COMPLETE
+  task: Diagnose and recover Slack connection, delivery, action, identity, and war-room failures.
 keywords: [slack not sending, slack message failed, slack troubleshooting, slack actions failing]
 verification:
   level: source

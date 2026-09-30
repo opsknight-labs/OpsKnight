@@ -1,7 +1,7 @@
 ---
 title: Microsoft Teams ChatOps
 description: Configure the Teams application, destinations, incident cards, and war rooms.
-type: integration
+type: concept
 product_area: chatops
 audience: [administrator, responder]
 verification:

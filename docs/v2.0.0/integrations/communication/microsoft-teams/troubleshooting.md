@@ -4,6 +4,9 @@ description: Diagnose tenant, installation, destination, card, and war-room fail
 type: troubleshooting
 product_area: chatops
 audience: [administrator, responder]
+reader:
+  status: READER_COMPLETE
+  task: Diagnose and recover Teams installation, card, action, identity, and war-room failures.
 keywords: [Teams not sending cards, Teams card action failing, Teams troubleshooting, Adaptive Cards]
 verification:
   level: source

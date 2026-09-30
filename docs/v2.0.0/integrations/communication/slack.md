@@ -1,7 +1,7 @@
 ---
 title: Slack
 description: Configure Slack destinations, incident messages, and war rooms.
-type: integration
+type: concept
 product_area: chatops
 audience: [administrator, responder]
 verification:
