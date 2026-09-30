@@ -17,6 +17,7 @@ type PaginationProps = {
   totalPages: number;
   totalItems: number;
   itemsPerPage: number;
+  itemLabel?: string;
 };
 
 export default function Pagination({
@@ -24,6 +25,7 @@ export default function Pagination({
   totalPages,
   totalItems,
   itemsPerPage,
+  itemLabel = 'service',
 }: PaginationProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -46,7 +48,7 @@ export default function Pagination({
     return (
       <div className="flex items-center justify-between px-4 py-4 border-t border-slate-200 bg-slate-50 rounded-b-xl">
         <span className="text-sm text-muted-foreground">
-          Showing <span className="font-medium text-foreground">{totalItems}</span> service
+          Showing <span className="font-medium text-foreground">{totalItems}</span> {itemLabel}
           {totalItems !== 1 ? 's' : ''}
         </span>
       </div>
@@ -93,7 +95,8 @@ export default function Pagination({
       <div className="text-sm text-muted-foreground">
         Showing <span className="font-medium text-foreground">{startItem}</span> to{' '}
         <span className="font-medium text-foreground">{endItem}</span> of{' '}
-        <span className="font-medium text-foreground">{totalItems}</span> services
+        <span className="font-medium text-foreground">{totalItems}</span> {itemLabel}
+        {totalItems !== 1 ? 's' : ''}
       </div>
 
       <div className="flex items-center gap-1">

@@ -13,6 +13,8 @@ import {
 } from '@/lib/rbac';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { deleteService, updateService, deleteIntegration } from '../actions';
+import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
+import { logger } from '@/lib/logger';
 
 // UI Components
 import {
@@ -36,6 +38,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/shadcn/aler
 import {
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
   XCircle,
   Globe,
   ShieldCheck,
@@ -164,11 +167,10 @@ function getWebhookUrl(
 export default async function ServiceDetailPage({ params, searchParams }: ServiceDetailPageProps) {
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
-  const page = Math.max(1, parseInt(resolvedSearchParams?.page || '1', 10));
+  const requestedPage = parsePageParam(resolvedSearchParams?.page);
   const activeTab = resolvedSearchParams?.tab || 'incidents';
   const errorCode = resolvedSearchParams?.error;
   const isSaved = resolvedSearchParams?.saved === '1';
-  const skip = (page - 1) * INCIDENTS_PER_PAGE;
 
   let currentUser: Awaited<ReturnType<typeof assertCanViewService>>;
   try {
@@ -199,70 +201,85 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         .then(rows => rows.map(row => `integration:${row.id}`))
     : [];
 
-  const [
-    serviceRaw,
-    totalIncidentCount,
-    slaMetrics,
-    uptimeByService,
-    teams,
-    policies,
-    globalSlackIntegration,
-    jiraConfig,
-    chatOpsConfig,
-    globalWarRoomPolicy,
-    serviceWarRoomPolicy,
-    teamsDestination,
-    incidentSlaPolicy,
-    workspaceIncidentSlaPolicy,
-    incidentClassificationPolicy,
-    integrationClassificationPolicies,
-    responseSupportHoursPolicy,
-  ] = await Promise.all([
-    prisma.service.findFirst({
-      where: { AND: [serviceReadWhere(actor), { id }] },
-      include: {
-        team: {
-          select: { id: true, name: true, description: true },
-        },
-        policy: {
-          include: {
-            steps: {
-              include: {
-                targetUser: {
-                  select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-                },
-                targetTeam: { select: { id: true, name: true } },
-                targetSchedule: { select: { id: true, name: true } },
-              },
-              orderBy: { stepOrder: 'asc' },
-            },
-          },
-        },
-        integrations: {
-          orderBy: { createdAt: 'desc' },
-        },
-        webhookIntegrations: {
-          orderBy: { createdAt: 'desc' },
-        },
-        jiraServiceMapping: true,
-        incidents: {
-          where: incidentAccess,
-          include: {
-            assignee: {
-              select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
-            },
-            team: {
-              select: { id: true, name: true },
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: INCIDENTS_PER_PAGE,
-        },
-        _count: { select: { integrations: true } },
+  const totalIncidentCount = await prisma.incident.count({
+    where: { AND: [incidentAccess, { serviceId: id }] },
+  });
+  const pagination = calculatePaginationBounds({
+    totalItems: totalIncidentCount,
+    page: requestedPage,
+    pageSize: INCIDENTS_PER_PAGE,
+  });
+  const page = pagination.page;
+  const totalIncidents = totalIncidentCount;
+  const totalPages = pagination.totalPages;
+
+  const serviceRaw = await prisma.service.findFirst({
+    where: { AND: [serviceReadWhere(actor), { id }] },
+    include: {
+      team: {
+        select: { id: true, name: true, description: true },
       },
-    }),
-    prisma.incident.count({ where: { AND: [incidentAccess, { serviceId: id }] } }),
+      policy: {
+        include: {
+          steps: {
+            include: {
+              targetUser: {
+                select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+              },
+              targetTeam: { select: { id: true, name: true } },
+              targetSchedule: { select: { id: true, name: true } },
+            },
+            orderBy: { stepOrder: 'asc' },
+          },
+        },
+      },
+      integrations: {
+        orderBy: { createdAt: 'desc' },
+      },
+      webhookIntegrations: {
+        orderBy: { createdAt: 'desc' },
+      },
+      jiraServiceMapping: true,
+      incidents: {
+        where: incidentAccess,
+        include: {
+          assignee: {
+            select: { id: true, name: true, email: true, avatarUrl: true, gender: true },
+          },
+          team: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: pagination.skip,
+        take: pagination.take,
+      },
+      _count: { select: { integrations: true } },
+    },
+  });
+
+  if (!serviceRaw) {
+    notFound();
+  }
+
+  // Load secondary and integration data with isolated error boundaries
+  const [
+    slaMetricsResult,
+    uptimeResult,
+    teamsResult,
+    policiesResult,
+    slackResult,
+    jiraResult,
+    chatOpsResult,
+    globalWarRoomResult,
+    serviceWarRoomResult,
+    teamsDestinationResult,
+    incidentSlaPolicyResult,
+    workspaceIncidentSlaPolicyResult,
+    incidentClassificationPolicyResult,
+    integrationClassificationPoliciesResult,
+    responseSupportHoursPolicyResult,
+  ] = await Promise.allSettled([
     calculateActorSLAMetrics(actor, {
       serviceId: id,
       windowDays: slaWindowDays,
@@ -335,29 +352,96 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       : Promise.resolve(null),
   ]);
 
-  if (!serviceRaw) {
-    notFound();
+  const isSlaMetricsAvailable =
+    slaMetricsResult.status === 'fulfilled' && Boolean(slaMetricsResult.value);
+  const slaMetrics = isSlaMetricsAvailable ? slaMetricsResult.value : null;
+  const uptimeByService = new Map<string, number>(
+    uptimeResult.status === 'fulfilled' && uptimeResult.value && typeof uptimeResult.value === 'object'
+      ? Object.entries(uptimeResult.value as Record<string, number>)
+      : []
+  );
+  const serviceUptime = uptimeByService.get(id);
+  const isUptimeAvailable =
+    uptimeResult.status === 'fulfilled' && typeof serviceUptime === 'number';
+  const teams = teamsResult.status === 'fulfilled' ? teamsResult.value : [];
+  const policies = policiesResult.status === 'fulfilled' ? policiesResult.value : [];
+  const globalSlackIntegration = slackResult.status === 'fulfilled' ? slackResult.value : null;
+  const jiraConfig = jiraResult.status === 'fulfilled' ? jiraResult.value : null;
+  const chatOpsConfig = chatOpsResult.status === 'fulfilled' ? chatOpsResult.value : null;
+  const globalWarRoomPolicy =
+    globalWarRoomResult.status === 'fulfilled' ? globalWarRoomResult.value : null;
+  const serviceWarRoomPolicy =
+    serviceWarRoomResult.status === 'fulfilled' ? serviceWarRoomResult.value : null;
+  const teamsDestination =
+    teamsDestinationResult.status === 'fulfilled' ? teamsDestinationResult.value : null;
+  const incidentSlaPolicy =
+    incidentSlaPolicyResult.status === 'fulfilled' ? incidentSlaPolicyResult.value : null;
+  const workspaceIncidentSlaPolicy =
+    workspaceIncidentSlaPolicyResult.status === 'fulfilled'
+      ? workspaceIncidentSlaPolicyResult.value
+      : null;
+  const incidentClassificationPolicy =
+    incidentClassificationPolicyResult.status === 'fulfilled'
+      ? incidentClassificationPolicyResult.value
+      : null;
+  const integrationClassificationPolicies =
+    integrationClassificationPoliciesResult.status === 'fulfilled'
+      ? integrationClassificationPoliciesResult.value
+      : [];
+  const responseSupportHoursPolicy =
+    responseSupportHoursPolicyResult.status === 'fulfilled'
+      ? responseSupportHoursPolicyResult.value
+      : null;
+
+  if (slaMetricsResult.status === 'rejected') {
+    logger.warn('[Service Detail] Failed to compute SLA metrics', {
+      error: slaMetricsResult.reason,
+    });
+  }
+  if (uptimeResult.status === 'rejected') {
+    logger.warn('[Service Detail] Failed to calculate service uptime', {
+      error: uptimeResult.reason,
+    });
+  }
+  if (jiraResult.status === 'rejected') {
+    logger.warn('[Service Detail] Failed to load Jira config', { error: jiraResult.reason });
+  }
+  if (slackResult.status === 'rejected') {
+    logger.warn('[Service Detail] Failed to load Slack integration', {
+      error: slackResult.reason,
+    });
+  }
+  if (chatOpsResult.status === 'rejected') {
+    logger.warn('[Service Detail] Failed to load ChatOps config', {
+      error: chatOpsResult.reason,
+    });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const service = serviceRaw as any;
   const canDeleteService = currentUser.role === 'ADMIN';
 
-  // SLA and Health Computations
-  const dynamicStatus = slaMetrics.dynamicStatus;
-  const activeIncidentsCount = slaMetrics.activeIncidents;
-  const windowTotalIncidents = slaMetrics.totalIncidents;
-  const slaCompliance = slaMetrics.resolveCompliance;
-  const mttr = slaMetrics.mttr ? slaMetrics.mttr / 60 : undefined;
+  // SLA and Health Computations with truthful failure degradation
+  const dynamicStatus: 'OPERATIONAL' | 'DEGRADED' | 'CRITICAL' | 'UNKNOWN' = isSlaMetricsAvailable
+    ? slaMetrics?.dynamicStatus ?? 'UNKNOWN'
+    : 'UNKNOWN';
+  const activeIncidentsCount = isSlaMetricsAvailable ? slaMetrics?.activeIncidents ?? 0 : undefined;
+  const windowTotalIncidents = isSlaMetricsAvailable ? slaMetrics?.totalIncidents ?? 0 : undefined;
+  const slaCompliance = isSlaMetricsAvailable ? slaMetrics?.resolveCompliance ?? null : null;
+  const mttr = isSlaMetricsAvailable && slaMetrics?.mttr ? slaMetrics.mttr / 60 : undefined;
   const effectiveDurationDays =
-    (slaMetrics.effectiveEnd.getTime() - slaMetrics.effectiveStart.getTime()) /
-    (1000 * 60 * 60 * 24);
+    isSlaMetricsAvailable && slaMetrics
+      ? (slaMetrics.effectiveEnd.getTime() - slaMetrics.effectiveStart.getTime()) /
+        (1000 * 60 * 60 * 24)
+      : 30;
   const incidentsPerMonth =
-    effectiveDurationDays > 0 ? (windowTotalIncidents / effectiveDurationDays) * 30 : 0;
-  const availability = Math.max(0, Math.min(100, uptimeByService[id] ?? 100));
-
-  const totalIncidents = totalIncidentCount;
-  const totalPages = Math.ceil(totalIncidents / INCIDENTS_PER_PAGE);
+    isSlaMetricsAvailable && windowTotalIncidents !== undefined && effectiveDurationDays > 0
+      ? (windowTotalIncidents / effectiveDurationDays) * 30
+      : undefined;
+  const availability =
+    isUptimeAvailable && typeof serviceUptime === 'number'
+      ? Math.max(0, Math.min(100, serviceUptime))
+      : null;
 
   const boundUpdateService = updateService.bind(null, service.id);
   const boundDeleteService = async () => {
@@ -1015,7 +1099,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                   ? 'success'
                   : dynamicStatus === 'DEGRADED'
                     ? 'warning'
-                    : 'danger'
+                    : dynamicStatus === 'CRITICAL'
+                      ? 'danger'
+                      : 'secondary'
               }
               size="xs"
               className="uppercase font-bold text-[10px] gap-1"
@@ -1023,7 +1109,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               {dynamicStatus === 'OPERATIONAL' && <CheckCircle2 className="h-3 w-3" />}
               {dynamicStatus === 'DEGRADED' && <AlertTriangle className="h-3 w-3" />}
               {dynamicStatus === 'CRITICAL' && <XCircle className="h-3 w-3" />}
-              {dynamicStatus}
+              {dynamicStatus === 'UNKNOWN' && <AlertCircle className="h-3 w-3" />}
+              {dynamicStatus === 'UNKNOWN' ? 'Unavailable' : dynamicStatus}
             </Badge>
 
             {service.team && (
@@ -1072,7 +1159,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         stats={[
           {
             label: 'Availability',
-            value: `${availability.toFixed(2)}%`,
+            value: availability !== null ? `${availability.toFixed(2)}%` : 'Unavailable',
             icon: <Activity className="h-3.5 w-3.5" />,
           },
           {
@@ -1084,17 +1171,24 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                   : mttr < 24
                     ? `${mttr.toFixed(1)}h`
                     : `${(mttr / 24).toFixed(1)}d`
-                : '-',
+                : isSlaMetricsAvailable
+                  ? '-'
+                  : 'Unavailable',
             icon: <Clock className="h-3.5 w-3.5" />,
           },
           {
             label: 'Incidents/mo',
-            value: incidentsPerMonth < 1 ? '<1' : incidentsPerMonth.toFixed(1),
+            value:
+              incidentsPerMonth !== undefined
+                ? incidentsPerMonth < 1
+                  ? '<1'
+                  : incidentsPerMonth.toFixed(1)
+                : 'Unavailable',
             icon: <Flame className="h-3.5 w-3.5" />,
           },
           {
             label: 'SLA Compliance',
-            value: slaCompliance !== null ? `${slaCompliance.toFixed(1)}%` : '-',
+            value: slaCompliance !== null ? `${slaCompliance.toFixed(1)}%` : 'Unavailable',
             icon: <ShieldCheck className="h-3.5 w-3.5" />,
           },
         ]}
@@ -1103,7 +1197,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       {/* Tabbed Workspace */}
       <ServiceDetailTabs
         defaultTab={activeTab}
-        activeIncidentCount={activeIncidentsCount}
+        activeIncidentCount={activeIncidentsCount ?? 0}
         integrationCount={service.integrations?.length || 0}
         notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}

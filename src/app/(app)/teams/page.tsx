@@ -8,11 +8,101 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Users, Shield, ArrowUpRight, Sparkles, UserCheck } from 'lucide-react';
+import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 
-export default async function TeamsPage() {
+import { Prisma } from '@prisma/client';
+
+export default async function TeamsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ page?: string; q?: string; search?: string; status?: string }>;
+} = {}) {
+  const params = await searchParams;
+  const requestedPage = parsePageParam(params?.page);
+  const searchQuery = (params?.q || params?.search || '').trim();
+  const statusFilter = params?.status || 'all';
   const teamScope = await getViewableTeamWhere();
+
+  const filterConditions: Prisma.TeamWhereInput[] = [teamScope];
+
+  if (searchQuery) {
+    filterConditions.push({
+      OR: [
+        { name: { contains: searchQuery, mode: 'insensitive' } },
+        { description: { contains: searchQuery, mode: 'insensitive' } },
+        { teamLead: { name: { contains: searchQuery, mode: 'insensitive' } } },
+        {
+          members: {
+            some: {
+              user: {
+                OR: [
+                  { name: { contains: searchQuery, mode: 'insensitive' } },
+                  { email: { contains: searchQuery, mode: 'insensitive' } },
+                ],
+              },
+            },
+          },
+        },
+        {
+          services: {
+            some: {
+              name: { contains: searchQuery, mode: 'insensitive' },
+            },
+          },
+        },
+      ],
+    });
+  }
+
+  if (statusFilter === 'configured') {
+    filterConditions.push({
+      AND: [{ teamLeadId: { not: null } }, { members: { some: {} } }],
+    });
+  } else if (statusFilter === 'needs-lead') {
+    filterConditions.push({ teamLeadId: null });
+  } else if (statusFilter === 'needs-services') {
+    filterConditions.push({ services: { none: {} } });
+  }
+
+  const where: Prisma.TeamWhereInput =
+    filterConditions.length === 1 ? teamScope : { AND: filterConditions };
+
+  const [
+    allTeamsCount,
+    totalMembersCount,
+    totalServicesCount,
+    configuredTeamsCount,
+    needsLeadTeamsCount,
+    totalFilteredCount,
+    permissions,
+  ] = await Promise.all([
+    prisma.team.count({ where: teamScope }),
+    prisma.teamMember.count({ where: { team: teamScope } }),
+    prisma.service.count({ where: { team: teamScope } }),
+    prisma.team.count({
+      where: {
+        AND: [teamScope, { teamLeadId: { not: null } }, { members: { some: {} } }],
+      },
+    }),
+    prisma.team.count({
+      where: {
+        AND: [teamScope, { teamLeadId: null }],
+      },
+    }),
+    prisma.team.count({ where }),
+    getUserPermissions(),
+  ]);
+
+  const pagination = calculatePaginationBounds({
+    totalItems: totalFilteredCount,
+    page: requestedPage,
+    pageSize: 50,
+  });
+
   const teams = await prisma.team.findMany({
-    where: teamScope,
+    where,
+    skip: pagination.skip,
+    take: pagination.take,
     include: {
       teamLead: {
         select: {
@@ -53,12 +143,6 @@ export default async function TeamsPage() {
     orderBy: { createdAt: 'desc' },
   });
 
-  const totalTeams = teams.length;
-  const uniqueMembers = new Set(teams.flatMap(t => t.members.map(m => m.userId))).size;
-  const uniqueServices = new Set(teams.flatMap(t => t.services.map(s => s.id))).size;
-  const configuredTeamsCount = teams.filter(t => t.members.length > 0 && t.teamLead).length;
-
-  const permissions = await getUserPermissions();
   const canCreateTeam = permissions.isAdminOrResponder;
 
   return (
@@ -85,9 +169,9 @@ export default async function TeamsPage() {
           </div>
 
           <TeamStatsCapsule
-            totalTeams={totalTeams}
-            totalMembers={uniqueMembers}
-            totalServices={uniqueServices}
+            totalTeams={allTeamsCount}
+            totalMembers={totalMembersCount}
+            totalServices={totalServicesCount}
             configuredCount={configuredTeamsCount}
           />
         </div>
@@ -100,7 +184,22 @@ export default async function TeamsPage() {
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
         {/* Teams Directory List */}
         <div className="xl:col-span-3 space-y-4">
-          <TeamDirectoryList teams={teams} />
+          <TeamDirectoryList
+            teams={teams}
+            pagination={{
+              currentPage: pagination.page,
+              totalPages: pagination.totalPages,
+              totalItems: pagination.totalItems,
+              itemsPerPage: pagination.pageSize,
+            }}
+            filterCounts={{
+              total: allTeamsCount,
+              configured: configuredTeamsCount,
+              needsLead: needsLeadTeamsCount,
+            }}
+            currentSearch={searchQuery}
+            currentStatus={statusFilter}
+          />
         </div>
 
         {/* Sidebar: Guide & Quick Links */}

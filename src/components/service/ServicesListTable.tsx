@@ -26,6 +26,7 @@ import {
   Server,
 } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
+import Pagination from '@/components/service/Pagination';
 
 export type ServiceListItem = {
   id: string;
@@ -301,6 +302,16 @@ export default function ServicesListTable({
               </div>
             ))}
           </div>
+        )}
+
+        {pagination && (
+          <Pagination
+            currentPage={pagination.currentPage}
+            totalPages={pagination.totalPages}
+            totalItems={pagination.totalItems}
+            itemsPerPage={pagination.itemsPerPage}
+            itemLabel="service"
+          />
         )}
       </div>
     </div>

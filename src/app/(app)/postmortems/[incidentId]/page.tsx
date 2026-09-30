@@ -1,8 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getPostmortem } from '../actions';
-import { notFound } from 'next/navigation';
 import PostmortemForm from '@/components/PostmortemForm';
 import PostmortemDetailView from '@/components/postmortem/PostmortemDetailView';
 import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';

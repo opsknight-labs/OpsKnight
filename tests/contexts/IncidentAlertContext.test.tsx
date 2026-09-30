@@ -589,4 +589,152 @@ describe('IncidentAlertContext', () => {
     // P2/MEDIUM incident should NOT break the dismissal
     expect(result.current.isBannerVisible).toBe(false);
   });
+
+  it('triggers real-time popup toast card for non-critical (P3/LOW) new incidents', () => {
+    // Initial mount with existing incident
+    const initial = {
+      id: 'inc-existing',
+      title: 'Existing Incident',
+      status: 'OPEN',
+      priority: 'P2',
+      urgency: 'MEDIUM',
+      createdAt: hoursAgo(1),
+    };
+    mockUseRealtime.mockReturnValue({
+      recentIncidents: [initial],
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <IncidentAlertProvider>{children}</IncidentAlertProvider>
+    );
+
+    const { rerender } = renderHook(() => useIncidentAlert(), { wrapper });
+    expect(mockNotify.incident).not.toHaveBeenCalled();
+
+    // A brand new P3/LOW incident arrives in real-time
+    const p3Incident = {
+      id: 'inc-p3-new',
+      title: 'Minor UI Glitch Reported',
+      status: 'OPEN',
+      priority: 'P3',
+      urgency: 'LOW',
+      createdAt: new Date().toISOString(),
+      service: { id: 'svc-ui', name: 'Web App' },
+    };
+
+    act(() => {
+      mockUseRealtime.mockReturnValue({
+        recentIncidents: [initial, p3Incident],
+      });
+      rerender();
+    });
+
+    // Real-time toast card MUST be displayed on the top right
+    expect(mockNotify.incident).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'inc-p3-new',
+        title: 'Minor UI Glitch Reported',
+        priority: 'P3',
+        urgency: 'LOW',
+      }),
+      expect.anything()
+    );
+  });
+
+  it('triggers real-time toast even when server clock has skew relative to client', () => {
+    const existing = {
+      id: 'inc-old',
+      title: 'Old Incident',
+      status: 'OPEN',
+      priority: 'P2',
+      createdAt: hoursAgo(2),
+    };
+    mockUseRealtime.mockReturnValue({
+      recentIncidents: [existing],
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <IncidentAlertProvider>{children}</IncidentAlertProvider>
+    );
+
+    const { rerender } = renderHook(() => useIncidentAlert(), { wrapper });
+    expect(mockNotify.incident).not.toHaveBeenCalled();
+
+    // Server clock is 2 minutes behind client (negative skew)
+    const skewedIncident = {
+      id: 'inc-skewed',
+      title: 'Server Clock Drifted Incident',
+      status: 'OPEN',
+      priority: 'P1',
+      urgency: 'HIGH',
+      createdAt: new Date(Date.now() - 120_000).toISOString(),
+    };
+
+    act(() => {
+      mockUseRealtime.mockReturnValue({
+        recentIncidents: [existing, skewedIncident],
+      });
+      rerender();
+    });
+
+    expect(mockNotify.incident).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'inc-skewed',
+        title: 'Server Clock Drifted Incident',
+      }),
+      expect.anything()
+    );
+  });
+
+  it('batches multiple simultaneous new arrivals into a multi-incident toast card', () => {
+    const existing = {
+      id: 'inc-old',
+      title: 'Old Incident',
+      status: 'OPEN',
+      priority: 'P2',
+      createdAt: hoursAgo(2),
+    };
+    mockUseRealtime.mockReturnValue({
+      recentIncidents: [existing],
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <IncidentAlertProvider>{children}</IncidentAlertProvider>
+    );
+
+    const { rerender } = renderHook(() => useIncidentAlert(), { wrapper });
+
+    const batch1 = {
+      id: 'inc-batch-1',
+      title: 'Batch Incident 1',
+      status: 'OPEN',
+      priority: 'P1',
+      urgency: 'HIGH',
+      createdAt: new Date().toISOString(),
+    };
+    const batch2 = {
+      id: 'inc-batch-2',
+      title: 'Batch Incident 2',
+      status: 'OPEN',
+      priority: 'P2',
+      urgency: 'MEDIUM',
+      createdAt: new Date().toISOString(),
+    };
+
+    act(() => {
+      mockUseRealtime.mockReturnValue({
+        recentIncidents: [existing, batch1, batch2],
+      });
+      rerender();
+    });
+
+    // Should pass the array of both incidents to notify.incident
+    expect(mockNotify.incident).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'inc-batch-1' }),
+        expect.objectContaining({ id: 'inc-batch-2' }),
+      ]),
+      expect.anything()
+    );
+  });
 });

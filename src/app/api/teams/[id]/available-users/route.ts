@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
-import { assertResponderOrAbove } from '@/lib/rbac';
+import { assertAdminOrTeamOwner } from '@/lib/rbac';
 import { logger, withRequestContext } from '@/lib/logger';
 
 const MAX_RESULTS = 50;
@@ -14,8 +14,8 @@ async function getAvailableUsers(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await assertResponderOrAbove();
     const { id: teamId } = await params;
+    await assertAdminOrTeamOwner(teamId);
     const query = (req.nextUrl.searchParams.get('q') || '').trim().slice(0, 100);
     const requestedLimit = Number(req.nextUrl.searchParams.get('limit')) || 20;
     const limit = Math.max(1, Math.min(requestedLimit, MAX_RESULTS));

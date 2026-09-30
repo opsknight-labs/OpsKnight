@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useToast } from '@/hooks/use-product-notification';
 import VirtualList from './ui/VirtualList';
 import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
@@ -38,15 +39,53 @@ export default function BulkTeamMemberActions({
   canManageMembers,
   canAssignOwnerAdmin,
   addMember,
-  teamId: _teamId,
+  teamId,
 }: BulkTeamMemberActionsProps) {
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [role, setRole] = useState<string>('MEMBER');
   const [isPending, startTransition] = useTransition();
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<User[]>(availableUsers);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const { showToast } = useToast();
 
-  if (!canManageMembers || availableUsers.length === 0) {
+  useEffect(() => {
+    if (!search) {
+      setSearchResults(availableUsers);
+    }
+  }, [availableUsers, search]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const response = await fetch(
+          `/api/teams/${encodeURIComponent(teamId)}/available-users?q=${encodeURIComponent(search)}&limit=50`,
+          { signal: controller.signal, cache: 'no-store' }
+        );
+        if (!response.ok) throw new Error('Search failed');
+        const data = (await response.json()) as { users?: User[]; hasMore?: boolean };
+        setSearchResults(data.users || []);
+        setHasMore(Boolean(data.hasMore));
+      } catch (error) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          showToast('Unable to search the user directory', 'error');
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsSearching(false);
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [search, showToast, teamId]);
+
+  if (!canManageMembers) {
     return null;
   }
 
@@ -61,11 +100,15 @@ export default function BulkTeamMemberActions({
   };
 
   const handleSelectAll = () => {
-    if (selectedUsers.size === availableUsers.length) {
-      setSelectedUsers(new Set());
+    const allVisibleSelected =
+      searchResults.length > 0 && searchResults.every(u => selectedUsers.has(u.id));
+    const next = new Set(selectedUsers);
+    if (allVisibleSelected) {
+      searchResults.forEach(u => next.delete(u.id));
     } else {
-      setSelectedUsers(new Set(availableUsers.map(u => u.id)));
+      searchResults.forEach(u => next.add(u.id));
     }
+    setSelectedUsers(next);
   };
 
   const handleBulkAdd = () => {
@@ -140,9 +183,7 @@ export default function BulkTeamMemberActions({
         <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/50 transition-colors">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium">
-              Bulk Add ({availableUsers.length} available)
-            </span>
+            <span className="text-sm font-medium">Bulk Add</span>
             {selectedUsers.size > 0 && (
               <Badge variant="secondary" size="xs" className="ml-2">
                 {selectedUsers.size} selected
@@ -159,6 +200,31 @@ export default function BulkTeamMemberActions({
 
       <CollapsibleContent>
         <div className="px-4 pb-4 space-y-4">
+          {/* Search Input */}
+          <div className="space-y-1">
+            <Label htmlFor="bulk-search" className="text-xs">
+              Search Users
+            </Label>
+            <div className="relative">
+              <Input
+                id="bulk-search"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search by name or email…"
+                aria-label="Search available users"
+                className="h-8 text-xs pr-8"
+              />
+              {isSearching && (
+                <Loader2 className="absolute right-2.5 top-2 h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+            </div>
+            {hasMore && (
+              <p className="text-[11px] text-muted-foreground">
+                More matches available. Refine query to narrow down.
+              </p>
+            )}
+          </div>
+
           {/* Select All Button */}
           <div className="flex justify-between items-center">
             <Button
@@ -166,12 +232,15 @@ export default function BulkTeamMemberActions({
               variant="outline"
               size="sm"
               onClick={handleSelectAll}
+              disabled={searchResults.length === 0}
               className="h-8 text-xs"
             >
-              {selectedUsers.size === availableUsers.length ? 'Deselect All' : 'Select All'}
+              {searchResults.length > 0 && searchResults.every(u => selectedUsers.has(u.id))
+                ? 'Deselect Visible'
+                : 'Select Visible'}
             </Button>
             <span className="text-xs text-muted-foreground">
-              {selectedUsers.size} / {availableUsers.length} selected
+              {selectedUsers.size} selected
             </span>
           </div>
 
@@ -199,9 +268,13 @@ export default function BulkTeamMemberActions({
 
           {/* User List */}
           <div className="border rounded-md overflow-hidden bg-background">
-            {availableUsers.length > 10 ? (
+            {searchResults.length === 0 ? (
+              <div className="p-4 text-center text-xs text-muted-foreground">
+                {isSearching ? 'Searching...' : 'No available users found.'}
+              </div>
+            ) : searchResults.length > 10 ? (
               <VirtualList
-                items={availableUsers}
+                items={searchResults}
                 itemHeight={60}
                 containerHeight={200}
                 overscan={3}
@@ -210,7 +283,7 @@ export default function BulkTeamMemberActions({
               />
             ) : (
               <div className="max-h-[200px] overflow-y-auto">
-                {availableUsers.map((user, index) => renderUserItem(user, index))}
+                {searchResults.map((user, index) => renderUserItem(user, index))}
               </div>
             )}
           </div>

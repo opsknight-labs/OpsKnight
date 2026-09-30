@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { assertCanViewSchedule } from '@/lib/rbac';
 import { buildScheduleBlocks, getFinalScheduleBlocks } from '@/lib/oncall';
+import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 import {
   addDaysToDateKey,
   formatDateForInput,
@@ -95,7 +96,7 @@ export default async function ScheduleDetailPage({
   const query = await searchParams;
   const now = new Date();
   const historyPageSize = 8;
-  const historyPage = Math.max(1, Number(query?.history ?? 1) || 1);
+  const requestedHistoryPage = parsePageParam(query?.history);
 
   const [authResult, schedule] = await Promise.all([
     assertCanViewSchedule(id).catch(() => null),
@@ -116,11 +117,20 @@ export default async function ScheduleDetailPage({
   const coverageRangeEnd = startOfDayFromDateKey(addDaysToDateKey(todayKey, 95), schedule.timeZone);
 
   const canMutate = capabilities.canManageRotation || capabilities.canCreateOverride;
+  const historyCount = await prisma.onCallOverride.count({
+    where: { scheduleId: id, end: { lte: now } },
+  });
+  const historyPagination = calculatePaginationBounds({
+    totalItems: historyCount,
+    page: requestedHistoryPage,
+    pageSize: historyPageSize,
+  });
+  const historyPage = historyPagination.page;
+
   const [
     users,
     overridesInRange,
     currentAndFutureOverrides,
-    historyCount,
     historyOverrides,
     auditLogs,
     linkedRules,
@@ -170,7 +180,6 @@ export default async function ScheduleDetailPage({
       orderBy: { start: 'asc' },
       take: 100,
     }),
-    prisma.onCallOverride.count({ where: { scheduleId: id, end: { lte: now } } }),
     prisma.onCallOverride.findMany({
       where: { scheduleId: id, end: { lte: now } },
       select: {
@@ -183,8 +192,8 @@ export default async function ScheduleDetailPage({
         replacesUser: { select: { name: true } },
       },
       orderBy: { end: 'desc' },
-      skip: (historyPage - 1) * historyPageSize,
-      take: historyPageSize,
+      skip: historyPagination.skip,
+      take: historyPagination.take,
     }),
     prisma.auditLog.findMany({
       where: { entityType: 'SCHEDULE', entityId: id },

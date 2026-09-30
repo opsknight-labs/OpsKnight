@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import _TimelineEvent from '../TimelineEvent';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { Button } from '@/components/ui/shadcn/button';
+import { loadOlderIncidentTimelineActivity } from './actions';
 import { cn } from '@/lib/utils';
 import {
   Clock,
@@ -14,6 +16,7 @@ import {
   Activity,
   MessageSquare,
   BellRing,
+  Loader2,
 } from 'lucide-react';
 
 type TimelineFilter =
@@ -137,24 +140,189 @@ export type Note = {
 };
 
 export type IncidentTimelineProps = {
+  incidentId?: string;
   events: Event[];
   notes?: Note[];
   notifications?: IncidentTimelineNotification[];
   incidentCreatedAt?: Date;
   incidentAcknowledgedAt?: Date | null;
   incidentResolvedAt?: Date | null;
+  totalEventsCount?: number;
+  totalNotesCount?: number;
+  totalNotificationsCount?: number;
+  totalActivityCount?: number;
 };
 
+const EMPTY_NOTES: Note[] = [];
+const EMPTY_NOTIFICATIONS: IncidentTimelineNotification[] = [];
+
 export default function IncidentTimeline({
+  incidentId,
   events,
-  notes = [],
-  notifications = [],
+  notes = EMPTY_NOTES,
+  notifications = EMPTY_NOTIFICATIONS,
   incidentCreatedAt,
   incidentAcknowledgedAt,
   incidentResolvedAt,
+  totalEventsCount,
+  totalNotesCount,
+  totalNotificationsCount,
+  totalActivityCount,
 }: IncidentTimelineProps) {
   const { userTimeZone } = useTimezone();
   const [activeFilter, setActiveFilter] = useState<TimelineFilter>('ALL');
+  const [loadedEvents, setLoadedEvents] = useState<Event[]>(events);
+  const [loadedNotes, setLoadedNotes] = useState<Note[]>(notes);
+  const [loadedNotifications, setLoadedNotifications] =
+    useState<IncidentTimelineNotification[]>(notifications);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasExhaustedOlder, setHasExhaustedOlder] = useState(false);
+
+  useEffect(() => {
+    setLoadedEvents(prev => {
+      if (prev === events) return prev;
+      if (prev.length === 0 && events.length === 0) return prev;
+      return events;
+    });
+  }, [events]);
+
+  useEffect(() => {
+    setLoadedNotes(prev => {
+      if (prev === notes) return prev;
+      if (prev.length === 0 && notes.length === 0) return prev;
+      return notes;
+    });
+  }, [notes]);
+
+  useEffect(() => {
+    setLoadedNotifications(prev => {
+      if (prev === notifications) return prev;
+      if (prev.length === 0 && notifications.length === 0) return prev;
+      return notifications;
+    });
+  }, [notifications]);
+
+  const totalItemsCount =
+    totalActivityCount ??
+    ((totalEventsCount ?? 0) + (totalNotesCount ?? 0) + (totalNotificationsCount ?? 0));
+  const currentItemsCount =
+    loadedEvents.length + loadedNotes.length + loadedNotifications.length;
+  const hasMoreActivity =
+    Boolean(incidentId) &&
+    !hasExhaustedOlder &&
+    (totalItemsCount > 0 ? totalItemsCount > currentItemsCount : false);
+
+  const handleLoadOlderActivity = async () => {
+    if (!incidentId || isLoadingMore || currentItemsCount === 0) return;
+
+    let oldestEventDate: Date | null = null;
+    let oldestEventId: string | null = null;
+    for (const e of loadedEvents) {
+      const d = new Date(e.createdAt);
+      if (
+        !oldestEventDate ||
+        d.getTime() < oldestEventDate.getTime() ||
+        (d.getTime() === oldestEventDate.getTime() && (!oldestEventId || e.id < oldestEventId))
+      ) {
+        oldestEventDate = d;
+        oldestEventId = e.id;
+      }
+    }
+
+    let oldestNoteDate: Date | null = null;
+    let oldestNoteId: string | null = null;
+    for (const n of loadedNotes) {
+      const d = new Date(n.createdAt);
+      if (
+        !oldestNoteDate ||
+        d.getTime() < oldestNoteDate.getTime() ||
+        (d.getTime() === oldestNoteDate.getTime() && (!oldestNoteId || n.id < oldestNoteId))
+      ) {
+        oldestNoteDate = d;
+        oldestNoteId = n.id;
+      }
+    }
+
+    let oldestNotifDate: Date | null = null;
+    let oldestNotifId: string | null = null;
+    for (const notif of loadedNotifications) {
+      const d = new Date(notif.createdAt);
+      if (
+        !oldestNotifDate ||
+        d.getTime() < oldestNotifDate.getTime() ||
+        (d.getTime() === oldestNotifDate.getTime() && (!oldestNotifId || notif.id < oldestNotifId))
+      ) {
+        oldestNotifDate = d;
+        oldestNotifId = notif.id;
+      }
+    }
+
+    if (!oldestEventDate && !oldestNoteDate && !oldestNotifDate) return;
+
+    setIsLoadingMore(true);
+    try {
+      const older = await loadOlderIncidentTimelineActivity(incidentId, {
+        eventCursor:
+          oldestEventDate && oldestEventId
+            ? { createdAt: oldestEventDate.toISOString(), id: oldestEventId }
+            : undefined,
+        noteCursor:
+          oldestNoteDate && oldestNoteId
+            ? { createdAt: oldestNoteDate.toISOString(), id: oldestNoteId }
+            : undefined,
+        notificationCursor:
+          oldestNotifDate && oldestNotifId
+            ? { createdAt: oldestNotifDate.toISOString(), id: oldestNotifId }
+            : undefined,
+      });
+
+      if (
+        older.events.length === 0 &&
+        older.notes.length === 0 &&
+        older.notifications.length === 0
+      ) {
+        setHasExhaustedOlder(true);
+      } else {
+        if (older.events.length > 0) {
+          setLoadedEvents(prev => {
+            const existingIds = new Set(prev.map(e => e.id));
+            const newEvents = older.events
+              .filter(e => !existingIds.has(e.id))
+              .map(e => ({ ...e, createdAt: new Date(e.createdAt) }));
+            return [...prev, ...newEvents];
+          });
+        }
+        if (older.notes.length > 0) {
+          setLoadedNotes(prev => {
+            const existingIds = new Set(prev.map(n => n.id));
+            const newNotes = older.notes
+              .filter(n => !existingIds.has(n.id))
+              .map(n => ({ ...n, createdAt: new Date(n.createdAt) }));
+            return [...prev, ...newNotes];
+          });
+        }
+        if (older.notifications.length > 0) {
+          setLoadedNotifications(prev => {
+            const existingIds = new Set(prev.map(notif => notif.id));
+            const newNotifs = older.notifications
+              .filter(notif => !existingIds.has(notif.id))
+              .map(notif => ({
+                ...notif,
+                createdAt: new Date(notif.createdAt),
+                sentAt: notif.sentAt ? new Date(notif.sentAt) : null,
+                deliveredAt: notif.deliveredAt ? new Date(notif.deliveredAt) : null,
+                failedAt: notif.failedAt ? new Date(notif.failedAt) : null,
+              }));
+            return [...prev, ...newNotifs];
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load older activity', err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   const formatEscalationMessage = (message: string) => {
     return message.replace(/\[\[scheduledAt=([^\]]+)\]\]/g, (_match, scheduledAtRaw) => {
@@ -167,191 +335,216 @@ export default function IncidentTimeline({
   };
 
   // Create a comprehensive timeline with incident lifecycle events and notes
-  const timelineEvents: Array<{
-    id: string;
-    message: string;
-    createdAt: Date;
-    type: string;
-    sortPriority: number;
-  }> = [];
+  const timelineEvents = useMemo(() => {
+    const eventsList: Array<{
+      id: string;
+      message: string;
+      createdAt: Date;
+      type: string;
+      sortPriority: number;
+    }> = [];
 
-  const hasCreatedDbEvent = events.some(e => /triggered|created/i.test(e.message));
-  const hasAckDbEvent = events.some(e => /acknowledged/i.test(e.message));
-  const hasResolveDbEvent = events.some(e => /resolved/i.test(e.message));
+    let hasCreatedDbEvent = false;
+    let hasAckDbEvent = false;
+    let hasResolveDbEvent = false;
 
-  // Add incident creation
-  if (incidentCreatedAt && !hasCreatedDbEvent) {
-    timelineEvents.push({
-      id: 'incident-created',
-      message: 'Incident triggered and created',
-      createdAt: incidentCreatedAt,
-      type: 'CREATED',
-      sortPriority: 0,
-    });
-  }
-
-  // Add acknowledgment
-  if (incidentAcknowledgedAt && !hasAckDbEvent) {
-    timelineEvents.push({
-      id: 'incident-acknowledged',
-      message: 'Incident acknowledged by responder',
-      createdAt: incidentAcknowledgedAt,
-      type: 'ACKNOWLEDGED',
-      sortPriority: 1,
-    });
-  }
-
-  // Add resolution
-  if (incidentResolvedAt && !hasResolveDbEvent) {
-    timelineEvents.push({
-      id: 'incident-resolved',
-      message: 'Incident marked as resolved',
-      createdAt: incidentResolvedAt,
-      type: 'RESOLVED',
-      sortPriority: 2,
-    });
-  }
-
-  // Track matched notes to prevent duplicates when an incidentEvent already exists for a note
-  const matchedNoteIds = new Set<string>();
-
-  // Add regular events
-  events.forEach(event => {
-    const isNoteEvent =
-      event.type === 'NOTE' ||
-      event.type === 'COMMENT' ||
-      /\bnote\b|pinned message|comment/i.test(event.message);
-
-    let message = event.message;
-    let eventType = event.type || 'EVENT';
-
-    if (isNoteEvent) {
-      eventType = 'NOTE';
-      if (notes && notes.length > 0) {
-        const eventTime = new Date(event.createdAt).getTime();
-        const matchingNote = notes.find(n => {
-          if (matchedNoteIds.has(n.id)) return false;
-          const noteTime = new Date(n.createdAt).getTime();
-          return Math.abs(eventTime - noteTime) <= 15000;
-        });
-
-        if (matchingNote) {
-          matchedNoteIds.add(matchingNote.id);
-          if (!message.includes(matchingNote.content)) {
-            message = `${message}:\n${matchingNote.content}`;
-          }
-        }
-      }
+    for (const e of loadedEvents) {
+      if (!hasCreatedDbEvent && /triggered|created/i.test(e.message)) hasCreatedDbEvent = true;
+      if (!hasAckDbEvent && /acknowledged/i.test(e.message)) hasAckDbEvent = true;
+      if (!hasResolveDbEvent && /resolved/i.test(e.message)) hasResolveDbEvent = true;
     }
 
-    timelineEvents.push({
-      ...event,
-      message,
-      type: eventType,
-      sortPriority: 3,
-    });
-  });
+    // Add incident creation
+    if (incidentCreatedAt && !hasCreatedDbEvent) {
+      eventsList.push({
+        id: 'incident-created',
+        message: 'Incident triggered and created',
+        createdAt: incidentCreatedAt,
+        type: 'CREATED',
+        sortPriority: 0,
+      });
+    }
 
-  // Synthesize timeline events for any notes that do not have a matching incidentEvent
-  if (notes && notes.length > 0) {
-    notes.forEach(note => {
-      if (!matchedNoteIds.has(note.id)) {
-        const author = note.user?.name || note.user?.email || 'Responder';
-        const formattedMsg = note.content.startsWith('📌')
-          ? note.content
-          : `Note added by ${author}:\n${note.content}`;
+    // Add acknowledgment
+    if (incidentAcknowledgedAt && !hasAckDbEvent) {
+      eventsList.push({
+        id: 'incident-acknowledged',
+        message: 'Incident acknowledged by responder',
+        createdAt: incidentAcknowledgedAt,
+        type: 'ACKNOWLEDGED',
+        sortPriority: 1,
+      });
+    }
 
-        timelineEvents.push({
-          id: `note-${note.id}`,
-          message: formattedMsg,
-          createdAt: note.createdAt,
-          type: 'NOTE',
-          sortPriority: 3,
-        });
-      }
-    });
-  }
+    // Add resolution
+    if (incidentResolvedAt && !hasResolveDbEvent) {
+      eventsList.push({
+        id: 'incident-resolved',
+        message: 'Incident marked as resolved',
+        createdAt: incidentResolvedAt,
+        type: 'RESOLVED',
+        sortPriority: 2,
+      });
+    }
 
-  // Track matched voice call events to deduplicate synthesized voice deliveries
-  const matchedVoiceEventIds = new Set<string>();
+    // Track matched notes to prevent duplicates when an incidentEvent already exists for a note
+    const matchedNoteIds = new Set<string>();
+    const noteLookup = (loadedNotes || []).map(n => ({
+      id: n.id,
+      content: n.content,
+      time: new Date(n.createdAt).getTime(),
+    }));
 
-  // Synthesize timeline events for incident notifications
-  if (notifications && notifications.length > 0) {
-    notifications.forEach(notif => {
-      let timestamp: string | Date | undefined;
-      switch (notif.status) {
-        case 'FAILED':
-        case 'UNKNOWN':
-          timestamp = notif.failedAt || notif.sentAt || notif.createdAt;
-          break;
-        case 'DELIVERED':
-          timestamp = notif.deliveredAt || notif.sentAt || notif.createdAt;
-          break;
-        case 'SENT':
-          timestamp = notif.sentAt || notif.deliveredAt || notif.createdAt;
-          break;
-        default:
-          timestamp = notif.deliveredAt || notif.failedAt || notif.sentAt || notif.createdAt;
-          break;
-      }
+    // Add regular events
+    loadedEvents.forEach(event => {
+      const isNoteEvent =
+        event.type === 'NOTE' ||
+        event.type === 'COMMENT' ||
+        /\bnote\b|pinned message|comment/i.test(event.message);
 
-      // Suppress synthesized entry when an equivalent persisted voice call connected event exists for this responder
-      if (notif.channel?.toUpperCase() === 'VOICE' && notif.status?.toUpperCase() === 'DELIVERED') {
-        const notifTime = timestamp ? new Date(timestamp).getTime() : 0;
-        const recipientName = notif.user?.name?.trim().toLowerCase();
-        const recipientEmail = notif.user?.email?.trim().toLowerCase();
-        const recipientPhone = notif.recipientDisplay?.trim().toLowerCase();
+      let message = event.message;
+      let eventType = event.type || 'EVENT';
 
-        const matchingEvent = events.find(e => {
-          if (matchedVoiceEventIds.has(e.id)) return false;
-          if (!/voice call connected/i.test(e.message)) return false;
-          const eventTime = new Date(e.createdAt).getTime();
-          if (Math.abs(eventTime - notifTime) > 120_000) return false;
+      if (isNoteEvent) {
+        eventType = 'NOTE';
+        if (noteLookup.length > 0) {
+          const eventTime = new Date(event.createdAt).getTime();
+          const matchingNote = noteLookup.find(
+            n => !matchedNoteIds.has(n.id) && Math.abs(eventTime - n.time) <= 15000
+          );
 
-          const msgLower = e.message.toLowerCase();
-          if (recipientName && msgLower.includes(recipientName)) return true;
-          if (recipientEmail && msgLower.includes(recipientEmail)) return true;
-          if (recipientPhone && msgLower.includes(recipientPhone)) return true;
-          if (
-            !recipientName &&
-            !recipientEmail &&
-            !recipientPhone &&
-            msgLower.includes('responder')
-          ) {
-            return true;
+          if (matchingNote) {
+            matchedNoteIds.add(matchingNote.id);
+            if (!message.includes(matchingNote.content)) {
+              message = `${message}:\n${matchingNote.content}`;
+            }
           }
-          return false;
-        });
-        if (matchingEvent) {
-          matchedVoiceEventIds.add(matchingEvent.id);
-          return;
         }
       }
 
-      timelineEvents.push({
-        id: `notif-${notif.id}`,
-        message: formatNotificationMessage(notif),
-        createdAt: timestamp ? new Date(timestamp) : new Date(),
-        type: 'NOTIFICATION',
+      eventsList.push({
+        ...event,
+        message,
+        type: eventType,
         sortPriority: 3,
       });
     });
-  }
 
-  // Sort by date (oldest first for timeline) with secondary ID tie-breaker for same-millisecond events
-  timelineEvents.sort((a, b) => {
-    const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    if (diff !== 0) return diff;
-    if (a.sortPriority !== b.sortPriority) {
-      return a.sortPriority - b.sortPriority;
+    // Synthesize timeline events for any notes that do not have a matching incidentEvent
+    if (loadedNotes && loadedNotes.length > 0) {
+      loadedNotes.forEach(note => {
+        if (!matchedNoteIds.has(note.id)) {
+          const author = note.user?.name || note.user?.email || 'Responder';
+          const formattedMsg = note.content.startsWith('📌')
+            ? note.content
+            : `Note added by ${author}:\n${note.content}`;
+
+          eventsList.push({
+            id: `note-${note.id}`,
+            message: formattedMsg,
+            createdAt: note.createdAt,
+            type: 'NOTE',
+            sortPriority: 3,
+          });
+        }
+      });
     }
-    return String(a.id || '').localeCompare(String(b.id || ''));
-  });
 
-  const filteredEvents =
-    activeFilter === 'ALL'
+    // Track matched voice call events to deduplicate synthesized voice deliveries
+    const matchedVoiceEventIds = new Set<string>();
+    const voiceEvents = loadedEvents
+      .filter(e => /voice call connected/i.test(e.message))
+      .map(e => ({
+        id: e.id,
+        time: new Date(e.createdAt).getTime(),
+        msgLower: e.message.toLowerCase(),
+      }));
+
+    // Synthesize timeline events for incident notifications
+    if (loadedNotifications && loadedNotifications.length > 0) {
+      loadedNotifications.forEach(notif => {
+        let timestamp: string | Date | undefined;
+        switch (notif.status) {
+          case 'FAILED':
+          case 'UNKNOWN':
+            timestamp = notif.failedAt || notif.sentAt || notif.createdAt;
+            break;
+          case 'DELIVERED':
+            timestamp = notif.deliveredAt || notif.sentAt || notif.createdAt;
+            break;
+          case 'SENT':
+            timestamp = notif.sentAt || notif.deliveredAt || notif.createdAt;
+            break;
+          default:
+            timestamp = notif.deliveredAt || notif.failedAt || notif.sentAt || notif.createdAt;
+            break;
+        }
+
+        // Suppress synthesized entry when an equivalent persisted voice call connected event exists for this responder
+        if (notif.channel?.toUpperCase() === 'VOICE' && notif.status?.toUpperCase() === 'DELIVERED') {
+          const notifTime = timestamp ? new Date(timestamp).getTime() : 0;
+          const recipientName = notif.user?.name?.trim().toLowerCase();
+          const recipientEmail = notif.user?.email?.trim().toLowerCase();
+          const recipientPhone = notif.recipientDisplay?.trim().toLowerCase();
+
+          const matchingEvent = voiceEvents.find(e => {
+            if (matchedVoiceEventIds.has(e.id)) return false;
+            if (Math.abs(e.time - notifTime) > 120_000) return false;
+
+            if (recipientName && e.msgLower.includes(recipientName)) return true;
+            if (recipientEmail && e.msgLower.includes(recipientEmail)) return true;
+            if (recipientPhone && e.msgLower.includes(recipientPhone)) return true;
+            if (
+              !recipientName &&
+              !recipientEmail &&
+              !recipientPhone &&
+              e.msgLower.includes('responder')
+            ) {
+              return true;
+            }
+            return false;
+          });
+          if (matchingEvent) {
+            matchedVoiceEventIds.add(matchingEvent.id);
+            return;
+          }
+        }
+
+        eventsList.push({
+          id: `notif-${notif.id}`,
+          message: formatNotificationMessage(notif),
+          createdAt: timestamp ? new Date(timestamp) : new Date(),
+          type: 'NOTIFICATION',
+          sortPriority: 3,
+        });
+      });
+    }
+
+    // Sort by date (oldest first for timeline) with secondary ID tie-breaker for same-millisecond events
+    eventsList.sort((a, b) => {
+      const diff = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      if (diff !== 0) return diff;
+      if (a.sortPriority !== b.sortPriority) {
+        return a.sortPriority - b.sortPriority;
+      }
+      return String(a.id || '').localeCompare(String(b.id || ''));
+    });
+
+    return eventsList;
+  }, [
+    loadedEvents,
+    loadedNotes,
+    loadedNotifications,
+    incidentCreatedAt,
+    incidentAcknowledgedAt,
+    incidentResolvedAt,
+  ]);
+
+  const filteredEvents = useMemo(() => {
+    return activeFilter === 'ALL'
       ? timelineEvents
       : timelineEvents.filter(e => categorize(e.type, e.message) === activeFilter);
+  }, [timelineEvents, activeFilter]);
 
   const getEventConfig = (type: string) => {
     switch (type) {
@@ -516,6 +709,30 @@ export default function IncidentTimeline({
           );
         })}
       </div>
+
+      {hasMoreActivity && (
+        <div className="mt-4 flex flex-col items-center justify-center p-3 border rounded-lg bg-slate-50 dark:bg-slate-800/40 text-xs text-muted-foreground gap-2">
+          <span>
+            Showing {currentItemsCount} of {totalItemsCount} activity items
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLoadOlderActivity}
+            disabled={isLoadingMore}
+            className="h-8 gap-1.5"
+          >
+            {isLoadingMore ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>Loading older activity...</span>
+              </>
+            ) : (
+              <span>Load older activity</span>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

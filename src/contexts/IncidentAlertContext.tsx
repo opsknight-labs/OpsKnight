@@ -157,9 +157,11 @@ export function IncidentAlertProvider({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isAcknowledging, setIsAcknowledging] = useState(false);
 
-  // Connection timestamp guard: only fire toast for incidents created AFTER client mount
+  // Connection and known incident ID tracking
   const mountTimestampRef = useRef<number>(Date.now());
-  const toastedIdsRef = useRef<Set<string>>(new Set());
+  const hasInitializedRef = useRef<boolean>(initialIncidents.length > 0);
+  const knownIncidentIdsRef = useRef<Set<string>>(new Set(initialIncidents.map(i => i.id)));
+  const toastedIdsRef = useRef<Set<string>>(new Set(initialIncidents.map(i => i.id)));
 
   const dismissBanner = useCallback(() => {
     const now = Date.now();
@@ -213,6 +215,70 @@ export function IncidentAlertProvider({
   useEffect(() => {
     if (!recentIncidents || recentIncidents.length === 0) return;
 
+    const now = Date.now();
+    const newArrivals: Array<{
+      id: string;
+      title: string;
+      priority?: string | null;
+      urgency?: string | null;
+      service?: { id?: string; name: string } | null;
+      createdAt: string | Date;
+    }> = [];
+    let shouldClearDismissal = false;
+    const isFirstSync = !hasInitializedRef.current;
+
+    for (const item of recentIncidents) {
+      const parsed = parseIncidentFromRecord(item);
+      if (!parsed) continue;
+
+      const isResolvedOrSuppressed = parsed.status === 'RESOLVED' || parsed.status === 'SUPPRESSED';
+      const createdTime = new Date(parsed.createdAt).getTime();
+      const ageMs = now - createdTime;
+
+      if (isFirstSync) {
+        // On initial sync, flag as new arrival only if freshly created (within 60s)
+        const isFresh = !isNaN(createdTime) && ageMs <= 60_000 && ageMs >= -60_000;
+        if (isFresh && !isResolvedOrSuppressed && !toastedIdsRef.current.has(parsed.id)) {
+          newArrivals.push({
+            id: parsed.id,
+            title: parsed.title,
+            priority: parsed.priority,
+            urgency: parsed.urgency,
+            service: parsed.service,
+            createdAt: parsed.createdAt,
+          });
+          toastedIdsRef.current.add(parsed.id);
+          if (isP1OrHighUrgency(parsed)) {
+            shouldClearDismissal = true;
+          }
+        }
+        knownIncidentIdsRef.current.add(parsed.id);
+      } else {
+        // Subsequent sync: any new incident ID not previously seen is a genuine new arrival
+        const isUnseen = !knownIncidentIdsRef.current.has(parsed.id) && !toastedIdsRef.current.has(parsed.id);
+        const withinMaxAge = isNaN(createdTime) || ageMs <= 15 * 60 * 1000;
+
+        if (isUnseen && !isResolvedOrSuppressed && withinMaxAge) {
+          newArrivals.push({
+            id: parsed.id,
+            title: parsed.title,
+            priority: parsed.priority,
+            urgency: parsed.urgency,
+            service: parsed.service,
+            createdAt: parsed.createdAt,
+          });
+          toastedIdsRef.current.add(parsed.id);
+          if (isP1OrHighUrgency(parsed)) {
+            shouldClearDismissal = true;
+          }
+        }
+        knownIncidentIdsRef.current.add(parsed.id);
+      }
+    }
+
+    hasInitializedRef.current = true;
+
+    // Update critical incidents map for the emergency banner
     setIncidentsMap(prev => {
       let changed = false;
       const next = new Map(prev);
@@ -241,50 +307,33 @@ export function IncidentAlertProvider({
             const updatedTime = parsed.updatedAt ? new Date(parsed.updatedAt).getTime() : 0;
             const isEscalation =
               (existing && !wasHighOrP1 && isHighOrP1) ||
-              (!existing && isHighOrP1 && (updatedTime >= mountTimestampRef.current - 5000 || updatedTime > (dismissedAt ?? 0)));
+              (!existing && isHighOrP1 && (updatedTime >= mountTimestampRef.current - 60_000 || updatedTime > (dismissedAt ?? 0)));
 
             if (isEscalation) {
-              clearDismissal();
+              shouldClearDismissal = true;
             }
           }
-        }
-
-        // Check if this is a genuine brand-new incident created while connected
-        const createdTime = new Date(parsed.createdAt).getTime();
-        const isNewArrival =
-          createdTime >= mountTimestampRef.current - 5000 &&
-          !toastedIdsRef.current.has(parsed.id) &&
-          isCritical &&
-          parsed.status !== 'RESOLVED';
-
-        if (isNewArrival) {
-          toastedIdsRef.current.add(parsed.id);
-
-          // A brand-new critical incident (P1 or HIGH urgency) breaks any prior dismissal across all pages
-          if (isP1OrHighUrgency(parsed)) {
-            clearDismissal();
-          }
-
-          notify.incident(
-            {
-              id: parsed.id,
-              title: parsed.title,
-              priority: parsed.priority,
-              urgency: parsed.urgency,
-              service: parsed.service,
-              createdAt: parsed.createdAt,
-            },
-            {
-              onAcknowledge: async (id: string) => {
-                await acknowledgeIncident(id);
-              },
-            }
-          );
         }
       }
 
       return changed ? next : prev;
     });
+
+    if (shouldClearDismissal) {
+      clearDismissal();
+    }
+
+    // Fire rich top-right alert popup card
+    if (newArrivals.length > 0) {
+      notify.incident(
+        newArrivals.length === 1 ? newArrivals[0] : newArrivals,
+        {
+          onAcknowledge: async (id: string) => {
+            await acknowledgeIncident(id);
+          },
+        }
+      );
+    }
   }, [recentIncidents, clearDismissal, acknowledgeIncident, dismissedAt]);
 
   // Derive visible active critical incidents scoped to the last 24h

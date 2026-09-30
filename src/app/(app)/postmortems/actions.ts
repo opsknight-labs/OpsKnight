@@ -13,11 +13,11 @@ import { postmortemReadWhere } from '@/lib/authorization-filters';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
   getStoredActionItemId,
-  normalizeLegacyActionItems,
   parseActionItemDueDate,
   resolveStoredActionItems,
   type ActionItem,
 } from '@/lib/action-items';
+import { parsePageParam, parsePageSizeParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 
 export type TimelineEvent = {
   id: string;
@@ -261,71 +261,7 @@ export async function getPostmortem(incidentId: string) {
     return null;
   }
 
-  let { actionItemRecords } = postmortem;
-  const { actionItems, ...rest } = postmortem;
-
-  // Rolling migration aid: old postmortems may still only have JSON action
-  // items. Hydrate normalized rows on first read so Jira linking works without
-  // requiring a maintenance window.
-  if (canViewDrafts && actionItemRecords.length === 0) {
-    const legacyItems = normalizeLegacyActionItems(actionItems, {
-      legacyIdPrefix: `postmortem-${postmortem.id}`,
-    });
-
-    if (legacyItems.length > 0) {
-      await prisma.$transaction(async tx => {
-        for (const [index, item] of legacyItems.entries()) {
-          await tx.actionItem.upsert({
-            where: {
-              id: getStoredActionItemId({
-                postmortemId: postmortem.id,
-                legacyId: item.id,
-                index,
-              }),
-            },
-            update: {},
-            create: {
-              id: getStoredActionItemId({
-                postmortemId: postmortem.id,
-                legacyId: item.id,
-                index,
-              }),
-              postmortemId: postmortem.id,
-              incidentId: postmortem.incident.id,
-              title: item.title.trim() || 'Untitled action item',
-              description: item.description.trim() || null,
-              ownerId: item.owner || null,
-              dueDate: parseActionItemDueDate(item.dueDate) ?? null,
-              status: item.status,
-              priority: item.priority,
-              source: 'POSTMORTEM',
-              completedAt: item.status === 'COMPLETED' ? new Date() : null,
-            },
-          });
-        }
-      });
-
-      actionItemRecords = await prisma.actionItem.findMany({
-        where: { postmortemId: postmortem.id },
-        include: {
-          externalIssueLinks: {
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            select: {
-              id: true,
-              provider: true,
-              externalKey: true,
-              externalUrl: true,
-              externalStatus: true,
-              externalAssignee: true,
-              syncState: true,
-            },
-          },
-        },
-        orderBy: { createdAt: 'asc' },
-      });
-    }
-  }
+  const { actionItems, actionItemRecords, ...rest } = postmortem;
 
   return {
     ...rest,
@@ -349,8 +285,9 @@ export async function getAllPostmortems(
     limit?: number;
   } = {}
 ) {
-  const { status, search, serviceId, page = 1, limit = 50 } = options;
-  const skip = (page - 1) * limit;
+  const { status, search, serviceId } = options;
+  const safePage = parsePageParam(options.page);
+  const safeLimit = parsePageSizeParam(options.limit, 50, 100);
 
   const [permissions, actor] = await Promise.all([
     getUserPermissions(),
@@ -379,39 +316,43 @@ export async function getAllPostmortems(
     AND: [postmortemReadWhere(actor), selectedWhere],
   };
 
-  const [postmortems, total] = await Promise.all([
-    prisma.postmortem.findMany({
-      where,
-      include: {
-        createdBy: {
-          select: { id: true, name: true, email: true, avatarUrl: true },
-        },
-        incident: {
-          select: {
-            id: true,
-            title: true,
-            status: true,
-            service: {
-              select: { id: true, name: true },
-            },
-            resolvedAt: true,
+  const total = await prisma.postmortem.count({ where });
+  const paginationBounds = calculatePaginationBounds({
+    totalItems: total,
+    page: safePage,
+    pageSize: safeLimit,
+  });
+
+  const postmortems = await prisma.postmortem.findMany({
+    where,
+    include: {
+      createdBy: {
+        select: { id: true, name: true, email: true, avatarUrl: true },
+      },
+      incident: {
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          service: {
+            select: { id: true, name: true },
           },
+          resolvedAt: true,
         },
       },
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take: limit,
-    }),
-    prisma.postmortem.count({ where }),
-  ]);
+    },
+    orderBy: { createdAt: 'desc' },
+    skip: paginationBounds.skip,
+    take: paginationBounds.take,
+  });
 
   return {
     postmortems,
     pagination: {
-      currentPage: page,
-      totalPages: Math.ceil(total / limit),
+      currentPage: paginationBounds.page,
+      totalPages: paginationBounds.totalPages,
       totalItems: total,
-      itemsPerPage: limit,
+      itemsPerPage: safeLimit,
     },
   };
 }

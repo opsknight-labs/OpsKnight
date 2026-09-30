@@ -714,6 +714,9 @@ export async function bulkUpdateUsers(
       actorId: admin?.id || null,
       details: { userIds, count: userIds.length },
     });
+
+    revalidatePath('/users');
+    return { success: true, message: `Activated ${userIds.length} user(s)` };
   } else if (action === 'deactivate') {
     if (admin && userIds.includes(admin.id)) {
       return { error: 'You cannot deactivate your own account.' };
