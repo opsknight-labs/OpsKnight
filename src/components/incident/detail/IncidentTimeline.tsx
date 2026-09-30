@@ -153,11 +153,14 @@ export type IncidentTimelineProps = {
   totalActivityCount?: number;
 };
 
+const EMPTY_NOTES: Note[] = [];
+const EMPTY_NOTIFICATIONS: IncidentTimelineNotification[] = [];
+
 export default function IncidentTimeline({
   incidentId,
   events,
-  notes = [],
-  notifications = [],
+  notes = EMPTY_NOTES,
+  notifications = EMPTY_NOTIFICATIONS,
   incidentCreatedAt,
   incidentAcknowledgedAt,
   incidentResolvedAt,
@@ -176,15 +179,27 @@ export default function IncidentTimeline({
   const [hasExhaustedOlder, setHasExhaustedOlder] = useState(false);
 
   useEffect(() => {
-    setLoadedEvents(events);
+    setLoadedEvents(prev => {
+      if (prev === events) return prev;
+      if (prev.length === 0 && events.length === 0) return prev;
+      return events;
+    });
   }, [events]);
 
   useEffect(() => {
-    setLoadedNotes(notes);
+    setLoadedNotes(prev => {
+      if (prev === notes) return prev;
+      if (prev.length === 0 && notes.length === 0) return prev;
+      return notes;
+    });
   }, [notes]);
 
   useEffect(() => {
-    setLoadedNotifications(notifications);
+    setLoadedNotifications(prev => {
+      if (prev === notifications) return prev;
+      if (prev.length === 0 && notifications.length === 0) return prev;
+      return notifications;
+    });
   }, [notifications]);
 
   const totalItemsCount =
