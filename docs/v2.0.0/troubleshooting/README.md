@@ -2,7 +2,7 @@
 title: Troubleshooting
 order: 7
 description: Diagnose OpsKnight symptoms using observable evidence.
-type: troubleshooting
+type: concept
 product_area: operations
 audience: [operator, administrator, responder]
 verification:

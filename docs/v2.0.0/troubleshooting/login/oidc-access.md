@@ -2,6 +2,9 @@
 title: OIDC login succeeds but access is wrong
 description: Diagnose account linking, role mapping, provisioning, and stale session access.
 type: troubleshooting
+reader:
+  status: READER_COMPLETE
+  task: Diagnose, recover, and verify oidc access.
 product_area: identity
 audience: [administrator, operator]
 verification:

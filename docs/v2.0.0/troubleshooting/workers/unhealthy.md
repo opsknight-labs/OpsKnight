@@ -2,6 +2,9 @@
 title: Worker is unhealthy
 description: Diagnose stalled claims, queue age, concurrency, and database capacity.
 type: troubleshooting
+reader:
+  status: READER_COMPLETE
+  task: Diagnose, recover, and verify unhealthy.
 product_area: operations
 audience: [operator]
 keywords: [worker unhealthy, worker queue stalled, scale workers, queue age]

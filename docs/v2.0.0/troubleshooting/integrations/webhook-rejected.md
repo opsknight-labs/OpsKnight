@@ -2,6 +2,9 @@
 title: Integration webhook is rejected
 description: Diagnose authentication, signature, replay, rate-limit, and payload failures.
 type: troubleshooting
+reader:
+  status: READER_COMPLETE
+  task: Diagnose, recover, and verify webhook rejected.
 product_area: integrations
 audience: [operator, administrator]
 verification:

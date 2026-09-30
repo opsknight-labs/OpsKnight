@@ -2,6 +2,9 @@
 title: Status page is not updating
 description: Diagnose projection, routing, caching, and privacy configuration.
 type: troubleshooting
+reader:
+  status: READER_COMPLETE
+  task: Diagnose, recover, and verify not updating.
 product_area: status-pages
 audience: [operator, administrator]
 verification:

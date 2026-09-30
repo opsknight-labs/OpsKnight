@@ -2,6 +2,9 @@
 title: Scheduler is not processing maintenance
 description: Diagnose missing ownership, stale progress, locks, and database failures.
 type: troubleshooting
+reader:
+  status: READER_COMPLETE
+  task: Diagnose, recover, and verify not processing.
 product_area: operations
 audience: [operator]
 verification:
