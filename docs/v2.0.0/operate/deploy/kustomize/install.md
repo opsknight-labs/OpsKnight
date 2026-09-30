@@ -139,7 +139,65 @@ Reject placeholder values, mutable images, integrated-plus-split ownership, publ
 
 ## Run migration and deploy
 
-Create a one-shot Job from the target image using `DIRECT_DATABASE_URL`. Run Prisma deploy plus the maintained release index installers documented in [Database migrations](../../upgrades/database-migrations). Do not include an ordinary Job in continuously reconciled resources without controller-specific one-shot ordering.
+Save the following as `migration-job.yaml`. Replace the image digest with the same digest used by the overlay. The Job reads only the direct PostgreSQL URL and runs Prisma plus every maintained online-index installer:
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opsknight-migration
+  namespace: opsknight
+  labels:
+    app.kubernetes.io/name: opsknight
+    app.kubernetes.io/component: migration
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opsknight
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: migrate
+          image: ghcr.io/opsknight-labs/opsknight@sha256:<tested-opsknight-image-digest>
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opsknight-secrets
+                  key: DIRECT_DATABASE_URL
+            - name: DIRECT_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opsknight-secrets
+                  key: DIRECT_DATABASE_URL
+          command: [sh, -ec]
+          args:
+            - |
+              node node_modules/prisma/build/index.js migrate deploy
+              node scripts/create-status-platform-online-indexes.cjs
+              node scripts/create-sla-scheduler-online-index.cjs
+              node scripts/create-voice-attempt-online-indexes.cjs
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+```
+
+For a database with a private CA, add a read-only Secret volume, mount it into this container, and include the matching `sslrootcert` plus `sslmode=verify-full` in `DIRECT_DATABASE_URL`. Do not place an ordinary Job in continuously reconciled resources without controller-specific one-shot ordering.
 
 ```sh
 kubectl apply -f migration-job.yaml
@@ -148,7 +206,7 @@ kubectl -n opsknight logs job/opsknight-migration
 kubectl apply -k deploy/environments/production
 ```
 
-Stop if migration fails.
+Delete an earlier completed Job before reusing the same name for a later release, or give the Job a release-specific name. Stop if migration fails; do not apply the workloads until all four commands exit successfully.
 
 ## Verify the installation
 

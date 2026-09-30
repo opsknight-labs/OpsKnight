@@ -54,12 +54,11 @@ concurrent build:
 DATABASE_URL="$DIRECT_DATABASE_URL" npm run prisma:indexes:sla-scheduler
 ```
 
-The current container entrypoint and Helm migration Job install the status-page
-and voice-attempt online indexes but do not invoke the SLA scheduler installer.
-Run the command explicitly during the `SHADOW` rollout before selecting
-`INDEXED`. Do not assume the index exists merely because schema migrations or
-the deployment migration Job completed; the UI will reject Indexed mode until
-the database check passes.
+The Helm migration Job invokes this installer explicitly. For deployments or
+older release artifacts whose migration owner does not, run the command during
+the `SHADOW` rollout before selecting `INDEXED`. Confirm the index is valid
+rather than assuming schema migrations alone created it; the UI rejects Indexed
+mode until the database check passes.
 
 ## Apply migrations by deployment type
 
@@ -79,7 +78,7 @@ Use the actual web service name from your Compose file. A zero exit code and the
 
 ### Helm
 
-The chart enables a pre-install/pre-upgrade migration Job when `migrations.job.enabled` is true. It uses the chart image and database secret, runs Prisma against `DIRECT_DATABASE_URL`, then installs the status-platform and voice-attempt indexes.
+The chart enables a pre-install/pre-upgrade migration Job when `migrations.job.enabled` is true. It uses the chart image and direct database secret, runs Prisma against `DIRECT_DATABASE_URL`, then installs the status-platform, SLA-scheduler, and voice-attempt indexes.
 
 ```bash
 helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \

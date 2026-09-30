@@ -22,7 +22,7 @@ Provision a supported PostgreSQL database with backups/PITR, tested recovery, TL
 
 ## Prepare the configuration
 
-Disable bundled PostgreSQL, store `DATABASE_URL` and `DIRECT_DATABASE_URL` in the existing Secret, and configure chart key mappings. For a private CA, mount it into migration and every runtime role and use `verify-full` plus the matching `sslrootcert` path.
+Disable bundled PostgreSQL, store `DATABASE_URL` and `DIRECT_DATABASE_URL` in the existing Secret, and map them with `secrets.keys.databaseUrl` and `secrets.keys.directDatabaseUrl`. The migration Job and split runtime use the direct key for schema/index work; do not point it at transaction-mode PgBouncer. For a private CA, mount it into migration and every runtime role and use `verify-full` plus the matching `sslrootcert` path.
 
 Configure NetworkPolicy/provider firewall and the chart connection ceiling. URI-encode credentials.
 
@@ -54,4 +54,3 @@ Plan a quiesced or replicated cutover with backup, target validation, direct mig
 
 - [Configure PgBouncer](./pgbouncer)
 - [Install with Helm](./install)
-
