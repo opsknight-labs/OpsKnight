@@ -1,9 +1,12 @@
 ---
 title: Configure SCIM user provisioning
 description: Connect Microsoft Entra, Okta, or another SCIM client and verify user provisioning and deprovisioning.
-type: how-to
+type: tutorial
 product_area: identity
 audience: [administrator, operator]
+reader:
+  status: READER_COMPLETE
+  task: Configure and verify SCIM provisioning and deprovisioning end to end.
 keywords: [SCIM provisioning, Entra provisioning, Okta provisioning, SCIM users, identity lifecycle]
 verification:
   level: source

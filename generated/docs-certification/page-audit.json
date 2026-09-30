@@ -3,14 +3,14 @@
   "purpose": "Reader-completeness audit. Mapping and source verification do not imply task usability.",
   "counts": {
     "DISCOVERED": 0,
-    "MAPPED": 151,
+    "MAPPED": 149,
     "DRAFTED": 0,
-    "READER_COMPLETE": 87,
+    "READER_COMPLETE": 89,
     "HUMAN_VERIFIED": 0,
     "RUNTIME_VERIFIED": 0
   },
   "taskPages": 177,
-  "readerCompleteTaskPages": 87,
+  "readerCompleteTaskPages": 89,
   "humanVerifiedTaskPages": 0,
   "runtimeVerifiedTaskPages": 0,
   "pages": [
@@ -434,9 +434,9 @@
     },
     {
       "page": "guides/identity/configure-oidc.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
+      "type": "tutorial",
+      "userTask": "Configure, pilot, verify, and safely enforce OIDC single sign-on.",
+      "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
@@ -445,9 +445,9 @@
     },
     {
       "page": "guides/identity/configure-scim.md",
-      "type": "how-to",
-      "userTask": null,
-      "status": "MAPPED",
+      "type": "tutorial",
+      "userTask": "Configure and verify SCIM provisioning and deprovisioning end to end.",
+      "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",

@@ -1,9 +1,12 @@
 ---
 title: Configure OIDC single sign-on
 description: Register Microsoft Entra, Google Workspace, Okta, Auth0, or a generic OIDC provider and safely roll out sign-in.
-type: how-to
+type: tutorial
 product_area: identity
 audience: [administrator, operator]
+reader:
+  status: READER_COMPLETE
+  task: Configure, pilot, verify, and safely enforce OIDC single sign-on.
 keywords: [OIDC login, configure SSO, OpenID Connect, Entra, Google Workspace, Okta, Auth0]
 verification:
   level: source
