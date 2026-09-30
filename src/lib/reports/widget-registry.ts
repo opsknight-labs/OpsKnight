@@ -20,7 +20,7 @@ export type WidgetDefinition = {
   maxSize?: { w: number; h: number };
   icon: string;
   category: WidgetCategory;
-  config?: Record<string, any>;
+  config?: Record<string, unknown>;
 };
 
 /**

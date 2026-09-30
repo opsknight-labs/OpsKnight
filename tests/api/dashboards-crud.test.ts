@@ -47,7 +47,9 @@ describe('Dashboards API CRUD Contract', () => {
     vi.clearAllMocks();
     mocks.getServerSession.mockResolvedValue({ user: { email: mockUser.email } });
     mocks.prisma.user.findUnique.mockResolvedValue(mockUser);
-    mocks.prisma.$transaction.mockImplementation(async (callback: any) => callback(mocks.prisma));
+    mocks.prisma.$transaction.mockImplementation(
+      async (callback: (tx: typeof mocks.prisma) => Promise<unknown>) => callback(mocks.prisma)
+    );
   });
 
   describe('GET /api/dashboards', () => {

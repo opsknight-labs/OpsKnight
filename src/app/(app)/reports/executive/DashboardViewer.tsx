@@ -47,7 +47,7 @@ type Widget = {
   widgetDefinitionId?: string;
   title?: string | null;
   position: { x: number; y: number; w: number; h: number };
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 };
 
 type DashboardViewerProps = {
@@ -66,6 +66,8 @@ type DashboardViewerProps = {
     services: Array<{ id: string; name: string }>;
   };
   templates: DashboardTemplate[];
+  savedDashboards?: Array<{ id: string; name: string; visibility: string; userId: string }>;
+  currentUserId?: string;
   currentTemplateId?: string;
   isTemplate: boolean;
   dashboardId?: string;
@@ -91,6 +93,8 @@ export default function DashboardViewer({
   currentFilters,
   filterOptions,
   templates,
+  savedDashboards = [],
+  currentUserId,
   currentTemplateId,
   isTemplate,
   dashboardId,
@@ -101,17 +105,24 @@ export default function DashboardViewer({
   const [isCloning, setIsCloning] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isWidgetLibraryOpen, setIsWidgetLibraryOpen] = useState(false);
+  const [dashboardTitle, setDashboardTitle] = useState(dashboardName);
+  const [dashboardDesc, setDashboardDesc] = useState(dashboardDescription);
   const [savedBaseline, setSavedBaseline] = useState(widgets);
   const [localWidgets, setLocalWidgets] = useState(widgets);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Sync localWidgets when dashboard/template changes
+  // Sync state when dashboard/template changes
   useEffect(() => {
     setSavedBaseline(widgets);
     setLocalWidgets(widgets);
-  }, [dashboardId, currentTemplateId]); // eslint-disable-line react-hooks/exhaustive-deps
+    setDashboardTitle(dashboardName);
+    setDashboardDesc(dashboardDescription);
+  }, [dashboardId, currentTemplateId, widgets, dashboardName, dashboardDescription]);
 
-  const isDirty = JSON.stringify(localWidgets) !== JSON.stringify(savedBaseline);
+  const isDirty =
+    JSON.stringify(localWidgets) !== JSON.stringify(savedBaseline) ||
+    dashboardTitle !== dashboardName ||
+    dashboardDesc !== dashboardDescription;
 
   // Handle adding a new widget from the library
   const handleAddWidget = (widgetDef: WidgetDefinition) => {
@@ -174,7 +185,7 @@ export default function DashboardViewer({
       router.push(`/reports/executive/${data.dashboard.id}`);
     } catch (error) {
       console.error('Failed to clone dashboard:', error);
-      alert('Failed to clone dashboard. Please try again.');
+      notify.error('Failed to clone dashboard. Please try again.');
     } finally {
       setIsCloning(false);
     }
@@ -183,7 +194,7 @@ export default function DashboardViewer({
   // Build URL with updated filter
   const buildFilterUrl = (key: string, value: string) => {
     const params = new URLSearchParams();
-    if (currentTemplateId) params.set('template', currentTemplateId);
+    if (currentTemplateId && !dashboardId) params.set('template', currentTemplateId);
 
     // Set all current filters
     if (key === 'window') {
@@ -193,15 +204,20 @@ export default function DashboardViewer({
     }
 
     if (key === 'teamId') {
-      if (value !== 'ALL') params.set('teamId', value);
-    } else if (currentFilters.teamId) {
-      params.set('teamId', currentFilters.teamId);
-    }
-
-    if (key === 'serviceId') {
-      if (value !== 'ALL') params.set('serviceId', value);
-    } else if (currentFilters.serviceId) {
-      params.set('serviceId', currentFilters.serviceId);
+      if (value !== 'ALL') {
+        params.set('teamId', value);
+      }
+      // Dependent filter reset: changing team clears incompatible serviceId
+      params.delete('serviceId');
+    } else {
+      if (currentFilters.teamId) {
+        params.set('teamId', currentFilters.teamId);
+      }
+      if (key === 'serviceId') {
+        if (value !== 'ALL') params.set('serviceId', value);
+      } else if (currentFilters.serviceId) {
+        params.set('serviceId', currentFilters.serviceId);
+      }
     }
 
     const basePath = dashboardId
@@ -222,6 +238,8 @@ export default function DashboardViewer({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          name: dashboardTitle,
+          description: dashboardDesc,
           widgets: localWidgets.map(w => ({
             widgetType: w.widgetType,
             metricKey: w.metricKey,
@@ -233,22 +251,30 @@ export default function DashboardViewer({
         }),
       });
       if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(body?.error || 'Failed to save dashboard');
       }
-      const data = await response.json();
+      const data = (await response.json()) as {
+        dashboard?: {
+          widgets?: Widget[];
+          name?: string;
+          description?: string;
+        };
+      };
       // Update baseline to match saved state
-      const updatedWidgets = (data.dashboard?.widgets || localWidgets).map((w: any) => ({
+      const updatedWidgets: Widget[] = (data.dashboard?.widgets || localWidgets).map(w => ({
         id: w.id,
         widgetType: w.widgetType,
         metricKey: w.metricKey,
         widgetDefinitionId: w.widgetDefinitionId,
         title: w.title,
-        position: w.position as { x: number; y: number; w: number; h: number },
-        config: w.config as Record<string, any>,
+        position: w.position,
+        config: w.config,
       }));
       setSavedBaseline(updatedWidgets);
       setLocalWidgets(updatedWidgets);
+      if (data.dashboard?.name) setDashboardTitle(data.dashboard.name);
+      if (data.dashboard?.description !== undefined) setDashboardDesc(data.dashboard.description || '');
       setIsEditing(false);
       notify.success('Dashboard saved successfully');
     } catch (error) {
@@ -281,10 +307,31 @@ export default function DashboardViewer({
                   </span>
                 )}
               </div>
-              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
-                {dashboardName}
-              </h1>
-              <p className="text-xs md:text-sm text-zinc-300 mt-1">{dashboardDescription}</p>
+              {isEditing && dashboardId ? (
+                <div className="space-y-1.5 mt-1 max-w-lg">
+                  <input
+                    type="text"
+                    value={dashboardTitle}
+                    onChange={e => setDashboardTitle(e.target.value)}
+                    className="text-xl md:text-2xl font-bold bg-zinc-900 border border-zinc-700 rounded px-2.5 py-1 text-white w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder="Dashboard title"
+                  />
+                  <input
+                    type="text"
+                    value={dashboardDesc}
+                    onChange={e => setDashboardDesc(e.target.value)}
+                    className="text-xs md:text-sm text-zinc-300 bg-zinc-900 border border-zinc-700 rounded px-2.5 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder="Dashboard description"
+                  />
+                </div>
+              ) : (
+                <>
+                  <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
+                    {dashboardTitle}
+                  </h1>
+                  <p className="text-xs md:text-sm text-zinc-300 mt-1">{dashboardDesc}</p>
+                </>
+              )}
             </div>
           </div>
 
@@ -333,6 +380,7 @@ export default function DashboardViewer({
                       className="text-destructive focus:text-destructive"
                       onClick={async () => {
                         if (
+                          // eslint-disable-next-line no-alert
                           !confirm(
                             'Are you sure you want to delete this dashboard? This action cannot be undone.'
                           )
@@ -350,7 +398,7 @@ export default function DashboardViewer({
                           router.push('/reports');
                         } catch (error) {
                           console.error('Failed to delete dashboard:', error);
-                          alert('Failed to delete dashboard. Please try again.');
+                          notify.error('Failed to delete dashboard. Please try again.');
                         } finally {
                           setIsDeleting(false);
                         }
@@ -390,7 +438,7 @@ export default function DashboardViewer({
           value={String(currentFilters.windowDays)}
           onValueChange={value => handleFilterChange('window', value)}
         >
-          <SelectTrigger className="w-[130px]">
+          <SelectTrigger className="w-[130px]" aria-label="Time range">
             <SelectValue placeholder="Time range" />
           </SelectTrigger>
           <SelectContent>
@@ -407,7 +455,7 @@ export default function DashboardViewer({
           value={currentFilters.teamId || 'ALL'}
           onValueChange={value => handleFilterChange('teamId', value)}
         >
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-[150px]" aria-label="Filter by team">
             <SelectValue placeholder="All Teams" />
           </SelectTrigger>
           <SelectContent>
@@ -425,7 +473,7 @@ export default function DashboardViewer({
           value={currentFilters.serviceId || 'ALL'}
           onValueChange={value => handleFilterChange('serviceId', value)}
         >
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-[150px]" aria-label="Filter by service">
             <SelectValue placeholder="All Services" />
           </SelectTrigger>
           <SelectContent>
@@ -438,28 +486,63 @@ export default function DashboardViewer({
           </SelectContent>
         </Select>
 
-        {/* Template Switcher */}
+        {/* Dashboard & Template Selector */}
         <div className="ml-auto">
           <Select
-            value={currentTemplateId || 'custom'}
+            value={dashboardId ? `saved:${dashboardId}` : `template:${currentTemplateId || 'executive-summary'}`}
             onValueChange={value => {
               const params = new URLSearchParams();
-              if (value !== 'custom') params.set('template', value);
               if (currentFilters.windowDays !== 7) params.set('window', String(currentFilters.windowDays));
               if (currentFilters.teamId) params.set('teamId', currentFilters.teamId);
               if (currentFilters.serviceId) params.set('serviceId', currentFilters.serviceId);
               const qs = params.toString();
-              router.push(`/reports/executive${qs ? `?${qs}` : ''}`);
+
+              if (value.startsWith('saved:')) {
+                const targetId = value.replace('saved:', '');
+                router.push(`/reports/executive/${targetId}${qs ? `?${qs}` : ''}`);
+              } else if (value.startsWith('template:')) {
+                const targetTemplate = value.replace('template:', '');
+                params.set('template', targetTemplate);
+                router.push(`/reports/executive?${params.toString()}`);
+              }
             }}
           >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select template" />
+            <SelectTrigger className="w-[220px]" aria-label="Select dashboard">
+              <SelectValue placeholder="Select dashboard" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="custom">Default View</SelectItem>
+              {savedDashboards.filter(d => !currentUserId || d.userId === currentUserId).length > 0 && (
+                <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  My Dashboards
+                </div>
+              )}
+              {savedDashboards
+                .filter(d => !currentUserId || d.userId === currentUserId)
+                .map(d => (
+                  <SelectItem key={d.id} value={`saved:${d.id}`}>
+                    {d.name}
+                  </SelectItem>
+                ))}
+
+              {savedDashboards.filter(d => currentUserId && d.userId !== currentUserId).length > 0 && (
+                <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-1.5">
+                  Team & Shared
+                </div>
+              )}
+              {savedDashboards
+                .filter(d => currentUserId && d.userId !== currentUserId)
+                .map(d => (
+                  <SelectItem key={d.id} value={`saved:${d.id}`}>
+                    {d.name} ({d.visibility === 'TEAM' ? 'Team' : 'Public'})
+                  </SelectItem>
+                ))}
+
+              <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mt-1.5">
+                Templates
+              </div>
               {templates.map(t => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
+                <SelectItem key={t.id} value={`template:${t.id}`}>
+                  {t.name} (Template)
                 </SelectItem>
               ))}
             </SelectContent>
@@ -504,6 +587,8 @@ export default function DashboardViewer({
             <Button
               variant="outline"
               onClick={() => {
+                setDashboardTitle(dashboardName);
+                setDashboardDesc(dashboardDescription);
                 setLocalWidgets(savedBaseline);
                 setIsEditing(false);
               }}

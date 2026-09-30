@@ -13,7 +13,8 @@ import { formatTimeMinutesMs } from '@/lib/time-format';
 
 function resolveNestedPath(obj: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((acc, key) => {
-    if (acc && typeof acc === 'object' && key in (acc as Record<string, unknown>)) {
+    if (acc && typeof acc === 'object' && Object.prototype.hasOwnProperty.call(acc, key)) {
+      // eslint-disable-next-line security/detect-object-injection
       return (acc as Record<string, unknown>)[key];
     }
     return undefined;
@@ -21,7 +22,7 @@ function resolveNestedPath(obj: Record<string, unknown>, path: string): unknown 
 }
 
 type TableWidgetProps = {
-  data: Array<Record<string, any>>;
+  data: Array<Record<string, unknown>>;
   metricKey: string;
   maxRows?: number;
 };
@@ -29,7 +30,7 @@ type TableWidgetProps = {
 type ColumnConfig = {
   key: string;
   label: string;
-  format?: (value: any) => string;
+  format?: (value: unknown) => string;
   align?: 'left' | 'center' | 'right';
 };
 
@@ -67,7 +68,10 @@ const TableWidget = memo(function TableWidget({ data, metricKey, maxRows = 5 }: 
         </TableHeader>
         <TableBody>
           {displayData.map((row, idx) => (
-            <TableRow key={row.id || idx} className="hover:bg-muted/50">
+            <TableRow
+              key={typeof row.id === 'string' || typeof row.id === 'number' ? row.id : idx}
+              className="hover:bg-muted/50"
+            >
               {columns.map(col => {
                 const cellValue = resolveNestedPath(row, col.key);
                 return (
@@ -114,7 +118,7 @@ function getColumnsForMetric(metricKey: string): ColumnConfig[] {
         key: 'mtta',
         label: 'MTTA',
         align: 'right',
-        format: v => (v ? formatTimeMinutesMs(v * 60000) : '--'),
+        format: v => (typeof v === 'number' ? formatTimeMinutesMs(v * 60000) : '--'),
       },
     ],
     onCallLoad: [
@@ -123,7 +127,7 @@ function getColumnsForMetric(metricKey: string): ColumnConfig[] {
         key: 'hoursMs',
         label: 'Hours',
         align: 'right',
-        format: v => (v ? `${(v / 3600000).toFixed(1)}h` : '--'),
+        format: v => (typeof v === 'number' ? `${(v / 3600000).toFixed(1)}h` : '--'),
       },
       { key: 'incidentCount', label: 'Incidents', align: 'right' },
     ],
@@ -148,12 +152,11 @@ function getColumnsForMetric(metricKey: string): ColumnConfig[] {
     ],
   };
 
-  return (
-    configs[metricKey] || [
-      { key: 'name', label: 'Name' },
-      { key: 'count', label: 'Count', align: 'right' },
-    ]
-  );
+  // eslint-disable-next-line security/detect-object-injection
+  return configs[metricKey] || [
+    { key: 'name', label: 'Name' },
+    { key: 'count', label: 'Count', align: 'right' },
+  ];
 }
 
 export default TableWidget;

@@ -10,9 +10,10 @@ import type { WidgetDefinition } from './widget-registry';
 export type TemplateWidget = {
   widgetType: WidgetDefinition['type'];
   metricKey: string;
+  widgetDefinitionId?: string;
   title?: string;
   position: { x: number; y: number; w: number; h: number };
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 };
 
 export type DashboardTemplate = {
@@ -39,19 +40,28 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'metric',
         metricKey: 'totalIncidents',
+        widgetDefinitionId: 'total-incidents',
         position: { x: 0, y: 0, w: 1, h: 1 },
         config: {},
       },
       {
         widgetType: 'metric',
         metricKey: 'activeIncidents',
+        widgetDefinitionId: 'active-incidents',
         position: { x: 1, y: 0, w: 1, h: 1 },
         config: {},
       },
-      { widgetType: 'metric', metricKey: 'mttr', position: { x: 2, y: 0, w: 1, h: 1 }, config: {} },
+      {
+        widgetType: 'metric',
+        metricKey: 'mttr',
+        widgetDefinitionId: 'mttr',
+        position: { x: 2, y: 0, w: 1, h: 1 },
+        config: {},
+      },
       {
         widgetType: 'gauge',
         metricKey: 'ackCompliance',
+        widgetDefinitionId: 'ack-compliance',
         position: { x: 3, y: 0, w: 1, h: 1 },
         config: {},
       },
@@ -59,6 +69,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'chart',
         metricKey: 'trendSeries',
+        widgetDefinitionId: 'incident-trend',
         title: 'Incident Trend',
         position: { x: 0, y: 1, w: 4, h: 2 },
         config: { chartType: 'count' },
@@ -67,6 +78,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'insights',
         metricKey: 'insights',
+        widgetDefinitionId: 'smart-insights',
         title: 'Smart Insights',
         position: { x: 0, y: 3, w: 2, h: 2 },
         config: {},
@@ -74,6 +86,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'table',
         metricKey: 'serviceMetrics',
+        widgetDefinitionId: 'service-health',
         title: 'Service Health',
         position: { x: 2, y: 3, w: 2, h: 2 },
         config: {},
@@ -91,24 +104,28 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'metric',
         metricKey: 'activeIncidents',
+        widgetDefinitionId: 'active-incidents',
         position: { x: 0, y: 0, w: 1, h: 1 },
         config: {},
       },
       {
         widgetType: 'metric',
         metricKey: 'unassignedActive',
+        widgetDefinitionId: 'unassigned-active',
         position: { x: 1, y: 0, w: 1, h: 1 },
         config: {},
       },
       {
         widgetType: 'gauge',
         metricKey: 'coveragePercent',
+        widgetDefinitionId: 'coverage-percent',
         position: { x: 2, y: 0, w: 1, h: 1 },
         config: {},
       },
       {
         widgetType: 'metric',
         metricKey: 'escalationRate',
+        widgetDefinitionId: 'escalation-rate',
         position: { x: 3, y: 0, w: 1, h: 1 },
         config: {},
       },
@@ -116,6 +133,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'chart',
         metricKey: 'trendSeries',
+        widgetDefinitionId: 'mtta-mttr-trend',
         title: 'MTTA vs MTTR',
         position: { x: 0, y: 1, w: 2, h: 2 },
         config: { chartType: 'mttaVsMttr' },
@@ -123,6 +141,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'chart',
         metricKey: 'urgencyMix',
+        widgetDefinitionId: 'urgency-distribution',
         title: 'Urgency Distribution',
         position: { x: 2, y: 1, w: 2, h: 2 },
         config: { chartType: 'pie' },
@@ -131,6 +150,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'chart',
         metricKey: 'heatmapData',
+        widgetDefinitionId: 'incident-heatmap',
         title: 'Incident Calendar',
         position: { x: 0, y: 3, w: 4, h: 2 },
         config: { chartType: 'heatmap' },
@@ -139,6 +159,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'table',
         metricKey: 'onCallLoad',
+        widgetDefinitionId: 'on-call-load',
         title: 'On-Call Load',
         position: { x: 0, y: 5, w: 2, h: 2 },
         config: {},
@@ -146,6 +167,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'table',
         metricKey: 'topServices',
+        widgetDefinitionId: 'top-services',
         title: 'Top Services',
         position: { x: 2, y: 5, w: 2, h: 2 },
         config: {},
@@ -163,6 +185,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'gauge',
         metricKey: 'ackCompliance',
+        widgetDefinitionId: 'ack-compliance',
         title: 'Ack Compliance',
         position: { x: 0, y: 0, w: 1, h: 1 },
         config: {},
@@ -170,6 +193,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'gauge',
         metricKey: 'resolveCompliance',
+        widgetDefinitionId: 'resolve-compliance',
         title: 'Resolve Compliance',
         position: { x: 1, y: 0, w: 1, h: 1 },
         config: {},
@@ -177,6 +201,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'metric',
         metricKey: 'ackBreaches',
+        widgetDefinitionId: 'ack-breaches',
         title: 'Ack Breaches',
         position: { x: 2, y: 0, w: 1, h: 1 },
         config: {},
@@ -184,6 +209,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'metric',
         metricKey: 'resolveBreaches',
+        widgetDefinitionId: 'resolve-breaches',
         title: 'Resolve Breaches',
         position: { x: 3, y: 0, w: 1, h: 1 },
         config: {},
@@ -192,6 +218,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'chart',
         metricKey: 'trendSeries',
+        widgetDefinitionId: 'sla-compliance-trend',
         title: 'SLA Compliance Trend',
         position: { x: 0, y: 1, w: 4, h: 2 },
         config: { chartType: 'slaCompliance' },
@@ -200,6 +227,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'metric',
         metricKey: 'mttd',
+        widgetDefinitionId: 'mtta',
         title: 'MTTA',
         position: { x: 0, y: 3, w: 1, h: 1 },
         config: {},
@@ -207,6 +235,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'metric',
         metricKey: 'mttr',
+        widgetDefinitionId: 'mttr',
         title: 'MTTR',
         position: { x: 1, y: 3, w: 1, h: 1 },
         config: {},
@@ -214,6 +243,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'gauge',
         metricKey: 'ackRate',
+        widgetDefinitionId: 'ack-rate',
         title: 'Ack Rate',
         position: { x: 2, y: 3, w: 1, h: 1 },
         config: {},
@@ -221,6 +251,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'gauge',
         metricKey: 'resolveRate',
+        widgetDefinitionId: 'resolve-rate',
         title: 'Resolve Rate',
         position: { x: 3, y: 3, w: 1, h: 1 },
         config: {},
@@ -229,6 +260,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'table',
         metricKey: 'serviceSlaTable',
+        widgetDefinitionId: 'service-sla-table',
         title: 'Service SLA Compliance',
         position: { x: 0, y: 4, w: 4, h: 2 },
         config: {},
@@ -246,24 +278,28 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'metric',
         metricKey: 'totalIncidents',
+        widgetDefinitionId: 'total-incidents',
         position: { x: 0, y: 0, w: 1, h: 1 },
         config: {},
       },
       {
         widgetType: 'gauge',
         metricKey: 'resolveRate',
+        widgetDefinitionId: 'resolve-rate',
         position: { x: 1, y: 0, w: 1, h: 1 },
         config: {},
       },
       {
         widgetType: 'gauge',
         metricKey: 'coveragePercent',
+        widgetDefinitionId: 'coverage-percent',
         position: { x: 2, y: 0, w: 1, h: 1 },
         config: {},
       },
       {
         widgetType: 'metric',
         metricKey: 'unassignedActive',
+        widgetDefinitionId: 'unassigned-active',
         position: { x: 3, y: 0, w: 1, h: 1 },
         config: {},
       },
@@ -271,6 +307,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'table',
         metricKey: 'assigneeLoad',
+        widgetDefinitionId: 'assignee-load',
         title: 'Assignee Workload',
         position: { x: 0, y: 1, w: 2, h: 2 },
         config: {},
@@ -278,6 +315,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'table',
         metricKey: 'onCallLoad',
+        widgetDefinitionId: 'on-call-load',
         title: 'On-Call Distribution',
         position: { x: 2, y: 1, w: 2, h: 2 },
         config: {},
@@ -286,6 +324,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'chart',
         metricKey: 'trendSeries',
+        widgetDefinitionId: 'mtta-mttr-trend',
         title: 'Response Performance',
         position: { x: 0, y: 3, w: 2, h: 2 },
         config: { chartType: 'mttaVsMttr' },
@@ -293,6 +332,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'insights',
         metricKey: 'insights',
+        widgetDefinitionId: 'smart-insights',
         title: 'Insights',
         position: { x: 2, y: 3, w: 2, h: 2 },
         config: {},
@@ -309,6 +349,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'metric',
         metricKey: 'activeIncidents',
+        widgetDefinitionId: 'active-incidents',
         title: 'Active',
         position: { x: 0, y: 0, w: 1, h: 1 },
         config: {},
@@ -316,6 +357,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'metric',
         metricKey: 'mttr',
+        widgetDefinitionId: 'mttr',
         title: 'MTTR',
         position: { x: 1, y: 0, w: 1, h: 1 },
         config: {},
@@ -323,6 +365,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'gauge',
         metricKey: 'ackCompliance',
+        widgetDefinitionId: 'ack-compliance',
         title: 'SLA',
         position: { x: 2, y: 0, w: 1, h: 1 },
         config: {},
@@ -330,6 +373,7 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
       {
         widgetType: 'gauge',
         metricKey: 'coveragePercent',
+        widgetDefinitionId: 'coverage-percent',
         title: 'Coverage',
         position: { x: 3, y: 0, w: 1, h: 1 },
         config: {},

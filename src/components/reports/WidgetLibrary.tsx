@@ -32,19 +32,35 @@ interface WidgetLibraryProps {
   existingWidgetDefIds?: string[];
 }
 
-const CATEGORY_ICONS: Record<WidgetCategory, React.ElementType> = {
-  metrics: TrendingUp,
-  charts: BarChart2,
-  tables: Table2,
-  special: Sparkles,
-};
+function getCategoryIcon(cat: WidgetCategory): React.ElementType {
+  switch (cat) {
+    case 'metrics':
+      return TrendingUp;
+    case 'charts':
+      return BarChart2;
+    case 'tables':
+      return Table2;
+    case 'special':
+      return Sparkles;
+    default:
+      return Activity;
+  }
+}
 
-const CATEGORY_LABELS: Record<WidgetCategory, string> = {
-  metrics: 'Metric Cards & Gauges',
-  charts: 'Charts & Graphs',
-  tables: 'Data Tables',
-  special: 'Special Widgets',
-};
+function getCategoryLabel(cat: WidgetCategory): string {
+  switch (cat) {
+    case 'metrics':
+      return 'Metric Cards & Gauges';
+    case 'charts':
+      return 'Charts & Graphs';
+    case 'tables':
+      return 'Data Tables';
+    case 'special':
+      return 'Special Widgets';
+    default:
+      return 'Widgets';
+  }
+}
 
 // Widget type icons
 function getWidgetIcon(id: string): React.ElementType {
@@ -166,7 +182,7 @@ const WidgetLibrary = memo(function WidgetLibrary({
                 All
               </button>
               {categories.map(cat => {
-                const Icon = CATEGORY_ICONS[cat];
+                const Icon = getCategoryIcon(cat);
                 return (
                   <button
                     key={cat}
@@ -176,10 +192,10 @@ const WidgetLibrary = memo(function WidgetLibrary({
                         ? 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
-                    title={CATEGORY_LABELS[cat]}
+                    title={getCategoryLabel(cat)}
                   >
                     <Icon className="h-3.5 w-3.5" />
-                    <span className="hidden lg:inline">{CATEGORY_LABELS[cat]}</span>
+                    <span className="hidden lg:inline">{getCategoryLabel(cat)}</span>
                   </button>
                 );
               })}
@@ -194,10 +210,10 @@ const WidgetLibrary = memo(function WidgetLibrary({
               {selectedCategory === 'all' && (
                 <div className="flex items-center gap-2 mb-3">
                   {(() => {
-                    const Icon = CATEGORY_ICONS[category as WidgetCategory];
+                    const Icon = getCategoryIcon(category as WidgetCategory);
                     return <Icon className="h-4 w-4 text-primary" />;
                   })()}
-                  <h3 className="font-medium">{CATEGORY_LABELS[category as WidgetCategory]}</h3>
+                  <h3 className="font-medium">{getCategoryLabel(category as WidgetCategory)}</h3>
                   <span className="text-xs text-muted-foreground">({widgets.length} widgets)</span>
                 </div>
               )}

@@ -41,7 +41,7 @@ type Widget = {
   widgetDefinitionId?: string;
   title?: string | null;
   position: { x: number; y: number; w: number; h: number };
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 };
 
 type DashboardGridProps = {

@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
 import { Button } from '@/components/ui/shadcn/button';
+import { notify } from '@/lib/toast';
 
 interface DashboardCardProps {
   id: string;
@@ -55,7 +56,7 @@ export default function DashboardCard({
       router.refresh();
     } catch (error) {
       console.error('Failed to delete dashboard:', error);
-      alert('Failed to delete dashboard. Please try again.');
+      notify.error('Failed to delete dashboard. Please try again.');
     } finally {
       setIsDeleting(false);
     }

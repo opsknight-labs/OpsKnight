@@ -37,7 +37,12 @@ export default async function ExecutiveDashboardPage({
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true, timeZone: true, role: true },
+    select: {
+      id: true,
+      timeZone: true,
+      role: true,
+      teamMemberships: { select: { teamId: true } },
+    },
   });
 
   if (!user) {
@@ -62,6 +67,7 @@ export default async function ExecutiveDashboardPage({
     id: `template-${idx}`,
     widgetType: w.widgetType,
     metricKey: w.metricKey,
+    widgetDefinitionId: w.widgetDefinitionId || undefined,
     title: w.title || null,
     position: w.position,
     config: w.config,
@@ -80,8 +86,9 @@ export default async function ExecutiveDashboardPage({
   const serializedMetrics = serializeSlaMetrics(metrics);
   const lastUpdatedLabel = formatDateTime(new Date(), userTimeZone, { format: 'datetime' });
 
-  // Fetch filter options
-  const [teams, services] = await Promise.all([
+  // Fetch filter options and accessible saved dashboards
+  const userTeamIds = user.teamMemberships.map((m: { teamId: string }) => m.teamId);
+  const [teams, services, savedDashboards] = await Promise.all([
     prisma.team.findMany({
       where: teamReadWhere(actor),
       select: { id: true, name: true },
@@ -91,6 +98,19 @@ export default async function ExecutiveDashboardPage({
       where: serviceReadWhere(actor),
       select: { id: true, name: true, teamId: true },
       orderBy: { name: 'asc' },
+    }),
+    prisma.dashboard.findMany({
+      where: {
+        OR: [
+          { userId: user.id },
+          { visibility: 'TEAM', teamId: { in: userTeamIds } },
+          { visibility: 'PUBLIC' },
+        ],
+        isTemplate: false,
+      },
+      select: { id: true, name: true, visibility: true, userId: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
     }),
   ]);
 
@@ -111,6 +131,8 @@ export default async function ExecutiveDashboardPage({
         services: teamId ? services.filter(s => s.teamId === teamId) : services,
       }}
       templates={DASHBOARD_TEMPLATES}
+      savedDashboards={savedDashboards}
+      currentUserId={user.id}
       currentTemplateId={activeTemplate.id}
       isTemplate={true}
     />

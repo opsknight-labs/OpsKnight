@@ -17,13 +17,23 @@ import type { WidgetType } from '@/lib/reports/widget-registry';
 /**
  * Get the data for a specific metric key from the metrics object
  */
-export function getMetricData(metrics: SerializedSLAMetrics, metricKey: string): any {
+export function getMetricData(metrics: SerializedSLAMetrics, metricKey: string): unknown {
   // Handle nested keys like 'user.name'
   if (metricKey.includes('.')) {
-    return metricKey.split('.').reduce((obj, key) => obj?.[key], metrics as any);
+    return metricKey.split('.').reduce<unknown>((obj, key) => {
+      if (obj && typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, key)) {
+        // eslint-disable-next-line security/detect-object-injection
+        return (obj as Record<string, unknown>)[key];
+      }
+      return undefined;
+    }, metrics);
   }
 
-  return (metrics as any)[metricKey];
+  if (Object.prototype.hasOwnProperty.call(metrics, metricKey)) {
+    // eslint-disable-next-line security/detect-object-injection
+    return (metrics as unknown as Record<string, unknown>)[metricKey];
+  }
+  return undefined;
 }
 
 /**

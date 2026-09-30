@@ -21,7 +21,15 @@ vi.mock('@/lib/toast', () => ({
 }));
 
 vi.mock('@/components/reports/DashboardGrid', () => ({
-  default: ({ widgets, isEditing, onRemoveWidget }: any) => (
+  default: ({
+    widgets,
+    isEditing,
+    onRemoveWidget,
+  }: {
+    widgets: Array<{ id: string }>;
+    isEditing: boolean;
+    onRemoveWidget: (id: string) => void;
+  }) => (
     <div data-testid="dashboard-grid">
       <span>{widgets.length} widgets in grid</span>
       {isEditing && (
@@ -65,15 +73,34 @@ describe('DashboardViewer Component', () => {
     metrics: {} as SerializedSLAMetrics,
     lastUpdated: 'Sep 30, 2026, 09:00 AM',
     currentFilters: { windowDays: 7 },
-    filterOptions: { teams: [], services: [] },
-    templates: [],
+    filterOptions: {
+      teams: [{ id: 'team-infra', name: 'Infrastructure' }],
+      services: [{ id: 'svc-db', name: 'Database' }],
+    },
+    templates: [
+      {
+        id: 'sre-ops',
+        name: 'SRE Operations',
+        description: 'SRE metrics',
+        icon: 'Terminal',
+        color: '#10b981',
+        widgets: [],
+      },
+    ],
+    savedDashboards: [
+      { id: 'dash-456', name: 'SRE Dashboard', visibility: 'PRIVATE', userId: 'user-1' },
+    ],
+    currentUserId: 'user-1',
     isTemplate: false,
     dashboardId: 'dash-123',
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    global.fetch = vi.fn();
+    window.HTMLElement.prototype.hasPointerCapture = () => false;
+    window.HTMLElement.prototype.setPointerCapture = () => {};
+    window.HTMLElement.prototype.releasePointerCapture = () => {};
+    window.HTMLElement.prototype.scrollIntoView = () => {};
   });
 
   it('renders dashboard details and initial widget count', () => {
@@ -84,22 +111,53 @@ describe('DashboardViewer Component', () => {
     expect(screen.getByText('2 widgets')).toBeDefined();
   });
 
-  it('preserves dashboardId in filter navigation URL for custom dashboards', () => {
+  it('preserves dashboardId in filter navigation URL for custom dashboards', async () => {
     render(<DashboardViewer {...defaultProps} />);
 
-    // Time window select
-    const timeWindowTrigger = screen.getByText('7 days');
-    expect(timeWindowTrigger).toBeDefined();
+    // Open teams select
+    const teamTrigger = screen.getByRole('combobox', { name: /filter by team/i });
+    fireEvent.keyDown(teamTrigger, { key: 'ArrowDown' });
+
+    const teamOption = await screen.findByText('Infrastructure');
+    fireEvent.click(teamOption);
+
+    expect(pushMock).toHaveBeenCalledWith(
+      expect.stringContaining('/reports/executive/dash-123')
+    );
+    expect(pushMock).toHaveBeenCalledWith(
+      expect.stringContaining('teamId=team-infra')
+    );
   });
 
-  it('enters edit mode, tracks dirty state on widget changes, and saves via PUT API', async () => {
-    (global.fetch as any).mockResolvedValueOnce({
+  it('navigates to another saved dashboard when chosen from selector', async () => {
+    render(<DashboardViewer {...defaultProps} />);
+
+    // Find dashboard selector trigger
+    const selectorTrigger = screen.getByRole('combobox', { name: /select dashboard/i });
+    fireEvent.keyDown(selectorTrigger, { key: 'ArrowDown' });
+
+    const targetOption = await screen.findByText('SRE Dashboard');
+    fireEvent.click(targetOption);
+
+    expect(pushMock).toHaveBeenCalledWith(
+      expect.stringContaining('/reports/executive/dash-456')
+    );
+  });
+
+  it('enters edit mode, renames dashboard, tracks dirty state, and saves via PUT API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         success: true,
-        dashboard: { id: 'dash-123', widgets: [mockWidgets[1]] },
+        dashboard: {
+          id: 'dash-123',
+          widgets: [mockWidgets[1]],
+          name: 'Renamed Operations',
+          description: 'Updated description',
+        },
       }),
     });
+    global.fetch = fetchMock;
 
     render(<DashboardViewer {...defaultProps} />);
 
@@ -107,11 +165,15 @@ describe('DashboardViewer Component', () => {
     const settingsButton = screen.getByRole('button', { name: 'Dashboard settings' });
     fireEvent.pointerDown(settingsButton, { button: 0 });
 
-    const editMenuItem = await screen.findByText('Edit Dashboard');
+    const editMenuItem = await screen.findByText(/Edit Dashboard/i);
     fireEvent.click(editMenuItem);
 
     // Edit bar should be visible
     expect(screen.getByText(/Editing mode - 2 widgets/i)).toBeDefined();
+
+    // Rename dashboard via title input
+    const titleInput = screen.getByPlaceholderText('Dashboard title');
+    fireEvent.change(titleInput, { target: { value: 'Renamed Operations' } });
 
     // Trigger widget removal from mocked grid
     const removeBtn = screen.getByTestId('remove-widget-btn');
@@ -126,25 +188,29 @@ describe('DashboardViewer Component', () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(fetchMock).toHaveBeenCalledWith(
         '/api/dashboards/dash-123',
         expect.objectContaining({
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: expect.stringContaining('"widgets":'),
+          body: expect.stringContaining('"name":"Renamed Operations"'),
         })
       );
     });
   });
 
-  it('restores saved baseline when Cancel is clicked in edit mode', async () => {
+  it('restores saved baseline and title when Cancel is clicked in edit mode', async () => {
     render(<DashboardViewer {...defaultProps} />);
 
     // Enter edit mode
     const settingsButton = screen.getByRole('button', { name: 'Dashboard settings' });
     fireEvent.pointerDown(settingsButton, { button: 0 });
-    const editMenuItem = await screen.findByText('Edit Dashboard');
+    const editMenuItem = await screen.findByText(/Edit Dashboard/i);
     fireEvent.click(editMenuItem);
+
+    // Edit title
+    const titleInput = screen.getByPlaceholderText('Dashboard title');
+    fireEvent.change(titleInput, { target: { value: 'Scratch Title' } });
 
     // Remove widget to make dirty
     const removeBtn = screen.getByTestId('remove-widget-btn');
@@ -155,7 +221,8 @@ describe('DashboardViewer Component', () => {
     const cancelBtn = screen.getByRole('button', { name: /cancel/i });
     fireEvent.click(cancelBtn);
 
-    // Should exit edit mode
+    // Should exit edit mode and restore title
     expect(screen.queryByText(/Editing mode/i)).toBeNull();
+    expect(screen.getByText('Executive Operations')).toBeDefined();
   });
 });

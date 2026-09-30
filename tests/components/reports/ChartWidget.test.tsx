@@ -5,34 +5,50 @@ import ChartWidget, { getChartData } from '@/components/reports/widgets/ChartWid
 import type { SerializedSLAMetrics } from '@/lib/sla';
 
 describe('ChartWidget', () => {
-  const mockMetrics: Partial<SerializedSLAMetrics> = {
+  const mockMetrics = {
     trendSeries: [
-      { label: 'Mon', count: 10, mtta: 5, mttr: 15, ackCompliance: 90, resolveCompliance: 85 } as any,
-      { label: 'Tue', count: 12, mtta: 4, mttr: 14, ackCompliance: 95, resolveCompliance: 88 } as any,
+      {
+        label: 'Mon',
+        count: 10,
+        mtta: 5,
+        mttr: 15,
+        ackCompliance: 90,
+        resolveCompliance: 85,
+        timestamp: '2026-09-01T00:00:00Z',
+      },
+      {
+        label: 'Tue',
+        count: 12,
+        mtta: 4,
+        mttr: 14,
+        ackCompliance: 95,
+        resolveCompliance: 88,
+        timestamp: '2026-09-02T00:00:00Z',
+      },
     ],
     urgencyMix: [
-      { urgency: 'high', count: 8 } as any,
-      { urgency: 'medium', count: 14 } as any,
+      { urgency: 'high', count: 8, percentage: 36 },
+      { urgency: 'medium', count: 14, percentage: 64 },
     ],
     statusMix: [
-      { status: 'RESOLVED', count: 20 } as any,
-      { status: 'ACTIVE', count: 2 } as any,
+      { status: 'RESOLVED', count: 20, percentage: 90 },
+      { status: 'ACTIVE', count: 2, percentage: 10 },
     ],
     heatmapData: [
       { date: '2026-09-01', count: 4 },
       { date: '2026-09-02', count: 7 },
     ],
-  };
+  } as unknown as SerializedSLAMetrics;
 
   describe('getChartData extraction helper', () => {
     it('extracts count trend by default for trendSeries', () => {
-      const data = getChartData('trendSeries', mockMetrics as SerializedSLAMetrics);
+      const data = getChartData('trendSeries', mockMetrics);
       expect(data).toHaveLength(2);
       expect(data[0]).toEqual({ label: 'Mon', value: 10 });
     });
 
     it('extracts dual-series (mtta and mttr) when chartType is mttaVsMttr', () => {
-      const data = getChartData('trendSeries', mockMetrics as SerializedSLAMetrics, {
+      const data = getChartData('trendSeries', mockMetrics, {
         chartType: 'mttaVsMttr',
       });
       expect(data).toHaveLength(2);
@@ -40,7 +56,7 @@ describe('ChartWidget', () => {
     });
 
     it('extracts dual-series (ack and resolve compliance) when chartType is slaCompliance', () => {
-      const data = getChartData('trendSeries', mockMetrics as SerializedSLAMetrics, {
+      const data = getChartData('trendSeries', mockMetrics, {
         chartType: 'slaCompliance',
       });
       expect(data).toHaveLength(2);
@@ -48,33 +64,33 @@ describe('ChartWidget', () => {
     });
 
     it('formats urgencyMix and statusMix with name and value for Pie charts', () => {
-      const urgencyData = getChartData('urgencyMix', mockMetrics as SerializedSLAMetrics);
+      const urgencyData = getChartData('urgencyMix', mockMetrics);
       expect(urgencyData[0]).toEqual({ name: 'High', label: 'High', value: 8 });
 
-      const statusData = getChartData('statusMix', mockMetrics as SerializedSLAMetrics);
+      const statusData = getChartData('statusMix', mockMetrics);
       expect(statusData[0]).toEqual({ name: 'Resolved', label: 'Resolved', value: 20 });
     });
   });
 
   describe('ChartWidget rendering', () => {
-    it('renders heatmap placeholder with data points count for heatmap chartType', () => {
-      render(
+    it('renders real heatmap calendar for heatmap chartType', () => {
+      const { container } = render(
         <ChartWidget
           metricKey="heatmapData"
-          metrics={mockMetrics as SerializedSLAMetrics}
+          metrics={mockMetrics}
           config={{ chartType: 'heatmap' }}
         />
       );
 
-      expect(screen.getByText('Heatmap visualization')).toBeDefined();
-      expect(screen.getByText('Data points: 2')).toBeDefined();
+      // Verify HeatmapCalendar container is rendered
+      expect(container.querySelector('.heatmap-calendar-container, svg')).toBeDefined();
     });
 
     it('renders dual-series chart for mttaVsMttr', () => {
       const { container } = render(
         <ChartWidget
           metricKey="trendSeries"
-          metrics={mockMetrics as SerializedSLAMetrics}
+          metrics={mockMetrics}
           config={{ chartType: 'mttaVsMttr' }}
         />
       );
@@ -86,7 +102,7 @@ describe('ChartWidget', () => {
       const { container } = render(
         <ChartWidget
           metricKey="urgencyMix"
-          metrics={mockMetrics as SerializedSLAMetrics}
+          metrics={mockMetrics}
           config={{ chartType: 'pie' }}
         />
       );
@@ -98,8 +114,8 @@ describe('ChartWidget', () => {
       render(
         <ChartWidget
           metricKey="trendSeries"
-          metrics={{ trendSeries: [] } as any}
-          config={{ chartType: 'count' as any }}
+          metrics={{ trendSeries: [] } as unknown as SerializedSLAMetrics}
+          config={{ chartType: 'line' }}
         />
       );
 

@@ -32,13 +32,16 @@ const GaugeWidget = memo(function GaugeWidget({
   // Auto-determine color based on thresholds
   const getColor = (): string => {
     if (variant !== 'auto') {
-      const colorMap = {
-        default: '#6b7280',
-        success: '#22c55e',
-        warning: '#eab308',
-        danger: '#ef4444',
-      };
-      return colorMap[variant];
+      switch (variant) {
+        case 'success':
+          return '#22c55e';
+        case 'warning':
+          return '#eab308';
+        case 'danger':
+          return '#ef4444';
+        default:
+          return '#6b7280';
+      }
     }
 
     // Auto color based on value
