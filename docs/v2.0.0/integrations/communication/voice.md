@@ -5,6 +5,9 @@ type: integration
 product_area: notifications
 audience: [administrator, operator, responder]
 keywords: [Twilio voice, Twilio SMS, WhatsApp, voice paging, WhatsApp notifications]
+reader:
+  status: READER_COMPLETE
+  task: Configure and verify Twilio voice, SMS, and WhatsApp incident delivery.
 verification:
   level: source
   verified_at: 2026-09-27
@@ -20,7 +23,7 @@ WhatsApp enablement and credentials. Each channel still requires an eligible
 responder endpoint and routing selection; configuring Twilio alone does not send
 incident notifications.
 
-## Before you begin
+## Prerequisites
 
 You need administrator access to **Settings → Notifications**, a Twilio account,
 and an HTTPS OpsKnight URL reachable by Twilio for delivery and voice callbacks.
@@ -33,7 +36,9 @@ Twilio sender for SMS; a WhatsApp-only number is not a valid SMS sender. Configu
 the Twilio WhatsApp sender separately and, when required for outbound templates,
 the Twilio Content SID.
 
-## Configure SMS and WhatsApp
+## Setup and configuration
+
+### Configure SMS and WhatsApp
 
 1. Open **Settings → Notifications** and configure the Twilio account SID, auth
    token, and SMS sender number.
@@ -58,7 +63,7 @@ sends session text. The implementation limits generated WhatsApp message text to
 1,600 characters. Provider and control-plane admission, retry, and terminal
 outcomes are described in the [notification delivery reference](../../reference/notifications/).
 
-## Verify SMS and WhatsApp
+## Verify the connection
 
 For each enabled channel, confirm the provider test is delivered, trigger one
 synthetic incident, and verify that the operations view contains the expected
@@ -70,7 +75,9 @@ triggered incident. Voice is an urgent notification channel: acknowledgement
 input is collected during the call, while later acknowledgement and resolution
 events are not sent as new voice calls.
 
-## Configure the provider
+## Use voice paging
+
+### Configure the provider
 
 In **Settings → Notifications**, configure Twilio credentials, the outbound
 number, and voice delivery. Set `VOICE_CALLBACK_SIGNING_SECRET` to an independent
@@ -90,7 +97,7 @@ confirm the call identifies the service and incident, and exercise the documente
 acknowledgement input. Then inspect **Settings → Notifications → Operations** for
 provider admission, attempts, callback outcome, and terminal state.
 
-## Troubleshoot
+## Troubleshooting
 
 - SMS reports an invalid sender: use an SMS-capable Twilio number rather than a
   WhatsApp-only sender.

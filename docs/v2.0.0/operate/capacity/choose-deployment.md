@@ -1,7 +1,7 @@
 ---
 title: Choose a deployment topology
 description: Select Integrated Compose, Split Compose, Swarm, Helm, or Kustomize from operational requirements.
-type: deployment
+type: concept
 product_area: deployment
 audience: [operator, administrator]
 keywords: [which deployment, integrated vs split, Swarm HA, Helm vs Kustomize, PgBouncer]
