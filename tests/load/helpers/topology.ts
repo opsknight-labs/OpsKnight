@@ -1059,7 +1059,7 @@ export interface QueueSnapshot {
   containerStats?: string;
 }
 
-async function captureQueueSnapshot(prisma: PrismaClient, stage: string): Promise<QueueSnapshot> {
+export async function captureQueueSnapshot(prisma: PrismaClient, stage: string): Promise<QueueSnapshot> {
   const now = new Date();
   const [
     pendingCriticalDue,

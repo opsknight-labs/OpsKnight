@@ -21,6 +21,7 @@ import {
 } from '../load/fixtures/users';
 import { parsePrometheusText } from '../load/helpers/metrics';
 import {
+  captureQueueSnapshot,
   deriveCapacityFromScenarios,
   generateCertificationMarkdownReport,
   KIND_4NODE_CLUSTER_CONFIG,
@@ -644,5 +645,61 @@ opsknight_db_pool_active 18
     // When 0s or negative remaining, sleep is 0 (exit immediately)
     expect(calculatePollSleep(0)).toBe(0);
     expect(calculatePollSleep(-500)).toBe(0);
+  });
+
+  it('correctly populates all queue categories including future-scheduled retries via captureQueueSnapshot', async () => {
+    // Mock PrismaClient to simulate:
+    // - 0 due critical notifications (nextAttemptAt <= now)
+    // - 3 future-scheduled critical retries (nextAttemptAt > now)
+    // - 7 pending transactional notifications
+    // - 15 pending bulk notifications
+    // - 4 pending background jobs
+    let countCallIndex = 0;
+    const mockPrisma = {
+      notification: {
+        count: async ({ where }: { where: Record<string, any> }) => {
+          if (where.trafficClass === 'CRITICAL' && where.nextAttemptAt?.lte) return 0;
+          if (where.trafficClass === 'CRITICAL' && where.nextAttemptAt?.gt) return 3;
+          if (where.trafficClass === 'TRANSACTIONAL') return 7;
+          if (where.trafficClass === 'BULK' && where.status === 'PENDING') return 15;
+          if (where.status === 'FAILED') return 2;
+          if (where.trafficClass === 'CRITICAL' && where.status?.in) return 25;
+          if (where.trafficClass === 'BULK' && where.status?.in) return 50;
+          return 0;
+        },
+        findFirst: async () => ({
+          nextAttemptAt: new Date(Date.now() + 10_000),
+        }),
+      },
+      backgroundJob: {
+        count: async () => 4,
+        findFirst: async () => ({
+          createdAt: new Date(Date.now() - 5_000),
+        }),
+      },
+      $queryRaw: async () => [{ count: BigInt(5) }],
+    };
+
+    const snapshot = await captureQueueSnapshot(mockPrisma as any, 'test-capture');
+
+    // Total critical is sum of due + future retries
+    expect(snapshot.pendingCritical).toBe(3);
+    expect(snapshot.pendingCriticalDue).toBe(0);
+    expect(snapshot.futureScheduledCritical).toBe(3);
+
+    // Transactional and bulk queues are populated
+    expect(snapshot.pendingTransactional).toBe(7);
+    expect(snapshot.pendingBulk).toBe(15);
+    expect(snapshot.pendingBackgroundJobs).toBe(4);
+
+    // Even though due critical is 0, snapshot is NOT drained because future retries, TX, BULK, and BG jobs exist
+    const isDrained =
+      snapshot.pendingCritical === 0 &&
+      snapshot.futureScheduledCritical === 0 &&
+      snapshot.pendingTransactional === 0 &&
+      snapshot.pendingBulk === 0 &&
+      snapshot.pendingBackgroundJobs === 0;
+
+    expect(isDrained).toBe(false);
   });
 });
