@@ -4,6 +4,9 @@ description: Build alerts and operational diagnosis from readiness, deep health,
 type: deployment
 product_area: observability
 audience: [operator]
+reader:
+  status: READER_COMPLETE
+  task: Configure, alert on, and verify layered OpsKnight health and metrics monitoring.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -74,7 +77,7 @@ Alert on sustained conditions rather than isolated samples:
 
 Page on user-impacting or fast-burn conditions. Ticket slower capacity trends. A large queue with low age may be a healthy burst; a small queue with one very old item may indicate stuck work.
 
-## Diagnostic sequence
+## Run the diagnostic sequence
 
 When OpsKnight appears unhealthy:
 
@@ -107,6 +110,10 @@ At deployment and periodically thereafter:
 - Confirm dashboards distinguish disabled responsibilities from failures.
 - Confirm alert links open the correct environment and time range.
 - Confirm retention supports incident and postmortem investigation.
+
+## Operate in production
+
+Keep readiness probes, Prometheus scraping, durable logs, and synthetic journeys in separate failure domains where practical. Review thresholds after topology, replica, pool, or concurrency changes. Restrict deep-health and metrics endpoints to operator networks, and retain enough history to distinguish a transient provider delay from sustained queue saturation.
 
 ## Troubleshooting
 

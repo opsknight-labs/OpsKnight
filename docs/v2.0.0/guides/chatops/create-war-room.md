@@ -1,7 +1,7 @@
 ---
 title: Create an incident war room
 description: Provision and manage a provider-backed collaboration room.
-type: how-to
+type: concept
 product_area: chatops
 audience: [responder, administrator]
 verification:

@@ -1,7 +1,7 @@
 ---
 title: Operate the split runtime
 description: Separate web, scheduler, worker, projector, and migration ownership.
-type: deployment
+type: concept
 product_area: deployment
 audience: [operator]
 keywords: [HA install, high availability, split mode, split runtime, scale workers]
