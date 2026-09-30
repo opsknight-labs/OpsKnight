@@ -1,9 +1,12 @@
 ---
 title: Connect Jira
 description: Link OpsKnight services and incidents to Jira projects and issues.
-type: how-to
+type: tutorial
 product_area: jira
 audience: [administrator, responder]
+reader:
+  status: READER_COMPLETE
+  task: Connect Jira and validate incident-to-issue synchronization end to end.
 verification:
   level: source
   verified_at: 2026-09-27

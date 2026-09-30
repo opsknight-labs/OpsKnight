@@ -4,6 +4,9 @@ description: Diagnose credentials, project mapping, issue creation, and webhook 
 type: troubleshooting
 product_area: jira
 audience: [administrator, responder]
+reader:
+  status: READER_COMPLETE
+  task: Diagnose and recover Jira connection, mapping, issue, and webhook synchronization failures.
 verification:
   level: source
   verified_at: 2026-09-28
@@ -27,4 +30,3 @@ available. Inspect the incident operation before retrying.
 Confirm the integration is enabled, the shared secret matches, and Jira is
 sending a handled event. Check for `429` responses and preserve the Atlassian
 webhook identifier when diagnosing duplicate or delayed delivery.
-

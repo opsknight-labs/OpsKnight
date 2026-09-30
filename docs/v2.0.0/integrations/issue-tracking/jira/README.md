@@ -1,7 +1,7 @@
 ---
 title: Jira integration
 description: Create and synchronize Jira issues from OpsKnight incidents.
-type: integration
+type: concept
 product_area: jira
 audience: [administrator, responder]
 verification:
@@ -18,4 +18,3 @@ updates through a fenced synchronization path.
 - [Connect Jira](./connect)
 - [Configure Jira webhooks](./configure-webhooks)
 - [Troubleshoot Jira](./troubleshooting)
-
