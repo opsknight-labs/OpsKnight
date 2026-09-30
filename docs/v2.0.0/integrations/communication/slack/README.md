@@ -1,7 +1,7 @@
 ---
 title: Slack ChatOps
 description: Connect Slack, route incident messages, act on incidents, and operate war rooms.
-type: integration
+type: concept
 product_area: chatops
 audience: [administrator, responder]
 verification:

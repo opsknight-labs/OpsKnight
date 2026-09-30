@@ -1,7 +1,7 @@
 ---
 title: Microsoft Teams
 description: Configure Teams messaging, interactive cards, and incident war rooms.
-type: integration
+type: concept
 product_area: chatops
 audience: [administrator, responder]
 verification:
