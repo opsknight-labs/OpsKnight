@@ -54,10 +54,10 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [],
-        "guides": [
+        "concepts": [
           "integrations/README.md"
         ],
+        "guides": [],
         "reference": [
           "reference/api/events.md"
         ],
@@ -71,10 +71,10 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [],
-        "guides": [
+        "concepts": [
           "integrations/README.md"
         ],
+        "guides": [],
         "reference": [
           "reference/api/events.md"
         ],
@@ -89,11 +89,10 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "README.md"
-        ],
-        "guides": [
+          "README.md",
           "guides/README.md"
         ],
+        "guides": [],
         "reference": [],
         "troubleshooting": []
       },
@@ -187,11 +186,10 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "start/what-is-opsknight.md"
-        ],
-        "guides": [
+          "start/what-is-opsknight.md",
           "start/README.md"
         ],
+        "guides": [],
         "reference": [],
         "troubleshooting": []
       },
@@ -413,11 +411,10 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/services.md"
-        ],
-        "guides": [
+          "concepts/services.md",
           "integrations/README.md"
         ],
+        "guides": [],
         "reference": [],
         "troubleshooting": []
       },
@@ -589,11 +586,10 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/chatops.md"
-        ],
-        "guides": [
+          "concepts/chatops.md",
           "guides/chatops/create-war-room.md"
         ],
+        "guides": [],
         "reference": [],
         "troubleshooting": []
       },
@@ -605,9 +601,10 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "integrations/issue-tracking/jira/README.md"
+        ],
         "guides": [
-          "integrations/issue-tracking/jira/README.md",
           "integrations/issue-tracking/jira/connect.md"
         ],
         "reference": [],
@@ -621,9 +618,10 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "integrations/communication/microsoft-teams/README.md"
+        ],
         "guides": [
-          "integrations/communication/microsoft-teams/README.md",
           "integrations/communication/microsoft-teams/connect.md"
         ],
         "reference": [],
@@ -637,10 +635,10 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [],
-        "guides": [
+        "concepts": [
           "integrations/README.md"
         ],
+        "guides": [],
         "reference": [],
         "troubleshooting": []
       },
@@ -652,9 +650,10 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "integrations/communication/slack/README.md"
+        ],
         "guides": [
-          "integrations/communication/slack/README.md",
           "integrations/communication/slack/connect-with-oauth.md"
         ],
         "reference": [],
@@ -1636,10 +1635,11 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [],
-        "guides": [
-          "start/quickstart.md",
+        "concepts": [
           "start/production-install.md"
+        ],
+        "guides": [
+          "start/quickstart.md"
         ],
         "reference": [],
         "troubleshooting": []

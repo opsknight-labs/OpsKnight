@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "59f816625967c3043ed64fabf9981ea708e4417a",
+  "sourceRevision": "7ab9bf4e27455c1dfdacff4a1d10ba6c46cf78b1",
   "contracts": [
     {
       "id": "api:/api/events",
@@ -303,6 +303,7 @@
         "src/lib/local-auth-policy.ts",
         "src/lib/logger.ts",
         "src/lib/metrics/operational/registry.ts",
+        "src/lib/notification-capacity-control.ts",
         "src/lib/notification-control-plane.ts",
         "src/lib/notification-recovery.ts",
         "src/lib/notification-retry.ts",
@@ -315,6 +316,7 @@
         "src/lib/oidc/role-mapping.ts",
         "src/lib/prisma-datasource.ts",
         "src/lib/prisma.ts",
+        "src/lib/provider-admission.ts",
         "src/lib/rate-limit.ts",
         "src/lib/realtime-change-control-plane.ts",
         "src/lib/request-context.ts",
@@ -350,6 +352,7 @@
           "src/lib/local-auth-policy.ts",
           "src/lib/logger.ts",
           "src/lib/metrics/operational/registry.ts",
+          "src/lib/notification-capacity-control.ts",
           "src/lib/notification-control-plane.ts",
           "src/lib/notification-recovery.ts",
           "src/lib/notification-retry.ts",
@@ -362,6 +365,7 @@
           "src/lib/oidc/role-mapping.ts",
           "src/lib/prisma-datasource.ts",
           "src/lib/prisma.ts",
+          "src/lib/provider-admission.ts",
           "src/lib/rate-limit.ts",
           "src/lib/realtime-change-control-plane.ts",
           "src/lib/request-context.ts",
@@ -415,14 +419,18 @@
           "notificationContent",
           "notificationDeliveryAttempt",
           "notificationFanout",
+          "notificationProviderCapacity",
+          "notificationRuntimeSettings",
           "oidcConfig",
           "oidcIdentity",
+          "providerAdmission",
           "rateLimit",
           "realtimeChange",
           "service",
           "statusPage",
           "statusPageSubscription",
           "statusPageWebhook",
+          "systemConfig",
           "user",
           "userToken",
           "webhookIntegration"
@@ -506,6 +514,7 @@
             "src/lib/local-auth-policy.ts",
             "src/lib/logger.ts",
             "src/lib/metrics/operational/registry.ts",
+            "src/lib/notification-capacity-control.ts",
             "src/lib/notification-control-plane.ts",
             "src/lib/notification-recovery.ts",
             "src/lib/notification-retry.ts",
@@ -518,6 +527,7 @@
             "src/lib/oidc/role-mapping.ts",
             "src/lib/prisma-datasource.ts",
             "src/lib/prisma.ts",
+            "src/lib/provider-admission.ts",
             "src/lib/rate-limit.ts",
             "src/lib/realtime-change-control-plane.ts",
             "src/lib/request-context.ts",
@@ -555,6 +565,7 @@
             "src/lib/local-auth-policy.ts",
             "src/lib/logger.ts",
             "src/lib/metrics/operational/registry.ts",
+            "src/lib/notification-capacity-control.ts",
             "src/lib/notification-control-plane.ts",
             "src/lib/notification-recovery.ts",
             "src/lib/notification-retry.ts",
@@ -567,6 +578,7 @@
             "src/lib/oidc/role-mapping.ts",
             "src/lib/prisma-datasource.ts",
             "src/lib/prisma.ts",
+            "src/lib/provider-admission.ts",
             "src/lib/rate-limit.ts",
             "src/lib/realtime-change-control-plane.ts",
             "src/lib/request-context.ts",
@@ -606,9 +618,12 @@
         "src/lib/job-worker.ts",
         "src/lib/jobs/queue.ts",
         "src/lib/logger.ts",
+        "src/lib/notification-capacity-control.ts",
+        "src/lib/notification-control-plane.ts",
         "src/lib/notification-recovery.ts",
         "src/lib/prisma-datasource.ts",
         "src/lib/prisma.ts",
+        "src/lib/provider-admission.ts",
         "src/lib/runtime-role.ts",
         "src/lib/version.ts"
       ],
@@ -621,9 +636,12 @@
           "src/lib/job-worker.ts",
           "src/lib/jobs/queue.ts",
           "src/lib/logger.ts",
+          "src/lib/notification-capacity-control.ts",
+          "src/lib/notification-control-plane.ts",
           "src/lib/notification-recovery.ts",
           "src/lib/prisma-datasource.ts",
           "src/lib/prisma.ts",
+          "src/lib/provider-admission.ts",
           "src/lib/runtime-role.ts",
           "src/lib/version.ts"
         ],
@@ -633,7 +651,7 @@
         "authentication": [],
         "authorization": [],
         "requestSchemas": [],
-        "rateLimited": false,
+        "rateLimited": true,
         "bodyLimited": false,
         "signatureVerification": false,
         "deliveryFencing": false,
@@ -643,10 +661,24 @@
           "backgroundJob",
           "externalOperation",
           "incident",
-          "incidentWarRoom"
+          "incidentWarRoom",
+          "notification",
+          "notificationContent",
+          "notificationDeliveryAttempt",
+          "notificationFanout",
+          "notificationProviderCapacity",
+          "notificationRuntimeSettings",
+          "providerAdmission",
+          "service",
+          "statusPage",
+          "statusPageSubscription",
+          "statusPageWebhook",
+          "systemConfig",
+          "webhookIntegration"
         ],
         "runtimeDependencies": [
-          "postgresql"
+          "postgresql",
+          "worker"
         ]
       },
       "documentation": {
@@ -701,9 +733,12 @@
             "src/lib/job-worker.ts",
             "src/lib/jobs/queue.ts",
             "src/lib/logger.ts",
+            "src/lib/notification-capacity-control.ts",
+            "src/lib/notification-control-plane.ts",
             "src/lib/notification-recovery.ts",
             "src/lib/prisma-datasource.ts",
             "src/lib/prisma.ts",
+            "src/lib/provider-admission.ts",
             "src/lib/runtime-role.ts",
             "src/lib/version.ts"
           ],
@@ -718,9 +753,12 @@
             "src/lib/job-worker.ts",
             "src/lib/jobs/queue.ts",
             "src/lib/logger.ts",
+            "src/lib/notification-capacity-control.ts",
+            "src/lib/notification-control-plane.ts",
             "src/lib/notification-recovery.ts",
             "src/lib/prisma-datasource.ts",
             "src/lib/prisma.ts",
+            "src/lib/provider-admission.ts",
             "src/lib/runtime-role.ts",
             "src/lib/version.ts"
           ],
@@ -10167,10 +10205,10 @@
         "kind": "ui"
       },
       "documentation": {
-        "concepts": [],
-        "guides": [
+        "concepts": [
           "integrations/README.md"
         ],
+        "guides": [],
         "reference": [
           "reference/api/events.md"
         ],
@@ -10221,10 +10259,10 @@
         "kind": "ui"
       },
       "documentation": {
-        "concepts": [],
-        "guides": [
+        "concepts": [
           "integrations/README.md"
         ],
+        "guides": [],
         "reference": [
           "reference/api/events.md"
         ],
@@ -10276,11 +10314,10 @@
       },
       "documentation": {
         "concepts": [
-          "README.md"
-        ],
-        "guides": [
+          "README.md",
           "guides/README.md"
         ],
+        "guides": [],
         "reference": [],
         "troubleshooting": []
       },
@@ -10596,11 +10633,10 @@
       },
       "documentation": {
         "concepts": [
-          "start/what-is-opsknight.md"
-        ],
-        "guides": [
+          "start/what-is-opsknight.md",
           "start/README.md"
         ],
+        "guides": [],
         "reference": [],
         "troubleshooting": []
       },
@@ -11317,11 +11353,10 @@
       },
       "documentation": {
         "concepts": [
-          "concepts/services.md"
-        ],
-        "guides": [
+          "concepts/services.md",
           "integrations/README.md"
         ],
+        "guides": [],
         "reference": [],
         "troubleshooting": []
       },
@@ -11914,11 +11949,10 @@
       },
       "documentation": {
         "concepts": [
-          "concepts/chatops.md"
-        ],
-        "guides": [
+          "concepts/chatops.md",
           "guides/chatops/create-war-room.md"
         ],
+        "guides": [],
         "reference": [],
         "troubleshooting": []
       },
@@ -11967,9 +12001,10 @@
         "kind": "ui"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "integrations/issue-tracking/jira/README.md"
+        ],
         "guides": [
-          "integrations/issue-tracking/jira/README.md",
           "integrations/issue-tracking/jira/connect.md"
         ],
         "reference": [],
@@ -12020,9 +12055,10 @@
         "kind": "ui"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "integrations/communication/microsoft-teams/README.md"
+        ],
         "guides": [
-          "integrations/communication/microsoft-teams/README.md",
           "integrations/communication/microsoft-teams/connect.md"
         ],
         "reference": [],
@@ -12073,10 +12109,10 @@
         "kind": "ui"
       },
       "documentation": {
-        "concepts": [],
-        "guides": [
+        "concepts": [
           "integrations/README.md"
         ],
+        "guides": [],
         "reference": [],
         "troubleshooting": []
       },
@@ -12125,9 +12161,10 @@
         "kind": "ui"
       },
       "documentation": {
-        "concepts": [],
+        "concepts": [
+          "integrations/communication/slack/README.md"
+        ],
         "guides": [
-          "integrations/communication/slack/README.md",
           "integrations/communication/slack/connect-with-oauth.md"
         ],
         "reference": [],
@@ -15447,10 +15484,11 @@
         "kind": "ui"
       },
       "documentation": {
-        "concepts": [],
-        "guides": [
-          "start/quickstart.md",
+        "concepts": [
           "start/production-install.md"
+        ],
+        "guides": [
+          "start/quickstart.md"
         ],
         "reference": [],
         "troubleshooting": []
@@ -26384,6 +26422,7 @@
         "src/app/robots.ts",
         "src/app/setup/actions.ts",
         "src/app/setup/page.tsx",
+        "src/components/settings/ApiKeysPanel.tsx",
         "src/lib/admin-health.ts",
         "src/lib/app-url.ts",
         "src/lib/auth-cookies.ts",
@@ -26411,6 +26450,7 @@
           "src/app/robots.ts",
           "src/app/setup/actions.ts",
           "src/app/setup/page.tsx",
+          "src/components/settings/ApiKeysPanel.tsx",
           "src/lib/admin-health.ts",
           "src/lib/app-url.ts",
           "src/lib/auth-cookies.ts",
@@ -26430,7 +26470,8 @@
           "runtime"
         ],
         "defaults": [
-          "http://localhost:3000"
+          "http://localhost:3000",
+          "https://api.opsknight.com"
         ],
         "allowedValues": [],
         "type": "string",
@@ -26516,6 +26557,7 @@
             "src/app/robots.ts",
             "src/app/setup/actions.ts",
             "src/app/setup/page.tsx",
+            "src/components/settings/ApiKeysPanel.tsx",
             "src/lib/admin-health.ts",
             "src/lib/app-url.ts",
             "src/lib/auth-cookies.ts",
@@ -27328,6 +27370,7 @@
         "src/app/providers.tsx",
         "src/app/setup/page.tsx",
         "src/components/DashboardRealtimeWrapper.tsx",
+        "src/components/DatabaseOffline.tsx",
         "src/components/WebVitalsReporter.tsx",
         "src/components/ui/ErrorBoundary.tsx",
         "src/lib/admin-health.ts",
@@ -27359,6 +27402,7 @@
           "src/app/providers.tsx",
           "src/app/setup/page.tsx",
           "src/components/DashboardRealtimeWrapper.tsx",
+          "src/components/DatabaseOffline.tsx",
           "src/components/WebVitalsReporter.tsx",
           "src/components/ui/ErrorBoundary.tsx",
           "src/lib/admin-health.ts",
@@ -27461,6 +27505,7 @@
             "src/app/providers.tsx",
             "src/app/setup/page.tsx",
             "src/components/DashboardRealtimeWrapper.tsx",
+            "src/components/DatabaseOffline.tsx",
             "src/components/WebVitalsReporter.tsx",
             "src/components/ui/ErrorBoundary.tsx",
             "src/lib/admin-health.ts",

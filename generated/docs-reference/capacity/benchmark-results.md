@@ -41,17 +41,21 @@ measurements from one test profile, not universal production guarantees.
 
 - Artifact: `artifacts/load-certification/certification-summary.json`
 - Pull request: #777
-- Original run provenance: not embedded in the merged artifact
+- Artifact generated: 2026-09-28T12:20:49.770Z
+- Product source revision tested: `52d6a3c5c791e7ad9ad21cd76f11cbdf11d3176f`
+- Test harness revision recorded: `e2cd6e28092f544eea2342ebe455cac680fd157b`
 - Test window: 2026-09-27T16:33:18.158Z through 2026-09-28T17:02:47.338Z
+- Host profile: 10-core CPU, 16 GB RAM; Docker Engine 28.x; Kind v0.31.0
 - Tested level: L0
 - Database and runtime profiles: recorded in the source certification report and
   topology definitions; do not transpose these measurements to a different pool,
   replica, host, or provider configuration.
 
-> The benchmark artifact was merged by PR #777, but the exact runtime source
-> revision, harness revision, image digest, and host profile were not embedded in
-> the original run. These results are historical measurements and are not
-> certified capacity.
+> The benchmark artifact was produced from product revision
+> `52d6a3c5c791e7ad9ad21cd76f11cbdf11d3176f`. The harness was later revised at
+> `e2cd6e28092f544eea2342ebe455cac680fd157b`, and the benchmark was not rerun after that
+> harness change. The results remain historical evidence, not a certification of
+> the later harness revision.
 
 ## How to use these results
 

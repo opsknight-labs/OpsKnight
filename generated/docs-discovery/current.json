@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-29T17:57:44+05:30",
-  "sourceRevision": "59f816625967c3043ed64fabf9981ea708e4417a",
+  "generatedAt": "2026-09-30T09:29:09+05:30",
+  "sourceRevision": "7ab9bf4e27455c1dfdacff4a1d10ba6c46cf78b1",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -510,6 +510,67 @@
     }
   ],
   "apiRoutes": [
+    {
+      "route": "/api/action-items/owners",
+      "file": "src/app/api/action-items/owners/route.ts",
+      "sources": [
+        "src/app/api/action-items/owners/route.ts",
+        "src/lib/api-response.ts",
+        "src/lib/auth.ts",
+        "src/lib/authorization-actors.ts",
+        "src/lib/authorization-filters.ts",
+        "src/lib/authorization-policy.ts",
+        "src/lib/authorization.ts",
+        "src/lib/errors/index.ts",
+        "src/lib/prisma-datasource.ts",
+        "src/lib/prisma.ts",
+        "src/lib/rbac.ts",
+        "src/lib/request-context.ts",
+        "src/lib/runtime-role.ts",
+        "src/lib/schedules/capabilities.ts"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "authentication": [
+        "session"
+      ],
+      "authorization": [
+        "EVENT_CREATE",
+        "INCIDENT_ACKNOWLEDGE",
+        "INCIDENT_CREATE",
+        "INCIDENT_ESCALATE",
+        "INCIDENT_MANAGE",
+        "INCIDENT_NOTE",
+        "INCIDENT_READ",
+        "SCHEDULE_READ",
+        "SERVICE_READ",
+        "capability-policy"
+      ],
+      "requestSchemas": [],
+      "rateLimited": true,
+      "bodyLimited": false,
+      "signatureVerification": false,
+      "deliveryFencing": false,
+      "idempotent": false,
+      "errors": [
+        "AUTHORIZATION_DENIED",
+        "LEGACY_API_ERROR",
+        "SCHEDULE_OVERRIDE_ACCESS_DENIED"
+      ],
+      "entities": [
+        "incident",
+        "oidcIdentity",
+        "onCallSchedule",
+        "service",
+        "team",
+        "teamMember",
+        "user"
+      ],
+      "runtimeDependencies": [
+        "postgresql"
+      ]
+    },
     {
       "route": "/api/admin/generate-reset-link",
       "file": "src/app/api/admin/generate-reset-link/route.ts",
@@ -4747,6 +4808,7 @@
         "src/lib/local-auth-policy.ts",
         "src/lib/logger.ts",
         "src/lib/metrics/operational/registry.ts",
+        "src/lib/notification-capacity-control.ts",
         "src/lib/notification-control-plane.ts",
         "src/lib/notification-recovery.ts",
         "src/lib/notification-retry.ts",
@@ -4759,6 +4821,7 @@
         "src/lib/oidc/role-mapping.ts",
         "src/lib/prisma-datasource.ts",
         "src/lib/prisma.ts",
+        "src/lib/provider-admission.ts",
         "src/lib/rate-limit.ts",
         "src/lib/realtime-change-control-plane.ts",
         "src/lib/request-context.ts",
@@ -4812,14 +4875,18 @@
         "notificationContent",
         "notificationDeliveryAttempt",
         "notificationFanout",
+        "notificationProviderCapacity",
+        "notificationRuntimeSettings",
         "oidcConfig",
         "oidcIdentity",
+        "providerAdmission",
         "rateLimit",
         "realtimeChange",
         "service",
         "statusPage",
         "statusPageSubscription",
         "statusPageWebhook",
+        "systemConfig",
         "user",
         "userToken",
         "webhookIntegration"
@@ -4838,9 +4905,12 @@
         "src/lib/job-worker.ts",
         "src/lib/jobs/queue.ts",
         "src/lib/logger.ts",
+        "src/lib/notification-capacity-control.ts",
+        "src/lib/notification-control-plane.ts",
         "src/lib/notification-recovery.ts",
         "src/lib/prisma-datasource.ts",
         "src/lib/prisma.ts",
+        "src/lib/provider-admission.ts",
         "src/lib/runtime-role.ts",
         "src/lib/version.ts"
       ],
@@ -4850,7 +4920,7 @@
       "authentication": [],
       "authorization": [],
       "requestSchemas": [],
-      "rateLimited": false,
+      "rateLimited": true,
       "bodyLimited": false,
       "signatureVerification": false,
       "deliveryFencing": false,
@@ -4860,10 +4930,24 @@
         "backgroundJob",
         "externalOperation",
         "incident",
-        "incidentWarRoom"
+        "incidentWarRoom",
+        "notification",
+        "notificationContent",
+        "notificationDeliveryAttempt",
+        "notificationFanout",
+        "notificationProviderCapacity",
+        "notificationRuntimeSettings",
+        "providerAdmission",
+        "service",
+        "statusPage",
+        "statusPageSubscription",
+        "statusPageWebhook",
+        "systemConfig",
+        "webhookIntegration"
       ],
       "runtimeDependencies": [
-        "postgresql"
+        "postgresql",
+        "worker"
       ]
     },
     {
@@ -17845,6 +17929,7 @@
         "src/app/robots.ts",
         "src/app/setup/actions.ts",
         "src/app/setup/page.tsx",
+        "src/components/settings/ApiKeysPanel.tsx",
         "src/lib/admin-health.ts",
         "src/lib/app-url.ts",
         "src/lib/auth-cookies.ts",
@@ -17864,7 +17949,8 @@
         "runtime"
       ],
       "defaults": [
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "https://api.opsknight.com"
       ],
       "allowedValues": [],
       "type": "string",
@@ -18136,6 +18222,7 @@
         "src/app/providers.tsx",
         "src/app/setup/page.tsx",
         "src/components/DashboardRealtimeWrapper.tsx",
+        "src/components/DatabaseOffline.tsx",
         "src/components/WebVitalsReporter.tsx",
         "src/components/ui/ErrorBoundary.tsx",
         "src/lib/admin-health.ts",
@@ -24215,6 +24302,15 @@
       "semanticClassification": "PROVIDER_CONSTRAINT"
     },
     {
+      "id": "src/components/settings/NotificationHistory.tsx:PAGE_LIMIT",
+      "name": "PAGE_LIMIT",
+      "value": 200,
+      "expression": "200",
+      "source": "src/components/settings/NotificationHistory.tsx",
+      "references": 4,
+      "semanticClassification": "INTERNAL_IMPLEMENTATION"
+    },
+    {
       "id": "src/components/SidebarSearch.tsx:MAX_RECENT_SEARCHES",
       "name": "MAX_RECENT_SEARCHES",
       "value": 5,
@@ -25811,6 +25907,161 @@
   "featureGraph": {
     "schemaVersion": 1,
     "nodes": [
+      {
+        "id": "api:/api/action-items/owners",
+        "kind": "api",
+        "name": "/api/action-items/owners",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "src/app/api/action-items/owners/route.ts",
+          "src/lib/api-response.ts",
+          "src/lib/auth.ts",
+          "src/lib/authorization-actors.ts",
+          "src/lib/authorization-filters.ts",
+          "src/lib/authorization-policy.ts",
+          "src/lib/authorization.ts",
+          "src/lib/errors/index.ts",
+          "src/lib/prisma-datasource.ts",
+          "src/lib/prisma.ts",
+          "src/lib/rbac.ts",
+          "src/lib/request-context.ts",
+          "src/lib/runtime-role.ts",
+          "src/lib/schedules/capabilities.ts"
+        ],
+        "contract": {
+          "route": "/api/action-items/owners",
+          "file": "src/app/api/action-items/owners/route.ts",
+          "sources": [
+            "src/app/api/action-items/owners/route.ts",
+            "src/lib/api-response.ts",
+            "src/lib/auth.ts",
+            "src/lib/authorization-actors.ts",
+            "src/lib/authorization-filters.ts",
+            "src/lib/authorization-policy.ts",
+            "src/lib/authorization.ts",
+            "src/lib/errors/index.ts",
+            "src/lib/prisma-datasource.ts",
+            "src/lib/prisma.ts",
+            "src/lib/rbac.ts",
+            "src/lib/request-context.ts",
+            "src/lib/runtime-role.ts",
+            "src/lib/schedules/capabilities.ts"
+          ],
+          "methods": [
+            "GET"
+          ],
+          "authentication": [
+            "session"
+          ],
+          "authorization": [
+            "EVENT_CREATE",
+            "INCIDENT_ACKNOWLEDGE",
+            "INCIDENT_CREATE",
+            "INCIDENT_ESCALATE",
+            "INCIDENT_MANAGE",
+            "INCIDENT_NOTE",
+            "INCIDENT_READ",
+            "SCHEDULE_READ",
+            "SERVICE_READ",
+            "capability-policy"
+          ],
+          "requestSchemas": [],
+          "rateLimited": true,
+          "bodyLimited": false,
+          "signatureVerification": false,
+          "deliveryFencing": false,
+          "idempotent": false,
+          "errors": [
+            "AUTHORIZATION_DENIED",
+            "LEGACY_API_ERROR",
+            "SCHEDULE_OVERRIDE_ACCESS_DENIED"
+          ],
+          "entities": [
+            "incident",
+            "oidcIdentity",
+            "onCallSchedule",
+            "service",
+            "team",
+            "teamMember",
+            "user"
+          ],
+          "runtimeDependencies": [
+            "postgresql"
+          ]
+        },
+        "documentation": {
+          "concepts": [
+            "concepts/permissions.md",
+            "concepts/schedules.md"
+          ],
+          "guides": [
+            "guides/administration/manage-permissions.md",
+            "guides/on-call/build-schedule.md",
+            "guides/on-call/overrides.md"
+          ],
+          "reference": [
+            "reference/api/README.md",
+            "reference/permissions.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [
+          "tests/integration/schedule-assignment-concurrency.test.ts",
+          "tests/lib/authorization-filters.test.ts",
+          "tests/lib/authorization-policy.test.ts"
+        ],
+        "runtimeEvidence": [
+          "generated/docs-evidence/current/on-call/schedules.png"
+        ],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "api:/api/action-items/owners:classification",
+            "text": "/api/action-items/owners is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "src/app/api/action-items/owners/route.ts",
+              "src/lib/api-response.ts",
+              "src/lib/auth.ts",
+              "src/lib/authorization-actors.ts",
+              "src/lib/authorization-filters.ts",
+              "src/lib/authorization-policy.ts",
+              "src/lib/authorization.ts",
+              "src/lib/errors/index.ts",
+              "src/lib/prisma-datasource.ts",
+              "src/lib/prisma.ts",
+              "src/lib/rbac.ts",
+              "src/lib/request-context.ts",
+              "src/lib/runtime-role.ts",
+              "src/lib/schedules/capabilities.ts"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "api:/api/action-items/owners:methods",
+            "text": "/api/action-items/owners implements GET.",
+            "evidence": [
+              "src/app/api/action-items/owners/route.ts",
+              "src/lib/api-response.ts",
+              "src/lib/auth.ts",
+              "src/lib/authorization-actors.ts",
+              "src/lib/authorization-filters.ts",
+              "src/lib/authorization-policy.ts",
+              "src/lib/authorization.ts",
+              "src/lib/errors/index.ts",
+              "src/lib/prisma-datasource.ts",
+              "src/lib/prisma.ts",
+              "src/lib/rbac.ts",
+              "src/lib/request-context.ts",
+              "src/lib/runtime-role.ts",
+              "src/lib/schedules/capabilities.ts"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
       {
         "id": "api:/api/admin/generate-reset-link",
         "kind": "api",
@@ -36662,6 +36913,7 @@
           "src/lib/local-auth-policy.ts",
           "src/lib/logger.ts",
           "src/lib/metrics/operational/registry.ts",
+          "src/lib/notification-capacity-control.ts",
           "src/lib/notification-control-plane.ts",
           "src/lib/notification-recovery.ts",
           "src/lib/notification-retry.ts",
@@ -36674,6 +36926,7 @@
           "src/lib/oidc/role-mapping.ts",
           "src/lib/prisma-datasource.ts",
           "src/lib/prisma.ts",
+          "src/lib/provider-admission.ts",
           "src/lib/rate-limit.ts",
           "src/lib/realtime-change-control-plane.ts",
           "src/lib/request-context.ts",
@@ -36709,6 +36962,7 @@
             "src/lib/local-auth-policy.ts",
             "src/lib/logger.ts",
             "src/lib/metrics/operational/registry.ts",
+            "src/lib/notification-capacity-control.ts",
             "src/lib/notification-control-plane.ts",
             "src/lib/notification-recovery.ts",
             "src/lib/notification-retry.ts",
@@ -36721,6 +36975,7 @@
             "src/lib/oidc/role-mapping.ts",
             "src/lib/prisma-datasource.ts",
             "src/lib/prisma.ts",
+            "src/lib/provider-admission.ts",
             "src/lib/rate-limit.ts",
             "src/lib/realtime-change-control-plane.ts",
             "src/lib/request-context.ts",
@@ -36774,14 +37029,18 @@
             "notificationContent",
             "notificationDeliveryAttempt",
             "notificationFanout",
+            "notificationProviderCapacity",
+            "notificationRuntimeSettings",
             "oidcConfig",
             "oidcIdentity",
+            "providerAdmission",
             "rateLimit",
             "realtimeChange",
             "service",
             "statusPage",
             "statusPageSubscription",
             "statusPageWebhook",
+            "systemConfig",
             "user",
             "userToken",
             "webhookIntegration"
@@ -36865,6 +37124,7 @@
               "src/lib/local-auth-policy.ts",
               "src/lib/logger.ts",
               "src/lib/metrics/operational/registry.ts",
+              "src/lib/notification-capacity-control.ts",
               "src/lib/notification-control-plane.ts",
               "src/lib/notification-recovery.ts",
               "src/lib/notification-retry.ts",
@@ -36877,6 +37137,7 @@
               "src/lib/oidc/role-mapping.ts",
               "src/lib/prisma-datasource.ts",
               "src/lib/prisma.ts",
+              "src/lib/provider-admission.ts",
               "src/lib/rate-limit.ts",
               "src/lib/realtime-change-control-plane.ts",
               "src/lib/request-context.ts",
@@ -36914,6 +37175,7 @@
               "src/lib/local-auth-policy.ts",
               "src/lib/logger.ts",
               "src/lib/metrics/operational/registry.ts",
+              "src/lib/notification-capacity-control.ts",
               "src/lib/notification-control-plane.ts",
               "src/lib/notification-recovery.ts",
               "src/lib/notification-retry.ts",
@@ -36926,6 +37188,7 @@
               "src/lib/oidc/role-mapping.ts",
               "src/lib/prisma-datasource.ts",
               "src/lib/prisma.ts",
+              "src/lib/provider-admission.ts",
               "src/lib/rate-limit.ts",
               "src/lib/realtime-change-control-plane.ts",
               "src/lib/request-context.ts",
@@ -36965,9 +37228,12 @@
           "src/lib/job-worker.ts",
           "src/lib/jobs/queue.ts",
           "src/lib/logger.ts",
+          "src/lib/notification-capacity-control.ts",
+          "src/lib/notification-control-plane.ts",
           "src/lib/notification-recovery.ts",
           "src/lib/prisma-datasource.ts",
           "src/lib/prisma.ts",
+          "src/lib/provider-admission.ts",
           "src/lib/runtime-role.ts",
           "src/lib/version.ts"
         ],
@@ -36980,9 +37246,12 @@
             "src/lib/job-worker.ts",
             "src/lib/jobs/queue.ts",
             "src/lib/logger.ts",
+            "src/lib/notification-capacity-control.ts",
+            "src/lib/notification-control-plane.ts",
             "src/lib/notification-recovery.ts",
             "src/lib/prisma-datasource.ts",
             "src/lib/prisma.ts",
+            "src/lib/provider-admission.ts",
             "src/lib/runtime-role.ts",
             "src/lib/version.ts"
           ],
@@ -36992,7 +37261,7 @@
           "authentication": [],
           "authorization": [],
           "requestSchemas": [],
-          "rateLimited": false,
+          "rateLimited": true,
           "bodyLimited": false,
           "signatureVerification": false,
           "deliveryFencing": false,
@@ -37002,10 +37271,24 @@
             "backgroundJob",
             "externalOperation",
             "incident",
-            "incidentWarRoom"
+            "incidentWarRoom",
+            "notification",
+            "notificationContent",
+            "notificationDeliveryAttempt",
+            "notificationFanout",
+            "notificationProviderCapacity",
+            "notificationRuntimeSettings",
+            "providerAdmission",
+            "service",
+            "statusPage",
+            "statusPageSubscription",
+            "statusPageWebhook",
+            "systemConfig",
+            "webhookIntegration"
           ],
           "runtimeDependencies": [
-            "postgresql"
+            "postgresql",
+            "worker"
           ]
         },
         "documentation": {
@@ -37060,9 +37343,12 @@
               "src/lib/job-worker.ts",
               "src/lib/jobs/queue.ts",
               "src/lib/logger.ts",
+              "src/lib/notification-capacity-control.ts",
+              "src/lib/notification-control-plane.ts",
               "src/lib/notification-recovery.ts",
               "src/lib/prisma-datasource.ts",
               "src/lib/prisma.ts",
+              "src/lib/provider-admission.ts",
               "src/lib/runtime-role.ts",
               "src/lib/version.ts"
             ],
@@ -37077,9 +37363,12 @@
               "src/lib/job-worker.ts",
               "src/lib/jobs/queue.ts",
               "src/lib/logger.ts",
+              "src/lib/notification-capacity-control.ts",
+              "src/lib/notification-control-plane.ts",
               "src/lib/notification-recovery.ts",
               "src/lib/prisma-datasource.ts",
               "src/lib/prisma.ts",
+              "src/lib/provider-admission.ts",
               "src/lib/runtime-role.ts",
               "src/lib/version.ts"
             ],
@@ -63689,10 +63978,10 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [],
-          "guides": [
+          "concepts": [
             "integrations/README.md"
           ],
+          "guides": [],
           "reference": [
             "reference/api/events.md"
           ],
@@ -63743,10 +64032,10 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [],
-          "guides": [
+          "concepts": [
             "integrations/README.md"
           ],
+          "guides": [],
           "reference": [
             "reference/api/events.md"
           ],
@@ -63798,11 +64087,10 @@
         },
         "documentation": {
           "concepts": [
-            "README.md"
-          ],
-          "guides": [
+            "README.md",
             "guides/README.md"
           ],
+          "guides": [],
           "reference": [],
           "troubleshooting": []
         },
@@ -64118,11 +64406,10 @@
         },
         "documentation": {
           "concepts": [
-            "start/what-is-opsknight.md"
-          ],
-          "guides": [
+            "start/what-is-opsknight.md",
             "start/README.md"
           ],
+          "guides": [],
           "reference": [],
           "troubleshooting": []
         },
@@ -64839,11 +65126,10 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/services.md"
-          ],
-          "guides": [
+            "concepts/services.md",
             "integrations/README.md"
           ],
+          "guides": [],
           "reference": [],
           "troubleshooting": []
         },
@@ -65436,11 +65722,10 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/chatops.md"
-          ],
-          "guides": [
+            "concepts/chatops.md",
             "guides/chatops/create-war-room.md"
           ],
+          "guides": [],
           "reference": [],
           "troubleshooting": []
         },
@@ -65489,9 +65774,10 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [],
+          "concepts": [
+            "integrations/issue-tracking/jira/README.md"
+          ],
           "guides": [
-            "integrations/issue-tracking/jira/README.md",
             "integrations/issue-tracking/jira/connect.md"
           ],
           "reference": [],
@@ -65542,9 +65828,10 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [],
+          "concepts": [
+            "integrations/communication/microsoft-teams/README.md"
+          ],
           "guides": [
-            "integrations/communication/microsoft-teams/README.md",
             "integrations/communication/microsoft-teams/connect.md"
           ],
           "reference": [],
@@ -65595,10 +65882,10 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [],
-          "guides": [
+          "concepts": [
             "integrations/README.md"
           ],
+          "guides": [],
           "reference": [],
           "troubleshooting": []
         },
@@ -65647,9 +65934,10 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [],
+          "concepts": [
+            "integrations/communication/slack/README.md"
+          ],
           "guides": [
-            "integrations/communication/slack/README.md",
             "integrations/communication/slack/connect-with-oauth.md"
           ],
           "reference": [],
@@ -68969,10 +69257,11 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [],
-          "guides": [
-            "start/quickstart.md",
+          "concepts": [
             "start/production-install.md"
+          ],
+          "guides": [
+            "start/quickstart.md"
           ],
           "reference": [],
           "troubleshooting": []
@@ -87093,6 +87382,7 @@
           "src/app/robots.ts",
           "src/app/setup/actions.ts",
           "src/app/setup/page.tsx",
+          "src/components/settings/ApiKeysPanel.tsx",
           "src/lib/admin-health.ts",
           "src/lib/app-url.ts",
           "src/lib/auth-cookies.ts",
@@ -87120,6 +87410,7 @@
             "src/app/robots.ts",
             "src/app/setup/actions.ts",
             "src/app/setup/page.tsx",
+            "src/components/settings/ApiKeysPanel.tsx",
             "src/lib/admin-health.ts",
             "src/lib/app-url.ts",
             "src/lib/auth-cookies.ts",
@@ -87139,7 +87430,8 @@
             "runtime"
           ],
           "defaults": [
-            "http://localhost:3000"
+            "http://localhost:3000",
+            "https://api.opsknight.com"
           ],
           "allowedValues": [],
           "type": "string",
@@ -87225,6 +87517,7 @@
               "src/app/robots.ts",
               "src/app/setup/actions.ts",
               "src/app/setup/page.tsx",
+              "src/components/settings/ApiKeysPanel.tsx",
               "src/lib/admin-health.ts",
               "src/lib/app-url.ts",
               "src/lib/auth-cookies.ts",
@@ -88037,6 +88330,7 @@
           "src/app/providers.tsx",
           "src/app/setup/page.tsx",
           "src/components/DashboardRealtimeWrapper.tsx",
+          "src/components/DatabaseOffline.tsx",
           "src/components/WebVitalsReporter.tsx",
           "src/components/ui/ErrorBoundary.tsx",
           "src/lib/admin-health.ts",
@@ -88068,6 +88362,7 @@
             "src/app/providers.tsx",
             "src/app/setup/page.tsx",
             "src/components/DashboardRealtimeWrapper.tsx",
+            "src/components/DatabaseOffline.tsx",
             "src/components/WebVitalsReporter.tsx",
             "src/components/ui/ErrorBoundary.tsx",
             "src/lib/admin-health.ts",
@@ -88170,6 +88465,7 @@
               "src/app/providers.tsx",
               "src/app/setup/page.tsx",
               "src/components/DashboardRealtimeWrapper.tsx",
+              "src/components/DatabaseOffline.tsx",
               "src/components/WebVitalsReporter.tsx",
               "src/components/ui/ErrorBoundary.tsx",
               "src/lib/admin-health.ts",
@@ -113006,6 +113302,58 @@
         ]
       },
       {
+        "id": "limit:src/components/settings/NotificationHistory.tsx:PAGE_LIMIT",
+        "kind": "limit",
+        "name": "src/components/settings/NotificationHistory.tsx:PAGE_LIMIT",
+        "owner": "notification",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "src/components/settings/NotificationHistory.tsx"
+        ],
+        "contract": {
+          "id": "src/components/settings/NotificationHistory.tsx:PAGE_LIMIT",
+          "name": "PAGE_LIMIT",
+          "value": 200,
+          "expression": "200",
+          "source": "src/components/settings/NotificationHistory.tsx",
+          "references": 4,
+          "semanticClassification": "INTERNAL_IMPLEMENTATION"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/limits.md"
+          ],
+          "troubleshooting": [
+            "troubleshooting/notifications/not-delivered.md"
+          ]
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "limit:src/components/settings/NotificationHistory.tsx:PAGE_LIMIT:classification",
+            "text": "src/components/settings/NotificationHistory.tsx:PAGE_LIMIT is classified as INTERNAL_IMPLEMENTATION and owned by notification.",
+            "evidence": [
+              "src/components/settings/NotificationHistory.tsx"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "limit:src/components/settings/NotificationHistory.tsx:PAGE_LIMIT:value",
+            "text": "PAGE_LIMIT has the discovered numeric value 200.",
+            "evidence": [
+              "src/components/settings/NotificationHistory.tsx"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "limit:src/components/SidebarSearch.tsx:MAX_RECENT_SEARCHES",
         "kind": "limit",
         "name": "src/components/SidebarSearch.tsx:MAX_RECENT_SEARCHES",
@@ -123169,8 +123517,8 @@
       }
     ],
     "summary": {
-      "total": 1159,
-      "claims": 1602,
+      "total": 1161,
+      "claims": 1606,
       "unsupportedClaims": 0,
       "supported": 631,
       "documentedSupported": 631,
@@ -123178,14 +123526,14 @@
       "unresolvedSemanticContracts": 0,
       "uiRoutesWithoutExplicitDocumentation": 0,
       "byKind": {
-        "api": 219,
+        "api": 220,
         "api-scope": 7,
         "authorization-action": 9,
         "configuration": 315,
         "deployment-topology": 4,
         "enum": 73,
         "integration": 28,
-        "limit": 224,
+        "limit": 225,
         "model": 120,
         "notification-provider": 9,
         "permission": 37,
@@ -123195,7 +123543,7 @@
       },
       "byClassification": {
         "ADMIN_FEATURE": 83,
-        "INTERNAL_IMPLEMENTATION": 528,
+        "INTERNAL_IMPLEMENTATION": 530,
         "OPERATOR_FEATURE": 344,
         "PUBLIC_API": 47,
         "PUBLIC_FEATURE": 157
