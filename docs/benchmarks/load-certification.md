@@ -54,16 +54,26 @@ Generated: `2026-09-29T18:27:24.601Z`
 
 ## 3. Evidence-Based Deployment Sizing Guidance
 
+### 3.1 Empirically Measured Limits (Phase 6 Testbed)
+- **Docker Compose Split + PgBouncer**: Peak **230.5 Alert RPS** (single-worker process CPU saturation limit under L9 catastrophic storm).
+- **Docker Swarm HA Split + PgBouncer (2 Replicas)**: Peak **104.6 Alert RPS** (Docker Swarm ingress routing mesh and overlay network latency boundary).
+- **Kubernetes Helm Split + PgBouncer (Kind 4-Node, 3 Workers)**: Peak **95.5 Alert RPS** (100% invariants certified, zero queue backlog / 0ms drain across progressive L1–L8).
+- **Kubernetes Kustomize Split + PgBouncer (Kind 4-Node, 3 Workers)**: Peak **66.1 Alert RPS** (targeted baseline and breaking-point ramp).
+
+### 3.2 Target / Theoretical Multi-Replica Production Sizing Guidance
+> [!NOTE]
+> Sizing tiers above the single-node / 4-node testbed maximums (> 230 RPS) represent theoretical scaling models predicated on horizontal replica autoscaling (HPA) and managed multi-AZ PostgreSQL; they are not single-instance Phase 6 measured limits.
+
 - **Small Setup (< 200 Alert RPS, < 100 VUs)**:
   - *Recommended*: **Compose Integrated** or **Helm/Swarm Integrated**.
   - *Rationale*: Single container process minimizes memory footprint and operational complexity while comfortably supporting normal on-call workloads.
-- **Medium Setup (200 – 800 Alert RPS, 100 – 500 VUs)**:
+- **Medium Setup (200 – 800 Alert RPS, 100 – 500 VUs) [Target Architecture]**:
   - *Recommended*: **Compose Split** or **Swarm/Helm Split**.
   - *Rationale*: Dedicated worker roles ensure that high-volume bulk or general jobs cannot starve critical paging and escalation notifications.
-- **Large Setup (800 – 2,000 Alert RPS, 500 – 2,000 VUs)**:
+- **Large Setup (800 – 2,000 Alert RPS, 500 – 2,000 VUs) [Target Architecture]**:
   - *Recommended*: **Compose Split + PgBouncer** or **Helm/Kustomize Split + PgBouncer**.
   - *Rationale*: PgBouncer transaction-mode pooling decouples 200+ Prisma client connections from the PostgreSQL engine connection limit.
-- **Enterprise HA Setup (2,000+ Alert RPS, Multi-AZ / High Availability)**:
+- **Enterprise HA Setup (2,000+ Alert RPS, Multi-AZ / High Availability) [Target Architecture]**:
   - *Recommended*: **Kind/Kubernetes (or Swarm HA) Split + PgBouncer + External HA PostgreSQL**.
   - *Rationale*: Zero single-point-of-failure topology with PodDisruptionBudgets, automated rolling rollouts, horizontal replica scaling, and outbox failure isolation.
 
@@ -159,11 +169,14 @@ Under multi-replica boot conditions (12+ microservices starting concurrently aga
 - **Root Cause**: PostgreSQL aborts secondary concurrent index builds under lock contention, creating dead metadata rows with `indisvalid = false` in `pg_index` / `pg_class`. Subsequent pod restarts detected the existing relation name and aborted with `assertRequiredIndexes()` failures, leading to fatal `CrashLoopBackOff` cascades.
 - **Remediation**: Implemented `cleanInvalidIndexes()` in `scripts/create-status-platform-online-indexes.cjs`. On startup, pods inspect `pg_index` for any `indisvalid = false` entries among required index relations and automatically execute `DROP INDEX CONCURRENTLY IF EXISTS` before rebuilding them. This self-healing mechanism eliminated startup deadlocks and ensures fully autonomous bootstrapping.
 
-### 7.4 Recommended Capacity & VU Deployment Matrix
+### 7.4 Target Architecture Sizing Guidance & Deployment Matrix
 
-| Workload Tier | Concurrent VUs | Alert Ingestion Rate | Recommended Architecture | Operational Strategy |
+> [!IMPORTANT]
+> **Measured vs. Target Guidance**: The values below represent target production sizing recommendations across horizontal multi-replica architectures. For single-instance / testbed boundaries measured during Phase 6 (e.g. 230.5 RPS Compose, 104.6 RPS Swarm, 95.5 RPS Helm 4-Node, 66.1 RPS Kustomize 4-Node), refer to Section 7.2 above. Higher throughput tiers (> 230 RPS) are theoretical models based on horizontal scaling and outbox partitioning.
+
+| Workload Tier | Concurrent VUs | Target Alert Ingestion Rate | Recommended Architecture | Operational Strategy |
 | :--- | :---: | :---: | :--- | :--- |
-| **Small Team** | < 100 VUs | < 200 RPS | **Compose Integrated** or **Helm/Swarm Integrated** | Single container process; lowest resource overhead; suitable for single on-call rotas. |
-| **Mid-Market** | 100 – 500 VUs | 200 – 800 RPS | **Compose Split** or **Swarm / Helm Split** | Dedicated worker containers ensure critical alerts and notifications never queue behind bulk maintenance jobs. |
-| **Scale-Up** | 500 – 2,000 VUs | 800 – 2,000 RPS | **Compose Split + PgBouncer** or **Kubernetes Helm + PgBouncer** | PgBouncer transaction-mode pooling prevents database connection starvation while scaling worker replicas. |
-| **Enterprise Mission-Critical** | 2,000+ VUs | 2,000+ RPS | **Kubernetes Helm / Kustomize Split + PgBouncer + Multi-Replica Workers** | Multi-AZ Kind/EKS/GKE cluster with PodDisruptionBudgets, HPA worker autoscaling, and dedicated PgBouncer poolers. |
+| **Small Team (Measured)** | < 100 VUs | < 200 RPS | **Compose Integrated** or **Helm/Swarm Integrated** | Single container process; lowest resource overhead; suitable for single on-call rotas. |
+| **Mid-Market (Target)** | 100 – 500 VUs | 200 – 800 RPS | **Compose Split** or **Swarm / Helm Split** | Dedicated worker containers ensure critical alerts and notifications never queue behind bulk maintenance jobs. |
+| **Scale-Up (Target)** | 500 – 2,000 VUs | 800 – 2,000 RPS | **Compose Split + PgBouncer** or **Kubernetes Helm + PgBouncer** | PgBouncer transaction-mode pooling prevents database connection starvation while scaling worker replicas. |
+| **Enterprise Mission-Critical (Target)** | 2,000+ VUs | 2,000+ RPS | **Kubernetes Helm / Kustomize Split + PgBouncer + Multi-Replica Workers** | Multi-AZ Kind/EKS/GKE cluster with PodDisruptionBudgets, HPA worker autoscaling, and dedicated PgBouncer poolers. |

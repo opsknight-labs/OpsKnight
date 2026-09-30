@@ -1045,6 +1045,8 @@ export interface QueueSnapshot {
   timestamp: string;
   stage: string;
   pendingCritical: number;
+  pendingCriticalDue: number;
+  futureScheduledCritical: number;
   oldestCriticalAgeSec: number;
   pendingTransactional: number;
   pendingBulk: number;
@@ -1060,7 +1062,8 @@ export interface QueueSnapshot {
 async function captureQueueSnapshot(prisma: PrismaClient, stage: string): Promise<QueueSnapshot> {
   const now = new Date();
   const [
-    pendingCritical,
+    pendingCriticalDue,
+    futureScheduledCritical,
     oldestCritical,
     pendingTransactional,
     pendingBulk,
@@ -1076,6 +1079,13 @@ async function captureQueueSnapshot(prisma: PrismaClient, stage: string): Promis
         status: 'PENDING',
         trafficClass: 'CRITICAL',
         nextAttemptAt: { lte: now },
+      },
+    }),
+    prisma.notification.count({
+      where: {
+        status: 'PENDING',
+        trafficClass: 'CRITICAL',
+        nextAttemptAt: { gt: now },
       },
     }),
     prisma.notification.findFirst({
@@ -1131,6 +1141,7 @@ async function captureQueueSnapshot(prisma: PrismaClient, stage: string): Promis
     prisma.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint AS count FROM pg_stat_activity WHERE datname = 'opsknight_db';`.catch(() => [{ count: BigInt(0) }]),
   ]);
 
+  const pendingCritical = pendingCriticalDue + futureScheduledCritical;
   const oldestCriticalAgeSec = oldestCritical
     ? Math.max(0, Math.round((now.getTime() - oldestCritical.nextAttemptAt.getTime()) / 1000))
     : 0;
@@ -1160,6 +1171,8 @@ async function captureQueueSnapshot(prisma: PrismaClient, stage: string): Promis
     timestamp: now.toISOString(),
     stage,
     pendingCritical,
+    pendingCriticalDue,
+    futureScheduledCritical,
     oldestCriticalAgeSec,
     pendingTransactional,
     pendingBulk,
@@ -1173,7 +1186,7 @@ async function captureQueueSnapshot(prisma: PrismaClient, stage: string): Promis
   };
 
   console.log(
-    `    [Queue Snapshot @ ${stage}] CRITICAL: ${snap.pendingCritical} (oldest: ${snap.oldestCriticalAgeSec}s) | TX: ${snap.pendingTransactional} | BULK: ${snap.pendingBulk} | BG Jobs: ${snap.pendingBackgroundJobs} (oldest: ${snap.oldestBackgroundJobAgeSec}s) | Delivered: ${snap.deliveredCritical} crit / ${snap.deliveredBulk} bulk | Failed: ${snap.failedNotifications} | DB Conns: ${snap.dbConnections}${snap.containerStats ? `\n      [Stats] ${snap.containerStats}` : ''}`
+    `    [Queue Snapshot @ ${stage}] CRITICAL: ${snap.pendingCritical} (due: ${snap.pendingCriticalDue}, future-retries: ${snap.futureScheduledCritical}, oldest: ${snap.oldestCriticalAgeSec}s) | TX: ${snap.pendingTransactional} | BULK: ${snap.pendingBulk} | BG Jobs: ${snap.pendingBackgroundJobs} (oldest: ${snap.oldestBackgroundJobAgeSec}s) | Delivered: ${snap.deliveredCritical} crit / ${snap.deliveredBulk} bulk | Failed: ${snap.failedNotifications} | DB Conns: ${snap.dbConnections}${snap.containerStats ? `\n      [Stats] ${snap.containerStats}` : ''}`
   );
 
   return snap;
@@ -1314,20 +1327,20 @@ export function deriveCapacityFromScenarios(
 ): DerivedCapacityProfile {
   if (records.length === 0) {
     return {
-      sustainedAlertRps: 'Measured on run',
-      burstAlertRps: 'Measured on run',
-      breakingPointRps: 'Measured on run',
-      notificationRate: 'Measured on run',
-      escalationRate: 'Measured on run',
-      concurrentUsers: 'Measured on run',
-      sseStreams: 'Measured on run',
-      statusFanout: 'Measured on run',
+      sustainedAlertRps: 'No scenarios executed',
+      burstAlertRps: 'No scenarios executed',
+      breakingPointRps: 'No scenarios executed',
+      notificationRate: 'No scenarios executed',
+      escalationRate: 'No scenarios executed',
+      concurrentUsers: 'No scenarios executed',
+      sseStreams: 'No scenarios executed',
+      statusFanout: 'No scenarios executed',
       alertsPerCore: 0,
       notificationsPerCore: 0,
       usersPerCore: 0,
       dbConnectionsPer100Rps: 'N/A',
-      deploymentRecommendation: 'Measured on run',
-      bottleneck: 'Pending execution',
+      deploymentRecommendation: 'Do not deploy: Zero scenarios executed',
+      bottleneck: 'No scenarios executed',
     };
   }
 
@@ -1553,16 +1566,26 @@ export function generateCertificationMarkdownReport(
   }
 
   lines.push('', '## 3. Evidence-Based Deployment Sizing Guidance', '');
+  lines.push('### 3.1 Empirically Measured Limits (Phase 6 Testbed)');
+  lines.push('- **Docker Compose Split + PgBouncer**: Peak **230.5 Alert RPS** (single-worker process CPU saturation limit under L9 catastrophic storm).');
+  lines.push('- **Docker Swarm HA Split + PgBouncer (2 Replicas)**: Peak **104.6 Alert RPS** (Docker Swarm ingress routing mesh and overlay network latency boundary).');
+  lines.push('- **Kubernetes Helm Split + PgBouncer (Kind 4-Node, 3 Workers)**: Peak **95.5 Alert RPS** (100% invariants certified, zero queue backlog / 0ms drain across progressive L1–L8).');
+  lines.push('- **Kubernetes Kustomize Split + PgBouncer (Kind 4-Node, 3 Workers)**: Peak **66.1 Alert RPS** (targeted baseline and breaking-point ramp).');
+  lines.push('');
+  lines.push('### 3.2 Target / Theoretical Multi-Replica Production Sizing Guidance');
+  lines.push('> [!NOTE]');
+  lines.push('> Sizing tiers above the single-node / 4-node testbed maximums (> 230 RPS) represent theoretical scaling models predicated on horizontal replica autoscaling (HPA) and managed multi-AZ PostgreSQL; they are not single-instance Phase 6 measured limits.');
+  lines.push('');
   lines.push('- **Small Setup (< 200 Alert RPS, < 100 VUs)**:');
   lines.push('  - *Recommended*: **Compose Integrated** or **Helm/Swarm Integrated**.');
   lines.push('  - *Rationale*: Single container process minimizes memory footprint and operational complexity while comfortably supporting normal on-call workloads.');
-  lines.push('- **Medium Setup (200 – 800 Alert RPS, 100 – 500 VUs)**:');
+  lines.push('- **Medium Setup (200 – 800 Alert RPS, 100 – 500 VUs) [Target Architecture]**:');
   lines.push('  - *Recommended*: **Compose Split** or **Swarm/Helm Split**.');
   lines.push('  - *Rationale*: Dedicated worker roles ensure that high-volume bulk or general jobs cannot starve critical paging and escalation notifications.');
-  lines.push('- **Large Setup (800 – 2,000 Alert RPS, 500 – 2,000 VUs)**:');
+  lines.push('- **Large Setup (800 – 2,000 Alert RPS, 500 – 2,000 VUs) [Target Architecture]**:');
   lines.push('  - *Recommended*: **Compose Split + PgBouncer** or **Helm/Kustomize Split + PgBouncer**.');
   lines.push('  - *Rationale*: PgBouncer transaction-mode pooling decouples 200+ Prisma client connections from the PostgreSQL engine connection limit.');
-  lines.push('- **Enterprise HA Setup (2,000+ Alert RPS, Multi-AZ / High Availability)**:');
+  lines.push('- **Enterprise HA Setup (2,000+ Alert RPS, Multi-AZ / High Availability) [Target Architecture]**:');
   lines.push('  - *Recommended*: **Kind/Kubernetes (or Swarm HA) Split + PgBouncer + External HA PostgreSQL**.');
   lines.push('  - *Rationale*: Zero single-point-of-failure topology with PodDisruptionBudgets, automated rolling rollouts, horizontal replica scaling, and outbox failure isolation.');
 
@@ -1664,6 +1687,16 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
     return true;
   });
 
+  if (opts.scenariosFilter && opts.scenariosFilter.length > 0) {
+    const allKnownScenarios = new Set(selectedTopologies.flatMap(t => t.scenarios));
+    const matchingScenarios = opts.scenariosFilter.filter(s => allKnownScenarios.has(s));
+    if (matchingScenarios.length === 0) {
+      throw new Error(
+        `--scenarios filter [${opts.scenariosFilter.join(', ')}] matched 0 scenarios across selected topologies.`
+      );
+    }
+  }
+
   if (opts.dryRun) {
     const planSummary = {
       mode: 'dry-run',
@@ -1672,14 +1705,21 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
       scaleProfile: opts.scale,
       durationProfile: opts.durationProfile,
       topologiesCount: selectedTopologies.length,
-      topologies: selectedTopologies.map(t => ({
-        id: t.id,
-        phase: t.phase,
-        family: t.family,
-        levels: opts.levelsOverride ?? t.defaultLoadLevels,
-        scenarios: t.scenarios,
-        recoveryDrills: t.recoveryDrills.map(d => d.name),
-      })),
+      topologies: selectedTopologies.map(t => {
+        const scenarios = t.scenarios.filter(s => {
+          if (opts.scenariosFilter && !opts.scenariosFilter.includes(s)) return false;
+          if (opts.skipScenarios && opts.skipScenarios.includes(s)) return false;
+          return true;
+        });
+        return {
+          id: t.id,
+          phase: t.phase,
+          family: t.family,
+          levels: opts.levelsOverride ?? t.defaultLoadLevels,
+          scenarios,
+          recoveryDrills: t.recoveryDrills.map(d => d.name),
+        };
+      }),
     };
     console.log(JSON.stringify(planSummary, null, 2));
     return planSummary;
@@ -1762,6 +1802,12 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
         return true;
       });
 
+      if (scenariosToRun.length === 0) {
+        throw new Error(
+          `Topology ${topology.id} has 0 scenarios selected (available: [${topology.scenarios.join(', ')}], filter: [${opts.scenariosFilter?.join(', ') ?? 'none'}], skip: [${opts.skipScenarios?.join(', ') ?? 'none'}]). Certification requires at least one scenario to execute.`
+        );
+      }
+
       for (const level of levels) {
         for (const scenarioFile of scenariosToRun) {
           const summaryJsonPath = path.join(
@@ -1827,18 +1873,30 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
 
       if (opts.drainSeconds > 0) {
         console.log(
-          `\n  === [Drain Observation] Holding topology with zero load for ${opts.drainSeconds}s ===`
+          `\n  === [Drain Observation] Holding topology with zero load for up to ${opts.drainSeconds}s ===`
         );
         const drainStart = Date.now();
         const drainDeadline = drainStart + opts.drainSeconds * 1000;
         while (Date.now() < drainDeadline) {
-          await new Promise(r => setTimeout(r, 15_000));
+          const remainingMs = drainDeadline - Date.now();
+          if (remainingMs <= 0) break;
+          const pollIntervalMs = Math.min(5_000, remainingMs);
+          await new Promise(r => setTimeout(r, pollIntervalMs));
           const elapsedSec = Math.round((Date.now() - drainStart) / 1000);
           const snap = await captureQueueSnapshot(hostPrisma, `drain-${elapsedSec}s`);
           queueSnapshots.push(snap);
-          if (snap.pendingCritical === 0 && snap.pendingBackgroundJobs === 0) {
+
+          // Full queue drain requires 0 pending items across all classes and zero future-scheduled critical retries
+          const isFullyDrained =
+            snap.pendingCritical === 0 &&
+            snap.futureScheduledCritical === 0 &&
+            snap.pendingTransactional === 0 &&
+            snap.pendingBulk === 0 &&
+            snap.pendingBackgroundJobs === 0;
+
+          if (isFullyDrained) {
             console.log(
-              `    [Drain Complete] All queues completely drained to 0 in ${elapsedSec}s!`
+              `    [Drain Complete] All queues completely drained to 0 (critical=0, future-retries=0, transactional=0, bulk=0, background-jobs=0) in ${elapsedSec}s!`
             );
             break;
           }
@@ -1871,9 +1929,11 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
         ...samples.map(s => s.postgres.oldestPendingJobAgeMs)
       );
 
-      const allScenariosPassed = scenarioRecords.every(
-        s => s.exitCode === 0 && s.thresholdsPassed !== false && s.errorRate <= 0.01
-      );
+      const allScenariosPassed =
+        scenarioRecords.length > 0 &&
+        scenarioRecords.every(
+          s => s.exitCode === 0 && s.thresholdsPassed !== false && s.errorRate <= 0.01
+        );
       results.push({
         topologyId: topology.id,
         topologyName: topology.name,
@@ -1884,7 +1944,7 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
         verification,
         peakActivePgConnections,
         peakOldestPendingJobAgeMs,
-        certified: verification.passed && allScenariosPassed,
+        certified: verification.passed && allScenariosPassed && scenarioRecords.length > 0,
       });
 
       try {
