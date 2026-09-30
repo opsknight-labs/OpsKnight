@@ -123,7 +123,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" $root }}
-                  key: {{ $root.Values.secrets.keys.databaseUrl }}
+                  key: {{ $root.Values.secrets.keys.directDatabaseUrl }}
             - name: NEXTAUTH_SECRET
               valueFrom:
                 secretKeyRef:

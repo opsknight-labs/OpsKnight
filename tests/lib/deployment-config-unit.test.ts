@@ -133,6 +133,18 @@ describe('deployment configuration invariants', () => {
     expect(read('deploy/kubernetes/helm/opsknight/templates/secret.yaml')).toContain(
       '.Values.secrets.keys.databaseUrl'
     );
+    expect(read('deploy/kubernetes/helm/opsknight/values.yaml')).toContain(
+      'directDatabaseUrl: DIRECT_DATABASE_URL'
+    );
+    expect(read('deploy/kubernetes/helm/opsknight/templates/migration-job.yaml')).toContain(
+      'key: {{ .Values.secrets.keys.directDatabaseUrl }}'
+    );
+    expect(read('deploy/kubernetes/helm/opsknight/templates/migration-job.yaml')).toContain(
+      'create-sla-scheduler-online-index.cjs'
+    );
+    expect(read('deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml')).toContain(
+      'key: {{ $root.Values.secrets.keys.directDatabaseUrl }}'
+    );
   });
 
   it('models every split-runtime ownership lane in Helm and Kustomize', () => {
@@ -345,9 +357,7 @@ describe('deployment configuration invariants', () => {
 
   it('keeps documentation capability coverage in CI and the release gate', () => {
     expect(read('package.json')).toContain('scripts/check-docs-capabilities.cjs');
-    expect(read('.github/workflows/docs-links.yml')).toContain(
-      'node scripts/check-docs-capabilities.cjs'
-    );
+    expect(read('.github/workflows/docs-links.yml')).toContain('npm run docs:certify:static');
     expect(read('.github/workflows/docker-image.yml')).toContain('npm run docs:capabilities');
     expect(read('docs/RELEASE_QUALITY_CONTRACT.md')).toContain(
       'Upgrade from the previous stable release'
@@ -623,4 +633,3 @@ describe('deployment configuration invariants', () => {
     expect(cidrPatch).toContain('opsknight-general-worker-network-policy');
   });
 });
-

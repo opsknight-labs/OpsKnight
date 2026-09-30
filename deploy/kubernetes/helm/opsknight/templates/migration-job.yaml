@@ -39,6 +39,9 @@ spec:
               if [ -f "scripts/create-status-platform-online-indexes.cjs" ]; then
                 node scripts/create-status-platform-online-indexes.cjs
               fi
+              if [ -f "scripts/create-sla-scheduler-online-index.cjs" ]; then
+                node scripts/create-sla-scheduler-online-index.cjs
+              fi
               if [ -f "scripts/create-voice-attempt-online-indexes.cjs" ]; then
                 node scripts/create-voice-attempt-online-indexes.cjs
               fi
@@ -53,7 +56,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" . }}
-                  key: {{ .Values.secrets.keys.databaseUrl }}
+                  key: {{ .Values.secrets.keys.directDatabaseUrl }}
           resources:
             requests:
               cpu: 100m

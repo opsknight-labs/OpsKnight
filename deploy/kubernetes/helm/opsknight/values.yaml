@@ -212,6 +212,9 @@ secrets:
   existingSecret: ''
   keys:
     databaseUrl: DATABASE_URL
+    # Direct PostgreSQL route used by migrations and schema/index installers.
+    # Keep this distinct from a transaction-pooled Web URL.
+    directDatabaseUrl: DIRECT_DATABASE_URL
     webDatabaseUrl: WEB_DATABASE_URL
     nextauthSecret: NEXTAUTH_SECRET
     encryptionKey: ENCRYPTION_KEY

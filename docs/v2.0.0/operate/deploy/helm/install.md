@@ -53,6 +53,7 @@ secrets:
   existingSecret: opsknight-secrets
   keys:
     databaseUrl: DATABASE_URL
+    directDatabaseUrl: DIRECT_DATABASE_URL
     nextauthSecret: NEXTAUTH_SECRET
     encryptionKey: ENCRYPTION_KEY
 
