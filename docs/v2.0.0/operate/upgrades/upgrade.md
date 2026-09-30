@@ -5,6 +5,9 @@ type: deployment
 product_area: upgrades
 audience: [operator, administrator]
 keywords: [upgrade OpsKnight, migration upgrade, release upgrade, rolling upgrade]
+reader:
+  status: READER_COMPLETE
+  task: Rehearse, migrate, roll out, verify, and accept an OpsKnight upgrade.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -34,7 +37,7 @@ Prepare:
 
 Do not start if the backup is untested, the target image is mutable, migration ownership is ambiguous, database headroom is insufficient for rollout overlap, or the old version's compatibility with the post-migration schema is unknown.
 
-## Decide compatibility and rollback before deployment
+## Configure compatibility and rollback before deployment
 
 Classify the release:
 
@@ -147,6 +150,10 @@ Complete every check before accepting the release:
 10. Logs contain no sustained migration, serialization, provider, encryption, or authorization failures.
 
 Keep the release in a monitored soak period that covers scheduled work and representative provider traffic. Record the image digest, schema result, test evidence, observed metrics, reviewer, and acceptance time.
+
+## Operate the accepted release
+
+Retain source and target digests, rendered configuration, migration output, acceptance evidence, and rollback criteria with the change record. Continue heightened monitoring through a representative paging and scheduled-maintenance window before retiring the previous image and backup.
 
 ## Failure handling
 

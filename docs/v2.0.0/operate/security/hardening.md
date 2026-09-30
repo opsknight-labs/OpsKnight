@@ -4,6 +4,9 @@ description: Establish and verify identity, transport, network, secret, database
 type: deployment
 product_area: security
 audience: [operator, administrator]
+reader:
+  status: READER_COMPLETE
+  task: Harden and verify an OpsKnight production deployment across every trust boundary.
 verification:
   level: source
   verified_at: 2026-09-29
@@ -18,13 +21,13 @@ verification:
 
 Hardening is a deployment property, not one application switch. Protect the public edge, internal services, identities, stored credentials, database, runtime roles, and operational evidence. Validate denied paths as deliberately as successful ones.
 
-## Before production exposure
+## Prerequisites before production exposure
 
 Record the deployment topology, public hostnames, trusted proxy path, database location, secret store, runtime roles, administrative identities, monitoring source networks, and backup encryption/recovery owner. Use a non-production environment with the same boundary design to test changes.
 
 Generate unique secrets for this installation. Never copy session, encryption, provider, or database credentials from examples, local development, or another environment.
 
-## Protect the external edge
+## Configure and protect the external edge
 
 1. Terminate TLS at a maintained ingress, reverse proxy, or load balancer and redirect plain HTTP to HTTPS.
 2. Set the public application/authentication URLs to the canonical HTTPS origin. Avoid aliases that create unexpected callback or cookie scope.
@@ -123,7 +126,11 @@ Ship application, ingress, orchestrator, database, and identity-provider logs to
 
 Do not log session cookies, bearer tokens, webhook secrets, encryption keys, database URLs, or full sensitive payloads. Validate redaction after configuration and provider errors, not only during successful requests.
 
-## Verification checklist
+## Run production acceptance
+
+Execute the checks below from both trusted operator networks and an untrusted client path. Record the denied and successful outcomes with the deployment evidence.
+
+## Validation checklist
 
 Before go-live and after material security changes, prove:
 
@@ -143,6 +150,10 @@ Record reviewer, date, application revision/image digest, configuration revision
 ## Incident response and rotation
 
 If a secret or administrative identity may be compromised, contain access first, preserve audit evidence, rotate at both OpsKnight and the external provider, revoke sessions/API keys, and verify denied use of the old credential. Encryption-key compromise can require rotation of the keyring plus every credential whose plaintext may have been exposed.
+
+## Operate the hardened deployment
+
+Review the trust-boundary inventory after every new integration, ingress, identity provider, or runtime role. Re-run denied-path tests, restore tests, audit export checks, and secret-rotation exercises on a defined schedule and after security-sensitive upgrades.
 
 ## Troubleshooting
 
