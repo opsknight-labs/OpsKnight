@@ -28,6 +28,29 @@ test.describe('production PWA service-worker contract', () => {
     request,
     context,
   }) => {
+    const iconContracts = [
+      ['/icons/opsknight-192.png', 192],
+      ['/icons/opsknight-512.png', 512],
+      ['/icons/opsknight-maskable-192.png', 192],
+      ['/icons/opsknight-maskable-512.png', 512],
+      ['/icons/opsknight-apple-touch.png', 180],
+    ] as const;
+
+    for (const [iconPath, expectedSize] of iconContracts) {
+      const iconResponse = await request.get(iconPath);
+      expect(iconResponse.status()).toBe(200);
+      expect(iconResponse.headers()['content-type']).toContain('image/png');
+      const iconBytes = await iconResponse.body();
+      expect(iconBytes.subarray(1, 4).toString('ascii')).toBe('PNG');
+      expect(iconBytes.readUInt32BE(16)).toBe(expectedSize);
+      expect(iconBytes.readUInt32BE(20)).toBe(expectedSize);
+    }
+
+    // Keep legacy URLs alive as generated aliases so already-queued Push
+    // notifications and older clients do not fall through to 404 after upgrade.
+    expect((await request.get('/icons/app-icon-192.png')).status()).toBe(200);
+    expect((await request.get('/icons/apple-touch-icon.png')).status()).toBe(200);
+
     const workerResponse = await request.get('/sw.js');
     expect(workerResponse.ok()).toBe(true);
     const workerText = await workerResponse.text();

@@ -85,10 +85,10 @@ export async function sendNotificationIntentPush(
       actions: JSON.stringify(
         eventType === 'triggered'
           ? [
-              { action: 'view', title: '👁️ View', icon: '/icons/app-icon-192.png' },
-              { action: 'acknowledge', title: '✓ Acknowledge', icon: '/icons/app-icon-192.png' },
+              { action: 'view', title: '👁️ View', icon: '/icons/opsknight-192.png' },
+              { action: 'acknowledge', title: '✓ Acknowledge', icon: '/icons/opsknight-192.png' },
             ]
-          : [{ action: 'view', title: '👁️ View', icon: '/icons/app-icon-192.png' }]
+          : [{ action: 'view', title: '👁️ View', icon: '/icons/opsknight-192.png' }]
       ),
     },
     badge: 1,
