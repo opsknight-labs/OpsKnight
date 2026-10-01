@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-01T14:19:44.505Z",
-  "sourceRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed",
-  "documentationRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed",
+  "generatedAt": "2026-10-01T14:22:10.913Z",
+  "sourceRevision": "08532feb34f68f4af7e66eecc9505a645e4ac55d",
+  "documentationRevision": "08532feb34f68f4af7e66eecc9505a645e4ac55d",
   "productSourceRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed",
   "runtimeSourceRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed",
   "runtimeImageDigest": "localhost:15000/opsknight-docs-v2@sha256:40c7adb7b32a8138af402f3f4a2439f427a121dfb747003051f307bb390f1c98",
