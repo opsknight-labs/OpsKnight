@@ -281,6 +281,71 @@ export default async function globalSetup() {
       }
     }
 
+    const dashboardFixtures = [
+      {
+        id: 'docs-dashboard-executive',
+        name: 'Production Reliability Overview',
+        description: 'Executive view of incident volume, response performance, and service health.',
+        visibility: 'PUBLIC' as const,
+        teamId: null,
+        widgets: [
+          ['total-incidents', 'metric', 'totalIncidents', 'Total Incidents', { x: 0, y: 0, w: 1, h: 1 }, {}],
+          ['active-incidents', 'metric', 'activeIncidents', 'Active Incidents', { x: 1, y: 0, w: 1, h: 1 }, {}],
+          ['mttr', 'metric', 'mttr', 'Mean Time to Resolve', { x: 2, y: 0, w: 1, h: 1 }, {}],
+          ['ack-compliance', 'gauge', 'ackCompliance', 'Acknowledgment SLA', { x: 3, y: 0, w: 1, h: 1 }, {}],
+          ['incident-trend', 'chart', 'trendSeries', 'Incident Trend', { x: 0, y: 1, w: 4, h: 2 }, { chartType: 'count' }],
+          ['service-health', 'table', 'serviceMetrics', 'Service Health', { x: 0, y: 3, w: 2, h: 2 }, {}],
+          ['smart-insights', 'insights', 'insights', 'Reliability Insights', { x: 2, y: 3, w: 2, h: 2 }, {}],
+        ],
+      },
+      {
+        id: 'docs-dashboard-sre',
+        name: 'SRE Weekly Operations',
+        description: 'Weekly review of escalation pressure, on-call coverage, and high-volume services.',
+        visibility: 'TEAM' as const,
+        teamId: team.id,
+        widgets: [
+          ['unassigned-active', 'metric', 'unassignedActive', 'Unassigned Incidents', { x: 0, y: 0, w: 1, h: 1 }, {}],
+          ['escalation-rate', 'metric', 'escalationRate', 'Escalation Rate', { x: 1, y: 0, w: 1, h: 1 }, {}],
+          ['coverage-percent', 'gauge', 'coveragePercent', 'On-Call Coverage', { x: 2, y: 0, w: 1, h: 1 }, {}],
+          ['incident-heatmap', 'chart', 'heatmapData', 'Incident Calendar', { x: 0, y: 1, w: 4, h: 2 }, { chartType: 'heatmap' }],
+          ['top-services', 'table', 'topServices', 'Top Services', { x: 0, y: 3, w: 2, h: 2 }, {}],
+        ],
+      },
+      {
+        id: 'docs-dashboard-sla',
+        name: 'Customer SLA Review',
+        description: 'Acknowledgment and resolution compliance for the monthly customer review.',
+        visibility: 'PRIVATE' as const,
+        teamId: null,
+        widgets: [
+          ['ack-compliance', 'gauge', 'ackCompliance', 'Ack Compliance', { x: 0, y: 0, w: 1, h: 1 }, {}],
+          ['resolve-compliance', 'gauge', 'resolveCompliance', 'Resolve Compliance', { x: 1, y: 0, w: 1, h: 1 }, {}],
+          ['ack-breaches', 'metric', 'ackBreaches', 'Ack Breaches', { x: 2, y: 0, w: 1, h: 1 }, {}],
+          ['resolve-breaches', 'metric', 'resolveBreaches', 'Resolve Breaches', { x: 3, y: 0, w: 1, h: 1 }, {}],
+          ['sla-compliance-trend', 'chart', 'trendSeries', 'SLA Compliance Trend', { x: 0, y: 1, w: 4, h: 2 }, { chartType: 'slaCompliance' }],
+        ],
+      },
+    ];
+    for (const dashboardFixture of dashboardFixtures) {
+      const dashboard = await prisma.dashboard.upsert({
+        where: { id: dashboardFixture.id },
+        update: { name: dashboardFixture.name, description: dashboardFixture.description, visibility: dashboardFixture.visibility, teamId: dashboardFixture.teamId, userId: admin.id, layout: { columns: 4, rowHeight: 150 }, isTemplate: false },
+        create: { id: dashboardFixture.id, name: dashboardFixture.name, description: dashboardFixture.description, visibility: dashboardFixture.visibility, teamId: dashboardFixture.teamId, userId: admin.id, layout: { columns: 4, rowHeight: 150 }, isTemplate: false },
+      });
+      await prisma.dashboardWidget.deleteMany({ where: { dashboardId: dashboard.id } });
+      await prisma.dashboardWidget.createMany({ data: dashboardFixture.widgets.map(([widgetDefinitionId, widgetType, metricKey, title, position, config], index) => ({
+        id: `${dashboard.id}-widget-${index}`,
+        dashboardId: dashboard.id,
+        widgetDefinitionId: widgetDefinitionId as string,
+        widgetType: widgetType as string,
+        metricKey: metricKey as string,
+        title: title as string,
+        position: position as object,
+        config: config as object,
+      })) });
+    }
+
     const auditFixtures = [
       { id: 'docs-audit-service', action: 'SERVICE_UPDATED', entityType: 'SERVICE' as const, entityId: service.id, details: { name: DOCS_FIXTURES.service, field: 'escalationPolicy' } },
       { id: 'docs-audit-schedule', action: 'SCHEDULE_UPDATED', entityType: 'SCHEDULE' as const, entityId: schedule.id, details: { name: DOCS_FIXTURES.schedule, field: 'rotation' } },

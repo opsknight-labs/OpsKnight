@@ -62,7 +62,23 @@ test.describe.serial('operational documentation surfaces', () => {
 
     await page.goto('/reports');
     await expect(page.locator('#main-content')).toBeVisible();
+    await expect(page.getByText('Production Reliability Overview').first()).toBeVisible();
     await captureEvidence(page, testInfo, 'analytics', 'reports');
+
+    await page.goto('/reports/executive?template=sre-operations');
+    await expect(page.getByText('SRE Operations').first()).toBeVisible();
+    await expect(page.getByText('Incident Calendar').first()).toBeVisible();
+    await captureEvidence(page, testInfo, 'analytics', 'dashboard-template');
+
+    await page.goto('/reports/executive/docs-dashboard-executive');
+    await expect(page.getByText('Production Reliability Overview').first()).toBeVisible();
+    await expect(page.getByText('Service Health').first()).toBeVisible();
+    await captureEvidence(page, testInfo, 'analytics', 'dashboard-saved');
+
+    await page.getByRole('button', { name: 'Dashboard settings' }).click();
+    await page.getByText('Edit Dashboard', { exact: true }).click();
+    await expect(page.getByText(/Editing mode/)).toBeVisible();
+    await captureEvidence(page, testInfo, 'analytics', 'dashboard-edit');
   });
 
   test('captures audit and operational inspection surfaces', async ({ page }, testInfo) => {

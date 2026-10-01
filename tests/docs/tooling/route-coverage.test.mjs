@@ -14,6 +14,12 @@ test('every UI route is explicitly classified and public surfaces have documenta
       assert.equal(route.documentationMapping, 'explicit-route-rule', `${route.route}: documentation is not route-specific`);
       assert.ok(pages.length > 0, `${route.route}: no documentation mapping`);
       for (const page of pages) assert.ok(existsSync(`docs/v2.0.0/${page}`), `${route.route}: missing ${page}`);
+      if (route.taskDocumentationRequired) {
+        assert.ok(
+          (route.documentation?.guides ?? []).length > 0,
+          `${route.route}: interactive route requires a task guide; concepts and references are insufficient`
+        );
+      }
     }
     if (route.classification === 'HIDDEN') {
       assert.ok(!pages.some(page => /start\/|guides\//.test(page)), `${route.route}: hidden route is presented as generally available`);

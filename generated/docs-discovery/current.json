@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-01T09:33:05+05:30",
-  "sourceRevision": "6db6ce6db205d67186bd9a47e4644b22c709465a",
+  "generatedAt": "2026-10-01T10:42:14+05:30",
+  "sourceRevision": "c09029b968b6e09a8217cd2fdd8578eae0a1b17a",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -4544,7 +4544,8 @@
       "authorization": [],
       "requestSchemas": [
         "ProfileMappingSchema",
-        "RoleMappingSchema"
+        "RoleMappingSchema",
+        "UpdateDashboardSchema"
       ],
       "rateLimited": true,
       "bodyLimited": false,
@@ -4594,6 +4595,7 @@
       ],
       "authorization": [],
       "requestSchemas": [
+        "CreateDashboardSchema",
         "ProfileMappingSchema",
         "RoleMappingSchema"
       ],
@@ -27413,7 +27415,9 @@
             "reference/api/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -27588,7 +27592,9 @@
             "reference/api/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -27763,7 +27769,9 @@
             "reference/api/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -28054,7 +28062,9 @@
           "reference": [
             "reference/api/README.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -28770,7 +28780,9 @@
             "reference/configuration/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -35789,7 +35801,9 @@
             "reference/configuration/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -36018,7 +36032,9 @@
             "reference/configuration/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -36170,7 +36186,8 @@
           "authorization": [],
           "requestSchemas": [
             "ProfileMappingSchema",
-            "RoleMappingSchema"
+            "RoleMappingSchema",
+            "UpdateDashboardSchema"
           ],
           "rateLimited": true,
           "bodyLimited": false,
@@ -36320,6 +36337,7 @@
           ],
           "authorization": [],
           "requestSchemas": [
+            "CreateDashboardSchema",
             "ProfileMappingSchema",
             "RoleMappingSchema"
           ],
@@ -46322,7 +46340,9 @@
             "reference/health.md",
             "reference/metrics.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -49162,7 +49182,9 @@
             "reference/configuration/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -54056,7 +54078,9 @@
             "reference/api/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -54222,7 +54246,9 @@
             "reference/api/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -54559,7 +54585,9 @@
             "reference/api/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -61821,7 +61849,9 @@
             "reference/api/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -61989,7 +62019,9 @@
             "reference/api/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -62159,7 +62191,9 @@
             "reference/api/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -62263,7 +62297,9 @@
           "reference": [
             "reference/api/README.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -62389,7 +62425,9 @@
             "reference/api/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -62558,7 +62596,9 @@
             "reference/api/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -64792,13 +64832,12 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [
-            "concepts/analytics.md"
+          "concepts": [],
+          "guides": [
+            "guides/reports/manage-dashboard.md",
+            "guides/reports/read-dashboard.md"
           ],
-          "guides": [],
-          "reference": [
-            "reference/metrics.md"
-          ],
+          "reference": [],
           "troubleshooting": []
         },
         "documentationMapping": "explicit-route-rule",
@@ -64846,13 +64885,11 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [
-            "concepts/analytics.md"
+          "concepts": [],
+          "guides": [
+            "guides/reports/create-dashboard.md"
           ],
-          "guides": [],
-          "reference": [
-            "reference/metrics.md"
-          ],
+          "reference": [],
           "troubleshooting": []
         },
         "documentationMapping": "explicit-route-rule",
@@ -64900,13 +64937,12 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [
-            "concepts/analytics.md"
+          "concepts": [],
+          "guides": [
+            "guides/reports/create-dashboard.md",
+            "guides/reports/read-dashboard.md"
           ],
-          "guides": [],
-          "reference": [
-            "reference/metrics.md"
-          ],
+          "reference": [],
           "troubleshooting": []
         },
         "documentationMapping": "explicit-route-rule",
@@ -64957,10 +64993,11 @@
           "concepts": [
             "concepts/analytics.md"
           ],
-          "guides": [],
-          "reference": [
-            "reference/metrics.md"
+          "guides": [
+            "guides/reports/README.md",
+            "guides/reports/create-dashboard.md"
           ],
+          "reference": [],
           "troubleshooting": []
         },
         "documentationMapping": "explicit-route-rule",
@@ -71244,7 +71281,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -72483,7 +72522,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -72519,7 +72560,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -72555,7 +72598,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -72627,7 +72672,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -72663,7 +72710,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -75424,7 +75473,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -75460,7 +75511,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -75496,7 +75549,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -75892,7 +75947,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -86617,7 +86674,9 @@
           "reference": [
             "reference/configuration/README.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -86690,7 +86749,9 @@
           "reference": [
             "reference/configuration/README.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -106880,7 +106941,9 @@
           "reference": [
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -106935,7 +106998,9 @@
           "reference": [
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -107363,7 +107428,9 @@
           "reference": [
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -107418,7 +107485,9 @@
           "reference": [
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -110704,7 +110773,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -110754,7 +110825,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -110818,7 +110891,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -111811,7 +111886,9 @@
             "reference/limits.md",
             "reference/metrics.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -112067,7 +112144,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -112117,7 +112196,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -112181,7 +112262,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -112910,7 +112993,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -115120,7 +115205,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -115170,7 +115257,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -115220,7 +115309,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -115420,7 +115511,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -115470,7 +115563,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -115520,7 +115615,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -115570,7 +115667,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -117174,7 +117273,9 @@
             "reference/api/events.md",
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -117234,7 +117335,9 @@
             "reference/api/events.md",
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -117294,7 +117397,9 @@
             "reference/api/events.md",
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -118262,7 +118367,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -121757,7 +121864,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -121807,7 +121916,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -121857,7 +121968,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/reports/troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
