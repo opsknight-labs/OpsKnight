@@ -159,6 +159,27 @@ select option {
     }
 }
 
+/* Dashboard Editing Bottom Bar - Stays above content and respects sidebar width */
+.dashboard-edit-footer {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    left: var(--sidebar-width, 240px);
+    transition: left var(--transition-base, 200ms ease-in-out);
+    z-index: 35;
+}
+
+.app-shell:has(.sidebar-collapsed) .dashboard-edit-footer,
+.app-shell:has(.sidebar[data-collapsed='true']) .dashboard-edit-footer {
+    left: var(--sidebar-width-collapsed, 64px);
+}
+
+@media (max-width: 768px) {
+    .dashboard-edit-footer {
+        left: 0 !important;
+    }
+}
+
 .page-shell {
     flex: 1;
     padding: 0.75rem 1rem 1rem;

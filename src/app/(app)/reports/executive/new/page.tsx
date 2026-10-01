@@ -18,6 +18,7 @@ import {
   Shield,
   Users,
   Minus,
+  type LucideIcon,
 } from 'lucide-react';
 import { DASHBOARD_TEMPLATES } from '@/lib/reports/dashboard-templates';
 import CreateBlankDashboardButton from './CreateBlankDashboardButton';
@@ -29,7 +30,7 @@ export const metadata: Metadata = {
   description: 'Create a new custom dashboard',
 };
 
-const TEMPLATE_ICONS: Record<string, any> = {
+const TEMPLATE_ICONS: Record<string, LucideIcon> = {
   'executive-summary': LayoutDashboard,
   'sre-operations': Terminal,
   'sla-performance': Shield,
@@ -44,7 +45,7 @@ export default async function NewDashboardPage() {
   }
 
   return (
-    <div className="w-full px-4 py-6 space-y-6 [zoom:0.8]">
+    <div className="w-full px-4 py-6 space-y-6">
       {/* Header */}
       <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />

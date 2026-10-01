@@ -27,6 +27,9 @@ interface DashboardCardProps {
   widgetCount: number;
   isDefault: boolean;
   updatedAt: string;
+  ownerName?: string | null;
+  visibility?: string;
+  canDelete?: boolean;
 }
 
 export default function DashboardCard({
@@ -36,6 +39,9 @@ export default function DashboardCard({
   widgetCount,
   isDefault,
   updatedAt,
+  ownerName,
+  visibility,
+  canDelete = true,
 }: DashboardCardProps) {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -70,43 +76,55 @@ export default function DashboardCard({
         <Link href={`/reports/executive/${id}`} className="absolute inset-0 z-0" />
 
         {/* Actions Dropdown */}
-        <div className="absolute top-3 right-3 z-10">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-muted transition-all"
-                onClick={e => e.preventDefault()}
-              >
-                <MoreVertical className="h-4 w-4 text-muted-foreground" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive cursor-pointer"
-                onClick={e => {
-                  e.preventDefault();
-                  setShowDeleteModal(true);
-                }}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {canDelete && (
+          <div className="absolute top-3 right-3 z-10">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-muted transition-all"
+                  onClick={e => e.preventDefault()}
+                >
+                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive cursor-pointer"
+                  onClick={e => {
+                    e.preventDefault();
+                    setShowDeleteModal(true);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
 
         <CardHeader>
           <div className="flex items-start justify-between">
             <LayoutDashboard className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
-            {isDefault && (
-              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                Default
-              </span>
-            )}
+            <div className="flex items-center gap-1.5">
+              {isDefault && (
+                <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                  Default
+                </span>
+              )}
+              {visibility && (
+                <span className="text-[10px] bg-muted px-2 py-0.5 rounded-full font-semibold uppercase text-muted-foreground">
+                  {visibility === 'TEAM' ? 'Team' : visibility === 'PUBLIC' ? 'Public' : 'Private'}
+                </span>
+              )}
+            </div>
           </div>
           <CardTitle className="text-base mt-2 group-hover:text-primary transition-colors">
             {name}
           </CardTitle>
+          {ownerName && (
+            <p className="text-[11px] text-muted-foreground">By {ownerName}</p>
+          )}
           {description && (
             <CardDescription className="text-xs line-clamp-2">{description}</CardDescription>
           )}
