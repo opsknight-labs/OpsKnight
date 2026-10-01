@@ -75,6 +75,7 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
     teamId,
     serviceId,
     userTimeZone,
+    includeActiveIncidents: true,
   });
 
   const serializedMetrics = serializeSlaMetrics(metrics);
