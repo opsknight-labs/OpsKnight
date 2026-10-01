@@ -18,7 +18,7 @@ import BarChart from '@/components/analytics/BarChart';
 import PieChart from '@/components/analytics/PieChart';
 import HeatmapCalendar from '@/components/analytics/HeatmapCalendar';
 
-type ChartType = 'line' | 'bar' | 'area' | 'pie' | 'mttaVsMttr' | 'slaCompliance' | 'heatmap';
+export type ChartType = 'line' | 'bar' | 'area' | 'pie' | 'mttaVsMttr' | 'slaCompliance' | 'heatmap';
 export type ChartDatum = Record<string, string | number | null | undefined>;
 
 interface ChartWidgetProps {

@@ -31,6 +31,7 @@ import {
   getMetricData,
   getPreviousPeriodValue,
 } from './widgets';
+import type { ChartType } from './widgets/ChartWidget';
 import type { SerializedSLAMetrics } from '@/lib/sla';
 import { getWidgetById, getAllWidgets } from '@/lib/reports/widget-registry';
 
@@ -366,7 +367,7 @@ const WidgetContent = memo(function WidgetContent({
         return (
           <GaugeWidget
             value={typeof data === 'number' ? data : null}
-            label={widget.config?.label}
+            label={typeof widget.config?.label === 'string' ? widget.config.label : undefined}
           />
         );
 
@@ -375,7 +376,9 @@ const WidgetContent = memo(function WidgetContent({
           <TableWidget
             data={Array.isArray(data) ? data : []}
             metricKey={widget.metricKey}
-            maxRows={widget.config?.maxRows}
+            maxRows={
+              typeof widget.config?.maxRows === 'number' ? widget.config.maxRows : undefined
+            }
           />
         );
 
@@ -383,24 +386,40 @@ const WidgetContent = memo(function WidgetContent({
         return (
           <InsightsWidget
             insights={Array.isArray(data) ? data : []}
-            maxItems={widget.config?.maxItems}
+            maxItems={
+              typeof widget.config?.maxItems === 'number' ? widget.config.maxItems : undefined
+            }
           />
         );
 
-      case 'chart':
+      case 'chart': {
+        const chartType =
+          typeof widget.config?.chartType === 'string'
+            ? (widget.config.chartType as ChartType)
+            : 'line';
+        const color =
+          typeof widget.config?.color === 'string' ? widget.config.color : undefined;
+        const height =
+          typeof widget.config?.height === 'number' ? widget.config.height : 160;
+        const showLegend =
+          typeof widget.config?.showLegend === 'boolean' ? widget.config.showLegend : undefined;
+        const showTrend =
+          typeof widget.config?.showTrend === 'boolean' ? widget.config.showTrend : undefined;
+
         return (
           <ChartWidget
             metricKey={widget.metricKey}
             metrics={metrics}
             config={{
-              chartType: widget.config?.chartType || 'line',
-              color: widget.config?.color,
-              height: widget.config?.height || 160,
-              showLegend: widget.config?.showLegend,
-              showTrend: widget.config?.showTrend,
+              chartType,
+              color,
+              height,
+              showLegend,
+              showTrend,
             }}
           />
         );
+      }
 
       default:
         return (
