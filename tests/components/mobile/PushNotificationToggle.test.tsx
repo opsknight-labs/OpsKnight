@@ -559,6 +559,61 @@ describe('PushNotificationToggle', () => {
     });
   });
 
+  it('does not prompt again when notification permission is already granted', async () => {
+    const requestPermission = vi.fn();
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'granted',
+        requestPermission,
+      },
+      configurable: true,
+    });
+
+    const subscribe = vi.fn().mockResolvedValue({ endpoint: 'https://push.example.com/granted' });
+    const registration = {
+      active: { scriptURL: `${window.location.origin}/sw.js` },
+      waiting: null,
+      installing: null,
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(null),
+        subscribe,
+      },
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(registration),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: Promise.resolve(registration),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url.includes('/api/system/vapid-public-key')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ key: 'B' + 'A'.repeat(86) }),
+        };
+      }
+      if (url.includes('/api/user/push-subscription')) {
+        return { ok: true, status: 200, json: async () => ({ success: true }) };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    render(<PushNotificationToggle />);
+
+    const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    await waitFor(() => expect(enableButton).not.toBeDisabled());
+    fireEvent.click(enableButton);
+
+    // With an existing grant there is no permission await: subscription starts
+    // directly in the same gesture task.
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(subscribe).toHaveBeenCalledTimes(1);
+  });
+
   it('requests native iOS permission from Enable before subscribing with no setup fetch', async () => {
     vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
       'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15'
