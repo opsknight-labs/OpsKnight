@@ -223,6 +223,43 @@ describe('offline-queue', () => {
     });
   });
 
+  it('returns after IndexedDB persistence even when serviceWorker.ready never settles', async () => {
+    vi.useFakeTimers();
+    const originalServiceWorker = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
+    try {
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: { ready: new Promise<ServiceWorkerRegistration>(() => {}) },
+        configurable: true,
+      });
+
+      const id = await enqueueRequest({
+        operation: 'INCIDENT_STATUS',
+        url: '/api/incidents/inc-sw-stall/status',
+        method: 'PATCH',
+        idempotencyKey: 'ack-sw-stall',
+      });
+
+      expect(id).toBeTruthy();
+      expect((await listQueuedRequests()).find(item => item.id === id)).toMatchObject({
+        state: 'PENDING',
+        idempotencyKey: 'ack-sw-stall',
+      });
+
+      // Let the best-effort Background Sync waiter expire so the test does not
+      // leave a timer behind; enqueue itself has already completed.
+      await vi.advanceTimersByTimeAsync(3_000);
+    } finally {
+      if (originalServiceWorker) {
+        Object.defineProperty(navigator, 'serviceWorker', originalServiceWorker);
+      } else {
+        delete (
+          navigator as unknown as { serviceWorker?: ServiceWorkerContainer }
+        ).serviceWorker;
+      }
+      vi.useRealTimers();
+    }
+  });
+
   it('lists and removes only queued request records', async () => {
     const first = await enqueueRequest({ url: '/api/1', method: 'GET' });
     await enqueueRequest({ url: '/api/2', method: 'GET' });

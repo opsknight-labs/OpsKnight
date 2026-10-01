@@ -63,6 +63,20 @@ describe('mobile/PWA enterprise architecture contract', () => {
     );
   });
 
+  it('turns deployment detection into an explicit service-worker update check', () => {
+    const versionCheck = fs.readFileSync('src/components/VersionCheck.tsx', 'utf8');
+    const coordinator = fs.readFileSync('src/components/mobile/MobilePwaCoordinator.tsx', 'utf8');
+
+    expect(versionCheck).toContain("window.dispatchEvent(");
+    expect(versionCheck).toContain("'opsknight:deployment-update'");
+    expect(coordinator).toContain(
+      "window.addEventListener('opsknight:deployment-update', onDeploymentUpdate)"
+    );
+    expect(coordinator).toContain('await registration.update()');
+    expect(coordinator).toContain('setWaitingWorker(registration.waiting)');
+    expect(coordinator).toContain("worker.postMessage({ type: 'SKIP_WAITING' })");
+  });
+
   it('binds responder cache and offline replay to the authenticated principal generation', () => {
     const cache = fs.readFileSync('src/lib/mobile-cache.ts', 'utf8');
     const queue = fs.readFileSync('src/lib/offline-queue.ts', 'utf8');
