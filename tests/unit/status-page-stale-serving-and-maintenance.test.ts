@@ -17,6 +17,9 @@ vi.mock('@/lib/prisma', () => ({
       findFirst: vi.fn(),
       findMany: vi.fn(),
     },
+    statusPageSubscription: {
+      findMany: vi.fn(),
+    },
     incident: {
       findUnique: vi.fn(),
     },
@@ -113,7 +116,7 @@ describe('Status Page Rebuild Serving & Maintenance Suppression', () => {
         payload: mockPayload,
         generatedAt: new Date('2026-10-01T10:00:00.000Z'),
         lastError: null,
-      } as any);
+      } as unknown as Awaited<ReturnType<typeof prisma.statusPageSnapshot.findUnique>>);
 
       const result = await getStatusPageSnapshot(pageId);
 
@@ -134,7 +137,7 @@ describe('Status Page Rebuild Serving & Maintenance Suppression', () => {
         payload: null,
         generatedAt: new Date('2026-10-01T10:00:00.000Z'),
         lastError: null,
-      } as any);
+      } as unknown as Awaited<ReturnType<typeof prisma.statusPageSnapshot.findUnique>>);
 
       const result = await getStatusPageSnapshot(pageId);
 
@@ -159,7 +162,7 @@ describe('Status Page Rebuild Serving & Maintenance Suppression', () => {
         createdAt: now,
         updatedAt: now,
         service: { id: serviceId, name: 'Payment' },
-      } as any);
+      } as unknown as Awaited<ReturnType<typeof prisma.incident.findUnique>>);
 
       vi.mocked(prisma.statusPage.findMany).mockResolvedValue([
         {
@@ -170,14 +173,14 @@ describe('Status Page Rebuild Serving & Maintenance Suppression', () => {
           organizationName: 'Acme Corp',
           services: [{ serviceId, showOnPage: true }],
         },
-      ] as any);
+      ] as unknown as Awaited<ReturnType<typeof prisma.statusPage.findMany>>);
 
       // Mock an active maintenance announcement that affects the payment service
       vi.mocked(prisma.statusPageAnnouncement.findFirst).mockResolvedValue({
         id: 'maint-1',
         title: 'Scheduled Payment Gateway Upgrade',
         affectedServiceIds: [serviceId],
-      } as any);
+      } as unknown as Awaited<ReturnType<typeof prisma.statusPageAnnouncement.findFirst>>);
 
       const result = await notifyStatusPageSubscribers(incidentId, 'investigating');
 
@@ -201,7 +204,7 @@ describe('Status Page Rebuild Serving & Maintenance Suppression', () => {
         createdAt: now,
         updatedAt: now,
         service: { id: serviceId, name: 'Database' },
-      } as any);
+      } as unknown as Awaited<ReturnType<typeof prisma.incident.findUnique>>);
 
       vi.mocked(prisma.statusPage.findMany).mockResolvedValue([
         {
@@ -212,18 +215,17 @@ describe('Status Page Rebuild Serving & Maintenance Suppression', () => {
           organizationName: 'Acme Corp',
           services: [{ serviceId, showOnPage: true }],
         },
-      ] as any);
+      ] as unknown as Awaited<ReturnType<typeof prisma.statusPage.findMany>>);
 
       // No active maintenance window
       vi.mocked(prisma.statusPageAnnouncement.findFirst).mockResolvedValue(null);
 
       // Subscriptions
-      (prisma as any).statusPageSubscription = {
-        findMany: vi
-          .fn()
-          .mockResolvedValueOnce([{ id: 'sub-1', email: 'user@example.com', token: 'token-1' }])
-          .mockResolvedValueOnce([]), // 2nd batch empty to break cursor loop
-      };
+      vi.mocked(prisma.statusPageSubscription.findMany)
+        .mockResolvedValueOnce([
+          { id: 'sub-1', email: 'user@example.com', token: 'token-1' },
+        ] as unknown as Awaited<ReturnType<typeof prisma.statusPageSubscription.findMany>>)
+        .mockResolvedValueOnce([]);
 
       const result = await notifyStatusPageSubscribers(incidentId, 'investigating');
 
