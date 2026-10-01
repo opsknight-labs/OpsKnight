@@ -34,7 +34,7 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true, timeZone: true },
+    select: { id: true, timeZone: true, teamMemberships: { select: { teamId: true } } },
   });
 
   if (!user) {
@@ -51,8 +51,13 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
     notFound();
   }
 
-  // Check access
-  if (dashboard.userId !== user.id && dashboard.visibility === 'PRIVATE') {
+  // Check access — mirror the API's authorization logic
+  const isOwner = dashboard.userId === user.id;
+  const isTeamMember = !!(dashboard.teamId &&
+    user.teamMemberships.some((m: { teamId: string }) => m.teamId === dashboard.teamId));
+  const isPublicOrTemplate = dashboard.visibility === 'PUBLIC' || dashboard.isTemplate;
+
+  if (!isOwner && !isTeamMember && !isPublicOrTemplate) {
     notFound();
   }
 
@@ -70,13 +75,15 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
     teamId,
     serviceId,
     userTimeZone,
+    includeActiveIncidents: true,
   });
 
   const serializedMetrics = serializeSlaMetrics(metrics);
   const lastUpdatedLabel = formatDateTime(new Date(), userTimeZone, { format: 'datetime' });
 
-  // Fetch filter options
-  const [teams, services] = await Promise.all([
+  // Fetch filter options and accessible saved dashboards
+  const userTeamIds = user.teamMemberships.map((m: { teamId: string }) => m.teamId);
+  const [teams, services, savedDashboards] = await Promise.all([
     prisma.team.findMany({
       where: teamReadWhere(actor),
       select: { id: true, name: true },
@@ -87,6 +94,19 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
       select: { id: true, name: true, teamId: true },
       orderBy: { name: 'asc' },
     }),
+    prisma.dashboard.findMany({
+      where: {
+        OR: [
+          { userId: user.id },
+          { visibility: 'TEAM', teamId: { in: userTeamIds } },
+          { visibility: 'PUBLIC' },
+        ],
+        isTemplate: false,
+      },
+      select: { id: true, name: true, visibility: true, userId: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
+    }),
   ]);
 
   // Transform widgets to expected format
@@ -94,9 +114,10 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
     id: w.id,
     widgetType: w.widgetType,
     metricKey: w.metricKey,
+    widgetDefinitionId: w.widgetDefinitionId || undefined,
     title: w.title,
     position: w.position as { x: number; y: number; w: number; h: number },
-    config: w.config as Record<string, any>,
+    config: w.config as Record<string, unknown>,
   }));
 
   return (
@@ -116,7 +137,10 @@ export default async function SavedDashboardPage({ params, searchParams }: PageP
         services: teamId ? services.filter(s => s.teamId === teamId) : services,
       }}
       templates={DASHBOARD_TEMPLATES}
+      savedDashboards={savedDashboards}
+      currentUserId={user.id}
       isTemplate={false}
+      layout={dashboard.layout as { columns?: number; rowHeight?: number } | undefined}
       dashboardId={dashboard.id}
     />
   );

@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/shadcn/dialog';
-import { Check, Sparkles, Bot, User, Cpu, Shield, PawPrint } from 'lucide-react';
+import { Check, Sparkles, Bot, User, Cpu, Shield, PawPrint, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Static high-res custom avatars (call-center and ops agents with headsets) - Local 0ms load
@@ -118,6 +118,7 @@ interface AvatarPickerProps {
   trigger?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onUploadClick?: () => void;
 }
 
 export function AvatarPicker({
@@ -127,6 +128,7 @@ export function AvatarPicker({
   trigger,
   open: controlledOpen,
   onOpenChange: setControlledOpen,
+  onUploadClick,
 }: AvatarPickerProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
@@ -197,11 +199,21 @@ export function AvatarPicker({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Choose Your Avatar</DialogTitle>
-            <DialogDescription>
-              Select an avatar that represents you across incidents, on-call schedules, and team
-              dashboards.
-            </DialogDescription>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <DialogTitle>Choose Your Avatar</DialogTitle>
+                <DialogDescription>
+                  Select an avatar that represents you across incidents, on-call schedules, and team
+                  dashboards.
+                </DialogDescription>
+              </div>
+              {onUploadClick && (
+                <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={() => { onUploadClick(); setOpen(false); }}>
+                  <Upload className="h-3.5 w-3.5" />
+                  Upload Photo
+                </Button>
+              )}
+            </div>
           </DialogHeader>
 
           {/* Team Mascots & Animals */}
@@ -210,7 +222,7 @@ export function AvatarPicker({
               <PawPrint className="h-4 w-4 text-amber-500" />
               <span>Team Mascots & Animals</span>
             </h4>
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
               {ANIMAL_AVATARS.map(avatar => {
                 const isSelected = isStaticSelected(avatar.src, avatar.id);
                 return (
@@ -257,7 +269,7 @@ export function AvatarPicker({
                 Recommended
               </span>
             </h4>
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
               {STATIC_AVATARS.map(avatar => {
                 const isSelected = isStaticSelected(avatar.src, avatar.id);
                 return (
@@ -301,7 +313,7 @@ export function AvatarPicker({
               <Bot className="h-4 w-4 text-indigo-500" />
               <span>Developer & SRE Bots</span>
             </h4>
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
               {BOT_PRESETS.map(avatar => {
                 const isSelected = isDiceBearSelected(avatar);
                 const url = getDiceBearUrl(avatar.style, avatar.seed, avatar.bg);
@@ -346,7 +358,7 @@ export function AvatarPicker({
               <Sparkles className="h-4 w-4 text-purple-500" />
               <span>Minimalist Personas</span>
             </h4>
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
               {NOTIONISTS_PRESETS.map(avatar => {
                 const isSelected = isDiceBearSelected(avatar);
                 const url = getDiceBearUrl(avatar.style, avatar.seed, avatar.bg);
@@ -394,7 +406,7 @@ export function AvatarPicker({
                 {getInitials(userName)}
               </span>
             </h4>
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
               {INITIALS_PALETTES.map(palette => {
                 const userInitials = getInitials(userName);
                 const url = getDiceBearUrl('initials', userInitials, palette.bg);
@@ -445,7 +457,7 @@ export function AvatarPicker({
           {/* Flat Tech Personas */}
           <div className="space-y-3 pt-2">
             <h4 className="text-sm font-medium text-foreground">Vector Personas</h4>
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
               {PERSONAS_AVATARS.map(avatar => {
                 const isSelected = isDiceBearSelected(avatar);
                 const url = getDiceBearUrl(avatar.style, avatar.seed, avatar.bg);
@@ -487,7 +499,7 @@ export function AvatarPicker({
           {/* Professional Avataaars */}
           <div className="space-y-3 pt-2">
             <h4 className="text-sm font-medium text-foreground">Engineering Roles</h4>
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
               {AVATAAARS_PRESETS.map(avatar => {
                 const isSelected = isDiceBearSelected(avatar);
                 const url = getDiceBearUrl(avatar.style, avatar.seed, avatar.bg);
@@ -532,7 +544,7 @@ export function AvatarPicker({
               <Shield className="h-4 w-4 text-sky-500" />
               <span>Abstract Badges & Tokens</span>
             </h4>
-            <div className="grid grid-cols-6 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 gap-3">
               {ABSTRACT_PRESETS.map(avatar => {
                 const isSelected = isDiceBearSelected(avatar);
                 const url = getDiceBearUrl(avatar.style, avatar.seed, avatar.bg);

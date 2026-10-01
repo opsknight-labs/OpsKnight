@@ -9,6 +9,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import { Card } from '@/components/ui/shadcn/card';
 import { getDefaultAvatar } from '@/lib/avatar';
 import { getRequestActorContext } from '@/lib/request-actor-context';
+import { assertCanListUsers } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,7 @@ export default async function MobileUsersPage({
 }) {
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/users'));
+  await assertCanListUsers();
 
   const params = await searchParams;
   const query = params.q?.trim() || '';

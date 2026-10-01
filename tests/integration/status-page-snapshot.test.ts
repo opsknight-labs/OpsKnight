@@ -59,7 +59,7 @@ describe('durable status page projections', () => {
     expect(JSON.stringify(after)).not.toContain('Internal-only failure');
   });
 
-  it('fails closed when a privacy-tightening rebuild is lock-contended', async () => {
+  it('serves the last good snapshot (STALE_OK) when a rebuild is lock-contended', async () => {
     const page = await createTestStatusPage({ enabled: true });
     const service = await createTestService('API');
     await linkServiceToStatusPage(page.id, service.id);
@@ -80,13 +80,15 @@ describe('durable status page projections', () => {
       `;
       expect(lock[0]?.acquired).toBe(true);
       const projected = await getStatusPageSnapshot(page.id);
-      expect(projected).toEqual({ snapshot: null, stale: true, servingState: 'FAIL_CLOSED' });
+      expect(projected.servingState).toBe('STALE_OK');
+      expect(projected.snapshot).not.toBeNull();
+      expect(projected.stale).toBe(true);
     });
 
     expect(JSON.stringify(await readStatusPageSnapshot(page.id))).toContain('Public failure');
   });
 
-  it('fails closed when a privacy-tightening invalidation has not been rebuilt', async () => {
+  it('serves the last good snapshot (STALE_OK) when an invalidation has not been rebuilt', async () => {
     const page = await createTestStatusPage({
       enabled: true,
       showMetrics: true,
@@ -104,13 +106,12 @@ describe('durable status page projections', () => {
       data: { visibility: 'PRIVATE' },
     });
 
-    // Dirty + still-LIVE is fail-closed. getStatusPageSnapshot does not rebuild, so a history
-    // mock here would never run and would leak into later tests via mockRejectedValueOnce.
-    expect(await getStatusPageSnapshot(page.id)).toEqual({
-      snapshot: null,
-      stale: true,
-      servingState: 'FAIL_CLOSED',
-    });
+    // When revision !== publishedRevision during rebuilds, keep serving the previous snapshot
+    // with stale = true and servingState = 'STALE_OK' instead of failing closed to a blank screen.
+    const projected = await getStatusPageSnapshot(page.id);
+    expect(projected.servingState).toBe('STALE_OK');
+    expect(projected.snapshot).not.toBeNull();
+    expect(projected.stale).toBe(true);
     expect(JSON.stringify(await readStatusPageSnapshot(page.id))).toContain('Sensitive failure');
   });
 

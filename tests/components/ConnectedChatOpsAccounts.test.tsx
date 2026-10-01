@@ -71,6 +71,11 @@ describe('ConnectedChatOpsAccounts', () => {
     const disconnectBtn = screen.getByRole('button', { name: 'Disconnect' });
     fireEvent.click(disconnectBtn);
 
+    // Confirm in the AlertDialog
+    const confirmButtons = screen.getAllByRole('button', { name: 'Disconnect' });
+    const confirmBtn = confirmButtons[confirmButtons.length - 1];
+    fireEvent.click(confirmBtn);
+
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         '/api/settings/chatops/identities',

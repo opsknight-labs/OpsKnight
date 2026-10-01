@@ -37,7 +37,12 @@ export default async function ExecutiveDashboardPage({
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true, timeZone: true, role: true },
+    select: {
+      id: true,
+      timeZone: true,
+      role: true,
+      teamMemberships: { select: { teamId: true } },
+    },
   });
 
   if (!user) {
@@ -55,36 +60,20 @@ export default async function ExecutiveDashboardPage({
   const templateId = params?.template;
 
   // If template specified, use template widgets
-  let widgets: any[] = [];
-  let dashboardName = 'Executive Dashboard';
-  let dashboardDescription = 'Operational health overview';
+  const selectedTemplate = templateId ? getTemplateById(templateId) : null;
+  const activeTemplate = selectedTemplate || DASHBOARD_TEMPLATES[0];
 
-  if (templateId) {
-    const template = getTemplateById(templateId);
-    if (template) {
-      widgets = template.widgets.map((w, idx) => ({
-        id: `template-${idx}`,
-        widgetType: w.widgetType,
-        metricKey: w.metricKey,
-        title: w.title || null,
-        position: w.position,
-        config: w.config,
-      }));
-      dashboardName = template.name;
-      dashboardDescription = template.description;
-    }
-  } else {
-    // Default: use executive summary template
-    const defaultTemplate = DASHBOARD_TEMPLATES[0];
-    widgets = defaultTemplate.widgets.map((w, idx) => ({
-      id: `default-${idx}`,
-      widgetType: w.widgetType,
-      metricKey: w.metricKey,
-      title: w.title || null,
-      position: w.position,
-      config: w.config,
-    }));
-  }
+  const widgets = activeTemplate.widgets.map((w, idx) => ({
+    id: `template-${idx}`,
+    widgetType: w.widgetType,
+    metricKey: w.metricKey,
+    widgetDefinitionId: w.widgetDefinitionId || undefined,
+    title: w.title || null,
+    position: w.position,
+    config: w.config,
+  }));
+  const dashboardName = activeTemplate.name;
+  const dashboardDescription = activeTemplate.description;
 
   // Fetch metrics
   const metrics = await calculateActorSLAMetrics(actor, {
@@ -92,13 +81,15 @@ export default async function ExecutiveDashboardPage({
     teamId,
     serviceId,
     userTimeZone,
+    includeActiveIncidents: true,
   });
 
   const serializedMetrics = serializeSlaMetrics(metrics);
   const lastUpdatedLabel = formatDateTime(new Date(), userTimeZone, { format: 'datetime' });
 
-  // Fetch filter options
-  const [teams, services] = await Promise.all([
+  // Fetch filter options and accessible saved dashboards
+  const userTeamIds = user.teamMemberships.map((m: { teamId: string }) => m.teamId);
+  const [teams, services, savedDashboards] = await Promise.all([
     prisma.team.findMany({
       where: teamReadWhere(actor),
       select: { id: true, name: true },
@@ -108,6 +99,19 @@ export default async function ExecutiveDashboardPage({
       where: serviceReadWhere(actor),
       select: { id: true, name: true, teamId: true },
       orderBy: { name: 'asc' },
+    }),
+    prisma.dashboard.findMany({
+      where: {
+        OR: [
+          { userId: user.id },
+          { visibility: 'TEAM', teamId: { in: userTeamIds } },
+          { visibility: 'PUBLIC' },
+        ],
+        isTemplate: false,
+      },
+      select: { id: true, name: true, visibility: true, userId: true },
+      orderBy: { updatedAt: 'desc' },
+      take: 50,
     }),
   ]);
 
@@ -128,8 +132,10 @@ export default async function ExecutiveDashboardPage({
         services: teamId ? services.filter(s => s.teamId === teamId) : services,
       }}
       templates={DASHBOARD_TEMPLATES}
-      currentTemplateId={templateId}
-      isTemplate={!!templateId}
+      savedDashboards={savedDashboards}
+      currentUserId={user.id}
+      currentTemplateId={activeTemplate.id}
+      isTemplate={true}
     />
   );
 }

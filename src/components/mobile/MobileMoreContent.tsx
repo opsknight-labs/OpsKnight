@@ -34,6 +34,7 @@ type NavigationItem = {
   label: string;
   description?: string;
   icon: IconComponent;
+  requiresRole?: readonly string[];
 };
 
 type MobileMoreContentProps = {
@@ -64,6 +65,7 @@ const operations: NavigationItem[] = [
     label: 'Escalation policies',
     description: 'Escalation paths',
     icon: ShieldCheck,
+    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
   },
   {
     href: '/m/postmortems',
@@ -78,7 +80,13 @@ const operations: NavigationItem[] = [
     description: 'Responder performance and trends',
     icon: BarChart3,
   },
-  { href: '/m/users', label: 'Users', description: 'Directory and roles', icon: Users },
+  {
+    href: '/m/users',
+    label: 'Users',
+    description: 'Directory and roles',
+    icon: Users,
+    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
+  },
 ];
 
 const account: NavigationItem[] = [
@@ -146,6 +154,9 @@ export default function MobileMoreContent({
 }: MobileMoreContentProps) {
   const { getAvatar } = useUserAvatarContextSafe();
   const avatarUrl = userId ? getAvatar(userId, gender, name, avatarUrlProp) : avatarUrlProp;
+  const authorizedOperations = operations.filter(
+    item => !item.requiresRole || item.requiresRole.includes(role.toUpperCase())
+  );
 
   return (
     <div className="responsive-page space-y-5">
@@ -166,7 +177,7 @@ export default function MobileMoreContent({
 
       <Section title="Operations">
         <Card className="divide-y divide-border/70 overflow-hidden rounded-xl border-border bg-card shadow-none">
-          {operations.map(item => (
+          {authorizedOperations.map(item => (
             <NavigationRow key={item.href} item={item} />
           ))}
         </Card>

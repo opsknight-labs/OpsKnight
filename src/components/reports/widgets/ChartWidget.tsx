@@ -1,14 +1,25 @@
 'use client';
 
-import { useState, useEffect, memo } from 'react';
+import { useSyncExternalStore, memo, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { SerializedSLAMetrics } from '@/lib/sla';
+
+const subscribe = () => () => {};
+const getSnapshot = () => true;
+const getServerSnapshot = () => false;
+
+function useIsMounted() {
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
 
 // Import chart components directly
 import LineChart from '@/components/analytics/LineChart';
 import BarChart from '@/components/analytics/BarChart';
+import PieChart from '@/components/analytics/PieChart';
+import HeatmapCalendar from '@/components/analytics/HeatmapCalendar';
 
-type ChartType = 'line' | 'bar' | 'area';
+export type ChartType = 'line' | 'bar' | 'area' | 'pie' | 'mttaVsMttr' | 'slaCompliance' | 'heatmap';
+export type ChartDatum = Record<string, string | number | null | undefined>;
 
 interface ChartWidgetProps {
   metricKey: string;
@@ -20,6 +31,7 @@ interface ChartWidgetProps {
     height?: number;
     showLegend?: boolean;
     showTrend?: boolean;
+    [key: string]: unknown;
   };
 }
 
@@ -33,17 +45,15 @@ const CHART_COLORS = {
   secondary: '#64748b',
 };
 
+const PIE_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6b7280'];
+const EMPTY_HEATMAP_DATA: NonNullable<SerializedSLAMetrics['heatmapData']> = [];
+
 const ChartWidget = memo(function ChartWidget({
   metricKey,
   metrics,
   config = {},
 }: ChartWidgetProps) {
-  const [isMounted, setIsMounted] = useState(false);
-
-  // Handle client-side mounting to avoid hydration issues
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  const isMounted = useIsMounted();
 
   const {
     chartType = 'line',
@@ -53,8 +63,41 @@ const ChartWidget = memo(function ChartWidget({
     showTrend = true,
   } = config;
 
+  const heatmapData = metrics.heatmapData ?? EMPTY_HEATMAP_DATA;
+  const { heatmapStart, heatmapDays } = useMemo(() => {
+    if (!heatmapData.length) {
+      const today = new Date();
+      const defaultStart = new Date(
+        Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 30)
+      );
+      return { heatmapStart: defaultStart, heatmapDays: 30 };
+    }
+
+    const timestamps = heatmapData
+      .map(d => {
+        const parts = d.date.split('-').map(Number);
+        return Date.UTC(parts[0], parts[1] - 1, parts[2]);
+      })
+      .filter(t => !Number.isNaN(t));
+
+    if (!timestamps.length) {
+      return { heatmapStart: new Date(), heatmapDays: 30 };
+    }
+
+    const minTimestamp = Math.min(...timestamps);
+    const maxTimestamp = Math.max(...timestamps);
+
+    const startDate = new Date(minTimestamp);
+    const totalDays = Math.max(1, Math.round((maxTimestamp - minTimestamp) / 86400000) + 1);
+
+    return {
+      heatmapStart: startDate,
+      heatmapDays: totalDays,
+    };
+  }, [heatmapData]);
+
   // Map metricKey to chart data
-  const chartData = getChartData(metricKey, metrics);
+  const chartData = getChartData(metricKey, metrics, config);
 
   if (!chartData || chartData.length === 0) {
     return (
@@ -64,8 +107,19 @@ const ChartWidget = memo(function ChartWidget({
     );
   }
 
-  // Calculate trend
-  const trend = calculateTrend(chartData);
+  // Calculate trend only for temporal/time-series charts, not categorical or heatmap
+  const isCategorical =
+    chartType === 'pie' ||
+    chartType === 'heatmap' ||
+    metricKey === 'urgencyMix' ||
+    metricKey === 'statusMix' ||
+    metricKey === 'heatmapData' ||
+    metricKey === 'incidentsByUrgency' ||
+    metricKey === 'incidentsByStatus' ||
+    metricKey === 'topServicesChart' ||
+    metricKey === 'assigneeLoadChart';
+
+  const trend = isCategorical ? null : calculateTrend(chartData);
 
   // Show loading state during hydration
   if (!isMounted) {
@@ -101,15 +155,57 @@ const ChartWidget = memo(function ChartWidget({
 
       {/* Chart */}
       <div className="flex-1 min-h-0">
-        {chartType === 'bar' ? (
+        {chartType === 'heatmap' ? (
+          <div className="h-full w-full overflow-hidden flex items-center justify-center p-1">
+            <HeatmapCalendar
+              data={heatmapData.map(d => ({ date: d.date, count: d.count }))}
+              startDate={heatmapStart}
+              days={heatmapDays}
+              fitWidth={true}
+            />
+          </div>
+        ) : chartType === 'pie' ? (
+          <div className="h-full flex items-center justify-center">
+            <PieChart
+              data={chartData.map((d, i) => ({
+                label: String(d.name || d.label || ''),
+                value: typeof d.value === 'number' ? d.value : 0,
+                color: PIE_COLORS[i % PIE_COLORS.length],
+              }))}
+              size={Math.min(height, 160)}
+              showLegend={showLegend}
+            />
+          </div>
+        ) : chartType === 'mttaVsMttr' || chartType === 'slaCompliance' ? (
+          <LineChart
+            data={chartData}
+            lines={[
+              {
+                key: 'value',
+                color: CHART_COLORS.primary,
+                label: chartType === 'mttaVsMttr' ? 'MTTA' : 'Ack Compliance',
+              },
+              {
+                key: 'value2',
+                color: CHART_COLORS.success,
+                label: chartType === 'mttaVsMttr' ? 'MTTR' : 'Resolve Compliance',
+              },
+            ]}
+            height={height}
+            showLegend={showLegend || true}
+          />
+        ) : chartType === 'bar' ? (
           <BarChart
             data={chartData.map((d, i) => ({
               key: String(i),
-              label: d.label || '',
-              count: d.value,
+              label: String(d.label || d.name || ''),
+              count: typeof d.value === 'number' ? d.value : null,
             }))}
             maxValue={
-              Math.max(0, ...chartData.flatMap(d => (d.value === null ? [] : [d.value]))) * 1.1
+              Math.max(
+                0,
+                ...chartData.flatMap(d => (typeof d.value === 'number' ? [d.value] : []))
+              ) * 1.1
             }
             height={height}
             showValues={chartData.length <= 7}
@@ -119,8 +215,8 @@ const ChartWidget = memo(function ChartWidget({
         ) : (
           <LineChart
             data={chartData.map(d => ({
-              label: d.label || '',
-              value: d.value,
+              label: String(d.label || d.name || ''),
+              value: typeof d.value === 'number' ? d.value : null,
             }))}
             lines={[{ key: 'value', color, label: metricKey }]}
             height={height}
@@ -137,11 +233,26 @@ export default ChartWidget;
 // Extract chart data from metrics based on metricKey
 export function getChartData(
   metricKey: string,
-  metrics: SerializedSLAMetrics
-): Array<{ label: string; value: number | null }> {
+  metrics: SerializedSLAMetrics,
+  config?: Record<string, unknown>
+): ChartDatum[] {
   switch (metricKey) {
     case 'incidentTrend':
     case 'trendSeries':
+      if (config?.chartType === 'mttaVsMttr') {
+        return (metrics.trendSeries || []).map(d => ({
+          label: d.label,
+          value: d.mtta ?? null,
+          value2: d.mttr ?? null,
+        }));
+      }
+      if (config?.chartType === 'slaCompliance') {
+        return (metrics.trendSeries || []).map(d => ({
+          label: d.label,
+          value: d.ackCompliance ?? null,
+          value2: d.resolveCompliance ?? null,
+        }));
+      }
       return (metrics.trendSeries || []).map(d => ({
         label: d.label,
         value: d.count,
@@ -157,6 +268,7 @@ export function getChartData(
     case 'urgencyDistribution':
     case 'urgencyMix':
       return (metrics.urgencyMix || []).map(d => ({
+        name: d.urgency.charAt(0).toUpperCase() + d.urgency.slice(1),
         label: d.urgency.charAt(0).toUpperCase() + d.urgency.slice(1),
         value: d.count,
       }));
@@ -165,28 +277,28 @@ export function getChartData(
     case 'statusDistribution':
     case 'statusMix':
       return (metrics.statusMix || []).map(d => ({
+        name: d.status.charAt(0).toUpperCase() + d.status.slice(1).toLowerCase(),
         label: d.status.charAt(0).toUpperCase() + d.status.slice(1).toLowerCase(),
         value: d.count,
       }));
 
     case 'responseTimesTrend':
-      // Create trend data from trendSeries
       return (metrics.trendSeries || []).map(d => ({
         label: d.label,
-        value: d.mtta,
+        value: d.mtta ?? null,
       }));
 
     case 'resolutionTimesTrend':
       return (metrics.trendSeries || []).map(d => ({
         label: d.label,
-        value: d.mttr,
+        value: d.mttr ?? null,
       }));
 
     case 'slaComplianceTrend':
     case 'ackComplianceTrend':
       return (metrics.trendSeries || []).map(d => ({
         label: d.label,
-        value: d.ackCompliance,
+        value: d.ackCompliance ?? null,
       }));
 
     case 'topServicesChart':
@@ -202,30 +314,26 @@ export function getChartData(
       }));
 
     default:
-      // Try to use trendSeries as fallback
-      if (metrics.trendSeries && metrics.trendSeries.length > 0) {
-        return metrics.trendSeries.map(d => ({
-          label: d.label,
-          value: d.count,
-        }));
-      }
       return [];
   }
 }
 
-// Calculate trend percentage
-export function calculateTrend(data: Array<{ value: number | null }>): number | null {
-  const evaluable = data.filter(
-    (entry): entry is { value: number } => typeof entry.value === 'number'
-  );
-  if (evaluable.length < 2) return null;
+// Calculate percentage trend from first half to second half of data
+export function calculateTrend(data: Array<Record<string, unknown>>): number | null {
+  if (data.length < 2) return null;
 
-  const midpoint = Math.floor(evaluable.length / 2);
-  const firstHalf = evaluable.slice(0, midpoint);
-  const secondHalf = evaluable.slice(midpoint);
+  const validValues = data
+    .map(d => (typeof d.value === 'number' ? d.value : null))
+    .filter((v): v is number => v !== null);
 
-  const firstAvg = firstHalf.reduce((sum, d) => sum + d.value, 0) / firstHalf.length;
-  const secondAvg = secondHalf.reduce((sum, d) => sum + d.value, 0) / secondHalf.length;
+  if (validValues.length < 2) return null;
+
+  const mid = Math.floor(validValues.length / 2);
+  const firstHalf = validValues.slice(0, mid);
+  const secondHalf = validValues.slice(mid);
+
+  const firstAvg = firstHalf.reduce((a, b) => a + b, 0) / (firstHalf.length || 1);
+  const secondAvg = secondHalf.reduce((a, b) => a + b, 0) / (secondHalf.length || 1);
 
   if (firstAvg === 0) return secondAvg > 0 ? 100 : 0;
   return ((secondAvg - firstAvg) / firstAvg) * 100;

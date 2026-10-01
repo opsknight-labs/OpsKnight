@@ -19,6 +19,7 @@ import { Server, AlertTriangle, XCircle, CheckCircle2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { resolveAccessContext } from '@/lib/access-context';
+import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 
 export const revalidate = 0;
 
@@ -92,10 +93,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const teamFilter = typeof params?.team === 'string' ? params.team : '';
   const sortBy = typeof params?.sort === 'string' ? params.sort : 'name_asc';
   const errorCode = typeof params?.error === 'string' ? params.error : '';
-  const currentPage = Math.max(
-    1,
-    parseInt(typeof params?.page === 'string' ? params.page : '1', 10)
-  );
+  const requestedPage = parsePageParam(params?.page);
 
   const [permissions, actor] = await Promise.all([
     getUserPermissions(),
@@ -158,23 +156,24 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
       : selectedNonStatusWhere;
   const where: Prisma.ServiceWhereInput = { AND: [serviceAccess, selectedWhere] };
 
-  // Build orderBy clause
-  let orderBy: Prisma.ServiceOrderByWithRelationInput = { name: 'asc' };
+  // Build orderBy clause with deterministic tiebreaker
+  let orderBy: Prisma.ServiceOrderByWithRelationInput[] = [{ name: 'asc' }, { id: 'asc' }];
   if (sortBy === 'name_desc') {
-    orderBy = { name: 'desc' };
+    orderBy = [{ name: 'desc' }, { id: 'desc' }];
   } else if (sortBy === 'status') {
-    orderBy = { status: 'asc' };
+    orderBy = [{ status: 'asc' }, { id: 'asc' }];
   }
 
   const isIncidentCountSort = sortBy === 'incidents_desc' || sortBy === 'incidents_asc';
-  const [totalFilteredItems, countSortServices] = await Promise.all([
-    prisma.service.count({ where }),
-    isIncidentCountSort
-      ? prisma.service.findMany({ where, select: { id: true, name: true } })
-      : Promise.resolve([]),
-  ]);
-  const totalPages = Math.ceil(totalFilteredItems / ITEMS_PER_PAGE);
-  const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
+  const totalFilteredItems = await prisma.service.count({ where });
+
+  const pagination = calculatePaginationBounds({
+    totalItems: totalFilteredItems,
+    page: requestedPage,
+    pageSize: ITEMS_PER_PAGE,
+  });
+  const currentPage = pagination.page;
+  const totalPages = pagination.totalPages;
 
   const serviceSelect = {
     id: true,
@@ -186,50 +185,154 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     team: true,
     policy: { select: { id: true, name: true } },
   } as const;
-  const countSortActiveCounts = isIncidentCountSort
-    ? await prisma.incident.groupBy({
+
+  type ServiceItem = Prisma.ServiceGetPayload<{ select: typeof serviceSelect }>;
+  let services: ServiceItem[] = [];
+
+  const activeIncidentCondition = {
+    AND: [incidentAccess, { status: { in: activeIncidentStatuses() } }],
+  };
+
+  if (!isIncidentCountSort) {
+    services = await prisma.service.findMany({
+      where,
+      skip: pagination.skip,
+      take: pagination.take,
+      select: serviceSelect,
+      orderBy,
+    });
+  } else if (sortBy === 'incidents_desc') {
+    // Services with active incidents (> 0) come first, ordered descending
+    const activeCondition: Prisma.ServiceWhereInput = {
+      AND: [where, { incidents: { some: activeIncidentCondition } }],
+    };
+    const zeroCondition: Prisma.ServiceWhereInput = {
+      AND: [where, { incidents: { none: activeIncidentCondition } }],
+    };
+
+    const activeCount = await prisma.service.count({ where: activeCondition });
+
+    if (pagination.skip < activeCount) {
+      const neededActive = Math.min(pagination.take, activeCount - pagination.skip);
+      const activeIncidentGroups = await prisma.incident.groupBy({
         by: ['serviceId'],
         where: {
           AND: [
             incidentAccess,
             { status: { in: activeIncidentStatuses() } },
-            { serviceId: { in: countSortServices.map(service => service.id) } },
+            { service: where },
           ],
         },
-        _count: { _all: true },
-      })
-    : [];
-  const countByServiceId = new Map(
-    countSortActiveCounts.map(count => [count.serviceId, count._count._all])
-  );
-  const orderedCountSortIds = isIncidentCountSort
-    ? countSortServices
-        .sort((left, right) => {
-          const difference =
-            (countByServiceId.get(left.id) ?? 0) - (countByServiceId.get(right.id) ?? 0);
-          return (
-            (sortBy === 'incidents_desc' ? -difference : difference) ||
-            left.name.localeCompare(right.name)
-          );
-        })
-        .map(service => service.id)
-    : [];
-  const pageServiceIds = orderedCountSortIds.slice(startIdx, startIdx + ITEMS_PER_PAGE);
-  const services = isIncidentCountSort
-    ? await prisma.service.findMany({
-        where: { id: { in: pageServiceIds } },
-        select: serviceSelect,
-      })
-    : await prisma.service.findMany({
-        where,
-        skip: startIdx,
-        take: ITEMS_PER_PAGE,
-        select: serviceSelect,
-        orderBy,
+        _count: { serviceId: true },
+        orderBy: [{ _count: { serviceId: 'desc' } }, { serviceId: 'asc' }],
+        skip: pagination.skip,
+        take: neededActive,
       });
-  if (isIncidentCountSort) {
-    const position = new Map(pageServiceIds.map((id, index) => [id, index]));
-    services.sort((left, right) => (position.get(left.id) ?? 0) - (position.get(right.id) ?? 0));
+
+      const activeIdsOnPage = activeIncidentGroups.map(g => g.serviceId);
+      const activeServices = await prisma.service.findMany({
+        where: { id: { in: activeIdsOnPage } },
+        select: serviceSelect,
+      });
+      const serviceMap = new Map(activeServices.map(s => [s.id, s]));
+      const sortedActiveServices = activeIdsOnPage
+        .map(id => serviceMap.get(id))
+        .filter((s): s is ServiceItem => Boolean(s));
+
+      const remainingSlots = pagination.take - sortedActiveServices.length;
+      if (remainingSlots > 0) {
+        const zeroIncidentServices = await prisma.service.findMany({
+          where: zeroCondition,
+          take: remainingSlots,
+          select: serviceSelect,
+          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        });
+        services = [...sortedActiveServices, ...zeroIncidentServices];
+      } else {
+        services = sortedActiveServices;
+      }
+    } else {
+      // Entire page falls into 0-incident services
+      const zeroSkip = pagination.skip - activeCount;
+      services = await prisma.service.findMany({
+        where: zeroCondition,
+        skip: zeroSkip,
+        take: pagination.take,
+        select: serviceSelect,
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      });
+    }
+  } else {
+    // sortBy === 'incidents_asc': 0-incident services come first
+    const zeroCondition: Prisma.ServiceWhereInput = {
+      AND: [where, { incidents: { none: activeIncidentCondition } }],
+    };
+    const zeroIncidentCount = await prisma.service.count({ where: zeroCondition });
+
+    if (pagination.skip < zeroIncidentCount) {
+      const zeroServices = await prisma.service.findMany({
+        where: zeroCondition,
+        skip: pagination.skip,
+        take: pagination.take,
+        select: serviceSelect,
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      });
+
+      const remainingSlots = pagination.take - zeroServices.length;
+      if (remainingSlots > 0) {
+        const activeIncidentGroups = await prisma.incident.groupBy({
+          by: ['serviceId'],
+          where: {
+            AND: [
+              incidentAccess,
+              { status: { in: activeIncidentStatuses() } },
+              { service: where },
+            ],
+          },
+          _count: { serviceId: true },
+          orderBy: [{ _count: { serviceId: 'asc' } }, { serviceId: 'asc' }],
+          take: remainingSlots,
+        });
+        const activeIds = activeIncidentGroups.map(g => g.serviceId);
+        const activeServices = await prisma.service.findMany({
+          where: { id: { in: activeIds } },
+          select: serviceSelect,
+        });
+        const serviceMap = new Map(activeServices.map(s => [s.id, s]));
+        const sortedActive = activeIds
+          .map(id => serviceMap.get(id))
+          .filter((s): s is ServiceItem => Boolean(s));
+        services = [...zeroServices, ...sortedActive];
+      } else {
+        services = zeroServices;
+      }
+    } else {
+      // Entire page falls into active services
+      const activeSkip = pagination.skip - zeroIncidentCount;
+      const activeIncidentGroups = await prisma.incident.groupBy({
+        by: ['serviceId'],
+        where: {
+          AND: [
+            incidentAccess,
+            { status: { in: activeIncidentStatuses() } },
+            { service: where },
+          ],
+        },
+        _count: { serviceId: true },
+        orderBy: [{ _count: { serviceId: 'asc' } }, { serviceId: 'asc' }],
+        skip: activeSkip,
+        take: pagination.take,
+      });
+      const activeIdsOnPage = activeIncidentGroups.map(g => g.serviceId);
+      const activeServices = await prisma.service.findMany({
+        where: { id: { in: activeIdsOnPage } },
+        select: serviceSelect,
+      });
+      const serviceMap = new Map(activeServices.map(s => [s.id, s]));
+      services = activeIdsOnPage
+        .map(id => serviceMap.get(id))
+        .filter((s): s is ServiceItem => Boolean(s));
+    }
   }
 
   const { calculateActorSLAMetrics } = await import('@/lib/actor-metrics');

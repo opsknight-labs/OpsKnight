@@ -22,6 +22,8 @@ import {
   Layers,
 } from 'lucide-react';
 import Link from 'next/link';
+import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
+import { getScimConfig } from '@/lib/scim';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -67,12 +69,13 @@ export default async function SystemSettingsPage() {
 
     const prisma = (await import('@/lib/prisma')).default;
 
-    const [systemSettings, rawOidcConfig] = await Promise.all([
+    const [systemSettings, rawOidcConfig, scimConfig] = await Promise.all([
       prisma.systemSettings.findUnique({
         where: { id: 'default' },
         select: { appUrl: true, updatedAt: true },
       }),
       prisma.oidcConfig.findFirst({ orderBy: { updatedAt: 'desc' } }),
+      getScimConfig(),
     ]);
 
     const appUrl = systemSettings?.appUrl ?? null;
@@ -80,6 +83,7 @@ export default async function SystemSettingsPage() {
       process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
     const authOrigin = resolveAuthPublicOrigin({ dbAppUrl: appUrl });
     const ssoCallbackUrl = authOrigin.callbackUrl;
+    const scimTenantUrl = `${authOrigin.origin}/api/scim/v2`;
 
     let oidcConfig: {
       enabled: boolean;
@@ -162,6 +166,7 @@ export default async function SystemSettingsPage() {
         initialConfig={oidcConfig}
         callbackUrl={ssoCallbackUrl}
         hasEncryptionKey={env.encryptionKey}
+        scimSection={<ScimSettingsSection initialConfig={scimConfig} tenantUrl={scimTenantUrl} />}
       />
     );
 
@@ -460,6 +465,7 @@ export default async function SystemSettingsPage() {
           retentionTab={retentionTab}
           envTab={envTab}
           ssoEnabled={ssoEnabled}
+          scimEnabled={scimConfig.enabled && scimConfig.hasSecretToken}
           appUrlConfigured={appUrlConfigured}
           allEnvOk={allEnvOk}
           missingCount={missingCount}

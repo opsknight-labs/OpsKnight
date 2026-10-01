@@ -43,6 +43,20 @@ async function assertRequiredIndexes() {
   }
 }
 
+async function cleanInvalidIndexes() {
+  const invalidRows = await prisma.$queryRawUnsafe(`
+    SELECT c.relname AS name
+    FROM pg_index i
+    JOIN pg_class c ON c.oid = i.indexrelid
+    WHERE i.indisvalid = false
+      AND c.relname = ANY(ARRAY[${requiredIndexNames.map(name => `'${name}'`).join(',')}])
+  `);
+  for (const row of invalidRows) {
+    console.warn(`⚠️  Dropping invalid index from previous failed attempt: ${row.name}`);
+    await prisma.$executeRawUnsafe(`DROP INDEX CONCURRENTLY IF EXISTS "${row.name}"`);
+  }
+}
+
 async function main() {
   for (let attempt = 1; attempt <= MAX_INSTALL_ATTEMPTS; attempt += 1) {
     let lockAcquired = false;
@@ -52,6 +66,8 @@ async function main() {
         `SELECT pg_advisory_lock(${INSTALL_LOCK_ID})::text AS "lockResult"`
       );
       lockAcquired = true;
+
+      await cleanInvalidIndexes();
 
       for (const statement of indexes) {
         await prisma.$executeRawUnsafe(statement);

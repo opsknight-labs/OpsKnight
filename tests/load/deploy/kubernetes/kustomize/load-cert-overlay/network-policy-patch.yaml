@@ -15,6 +15,16 @@ spec:
           port: 8088
         - protocol: TCP
           port: 2525
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6432
+        - protocol: TCP
+          port: 443
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -33,6 +43,16 @@ spec:
           port: 8088
         - protocol: TCP
           port: 2525
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6432
+        - protocol: TCP
+          port: 443
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -51,6 +71,16 @@ spec:
           port: 8088
         - protocol: TCP
           port: 2525
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6432
+        - protocol: TCP
+          port: 443
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -69,6 +99,16 @@ spec:
           port: 8088
         - protocol: TCP
           port: 2525
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6432
+        - protocol: TCP
+          port: 443
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -87,6 +127,16 @@ spec:
           port: 8088
         - protocol: TCP
           port: 2525
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6432
+        - protocol: TCP
+          port: 443
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -105,3 +155,13 @@ spec:
           port: 8088
         - protocol: TCP
           port: 2525
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6432
+        - protocol: TCP
+          port: 443
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

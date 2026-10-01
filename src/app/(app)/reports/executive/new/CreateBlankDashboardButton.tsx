@@ -1,10 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/shadcn/button';
+import { notify } from '@/lib/toast';
 import { Loader2 } from 'lucide-react';
 
 export default function CreateBlankDashboardButton() {
+  const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
 
   const handleCreate = async () => {
@@ -27,10 +30,10 @@ export default function CreateBlankDashboardButton() {
       }
 
       const data = await response.json();
-      window.location.href = `/reports/executive/${data.dashboard.id}`;
+      router.push(`/reports/executive/${data.dashboard.id}`);
     } catch (error) {
       console.error('Failed to create dashboard:', error);
-      alert('Failed to create dashboard. Please try again.');
+      notify.error('Failed to create dashboard. Please try again.');
       setIsCreating(false);
     }
   };

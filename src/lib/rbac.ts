@@ -138,6 +138,28 @@ export async function assertCapability(capability: Capability, message?: string)
   return user;
 }
 
+export async function assertCanListUsers() {
+  return assertCapability(
+    CAPABILITIES.USER_READ_ALL,
+    'Unauthorized. Organization-wide user directory access required.'
+  );
+}
+
+export async function assertCanViewUser(_userId: string) {
+  return assertCanListUsers();
+}
+
+export async function assertCanListPolicies() {
+  return assertCapability(
+    CAPABILITIES.POLICY_READ_ALL,
+    'Unauthorized. Escalation policy access required.'
+  );
+}
+
+export async function assertCanViewPolicy(_policyId: string) {
+  return assertCanListPolicies();
+}
+
 export async function assertAdminOrTeamOwner(teamId: string) {
   const user = await getCurrentUser();
   if (user.role === 'ADMIN') return user;

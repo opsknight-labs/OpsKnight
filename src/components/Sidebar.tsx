@@ -556,8 +556,11 @@ export default function Sidebar({
 
         {/* Scrollable Navigation Area */}
         <nav
+          id="navigation"
+          aria-label="Main navigation"
+          tabIndex={-1}
           className={cn(
-            'sidebar-nav flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain',
+            'sidebar-nav flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain focus:outline-hidden',
             '[scrollbar-width:thin] [scrollbar-color:rgba(100,116,139,0.45)_transparent]',
             '[&::-webkit-scrollbar]:w-1.5',
             '[&::-webkit-scrollbar-track]:bg-transparent',

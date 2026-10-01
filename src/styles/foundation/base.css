@@ -159,6 +159,27 @@ select option {
     }
 }
 
+/* Dashboard Editing Bottom Bar - Stays above content and respects sidebar width */
+.dashboard-edit-footer {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    left: var(--sidebar-width, 240px);
+    transition: left var(--transition-base, 200ms ease-in-out);
+    z-index: 35;
+}
+
+.app-shell:has(.sidebar-collapsed) .dashboard-edit-footer,
+.app-shell:has(.sidebar[data-collapsed='true']) .dashboard-edit-footer {
+    left: var(--sidebar-width-collapsed, 64px);
+}
+
+@media (max-width: 768px) {
+    .dashboard-edit-footer {
+        left: 0 !important;
+    }
+}
+
 .page-shell {
     flex: 1;
     padding: 0.75rem 1rem 1rem;
@@ -187,3 +208,241 @@ select option {
     position: relative;
     z-index: 1;
 }
+
+/* ==========================================================================
+   Executive Dashboard Print & PDF Export Styles
+   ========================================================================== */
+@media print {
+    @page {
+        size: landscape;
+        margin: 12mm 15mm;
+    }
+
+    /* Hide chrome, navigation, headers, footers, interactive filters and modals */
+    nav,
+    aside,
+    header:not(.print-include),
+    .app-header,
+    .dashboard-edit-footer,
+    .no-print,
+    [data-no-print='true'],
+    .app-sidebar,
+    .sidebar,
+    button:not(.print-keep),
+    [role='dialog'],
+    .filter-bar-controls,
+    .print\:hidden,
+    .executive-screen-header,
+    .executive-filters-bar,
+    [role='region'][aria-label*='Wallboard'] {
+        display: none !important;
+    }
+
+    /* Base page styling for multi-page PDF export: reset fixed heights & viewports */
+    html,
+    body,
+    .app-shell,
+    .content-shell,
+    .page-shell,
+    main,
+    #main-content {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: visible !important;
+        overflow-y: visible !important;
+        position: static !important;
+        display: block !important;
+        box-shadow: none !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Executive print header display */
+    .executive-print-header {
+        display: block !important;
+        margin-bottom: 1.25rem !important;
+        padding-bottom: 0.5rem !important;
+        border-bottom: 2px solid #cbd5e1 !important;
+    }
+
+    /* Multi-page grid layout */
+    .grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        grid-auto-rows: auto !important;
+        gap: 16px !important;
+        height: auto !important;
+        overflow: visible !important;
+    }
+
+    .grid > div {
+        grid-column: span 1 !important;
+        grid-row: auto !important;
+        height: auto !important;
+        min-height: auto !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        box-shadow: none !important;
+        border: 1px solid #cbd5e1 !important;
+        background: #ffffff !important;
+        border-radius: 8px !important;
+    }
+
+    /* Wide widgets: charts, tables, feeds, incident lists should span full width (2 columns) */
+    .grid > div[data-widget-type='chart'],
+    .grid > div[data-widget-type='table'],
+    .grid > div[data-widget-type='insights'],
+    .grid > div:has(table),
+    .grid > div:has(.recharts-responsive-container),
+    .grid > div:has(svg) {
+        grid-column: span 2 !important;
+    }
+
+    /* Small single-stat metrics and gauges stay 1 column side-by-side */
+    .grid > div[data-widget-type='metric'],
+    .grid > div[data-widget-type='gauge'] {
+        grid-column: span 1 !important;
+    }
+
+    /* Expand cards and table contents in print so nothing scrolls or cuts off */
+    .grid .overflow-auto,
+    .grid .overflow-hidden,
+    .grid [class*='overflow-'] {
+        overflow: visible !important;
+        height: auto !important;
+        max-height: none !important;
+    }
+
+    /* Ensure SVG charts scale cleanly */
+    svg {
+        max-width: 100% !important;
+    }
+
+    /* Text contrast adjustments */
+    .text-card-foreground,
+    [class*='CardTitle'],
+    h1, h2, h3, h4, h5, h6 {
+        color: #0f172a !important;
+    }
+
+    .text-muted-foreground,
+    .text-zinc-400 {
+        color: #475569 !important;
+    }
+
+    .bg-card,
+    .bg-zinc-800,
+    .bg-zinc-900 {
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+    }
+
+    .border,
+    .border-zinc-800,
+    .border-border {
+        border-color: #e2e8f0 !important;
+    }
+
+    /* Semantic Status Badges & Compliance Indicators in Print */
+    .text-emerald-400,
+    .text-emerald-500,
+    .text-emerald-600,
+    .text-green-500,
+    .text-green-600 {
+        color: #15803d !important;
+    }
+
+    .bg-emerald-500\/10,
+    .bg-emerald-500\/20,
+    .bg-emerald-50 {
+        background-color: #dcfce7 !important;
+        color: #15803d !important;
+    }
+
+    .text-rose-400,
+    .text-rose-500,
+    .text-rose-600,
+    .text-red-500,
+    .text-red-600 {
+        color: #b91c1c !important;
+    }
+
+    .bg-rose-500\/10,
+    .bg-rose-500\/20,
+    .bg-red-50 {
+        background-color: #fee2e2 !important;
+        color: #b91c1c !important;
+    }
+
+    .text-amber-400,
+    .text-amber-500,
+    .text-amber-600,
+    .text-yellow-500 {
+        color: #b45309 !important;
+    }
+
+    .bg-amber-500\/10,
+    .bg-amber-500\/20,
+    .bg-yellow-50 {
+        background-color: #fef3c7 !important;
+        color: #b45309 !important;
+    }
+
+    .text-blue-400,
+    .text-blue-500,
+    .text-blue-600 {
+        color: #1d4ed8 !important;
+    }
+
+    .bg-blue-500\/10,
+    .bg-blue-500\/20,
+    .bg-blue-50 {
+        background-color: #dbeafe !important;
+        color: #1d4ed8 !important;
+    }
+
+    .text-purple-400,
+    .text-purple-500,
+    .text-purple-600 {
+        color: #6d28d9 !important;
+    }
+
+    /* Preserve white text inside filled badge pills */
+    [class*='bg-rose-'] .text-white,
+    [class*='bg-red-'] .text-white,
+    [class*='bg-emerald-'] .text-white,
+    [class*='bg-green-'] .text-white,
+    [class*='bg-blue-'] .text-white {
+        color: #ffffff !important;
+    }
+
+    /* Tables full expansion in print */
+    table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+    }
+
+    th {
+        background-color: #f1f5f9 !important;
+        color: #1e293b !important;
+        font-weight: 600 !important;
+        border-bottom: 1px solid #cbd5e1 !important;
+    }
+
+    td {
+        border-bottom: 1px solid #e2e8f0 !important;
+        color: #334155 !important;
+    }
+
+    tr {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+    }
+}
+

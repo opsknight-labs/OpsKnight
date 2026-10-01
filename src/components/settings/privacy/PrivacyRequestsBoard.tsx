@@ -163,17 +163,23 @@ export default function PrivacyRequestsBoard({
   }, [initialRequests, initialNextCursor]);
 
   useEffect(() => {
-    if (subjectType !== 'USER' || subjectQuery.trim().length < 2) {
+    if (subjectType !== 'USER') {
+      setSubjectMatches([]);
+      return;
+    }
+    const query = subjectQuery.trim();
+    if (query.length === 0) {
       setSubjectMatches(subjectUsers);
       return;
     }
     const timer = window.setTimeout(() => {
       void fetch(
-        `/api/compliance/privacy-requests/subjects?search=${encodeURIComponent(subjectQuery.trim())}`,
+        `/api/compliance/privacy-requests/subjects?search=${encodeURIComponent(query)}`,
         { cache: 'no-store' }
       )
         .then(readJson)
-        .then(body => setSubjectMatches((body?.data?.users as RequestUser[]) ?? []));
+        .then(body => setSubjectMatches((body?.data?.users as RequestUser[]) ?? []))
+        .catch(() => showToast('Failed to search subjects. Please try again.', 'error'));
     }, 250);
     return () => window.clearTimeout(timer);
   }, [subjectQuery, subjectType, subjectUsers]);
@@ -225,6 +231,8 @@ export default function PrivacyRequestsBoard({
         }
         setRequests(prev => [...prev, ...(body.data.requests as PrivacyRequestRow[])]);
         setNextCursor(body.data.nextCursor ?? null);
+      } catch {
+        showToast('A network error occurred. Please try again.', 'error');
       } finally {
         setIsLoadingMore(false);
       }

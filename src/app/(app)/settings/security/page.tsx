@@ -189,8 +189,8 @@ export default async function SecuritySettingsPage() {
                 System Settings.
               </p>
               <Button variant="ghost" size="sm" asChild className="gap-1 text-xs h-8">
-                <Link href="/settings/system">
-                  Configure Workspace SSO
+                <Link href="/settings/system?section=sso">
+                  Configure Workspace SSO & SCIM
                   <ExternalLink className="h-3.5 w-3.5" />
                 </Link>
               </Button>
@@ -262,7 +262,46 @@ export default async function SecuritySettingsPage() {
         </div>
       </SettingsSection>
 
-      {/* Section 4: Recent Security Activity */}
+      {/* Section 4: SCIM 2.0 User Provisioning Pointer (Admins only) */}
+      {isAdmin && (
+        <SettingsSection
+          title="SCIM 2.0 User Provisioning"
+          description="Automate identity lifecycle management: provision, synchronize, and de-provision users directly from Microsoft Entra ID, Okta, or other identity providers."
+          footer={
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                OpsKnight implements RFC 7644 SCIM 2.0 for automated user lifecycle operations.
+              </p>
+              <Button variant="ghost" size="sm" asChild className="gap-1 text-xs h-8">
+                <Link href="/settings/system?section=sso">
+                  Configure SCIM Provisioning
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            </div>
+          }
+        >
+          <div className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
+            <div>
+              <p className="font-medium text-foreground">
+                Centralized Enterprise Identity Control Plane
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                SCIM 2.0 endpoint credentials, tenant URL, and identity provider setup guides are
+                managed alongside Single Sign-On in System Settings.
+              </p>
+            </div>
+            <Button size="sm" asChild className="shrink-0 gap-1.5 text-xs h-8">
+              <Link href="/settings/system?section=sso">
+                Go to SSO & SCIM Settings
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+        </SettingsSection>
+      )}
+
+      {/* Section 5: Recent Security Activity */}
       <SettingsSection
         title="Recent Security Activity"
         description="Audit history of authentication and credential events on your account."

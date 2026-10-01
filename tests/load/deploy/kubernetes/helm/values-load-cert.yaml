@@ -13,3 +13,7 @@ secrets:
 extraEnv:
   - name: OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS
     value: "host.docker.internal,10.0.2.2,127.0.0.1,opsknight-emulator"
+
+postgresql:
+  password: "devpassword"
+

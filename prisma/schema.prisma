@@ -563,6 +563,7 @@ model Team {
   id                String             @id @default(cuid())
   name              String             @unique
   description       String?
+  scimExternalId    String?            @unique
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   members           TeamMember[]
@@ -1506,6 +1507,7 @@ model ActionItem {
   @@index([ownerId, status])
   @@index([status, priority])
   @@index([dueDate])
+  @@index([createdAt, id])
 }
 
 model JiraConfig {
@@ -2719,16 +2721,17 @@ model Dashboard {
 }
 
 model DashboardWidget {
-  id          String    @id @default(cuid())
-  dashboardId String
-  widgetType  String
-  metricKey   String
-  title       String?
-  position    Json
-  config      Json
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  dashboard   Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  id                 String    @id @default(cuid())
+  dashboardId        String
+  widgetType         String
+  metricKey          String
+  widgetDefinitionId String?
+  title              String?
+  position           Json
+  config             Json
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  dashboard          Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
 
   @@index([dashboardId])
 }

@@ -7,6 +7,7 @@ import { getAuthOptions } from '@/lib/auth';
 import {
   addUser,
   addUserToTeam,
+  bulkUpdateUsers,
   deactivateUser,
   deleteUser,
   generateInvite,
@@ -29,6 +30,13 @@ import { Button } from '@/components/ui/shadcn/button';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Users, UserCheck, UserPlus, UserX } from 'lucide-react';
 import { isAppRole } from '@/lib/authorization';
+import { assertCanListUsers } from '@/lib/rbac';
+import {
+  parsePageParam,
+  calculatePaginationBounds,
+  formatPaginationSummary,
+  parseEnumValue,
+} from '@/lib/pagination-parser';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,8 +55,11 @@ function buildPaginationUrl(baseParams: URLSearchParams, page: number): string {
 export default async function UsersPage({ searchParams }: UsersPageProps) {
   const awaitedSearchParams = await searchParams;
   const query = typeof awaitedSearchParams?.q === 'string' ? awaitedSearchParams.q.trim() : '';
-  const statusFilter =
-    typeof awaitedSearchParams?.status === 'string' ? awaitedSearchParams.status : '';
+  const statusFilter = parseEnumValue(
+    awaitedSearchParams?.status,
+    ['INVITED', 'ACTIVE', 'DISABLED'] as const,
+    undefined
+  );
   const requestedRole =
     typeof awaitedSearchParams?.role === 'string' ? awaitedSearchParams.role : '';
   const roleFilter = isAppRole(requestedRole) ? requestedRole : '';
@@ -58,14 +69,14 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
     typeof awaitedSearchParams?.sortBy === 'string' ? awaitedSearchParams.sortBy : 'createdAt';
   const sortOrder =
     typeof awaitedSearchParams?.sortOrder === 'string' ? awaitedSearchParams.sortOrder : 'desc';
-  const page = Math.max(1, Number(awaitedSearchParams?.page) || 1);
-  const skip = (page - 1) * USERS_PER_PAGE;
+  const requestedPage = parsePageParam(awaitedSearchParams?.page);
 
   // Security & Initialization Checks
   const session = await getServerSession(await getAuthOptions());
   if (!session) {
     redirect('/login?callbackUrl=/users');
   }
+  await assertCanListUsers();
 
   const userCount = await prisma.user.count();
   if (userCount === 0) {
@@ -96,40 +107,49 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
     ],
   };
 
-  const [users, totalCount, teams] = await Promise.all([
-    prisma.user.findMany({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        status: true,
-        avatarUrl: true,
-        gender: true,
-        jobTitle: true,
-        department: true,
-        createdAt: true,
-        teamMemberships: {
-          include: {
-            team: true,
-          },
-        },
-      },
-      where,
-      orderBy:
-        sortBy === 'name'
-          ? { name: sortOrder as 'asc' | 'desc' }
-          : sortBy === 'email'
-            ? { email: sortOrder as 'asc' | 'desc' }
-            : sortBy === 'status'
-              ? { status: sortOrder as 'asc' | 'desc' }
-              : { createdAt: sortOrder as 'asc' | 'desc' },
-      skip,
-      take: USERS_PER_PAGE,
-    }),
+  const [totalCount, teams] = await Promise.all([
     prisma.user.count({ where }),
     prisma.team.findMany({ orderBy: { name: 'asc' } }),
   ]);
+
+  const pagination = calculatePaginationBounds({
+    totalItems: totalCount,
+    page: requestedPage,
+    pageSize: USERS_PER_PAGE,
+  });
+  const page = pagination.page;
+  const totalPages = pagination.totalPages;
+
+  const users = await prisma.user.findMany({
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      status: true,
+      avatarUrl: true,
+      gender: true,
+      jobTitle: true,
+      department: true,
+      createdAt: true,
+      teamMemberships: {
+        include: {
+          team: true,
+        },
+      },
+    },
+    where,
+    orderBy:
+      sortBy === 'name'
+        ? { name: sortOrder as 'asc' | 'desc' }
+        : sortBy === 'email'
+          ? { email: sortOrder as 'asc' | 'desc' }
+          : sortBy === 'status'
+            ? { status: sortOrder as 'asc' | 'desc' }
+            : { createdAt: sortOrder as 'asc' | 'desc' },
+    skip: pagination.skip,
+    take: pagination.take,
+  });
 
   // Get stats
   const stats = {
@@ -159,8 +179,6 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
     stats.invited = totalStats.find(s => s.status === 'INVITED')?._count._all || 0;
     stats.disabled = totalStats.find(s => s.status === 'DISABLED')?._count._all || 0;
   }
-
-  const totalPages = Math.ceil(totalCount / USERS_PER_PAGE);
 
   const currentUserEmail = session?.user?.email;
   const currentUser = currentUserEmail
@@ -235,8 +253,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
             <div>
               <CardTitle className="text-base font-bold">User Directory</CardTitle>
               <CardDescription className="text-xs text-muted-foreground">
-                Showing {skip + 1}-{Math.min(skip + USERS_PER_PAGE, totalCount)} of {totalCount}{' '}
-                users
+                {formatPaginationSummary(pagination.startItem, pagination.endItem, totalCount, 'users')}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2.5">
@@ -265,6 +282,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
             deleteUser={deleteUser}
             generateInvite={generateInvite}
             getUserDependencyReport={getUserDependencyReport}
+            bulkUpdateUsers={bulkUpdateUsers}
           />
 
           {/* Pagination */}

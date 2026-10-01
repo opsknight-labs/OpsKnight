@@ -196,6 +196,23 @@ export async function runLoadCleanup(options?: {
       return [delJobs, delAttempts, delNotifs, { count: 0 }, { count: 0 }, { count: 0 }, delAlerts, delIncs];
     });
 
+    await prisma.statusPageService.deleteMany({
+      where: {
+        OR: [
+          { statusPageId: { startsWith: 'lt-' } },
+          { serviceId: { in: loadServiceIds } },
+        ],
+      },
+    }).catch(() => undefined);
+    await prisma.statusPageSubscriptionService.deleteMany({
+      where: {
+        OR: [
+          { subscription: { statusPageId: { startsWith: 'lt-' } } },
+          { serviceId: { in: loadServiceIds } },
+        ],
+      },
+    }).catch(() => undefined);
+
     const deletedStatusPageSubscribers = await prisma.statusPageSubscription.deleteMany({
       where: { statusPageId: { startsWith: 'lt-' } },
     });
@@ -211,9 +228,124 @@ export async function runLoadCleanup(options?: {
       where: { id: { startsWith: 'lt-' } },
     });
 
+    const targetIncidentCondition = {
+      OR: [
+        { serviceId: { in: loadServiceIds } },
+        { serviceId: { startsWith: 'lt-' } },
+        { id: { startsWith: 'lt-' } },
+        { id: { in: loadIncidentIds } },
+      ],
+    };
+    const incsToDelete = await prisma.incident.findMany({
+      where: targetIncidentCondition,
+      select: { id: true },
+    }).catch(() => []);
+    const incIds = incsToDelete.map(i => i.id);
+
+    if (incIds.length > 0) {
+      await prisma.notificationDeliveryAttempt.deleteMany({
+        where: { notification: { incidentId: { in: incIds } } },
+      }).catch(() => undefined);
+      await prisma.notification.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.alert.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentEvent.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentNote.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentWatcher.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentTag.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.actionItem.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.statusPageAnnouncement.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentSlaPause.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.customFieldValue.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.postmortem.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.externalIssueLink.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.slackPinnedMessage.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.microsoftTeamsIncidentMessage.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentWarRoom.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+      await prisma.incidentMeeting.deleteMany({
+        where: { incidentId: { in: incIds } },
+      }).catch(() => undefined);
+    }
+
+    await prisma.notificationDeliveryAttempt.deleteMany({
+      where: {
+        OR: [
+          { notification: { incident: { serviceId: { in: loadServiceIds } } } },
+          { notification: { incidentId: { in: incIds } } },
+          { notification: { id: { startsWith: 'lt-' } } },
+        ],
+      },
+    }).catch(() => undefined);
+
+    await prisma.notification.deleteMany({
+      where: {
+        OR: [
+          { incident: { serviceId: { in: loadServiceIds } } },
+          { incidentId: { in: incIds } },
+          { id: { startsWith: 'lt-' } },
+        ],
+      },
+    }).catch(() => undefined);
+
+    await prisma.alert.deleteMany({
+      where: {
+        OR: [
+          { serviceId: { in: loadServiceIds } },
+          { incidentId: { in: incIds } },
+          { id: { startsWith: 'lt-' } },
+          { dedupKey: { contains: 'lt-' } },
+        ],
+      },
+    }).catch(() => undefined);
+
+    await prisma.incident.deleteMany({
+      where: {
+        OR: [
+          { serviceId: { in: loadServiceIds } },
+          { serviceId: { startsWith: 'lt-' } },
+          { id: { startsWith: 'lt-' } },
+          { id: { in: loadIncidentIds } },
+        ],
+      },
+    }).catch(() => ({ count: 0 }));
+
     const deletedServices = await prisma.service.deleteMany({
-      where: { id: { startsWith: 'lt-' } },
-    });
+      where: {
+        OR: [
+          { id: { startsWith: 'lt-' } },
+          { id: { in: loadServiceIds } },
+        ],
+      },
+    }).catch(() => ({ count: 0 }));
 
     await prisma.slackIntegration.deleteMany({
       where: { id: { startsWith: 'lt-' } },

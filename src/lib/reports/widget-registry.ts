@@ -20,7 +20,7 @@ export type WidgetDefinition = {
   maxSize?: { w: number; h: number };
   icon: string;
   category: WidgetCategory;
-  config?: Record<string, any>;
+  config?: Record<string, unknown>;
 };
 
 /**
@@ -332,6 +332,17 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     metricKey: 'serviceSlaTable',
     defaultSize: { w: 2, h: 2 },
     icon: 'Shield',
+    category: 'tables',
+  },
+  {
+    id: 'active-incidents-feed',
+    name: 'Active Incidents Feed',
+    description: 'Current active, triggered, and acknowledged incidents',
+    type: 'table',
+    metricKey: 'activeIncidentSummaries',
+    defaultSize: { w: 2, h: 2 },
+    minSize: { w: 2, h: 2 },
+    icon: 'Flame',
     category: 'tables',
   },
 

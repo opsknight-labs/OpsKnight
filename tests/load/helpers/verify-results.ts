@@ -73,21 +73,47 @@ export async function verifyLoadCertificationResults(options?: {
     if (waitForDrainMs > 0) {
       const deadline = Date.now() + waitForDrainMs;
       while (Date.now() < deadline) {
-        const pendingCritical = await prisma.notification.count({
-          where: {
-            status: 'PENDING',
-            trafficClass: 'CRITICAL',
-            nextAttemptAt: { lte: new Date() },
-          },
-        });
-        const pendingEscalations = await prisma.backgroundJob.count({
-          where: {
-            type: 'ESCALATION',
-            status: { in: ['PENDING', 'PENDING_V2', 'PROCESSING', 'PROCESSING_V2'] },
-          },
-        });
-        if (pendingCritical === 0 && pendingEscalations === 0) break;
-        await new Promise(r => setTimeout(r, 500));
+        const remainingMs = deadline - Date.now();
+        if (remainingMs <= 0) break;
+        const [
+          pendingCriticalTotal,
+          pendingTransactional,
+          pendingBulk,
+          pendingBackgroundJobs,
+        ] = await Promise.all([
+          prisma.notification.count({
+            where: {
+              status: 'PENDING',
+              trafficClass: 'CRITICAL',
+            },
+          }),
+          prisma.notification.count({
+            where: {
+              status: 'PENDING',
+              trafficClass: 'TRANSACTIONAL',
+            },
+          }),
+          prisma.notification.count({
+            where: {
+              status: 'PENDING',
+              trafficClass: 'BULK',
+            },
+          }),
+          prisma.backgroundJob.count({
+            where: {
+              status: { in: ['PENDING', 'PENDING_V2', 'PROCESSING', 'PROCESSING_V2'] },
+            },
+          }),
+        ]);
+        if (
+          pendingCriticalTotal === 0 &&
+          pendingTransactional === 0 &&
+          pendingBulk === 0 &&
+          pendingBackgroundJobs === 0
+        ) {
+          break;
+        }
+        await new Promise(r => setTimeout(r, Math.min(500, remainingMs)));
       }
     }
 

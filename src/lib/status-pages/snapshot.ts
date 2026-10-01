@@ -1036,30 +1036,33 @@ export async function getStatusPageSnapshot(pageId: string): Promise<{
   const manifest = await store.readManifest(pageId);
   if (!manifest) return { snapshot: null, stale: true, servingState: 'UNCONFIGURED' };
   const recordedServingState = manifestServingState(manifest);
-  // Database triggers can invalidate a revision without knowing whether the underlying write
-  // broadened or narrowed disclosure. A manifest still labelled LIVE is therefore only live
-  // while it is internally consistent; an unexplained revocation must fail closed.
-  const servingState =
-    recordedServingState === 'LIVE' && manifest.revoked ? 'FAIL_CLOSED' : recordedServingState;
+  if (recordedServingState === 'DISABLED') {
+    return { snapshot: null, stale: true, servingState: 'DISABLED' };
+  }
+  if (recordedServingState === 'FAIL_CLOSED') {
+    return { snapshot: null, stale: true, servingState: 'FAIL_CLOSED' };
+  }
 
   if (manifest.enabled && !manifest.revoked) {
     const payload = await store.readSnapshot(pageId, manifest.revision);
     if (payload && statusSnapshotIntegrity(payload) === manifest.integrityHash) {
       const current = parseStatusPageSnapshot(pageId, payload);
-      if (current) return { snapshot: current, stale: false, servingState };
+      if (current) return { snapshot: current, stale: false, servingState: 'LIVE' };
     }
   }
 
-  if (servingState === 'STALE_OK') {
+  // During a background rebuild (when revision !== publishedRevision but page was LIVE/STALE_OK and enabled),
+  // keep serving the last good snapshot with stale = true so visitors never see an outage or blank screen.
+  if (manifest.enabled) {
     const lastGood = await store.readLastGoodSnapshot(pageId);
     const previous = lastGood ? parseStatusPageSnapshot(pageId, lastGood.payload) : null;
     if (previous) {
       addOperationalMetric('opsknight_status_page_stale_serves_total', 1, { surface: 'snapshot' });
-      return { snapshot: previous, stale: true, servingState };
+      return { snapshot: previous, stale: true, servingState: 'STALE_OK' };
     }
   }
 
-  return { snapshot: null, stale: true, servingState };
+  return { snapshot: null, stale: true, servingState: 'FAIL_CLOSED' };
 }
 
 export async function getStatusPageSnapshotByRoute(routeKey: string) {

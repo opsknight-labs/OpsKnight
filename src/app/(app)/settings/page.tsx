@@ -105,59 +105,88 @@ const itemThemes: Record<string, { bg: string; text: string }> = {
 export default async function SettingsOverviewPage() {
   const permissions = await getUserPermissions();
 
+  const now = new Date();
+  const apiKeysQuery = permissions.authenticated && permissions.id
+    ? prisma.apiKey.count({
+        where: {
+          revokedAt: null,
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+          ...(permissions.isAdmin ? {} : { userId: permissions.id }),
+        },
+      })
+    : Promise.resolve(0);
+
   const [
-    slackIntegration,
-    jiraConfig,
-    chatOpsConfig,
-    teamsConfig,
-    activeApiKeysCount,
-    notificationProvidersCount,
-    statusPage,
-    customFieldsCount,
-  ] = await Promise.all([
-    prisma.slackIntegration
-      .findFirst({
-        where: { services: { none: {} }, enabled: true },
-        select: { workspaceName: true, enabled: true },
-      })
-      .catch(() => null),
-    prisma.jiraConfig
-      .findUnique({
-        where: { id: 'default' },
-        select: { enabled: true, baseUrl: true },
-      })
-      .catch(() => null),
-    prisma.chatOpsConfig
-      .findUnique({
-        where: { id: 'default' },
-        select: { enabled: true },
-      })
-      .catch(() => null),
-    prisma.microsoftTeamsConfig
-      .findFirst({
-        select: { enabled: true },
-      })
-      .catch(() => null),
-    prisma.apiKey
-      .count({
-        where: { revokedAt: null },
-      })
-      .catch(() => 0),
-    prisma.notificationProvider
-      .count({
-        where: { enabled: true },
-      })
-      .catch(() => 0),
-    prisma.statusPage
-      .findFirst({
-        select: { enabled: true, privacyMode: true },
-      })
-      .catch(() => null),
-    prisma.customField.count().catch(() => 0),
+    slackResult,
+    jiraResult,
+    chatOpsResult,
+    teamsResult,
+    apiKeysResult,
+    notificationProvidersResult,
+    statusPageResult,
+    customFieldsResult,
+  ] = await Promise.allSettled([
+    permissions.isAdmin
+      ? prisma.slackIntegration.findFirst({
+          where: { services: { none: {} }, enabled: true },
+          select: { workspaceName: true, enabled: true },
+        })
+      : Promise.resolve(null),
+    permissions.isAdmin
+      ? prisma.jiraConfig.findUnique({
+          where: { id: 'default' },
+          select: { enabled: true, baseUrl: true },
+        })
+      : Promise.resolve(null),
+    permissions.isAdmin
+      ? prisma.chatOpsConfig.findUnique({
+          where: { id: 'default' },
+          select: { enabled: true },
+        })
+      : Promise.resolve(null),
+    permissions.isAdmin
+      ? prisma.microsoftTeamsConfig.findFirst({
+          select: { enabled: true },
+        })
+      : Promise.resolve(null),
+    apiKeysQuery,
+    permissions.isAdmin
+      ? prisma.notificationProvider.count({
+          where: { enabled: true },
+        })
+      : Promise.resolve(0),
+    permissions.isAdmin
+      ? prisma.statusPage.findFirst({
+          select: { enabled: true, privacyMode: true },
+        })
+      : Promise.resolve(null),
+    permissions.isAdmin ? prisma.customField.count() : Promise.resolve(0),
   ]);
 
+  const slackIntegration = slackResult.status === 'fulfilled' ? slackResult.value : null;
+  const jiraConfig = jiraResult.status === 'fulfilled' ? jiraResult.value : null;
+  const chatOpsConfig = chatOpsResult.status === 'fulfilled' ? chatOpsResult.value : null;
+  const teamsConfig = teamsResult.status === 'fulfilled' ? teamsResult.value : null;
+  const activeApiKeysCount = apiKeysResult.status === 'fulfilled' ? apiKeysResult.value : 0;
+  const notificationProvidersCount =
+    notificationProvidersResult.status === 'fulfilled' ? notificationProvidersResult.value : 0;
+  const statusPage = statusPageResult.status === 'fulfilled' ? statusPageResult.value : null;
+  const customFieldsCount =
+    customFieldsResult.status === 'fulfilled' ? customFieldsResult.value : 0;
+
+  const slackFailed = slackResult.status === 'rejected';
+  const jiraFailed = jiraResult.status === 'rejected';
+  const chatOpsFailed = chatOpsResult.status === 'rejected';
+  const teamsFailed = teamsResult.status === 'rejected';
+  const apiKeysFailed = apiKeysResult.status === 'rejected';
+  const notifFailed = notificationProvidersResult.status === 'rejected';
+  const statusPageFailed = statusPageResult.status === 'rejected';
+  const customFieldsFailed = customFieldsResult.status === 'rejected';
+
   const itemStatuses: Record<string, ItemLiveStatus> = {
-    slack: slackIntegration?.enabled
+    slack: slackFailed
+      ? { label: 'Unavailable', connected: false }
+      : slackIntegration?.enabled
       ? {
           label: slackIntegration.workspaceName
             ? `Connected (${slackIntegration.workspaceName})`
@@ -165,33 +194,52 @@ export default async function SettingsOverviewPage() {
           connected: true,
         }
       : { label: 'Not Connected', connected: false },
-    jira: jiraConfig?.enabled
+    jira: jiraFailed
+      ? { label: 'Unavailable', connected: false }
+      : jiraConfig?.enabled
       ? { label: 'Connected', connected: true }
       : { label: 'Not Connected', connected: false },
-    'microsoft-teams': teamsConfig?.enabled
+    'microsoft-teams': teamsFailed
+      ? { label: 'Unavailable', connected: false }
+      : teamsConfig?.enabled
       ? { label: 'Connected', connected: true }
       : { label: 'Not Connected', connected: false },
-    chatops: chatOpsConfig?.enabled
+    chatops: chatOpsFailed
+      ? { label: 'Unavailable', connected: false }
+      : chatOpsConfig?.enabled
       ? { label: 'Active', connected: true }
       : { label: 'Disabled', connected: false },
-    'status-page': statusPage?.enabled
+    'status-page': statusPageFailed
+      ? { label: 'Unavailable', connected: false }
+      : statusPage?.enabled
       ? {
           label: statusPage.privacyMode === 'PUBLIC' ? 'Public' : 'Active',
           connected: true,
         }
       : { label: 'Disabled', connected: false },
     'api-keys': {
-      label: activeApiKeysCount > 0 ? `${activeApiKeysCount} Active` : '0 Active',
-      connected: activeApiKeysCount > 0,
+      label: apiKeysFailed
+        ? 'Unavailable'
+        : activeApiKeysCount > 0
+        ? `${activeApiKeysCount} Active`
+        : '0 Active',
+      connected: !apiKeysFailed && activeApiKeysCount > 0,
     },
     'notifications-admin': {
-      label:
-        notificationProvidersCount > 0 ? `${notificationProvidersCount} Active` : 'Default Only',
-      connected: notificationProvidersCount > 0,
+      label: notifFailed
+        ? 'Unavailable'
+        : notificationProvidersCount > 0
+        ? `${notificationProvidersCount} Active`
+        : 'Default Only',
+      connected: !notifFailed && notificationProvidersCount > 0,
     },
     'custom-fields': {
-      label: customFieldsCount > 0 ? `${customFieldsCount} Defined` : 'None',
-      connected: customFieldsCount > 0,
+      label: customFieldsFailed
+        ? 'Unavailable'
+        : customFieldsCount > 0
+        ? `${customFieldsCount} Defined`
+        : 'None',
+      connected: !customFieldsFailed && customFieldsCount > 0,
     },
   };
 
@@ -233,99 +281,173 @@ export default async function SettingsOverviewPage() {
       </div>
 
       {/* Metric Capsules */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <Link
-          href="/settings/integrations/slack"
-          className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-purple-500/40 hover:bg-purple-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-        >
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:scale-105 transition-transform shrink-0 border border-purple-500/20 shadow-2xs">
-              <Puzzle className="h-5 w-5" />
+      {permissions.isAdmin ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <Link
+            href="/settings/integrations/slack"
+            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-purple-500/40 hover:bg-purple-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:scale-105 transition-transform shrink-0 border border-purple-500/20 shadow-2xs">
+                <Puzzle className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Integrations
+                </p>
+                <p className="text-base font-bold text-foreground truncate mt-0.5">
+                  {slackFailed && jiraFailed && chatOpsFailed && teamsFailed
+                    ? 'Unavailable'
+                    : `${activeIntegrationsCount} Active`}
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Integrations
-              </p>
-              <p className="text-base font-bold text-foreground truncate mt-0.5">
-                {activeIntegrationsCount} Active
-              </p>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-purple-500/10 transition-all shrink-0 ml-2">
+              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
             </div>
-          </div>
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-purple-500/10 transition-all shrink-0 ml-2">
-            <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </Link>
+          </Link>
 
-        <Link
-          href="/settings/api-keys"
-          className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-emerald-500/40 hover:bg-emerald-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-        >
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform shrink-0 border border-emerald-500/20 shadow-2xs">
-              <KeyRound className="h-5 w-5" />
+          <Link
+            href="/settings/api-keys"
+            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-emerald-500/40 hover:bg-emerald-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform shrink-0 border border-emerald-500/20 shadow-2xs">
+                <KeyRound className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  API Keys
+                </p>
+                <p className="text-base font-bold text-foreground truncate mt-0.5">
+                  {apiKeysFailed ? 'Unavailable' : `${activeApiKeysCount} Active`}
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                API Keys
-              </p>
-              <p className="text-base font-bold text-foreground truncate mt-0.5">
-                {activeApiKeysCount} Active
-              </p>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-emerald-500/10 transition-all shrink-0 ml-2">
+              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
             </div>
-          </div>
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-emerald-500/10 transition-all shrink-0 ml-2">
-            <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </Link>
+          </Link>
 
-        <Link
-          href="/settings/custom-fields"
-          className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-indigo-500/40 hover:bg-indigo-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-        >
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform shrink-0 border border-indigo-500/20 shadow-2xs">
-              <SlidersHorizontal className="h-5 w-5" />
+          <Link
+            href="/settings/custom-fields"
+            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-indigo-500/40 hover:bg-indigo-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform shrink-0 border border-indigo-500/20 shadow-2xs">
+                <SlidersHorizontal className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Custom Fields
+                </p>
+                <p className="text-base font-bold text-foreground truncate mt-0.5">
+                  {customFieldsFailed ? 'Unavailable' : `${customFieldsCount} Defined`}
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Custom Fields
-              </p>
-              <p className="text-base font-bold text-foreground truncate mt-0.5">
-                {customFieldsCount} Defined
-              </p>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-indigo-500/10 transition-all shrink-0 ml-2">
+              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
             </div>
-          </div>
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-indigo-500/10 transition-all shrink-0 ml-2">
-            <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </Link>
+          </Link>
 
-        <Link
-          href="/settings/status-pages"
-          className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-cyan-500/40 hover:bg-cyan-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-        >
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 group-hover:scale-105 transition-transform shrink-0 border border-cyan-500/20 shadow-2xs">
-              <Globe className="h-5 w-5" />
+          <Link
+            href="/settings/status-pages"
+            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-cyan-500/40 hover:bg-cyan-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 group-hover:scale-105 transition-transform shrink-0 border border-cyan-500/20 shadow-2xs">
+                <Globe className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Status Page
+                </p>
+                <p className="text-base font-bold text-foreground truncate mt-0.5">
+                  {statusPageFailed
+                    ? 'Unavailable'
+                    : statusPage?.enabled
+                    ? statusPage.privacyMode === 'PUBLIC'
+                      ? 'Public'
+                      : 'Active'
+                    : 'Disabled'}
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Status Page
-              </p>
-              <p className="text-base font-bold text-foreground truncate mt-0.5">
-                {statusPage?.enabled
-                  ? statusPage.privacyMode === 'PUBLIC'
-                    ? 'Public'
-                    : 'Active'
-                  : 'Disabled'}
-              </p>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-cyan-500/10 transition-all shrink-0 ml-2">
+              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
             </div>
-          </div>
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-cyan-500/10 transition-all shrink-0 ml-2">
-            <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
-          </div>
-        </Link>
-      </div>
+          </Link>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          <Link
+            href="/settings/profile"
+            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-sky-500/40 hover:bg-sky-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 group-hover:scale-105 transition-transform shrink-0 border border-sky-500/20 shadow-2xs">
+                <User className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Personal Account
+                </p>
+                <p className="text-base font-bold text-foreground truncate mt-0.5">
+                  Profile & Preferences
+                </p>
+              </div>
+            </div>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-sky-500/10 transition-all shrink-0 ml-2">
+              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </Link>
+
+          <Link
+            href="/settings/security"
+            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-emerald-500/40 hover:bg-emerald-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform shrink-0 border border-emerald-500/20 shadow-2xs">
+                <Shield className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Security
+                </p>
+                <p className="text-base font-bold text-foreground truncate mt-0.5">
+                  Credentials & Sessions
+                </p>
+              </div>
+            </div>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-emerald-500/10 transition-all shrink-0 ml-2">
+              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </Link>
+
+          <Link
+            href="/settings/api-keys"
+            className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-amber-500/40 hover:bg-amber-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 group-hover:scale-105 transition-transform shrink-0 border border-amber-500/20 shadow-2xs">
+                <KeyRound className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  API Keys
+                </p>
+                <p className="text-base font-bold text-foreground truncate mt-0.5">
+                  {apiKeysFailed ? 'Unavailable' : `${activeApiKeysCount} Active`}
+                </p>
+              </div>
+            </div>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-amber-500/10 transition-all shrink-0 ml-2">
+              <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+            </div>
+          </Link>
+        </div>
+      )}
 
       {/* Settings Sections - Grouped List Rows */}
       <div className="space-y-8">

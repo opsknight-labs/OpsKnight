@@ -1,16 +1,5 @@
 import prisma from '@/lib/prisma';
-import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
-import { DirectUserAvatar } from '@/components/UserAvatar';
-import { getDefaultAvatar } from '@/lib/avatar';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/shadcn/table';
-import { Card } from '@/components/ui/shadcn/card';
+import { getUserTimeZone } from '@/lib/timezone';
 
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Shield, FileText } from 'lucide-react';
@@ -21,6 +10,7 @@ import { logger } from '@/lib/logger';
 
 import AuditFilters from '@/components/audit/AuditFilters';
 import AuditLogTable from '@/components/audit/AuditLogTable';
+import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,7 +64,7 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
   const actorId = awaitedParams?.actorId;
   const action = awaitedParams?.action;
   const search = awaitedParams?.search;
-  const page = Math.max(1, Number.parseInt(awaitedParams?.page || '1', 10) || 1);
+  const requestedPage = parsePageParam(awaitedParams?.page);
   const pageSize = 50;
 
   const userTimeZone = getUserTimeZone(currentUser);
@@ -100,17 +90,25 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
 
   let logs: AuditLogRow[];
   let totalLogs: number;
+  let page: number;
+  let totalPages: number;
   try {
-    [logs, totalLogs] = await Promise.all([
-      prisma.auditLog.findMany({
-        where,
-        include: auditLogInclude,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-      prisma.auditLog.count({ where }),
-    ]);
+    totalLogs = await prisma.auditLog.count({ where });
+    const pagination = calculatePaginationBounds({
+      totalItems: totalLogs,
+      page: requestedPage,
+      pageSize,
+    });
+    page = pagination.page;
+    totalPages = pagination.totalPages;
+
+    logs = await prisma.auditLog.findMany({
+      where,
+      include: auditLogInclude,
+      orderBy: { createdAt: 'desc' },
+      skip: pagination.skip,
+      take: pagination.take,
+    });
   } catch (error) {
     logger.error('[AuditLog] Failed to load records', {
       error,
@@ -127,7 +125,6 @@ export default async function AuditLogPage({ searchParams }: AuditLogPageProps) 
     createdAt: log.createdAt.toISOString(),
     details: serializeAuditDetails(log.details),
   }));
-  const totalPages = Math.max(1, Math.ceil(totalLogs / pageSize));
   const pageHref = (targetPage: number) => {
     const params = new URLSearchParams();
     if (entityType) params.set('entityType', entityType);

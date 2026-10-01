@@ -31,16 +31,18 @@ import {
   getMetricData,
   getPreviousPeriodValue,
 } from './widgets';
+import type { ChartType } from './widgets/ChartWidget';
 import type { SerializedSLAMetrics } from '@/lib/sla';
-import { getWidgetById } from '@/lib/reports/widget-registry';
+import { getWidgetById, getAllWidgets } from '@/lib/reports/widget-registry';
 
 type Widget = {
   id: string;
   widgetType: string;
   metricKey: string;
+  widgetDefinitionId?: string;
   title?: string | null;
   position: { x: number; y: number; w: number; h: number };
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 };
 
 type DashboardGridProps = {
@@ -244,6 +246,8 @@ const SortableWidgetItem = memo(function SortableWidgetItem({
     <div
       ref={setNodeRef}
       style={style}
+      data-widget-type={widget.widgetType}
+      data-widget-id={widget.id}
       className={`relative transition-opacity duration-200 ${
         isEditing ? 'group/widget' : ''
       } ${isDragging ? 'z-50' : ''}`}
@@ -253,12 +257,12 @@ const SortableWidgetItem = memo(function SortableWidgetItem({
         <div
           {...attributes}
           {...listeners}
-          className="absolute inset-0 z-10 cursor-grab active:cursor-grabbing"
+          className="absolute top-0 left-0 right-14 h-8 z-10 flex items-center justify-center cursor-grab active:cursor-grabbing"
           style={{ touchAction: 'none' }}
         >
           {/* Visible drag indicator */}
           <div className="absolute top-1 left-1/2 -translate-x-1/2 opacity-0 group-hover/widget:opacity-100 transition-opacity z-20">
-            <div className="flex items-center gap-1 px-2 py-1 bg-primary text-primary-foreground text-xs rounded-full shadow-lg">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted/80 text-muted-foreground text-xs">
               <GripVertical className="h-3 w-3" />
               <span>Drag</span>
             </div>
@@ -336,7 +340,9 @@ const WidgetContent = memo(function WidgetContent({
   onConfigure?: () => void;
 }) {
   // Get widget definition for default title
-  const definition = getWidgetById(widget.metricKey.replace('Widget', '').toLowerCase());
+  const definition = widget.widgetDefinitionId
+    ? getWidgetById(widget.widgetDefinitionId)
+    : getAllWidgets().find(w => w.metricKey === widget.metricKey);
   const title = widget.title || definition?.name || widget.metricKey;
 
   // Get metric data
@@ -363,7 +369,7 @@ const WidgetContent = memo(function WidgetContent({
         return (
           <GaugeWidget
             value={typeof data === 'number' ? data : null}
-            label={widget.config?.label}
+            label={typeof widget.config?.label === 'string' ? widget.config.label : undefined}
           />
         );
 
@@ -372,7 +378,9 @@ const WidgetContent = memo(function WidgetContent({
           <TableWidget
             data={Array.isArray(data) ? data : []}
             metricKey={widget.metricKey}
-            maxRows={widget.config?.maxRows}
+            maxRows={
+              typeof widget.config?.maxRows === 'number' ? widget.config.maxRows : undefined
+            }
           />
         );
 
@@ -380,24 +388,40 @@ const WidgetContent = memo(function WidgetContent({
         return (
           <InsightsWidget
             insights={Array.isArray(data) ? data : []}
-            maxItems={widget.config?.maxItems}
+            maxItems={
+              typeof widget.config?.maxItems === 'number' ? widget.config.maxItems : undefined
+            }
           />
         );
 
-      case 'chart':
+      case 'chart': {
+        const chartType =
+          typeof widget.config?.chartType === 'string'
+            ? (widget.config.chartType as ChartType)
+            : 'line';
+        const color =
+          typeof widget.config?.color === 'string' ? widget.config.color : undefined;
+        const height =
+          typeof widget.config?.height === 'number' ? widget.config.height : 160;
+        const showLegend =
+          typeof widget.config?.showLegend === 'boolean' ? widget.config.showLegend : undefined;
+        const showTrend =
+          typeof widget.config?.showTrend === 'boolean' ? widget.config.showTrend : undefined;
+
         return (
           <ChartWidget
             metricKey={widget.metricKey}
             metrics={metrics}
             config={{
-              chartType: widget.config?.chartType || 'line',
-              color: widget.config?.color,
-              height: widget.config?.height || 160,
-              showLegend: widget.config?.showLegend,
-              showTrend: widget.config?.showTrend,
+              chartType,
+              color,
+              height,
+              showLegend,
+              showTrend,
             }}
           />
         );
+      }
 
       default:
         return (

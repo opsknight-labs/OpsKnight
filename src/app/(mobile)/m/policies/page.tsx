@@ -3,10 +3,12 @@ import Link from 'next/link';
 import { ChevronRight, ShieldCheck } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import { Card } from '@/components/ui/shadcn/card';
+import { assertCanListPolicies } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MobilePoliciesPage() {
+  await assertCanListPolicies();
   const policies = await prisma.escalationPolicy.findMany({
     orderBy: { name: 'asc' },
     include: {

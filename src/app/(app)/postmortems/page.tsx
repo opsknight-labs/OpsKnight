@@ -15,9 +15,9 @@ import { FileText, CheckCircle2, Clock, Archive, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import PostmortemsListTable from '@/components/postmortem/PostmortemsListTable';
 import { getUserTimeZone } from '@/lib/timezone';
-import { cn } from '@/lib/utils';
 
 import PostmortemsFilters from '@/components/postmortem/PostmortemsFilters';
+import { parsePageParam, parseEnumValue } from '@/lib/pagination-parser';
 
 export default async function PostmortemsPage({
   searchParams,
@@ -30,10 +30,10 @@ export default async function PostmortemsPage({
   }
 
   const params = await searchParams;
-  const status = params.status as 'DRAFT' | 'PUBLISHED' | 'ARCHIVED' | undefined;
+  const status = parseEnumValue(params.status, ['DRAFT', 'PUBLISHED', 'ARCHIVED'] as const);
   const search = params.search;
   const serviceId = params.serviceId;
-  const page = params.page ? parseInt(params.page) : 1;
+  const page = parsePageParam(params.page);
   const [permissions, actor] = await Promise.all([
     getUserPermissions(),
     getCurrentAuthorizationActor(),
