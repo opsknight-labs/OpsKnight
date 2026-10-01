@@ -1,6 +1,6 @@
 schemaVersion: 1
 purpose: Generated topic inventory only. It makes no claim that a topic was ported or reviewed.
-sourceDigest: 47a632d40ada6cb09d4f8b92b2eef7780fd2a8509b8889a4e6e926fdf1d4229c
+sourceDigest: a5d2b624f9b60a651fd2bfa710d30d0d6f5a659c62641f612b81479a212acbb5
 topics:
   - id: readme_1
     source: docs/v1.5/README.md
@@ -2989,8 +2989,12 @@ topics:
   - id: deployment_mobile_pwa_7
     source: docs/v1.5/deployment/mobile-pwa.md
     level: 2
-    topic: Troubleshooting
+    topic: Real-device release gate
   - id: deployment_mobile_pwa_8
+    source: docs/v1.5/deployment/mobile-pwa.md
+    level: 2
+    topic: Troubleshooting
+  - id: deployment_mobile_pwa_9
     source: docs/v1.5/deployment/mobile-pwa.md
     level: 2
     topic: Related topics
