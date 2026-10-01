@@ -25,6 +25,18 @@ const supportedTopologies = [
   ['kind_helm_split_pgbouncer', 'Kubernetes: Helm + Split Runtime + PgBouncer'],
   ['kind_kustomize_split_pgbouncer', 'Kubernetes: Kustomize + Split Runtime + PgBouncer'],
   ['phase6_compose_integrated', 'Phase 6: Compose Integrated Runtime'],
+  ['phase6_compose_split', 'Phase 6: Compose Split Runtime'],
+  ['phase6_compose_split_pgbouncer', 'Phase 6: Compose Split Runtime + PgBouncer'],
+  ['phase6_swarm_integrated', 'Phase 6: Swarm Integrated Runtime'],
+  ['phase6_swarm_split', 'Phase 6: Swarm Split Runtime'],
+  ['phase6_swarm_split_pgbouncer', 'Phase 6: Swarm Split Runtime + PgBouncer'],
+  ['phase6_swarm_ha_split_pgbouncer', 'Phase 6: Swarm HA Split Runtime + PgBouncer'],
+  ['phase6_helm_integrated', 'Phase 6: Helm Integrated Runtime'],
+  ['phase6_helm_split', 'Phase 6: Helm Split Runtime'],
+  ['phase6_helm_split_pgbouncer', 'Phase 6: Helm Split Runtime + PgBouncer'],
+  ['phase6_kustomize_integrated', 'Phase 6: Kustomize Integrated Runtime'],
+  ['phase6_kustomize_split', 'Phase 6: Kustomize Split Runtime'],
+  ['phase6_kustomize_split_pgbouncer', 'Phase 6: Kustomize Split Runtime + PgBouncer'],
 ];
 
 const evidenceByTopology = new Map(artifact.results.map(item => [item.topologyId, item]));
