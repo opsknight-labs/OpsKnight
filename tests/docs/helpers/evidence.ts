@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import type { Page, TestInfo } from '@playwright/test';
+import type { Locator, Page, TestInfo } from '@playwright/test';
 
 const GLOBAL_ERROR_TEXT = /Dashboard couldn't load|Try again|Analytics couldn't load|Something went wrong/i;
 const VISIBLE_LOADING_SKELETON =
@@ -26,16 +26,27 @@ export async function assertEvidenceReady(page: Page) {
   }
 }
 
-export async function captureEvidence(page: Page, testInfo: TestInfo, journey: string, name: string) {
+export async function captureEvidence(
+  page: Page,
+  testInfo: TestInfo,
+  journey: string,
+  name: string,
+  target?: Locator
+) {
   await assertEvidenceReady(page);
   const directory = resolve('generated/docs-evidence/current', journey);
   // Journey and artifact names are fixed in the committed test suite.
   // eslint-disable-next-line security/detect-non-literal-fs-filename
   await mkdir(directory, { recursive: true });
   const image = resolve(directory, `${name}.png`);
+  const screenshotOptions = { path: image, animations: 'disabled' as const };
   // Viewport captures preserve fixed navigation chrome. Full-page stitching can
   // omit the fixed sidebar while retaining its content gutter.
-  await page.screenshot({ path: image, fullPage: false });
+  if (target) {
+    await target.screenshot(screenshotOptions);
+  } else {
+    await page.screenshot({ ...screenshotOptions, fullPage: false });
+  }
   const sourceRevision = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const requestedImage = process.env.DOCS_OPSKNIGHT_IMAGE;
   if (!requestedImage?.includes('@sha256:')) {

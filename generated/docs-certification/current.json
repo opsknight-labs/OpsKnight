@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-01T10:08:02.819Z",
-  "sourceRevision": "84b210b3faa220d136f55336434f8de06fdb8f61",
-  "documentationRevision": "84b210b3faa220d136f55336434f8de06fdb8f61",
-  "productSourceRevision": "84b210b3faa220d136f55336434f8de06fdb8f61",
-  "runtimeSourceRevision": "84b210b3faa220d136f55336434f8de06fdb8f61",
-  "runtimeImageDigest": "localhost:15000/opsknight-docs-v2@sha256:61cb9c50fb53b591feb880006a8c4d3583d21fc64a91aad0c27265f99baa7450",
+  "generatedAt": "2026-10-01T14:19:44.505Z",
+  "sourceRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed",
+  "documentationRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed",
+  "productSourceRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed",
+  "runtimeSourceRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed",
+  "runtimeImageDigest": "localhost:15000/opsknight-docs-v2@sha256:40c7adb7b32a8138af402f3f4a2439f427a121dfb747003051f307bb390f1c98",
   "releaseState": "upcoming",
   "checks": {
     "frontmatter": "passed",
@@ -48,7 +48,7 @@
     "rawLimits": 225,
     "publicLimits": 51,
     "journeyFiles": 3,
-    "evidenceScreenshots": 32,
+    "evidenceScreenshots": 30,
     "humanReviewAreas": 7,
     "humanReviewAreasPassed": 0,
     "humanReviewAreasPending": 7,
@@ -90,19 +90,17 @@
       "generated/docs-evidence/current/on-call/schedules.png",
       "generated/docs-evidence/current/operations/events.png",
       "generated/docs-evidence/current/operations/health-center.png",
-      "generated/docs-evidence/current/operations/performance.png",
       "generated/docs-evidence/current/operations/system-logs.png",
       "generated/docs-evidence/current/response/action-items.png",
       "generated/docs-evidence/current/response/postmortems.png",
       "generated/docs-evidence/current/services/list.png",
-      "generated/docs-evidence/current/services/service-objectives.png",
       "generated/docs-evidence/current/status-pages/list.png",
       "generated/docs-evidence/current/teams/list.png"
     ],
     "runtime": {
-      "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:61cb9c50fb53b591feb880006a8c4d3583d21fc64a91aad0c27265f99baa7450",
-      "digest": "localhost:15000/opsknight-docs-v2@sha256:61cb9c50fb53b591feb880006a8c4d3583d21fc64a91aad0c27265f99baa7450",
-      "sourceRevision": "84b210b3faa220d136f55336434f8de06fdb8f61"
+      "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:40c7adb7b32a8138af402f3f4a2439f427a121dfb747003051f307bb390f1c98",
+      "digest": "localhost:15000/opsknight-docs-v2@sha256:40c7adb7b32a8138af402f3f4a2439f427a121dfb747003051f307bb390f1c98",
+      "sourceRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed"
     }
   }
 }
