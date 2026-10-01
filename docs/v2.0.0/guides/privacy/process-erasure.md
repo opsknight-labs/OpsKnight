@@ -15,7 +15,7 @@ verification:
 
 ## Before you begin
 
-Use an `ERASURE` request with verified identity in `PROCESSING`. Require erasure capability and an approved change/case record. Erasure is destructive; take and validate required backups while respecting the erasure policy for restored data.
+Use an `ERASURE` request for a `USER` with verified identity in `PROCESSING`. Require erasure capability and an approved change/case record. Erasure is destructive; take and validate required backups while respecting the erasure policy for restored data. `STATUS_SUBSCRIBER` erasure is not automated in 2.0 and must follow the approved manual subscriber-data process.
 
 ## Open the feature
 
@@ -46,6 +46,7 @@ There is no UI undo. If execution fails, stop, preserve evidence, inspect the re
 - **Preview is blocked:** inspect legal hold, ownership, and dependency details.
 - **Execute is unavailable:** verify permission, identity, request type, and `PROCESSING` state.
 - **Concurrent/stale state:** reload the detail; another operator may have transitioned or claimed it.
+- **Subscriber erasure has no preview/execute action:** this is expected. Do not substitute a user ID or edit the database; complete and evidence the manual subscriber erasure workflow.
 
 ## Next steps
 

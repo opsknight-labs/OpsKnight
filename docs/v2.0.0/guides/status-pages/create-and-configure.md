@@ -8,7 +8,7 @@ reader: { status: READER_COMPLETE, task: Create and publish the OpsKnight status
 verification:
   level: source
   verified_at: 2026-10-01
-  evidence: ["src/app/(app)/settings/status-pages/page.tsx", "src/app/(app)/settings/status-pages/[pageId]/page.tsx", "src/components/status-page/StatusPageWorkspace.tsx"]
+  evidence: ["src/app/(app)/settings/status-pages/page.tsx", "src/app/(app)/settings/status-pages/[pageId]/page.tsx", "src/components/status-page/StatusPageWorkspace.tsx", "docs/v2.0.0/assets/status-pages.png"]
 ---
 
 # Create and configure the status page
@@ -22,6 +22,8 @@ List customer-facing services, choose a stable slug/domain, decide public versus
 ## Open the feature
 
 Open **Settings → Status Pages**. If no page exists, select **Create Status Page**; otherwise open the existing page workspace.
+
+![Status-page administration for the single supported page, mapped services, and publication state](/docs/v2.0.0/assets/status-pages.png)
 
 ## Configure the page
 

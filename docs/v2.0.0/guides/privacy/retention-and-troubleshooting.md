@@ -33,6 +33,10 @@ Do not bypass the hold. Escalate to the privacy/legal owner, record the decision
 
 Confirm the actor has the specific read/manage/export/erasure capability, not merely an administrator-looking role. Inspect application and audit logs using the request ID. Retry only after resolving the denied capability or transient failure.
 
+## Status-page subscriber request has no automation
+
+This is expected in 2.0. OpsKnight can create, assign, verify, transition, and audit a `STATUS_SUBSCRIBER` request, but automated export and erasure are unavailable. Use the approved manual fulfilment process, retain its evidence in the external case record, and mark the OpsKnight request complete only after verification. Never change the subject type to `USER` or operate directly on the database to bypass this boundary.
+
 ## Related pages
 
 - [Create and review a request](./manage-request)
