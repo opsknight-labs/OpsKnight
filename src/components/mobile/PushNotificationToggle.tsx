@@ -74,6 +74,7 @@ function standaloneMode() {
 
 type PushStage =
   | 'INIT'
+  | 'REQUEST_PERMISSION'
   | 'SERVICE_WORKER_READY'
   | 'FETCH_VAPID_KEY'
   | 'READ_SUBSCRIPTION'
@@ -530,6 +531,32 @@ export default function PushNotificationToggle() {
     setPushState('REGISTERING');
     let stage: PushStage = 'INIT';
     try {
+      let permission = Notification.permission;
+      if (permission === 'default') {
+        // Invoke the native permission request synchronously from the explicit
+        // Enable gesture. This is the reliable iOS Home Screen PWA ceremony:
+        // all SW/VAPID preparation is already complete, so no network or
+        // service-worker work sits between the user tap and this request.
+        stage = 'REQUEST_PERMISSION';
+        const permissionPromise = Notification.requestPermission();
+        permission = await promiseWithTimeout(
+          permissionPromise,
+          REQUEST_TIMEOUT_MS,
+          'Notification permission request timed out.'
+        );
+      }
+
+      if (permission === 'denied') {
+        setPushState('PERMISSION_DENIED');
+        setError('Notifications are blocked in browser or device settings.');
+        return;
+      }
+      if (permission !== 'granted') {
+        setPushState('PERMISSION_REQUIRED');
+        setError('Notification permission was not granted.');
+        return;
+      }
+
       let subscription = prepared.subscription;
 
       if (!subscription) {
@@ -547,9 +574,10 @@ export default function PushNotificationToggle() {
           applicationServerKey: prepared.applicationServerKey as unknown as BufferSource,
         };
 
-        // Keep one standards-based ceremony across browsers. All asynchronous
-        // preparation is complete before the button is enabled, so a new
-        // subscription is always initiated directly from the user gesture.
+        // All asynchronous SW/VAPID preparation is complete before Enable is
+        // available. With permission already granted, subscribe remains a
+        // direct gesture-path call; after a native permission prompt, no
+        // additional setup work runs before subscription creation.
         stage = 'CREATE_SUBSCRIPTION';
         const subscriptionPromise = prepared.registration.pushManager.subscribe(subscribeOptions);
         subscription = await promiseWithTimeout(
