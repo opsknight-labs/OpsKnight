@@ -1,6 +1,6 @@
 'use client';
 
-import { useSyncExternalStore, memo } from 'react';
+import { useSyncExternalStore, memo, useMemo } from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { SerializedSLAMetrics } from '@/lib/sla';
 
@@ -46,6 +46,7 @@ const CHART_COLORS = {
 };
 
 const PIE_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6b7280'];
+const EMPTY_HEATMAP_DATA: NonNullable<SerializedSLAMetrics['heatmapData']> = [];
 
 const ChartWidget = memo(function ChartWidget({
   metricKey,
@@ -61,6 +62,39 @@ const ChartWidget = memo(function ChartWidget({
     showLegend = false,
     showTrend = true,
   } = config;
+
+  const heatmapData = metrics.heatmapData ?? EMPTY_HEATMAP_DATA;
+  const { heatmapStart, heatmapDays } = useMemo(() => {
+    if (!heatmapData.length) {
+      const today = new Date();
+      const defaultStart = new Date(
+        Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 30)
+      );
+      return { heatmapStart: defaultStart, heatmapDays: 30 };
+    }
+
+    const timestamps = heatmapData
+      .map(d => {
+        const parts = d.date.split('-').map(Number);
+        return Date.UTC(parts[0], parts[1] - 1, parts[2]);
+      })
+      .filter(t => !Number.isNaN(t));
+
+    if (!timestamps.length) {
+      return { heatmapStart: new Date(), heatmapDays: 30 };
+    }
+
+    const minTimestamp = Math.min(...timestamps);
+    const maxTimestamp = Math.max(...timestamps);
+
+    const startDate = new Date(minTimestamp);
+    const totalDays = Math.max(1, Math.round((maxTimestamp - minTimestamp) / 86400000) + 1);
+
+    return {
+      heatmapStart: startDate,
+      heatmapDays: totalDays,
+    };
+  }, [heatmapData]);
 
   // Map metricKey to chart data
   const chartData = getChartData(metricKey, metrics, config);
@@ -124,9 +158,10 @@ const ChartWidget = memo(function ChartWidget({
         {chartType === 'heatmap' ? (
           <div className="h-full w-full overflow-hidden flex items-center justify-center p-1">
             <HeatmapCalendar
-              data={(metrics.heatmapData || []).map(d => ({ date: d.date, count: d.count }))}
+              data={heatmapData.map(d => ({ date: d.date, count: d.count }))}
+              startDate={heatmapStart}
+              days={heatmapDays}
               fitWidth={true}
-              days={(metrics.heatmapData || []).length || 30}
             />
           </div>
         ) : chartType === 'pie' ? (

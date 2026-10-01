@@ -73,7 +73,7 @@ describe('ChartWidget', () => {
   });
 
   describe('ChartWidget rendering', () => {
-    it('renders real heatmap calendar for heatmap chartType', () => {
+    it('renders real heatmap calendar for heatmap chartType with historical start', () => {
       const { container } = render(
         <ChartWidget
           metricKey="heatmapData"
@@ -82,8 +82,9 @@ describe('ChartWidget', () => {
         />
       );
 
-      // Verify HeatmapCalendar container is rendered
+      // Verify HeatmapCalendar container is rendered with historical dates
       expect(container.querySelector('.heatmap-calendar-container, svg')).toBeDefined();
+      expect(container.querySelector('title')?.textContent).toBe('Sep 1, 2026: 4 incidents');
     });
 
     it('renders dual-series chart for mttaVsMttr', () => {
