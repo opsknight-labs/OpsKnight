@@ -32,4 +32,44 @@ test.describe.serial('operational documentation surfaces', () => {
     await expect(page.getByText('daniel.kim@opsknight.com').first()).toBeVisible();
     await captureEvidence(page, testInfo, 'administration', 'users');
   });
+
+  test('captures service and team ownership', async ({ page }, testInfo) => {
+    await page.goto('/services');
+    await expect(page.getByText(DOCS_FIXTURES.service).first()).toBeVisible();
+    await expect(page.getByText('Edge Gateway').first()).toBeVisible();
+    await captureEvidence(page, testInfo, 'services', 'list');
+
+    await page.goto('/teams');
+    await expect(page.getByText(DOCS_FIXTURES.team).first()).toBeVisible();
+    await expect(page.getByText('Platform Infrastructure').first()).toBeVisible();
+    await captureEvidence(page, testInfo, 'teams', 'list');
+  });
+
+  test('captures action and reporting surfaces', async ({ page }, testInfo) => {
+    await page.goto('/action-items');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'response', 'action-items');
+
+    await page.goto('/analytics');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'analytics', 'overview');
+
+    await page.goto('/reports');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'analytics', 'reports');
+  });
+
+  test('captures audit and operational inspection surfaces', async ({ page }, testInfo) => {
+    await page.goto('/audit');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'administration', 'audit-log');
+
+    await page.goto('/events');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'operations', 'events');
+
+    await page.goto('/system-logs');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'operations', 'system-logs');
+  });
 });
