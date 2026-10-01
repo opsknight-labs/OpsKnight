@@ -727,6 +727,20 @@ export default function PushNotificationToggle() {
         </div>
       ) : null}
 
+      {pushState === 'SERVER_UNAVAILABLE' ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          className="h-11 min-h-[44px] w-full gap-2"
+          onClick={() => void unsubscribe()}
+          disabled={loading}
+        >
+          <BellOff className="h-4 w-4" aria-hidden="true" />
+          {loading ? 'Removing device…' : 'Remove this device'}
+        </Button>
+      ) : null}
+
       <div className="border-t border-border pt-3">
         <Button
           type="button"
