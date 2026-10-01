@@ -1,12 +1,11 @@
 ---
 title: Reports and dashboards
 description: Build, filter, interpret, share, and maintain operational dashboards in OpsKnight.
-type: how-to
+type: concept
 product_area: analytics
 audience: [responder, administrator, operator]
 reader:
   status: READER_COMPLETE
-  task: Use the complete reports and dashboards workflow.
 verification:
   level: source
   verified_at: 2026-10-01

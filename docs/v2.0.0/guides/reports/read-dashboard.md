@@ -15,7 +15,15 @@ verification:
 
 # Read and filter a dashboard
 
-## Set the scope before interpreting a value
+## Before you begin
+
+Confirm the reporting question, desired time window, and team or service scope. You need read access to the underlying operational records.
+
+## Open the feature
+
+Open **Reports & Dashboards**, then choose a saved dashboard or select a built-in template to preview it.
+
+## Configure the reporting scope
 
 At the top of a dashboard, set:
 
@@ -37,6 +45,10 @@ The filters are encoded in the URL. Switching between a saved dashboard and a te
 
 Use the [metrics reference](../../reference/metrics) for the precise population, unit, labels, and aggregation caveats behind a metric.
 
+## How dashboard calculation works
+
+The server calculates metrics from records the current authorization actor can read, using the selected window, team, service, and user time zone. Widgets then render different views of that serialized metric set; a similar title does not make two widget definitions semantically identical.
+
 ## Empty and partial results
 
 An empty chart is not automatically a runtime failure. It can mean no matching incidents exist in the selected window, the team/service combination has no matching records, the user cannot read those records, or the metric has no valid samples (for example, no resolved incidents for MTTR). Widen the time range, clear team/service filters, and compare with the incident list before escalating.
@@ -46,3 +58,20 @@ The **Updated** timestamp reports when the server rendered the current view. It 
 ## Switch views safely
 
 Use **Select dashboard** to switch among **My Dashboards**, accessible **Team & Shared** dashboards, and built-in **Templates**. Templates are previews until cloned. A saved dashboard name followed by `Team` or `Public` identifies its visibility; it does not imply edit ownership.
+
+## Verify the interpretation
+
+Record the time, team, and service filters with any reported value. Cross-check a count against the incident list for the same scope and confirm a rate's qualifying population in the metrics reference. Success means the scope survives a dashboard switch in the URL and the displayed values match the intended population.
+
+## Undo filter changes
+
+Set **Team** and **Service** back to **All**, restore the desired time range, or reopen the dashboard without query parameters. Because filters are not saved defaults, this does not alter the dashboard definition.
+
+## Troubleshooting
+
+If values are empty, contradictory, or stale, follow [Troubleshoot reports](./troubleshooting) and verify authorization, samples, scope, and refresh time.
+
+## Next steps
+
+- [Manage a saved dashboard](./manage-dashboard)
+- [Metrics reference](../../reference/metrics)

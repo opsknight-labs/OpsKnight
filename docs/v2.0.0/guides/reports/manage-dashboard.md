@@ -15,11 +15,25 @@ verification:
 
 # Manage a saved dashboard
 
-## Enter edit mode
+## Before you begin
+
+Open a saved dashboard that you own. Team/public visibility permits reading but does not grant edit or delete ownership.
+
+## Open the feature
+
+Open **Reports & Dashboards**, select the dashboard, open the gear menu, and choose **Edit Dashboard**.
+
+## Configure dashboard metadata
 
 Open a dashboard you own, select the gear menu, then **Edit Dashboard**. Edit mode exposes the name, description, drag handles, widget removal controls, **Add Widget**, **Cancel**, and **Save Changes**.
 
 Changes stay in the browser until saved. The **Unsaved changes** label indicates that the title, description, widget set, or order differs from the last saved baseline.
+
+![Saved dashboard in edit mode with editable metadata, drag handles, and save controls](/docs/v2.0.0/assets/dashboard-edit.png)
+
+## How saved state works
+
+The editor compares local title, description, widget definitions, positions, and configuration with the last saved baseline. Filter query parameters are separate display scope and are not included in that saved definition.
 
 ## Add and remove widgets
 
@@ -50,3 +64,19 @@ The API supports `PRIVATE`, `TEAM`, and `PUBLIC` visibility. The current dashboa
 4. OpsKnight deletes the dashboard and its widgets, then returns to **Reports & Dashboards**.
 
 Deletion cannot be undone in the UI. **Export as PDF** and **Share Dashboard** are visible but disabled in 2.0.
+
+## Verify saved changes
+
+After **Save Changes** confirms success, reload the same URL. Confirm the name, description, widget count, identities, and order remain. Return to **Reports** and confirm its card carries the expected name and count.
+
+## Troubleshooting
+
+- **Save Changes is disabled:** make an actual title, description, widget, or ordering change.
+- **A widget is disabled in the library:** that widget definition is already present.
+- **Changes disappear:** verify this is a saved dashboard URL and that the save confirmation completed.
+- **Edit or delete fails:** confirm the signed-in user owns the dashboard.
+
+## Next steps
+
+- [Read and filter dashboards](./read-dashboard)
+- [Troubleshoot reports](./troubleshooting)

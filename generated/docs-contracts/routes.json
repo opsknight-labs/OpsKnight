@@ -375,10 +375,10 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
+          "guides/reports/README.md",
           "concepts/analytics.md"
         ],
         "guides": [
-          "guides/reports/README.md",
           "guides/reports/create-dashboard.md"
         ],
         "reference": [],
