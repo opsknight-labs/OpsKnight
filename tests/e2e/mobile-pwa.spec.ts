@@ -246,6 +246,22 @@ test.describe('mobile PWA browser contract', () => {
     expect(current.searchParams.get('callbackUrl')).toBe('/m/incidents');
   });
 
+  test('rendered app head references the generated PWA manifest route', async ({
+    page,
+    request,
+  }) => {
+    await page.goto('/login');
+
+    const href = await page.locator('link[rel="manifest"]').getAttribute('href');
+    expect(href).toBeTruthy();
+
+    const manifestUrl = new URL(href!, page.url());
+    expect(manifestUrl.pathname).toBe('/manifest.webmanifest');
+
+    const response = await request.get(manifestUrl.pathname);
+    expect(response.ok()).toBe(true);
+  });
+
   test('manifest permits adaptive orientation and exposes responder shortcuts', async ({
     request,
   }) => {
