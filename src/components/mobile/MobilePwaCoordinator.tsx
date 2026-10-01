@@ -198,6 +198,7 @@ export default function MobilePwaCoordinator({
     }
 
     let reloading = false;
+    let knownRegistration: ServiceWorkerRegistration | null = null;
     const onControllerChange = () => {
       if (!applyingUpdateRef.current) return;
       if (reloading) return;
@@ -208,6 +209,7 @@ export default function MobilePwaCoordinator({
       if (event.data?.type === 'OFFLINE_QUEUE_CHANGED') void refreshQueue();
     };
     const inspectRegistration = (registration: ServiceWorkerRegistration) => {
+      knownRegistration = registration;
       try {
         registration?.active?.postMessage?.({ type: 'SET_ACTIVE_PRINCIPAL', ...principal });
         if (registration?.waiting && navigator.serviceWorker.controller) {
@@ -232,8 +234,31 @@ export default function MobilePwaCoordinator({
       }
     };
 
+    const onDeploymentUpdate = () => {
+      void (async () => {
+        try {
+          const registration =
+            knownRegistration ?? (await navigator.serviceWorker.getRegistration());
+          if (!registration) return;
+          if (!knownRegistration) inspectRegistration(registration);
+
+          // VersionCheck only signals that the deployment changed. The
+          // coordinator actively asks the browser to discover a new worker,
+          // while activation remains explicitly user-controlled.
+          await registration.update();
+          if (registration.waiting && navigator.serviceWorker.controller) {
+            setWaitingWorker(registration.waiting);
+            setApplyingUpdate(false);
+          }
+        } catch (error) {
+          logger.warn('mobile.serviceWorker.update_check_failed', { error });
+        }
+      })();
+    };
+
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
     navigator.serviceWorker.addEventListener('message', onMessage);
+    window.addEventListener('opsknight:deployment-update', onDeploymentUpdate);
     void navigator.serviceWorker
       .getRegistration()
       .then(registration => {
@@ -248,6 +273,7 @@ export default function MobilePwaCoordinator({
       document.removeEventListener('visibilitychange', visibility);
       navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
       navigator.serviceWorker.removeEventListener('message', onMessage);
+      window.removeEventListener('opsknight:deployment-update', onDeploymentUpdate);
     };
   }, [authGeneration, principalId, recordSessionActivity, refreshQueue, requestSync]);
 
