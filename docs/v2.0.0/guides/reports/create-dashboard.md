@@ -19,7 +19,11 @@ verification:
 
 Sign in and confirm you can read the teams, services, and incidents the dashboard should summarize. Dashboard metrics respect that authorization scope; creating a dashboard does not grant access to additional operational data.
 
-## Choose blank or template
+## Open the feature
+
+Open **Reports & Dashboards**, then select **Create Dashboard**.
+
+## Configure the starting point
 
 1. Open **Reports & Dashboards**.
 2. Select **Create Dashboard**.
@@ -33,6 +37,8 @@ Sign in and confirm you can read the teams, services, and incidents the dashboar
 
 Selecting a template opens a live preview. It does not create a saved dashboard yet.
 
+![Populated SRE Operations template preview with operational metric cards and charts](/docs/v2.0.0/assets/dashboard-template.png)
+
 ## Create from a template
 
 1. Review the preview with the default seven-day, all-team, all-service scope.
@@ -45,6 +51,8 @@ Selecting a template opens a live preview. It does not create a saved dashboard 
 8. Select **Save Changes**.
 
 Success means the dashboard has a stable `/reports/executive/<id>` URL, appears under **My Dashboards**, and remains after a reload.
+
+![Saved Production Reliability Overview dashboard populated with incident, SLA, trend, and service-health data](/docs/v2.0.0/assets/dashboard-saved.png)
 
 ## Create from scratch
 
@@ -60,3 +68,22 @@ Success means the dashboard has a stable `/reports/executive/<id>` URL, appears 
 Reload the page, then return to **Reports & Dashboards**. Confirm the card shows the expected name and widget count. Reopen it and verify the title, description, widget order, and widget set persisted. Change one filter and confirm the URL and displayed metrics update together.
 
 If the dashboard is empty or a save fails, use [Troubleshoot reports](./troubleshooting).
+
+## What OpsKnight does
+
+OpsKnight creates a dashboard owned by the signed-in user and persists each widget's definition, metric, visual type, position, and configuration. Cloning copies a template into independent saved state; later template changes do not rewrite the clone.
+
+## Delete or replace the dashboard
+
+To undo creation, open the saved dashboard, select the gear menu, and choose **Delete Dashboard**. To restart without losing the original immediately, create and verify the replacement first, then delete the obsolete dashboard.
+
+## Troubleshooting
+
+- If cloning does not navigate to a saved URL, do not assume the dashboard exists; return to **Reports** and check **My Dashboards**.
+- If a template is empty, clear filters and widen the time range.
+- If saving is denied, confirm you own the saved dashboard.
+
+## Next steps
+
+- [Read and filter the dashboard](./read-dashboard)
+- [Manage widgets and layout](./manage-dashboard)

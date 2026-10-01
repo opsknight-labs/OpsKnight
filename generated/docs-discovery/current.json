@@ -36207,23 +36207,36 @@
         },
         "documentation": {
           "concepts": [
+            "concepts/analytics.md",
             "concepts/authentication.md"
           ],
           "guides": [
-            "guides/identity/configure-oidc.md"
+            "guides/identity/configure-oidc.md",
+            "guides/reports/README.md",
+            "guides/reports/create-dashboard.md",
+            "guides/reports/manage-dashboard.md",
+            "guides/reports/read-dashboard.md",
+            "guides/reports/troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
-            "reference/configuration/README.md"
+            "reference/configuration/README.md",
+            "reference/metrics.md"
           ],
           "troubleshooting": []
         },
         "documentationMapping": "capability-source",
         "tests": [
+          "tests/api/reports-metrics-response.test.ts",
           "tests/lib/oidc-provider.test.ts",
-          "tests/lib/oidc-validation-provider-matrix.test.ts"
+          "tests/lib/oidc-validation-provider-matrix.test.ts",
+          "tests/unit/analytics-panels.test.ts"
         ],
-        "runtimeEvidence": [],
+        "runtimeEvidence": [
+          "generated/docs-evidence/current/analytics/dashboard-saved.png",
+          "generated/docs-evidence/current/analytics/dashboard-template.png",
+          "generated/docs-evidence/current/analytics/reports.png"
+        ],
         "introducedVersion": "unknown",
         "availability": "unknown",
         "claims": [
@@ -36359,23 +36372,36 @@
         },
         "documentation": {
           "concepts": [
+            "concepts/analytics.md",
             "concepts/authentication.md"
           ],
           "guides": [
-            "guides/identity/configure-oidc.md"
+            "guides/identity/configure-oidc.md",
+            "guides/reports/README.md",
+            "guides/reports/create-dashboard.md",
+            "guides/reports/manage-dashboard.md",
+            "guides/reports/read-dashboard.md",
+            "guides/reports/troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
-            "reference/configuration/README.md"
+            "reference/configuration/README.md",
+            "reference/metrics.md"
           ],
           "troubleshooting": []
         },
         "documentationMapping": "capability-source",
         "tests": [
+          "tests/api/reports-metrics-response.test.ts",
           "tests/lib/oidc-provider.test.ts",
-          "tests/lib/oidc-validation-provider-matrix.test.ts"
+          "tests/lib/oidc-validation-provider-matrix.test.ts",
+          "tests/unit/analytics-panels.test.ts"
         ],
-        "runtimeEvidence": [],
+        "runtimeEvidence": [
+          "generated/docs-evidence/current/analytics/dashboard-saved.png",
+          "generated/docs-evidence/current/analytics/dashboard-template.png",
+          "generated/docs-evidence/current/analytics/reports.png"
+        ],
         "introducedVersion": "unknown",
         "availability": "unknown",
         "claims": [
@@ -63924,7 +63950,11 @@
           "tests/api/reports-metrics-response.test.ts",
           "tests/unit/analytics-panels.test.ts"
         ],
-        "runtimeEvidence": [],
+        "runtimeEvidence": [
+          "generated/docs-evidence/current/analytics/dashboard-saved.png",
+          "generated/docs-evidence/current/analytics/dashboard-template.png",
+          "generated/docs-evidence/current/analytics/reports.png"
+        ],
         "introducedVersion": "unknown",
         "availability": "unknown",
         "claims": [
@@ -64841,8 +64871,15 @@
           "troubleshooting": []
         },
         "documentationMapping": "explicit-route-rule",
-        "tests": [],
-        "runtimeEvidence": [],
+        "tests": [
+          "tests/api/reports-metrics-response.test.ts",
+          "tests/unit/analytics-panels.test.ts"
+        ],
+        "runtimeEvidence": [
+          "generated/docs-evidence/current/analytics/dashboard-saved.png",
+          "generated/docs-evidence/current/analytics/dashboard-template.png",
+          "generated/docs-evidence/current/analytics/reports.png"
+        ],
         "introducedVersion": "unknown",
         "availability": "unknown",
         "claims": [
@@ -64893,8 +64930,15 @@
           "troubleshooting": []
         },
         "documentationMapping": "explicit-route-rule",
-        "tests": [],
-        "runtimeEvidence": [],
+        "tests": [
+          "tests/api/reports-metrics-response.test.ts",
+          "tests/unit/analytics-panels.test.ts"
+        ],
+        "runtimeEvidence": [
+          "generated/docs-evidence/current/analytics/dashboard-saved.png",
+          "generated/docs-evidence/current/analytics/dashboard-template.png",
+          "generated/docs-evidence/current/analytics/reports.png"
+        ],
         "introducedVersion": "unknown",
         "availability": "unknown",
         "claims": [
@@ -64946,8 +64990,15 @@
           "troubleshooting": []
         },
         "documentationMapping": "explicit-route-rule",
-        "tests": [],
-        "runtimeEvidence": [],
+        "tests": [
+          "tests/api/reports-metrics-response.test.ts",
+          "tests/unit/analytics-panels.test.ts"
+        ],
+        "runtimeEvidence": [
+          "generated/docs-evidence/current/analytics/dashboard-saved.png",
+          "generated/docs-evidence/current/analytics/dashboard-template.png",
+          "generated/docs-evidence/current/analytics/reports.png"
+        ],
         "introducedVersion": "unknown",
         "availability": "unknown",
         "claims": [
@@ -64991,18 +65042,25 @@
         },
         "documentation": {
           "concepts": [
+            "guides/reports/README.md",
             "concepts/analytics.md"
           ],
           "guides": [
-            "guides/reports/README.md",
             "guides/reports/create-dashboard.md"
           ],
           "reference": [],
           "troubleshooting": []
         },
         "documentationMapping": "explicit-route-rule",
-        "tests": [],
-        "runtimeEvidence": [],
+        "tests": [
+          "tests/api/reports-metrics-response.test.ts",
+          "tests/unit/analytics-panels.test.ts"
+        ],
+        "runtimeEvidence": [
+          "generated/docs-evidence/current/analytics/dashboard-saved.png",
+          "generated/docs-evidence/current/analytics/dashboard-template.png",
+          "generated/docs-evidence/current/analytics/reports.png"
+        ],
         "introducedVersion": "unknown",
         "availability": "unknown",
         "claims": [
@@ -110952,16 +111010,33 @@
           "semanticClassification": "INTERNAL_IMPLEMENTATION"
         },
         "documentation": {
-          "concepts": [],
-          "guides": [],
+          "concepts": [
+            "concepts/analytics.md"
+          ],
+          "guides": [
+            "guides/reports/README.md",
+            "guides/reports/create-dashboard.md",
+            "guides/reports/manage-dashboard.md",
+            "guides/reports/read-dashboard.md",
+            "guides/reports/troubleshooting.md"
+          ],
           "reference": [
-            "reference/limits.md"
+            "reference/api/README.md",
+            "reference/limits.md",
+            "reference/metrics.md"
           ],
           "troubleshooting": []
         },
         "documentationMapping": "capability-source",
-        "tests": [],
-        "runtimeEvidence": [],
+        "tests": [
+          "tests/api/reports-metrics-response.test.ts",
+          "tests/unit/analytics-panels.test.ts"
+        ],
+        "runtimeEvidence": [
+          "generated/docs-evidence/current/analytics/dashboard-saved.png",
+          "generated/docs-evidence/current/analytics/dashboard-template.png",
+          "generated/docs-evidence/current/analytics/reports.png"
+        ],
         "introducedVersion": "unknown",
         "availability": "unknown",
         "claims": [
@@ -111002,16 +111077,33 @@
           "semanticClassification": "INTERNAL_IMPLEMENTATION"
         },
         "documentation": {
-          "concepts": [],
-          "guides": [],
+          "concepts": [
+            "concepts/analytics.md"
+          ],
+          "guides": [
+            "guides/reports/README.md",
+            "guides/reports/create-dashboard.md",
+            "guides/reports/manage-dashboard.md",
+            "guides/reports/read-dashboard.md",
+            "guides/reports/troubleshooting.md"
+          ],
           "reference": [
-            "reference/limits.md"
+            "reference/api/README.md",
+            "reference/limits.md",
+            "reference/metrics.md"
           ],
           "troubleshooting": []
         },
         "documentationMapping": "capability-source",
-        "tests": [],
-        "runtimeEvidence": [],
+        "tests": [
+          "tests/api/reports-metrics-response.test.ts",
+          "tests/unit/analytics-panels.test.ts"
+        ],
+        "runtimeEvidence": [
+          "generated/docs-evidence/current/analytics/dashboard-saved.png",
+          "generated/docs-evidence/current/analytics/dashboard-template.png",
+          "generated/docs-evidence/current/analytics/reports.png"
+        ],
         "introducedVersion": "unknown",
         "availability": "unknown",
         "claims": [
