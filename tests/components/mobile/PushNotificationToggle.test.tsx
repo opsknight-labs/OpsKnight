@@ -43,6 +43,43 @@ describe('PushNotificationToggle', () => {
     vi.unstubAllGlobals();
   });
 
+  it('shows a stage-aware message when the service worker never becomes ready', async () => {
+    vi.useFakeTimers();
+    try {
+      const registration = {
+        active: { scriptURL: 'https://opsknight.example/sw.js' },
+        waiting: null,
+        installing: null,
+        pushManager: {
+          getSubscription: vi.fn().mockResolvedValue(null),
+        },
+      };
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(registration),
+          register: vi.fn().mockResolvedValue(registration),
+          ready: new Promise(() => {}),
+        },
+        configurable: true,
+      });
+
+      render(<PushNotificationToggle />);
+
+      await act(async () => {
+        // Let preflight reach the ready wait, then exhaust the 25s budget.
+        for (let i = 0; i < 12; i += 1) await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(25_000);
+        for (let i = 0; i < 12; i += 1) await Promise.resolve();
+      });
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Service worker did not become ready. Retry.'
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('allows iOS-style service worker readiness to take longer than the old 8 second budget', async () => {
     vi.useFakeTimers();
     try {
