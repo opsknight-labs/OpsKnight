@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { notify } from '@/lib/toast';
@@ -180,6 +181,36 @@ export default function DashboardViewer({
 
     return () => clearInterval(intervalId);
   }, [autoRefreshInterval, router]);
+
+  // Portal mount: track whether we are safely client-side so createPortal can run.
+  // Also lock document.body scroll to prevent the hidden content-shell from scrolling behind.
+  const [portalMounted, setPortalMounted] = useState(false);
+  const portalRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    // Create and attach the portal host div to body once on the client.
+    const el = document.createElement('div');
+    el.id = 'kiosk-portal-root';
+    document.body.appendChild(el);
+    portalRef.current = el;
+    setPortalMounted(true);
+    return () => {
+      document.body.removeChild(el);
+      portalRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    // Lock body scroll when kiosk overlay is active so the app shell doesn't scroll behind it.
+    if (isKioskMode) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isKioskMode]);
 
   // Live clock for TV / Wallboard mode
   const [wallboardClock, setWallboardClock] = useState<string>('');
@@ -498,160 +529,166 @@ export default function DashboardViewer({
         </div>
       </div>
 
-      {/* TV / NOC Wallboard Full-Screen Takeover Overlay */}
-      {isKioskMode && (
-        <div
-          role="region"
-          aria-label="NOC Wallboard Presentation"
-          className="fixed inset-0 z-[99999] bg-[#09090b] text-zinc-100 overflow-y-auto flex flex-col p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-200 print:hidden"
-        >
-          {/* Wallboard Top Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-zinc-800/80 bg-zinc-950/60 -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 lg:-mx-8 lg:-mt-8 p-4 sm:p-6 lg:p-8 backdrop-blur-md sticky top-0 z-50">
-            {/* Left: Branding & Status */}
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold select-none shadow-xs">
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-                </span>
-                <span className="tracking-wider">NOC Wallboard</span>
-                <span className="text-zinc-600">•</span>
-                <span className="text-emerald-400 font-bold">LIVE</span>
-              </div>
-              {wallboardClock && (
-                <div className="font-mono text-xs text-zinc-300 bg-zinc-900/90 px-2.5 py-1 rounded-md border border-zinc-800 shadow-xs">
-                  {wallboardClock}
-                </div>
-              )}
-            </div>
-
-            {/* Center: Title & Scope */}
-            <div className="flex flex-col items-center text-center">
-              <div className="text-lg md:text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                {dashboardTitle}
-                {isTemplate && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800 text-amber-400 border border-zinc-700">
-                    <Sparkles className="h-2.5 w-2.5" />
-                    Template
+      {/* TV / NOC Wallboard Full-Screen Takeover — rendered via portal at document.body
+          so it is NEVER clipped by overflow-y:auto on .content-shell */}
+      {portalMounted &&
+        isKioskMode &&
+        portalRef.current &&
+        createPortal(
+          <div
+            role="region"
+            aria-label="NOC Wallboard Presentation"
+            className="fixed inset-0 z-[99999] bg-[#09090b] text-zinc-100 overflow-y-auto flex flex-col p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-200 print:hidden"
+            style={{ zIndex: 99999 }}
+          >
+            {/* Wallboard Top Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-zinc-800/80 bg-zinc-950/60 -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 lg:-mx-8 lg:-mt-8 p-4 sm:p-6 lg:p-8 backdrop-blur-md sticky top-0 z-10">
+              {/* Left: Branding & Status */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold select-none shadow-xs">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
                   </span>
+                  <span className="tracking-wider">NOC Wallboard</span>
+                  <span className="text-zinc-600">•</span>
+                  <span className="text-emerald-400 font-bold">LIVE</span>
+                </div>
+                {wallboardClock && (
+                  <div className="font-mono text-xs text-zinc-300 bg-zinc-900/90 px-2.5 py-1 rounded-md border border-zinc-800 shadow-xs">
+                    {wallboardClock}
+                  </div>
                 )}
               </div>
-              <div className="text-xs text-zinc-400 flex items-center gap-2 mt-0.5">
-                <span>
-                  {TIME_WINDOWS.find(w => w.value === String(currentFilters.windowDays))?.label ||
-                    `${currentFilters.windowDays}d`}
-                </span>
-                <span>•</span>
-                <span>
-                  {currentFilters.teamId
-                    ? filterOptions.teams.find(t => t.id === currentFilters.teamId)?.name || 'Team'
-                    : 'All Teams'}
-                </span>
-                <span>•</span>
-                <span>
-                  {currentFilters.serviceId
-                    ? filterOptions.services.find(s => s.id === currentFilters.serviceId)?.name ||
-                      'Service'
-                    : 'All Services'}
-                </span>
-                <span>•</span>
-                <span>{localWidgets.length} widgets</span>
+
+              {/* Center: Title & Scope */}
+              <div className="flex flex-col items-center text-center">
+                <div className="text-lg md:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                  {dashboardTitle}
+                  {isTemplate && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800 text-amber-400 border border-zinc-700">
+                      <Sparkles className="h-2.5 w-2.5" />
+                      Template
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-zinc-400 flex items-center gap-2 mt-0.5">
+                  <span>
+                    {TIME_WINDOWS.find(w => w.value === String(currentFilters.windowDays))?.label ||
+                      `${currentFilters.windowDays}d`}
+                  </span>
+                  <span>•</span>
+                  <span>
+                    {currentFilters.teamId
+                      ? filterOptions.teams.find(t => t.id === currentFilters.teamId)?.name || 'Team'
+                      : 'All Teams'}
+                  </span>
+                  <span>•</span>
+                  <span>
+                    {currentFilters.serviceId
+                      ? filterOptions.services.find(s => s.id === currentFilters.serviceId)?.name ||
+                        'Service'
+                      : 'All Services'}
+                  </span>
+                  <span>•</span>
+                  <span>{localWidgets.length} widgets</span>
+                </div>
+              </div>
+
+              {/* Right: Controls & Exit */}
+              <div className="flex items-center gap-2.5">
+                {/* Auto Refresh pill & control */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={cn(
+                        'bg-zinc-900/90 border-zinc-700/80 text-zinc-200 hover:text-white gap-1.5 text-xs font-medium h-9',
+                        autoRefreshInterval > 0 &&
+                          'border-emerald-500/50 text-emerald-400 bg-emerald-500/10'
+                      )}
+                    >
+                      <RefreshCw
+                        className={cn(
+                          'h-3.5 w-3.5',
+                          autoRefreshInterval > 0 && 'animate-spin [animation-duration:3s]'
+                        )}
+                      />
+                      <span>{autoRefreshInterval > 0 ? `${refreshCountdown}s` : 'Manual'}</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-zinc-200">
+                    <div className="px-2 py-1 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                      Auto-Refresh Interval
+                    </div>
+                    <DropdownMenuItem onClick={() => setAutoRefreshInterval(0)}>
+                      <span>Off (Manual)</span>
+                      {autoRefreshInterval === 0 && (
+                        <Check className="h-4 w-4 ml-auto text-primary" />
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setAutoRefreshInterval(30)}>
+                      <span>Every 30 seconds</span>
+                      {autoRefreshInterval === 30 && (
+                        <Check className="h-4 w-4 ml-auto text-primary" />
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setAutoRefreshInterval(60)}>
+                      <span>Every 1 minute</span>
+                      {autoRefreshInterval === 60 && (
+                        <Check className="h-4 w-4 ml-auto text-primary" />
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setAutoRefreshInterval(300)}>
+                      <span>Every 5 minutes</span>
+                      {autoRefreshInterval === 300 && (
+                        <Check className="h-4 w-4 ml-auto text-primary" />
+                      )}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.refresh()}
+                  className="bg-zinc-900/90 border-zinc-700/80 text-zinc-200 hover:text-white h-9 px-2.5"
+                  title="Refresh metrics now"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+
+                {/* Exit TV Mode Button */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={exitKioskMode}
+                  className="bg-zinc-900/90 hover:bg-zinc-800 border-zinc-700 text-zinc-200 hover:text-white font-medium text-xs h-9 gap-1.5"
+                >
+                  <Minimize2 className="h-3.5 w-3.5" />
+                  <span>Exit (Esc)</span>
+                </Button>
               </div>
             </div>
 
-            {/* Right: Controls & Exit */}
-            <div className="flex items-center gap-2.5">
-              {/* Auto Refresh pill & control */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={cn(
-                      'bg-zinc-900/90 border-zinc-700/80 text-zinc-200 hover:text-white gap-1.5 text-xs font-medium h-9',
-                      autoRefreshInterval > 0 &&
-                        'border-emerald-500/50 text-emerald-400 bg-emerald-500/10'
-                    )}
-                  >
-                    <RefreshCw
-                      className={cn(
-                        'h-3.5 w-3.5',
-                        autoRefreshInterval > 0 && 'animate-spin [animation-duration:3s]'
-                      )}
-                    />
-                    <span>{autoRefreshInterval > 0 ? `${refreshCountdown}s` : 'Manual'}</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-zinc-200">
-                  <div className="px-2 py-1 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                    Auto-Refresh Interval
-                  </div>
-                  <DropdownMenuItem onClick={() => setAutoRefreshInterval(0)}>
-                    <span>Off (Manual)</span>
-                    {autoRefreshInterval === 0 && (
-                      <Check className="h-4 w-4 ml-auto text-primary" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setAutoRefreshInterval(30)}>
-                    <span>Every 30 seconds</span>
-                    {autoRefreshInterval === 30 && (
-                      <Check className="h-4 w-4 ml-auto text-primary" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setAutoRefreshInterval(60)}>
-                    <span>Every 1 minute</span>
-                    {autoRefreshInterval === 60 && (
-                      <Check className="h-4 w-4 ml-auto text-primary" />
-                    )}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setAutoRefreshInterval(300)}>
-                    <span>Every 5 minutes</span>
-                    {autoRefreshInterval === 300 && (
-                      <Check className="h-4 w-4 ml-auto text-primary" />
-                    )}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => router.refresh()}
-                className="bg-zinc-900/90 border-zinc-700/80 text-zinc-200 hover:text-white h-9 px-2.5"
-                title="Refresh metrics now"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-              </Button>
-
-              {/* Exit TV Mode Button */}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={exitKioskMode}
-                className="bg-zinc-900/90 hover:bg-zinc-800 border-zinc-700 text-zinc-200 hover:text-white font-medium text-xs h-9 gap-1.5"
-              >
-                <Minimize2 className="h-3.5 w-3.5" />
-                <span>Exit (Esc)</span>
-              </Button>
+            {/* NOC Grid Area */}
+            <div className="flex-1 w-full max-w-[1920px] mx-auto">
+              <DashboardGrid
+                widgets={localWidgets}
+                metrics={metrics}
+                isEditing={false}
+                isLoading={false}
+                columns={layout?.columns ?? 4}
+                rowHeight={layout?.rowHeight ?? 150}
+                gap={16}
+              />
             </div>
-          </div>
-
-          {/* NOC Grid Area */}
-          <div className="flex-1 w-full max-w-[1920px] mx-auto">
-            <DashboardGrid
-              widgets={localWidgets}
-              metrics={metrics}
-              isEditing={false}
-              isLoading={false}
-              columns={layout?.columns ?? 4}
-              rowHeight={layout?.rowHeight ?? 150}
-              gap={16}
-            />
-          </div>
-        </div>
-      )}
+          </div>,
+          portalRef.current
+        )}
 
       {/* Header */}
       <div
