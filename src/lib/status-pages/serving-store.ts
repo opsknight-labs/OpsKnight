@@ -211,6 +211,8 @@ class PostgreSqlStatusPageServingStore implements StatusPageServingStore {
     return observed('read_manifest', async () => {
       const row = await prisma.statusPageSnapshot.findUnique({ where: { statusPageId: pageId } });
       if (!row) return null;
+      const isRebuildInFlight =
+        row.publishedRevision !== row.revision && row.servingState === 'LIVE' && !!row.payload;
       return {
         pageId,
         revision: row.publishedRevision.toString(),
@@ -222,7 +224,7 @@ class PostgreSqlStatusPageServingStore implements StatusPageServingStore {
         publishedAt: row.generatedAt?.toISOString() ?? new Date(0).toISOString(),
         schemaVersion: 3,
         integrityHash: row.payload ? statusSnapshotIntegrity(row.payload) : '0'.repeat(64),
-        servingState: row.servingState as StatusPageServingState,
+        servingState: isRebuildInFlight ? 'STALE_OK' : (row.servingState as StatusPageServingState),
         lastGoodRevision:
           row.publishedRevision >= BigInt(0) ? row.publishedRevision.toString() : null,
         lastGoodSnapshotKey:
@@ -252,7 +254,13 @@ class PostgreSqlStatusPageServingStore implements StatusPageServingStore {
         where: { statusPageId: pageId },
         select: { payload: true, publishedRevision: true, servingState: true },
       });
-      return row?.servingState === 'STALE_OK' && row.payload && row.publishedRevision >= BigInt(0)
+      const isServingAllowed =
+        row &&
+        row.payload &&
+        row.publishedRevision >= BigInt(0) &&
+        row.servingState !== 'DISABLED' &&
+        row.servingState !== 'FAIL_CLOSED';
+      return isServingAllowed
         ? { revision: row.publishedRevision.toString(), payload: row.payload }
         : null;
     });
