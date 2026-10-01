@@ -14,7 +14,7 @@ import Link from 'next/link';
 import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
 import { getScimConfig } from '@/lib/scim';
 import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
-import { ShieldCheck, KeyRound, Fingerprint, ExternalLink, Users } from 'lucide-react';
+import { ShieldCheck, KeyRound, Fingerprint, ExternalLink } from 'lucide-react';
 
 export default async function SecuritySettingsPage() {
   const session = await getServerSession(await getAuthOptions());

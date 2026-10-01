@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,7 +33,6 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
-  ExternalLink,
   BookOpen,
 } from 'lucide-react';
 
