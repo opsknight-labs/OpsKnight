@@ -20,8 +20,12 @@ import {
   CheckCircle2,
   XCircle,
   Layers,
+  ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
+import { Button } from '@/components/ui/shadcn/button';
+import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
+import { getScimConfig } from '@/lib/scim';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -67,12 +71,13 @@ export default async function SystemSettingsPage() {
 
     const prisma = (await import('@/lib/prisma')).default;
 
-    const [systemSettings, rawOidcConfig] = await Promise.all([
+    const [systemSettings, rawOidcConfig, scimConfig] = await Promise.all([
       prisma.systemSettings.findUnique({
         where: { id: 'default' },
         select: { appUrl: true, updatedAt: true },
       }),
       prisma.oidcConfig.findFirst({ orderBy: { updatedAt: 'desc' } }),
+      getScimConfig(),
     ]);
 
     const appUrl = systemSettings?.appUrl ?? null;
@@ -80,6 +85,7 @@ export default async function SystemSettingsPage() {
       process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
     const authOrigin = resolveAuthPublicOrigin({ dbAppUrl: appUrl });
     const ssoCallbackUrl = authOrigin.callbackUrl;
+    const scimTenantUrl = `${authOrigin.origin}/api/scim/v2`;
 
     let oidcConfig: {
       enabled: boolean;
@@ -158,11 +164,32 @@ export default async function SystemSettingsPage() {
     );
 
     const ssoTab = (
-      <SsoSettingsForm
-        initialConfig={oidcConfig}
-        callbackUrl={ssoCallbackUrl}
-        hasEncryptionKey={env.encryptionKey}
-      />
+      <div className="space-y-8">
+        <SsoSettingsForm
+          initialConfig={oidcConfig}
+          callbackUrl={ssoCallbackUrl}
+          hasEncryptionKey={env.encryptionKey}
+        />
+        <SettingsSection
+          title="SCIM 2.0 User Provisioning"
+          description="Automate identity lifecycle management: provision, synchronize, and de-provision users directly from Microsoft Entra ID, Okta, or other enterprise identity providers."
+          footer={
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                OpsKnight implements RFC 7644 SCIM 2.0 for automated user lifecycle operations.
+              </p>
+              <Button variant="ghost" size="sm" asChild className="gap-1 text-xs h-8">
+                <Link href="/settings/users">
+                  View Provisioned Users
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            </div>
+          }
+        >
+          <ScimSettingsSection initialConfig={scimConfig} tenantUrl={scimTenantUrl} />
+        </SettingsSection>
+      </div>
     );
 
     const retentionTab = <RetentionPolicySettings />;
@@ -460,6 +487,7 @@ export default async function SystemSettingsPage() {
           retentionTab={retentionTab}
           envTab={envTab}
           ssoEnabled={ssoEnabled}
+          scimEnabled={scimConfig.enabled && scimConfig.hasSecretToken}
           appUrlConfigured={appUrlConfigured}
           allEnvOk={allEnvOk}
           missingCount={missingCount}

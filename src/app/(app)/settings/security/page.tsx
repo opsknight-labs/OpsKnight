@@ -11,9 +11,6 @@ import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import Link from 'next/link';
-import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
-import { getScimConfig } from '@/lib/scim';
-import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
 import { ShieldCheck, KeyRound, Fingerprint, ExternalLink } from 'lucide-react';
 
 export default async function SecuritySettingsPage() {
@@ -48,16 +45,6 @@ export default async function SecuritySettingsPage() {
     user?.lastOidcSync || (user?.oidcIdentities && user.oidcIdentities.length > 0)
   );
   const isAdmin = user?.role === 'ADMIN';
-
-  const systemSettings = isAdmin
-    ? await prisma.systemSettings.findUnique({
-        where: { id: 'default' },
-        select: { appUrl: true },
-      })
-    : null;
-  const authOrigin = resolveAuthPublicOrigin({ dbAppUrl: systemSettings?.appUrl ?? null });
-  const scimTenantUrl = `${authOrigin.origin}/api/scim/v2`;
-  const scimConfig = isAdmin ? await getScimConfig() : null;
 
   // Fetch recent user-specific audit logs
   let recentAuditLogs: SecurityAuditItem[] = [];
@@ -202,8 +189,8 @@ export default async function SecuritySettingsPage() {
                 System Settings.
               </p>
               <Button variant="ghost" size="sm" asChild className="gap-1 text-xs h-8">
-                <Link href="/settings/system">
-                  Configure Workspace SSO
+                <Link href="/settings/system?section=sso">
+                  Configure Workspace SSO & SCIM
                   <ExternalLink className="h-3.5 w-3.5" />
                 </Link>
               </Button>
@@ -275,26 +262,42 @@ export default async function SecuritySettingsPage() {
         </div>
       </SettingsSection>
 
-      {/* Section 4: SCIM 2.0 User Provisioning (Admins only) */}
-      {isAdmin && scimConfig && (
+      {/* Section 4: SCIM 2.0 User Provisioning Pointer (Admins only) */}
+      {isAdmin && (
         <SettingsSection
           title="SCIM 2.0 User Provisioning"
-          description="Automate identity lifecycle management: provision, synchronize, and de-provision users directly from Microsoft Entra ID, Okta, or other enterprise identity providers."
+          description="Automate identity lifecycle management: provision, synchronize, and de-provision users directly from Microsoft Entra ID, Okta, or other identity providers."
           footer={
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
                 OpsKnight implements RFC 7644 SCIM 2.0 for automated user lifecycle operations.
               </p>
               <Button variant="ghost" size="sm" asChild className="gap-1 text-xs h-8">
-                <Link href="/settings/users">
-                  View Provisioned Users
+                <Link href="/settings/system?section=sso">
+                  Configure SCIM Provisioning
                   <ExternalLink className="h-3.5 w-3.5" />
                 </Link>
               </Button>
             </div>
           }
         >
-          <ScimSettingsSection initialConfig={scimConfig} tenantUrl={scimTenantUrl} />
+          <div className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
+            <div>
+              <p className="font-medium text-foreground">
+                Centralized Enterprise Identity Control Plane
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                SCIM 2.0 endpoint credentials, tenant URL, and identity provider setup guides are
+                managed alongside Single Sign-On in System Settings.
+              </p>
+            </div>
+            <Button size="sm" asChild className="shrink-0 gap-1.5 text-xs h-8">
+              <Link href="/settings/system?section=sso">
+                Go to SSO & SCIM Settings
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
         </SettingsSection>
       )}
 
