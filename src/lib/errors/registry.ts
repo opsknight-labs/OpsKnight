@@ -424,6 +424,22 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  PUSH_SW_REGISTRATION_FAILED: {
+    status: 503,
+    category: 'dependency',
+    userMessage: 'Push notifications could not prepare the service worker on this device.',
+    action: 'Reload OpsKnight and try again. If it continues, check HTTPS and browser support.',
+    retryable: true,
+    exposure: 'public',
+  },
+  PUSH_VAPID_INVALID: {
+    status: 503,
+    category: 'dependency',
+    userMessage: 'The configured Push public key is invalid.',
+    action: 'Contact your administrator to correct the Web Push VAPID configuration.',
+    retryable: false,
+    exposure: 'public',
+  },
   PUSH_VAPID_NOT_CONFIGURED: {
     status: 503,
     category: 'dependency',

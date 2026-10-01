@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, BellOff, CircleAlert, Send, Wrench } from 'lucide-react';
 import MobileSettingCard from '@/components/mobile/MobileSettingCard';
 import { Button } from '@/components/ui/shadcn/button';
-import { errorFromResponse, toClientAppError } from '@/lib/client-error';
+import { ClientAppError, errorFromResponse, toClientAppError } from '@/lib/client-error';
 import { toUserFacingError } from '@/lib/user-facing-error';
 import { logger } from '@/lib/logger';
 import { haptics } from '@/lib/haptics';
@@ -21,6 +21,7 @@ export type PushState =
   | 'REGISTERING'
   | 'REGISTERED'
   | 'REPAIR_REQUIRED'
+  | 'SERVER_UNAVAILABLE'
   | 'ERROR';
 
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -73,7 +74,6 @@ function standaloneMode() {
 
 type PushStage =
   | 'INIT'
-  | 'REQUEST_PERMISSION'
   | 'SERVICE_WORKER_READY'
   | 'FETCH_VAPID_KEY'
   | 'READ_SUBSCRIPTION'
@@ -81,6 +81,12 @@ type PushStage =
   | 'SAVE_SUBSCRIPTION'
   | 'VERIFY_REGISTRATION'
   | 'UNSUBSCRIBE';
+
+type PreparedPush = {
+  registration: ServiceWorkerRegistration;
+  subscription: PushSubscription | null;
+  applicationServerKey: Uint8Array | null;
+};
 
 export default function PushNotificationToggle() {
   const router = useRouter();
@@ -91,41 +97,154 @@ export default function PushNotificationToggle() {
   const [testMessage, setTestMessage] = useState('');
   const [isStandalone, setIsStandalone] = useState(false);
   const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
+  const [preparing, setPreparing] = useState(true);
+  const [preflightReady, setPreflightReady] = useState(false);
+  const preparedPushRef = useRef<PreparedPush | null>(null);
+  const reconciliationGenerationRef = useRef(0);
 
   const ensureServiceWorker = useCallback(async () => {
-    if (!('serviceWorker' in navigator)) throw new Error('Service workers are not supported.');
-    if (!window.isSecureContext && window.location.hostname !== 'localhost') {
-      throw new Error('Push notifications require HTTPS.');
-    }
-    let registration = await promiseWithTimeout(
-      navigator.serviceWorker.getRegistration(),
-      SERVICE_WORKER_READY_TIMEOUT_MS,
-      'Service worker lookup timed out.'
-    );
-    const expected = new URL('/sw.js', window.location.origin).toString();
-    if (!registration || registration.active?.scriptURL !== expected) {
-      registration = await promiseWithTimeout(
-        navigator.serviceWorker.register('/sw.js', { scope: '/' }),
+    try {
+      if (!('serviceWorker' in navigator)) {
+        throw new ClientAppError({
+          code: 'PUSH_SW_REGISTRATION_FAILED',
+          error: 'Service workers are not supported by this browser.',
+          action: 'Use a browser that supports Web Push notifications.',
+          retryable: false,
+        });
+      }
+      if (!window.isSecureContext && window.location.hostname !== 'localhost') {
+        throw new ClientAppError({
+          code: 'PUSH_SW_REGISTRATION_FAILED',
+          error: 'Push notifications require HTTPS.',
+          action: 'Open OpsKnight over HTTPS and try again.',
+          retryable: false,
+        });
+      }
+
+      let registration = await promiseWithTimeout(
+        navigator.serviceWorker.getRegistration(),
         SERVICE_WORKER_READY_TIMEOUT_MS,
-        'Service worker registration timed out.'
+        'Service worker lookup timed out.'
       );
+      const expected = new URL('/sw.js', window.location.origin).toString();
+      if (!registration || registration.active?.scriptURL !== expected) {
+        registration = await promiseWithTimeout(
+          navigator.serviceWorker.register('/sw.js', { scope: '/' }),
+          SERVICE_WORKER_READY_TIMEOUT_MS,
+          'Service worker registration timed out.'
+        );
+      }
+      await promiseWithTimeout(
+        navigator.serviceWorker.ready,
+        SERVICE_WORKER_READY_TIMEOUT_MS,
+        'The service worker did not become ready.'
+      );
+      return registration;
+    } catch (error) {
+      if (error instanceof ClientAppError) throw error;
+      throw new ClientAppError({
+        code: 'PUSH_SW_REGISTRATION_FAILED',
+        error: 'Push notifications could not prepare the service worker on this device.',
+        action: 'Reload OpsKnight and try again. If it continues, check HTTPS and browser support.',
+        retryable: true,
+      });
     }
-    await promiseWithTimeout(
-      navigator.serviceWorker.ready,
-      SERVICE_WORKER_READY_TIMEOUT_MS,
-      'The service worker did not become ready.'
-    );
-    return registration;
   }, []);
+
+  const preparePush = useCallback(async (): Promise<PreparedPush> => {
+    const registration = await ensureServiceWorker();
+
+    const subscription = await promiseWithTimeout(
+      registration.pushManager.getSubscription(),
+      REQUEST_TIMEOUT_MS,
+      'Push subscription lookup timed out.'
+    );
+
+    // An existing browser subscription can be reconciled with the server
+    // without fetching VAPID again. This also avoids making healthy devices
+    // depend on a configuration endpoint during every settings-page visit.
+    if (subscription) {
+      return {
+        registration,
+        subscription,
+        applicationServerKey: null,
+      };
+    }
+
+    const keyResponse = await fetchWithTimeout(
+      '/api/system/vapid-public-key',
+      { cache: 'no-store' },
+      REQUEST_TIMEOUT_MS
+    );
+    if (keyResponse.status === 404) {
+      throw new ClientAppError({
+        code: 'PUSH_VAPID_NOT_CONFIGURED',
+        error: 'Push is not configured by your administrator.',
+        action: 'Push is not configured by your administrator.',
+        retryable: false,
+      });
+    }
+    if (!keyResponse.ok) {
+      throw await errorFromResponse(keyResponse, 'Push configuration is unavailable.');
+    }
+
+    const keyData = (await keyResponse.json()) as {
+      key?: string;
+      publicKey?: string;
+      enabled?: boolean;
+    };
+    if (keyData.enabled === false) {
+      throw new ClientAppError({
+        code: 'PUSH_VAPID_NOT_CONFIGURED',
+        error: 'Push is not configured by your administrator.',
+        action: 'Push is not configured by your administrator.',
+        retryable: false,
+      });
+    }
+    const normalized = normalizeVapidKey(String(keyData.publicKey || keyData.key || ''));
+    if (!normalized.key) {
+      throw new ClientAppError({
+        code: 'PUSH_VAPID_INVALID',
+        error: normalized.error || 'Push public key is invalid.',
+        action: 'Contact your administrator to correct the Web Push VAPID configuration.',
+        retryable: false,
+      });
+    }
+
+    const applicationServerKey = urlBase64ToUint8Array(normalized.key);
+    if (applicationServerKey.length !== 65) {
+      throw new ClientAppError({
+        code: 'PUSH_VAPID_INVALID',
+        error: 'Push public key length is invalid.',
+        action: 'Contact your administrator to correct the Web Push VAPID configuration.',
+        retryable: false,
+      });
+    }
+
+    return {
+      registration,
+      subscription: null,
+      applicationServerKey,
+    };
+  }, [ensureServiceWorker]);
 
   const checkSupportAndState = useCallback(async () => {
     if (typeof window === 'undefined') return;
+
+    const generation = ++reconciliationGenerationRef.current;
+    const isCurrent = () => reconciliationGenerationRef.current === generation;
     const detectedPlatform = detectPlatform();
     const standalone = standaloneMode();
+
+    if (!isCurrent()) return;
     setPlatform(detectedPlatform);
     setIsStandalone(standalone);
+    setError('');
 
     if (detectedPlatform === 'ios' && !standalone) {
+      preparedPushRef.current = null;
+      setPreflightReady(false);
+      setPreparing(false);
       setPushState('INSTALL_REQUIRED');
       return;
     }
@@ -134,54 +253,67 @@ export default function PushNotificationToggle() {
       !('PushManager' in window) ||
       !('Notification' in window)
     ) {
+      preparedPushRef.current = null;
+      setPreflightReady(false);
+      setPreparing(false);
       setPushState('UNSUPPORTED');
       return;
     }
     if (Notification.permission === 'denied') {
+      preparedPushRef.current = null;
+      setPreflightReady(false);
+      setPreparing(false);
       setPushState('PERMISSION_DENIED');
       return;
     }
-    if (Notification.permission === 'default') {
-      setPushState('PERMISSION_REQUIRED');
-      return;
-    }
 
+    setPreparing(true);
+    setPreflightReady(false);
     try {
-      const registration = await promiseWithTimeout(
-        navigator.serviceWorker.getRegistration(),
-        SERVICE_WORKER_READY_TIMEOUT_MS,
-        'Service worker lookup timed out.'
-      ).catch(() => null);
-      const subscription = await promiseWithTimeout(
-        registration?.pushManager?.getSubscription() ?? Promise.resolve(null),
-        REQUEST_TIMEOUT_MS,
-        'Push subscription lookup timed out.'
-      ).catch(() => null);
-      if (!subscription) {
+      const prepared = await preparePush();
+      if (!isCurrent()) return;
+
+      preparedPushRef.current = prepared;
+      setPreflightReady(true);
+
+      if (Notification.permission === 'default') {
+        setPreparing(false);
         setPushState('PERMISSION_REQUIRED');
         return;
       }
+
+      if (!prepared.subscription) {
+        setPreparing(false);
+        setPushState('PERMISSION_REQUIRED');
+        return;
+      }
+
       const response = await fetchWithTimeout(
         '/api/user/push-subscription/status',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint: subscription.endpoint }),
+          body: JSON.stringify({ endpoint: prepared.subscription.endpoint }),
           cache: 'no-store',
           credentials: 'include',
         },
         REQUEST_TIMEOUT_MS
       );
+      if (!isCurrent()) return;
+
       if (response.status === 401) {
+        setPreparing(false);
         setPushState('AUTH_REQUIRED');
         return;
       }
       if (response.status === 403) {
+        setPreparing(false);
         setPushState('ERROR');
         setError('Your account is not allowed to manage Push notifications.');
         return;
       }
       if (!response.ok) {
+        setPreparing(false);
         setPushState('ERROR');
         setError(
           'Push status could not be verified. Your browser subscription was left unchanged.'
@@ -191,18 +323,34 @@ export default function PushNotificationToggle() {
       const data = (await response.json()) as {
         deviceRegistered?: boolean;
         accountEnabled?: boolean;
+        providerConfigured?: boolean;
       };
+      if (!isCurrent()) return;
+
+      setPreparing(false);
+      if (data.providerConfigured === false) {
+        setPushState('SERVER_UNAVAILABLE');
+        setError(
+          'Server Push configuration is unavailable. Your device subscription is still saved.'
+        );
+        return;
+      }
       setPushState(data.deviceRegistered && data.accountEnabled ? 'REGISTERED' : 'REPAIR_REQUIRED');
       setError('');
     } catch (stateError) {
+      if (!isCurrent()) return;
+
+      preparedPushRef.current = null;
+      setPreflightReady(false);
+      setPreparing(false);
       logger.warn('push.state_reconciliation_failed', {
         component: 'PushNotificationToggle',
         error: stateError,
       });
       setPushState('ERROR');
-      setError('Push status could not be verified. Nothing was changed.');
+      setError(displayError(stateError, 'Push could not be prepared on this device.'));
     }
-  }, []);
+  }, [preparePush]);
 
   useEffect(() => {
     void checkSupportAndState();
@@ -218,66 +366,54 @@ export default function PushNotificationToggle() {
 
   const subscribeOrRepair = async () => {
     if (loading) return;
+
+    // User actions are authoritative over any in-flight background reconciliation.
+    reconciliationGenerationRef.current += 1;
+    const prepared = preparedPushRef.current;
+    if (!preflightReady || !prepared) {
+      setPushState('ERROR');
+      setError('Push is not ready yet. Retry preparation and then enable Push.');
+      return;
+    }
+
     setLoading(true);
     setError('');
     setTestMessage('');
     setPushState('REGISTERING');
     let stage: PushStage = 'INIT';
     try {
-      let permission = Notification.permission;
-      // Browser permission is requested only from this explicit user gesture.
-      if (permission !== 'granted') {
-        stage = 'REQUEST_PERMISSION';
-        permission = await promiseWithTimeout(
-          Notification.requestPermission(),
-          REQUEST_TIMEOUT_MS,
-          'Notification permission request timed out.'
-        );
-      }
-      if (permission === 'denied') {
-        setPushState('PERMISSION_DENIED');
-        setError('Notifications are blocked in browser or device settings.');
-        return;
-      }
-      if (permission !== 'granted') {
-        setPushState('PERMISSION_REQUIRED');
-        setError('Notification permission was not granted.');
-        return;
-      }
+      let subscription = prepared.subscription;
 
-      stage = 'SERVICE_WORKER_READY';
-      const registration = await ensureServiceWorker();
-
-      stage = 'FETCH_VAPID_KEY';
-      const keyResponse = await fetchWithTimeout(
-        '/api/system/vapid-public-key',
-        { cache: 'no-store' },
-        REQUEST_TIMEOUT_MS
-      );
-      if (!keyResponse.ok)
-        throw await errorFromResponse(keyResponse, 'Push configuration is unavailable.');
-      const { key: vapidKey } = (await keyResponse.json()) as { key?: string };
-      const normalized = normalizeVapidKey(String(vapidKey || ''));
-      if (!normalized.key) throw new Error(normalized.error || 'Push public key is invalid.');
-      const applicationServerKey = urlBase64ToUint8Array(normalized.key);
-      if (applicationServerKey.length !== 65) throw new Error('Push public key length is invalid.');
-
-      stage = 'READ_SUBSCRIPTION';
-      let subscription = await promiseWithTimeout(
-        registration.pushManager.getSubscription(),
-        REQUEST_TIMEOUT_MS,
-        'Push subscription lookup timed out.'
-      );
       if (!subscription) {
+        if (!prepared.applicationServerKey) {
+          throw new ClientAppError({
+            code: 'PUSH_VAPID_INVALID',
+            error: 'Push public key is unavailable.',
+            action: 'Retry preparation. If it continues, contact your administrator.',
+            retryable: true,
+          });
+        }
+
+        const subscribeOptions: PushSubscriptionOptionsInit = {
+          userVisibleOnly: true,
+          applicationServerKey: prepared.applicationServerKey as unknown as BufferSource,
+        };
+
+        // Keep one standards-based ceremony across browsers. All asynchronous
+        // preparation is complete before the button is enabled, so a new
+        // subscription is always initiated directly from the user gesture.
         stage = 'CREATE_SUBSCRIPTION';
+        const subscriptionPromise = prepared.registration.pushManager.subscribe(subscribeOptions);
         subscription = await promiseWithTimeout(
-          registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: applicationServerKey as unknown as BufferSource,
-          }),
+          subscriptionPromise,
           REQUEST_TIMEOUT_MS,
           'Push subscription creation timed out.'
         );
+
+        preparedPushRef.current = {
+          ...prepared,
+          subscription,
+        };
       }
 
       stage = 'SAVE_SUBSCRIPTION';
@@ -295,8 +431,9 @@ export default function PushNotificationToggle() {
         setPushState('AUTH_REQUIRED');
         return;
       }
-      if (!saveResponse.ok)
+      if (!saveResponse.ok) {
         throw await errorFromResponse(saveResponse, 'Failed to save Push subscription.');
+      }
 
       stage = 'VERIFY_REGISTRATION';
       setPushState('REGISTERED');
@@ -305,14 +442,28 @@ export default function PushNotificationToggle() {
       logger.error('push.subscription_failed', {
         component: 'PushNotificationToggle',
         stage,
+        platform,
+        standalone: isStandalone,
+        browserException:
+          subscribeError instanceof Error ? subscribeError.name : typeof subscribeError,
         error: subscribeError,
       });
-      setError(displayError(subscribeError, 'Failed to enable Push notifications.'));
-      setPushState(
-        typeof Notification !== 'undefined' && Notification.permission === 'denied'
-          ? 'PERMISSION_DENIED'
-          : 'ERROR'
-      );
+      const currentPermission =
+        typeof Notification !== 'undefined' ? Notification.permission : 'default';
+      if (currentPermission === 'denied') {
+        setError('Notifications are blocked in browser or device settings.');
+        setPushState('PERMISSION_DENIED');
+      } else if (
+        currentPermission === 'default' &&
+        subscribeError instanceof Error &&
+        subscribeError.name === 'NotAllowedError'
+      ) {
+        setError('Notification permission was not granted.');
+        setPushState('PERMISSION_REQUIRED');
+      } else {
+        setError(displayError(subscribeError, 'Failed to enable Push notifications.'));
+        setPushState('ERROR');
+      }
     } finally {
       setLoading(false);
     }
@@ -320,6 +471,7 @@ export default function PushNotificationToggle() {
 
   const unsubscribe = async () => {
     if (loading) return;
+    reconciliationGenerationRef.current += 1;
     setLoading(true);
     setError('');
     try {
@@ -366,7 +518,10 @@ export default function PushNotificationToggle() {
         );
         return;
       }
-      setPushState('PERMISSION_REQUIRED');
+      preparedPushRef.current = null;
+      setPreflightReady(false);
+      setPreparing(true);
+      await checkSupportAndState();
       haptics.selection();
     } catch (unsubscribeError) {
       logger.warn('push.unsubscribe_failed', {
@@ -469,6 +624,8 @@ export default function PushNotificationToggle() {
         return 'On';
       case 'REPAIR_REQUIRED':
         return 'Needs repair';
+      case 'SERVER_UNAVAILABLE':
+        return 'Server unavailable';
       case 'ERROR':
         return 'Needs attention';
     }
@@ -495,7 +652,9 @@ export default function PushNotificationToggle() {
         )
       }
       title="Push notifications"
-      status={pushStatusLabel(pushState)}
+      status={
+        preparing && pushState !== 'REGISTERED' ? 'Preparing…' : pushStatusLabel(pushState)
+      }
       action={
         // Install-required/blocked are already communicated by the status
         // line above; the action slot only needs a control when there is
@@ -519,19 +678,35 @@ export default function PushNotificationToggle() {
             size="sm"
             variant={pushState === 'REGISTERED' ? 'outline' : 'default'}
             className="min-h-11 gap-1.5"
-            disabled={loading || pushState === 'REGISTERING'}
-            onClick={() => void (pushState === 'REGISTERED' ? unsubscribe() : subscribeOrRepair())}
+            disabled={
+              loading ||
+              pushState === 'REGISTERING' ||
+              (pushState !== 'REGISTERED' && preparing)
+            }
+            onClick={() =>
+              void (pushState === 'REGISTERED'
+                ? unsubscribe()
+                : (pushState === 'ERROR' && !preflightReady) ||
+                    pushState === 'SERVER_UNAVAILABLE'
+                  ? checkSupportAndState()
+                  : subscribeOrRepair())
+            }
           >
             {pushState === 'REPAIR_REQUIRED' ? (
               <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
             ) : null}
-            {loading || pushState === 'REGISTERING'
-              ? 'Working…'
-              : pushState === 'REGISTERED'
-                ? 'Disable'
-                : pushState === 'REPAIR_REQUIRED'
-                  ? 'Repair'
-                  : 'Enable'}
+            {preparing && pushState !== 'REGISTERED'
+              ? 'Preparing…'
+              : loading || pushState === 'REGISTERING'
+                ? 'Working…'
+                : pushState === 'REGISTERED'
+                  ? 'Disable'
+                  : pushState === 'REPAIR_REQUIRED'
+                    ? 'Repair'
+                    : (pushState === 'ERROR' && !preflightReady) ||
+                        pushState === 'SERVER_UNAVAILABLE'
+                      ? 'Retry'
+                      : 'Enable'}
           </Button>
         )
       }
@@ -550,6 +725,20 @@ export default function PushNotificationToggle() {
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>{error}</span>
         </div>
+      ) : null}
+
+      {pushState === 'SERVER_UNAVAILABLE' ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          className="h-11 min-h-[44px] w-full gap-2"
+          onClick={() => void unsubscribe()}
+          disabled={loading}
+        >
+          <BellOff className="h-4 w-4" aria-hidden="true" />
+          {loading ? 'Removing device…' : 'Remove this device'}
+        </Button>
       ) : null}
 
       <div className="border-t border-border pt-3">
