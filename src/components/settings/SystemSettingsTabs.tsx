@@ -12,6 +12,7 @@ interface Props {
   retentionTab: ReactNode;
   envTab: ReactNode;
   ssoEnabled: boolean;
+  scimEnabled?: boolean;
   appUrlConfigured: boolean;
   allEnvOk: boolean;
   missingCount: number;
@@ -23,6 +24,7 @@ export default function SystemSettingsTabs({
   retentionTab,
   envTab,
   ssoEnabled,
+  scimEnabled,
   appUrlConfigured,
   allEnvOk,
   missingCount,
@@ -43,11 +45,20 @@ export default function SystemSettingsTabs({
       id: 'sso',
       label: 'SSO / OIDC',
       icon: <Shield className="h-3.5 w-3.5" />,
-      badge: ssoEnabled ? (
-        <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
-          Enabled
-        </span>
-      ) : undefined,
+      badge:
+        ssoEnabled && scimEnabled ? (
+          <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+            SSO & SCIM
+          </span>
+        ) : ssoEnabled ? (
+          <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+            Enabled
+          </span>
+        ) : scimEnabled ? (
+          <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+            SCIM Active
+          </span>
+        ) : undefined,
       content: ssoTab,
     },
     {

@@ -28,7 +28,7 @@ OpsKnight supports two methods for configuring the SCIM bearer token:
 
 ### 1. In-App UI Management (Recommended)
 
-Administrators can generate, view, copy, rotate, and revoke SCIM tokens directly from the OpsKnight web interface under **Settings $\to$ Security & Authentication $\to$ SCIM 2.0 User Provisioning**.
+Administrators can generate, view, copy, rotate, and revoke SCIM tokens directly from the OpsKnight web interface under **Settings $\to$ System $\to$ SSO / OIDC $\to$ SCIM 2.0 User Provisioning** (`/settings/system?section=sso`).
 
 - Tokens are encrypted at rest using authenticated AES-256-GCM envelope encryption.
 - No container restarts or `.env` modifications are required.
