@@ -1,6 +1,9 @@
 'use client';
 
+import { fetchWithTimeout } from '@/lib/client-timeout';
 import { enqueueRequest } from '@/lib/offline-queue';
+
+const INCIDENT_MUTATION_TIMEOUT_MS = 12_000;
 
 export type BrowserIncidentStatus =
   | 'OPEN'
@@ -115,13 +118,17 @@ export async function mutateIncidentStatus(input: {
     ...(input.expectedStatus ? { expectedStatus: input.expectedStatus } : {}),
   });
   try {
-    const response = await fetch(mutationUrl(input.incidentId), {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
-      body,
-      credentials: 'include',
-      cache: 'no-store',
-    });
+    const response = await fetchWithTimeout(
+      mutationUrl(input.incidentId),
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body,
+        credentials: 'include',
+        cache: 'no-store',
+      },
+      INCIDENT_MUTATION_TIMEOUT_MS
+    );
     if (!response.ok) {
       const error = await parseError(response);
       throw new IncidentStatusMutationError(
