@@ -90,6 +90,17 @@ type PreparedPush = {
 
 type ServiceWorkerPreparationStage = 'SW_LOOKUP' | 'SW_REGISTER' | 'SW_READY';
 
+function serviceWorkerFailureAction(stage: ServiceWorkerPreparationStage) {
+  switch (stage) {
+    case 'SW_LOOKUP':
+      return 'Service worker registration could not be checked. Retry.';
+    case 'SW_REGISTER':
+      return 'Service worker registration failed. Retry.';
+    case 'SW_READY':
+      return 'Service worker did not become ready. Retry.';
+  }
+}
+
 function serviceWorkerPath(worker: ServiceWorker | null | undefined): string | null {
   if (!worker?.scriptURL) return null;
   try {
@@ -183,7 +194,7 @@ export default function PushNotificationToggle() {
       throw new ClientAppError({
         code: 'PUSH_SW_REGISTRATION_FAILED',
         error: 'Push notifications could not prepare the service worker on this device.',
-        action: 'Reload OpsKnight and try again. If it continues, check HTTPS and browser support.',
+        action: serviceWorkerFailureAction(stage),
         retryable: true,
       });
     }
