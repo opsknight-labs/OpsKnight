@@ -1,93 +1,93 @@
 schemaVersion: 1
 source: generated/docs-evidence/current
-approvedSourceRevision: 08532feb34f68f4af7e66eecc9505a645e4ac55d
-runtimeImage: localhost:15000/opsknight-docs-v2@sha256:40c7adb7b32a8138af402f3f4a2439f427a121dfb747003051f307bb390f1c98
-runtimeSourceRevision: 7caf5d9f6573d7097063520f62d66cd6698c84ed
+approvedSourceRevision: a379a492bfb02552899967c3dc8b67b970d56957
+runtimeImage: localhost:15000/opsknight-docs-v2@sha256:0ac0900f61f3a8d8f8c3b160661620261319ceb561882f1da5bfb4a985268107
+runtimeSourceRevision: a379a492bfb02552899967c3dc8b67b970d56957
 assets:
   action-items.png:
     evidence: response/action-items.png
-    sha256: 0e872d9d892d2385d88aea0c2380577d5959fad3edc374a08f840c6a3cbbf82f
+    sha256: f9dc328cf545df41fea809800969dcc328f4caad6de3039d2790c9dd1db3773d
   analytics-overview.png:
     evidence: analytics/overview.png
-    sha256: 08733ceb1d3faa4dab176b00a42a600b5a656292532613a374b87615a7ce817f
+    sha256: 0f762295180a58d4cf875fed0fe008adf6ab3b6041887ad0efa03f1451a4f17b
   api-keys.png:
     evidence: administration/api-keys.png
-    sha256: d9b1c2cdff29a1ca624d7d64bccaaefd8ea01f7236f89775ff43b9e3419f1efc
+    sha256: fc23dd27a7cfc96f57e5c0f00a98ed0796f27194d013363ea24fd8c3763316b3
   audit-log.png:
     evidence: administration/audit-log.png
-    sha256: be53406b296b3d8296c4ddb26fe9ae5722e5937221ff25d1fff57c2c3ff26dc3
+    sha256: 6a75319ad63b36218e46b3f73f7fc739d06a0d0a3157d2ec058c743389eda956
   custom-fields.png:
     evidence: administration/custom-fields.png
-    sha256: e7f656ab2d5eaa4ac31a6e6e0e7282fea93d5f92408d94d5f34b223612606666
+    sha256: 0115622b16aaa6f3c6a6405bf6f07764b6a51fb786fa6ba0c054e4abd0da6c03
   escalation-policies.png:
     evidence: escalation/policies.png
-    sha256: f593e642e0b2079e433a7a24c4c79bfa041e612d780f572ee59537f857626ef0
+    sha256: 6a91c6ac7d420b0e77055942e65f4106b89110496cb5b967208e7b89c82e6ed1
   escalation-policy-detail.png:
     evidence: escalation/policy-detail.png
-    sha256: c01e394fd9d56c547aa33d75c4213316706c481ade9af113585077985f772244
+    sha256: f268dcddb1723847e6f68f68e897326b87a9ab0e8875a498be0964a91dcc0199
   event-logs.png:
     evidence: operations/events.png
-    sha256: 1c6ea3a57a84b381cf286e2406d115b381a0e252b3dd4e2e1dcbe785a730848d
+    sha256: a862ee6367a87e490ad60a375d6e05bd52c92c228606c4c0b912224ac9101cf0
   health-center.png:
     evidence: operations/health-center.png
-    sha256: c7f21d35b97c18bb808eb180fcfd3e0712ed151a60d5798bc4eeefdab86ae8bc
+    sha256: f6e28a0ce7856907ed9f4555566b52a290a9ebdcfe3bc905129c37302768f87e
   incident-acknowledged.png:
     evidence: incidents/acknowledge.png
-    sha256: 146c54b06daa5e0cb7b11938d58bc93b85cc4d1229dfcf5e53914a47e8fe737b
+    sha256: 7fa745d36629af0a0c1f5637496a7c0a24823bef8f557781bebab8445340baf8
   incident-create.png:
     evidence: incidents/create.png
-    sha256: 351cf0207f3419e435555d0264dad36443074c9f5f5aeaeac9f4fcc67fdb25ce
+    sha256: fc5a316007b0d01b8a9e41f5d9f1e8bcf8382c6c5ebdcef5f23cdd44676187ca
   incident-detail.png:
     evidence: incidents/detail.png
-    sha256: d26461efa3fb964c6ab6e7031ff84da5ccf74322e2d60d26898676c0d8540346
+    sha256: b48d04550226d0688f77dd4bb11a4b03730418b61dfcdedc60564511b53929d9
   incident-timeline.png:
     evidence: incidents/timeline.png
-    sha256: 3ab8e9752eec2126460292ca8c632e5083528a6cce36ad7100b9539afd5b4f14
+    sha256: 67a297ea607b4714386a6b2b4b14469f436e06d6673358cace7bdec4abef8a28
   incidents-list.png:
     evidence: incidents/list.png
-    sha256: 2cb14cae66500dc330e76db6a999fca767ebdcf974c7a61359e140206825747b
+    sha256: 1cf17a58f86d24bc33ba098966b1e5dd649a144cc1389eba94ac2bf956108316
   integration-settings.png:
     evidence: integrations/settings.png
-    sha256: 94f94b8be127502b77a52a2c0f423bc9ce96e121be32e4fab56546c9492acd8f
+    sha256: e99b0bab223de8175da23c05f52a78e6701a7f4153e59b64c1590e870985484e
   notification-settings.png:
     evidence: notifications/settings.png
-    sha256: f35f65c7214121c3e12cf844eb39e39cf270eebd39877724a9e2209171021b18
+    sha256: 3f5e8dd820e45dc158d782a1c3e96e0fdb5eab319cd6af42403f9ac283cb54c5
   on-call-schedule-detail.png:
     evidence: on-call/schedule-detail.png
-    sha256: 55289ac70414ccf7d0d2f519d7ed193cbc40508c6838c08b16b1c2970ffec794
+    sha256: 0563a1b73d4af443f15e90ab8c4221ecba2b7c0251f3109105863303104ea2d2
   on-call-schedules.png:
     evidence: on-call/schedules.png
-    sha256: 143c96a81f8a454ec185277f265850e58ced9e4af2e0cfa889ccd29e480bee86
+    sha256: 82f07b114b49c82d7f041d116a277d3d0d3fabb7cc794c3fade90eed4af55a04
   postmortems.png:
     evidence: response/postmortems.png
-    sha256: d3eda5c02832e9e0c54f22e2f6185676470d60c6d5c61825b3f8a327ca1cd4a5
+    sha256: 9773836047d5016b47fe16a0890c0bd230ffa31c4bd93829300130eca8288d56
   privacy-requests.png:
     evidence: administration/privacy-requests.png
-    sha256: 2ee57fd478e1b6d3e333f1a4f5070c1c933d02dcbe26c38505c74ec7332ef429
+    sha256: 4378d8f73928d30d38ca6596ecdaaecefa7bdbb56d27f5b21ec8870e38b8318d
   reports.png:
     evidence: analytics/reports.png
-    sha256: d7a25010e8073ecfea3fb87cb500767d6ab2f0c228de923f1b9b8f8bf056f912
+    sha256: 1fc1c1a0db9ca3cbfba45ea8c51dc8efb8357bce70e6fec877c84c0093cb3aa9
   services.png:
     evidence: services/list.png
-    sha256: 1e8df49c3140b424daffa220779ebe17ca58b3b059e10e4b55a51c67e74ece46
+    sha256: ad710121bfa1815fc42cc5dda33e09ac4af6efc0410c28e388f9f28ec18354a5
   status-pages.png:
     evidence: status-pages/list.png
-    sha256: 53a5e9c7b5239dc91baf929e1fc8f8fa30f4b538ae87c7c3a71a71304b8a2c40
+    sha256: 1dcddec5669dd4242e563d3dee3e6680b070db3f7f697272cec72f0bca1f27d4
   system-logs.png:
     evidence: operations/system-logs.png
-    sha256: 2b305e7ea05c5a2d13e233c95acf4775ab548446abdcbb8adb2cd24215a164bc
+    sha256: d86ff3b183ed071aff4172b63b1c6abd0fb0106256fcac0eb0e934941cd92e1a
   teams.png:
     evidence: teams/list.png
-    sha256: e7f4c0d1aaaefa5d62e0cb83ee697f7bb1c6d4f66fc12c6bc8629e5651e89ea4
+    sha256: 7fb6bb322b7adbfabf0f8ff0efa914de792ee267a08debc4dc408c96a2accff9
   users.png:
     evidence: administration/users.png
-    sha256: 5630c20791f16cb44fc8f0ab5cb5eca70ac06580038172e4f5b6f38a78ebe2c5
+    sha256: 89742702eb907af7e37912f95fd80d4ac0f254bd647feff277da49ebf1aacbd9
   dashboard-template.png:
     evidence: analytics/dashboard-template.png
-    sha256: 038d5cc2b2e6c2baef063f613948dcffbc9570d4c98e2bffc9f93698a04c042a
+    sha256: 20c7afc6286799f5cd1070e09ebfcfc113c426b8851ee019190e3c9884ab40ca
   dashboard-saved.png:
     evidence: analytics/dashboard-saved.png
-    sha256: 2bed025d52c69a607bd948df50e38a4b6095e420275f722d66a7d1de53f8b3de
+    sha256: 7ad0ffedc92d96074a38ff9151f4bfe47e43a2791e75eefb5179e507470fd19a
   dashboard-edit.png:
     evidence: analytics/dashboard-edit.png
-    sha256: 96eae587558d57fb089340a9e1082211820e2fd58681e1fa342c7d1b8c542ea7
+    sha256: 521544573961736cc259f0ac0dfdaed1d60b491d945c406e5986bc2a38c0b574

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-01T14:22:10.913Z",
-  "sourceRevision": "08532feb34f68f4af7e66eecc9505a645e4ac55d",
-  "documentationRevision": "08532feb34f68f4af7e66eecc9505a645e4ac55d",
-  "productSourceRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed",
-  "runtimeSourceRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed",
-  "runtimeImageDigest": "localhost:15000/opsknight-docs-v2@sha256:40c7adb7b32a8138af402f3f4a2439f427a121dfb747003051f307bb390f1c98",
+  "generatedAt": "2026-10-01T14:35:15.510Z",
+  "sourceRevision": "a379a492bfb02552899967c3dc8b67b970d56957",
+  "documentationRevision": "a379a492bfb02552899967c3dc8b67b970d56957",
+  "productSourceRevision": "a379a492bfb02552899967c3dc8b67b970d56957",
+  "runtimeSourceRevision": "a379a492bfb02552899967c3dc8b67b970d56957",
+  "runtimeImageDigest": "localhost:15000/opsknight-docs-v2@sha256:0ac0900f61f3a8d8f8c3b160661620261319ceb561882f1da5bfb4a985268107",
   "releaseState": "upcoming",
   "checks": {
     "frontmatter": "passed",
@@ -29,23 +29,23 @@
     "capabilitiesDiscovered": 22,
     "capabilitiesDocumented": 22,
     "uiRoutes": 101,
-    "apiRoutes": 220,
+    "apiRoutes": 227,
     "configurationItems": 316,
     "integrationCandidates": 28,
     "databaseModels": 120,
     "runtimeRoles": 8,
-    "featureNodes": 1162,
+    "featureNodes": 1170,
     "unclassifiedFeatures": 0,
-    "evidenceBackedClaims": 1607,
+    "evidenceBackedClaims": 1623,
     "unsupportedClaims": 0,
-    "supportedProductFeatures": 632,
-    "documentedSupportedFeatures": 632,
+    "supportedProductFeatures": 639,
+    "documentedSupportedFeatures": 639,
     "undocumentedSupportedFeatures": 0,
     "unresolvedSemanticContracts": 0,
     "missingEvidence": 0,
-    "supportedPublicApis": 40,
+    "supportedPublicApis": 47,
     "notificationProviders": 9,
-    "rawLimits": 225,
+    "rawLimits": 226,
     "publicLimits": 51,
     "journeyFiles": 3,
     "evidenceScreenshots": 30,
@@ -98,9 +98,9 @@
       "generated/docs-evidence/current/teams/list.png"
     ],
     "runtime": {
-      "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:40c7adb7b32a8138af402f3f4a2439f427a121dfb747003051f307bb390f1c98",
-      "digest": "localhost:15000/opsknight-docs-v2@sha256:40c7adb7b32a8138af402f3f4a2439f427a121dfb747003051f307bb390f1c98",
-      "sourceRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed"
+      "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:0ac0900f61f3a8d8f8c3b160661620261319ceb561882f1da5bfb4a985268107",
+      "digest": "localhost:15000/opsknight-docs-v2@sha256:0ac0900f61f3a8d8f8c3b160661620261319ceb561882f1da5bfb4a985268107",
+      "sourceRevision": "a379a492bfb02552899967c3dc8b67b970d56957"
     }
   }
 }

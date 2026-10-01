@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-01T19:39:35+05:30",
-  "sourceRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed",
+  "generatedAt": "2026-10-01T19:53:01+05:30",
+  "sourceRevision": "91f8f4e2dacbdd7624faa52a4f1262a2515ab3fe",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -9318,6 +9318,239 @@
       ]
     },
     {
+      "route": "/api/scim/v2/Groups/[id]",
+      "file": "src/app/api/scim/v2/Groups/[id]/route.ts",
+      "sources": [
+        "src/app/api/scim/v2/Groups/[id]/route.ts",
+        "src/lib/audit.ts",
+        "src/lib/encryption.ts",
+        "src/lib/logger.ts",
+        "src/lib/prisma-datasource.ts",
+        "src/lib/prisma.ts",
+        "src/lib/request-context.ts",
+        "src/lib/runtime-role.ts",
+        "src/lib/scim.ts"
+      ],
+      "methods": [
+        "GET",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ],
+      "authentication": [
+        "custom-header"
+      ],
+      "authorization": [],
+      "requestSchemas": [],
+      "rateLimited": false,
+      "bodyLimited": false,
+      "signatureVerification": false,
+      "deliveryFencing": false,
+      "idempotent": false,
+      "errors": [],
+      "entities": [
+        "systemConfig",
+        "systemSettings",
+        "team"
+      ],
+      "runtimeDependencies": [
+        "postgresql"
+      ]
+    },
+    {
+      "route": "/api/scim/v2/Groups",
+      "file": "src/app/api/scim/v2/Groups/route.ts",
+      "sources": [
+        "src/app/api/scim/v2/Groups/route.ts",
+        "src/lib/audit.ts",
+        "src/lib/encryption.ts",
+        "src/lib/logger.ts",
+        "src/lib/prisma-datasource.ts",
+        "src/lib/prisma.ts",
+        "src/lib/request-context.ts",
+        "src/lib/runtime-role.ts",
+        "src/lib/scim.ts"
+      ],
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authentication": [
+        "custom-header"
+      ],
+      "authorization": [],
+      "requestSchemas": [],
+      "rateLimited": false,
+      "bodyLimited": false,
+      "signatureVerification": false,
+      "deliveryFencing": false,
+      "idempotent": false,
+      "errors": [],
+      "entities": [
+        "systemConfig",
+        "systemSettings",
+        "team"
+      ],
+      "runtimeDependencies": [
+        "postgresql"
+      ]
+    },
+    {
+      "route": "/api/scim/v2/ResourceTypes/[id]",
+      "file": "src/app/api/scim/v2/ResourceTypes/[id]/route.ts",
+      "sources": [
+        "src/app/api/scim/v2/ResourceTypes/[id]/route.ts",
+        "src/lib/audit.ts",
+        "src/lib/encryption.ts",
+        "src/lib/scim.ts"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "authentication": [
+        "custom-header"
+      ],
+      "authorization": [],
+      "requestSchemas": [],
+      "rateLimited": false,
+      "bodyLimited": false,
+      "signatureVerification": false,
+      "deliveryFencing": false,
+      "idempotent": false,
+      "errors": [],
+      "entities": [
+        "systemConfig",
+        "systemSettings"
+      ],
+      "runtimeDependencies": [
+        "postgresql"
+      ]
+    },
+    {
+      "route": "/api/scim/v2/ResourceTypes",
+      "file": "src/app/api/scim/v2/ResourceTypes/route.ts",
+      "sources": [
+        "src/app/api/scim/v2/ResourceTypes/route.ts",
+        "src/lib/audit.ts",
+        "src/lib/encryption.ts",
+        "src/lib/scim.ts"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "authentication": [
+        "custom-header"
+      ],
+      "authorization": [],
+      "requestSchemas": [],
+      "rateLimited": false,
+      "bodyLimited": false,
+      "signatureVerification": false,
+      "deliveryFencing": false,
+      "idempotent": false,
+      "errors": [],
+      "entities": [
+        "systemConfig",
+        "systemSettings"
+      ],
+      "runtimeDependencies": [
+        "postgresql"
+      ]
+    },
+    {
+      "route": "/api/scim/v2/Schemas/[id]",
+      "file": "src/app/api/scim/v2/Schemas/[id]/route.ts",
+      "sources": [
+        "src/app/api/scim/v2/Schemas/[id]/route.ts",
+        "src/lib/audit.ts",
+        "src/lib/encryption.ts",
+        "src/lib/scim.ts"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "authentication": [
+        "custom-header"
+      ],
+      "authorization": [],
+      "requestSchemas": [],
+      "rateLimited": false,
+      "bodyLimited": false,
+      "signatureVerification": false,
+      "deliveryFencing": false,
+      "idempotent": false,
+      "errors": [],
+      "entities": [
+        "systemConfig",
+        "systemSettings"
+      ],
+      "runtimeDependencies": [
+        "postgresql"
+      ]
+    },
+    {
+      "route": "/api/scim/v2/Schemas",
+      "file": "src/app/api/scim/v2/Schemas/route.ts",
+      "sources": [
+        "src/app/api/scim/v2/Schemas/route.ts",
+        "src/lib/audit.ts",
+        "src/lib/encryption.ts",
+        "src/lib/scim.ts"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "authentication": [
+        "custom-header"
+      ],
+      "authorization": [],
+      "requestSchemas": [],
+      "rateLimited": false,
+      "bodyLimited": false,
+      "signatureVerification": false,
+      "deliveryFencing": false,
+      "idempotent": false,
+      "errors": [],
+      "entities": [
+        "systemConfig",
+        "systemSettings"
+      ],
+      "runtimeDependencies": [
+        "postgresql"
+      ]
+    },
+    {
+      "route": "/api/scim/v2/ServiceProviderConfig",
+      "file": "src/app/api/scim/v2/ServiceProviderConfig/route.ts",
+      "sources": [
+        "src/app/api/scim/v2/ServiceProviderConfig/route.ts",
+        "src/lib/audit.ts",
+        "src/lib/encryption.ts",
+        "src/lib/scim.ts"
+      ],
+      "methods": [
+        "GET"
+      ],
+      "authentication": [
+        "custom-header"
+      ],
+      "authorization": [],
+      "requestSchemas": [],
+      "rateLimited": false,
+      "bodyLimited": false,
+      "signatureVerification": false,
+      "deliveryFencing": false,
+      "idempotent": false,
+      "errors": [],
+      "entities": [
+        "systemConfig",
+        "systemSettings"
+      ],
+      "runtimeDependencies": [
+        "postgresql"
+      ]
+    },
+    {
       "route": "/api/scim/v2/Users/[id]",
       "file": "src/app/api/scim/v2/Users/[id]/route.ts",
       "sources": [
@@ -9342,7 +9575,9 @@
         "PATCH",
         "DELETE"
       ],
-      "authentication": [],
+      "authentication": [
+        "custom-header"
+      ],
       "authorization": [],
       "requestSchemas": [],
       "rateLimited": false,
@@ -9380,7 +9615,9 @@
         "POST",
         "PATCH"
       ],
-      "authentication": [],
+      "authentication": [
+        "custom-header"
+      ],
       "authorization": [],
       "requestSchemas": [],
       "rateLimited": false,
@@ -24768,6 +25005,15 @@
       "source": "src/lib/data-cleanup.ts",
       "references": 24,
       "semanticClassification": "INTERNAL_IMPLEMENTATION"
+    },
+    {
+      "id": "src/lib/email.ts:DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS",
+      "name": "DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS",
+      "value": 5,
+      "expression": "5",
+      "source": "src/lib/email.ts",
+      "references": 3,
+      "semanticClassification": "PROVIDER_CONSTRAINT"
     },
     {
       "id": "src/lib/encryption-key-validation.ts:MAX_KEYRING_ENTRIES",
@@ -50184,6 +50430,780 @@
         ]
       },
       {
+        "id": "api:/api/scim/v2/Groups/[id]",
+        "kind": "api",
+        "name": "/api/scim/v2/Groups/[id]",
+        "owner": "identity",
+        "classification": "PUBLIC_API",
+        "sources": [
+          "src/app/api/scim/v2/Groups/[id]/route.ts",
+          "src/lib/audit.ts",
+          "src/lib/encryption.ts",
+          "src/lib/logger.ts",
+          "src/lib/prisma-datasource.ts",
+          "src/lib/prisma.ts",
+          "src/lib/request-context.ts",
+          "src/lib/runtime-role.ts",
+          "src/lib/scim.ts"
+        ],
+        "contract": {
+          "route": "/api/scim/v2/Groups/[id]",
+          "file": "src/app/api/scim/v2/Groups/[id]/route.ts",
+          "sources": [
+            "src/app/api/scim/v2/Groups/[id]/route.ts",
+            "src/lib/audit.ts",
+            "src/lib/encryption.ts",
+            "src/lib/logger.ts",
+            "src/lib/prisma-datasource.ts",
+            "src/lib/prisma.ts",
+            "src/lib/request-context.ts",
+            "src/lib/runtime-role.ts",
+            "src/lib/scim.ts"
+          ],
+          "methods": [
+            "GET",
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
+          "authentication": [
+            "custom-header"
+          ],
+          "authorization": [],
+          "requestSchemas": [],
+          "rateLimited": false,
+          "bodyLimited": false,
+          "signatureVerification": false,
+          "deliveryFencing": false,
+          "idempotent": false,
+          "errors": [],
+          "entities": [
+            "systemConfig",
+            "systemSettings",
+            "team"
+          ],
+          "runtimeDependencies": [
+            "postgresql"
+          ]
+        },
+        "documentation": {
+          "concepts": [
+            "concepts/authentication.md"
+          ],
+          "guides": [
+            "guides/identity/configure-scim.md"
+          ],
+          "reference": [
+            "reference/api/README.md"
+          ],
+          "troubleshooting": [
+            "troubleshooting/login/oidc-access.md"
+          ]
+        },
+        "documentationMapping": "capability-source",
+        "tests": [
+          "tests/api/scim-users.test.ts",
+          "tests/lib/scim.test.ts"
+        ],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "api:/api/scim/v2/Groups/[id]:classification",
+            "text": "/api/scim/v2/Groups/[id] is classified as PUBLIC_API and owned by identity.",
+            "evidence": [
+              "src/app/api/scim/v2/Groups/[id]/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/logger.ts",
+              "src/lib/prisma-datasource.ts",
+              "src/lib/prisma.ts",
+              "src/lib/request-context.ts",
+              "src/lib/runtime-role.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "api:/api/scim/v2/Groups/[id]:methods",
+            "text": "/api/scim/v2/Groups/[id] implements GET, PUT, PATCH, DELETE.",
+            "evidence": [
+              "src/app/api/scim/v2/Groups/[id]/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/logger.ts",
+              "src/lib/prisma-datasource.ts",
+              "src/lib/prisma.ts",
+              "src/lib/request-context.ts",
+              "src/lib/runtime-role.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          }
+        ],
+        "relatedFeatures": [
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
+          "api:/api/scim/v2/Users/[id]",
+          "api:/api/scim/v2/Users",
+          "ui:/users/[id]",
+          "ui:/users",
+          "ui:/m/users/[id]",
+          "ui:/m/users",
+          "ui:/m/forgot-password"
+        ]
+      },
+      {
+        "id": "api:/api/scim/v2/Groups",
+        "kind": "api",
+        "name": "/api/scim/v2/Groups",
+        "owner": "identity",
+        "classification": "PUBLIC_API",
+        "sources": [
+          "src/app/api/scim/v2/Groups/route.ts",
+          "src/lib/audit.ts",
+          "src/lib/encryption.ts",
+          "src/lib/logger.ts",
+          "src/lib/prisma-datasource.ts",
+          "src/lib/prisma.ts",
+          "src/lib/request-context.ts",
+          "src/lib/runtime-role.ts",
+          "src/lib/scim.ts"
+        ],
+        "contract": {
+          "route": "/api/scim/v2/Groups",
+          "file": "src/app/api/scim/v2/Groups/route.ts",
+          "sources": [
+            "src/app/api/scim/v2/Groups/route.ts",
+            "src/lib/audit.ts",
+            "src/lib/encryption.ts",
+            "src/lib/logger.ts",
+            "src/lib/prisma-datasource.ts",
+            "src/lib/prisma.ts",
+            "src/lib/request-context.ts",
+            "src/lib/runtime-role.ts",
+            "src/lib/scim.ts"
+          ],
+          "methods": [
+            "GET",
+            "POST"
+          ],
+          "authentication": [
+            "custom-header"
+          ],
+          "authorization": [],
+          "requestSchemas": [],
+          "rateLimited": false,
+          "bodyLimited": false,
+          "signatureVerification": false,
+          "deliveryFencing": false,
+          "idempotent": false,
+          "errors": [],
+          "entities": [
+            "systemConfig",
+            "systemSettings",
+            "team"
+          ],
+          "runtimeDependencies": [
+            "postgresql"
+          ]
+        },
+        "documentation": {
+          "concepts": [
+            "concepts/authentication.md"
+          ],
+          "guides": [
+            "guides/identity/configure-scim.md"
+          ],
+          "reference": [
+            "reference/api/README.md"
+          ],
+          "troubleshooting": [
+            "troubleshooting/login/oidc-access.md"
+          ]
+        },
+        "documentationMapping": "capability-source",
+        "tests": [
+          "tests/api/scim-users.test.ts",
+          "tests/lib/scim.test.ts"
+        ],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "api:/api/scim/v2/Groups:classification",
+            "text": "/api/scim/v2/Groups is classified as PUBLIC_API and owned by identity.",
+            "evidence": [
+              "src/app/api/scim/v2/Groups/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/logger.ts",
+              "src/lib/prisma-datasource.ts",
+              "src/lib/prisma.ts",
+              "src/lib/request-context.ts",
+              "src/lib/runtime-role.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "api:/api/scim/v2/Groups:methods",
+            "text": "/api/scim/v2/Groups implements GET, POST.",
+            "evidence": [
+              "src/app/api/scim/v2/Groups/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/logger.ts",
+              "src/lib/prisma-datasource.ts",
+              "src/lib/prisma.ts",
+              "src/lib/request-context.ts",
+              "src/lib/runtime-role.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          }
+        ],
+        "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
+          "api:/api/scim/v2/Users/[id]",
+          "api:/api/scim/v2/Users",
+          "ui:/users/[id]",
+          "ui:/users",
+          "ui:/m/users/[id]",
+          "ui:/m/users",
+          "ui:/m/forgot-password"
+        ]
+      },
+      {
+        "id": "api:/api/scim/v2/ResourceTypes/[id]",
+        "kind": "api",
+        "name": "/api/scim/v2/ResourceTypes/[id]",
+        "owner": "identity",
+        "classification": "PUBLIC_API",
+        "sources": [
+          "src/app/api/scim/v2/ResourceTypes/[id]/route.ts",
+          "src/lib/audit.ts",
+          "src/lib/encryption.ts",
+          "src/lib/scim.ts"
+        ],
+        "contract": {
+          "route": "/api/scim/v2/ResourceTypes/[id]",
+          "file": "src/app/api/scim/v2/ResourceTypes/[id]/route.ts",
+          "sources": [
+            "src/app/api/scim/v2/ResourceTypes/[id]/route.ts",
+            "src/lib/audit.ts",
+            "src/lib/encryption.ts",
+            "src/lib/scim.ts"
+          ],
+          "methods": [
+            "GET"
+          ],
+          "authentication": [
+            "custom-header"
+          ],
+          "authorization": [],
+          "requestSchemas": [],
+          "rateLimited": false,
+          "bodyLimited": false,
+          "signatureVerification": false,
+          "deliveryFencing": false,
+          "idempotent": false,
+          "errors": [],
+          "entities": [
+            "systemConfig",
+            "systemSettings"
+          ],
+          "runtimeDependencies": [
+            "postgresql"
+          ]
+        },
+        "documentation": {
+          "concepts": [
+            "concepts/authentication.md"
+          ],
+          "guides": [
+            "guides/identity/configure-scim.md"
+          ],
+          "reference": [
+            "reference/api/README.md"
+          ],
+          "troubleshooting": [
+            "troubleshooting/login/oidc-access.md"
+          ]
+        },
+        "documentationMapping": "capability-source",
+        "tests": [
+          "tests/api/scim-users.test.ts",
+          "tests/lib/scim.test.ts"
+        ],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "api:/api/scim/v2/ResourceTypes/[id]:classification",
+            "text": "/api/scim/v2/ResourceTypes/[id] is classified as PUBLIC_API and owned by identity.",
+            "evidence": [
+              "src/app/api/scim/v2/ResourceTypes/[id]/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "api:/api/scim/v2/ResourceTypes/[id]:methods",
+            "text": "/api/scim/v2/ResourceTypes/[id] implements GET.",
+            "evidence": [
+              "src/app/api/scim/v2/ResourceTypes/[id]/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          }
+        ],
+        "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
+          "api:/api/scim/v2/Users/[id]",
+          "api:/api/scim/v2/Users",
+          "ui:/users/[id]",
+          "ui:/users",
+          "ui:/m/users/[id]",
+          "ui:/m/users",
+          "ui:/m/forgot-password"
+        ]
+      },
+      {
+        "id": "api:/api/scim/v2/ResourceTypes",
+        "kind": "api",
+        "name": "/api/scim/v2/ResourceTypes",
+        "owner": "identity",
+        "classification": "PUBLIC_API",
+        "sources": [
+          "src/app/api/scim/v2/ResourceTypes/route.ts",
+          "src/lib/audit.ts",
+          "src/lib/encryption.ts",
+          "src/lib/scim.ts"
+        ],
+        "contract": {
+          "route": "/api/scim/v2/ResourceTypes",
+          "file": "src/app/api/scim/v2/ResourceTypes/route.ts",
+          "sources": [
+            "src/app/api/scim/v2/ResourceTypes/route.ts",
+            "src/lib/audit.ts",
+            "src/lib/encryption.ts",
+            "src/lib/scim.ts"
+          ],
+          "methods": [
+            "GET"
+          ],
+          "authentication": [
+            "custom-header"
+          ],
+          "authorization": [],
+          "requestSchemas": [],
+          "rateLimited": false,
+          "bodyLimited": false,
+          "signatureVerification": false,
+          "deliveryFencing": false,
+          "idempotent": false,
+          "errors": [],
+          "entities": [
+            "systemConfig",
+            "systemSettings"
+          ],
+          "runtimeDependencies": [
+            "postgresql"
+          ]
+        },
+        "documentation": {
+          "concepts": [
+            "concepts/authentication.md"
+          ],
+          "guides": [
+            "guides/identity/configure-scim.md"
+          ],
+          "reference": [
+            "reference/api/README.md"
+          ],
+          "troubleshooting": [
+            "troubleshooting/login/oidc-access.md"
+          ]
+        },
+        "documentationMapping": "capability-source",
+        "tests": [
+          "tests/api/scim-users.test.ts",
+          "tests/lib/scim.test.ts"
+        ],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "api:/api/scim/v2/ResourceTypes:classification",
+            "text": "/api/scim/v2/ResourceTypes is classified as PUBLIC_API and owned by identity.",
+            "evidence": [
+              "src/app/api/scim/v2/ResourceTypes/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "api:/api/scim/v2/ResourceTypes:methods",
+            "text": "/api/scim/v2/ResourceTypes implements GET.",
+            "evidence": [
+              "src/app/api/scim/v2/ResourceTypes/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          }
+        ],
+        "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
+          "api:/api/scim/v2/Users/[id]",
+          "api:/api/scim/v2/Users",
+          "ui:/users/[id]",
+          "ui:/users",
+          "ui:/m/users/[id]",
+          "ui:/m/users",
+          "ui:/m/forgot-password"
+        ]
+      },
+      {
+        "id": "api:/api/scim/v2/Schemas/[id]",
+        "kind": "api",
+        "name": "/api/scim/v2/Schemas/[id]",
+        "owner": "identity",
+        "classification": "PUBLIC_API",
+        "sources": [
+          "src/app/api/scim/v2/Schemas/[id]/route.ts",
+          "src/lib/audit.ts",
+          "src/lib/encryption.ts",
+          "src/lib/scim.ts"
+        ],
+        "contract": {
+          "route": "/api/scim/v2/Schemas/[id]",
+          "file": "src/app/api/scim/v2/Schemas/[id]/route.ts",
+          "sources": [
+            "src/app/api/scim/v2/Schemas/[id]/route.ts",
+            "src/lib/audit.ts",
+            "src/lib/encryption.ts",
+            "src/lib/scim.ts"
+          ],
+          "methods": [
+            "GET"
+          ],
+          "authentication": [
+            "custom-header"
+          ],
+          "authorization": [],
+          "requestSchemas": [],
+          "rateLimited": false,
+          "bodyLimited": false,
+          "signatureVerification": false,
+          "deliveryFencing": false,
+          "idempotent": false,
+          "errors": [],
+          "entities": [
+            "systemConfig",
+            "systemSettings"
+          ],
+          "runtimeDependencies": [
+            "postgresql"
+          ]
+        },
+        "documentation": {
+          "concepts": [
+            "concepts/authentication.md"
+          ],
+          "guides": [
+            "guides/identity/configure-scim.md"
+          ],
+          "reference": [
+            "reference/api/README.md"
+          ],
+          "troubleshooting": [
+            "troubleshooting/login/oidc-access.md"
+          ]
+        },
+        "documentationMapping": "capability-source",
+        "tests": [
+          "tests/api/scim-users.test.ts",
+          "tests/lib/scim.test.ts"
+        ],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "api:/api/scim/v2/Schemas/[id]:classification",
+            "text": "/api/scim/v2/Schemas/[id] is classified as PUBLIC_API and owned by identity.",
+            "evidence": [
+              "src/app/api/scim/v2/Schemas/[id]/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "api:/api/scim/v2/Schemas/[id]:methods",
+            "text": "/api/scim/v2/Schemas/[id] implements GET.",
+            "evidence": [
+              "src/app/api/scim/v2/Schemas/[id]/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          }
+        ],
+        "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas",
+          "api:/api/scim/v2/Users/[id]",
+          "api:/api/scim/v2/Users",
+          "ui:/users/[id]",
+          "ui:/users",
+          "ui:/m/users/[id]",
+          "ui:/m/users",
+          "ui:/m/forgot-password"
+        ]
+      },
+      {
+        "id": "api:/api/scim/v2/Schemas",
+        "kind": "api",
+        "name": "/api/scim/v2/Schemas",
+        "owner": "identity",
+        "classification": "PUBLIC_API",
+        "sources": [
+          "src/app/api/scim/v2/Schemas/route.ts",
+          "src/lib/audit.ts",
+          "src/lib/encryption.ts",
+          "src/lib/scim.ts"
+        ],
+        "contract": {
+          "route": "/api/scim/v2/Schemas",
+          "file": "src/app/api/scim/v2/Schemas/route.ts",
+          "sources": [
+            "src/app/api/scim/v2/Schemas/route.ts",
+            "src/lib/audit.ts",
+            "src/lib/encryption.ts",
+            "src/lib/scim.ts"
+          ],
+          "methods": [
+            "GET"
+          ],
+          "authentication": [
+            "custom-header"
+          ],
+          "authorization": [],
+          "requestSchemas": [],
+          "rateLimited": false,
+          "bodyLimited": false,
+          "signatureVerification": false,
+          "deliveryFencing": false,
+          "idempotent": false,
+          "errors": [],
+          "entities": [
+            "systemConfig",
+            "systemSettings"
+          ],
+          "runtimeDependencies": [
+            "postgresql"
+          ]
+        },
+        "documentation": {
+          "concepts": [
+            "concepts/authentication.md"
+          ],
+          "guides": [
+            "guides/identity/configure-scim.md"
+          ],
+          "reference": [
+            "reference/api/README.md"
+          ],
+          "troubleshooting": [
+            "troubleshooting/login/oidc-access.md"
+          ]
+        },
+        "documentationMapping": "capability-source",
+        "tests": [
+          "tests/api/scim-users.test.ts",
+          "tests/lib/scim.test.ts"
+        ],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "api:/api/scim/v2/Schemas:classification",
+            "text": "/api/scim/v2/Schemas is classified as PUBLIC_API and owned by identity.",
+            "evidence": [
+              "src/app/api/scim/v2/Schemas/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "api:/api/scim/v2/Schemas:methods",
+            "text": "/api/scim/v2/Schemas implements GET.",
+            "evidence": [
+              "src/app/api/scim/v2/Schemas/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          }
+        ],
+        "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Users/[id]",
+          "api:/api/scim/v2/Users",
+          "ui:/users/[id]",
+          "ui:/users",
+          "ui:/m/users/[id]",
+          "ui:/m/users",
+          "ui:/m/forgot-password"
+        ]
+      },
+      {
+        "id": "api:/api/scim/v2/ServiceProviderConfig",
+        "kind": "api",
+        "name": "/api/scim/v2/ServiceProviderConfig",
+        "owner": "notification",
+        "classification": "PUBLIC_API",
+        "sources": [
+          "src/app/api/scim/v2/ServiceProviderConfig/route.ts",
+          "src/lib/audit.ts",
+          "src/lib/encryption.ts",
+          "src/lib/scim.ts"
+        ],
+        "contract": {
+          "route": "/api/scim/v2/ServiceProviderConfig",
+          "file": "src/app/api/scim/v2/ServiceProviderConfig/route.ts",
+          "sources": [
+            "src/app/api/scim/v2/ServiceProviderConfig/route.ts",
+            "src/lib/audit.ts",
+            "src/lib/encryption.ts",
+            "src/lib/scim.ts"
+          ],
+          "methods": [
+            "GET"
+          ],
+          "authentication": [
+            "custom-header"
+          ],
+          "authorization": [],
+          "requestSchemas": [],
+          "rateLimited": false,
+          "bodyLimited": false,
+          "signatureVerification": false,
+          "deliveryFencing": false,
+          "idempotent": false,
+          "errors": [],
+          "entities": [
+            "systemConfig",
+            "systemSettings"
+          ],
+          "runtimeDependencies": [
+            "postgresql"
+          ]
+        },
+        "documentation": {
+          "concepts": [
+            "concepts/authentication.md"
+          ],
+          "guides": [
+            "guides/identity/configure-scim.md"
+          ],
+          "reference": [
+            "reference/api/README.md"
+          ],
+          "troubleshooting": [
+            "troubleshooting/notifications/not-delivered.md"
+          ]
+        },
+        "documentationMapping": "capability-source",
+        "tests": [
+          "tests/api/scim-users.test.ts",
+          "tests/lib/scim.test.ts"
+        ],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "api:/api/scim/v2/ServiceProviderConfig:classification",
+            "text": "/api/scim/v2/ServiceProviderConfig is classified as PUBLIC_API and owned by notification.",
+            "evidence": [
+              "src/app/api/scim/v2/ServiceProviderConfig/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "api:/api/scim/v2/ServiceProviderConfig:methods",
+            "text": "/api/scim/v2/ServiceProviderConfig implements GET.",
+            "evidence": [
+              "src/app/api/scim/v2/ServiceProviderConfig/route.ts",
+              "src/lib/audit.ts",
+              "src/lib/encryption.ts",
+              "src/lib/scim.ts"
+            ],
+            "verification": "source"
+          }
+        ],
+        "relatedFeatures": [
+          "api:/api/webhooks/notifications/provider-feedback",
+          "api:/api/webhooks/notifications/twilio",
+          "api:/api/webhooks/notifications/twilio/voice/gather",
+          "api:/api/webhooks/notifications/twilio/voice/status",
+          "ui:/services/[id]/notifications",
+          "ui:/settings/notifications/history",
+          "ui:/settings/notifications/operations",
+          "ui:/settings/notifications",
+          "ui:/m/notifications",
+          "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
+          "configuration:MAX_RECONNECT_ATTEMPTS"
+        ]
+      },
+      {
         "id": "api:/api/scim/v2/Users/[id]",
         "kind": "api",
         "name": "/api/scim/v2/Users/[id]",
@@ -50230,7 +51250,9 @@
             "PATCH",
             "DELETE"
           ],
-          "authentication": [],
+          "authentication": [
+            "custom-header"
+          ],
           "authorization": [],
           "requestSchemas": [],
           "rateLimited": false,
@@ -50319,18 +51341,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
           "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL",
-          "configuration:AUTH_BREAK_GLASS_ENABLED"
+          "ui:/m/forgot-password"
         ]
       },
       {
@@ -50371,7 +51393,9 @@
             "POST",
             "PATCH"
           ],
-          "authentication": [],
+          "authentication": [
+            "custom-header"
+          ],
           "authorization": [],
           "requestSchemas": [],
           "rateLimited": false,
@@ -50448,18 +51472,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
           "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL",
-          "configuration:AUTH_BREAK_GLASS_ENABLED"
+          "ui:/m/forgot-password"
         ]
       },
       {
@@ -63183,6 +64207,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
           "api:/api/webhooks/notifications/twilio/voice/status",
@@ -63193,8 +64218,7 @@
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
           "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS",
-          "configuration:NOTIFICATION_AGING_FLOOR"
+          "configuration:MAX_RECONNECT_ATTEMPTS"
         ]
       },
       {
@@ -63334,6 +64358,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio/voice/gather",
           "api:/api/webhooks/notifications/twilio/voice/status",
@@ -63344,8 +64369,7 @@
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
           "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS",
-          "configuration:NOTIFICATION_AGING_FLOOR"
+          "configuration:MAX_RECONNECT_ATTEMPTS"
         ]
       },
       {
@@ -63525,6 +64549,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/status",
@@ -63535,8 +64560,7 @@
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
           "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS",
-          "configuration:NOTIFICATION_AGING_FLOOR"
+          "configuration:MAX_RECONNECT_ATTEMPTS"
         ]
       },
       {
@@ -63690,6 +64714,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -63700,8 +64725,7 @@
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
           "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS",
-          "configuration:NOTIFICATION_AGING_FLOOR"
+          "configuration:MAX_RECONNECT_ATTEMPTS"
         ]
       },
       {
@@ -65613,6 +66637,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -65623,8 +66648,7 @@
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
           "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS",
-          "configuration:NOTIFICATION_AGING_FLOOR"
+          "configuration:MAX_RECONNECT_ATTEMPTS"
         ]
       },
       {
@@ -66422,6 +67446,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -66432,8 +67457,7 @@
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
           "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS",
-          "configuration:NOTIFICATION_AGING_FLOOR"
+          "configuration:MAX_RECONNECT_ATTEMPTS"
         ]
       },
       {
@@ -66476,6 +67500,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -66486,8 +67511,7 @@
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
           "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS",
-          "configuration:NOTIFICATION_AGING_FLOOR"
+          "configuration:MAX_RECONNECT_ATTEMPTS"
         ]
       },
       {
@@ -66530,6 +67554,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -66540,8 +67565,7 @@
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
           "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS",
-          "configuration:NOTIFICATION_AGING_FLOOR"
+          "configuration:MAX_RECONNECT_ATTEMPTS"
         ]
       },
       {
@@ -67460,18 +68484,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users",
           "ui:/m/users/[id]",
           "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL",
-          "configuration:AUTH_BREAK_GLASS_ENABLED"
+          "ui:/m/forgot-password"
         ]
       },
       {
@@ -67518,18 +68542,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/m/users/[id]",
           "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL",
-          "configuration:AUTH_BREAK_GLASS_ENABLED"
+          "ui:/m/forgot-password"
         ]
       },
       {
@@ -67922,6 +68946,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -67932,8 +68957,7 @@
           "ui:/settings/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
           "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS",
-          "configuration:NOTIFICATION_AGING_FLOOR"
+          "configuration:MAX_RECONNECT_ATTEMPTS"
         ]
       },
       {
@@ -68663,18 +69687,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL",
-          "configuration:AUTH_BREAK_GLASS_ENABLED"
+          "ui:/m/forgot-password"
         ]
       },
       {
@@ -68719,18 +69743,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL",
-          "configuration:AUTH_BREAK_GLASS_ENABLED"
+          "ui:/m/forgot-password"
         ]
       },
       {
@@ -68824,18 +69848,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL",
-          "configuration:AUTH_BREAK_GLASS_ENABLED"
+          "ui:/m/users"
         ]
       },
       {
@@ -69361,18 +70385,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL",
-          "configuration:AUTH_BREAK_GLASS_ENABLED"
+          "ui:/m/users"
         ]
       },
       {
@@ -69517,18 +70541,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL",
-          "configuration:AUTH_BREAK_GLASS_ENABLED"
+          "ui:/m/users"
         ]
       },
       {
@@ -69621,18 +70645,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL",
-          "configuration:AUTH_BREAK_GLASS_ENABLED"
+          "ui:/m/users"
         ]
       },
       {
@@ -69673,18 +70697,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL",
-          "configuration:AUTH_BREAK_GLASS_ENABLED"
+          "ui:/m/users"
         ]
       },
       {
@@ -77471,18 +78495,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_ENABLED"
+          "ui:/m/users"
         ]
       },
       {
@@ -77549,18 +78573,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -77627,18 +78651,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -77703,18 +78727,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -77781,18 +78805,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -77859,18 +78883,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -77937,18 +78961,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -78015,18 +79039,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -78089,18 +79113,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -78984,6 +80008,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -78994,8 +80019,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS",
-          "configuration:NOTIFICATION_AGING_FLOOR"
+          "configuration:MAX_RECONNECT_ATTEMPTS"
         ]
       },
       {
@@ -82873,6 +83897,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -82883,8 +83908,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:MAX_RECONNECT_ATTEMPTS",
-          "configuration:NOTIFICATION_AGING_FLOOR"
+          "configuration:MAX_RECONNECT_ATTEMPTS"
         ]
       },
       {
@@ -83252,18 +84276,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -83463,18 +84487,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -86648,6 +87672,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -86658,8 +87683,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:NOTIFICATION_AGING_FLOOR"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -88570,18 +89594,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -88693,18 +89717,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -88884,18 +89908,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -89236,6 +90260,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -89246,8 +90271,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -89345,6 +90369,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -89355,8 +90380,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -89429,6 +90453,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -89439,8 +90464,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -89503,6 +90527,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -89513,8 +90538,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -89651,18 +90675,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -89727,18 +90751,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -89807,18 +90831,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -90683,18 +91707,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -90781,18 +91805,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -90977,18 +92001,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -91594,6 +92618,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -91604,8 +92629,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -91668,6 +92692,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -91678,8 +92703,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -94018,18 +95042,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -94095,18 +95119,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -94175,18 +95199,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -94633,18 +95657,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -94731,18 +95755,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -94943,18 +95967,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -96396,18 +97420,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -96615,18 +97639,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -97748,18 +98772,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -98114,18 +99138,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -98188,18 +99212,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -98262,18 +99286,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -98338,18 +99362,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -98412,18 +99436,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -100999,18 +102023,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -102885,18 +103909,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -105851,6 +106875,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -105861,8 +106886,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -105934,6 +106958,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -105944,8 +106969,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -106017,6 +107041,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -106027,8 +107052,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -106100,6 +107124,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -106110,8 +107135,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -106181,6 +107205,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -106191,8 +107216,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -106262,6 +107286,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -106272,8 +107297,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -106339,6 +107363,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -106349,8 +107374,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -106416,6 +107440,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -106426,8 +107451,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -106497,6 +107521,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -106507,8 +107532,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -108552,18 +109576,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -113973,6 +114997,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -113983,8 +115008,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -116590,6 +117614,56 @@
             "text": "BATCH_SIZE has the discovered numeric value 500.",
             "evidence": [
               "src/lib/data-cleanup.ts"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
+        "id": "limit:src/lib/email.ts:DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS",
+        "kind": "limit",
+        "name": "src/lib/email.ts:DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "src/lib/email.ts"
+        ],
+        "contract": {
+          "id": "src/lib/email.ts:DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS",
+          "name": "DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS",
+          "value": 5,
+          "expression": "5",
+          "source": "src/lib/email.ts",
+          "references": 3,
+          "semanticClassification": "PROVIDER_CONSTRAINT"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/limits.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "limit:src/lib/email.ts:DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS:classification",
+            "text": "src/lib/email.ts:DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "src/lib/email.ts"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "limit:src/lib/email.ts:DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS:value",
+            "text": "DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS has the discovered numeric value 5.",
+            "evidence": [
+              "src/lib/email.ts"
             ],
             "verification": "source"
           }
@@ -119618,6 +120692,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -119628,8 +120703,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -119840,6 +120914,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -119850,8 +120925,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -120043,6 +121117,7 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/ServiceProviderConfig",
           "api:/api/webhooks/notifications/provider-feedback",
           "api:/api/webhooks/notifications/twilio",
           "api:/api/webhooks/notifications/twilio/voice/gather",
@@ -120053,8 +121128,7 @@
           "ui:/settings/notifications",
           "ui:/m/notifications",
           "configuration:COMPLIANCE_DRIFT_NOTIFICATIONS_ENABLED",
-          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS",
-          "configuration:MAX_RECONNECT_ATTEMPTS"
+          "configuration:EVENT_TRANSACTION_MAX_ATTEMPTS"
         ]
       },
       {
@@ -121133,18 +122207,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -121199,18 +122273,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -121265,18 +122339,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -121331,18 +122405,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -121397,18 +122471,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -121463,18 +122537,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -121529,18 +122603,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -121595,18 +122669,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -122460,18 +123534,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -122526,18 +123600,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -122854,18 +123928,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -122920,18 +123994,18 @@
           }
         ],
         "relatedFeatures": [
+          "api:/api/scim/v2/Groups/[id]",
+          "api:/api/scim/v2/Groups",
+          "api:/api/scim/v2/ResourceTypes/[id]",
+          "api:/api/scim/v2/ResourceTypes",
+          "api:/api/scim/v2/Schemas/[id]",
+          "api:/api/scim/v2/Schemas",
           "api:/api/scim/v2/Users/[id]",
           "api:/api/scim/v2/Users",
           "ui:/users/[id]",
           "ui:/users",
           "ui:/m/users/[id]",
-          "ui:/m/users",
-          "ui:/m/forgot-password",
-          "ui:/auth/signout",
-          "ui:/forgot-password",
-          "ui:/reset-password",
-          "ui:/set-password",
-          "configuration:AUTH_BREAK_GLASS_EMAIL"
+          "ui:/m/users"
         ]
       },
       {
@@ -124337,23 +125411,23 @@
       }
     ],
     "summary": {
-      "total": 1162,
-      "claims": 1607,
+      "total": 1170,
+      "claims": 1623,
       "unsupportedClaims": 0,
-      "supported": 632,
-      "documentedSupported": 632,
+      "supported": 639,
+      "documentedSupported": 639,
       "undocumentedSupported": 0,
       "unresolvedSemanticContracts": 0,
       "uiRoutesWithoutExplicitDocumentation": 0,
       "byKind": {
-        "api": 220,
+        "api": 227,
         "api-scope": 7,
         "authorization-action": 9,
         "configuration": 316,
         "deployment-topology": 4,
         "enum": 73,
         "integration": 28,
-        "limit": 225,
+        "limit": 226,
         "model": 120,
         "notification-provider": 9,
         "permission": 37,
@@ -124363,9 +125437,9 @@
       },
       "byClassification": {
         "ADMIN_FEATURE": 83,
-        "INTERNAL_IMPLEMENTATION": 530,
+        "INTERNAL_IMPLEMENTATION": 531,
         "OPERATOR_FEATURE": 345,
-        "PUBLIC_API": 47,
+        "PUBLIC_API": 54,
         "PUBLIC_FEATURE": 157
       },
       "unclassified": 0
