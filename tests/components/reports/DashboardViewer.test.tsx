@@ -252,4 +252,40 @@ describe('DashboardViewer Component', () => {
     expect(screen.getByText('Widget Library')).toBeDefined();
     expect(screen.getByText('Choose widgets to add to your dashboard')).toBeDefined();
   });
+
+  it('triggers window.print when Export PDF is clicked', () => {
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
+    render(<DashboardViewer {...defaultProps} />);
+
+    const exportBtn = screen.getByRole('button', { name: /export pdf/i });
+    fireEvent.click(exportBtn);
+
+    expect(printSpy).toHaveBeenCalledTimes(1);
+    printSpy.mockRestore();
+  });
+
+  it('opens Share modal when Share button is clicked', () => {
+    render(<DashboardViewer {...defaultProps} />);
+
+    const shareBtn = screen.getByRole('button', { name: /^share$/i });
+    fireEvent.click(shareBtn);
+
+    expect(screen.getByText('Share Dashboard')).toBeDefined();
+    expect(screen.getByText(/Current filter parameters/i)).toBeDefined();
+  });
+
+  it('toggles Kiosk presentation mode when Presentation button is clicked', () => {
+    render(<DashboardViewer {...defaultProps} />);
+
+    const presentationBtn = screen.getByTitle(/Presentation Mode \(Press F\)/i);
+    fireEvent.click(presentationBtn);
+
+    expect(screen.getByText('NOC Wallboard')).toBeDefined();
+    expect(screen.getByRole('button', { name: /Exit \(Esc\)/i })).toBeDefined();
+
+    // Exit Kiosk mode
+    fireEvent.click(screen.getByRole('button', { name: /Exit \(Esc\)/i }));
+    expect(screen.queryByText('NOC Wallboard')).toBeNull();
+  });
 });
+

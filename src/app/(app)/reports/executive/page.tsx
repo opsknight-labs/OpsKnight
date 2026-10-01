@@ -81,6 +81,7 @@ export default async function ExecutiveDashboardPage({
     teamId,
     serviceId,
     userTimeZone,
+    includeActiveIncidents: true,
   });
 
   const serializedMetrics = serializeSlaMetrics(metrics);

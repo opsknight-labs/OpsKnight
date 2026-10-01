@@ -161,6 +161,14 @@ function getColumnsForMetric(metricKey: string): ColumnConfig[] {
         { key: 'user.name', label: 'On-Call' },
         { key: 'schedule.name', label: 'Schedule' },
       ];
+    case 'activeIncidentSummaries':
+    case 'activeIncidentsList':
+      return [
+        { key: 'title', label: 'Incident' },
+        { key: 'urgency', label: 'Urgency', align: 'center' },
+        { key: 'status', label: 'Status', align: 'center' },
+        { key: 'serviceName', label: 'Service' },
+      ];
     default:
       return [
         { key: 'name', label: 'Name' },
