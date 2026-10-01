@@ -103,7 +103,7 @@ describe('StatusPageAnnouncementManager Component', () => {
     expect(screen.getByText(/Set to Now/i)).toBeDefined();
   });
 
-  it('updates end date and time via quick window buttons (+1h, +2h, +4h)', () => {
+  it('updates end date and time via quick window buttons (+1h, +2h, +4h)', async () => {
     renderManager();
 
     // Open composer modal
@@ -113,12 +113,16 @@ describe('StatusPageAnnouncementManager Component', () => {
     fireEvent.click(add1hBtn);
 
     // Duration should calculate and show window
-    expect(screen.getByText(/Duration:/i)).toBeDefined();
-    expect(screen.getByText('1h')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText(/Duration:/i).textContent).toContain('1h');
+    });
 
     const add2hBtn = screen.getByRole('button', { name: '+2h' });
     fireEvent.click(add2hBtn);
-    expect(screen.getByText(/Duration:/i).textContent).toContain('2h');
+
+    await waitFor(() => {
+      expect(screen.getByText(/Duration:/i).textContent).toContain('2h');
+    });
   });
 
   it('detects and displays time validation error when end time is earlier than start time', () => {
@@ -344,4 +348,3 @@ describe('StatusPageAnnouncementManager Component', () => {
     });
   });
 });
-
