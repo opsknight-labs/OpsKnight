@@ -412,6 +412,9 @@ describe('PushNotificationToggle', () => {
       unsubscribe,
     };
     const registration = {
+      active: { scriptURL: `${window.location.origin}/sw.js` },
+      waiting: null,
+      installing: null,
       pushManager: {
         getSubscription: vi
           .fn()
@@ -509,6 +512,9 @@ describe('PushNotificationToggle', () => {
       configurable: true,
     });
     const registration = {
+      active: { scriptURL: `${window.location.origin}/sw.js` },
+      waiting: null,
+      installing: null,
       pushManager: {
         getSubscription: vi.fn().mockResolvedValue(null),
         subscribe: vi.fn().mockResolvedValue({ endpoint: 'https://push.example.com/new' }),
@@ -586,6 +592,9 @@ describe('PushNotificationToggle', () => {
         })
     );
     const registration = {
+      active: { scriptURL: `${window.location.origin}/sw.js` },
+      waiting: null,
+      installing: null,
       pushManager: {
         getSubscription: vi.fn().mockResolvedValue(null),
         subscribe,
@@ -668,6 +677,9 @@ describe('PushNotificationToggle', () => {
         })
     );
     const registration = {
+      active: { scriptURL: `${window.location.origin}/sw.js` },
+      waiting: null,
+      installing: null,
       pushManager: {
         getSubscription: vi.fn().mockResolvedValue(null),
         subscribe,
@@ -721,6 +733,9 @@ describe('PushNotificationToggle', () => {
 
   it('shows the typed administrator message when VAPID is not configured', async () => {
     const registration = {
+      active: { scriptURL: `${window.location.origin}/sw.js` },
+      waiting: null,
+      installing: null,
       pushManager: {
         getSubscription: vi.fn().mockResolvedValue(null),
       },
@@ -766,6 +781,9 @@ describe('PushNotificationToggle', () => {
       unsubscribe: vi.fn().mockResolvedValue(true),
     };
     const registration = {
+      active: { scriptURL: `${window.location.origin}/sw.js` },
+      waiting: null,
+      installing: null,
       pushManager: {
         getSubscription: vi.fn().mockResolvedValue(subscription),
       },
@@ -926,6 +944,9 @@ describe('PushNotificationToggle', () => {
 
   it('transitions to REPAIR_REQUIRED when subscription endpoint is missing', async () => {
     const registration = {
+      active: { scriptURL: `${window.location.origin}/sw.js` },
+      waiting: null,
+      installing: null,
       pushManager: {
         getSubscription: vi
           .fn()
@@ -1019,6 +1040,9 @@ describe('PushNotificationToggle', () => {
       configurable: true,
     });
     const registration = {
+      active: { scriptURL: `${window.location.origin}/sw.js` },
+      waiting: null,
+      installing: null,
       pushManager: {
         getSubscription: vi.fn().mockResolvedValue(null),
         subscribe: vi.fn().mockRejectedValue(new Error('Push subscription creation timed out.')),
@@ -1070,6 +1094,9 @@ describe('PushNotificationToggle', () => {
       configurable: true,
     });
     const registration = {
+      active: { scriptURL: `${window.location.origin}/sw.js` },
+      waiting: null,
+      installing: null,
       pushManager: {
         getSubscription: vi.fn().mockResolvedValue(null),
         subscribe: vi.fn().mockImplementation(async () => {
