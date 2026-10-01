@@ -288,14 +288,14 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
         }
       }
       const badge =
-        typeof options.data?.badge === 'string' ? options.data.badge : '/icons/app-icon-192.png';
+        typeof options.data?.badge === 'string' ? options.data.badge : '/icons/opsknight-192.png';
       const url = typeof options.data?.url === 'string' ? options.data.url : '/m';
       const urgency = options.data?.urgency === 'HIGH' ? 'HIGH' : 'NORMAL';
       const payload = JSON.stringify({
         title: options.title,
         body: options.body,
         data: options.data,
-        icon: '/icons/app-icon-192.png',
+        icon: '/icons/opsknight-192.png',
         badge,
         url,
         actions: parsedActions,
@@ -591,7 +591,7 @@ export async function sendIncidentPush(
     const incidentUrl = `${baseUrl}/m/incidents/${incidentId}`;
     const userTimeZone = getUserTimeZone(user ?? undefined);
     let titleEmoji = '';
-    let badge = '/icons/app-icon-192.png';
+    let badge = '/icons/opsknight-192.png';
     if (eventType === 'triggered') {
       titleEmoji = incident.urgency === 'HIGH' ? '🔴' : incident.urgency === 'MEDIUM' ? '🟡' : '🔵';
       badge = incident.urgency === 'HIGH' ? '/icons/badge-critical.png' : '/icons/badge-info.png';
@@ -633,14 +633,14 @@ export async function sendIncidentPush(
     const actions =
       eventType === 'triggered'
         ? [
-            { action: 'view', title: '👁️ View', icon: '/icons/app-icon-192.png' },
+            { action: 'view', title: '👁️ View', icon: '/icons/opsknight-192.png' },
             {
               action: 'acknowledge',
               title: '✓ Acknowledge',
-              icon: '/icons/app-icon-192.png',
+              icon: '/icons/opsknight-192.png',
             },
           ]
-        : [{ action: 'view', title: '👁️ View', icon: '/icons/app-icon-192.png' }];
+        : [{ action: 'view', title: '👁️ View', icon: '/icons/opsknight-192.png' }];
 
     return await sendPush({
       userId,

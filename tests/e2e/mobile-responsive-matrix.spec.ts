@@ -93,8 +93,28 @@ test.describe('mobile responsive visual integrity matrix', () => {
 
   test.beforeEach(async ({ page }) => {
     await clearRateLimits();
-    await page.route('**/api/realtime/stream', route => route.abort());
-    await page.route('**/api/notifications/stream', route => route.abort());
+    await page.route('**/api/realtime/stream', route =>
+      route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+        body: ': heartbeat\n\n',
+      })
+    );
+    await page.route('**/api/notifications/stream', route =>
+      route.fulfill({
+        status: 200,
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        },
+        body: ': heartbeat\n\n',
+      })
+    );
   });
 
   test.afterAll(async () => {
