@@ -25,7 +25,7 @@ export type PushState =
   | 'ERROR';
 
 const REQUEST_TIMEOUT_MS = 12_000;
-const SERVICE_WORKER_READY_TIMEOUT_MS = 8_000;
+const SERVICE_WORKER_READY_TIMEOUT_MS = 25_000;
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -88,6 +88,24 @@ type PreparedPush = {
   applicationServerKey: Uint8Array | null;
 };
 
+type ServiceWorkerPreparationStage = 'SW_LOOKUP' | 'SW_REGISTER' | 'SW_READY';
+
+function serviceWorkerPath(worker: ServiceWorker | null | undefined): string | null {
+  if (!worker?.scriptURL) return null;
+  try {
+    return new URL(worker.scriptURL, window.location.origin).pathname;
+  } catch {
+    return null;
+  }
+}
+
+function hasOpsKnightServiceWorker(registration: ServiceWorkerRegistration | undefined | null) {
+  if (!registration) return false;
+  return [registration.active, registration.waiting, registration.installing].some(
+    worker => serviceWorkerPath(worker) === '/sw.js'
+  );
+}
+
 export default function PushNotificationToggle() {
   const router = useRouter();
   const [pushState, setPushState] = useState<PushState>('PERMISSION_REQUIRED');
@@ -103,6 +121,7 @@ export default function PushNotificationToggle() {
   const reconciliationGenerationRef = useRef(0);
 
   const ensureServiceWorker = useCallback(async () => {
+    let stage: ServiceWorkerPreparationStage = 'SW_LOOKUP';
     try {
       if (!('serviceWorker' in navigator)) {
         throw new ClientAppError({
@@ -126,22 +145,41 @@ export default function PushNotificationToggle() {
         SERVICE_WORKER_READY_TIMEOUT_MS,
         'Service worker lookup timed out.'
       );
-      const expected = new URL('/sw.js', window.location.origin).toString();
-      if (!registration || registration.active?.scriptURL !== expected) {
+
+      // A valid active, waiting, or installing OpsKnight worker is enough to
+      // continue the normal lifecycle. In particular, a waiting update should
+      // not cause Push preflight to re-register /sw.js on iOS.
+      if (!hasOpsKnightServiceWorker(registration)) {
+        stage = 'SW_REGISTER';
         registration = await promiseWithTimeout(
           navigator.serviceWorker.register('/sw.js', { scope: '/' }),
           SERVICE_WORKER_READY_TIMEOUT_MS,
           'Service worker registration timed out.'
         );
       }
-      await promiseWithTimeout(
+
+      stage = 'SW_READY';
+      const readyRegistration = await promiseWithTimeout(
         navigator.serviceWorker.ready,
         SERVICE_WORKER_READY_TIMEOUT_MS,
         'The service worker did not become ready.'
       );
-      return registration;
+
+      if (!readyRegistration?.pushManager) {
+        throw new Error('Ready service worker registration does not expose PushManager.');
+      }
+
+      return readyRegistration;
     } catch (error) {
       if (error instanceof ClientAppError) throw error;
+
+      logger.warn('push.service_worker_prepare_failed', {
+        component: 'PushNotificationToggle',
+        stage,
+        browserException: error instanceof Error ? error.name : typeof error,
+        browserMessage: error instanceof Error ? error.message : 'Unknown service worker failure',
+      });
+
       throw new ClientAppError({
         code: 'PUSH_SW_REGISTRATION_FAILED',
         error: 'Push notifications could not prepare the service worker on this device.',
