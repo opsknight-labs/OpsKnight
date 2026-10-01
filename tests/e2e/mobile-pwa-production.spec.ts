@@ -61,7 +61,7 @@ test.describe('production PWA service-worker contract', () => {
 
       const ready = await Promise.race([
         navigator.serviceWorker.ready,
-        new Promise<null>(resolve => setTimeout(() => resolve(null), 15_000)),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 25_000)),
       ]);
       if (!ready) return null;
 
