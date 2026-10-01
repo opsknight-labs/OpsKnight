@@ -161,13 +161,13 @@ capabilities:
     title: Analyze incident and service performance
     product_area: analytics
     status: documented
-    required: { concepts: true, guides: false, reference: true, tests: true, evidence: false }
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: true }
     concepts: [concepts/analytics.md]
-    guides: []
+    guides: [guides/reports/README.md, guides/reports/create-dashboard.md, guides/reports/read-dashboard.md, guides/reports/manage-dashboard.md, guides/reports/troubleshooting.md]
     reference: [reference/api/README.md, reference/metrics.md]
     tests: [tests/unit/analytics-panels.test.ts, tests/api/reports-metrics-response.test.ts]
-    sources: [src/app/(app)/analytics, src/lib/reports]
-    evidence: []
+    sources: [src/app/(app)/analytics, src/app/(app)/reports, src/app/api/dashboards, src/components/reports, src/lib/reports]
+    evidence: [generated/docs-evidence/current/analytics/reports.png, generated/docs-evidence/current/analytics/dashboard-template.png, generated/docs-evidence/current/analytics/dashboard-saved.png]
     roles: [responder, administrator]
   postmortems:
     title: Learn from resolved incidents

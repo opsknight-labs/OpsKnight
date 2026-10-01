@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "routes": [
     {
       "route": "/action-items",
@@ -14,7 +14,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/analytics",
@@ -31,7 +32,8 @@
         ],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/audit",
@@ -46,7 +48,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/events",
@@ -63,7 +66,8 @@
         ],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/events/test",
@@ -80,7 +84,8 @@
         ],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/help",
@@ -96,7 +101,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/incidents/[id]",
@@ -114,7 +120,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/incidents/create",
@@ -129,7 +136,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/incidents",
@@ -147,7 +155,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/incidents/templates/create",
@@ -162,7 +171,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/incidents/templates",
@@ -177,7 +187,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/",
@@ -193,7 +204,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/policies/[id]",
@@ -210,7 +222,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/policies/create",
@@ -227,7 +240,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/policies",
@@ -244,7 +258,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/postmortems/[incidentId]",
@@ -262,7 +277,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/postmortems/create",
@@ -280,7 +296,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/postmortems",
@@ -298,7 +315,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/reports/executive/[id]",
@@ -306,16 +324,16 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/analytics.md"
+        "concepts": [],
+        "guides": [
+          "guides/reports/manage-dashboard.md",
+          "guides/reports/read-dashboard.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/metrics.md"
-        ],
+        "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/reports/executive/new",
@@ -323,16 +341,15 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/analytics.md"
+        "concepts": [],
+        "guides": [
+          "guides/reports/create-dashboard.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/metrics.md"
-        ],
+        "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/reports/executive",
@@ -340,16 +357,16 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/analytics.md"
+        "concepts": [],
+        "guides": [
+          "guides/reports/create-dashboard.md",
+          "guides/reports/read-dashboard.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/metrics.md"
-        ],
+        "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/reports",
@@ -360,13 +377,15 @@
         "concepts": [
           "concepts/analytics.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/metrics.md"
+        "guides": [
+          "guides/reports/README.md",
+          "guides/reports/create-dashboard.md"
         ],
+        "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/schedules/[id]",
@@ -384,7 +403,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/schedules",
@@ -402,7 +422,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/services/[id]/integrations",
@@ -418,7 +439,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/services/[id]/notifications",
@@ -435,7 +457,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/services/[id]",
@@ -451,7 +474,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/services/[id]/settings",
@@ -467,7 +491,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/services/[id]/webhooks/[webhookId]/edit",
@@ -484,7 +509,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/services/[id]/webhooks/new",
@@ -501,7 +527,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/services",
@@ -517,7 +544,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/api-keys",
@@ -532,7 +560,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/chatops/link",
@@ -547,7 +576,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/custom-fields",
@@ -562,7 +592,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/incident-sla",
@@ -577,7 +608,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/integrations/chatops",
@@ -593,7 +625,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/integrations/jira",
@@ -610,7 +643,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/integrations/microsoft-teams",
@@ -627,7 +661,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/integrations",
@@ -642,7 +677,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/integrations/slack",
@@ -659,7 +695,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/notifications/history",
@@ -674,7 +711,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/notifications/operations",
@@ -691,7 +729,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/notifications",
@@ -708,7 +747,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings",
@@ -725,7 +765,8 @@
         ],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/privacy-requests",
@@ -740,7 +781,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/profile",
@@ -757,7 +799,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/security-compliance",
@@ -774,7 +817,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/security",
@@ -791,7 +835,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/service-objectives",
@@ -806,7 +851,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/status-page",
@@ -823,7 +869,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/status-pages/[pageId]",
@@ -840,7 +887,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/status-pages",
@@ -857,7 +905,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/system/health",
@@ -874,7 +923,8 @@
         ],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/system",
@@ -891,7 +941,8 @@
         ],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/settings/system/performance",
@@ -907,7 +958,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/shortcuts",
@@ -922,7 +974,8 @@
         ],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/system-logs",
@@ -937,7 +990,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/teams/[id]",
@@ -953,7 +1007,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/teams",
@@ -969,7 +1024,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/users/[id]",
@@ -986,7 +1042,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/users",
@@ -1003,7 +1060,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/analytics",
@@ -1019,7 +1077,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/help",
@@ -1034,7 +1093,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/incidents/[id]",
@@ -1050,7 +1110,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/incidents/create",
@@ -1067,7 +1128,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/incidents",
@@ -1083,7 +1145,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/more",
@@ -1098,7 +1161,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/notifications",
@@ -1114,7 +1178,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m",
@@ -1129,7 +1194,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/policies/[id]",
@@ -1145,7 +1211,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/policies",
@@ -1161,7 +1228,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/postmortems/[id]",
@@ -1177,7 +1245,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/postmortems",
@@ -1193,7 +1262,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/schedules/[id]",
@@ -1209,7 +1279,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/schedules",
@@ -1225,7 +1296,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/services/[id]",
@@ -1241,7 +1313,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/services",
@@ -1257,7 +1330,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/status",
@@ -1273,7 +1347,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/teams/[id]",
@@ -1289,7 +1364,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/teams",
@@ -1305,7 +1381,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/users/[id]",
@@ -1322,7 +1399,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/users",
@@ -1339,7 +1417,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/logs",
@@ -1354,7 +1433,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/forgot-password",
@@ -1370,7 +1450,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/m/login",
@@ -1386,7 +1467,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/status/[slug]",
@@ -1403,7 +1485,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/status/[slug]/postmortems/[incidentId]",
@@ -1420,7 +1503,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/status/[slug]/unsubscribe/[token]",
@@ -1437,7 +1521,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/status/[slug]/verify/[token]",
@@ -1454,7 +1539,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/status",
@@ -1471,7 +1557,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/status/postmortems/[incidentId]",
@@ -1488,7 +1575,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/status/unsubscribe/[token]",
@@ -1505,7 +1593,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/status/verify/[token]",
@@ -1522,7 +1611,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/auth/signout",
@@ -1537,7 +1627,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/clear-desktop-preference",
@@ -1552,7 +1643,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/debug-mobile",
@@ -1567,7 +1659,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/forgot-password",
@@ -1582,7 +1675,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/login",
@@ -1597,7 +1691,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/reset-password",
@@ -1612,7 +1707,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/set-password",
@@ -1627,7 +1723,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     },
     {
       "route": "/setup",
@@ -1644,7 +1741,8 @@
         "reference": [],
         "troubleshooting": []
       },
-      "documentationMapping": "explicit-route-rule"
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
     }
   ]
 }

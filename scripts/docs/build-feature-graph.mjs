@@ -33,7 +33,11 @@ const documentationIndex = filesUnder('docs/v2.0.0', file => file.endsWith('.md'
 // when a newly discovered UI route has no deliberate mapping.
 const uiDocumentationRules = [
   [/^\/action-items$/, ['guides/incidents/action-items.md']],
-  [/^\/(?:analytics|reports(?:\/.*)?)$/, ['concepts/analytics.md', 'reference/metrics.md']],
+  [/^\/analytics$/, ['concepts/analytics.md', 'reference/metrics.md']],
+  [/^\/reports$/, ['guides/reports/README.md', 'guides/reports/create-dashboard.md', 'concepts/analytics.md']],
+  [/^\/reports\/executive\/new$/, ['guides/reports/create-dashboard.md']],
+  [/^\/reports\/executive\/\[id\]$/, ['guides/reports/manage-dashboard.md', 'guides/reports/read-dashboard.md']],
+  [/^\/reports\/executive$/, ['guides/reports/create-dashboard.md', 'guides/reports/read-dashboard.md']],
   [/^\/audit$/, ['guides/administration/audit-logs.md']],
   [/^\/events(?:\/test)?$/, ['reference/api/events.md', 'integrations/README.md']],
   [/^\/help$/, ['README.md', 'guides/README.md']],

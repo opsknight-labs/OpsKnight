@@ -18,4 +18,4 @@ common mistakes, and related concepts. Published guides must be backed by a
 test, current source/configuration, or a certified runtime journey.
 
 Browse by task area: incidents, on-call, escalation, notifications, ChatOps,
-status pages, identity, Jira, and administration.
+status pages, identity, Jira, [reports and dashboards](./reports/), and administration.

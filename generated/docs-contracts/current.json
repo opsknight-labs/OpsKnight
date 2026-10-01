@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "6db6ce6db205d67186bd9a47e4644b22c709465a",
+  "sourceRevision": "c09029b968b6e09a8217cd2fdd8578eae0a1b17a",
   "contracts": [
     {
       "id": "api:/api/events",
@@ -6642,7 +6642,9 @@
           "reference/health.md",
           "reference/metrics.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/reports/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -11018,13 +11020,12 @@
         "kind": "ui"
       },
       "documentation": {
-        "concepts": [
-          "concepts/analytics.md"
+        "concepts": [],
+        "guides": [
+          "guides/reports/manage-dashboard.md",
+          "guides/reports/read-dashboard.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/metrics.md"
-        ],
+        "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
@@ -11072,13 +11073,11 @@
         "kind": "ui"
       },
       "documentation": {
-        "concepts": [
-          "concepts/analytics.md"
+        "concepts": [],
+        "guides": [
+          "guides/reports/create-dashboard.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/metrics.md"
-        ],
+        "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
@@ -11126,13 +11125,12 @@
         "kind": "ui"
       },
       "documentation": {
-        "concepts": [
-          "concepts/analytics.md"
+        "concepts": [],
+        "guides": [
+          "guides/reports/create-dashboard.md",
+          "guides/reports/read-dashboard.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/metrics.md"
-        ],
+        "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
@@ -11183,10 +11181,11 @@
         "concepts": [
           "concepts/analytics.md"
         ],
-        "guides": [],
-        "reference": [
-          "reference/metrics.md"
+        "guides": [
+          "guides/reports/README.md",
+          "guides/reports/create-dashboard.md"
         ],
+        "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
@@ -25656,7 +25655,9 @@
         "reference": [
           "reference/configuration/README.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/reports/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [],
@@ -25729,7 +25730,9 @@
         "reference": [
           "reference/configuration/README.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/reports/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [],
@@ -45919,7 +45922,9 @@
         "reference": [
           "reference/permissions.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/reports/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -45974,7 +45979,9 @@
         "reference": [
           "reference/permissions.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/reports/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -46402,7 +46409,9 @@
         "reference": [
           "reference/permissions.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/reports/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -46457,7 +46466,9 @@
         "reference": [
           "reference/permissions.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/reports/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [
@@ -49636,7 +49647,9 @@
         "reference": [
           "reference/limits.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/reports/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [],
@@ -49700,7 +49713,9 @@
         "reference": [
           "reference/limits.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/reports/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [],
@@ -50689,7 +50704,9 @@
         "reference": [
           "reference/limits.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/reports/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [],
@@ -50753,7 +50770,9 @@
         "reference": [
           "reference/limits.md"
         ],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/reports/troubleshooting.md"
+        ]
       },
       "documentationMapping": "capability-source",
       "tests": [],
