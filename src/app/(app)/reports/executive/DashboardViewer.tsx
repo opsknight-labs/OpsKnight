@@ -36,6 +36,7 @@ import {
   Loader2,
   Pencil,
   Check,
+  RotateCcw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SerializedSLAMetrics } from '@/lib/sla';
@@ -491,6 +492,26 @@ export default function DashboardViewer({
             ))}
           </SelectContent>
         </Select>
+
+        {Boolean(currentFilters.teamId || currentFilters.serviceId || currentFilters.windowDays !== 7) && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const basePath = dashboardId ? `/reports/executive/${dashboardId}` : '/reports/executive';
+              const params = new URLSearchParams();
+              if (currentTemplateId && !dashboardId) params.set('template', currentTemplateId);
+              const qs = params.toString();
+              router.push(`${basePath}${qs ? `?${qs}` : ''}`);
+            }}
+            className="text-xs h-9 px-2.5 text-muted-foreground hover:text-foreground gap-1.5"
+            title="Reset to default filters"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span>Reset</span>
+          </Button>
+        )}
 
         {/* Dashboard & Template Selector */}
         <div className="ml-auto">

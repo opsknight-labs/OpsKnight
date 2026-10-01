@@ -255,7 +255,7 @@ const SortableWidgetItem = memo(function SortableWidgetItem({
         <div
           {...attributes}
           {...listeners}
-          className="absolute top-0 left-0 right-0 h-8 z-10 flex items-center justify-center cursor-grab active:cursor-grabbing"
+          className="absolute top-0 left-0 right-14 h-8 z-10 flex items-center justify-center cursor-grab active:cursor-grabbing"
           style={{ touchAction: 'none' }}
         >
           {/* Visible drag indicator */}

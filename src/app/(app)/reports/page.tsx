@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { DashboardVisibility } from '@prisma/client';
 import Link from 'next/link';
 import { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
@@ -23,6 +24,7 @@ import {
   Users,
   Minus,
   ArrowRight,
+  type LucideIcon,
 } from 'lucide-react';
 import { DASHBOARD_TEMPLATES } from '@/lib/reports/dashboard-templates';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
@@ -35,7 +37,7 @@ export const metadata: Metadata = {
   description: 'Customizable executive reports and operational dashboards',
 };
 
-const TEMPLATE_ICONS: Record<string, any> = {
+const TEMPLATE_ICONS: Record<string, LucideIcon> = {
   'executive-summary': LayoutDashboard,
   'sre-operations': Terminal,
   'sla-performance': Shield,
@@ -51,7 +53,11 @@ export default async function ReportsPage() {
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true, timeZone: true },
+    select: {
+      id: true,
+      timeZone: true,
+      teamMemberships: { select: { teamId: true } },
+    },
   });
 
   if (!user) {
@@ -59,13 +65,33 @@ export default async function ReportsPage() {
   }
 
   const userTimeZone = getUserTimeZone(user);
+  const userTeamIds = user.teamMemberships.map(m => m.teamId);
 
-  // Fetch user's dashboards
-  const dashboards = await prisma.dashboard.findMany({
-    where: { userId: user.id, isTemplate: false },
-    include: { _count: { select: { widgets: true } } },
-    orderBy: { updatedAt: 'desc' },
-  });
+  // Fetch user's dashboards and shared team/public dashboards
+  const [dashboards, sharedDashboards] = await Promise.all([
+    prisma.dashboard.findMany({
+      where: { userId: user.id, isTemplate: false },
+      include: { _count: { select: { widgets: true } } },
+      orderBy: { updatedAt: 'desc' },
+    }),
+    prisma.dashboard.findMany({
+      where: {
+        userId: { not: user.id },
+        isTemplate: false,
+        OR: [
+          { visibility: DashboardVisibility.PUBLIC },
+          ...(userTeamIds.length > 0
+            ? [{ visibility: DashboardVisibility.TEAM, teamId: { in: userTeamIds } }]
+            : []),
+        ],
+      },
+      include: {
+        _count: { select: { widgets: true } },
+        user: { select: { name: true, email: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    }),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
@@ -99,7 +125,7 @@ export default async function ReportsPage() {
         stats={[
           {
             label: 'Dashboards',
-            value: dashboards.length,
+            value: dashboards.length + sharedDashboards.length,
             icon: <LayoutDashboard className="h-3.5 w-3.5" />,
           },
           {
@@ -135,7 +161,7 @@ export default async function ReportsPage() {
             const Icon = TEMPLATE_ICONS[template.id] || LayoutDashboard;
             return (
               <Link key={template.id} href={`/reports/executive?template=${template.id}`}>
-                <Card className="h-full hover:shadow-md hover:border-primary/50 transition-all cursor-pointer group bg-white">
+                <Card className="h-full hover:shadow-md hover:border-primary/50 transition-all cursor-pointer group bg-card">
                   <CardHeader className="pb-3">
                     <div
                       className="w-10 h-10 rounded-lg flex items-center justify-center mb-2"
@@ -217,6 +243,38 @@ export default async function ReportsPage() {
           </div>
         )}
       </section>
+
+      {/* Team & Shared Dashboards Section */}
+      {sharedDashboards.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-500" />
+              <h2 className="text-lg font-bold text-foreground">Team & Shared Dashboards</h2>
+            </div>
+            <span className="text-xs text-muted-foreground">Dashboards shared with your team or organization</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {sharedDashboards.map(dashboard => (
+              <DashboardCard
+                key={dashboard.id}
+                id={dashboard.id}
+                name={dashboard.name}
+                description={dashboard.description}
+                widgetCount={dashboard._count.widgets}
+                isDefault={dashboard.isDefault}
+                ownerName={dashboard.user?.name || dashboard.user?.email || 'Team member'}
+                visibility={dashboard.visibility}
+                canDelete={false}
+                updatedAt={formatDateTime(dashboard.updatedAt, userTimeZone, {
+                  format: 'relative',
+                })}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
