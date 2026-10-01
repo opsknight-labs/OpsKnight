@@ -175,7 +175,7 @@ capabilities:
     status: documented
     required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
     concepts: [concepts/postmortems.md, concepts/postmortem-workflow.md]
-    guides: [guides/privacy/README.md, guides/privacy/manage-request.md, guides/privacy/export-data.md, guides/privacy/process-erasure.md, guides/privacy/retention-and-troubleshooting.md]
+    guides: [guides/postmortems/README.md, guides/postmortems/create-review-publish.md]
     reference: [reference/api/README.md]
     tests: [tests/components/jira-postmortem-consistency.test.tsx]
     sources: [src/app/(app)/postmortems, src/lib/action-items.ts]
@@ -197,9 +197,9 @@ capabilities:
     title: Evaluate controls and export compliance evidence
     product_area: compliance
     status: documented
-    required: { concepts: true, guides: false, reference: true, tests: true, evidence: false }
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
     concepts: [concepts/compliance.md]
-    guides: []
+    guides: [guides/compliance/README.md, guides/compliance/evaluate-and-export.md]
     reference: [reference/api/README.md]
     tests: [tests/integration/compliance-runtime-evaluation.test.ts, tests/integration/compliance-evidence-export.test.ts]
     sources: [src/lib/compliance, docs/compliance]

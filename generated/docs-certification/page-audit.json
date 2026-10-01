@@ -3,14 +3,14 @@
   "purpose": "Reader-completeness audit. Mapping and source verification do not imply task usability.",
   "counts": {
     "DISCOVERED": 0,
-    "MAPPED": 78,
+    "MAPPED": 88,
     "DRAFTED": 0,
-    "READER_COMPLETE": 180,
+    "READER_COMPLETE": 185,
     "HUMAN_VERIFIED": 0,
     "RUNTIME_VERIFIED": 0
   },
-  "taskPages": 178,
-  "readerCompleteTaskPages": 178,
+  "taskPages": 183,
+  "readerCompleteTaskPages": 183,
   "humanVerifiedTaskPages": 0,
   "runtimeVerifiedTaskPages": 0,
   "pages": [
@@ -290,6 +290,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "guides/administration/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
       "page": "guides/administration/api-keys.md",
       "type": "how-to",
       "userTask": "Create, test, rotate, and revoke a least-privileged API key.",
@@ -334,6 +345,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "guides/administration/manage-sessions.md",
+      "type": "how-to",
+      "userTask": "Review and revoke account sessions and recent device activity.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
       "page": "guides/administration/manage-users.md",
       "type": "tutorial",
       "userTask": "Invite, review, update, deactivate, reactivate, and offboard users safely.",
@@ -341,6 +363,28 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/administration/review-event-logs.md",
+      "type": "how-to",
+      "userTask": "Find and interpret incident lifecycle events in Event Logs.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/chatops/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
       "humanVerified": false,
       "runtimeVerified": false
     },
@@ -357,6 +401,39 @@
     },
     {
       "page": "guides/chatops/create-war-room.md",
+      "type": "how-to",
+      "userTask": "Create, verify, reconcile, and close a provider-backed incident war room.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/compliance/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/compliance/evaluate-and-export.md",
+      "type": "how-to",
+      "userTask": "Evaluate compliance controls, investigate drift, and export verifiable evidence.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/escalation/README.md",
       "type": "concept",
       "userTask": null,
       "status": "MAPPED",
@@ -444,6 +521,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "guides/identity/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
       "page": "guides/identity/configure-oidc.md",
       "type": "tutorial",
       "userTask": "Configure, pilot, verify, and safely enforce OIDC single sign-on.",
@@ -460,6 +548,17 @@
       "userTask": "Configure and verify SCIM user and group provisioning end to end.",
       "status": "READER_COMPLETE",
       "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/incidents/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
       "humanVerified": false,
@@ -598,6 +697,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "guides/mobile/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
       "page": "guides/mobile/install-and-notifications.md",
       "type": "how-to",
       "userTask": "Install and verify OpsKnight mobile push.",
@@ -636,6 +746,17 @@
       "userTask": "Inspect operational context from the mobile application.",
       "status": "READER_COMPLETE",
       "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/notifications/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
       "humanVerified": false,
@@ -702,6 +823,17 @@
       "userTask": "Configure and verify a responder's notification preferences.",
       "status": "READER_COMPLETE",
       "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/on-call/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
       "humanVerified": false,
@@ -777,6 +909,28 @@
       "page": "guides/on-call/troubleshooting.md",
       "type": "troubleshooting",
       "userTask": "Diagnose and recover an incorrect on-call schedule or route.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/postmortems/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/postmortems/create-review-publish.md",
+      "type": "how-to",
+      "userTask": "Create, review, publish, and follow up on an incident postmortem.",
       "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 0,
@@ -889,6 +1043,17 @@
       "userTask": "Restore a reports or dashboard workflow.",
       "status": "READER_COMPLETE",
       "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/status-pages/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
       "humanVerified": false,

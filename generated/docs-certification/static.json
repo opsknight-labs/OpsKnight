@@ -1,9 +1,9 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-01T15:04:45.504Z",
-  "sourceRevision": "ab4fc3aae6a1810bd2ce3e6a2e3d9acde7a5acf5",
-  "documentationRevision": "ab4fc3aae6a1810bd2ce3e6a2e3d9acde7a5acf5",
-  "productSourceRevision": "ab4fc3aae6a1810bd2ce3e6a2e3d9acde7a5acf5",
+  "generatedAt": "2026-10-01T16:17:20.908Z",
+  "sourceRevision": "40fdfadaa6bc23cb173469bb69d7322a81760cf8",
+  "documentationRevision": "40fdfadaa6bc23cb173469bb69d7322a81760cf8",
+  "productSourceRevision": "40fdfadaa6bc23cb173469bb69d7322a81760cf8",
   "runtimeSourceRevision": null,
   "runtimeImageDigest": null,
   "releaseState": "upcoming",
@@ -25,7 +25,7 @@
     "websiteBuild": "release-gated"
   },
   "counts": {
-    "documentationPages": 258,
+    "documentationPages": 273,
     "capabilitiesDiscovered": 22,
     "capabilitiesDocumented": 22,
     "uiRoutes": 101,
@@ -56,8 +56,8 @@
     "v15Topics": 1606,
     "v15TopicsReviewed": 0,
     "v15TopicsPending": 1606,
-    "taskDocumentationPages": 178,
-    "readerCompleteTaskPages": 178,
+    "taskDocumentationPages": 183,
+    "readerCompleteTaskPages": 183,
     "humanVerifiedTaskPages": 0,
     "runtimeVerifiedTaskPages": 0
   },
