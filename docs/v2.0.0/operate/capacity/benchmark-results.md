@@ -35,6 +35,19 @@ measurements from one test profile, not universal production guarantees.
 | `swarm_ha_split` | L0 | 4/8 | Failed | **NOT CERTIFIED** |
 | `kind_helm_split_pgbouncer` | L0 | 0/8 | Passed | **NOT CERTIFIED** |
 | `kind_kustomize_split_pgbouncer` | L0 | 0/8 | Passed | **NOT CERTIFIED** |
+| `phase6_compose_integrated` | L0 | 0/10 | Failed | **NOT CERTIFIED** |
+| `phase6_compose_split` | L0 | 0/11 | Failed | **NOT CERTIFIED** |
+| `phase6_compose_split_pgbouncer` | L1, L2, L3, L4, L5, L6, L7, L8, L9 | 0/99 | Failed | **NOT CERTIFIED** |
+| `phase6_swarm_integrated` | L0 | 0/8 | Failed | **NOT CERTIFIED** |
+| `phase6_swarm_split` | L0 | 0/9 | Failed | **NOT CERTIFIED** |
+| `phase6_swarm_split_pgbouncer` | L0 | 0/10 | Failed | **NOT CERTIFIED** |
+| `phase6_swarm_ha_split_pgbouncer` | L1, L2, L3, L4, L5, L6, L7, L8, L9 | 0/99 | Failed | **NOT CERTIFIED** |
+| `phase6_helm_integrated` | L0 | 0/6 | Failed | **NOT CERTIFIED** |
+| `phase6_helm_split` | L0 | 0/7 | Failed | **NOT CERTIFIED** |
+| `phase6_helm_split_pgbouncer` | L1, L2, L3, L4, L5, L6, L7, L8, L9 | 0/99 | Passed | **NOT CERTIFIED** |
+| `phase6_kustomize_integrated` | L0 | 0/6 | Failed | **NOT CERTIFIED** |
+| `phase6_kustomize_split` | L0 | 0/7 | Failed | **NOT CERTIFIED** |
+| `phase6_kustomize_split_pgbouncer` | L1, L9 | 0/20 | Failed | **NOT CERTIFIED** |
 
 ## Provenance
 
@@ -43,9 +56,9 @@ measurements from one test profile, not universal production guarantees.
 - Artifact generated: 2026-09-28T12:20:49.770Z
 - Product source revision tested: `52d6a3c5c791e7ad9ad21cd76f11cbdf11d3176f`
 - Test harness revision recorded: `e2cd6e28092f544eea2342ebe455cac680fd157b`
-- Test window: 2026-09-27T16:33:18.158Z through 2026-09-28T03:20:59.161Z
+- Test window: 2026-09-27T16:33:18.158Z through 2026-09-29T18:27:12.781Z
 - Host profile: 10-core CPU, 16 GB RAM; Docker Engine 28.x; Kind v0.31.0
-- Tested level: L0
+- Tested level: L0, L1, L2, L3, L4, L5, L6, L7, L8, L9
 - Database and runtime profiles: recorded in the source certification report and
   topology definitions; do not transpose these measurements to a different pool,
   replica, host, or provider configuration.

@@ -6,7 +6,7 @@ product_area: api
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-09-30
+  verified_at: 2026-10-01
   evidence:
     - src/app/api/
 ---

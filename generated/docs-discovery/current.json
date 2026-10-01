@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-30T09:29:09+05:30",
-  "sourceRevision": "7ab9bf4e27455c1dfdacff4a1d10ba6c46cf78b1",
+  "generatedAt": "2026-10-01T09:33:05+05:30",
+  "sourceRevision": "6db6ce6db205d67186bd9a47e4644b22c709465a",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -23263,6 +23263,7 @@
           "deploy/compose/docker-compose.pgbouncer-ca.yml",
           "deploy/compose/docker-compose.split.yml",
           "deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
           "deploy/kubernetes/helm/opsknight/templates/pgbouncer-configmap.yaml",
           "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
           "deploy/kubernetes/helm/opsknight/templates/split-pdbs.yaml",
@@ -109217,6 +109218,7 @@
           "deploy/compose/docker-compose.pgbouncer-ca.yml",
           "deploy/compose/docker-compose.split.yml",
           "deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
           "deploy/kubernetes/helm/opsknight/templates/pgbouncer-configmap.yaml",
           "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
           "deploy/kubernetes/helm/opsknight/templates/split-pdbs.yaml",
@@ -109291,6 +109293,7 @@
               "deploy/compose/docker-compose.pgbouncer-ca.yml",
               "deploy/compose/docker-compose.split.yml",
               "deploy/kubernetes/helm/opsknight/examples/values-split-runtime.yaml",
+              "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
               "deploy/kubernetes/helm/opsknight/templates/pgbouncer-configmap.yaml",
               "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
               "deploy/kubernetes/helm/opsknight/templates/split-pdbs.yaml",
