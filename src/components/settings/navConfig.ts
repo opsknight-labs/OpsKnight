@@ -238,6 +238,26 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         keywords: ['app url', 'providers', 'retention', 'data'],
       },
       {
+        id: 'system-logs',
+        label: 'System Logs',
+        description:
+          'Inspect real-time application logs, runtime errors, and component diagnostics',
+        href: '/system-logs',
+        icon: 'terminal',
+        requiresAdmin: true,
+        badge: 'Admin',
+        keywords: [
+          'logs',
+          'system logs',
+          'diagnostics',
+          'errors',
+          'debug',
+          'traces',
+          'tail',
+          'console',
+        ],
+      },
+      {
         id: 'notifications-admin',
         label: 'Notification Providers',
         description: 'Configure Twilio SMS, AWS SNS, WhatsApp Business, and Web Push VAPID keys',

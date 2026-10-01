@@ -7,6 +7,7 @@ type IconProps = {
     | 'security'
     | 'api-keys'
     | 'system'
+    | 'system-logs'
     | 'status-page'
     | 'help'
     | 'notifications'
@@ -155,6 +156,26 @@ export default function SettingsIcon({ name, className = '' }: IconProps) {
           d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
           fill="currentColor"
           fillOpacity="0.6"
+        />
+      </svg>
+    ),
+    'system-logs': (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className={className}>
+        <polyline
+          points="4 17 10 11 4 5"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <line
+          x1="12"
+          y1="19"
+          x2="20"
+          y2="19"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
         />
       </svg>
     ),

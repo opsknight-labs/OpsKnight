@@ -138,4 +138,15 @@ describe('SystemLogsPage & SystemLogsError', () => {
     fireEvent.click(retryButton);
     expect(resetMock).toHaveBeenCalledTimes(1);
   });
+
+  it('is exposed as an admin setting in settings navigation config', async () => {
+    const { SETTINGS_NAV_ITEMS } = await import('@/components/settings/navConfig');
+    expect(SETTINGS_NAV_ITEMS).toContainEqual(
+      expect.objectContaining({
+        id: 'system-logs',
+        href: '/system-logs',
+        requiresAdmin: true,
+      })
+    );
+  });
 });

@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   XCircle,
   Layers,
+  Terminal,
 } from 'lucide-react';
 import Link from 'next/link';
 import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
@@ -401,6 +402,15 @@ export default async function SystemSettingsPage() {
               </Badge>
               {encryptionBadge}
             </div>
+          }
+          actions={
+            <Link
+              href="/system-logs"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-foreground/15 hover:bg-primary-foreground/25 text-primary-foreground text-xs font-semibold transition-colors"
+            >
+              <Terminal className="h-3.5 w-3.5" />
+              <span>View System Logs</span>
+            </Link>
           }
           statsPlacement="bottom"
           stats={[

@@ -18,6 +18,7 @@ import {
   KeyRound,
   SlidersHorizontal,
   ShieldCheck,
+  Terminal,
   type LucideIcon,
 } from 'lucide-react';
 import { SlackLogo, JiraLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
@@ -46,6 +47,7 @@ const itemIcons: Record<string, LucideIcon | React.ComponentType<{ className?: s
   jira: JiraLogo,
   'health-center': Activity,
   system: Settings,
+  'system-logs': Terminal,
   'notifications-admin': Bell,
   'notification-operations': Activity,
   'notification-history': Bell,
@@ -98,6 +100,10 @@ const itemThemes: Record<string, { bg: string; text: string }> = {
   },
   jira: { bg: 'bg-[#0052CC]/10 dark:bg-[#0052CC]/20', text: 'text-[#2684FF]' },
   system: { bg: 'bg-violet-500/10 dark:bg-violet-500/20', text: 'text-violet-500' },
+  'system-logs': {
+    bg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
+    text: 'text-indigo-600 dark:text-indigo-400',
+  },
   'notifications-admin': { bg: 'bg-orange-500/10 dark:bg-orange-500/20', text: 'text-orange-500' },
   'health-center': { bg: 'bg-emerald-500/10 dark:bg-emerald-500/20', text: 'text-emerald-500' },
 };
@@ -106,15 +112,16 @@ export default async function SettingsOverviewPage() {
   const permissions = await getUserPermissions();
 
   const now = new Date();
-  const apiKeysQuery = permissions.authenticated && permissions.id
-    ? prisma.apiKey.count({
-        where: {
-          revokedAt: null,
-          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-          ...(permissions.isAdmin ? {} : { userId: permissions.id }),
-        },
-      })
-    : Promise.resolve(0);
+  const apiKeysQuery =
+    permissions.authenticated && permissions.id
+      ? prisma.apiKey.count({
+          where: {
+            revokedAt: null,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+            ...(permissions.isAdmin ? {} : { userId: permissions.id }),
+          },
+        })
+      : Promise.resolve(0);
 
   const [
     slackResult,
@@ -187,58 +194,58 @@ export default async function SettingsOverviewPage() {
     slack: slackFailed
       ? { label: 'Unavailable', connected: false }
       : slackIntegration?.enabled
-      ? {
-          label: slackIntegration.workspaceName
-            ? `Connected (${slackIntegration.workspaceName})`
-            : 'Connected',
-          connected: true,
-        }
-      : { label: 'Not Connected', connected: false },
+        ? {
+            label: slackIntegration.workspaceName
+              ? `Connected (${slackIntegration.workspaceName})`
+              : 'Connected',
+            connected: true,
+          }
+        : { label: 'Not Connected', connected: false },
     jira: jiraFailed
       ? { label: 'Unavailable', connected: false }
       : jiraConfig?.enabled
-      ? { label: 'Connected', connected: true }
-      : { label: 'Not Connected', connected: false },
+        ? { label: 'Connected', connected: true }
+        : { label: 'Not Connected', connected: false },
     'microsoft-teams': teamsFailed
       ? { label: 'Unavailable', connected: false }
       : teamsConfig?.enabled
-      ? { label: 'Connected', connected: true }
-      : { label: 'Not Connected', connected: false },
+        ? { label: 'Connected', connected: true }
+        : { label: 'Not Connected', connected: false },
     chatops: chatOpsFailed
       ? { label: 'Unavailable', connected: false }
       : chatOpsConfig?.enabled
-      ? { label: 'Active', connected: true }
-      : { label: 'Disabled', connected: false },
+        ? { label: 'Active', connected: true }
+        : { label: 'Disabled', connected: false },
     'status-page': statusPageFailed
       ? { label: 'Unavailable', connected: false }
       : statusPage?.enabled
-      ? {
-          label: statusPage.privacyMode === 'PUBLIC' ? 'Public' : 'Active',
-          connected: true,
-        }
-      : { label: 'Disabled', connected: false },
+        ? {
+            label: statusPage.privacyMode === 'PUBLIC' ? 'Public' : 'Active',
+            connected: true,
+          }
+        : { label: 'Disabled', connected: false },
     'api-keys': {
       label: apiKeysFailed
         ? 'Unavailable'
         : activeApiKeysCount > 0
-        ? `${activeApiKeysCount} Active`
-        : '0 Active',
+          ? `${activeApiKeysCount} Active`
+          : '0 Active',
       connected: !apiKeysFailed && activeApiKeysCount > 0,
     },
     'notifications-admin': {
       label: notifFailed
         ? 'Unavailable'
         : notificationProvidersCount > 0
-        ? `${notificationProvidersCount} Active`
-        : 'Default Only',
+          ? `${notificationProvidersCount} Active`
+          : 'Default Only',
       connected: !notifFailed && notificationProvidersCount > 0,
     },
     'custom-fields': {
       label: customFieldsFailed
         ? 'Unavailable'
         : customFieldsCount > 0
-        ? `${customFieldsCount} Defined`
-        : 'None',
+          ? `${customFieldsCount} Defined`
+          : 'None',
       connected: !customFieldsFailed && customFieldsCount > 0,
     },
   };
@@ -367,10 +374,10 @@ export default async function SettingsOverviewPage() {
                   {statusPageFailed
                     ? 'Unavailable'
                     : statusPage?.enabled
-                    ? statusPage.privacyMode === 'PUBLIC'
-                      ? 'Public'
-                      : 'Active'
-                    : 'Disabled'}
+                      ? statusPage.privacyMode === 'PUBLIC'
+                        ? 'Public'
+                        : 'Active'
+                      : 'Disabled'}
                 </p>
               </div>
             </div>

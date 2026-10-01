@@ -19,6 +19,7 @@ import {
   SlidersHorizontal,
   Tickets,
   Target,
+  Terminal,
   User,
   Users,
 } from 'lucide-react';
@@ -56,6 +57,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   'message-circle': MessageCircle,
   tickets: Tickets,
   target: Target,
+  terminal: Terminal,
 };
 
 export default function SettingsNav({
