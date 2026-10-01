@@ -10,12 +10,13 @@ reader:
 keywords: [SCIM provisioning, Entra provisioning, Okta provisioning, SCIM users, identity lifecycle]
 verification:
   level: source
-  verified_at: 2026-09-29
+  verified_at: 2026-10-01
   evidence:
     - src/lib/scim.ts
     - src/app/api/scim/v2/Users/route.ts
     - src/app/api/scim/v2/Users/[id]/route.ts
     - tests/api/scim-users.test.ts
+    - src/components/settings/ScimSettingsSection.tsx
 ---
 
 # Configure SCIM user provisioning
@@ -40,18 +41,40 @@ You need:
 
 - administrator access to the identity provider and the OpsKnight deployment;
 - an externally reachable HTTPS OpsKnight origin;
-- a high-entropy bearer token stored in the deployment secret manager; and
+- a high-entropy bearer token generated in OpsKnight or stored in the deployment secret manager; and
 - a small pilot group containing synthetic or low-risk test users.
 
-Generate at least 32 random characters. For example:
+## Generate the SCIM credential in OpsKnight
+
+Open **Settings → System → SSO → SCIM Provisioning**. The SCIM panel is kept
+under the SSO control plane; switching between SSO and SCIM tabs preserves
+unsaved SSO form state.
+
+1. Copy the displayed **Tenant URL**.
+2. Select **Generate SCIM Token**.
+3. Copy the revealed secret token directly into the identity provider.
+4. Confirm the panel reports **Active & Ready**, **UI Managed**, and the expected
+   last-four-character token hint.
+5. Hide the revealed value when finished. Use **Reveal** only in a controlled
+   administrator session.
+
+OpsKnight stores a hash for authentication and an encrypted copy for the
+administrator reveal operation. Generation and revocation are audited. Treat a
+revealed value as a production secret; do not paste it into tickets or logs.
+
+### Environment fallback
+
+Existing deployments can continue to supply `SCIM_BEARER_TOKEN`. Generate at
+least 32 random characters. For example:
 
 ```bash
 openssl rand -hex 32
 ```
 
-Store the value as the `SCIM_BEARER_TOKEN` runtime secret and restart affected
-web replicas according to your deployment method. Do not reuse the OIDC client
-secret, put the value in source control, or paste it into tickets.
+Store the value as the runtime secret and restart affected web replicas. The UI
+shows **Environment Fallback** when this credential is active. A database/UI
+credential takes precedence. Do not reuse the OIDC client secret or put either
+credential in source control.
 
 The base URL is:
 
@@ -88,7 +111,7 @@ urn:ietf:params:scim:schemas:core:2.0:User
 | `POST` | `/Users` | Create one user |
 | `GET` | `/Users/{id}` | Read one SCIM-managed user |
 | `PUT` | `/Users/{id}` | Replace supported user attributes |
-| `PATCH` | `/Users/{id}` | Apply supported replace operations |
+| `PATCH` | `/Users/{id}` | Apply supported add or replace operations |
 | `DELETE` | `/Users/{id}` | Deprovision and remove the SCIM identity binding |
 
 The principal fields are:
@@ -100,6 +123,7 @@ The principal fields are:
 | `userName` | Required, normalized email address |
 | `displayName` | Display name; falls back to the email local part on creation |
 | `emails` | Primary work-email representation returned by OpsKnight |
+| `photos` | Optional primary HTTP(S) avatar URL |
 | `active` | Maps to active or disabled account status |
 
 Creation requires a valid email-shaped `userName` and a non-empty `externalId`.
@@ -118,9 +142,14 @@ userName eq "person@example.com"
 Unsupported filter expressions fail explicitly. A filter never exposes an
 ordinary non-SCIM account, even when its email matches.
 
-`PUT` can replace email, display name, and active state but cannot change
-`externalId`. `PATCH` supports replace behavior for `active` and `displayName`;
-unsupported operations and paths return a SCIM error.
+`PUT` can replace email, display name, active state, and the first valid HTTP(S)
+photo but cannot change `externalId`. `PATCH` accepts `add` and `replace` for
+`active`, `displayName`, `name`/`name.formatted`, and `photos`/`avatarUrl`. It
+also accepts a pathless object containing supported fields. String `true` and
+`false` values are normalized for providers that serialize booleans as text.
+Unsupported operations or paths return a SCIM error. When a name changes and
+the current avatar is an OpsKnight-generated default, OpsKnight refreshes the
+initials avatar; a provider-supplied avatar is preserved.
 
 ## Configure Microsoft Entra provisioning
 
@@ -269,22 +298,26 @@ Offboarding should remove application assignment, deactivate the SCIM account,
 and disable provider sign-in. Verify the actual deactivation result rather than
 assuming one system automatically completes every step.
 
-## Rotate the bearer token
+## Rotate or revoke the bearer token
 
-`SCIM_BEARER_TOKEN` is a single configured credential; there is no application
-UI for multiple simultaneous SCIM tokens. Plan rotation as a short maintenance
-operation:
+OpsKnight accepts one active SCIM credential. Rotation immediately invalidates
+the previous UI-managed token, so plan a short provisioning pause:
 
 1. Pause provider provisioning jobs.
-2. Generate and store the replacement token in the deployment secret manager.
-3. Update OpsKnight and roll/restart the web service.
-4. Update the provider's Secret Token/API Token immediately.
-5. Test the connection and provision one pilot update.
-6. Resume provisioning and securely remove the old value.
+2. Open **Settings → System → SSO → SCIM Provisioning** and select **Rotate
+   Token**.
+3. Copy the newly revealed token to the provider immediately.
+4. Test the connection and provision one pilot update.
+5. Resume provisioning and securely remove the old value.
 
-Because only one runtime token is accepted, do not describe rotation as a
-long-lived dual-token overlap. Keep the pause short and monitor provider retry
-queues afterward.
+For an environment-fallback credential, update the secret manager, roll the web
+service, then update the provider. Because there is no dual-token overlap, keep
+the pause short and monitor provider retry queues afterward.
+
+Select **Revoke** to disable UI-managed SCIM access. Revocation does not delete
+existing users. If `SCIM_BEARER_TOKEN` is still configured, remove that fallback
+as part of a complete shutdown and confirm unauthenticated and old-token calls
+return `401`.
 
 ## Monitor and audit
 
@@ -301,10 +334,11 @@ audited after directory mapping or scope changes.
 
 ### Every request returns `401`
 
-Confirm `SCIM_BEARER_TOKEN` is present in the running web service, contains at
-least 32 characters, and matches the provider's bearer token. Check for an
-accidental newline or stale replica after secret rotation. Do not print the
-token while diagnosing.
+Confirm the SCIM panel reports an active database token or **Environment
+Fallback**, and that its hint matches the provider credential. For environment
+configuration, confirm the value contains at least 32 characters. Check for an
+accidental newline, an old provider secret, or a stale replica after rotation.
+Do not print the token while diagnosing.
 
 ### Test connection fails with `404`
 

@@ -9,8 +9,8 @@ product_area: status-pages
 audience: [operator, administrator]
 verification:
   level: source
-  verified_at: 2026-09-27
-  evidence: [src/lib/status-page-projection.ts, src/lib/status-page-public-data.ts]
+  verified_at: 2026-10-01
+  evidence: [src/lib/status-page-projection.ts, src/lib/status-page-public-data.ts, src/lib/status-pages/serving-store.ts, src/lib/status-page-notifications.ts]
 ---
 
 # Status page is not updating
@@ -58,6 +58,22 @@ If the snapshot is current but content is absent, review service membership and
 privacy policy. If origin is current but the public response is stale, purge or
 correct proxy caching. If projection is behind, repair the projector worker or
 its database access and let supported replay logic catch up.
+
+## Understand stale-serving and maintenance behavior
+
+During a snapshot rebuild, the public route can deliberately serve the last
+known-good snapshot instead of returning an empty/error page. Treat that as a
+continuity safeguard, not proof that projection is healthy: compare the served
+snapshot revision/time with the current page revision and repair the rebuild
+failure. Do not purge the last-known-good snapshot before a replacement has
+been generated and verified.
+
+When a status page is in maintenance mode, OpsKnight suppresses incident-driven
+subscriber notifications for that page. This prevents maintenance activity from
+producing misleading incident alerts. If the page content changed but email or
+webhook delivery did not occur, confirm maintenance state before diagnosing the
+notification provider. Disable maintenance only when the page should resume
+normal incident publication, then verify with a controlled update.
 
 Verify on both the default route and any custom hostname. Preserve page ID,
 service ID, source event time, projection cursor, snapshot time, route operation,
