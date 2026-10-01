@@ -774,8 +774,14 @@ describe('PushNotificationToggle', () => {
 
       render(<PushNotificationToggle />);
 
-      const enableButton = await screen.findByRole('button', { name: /Enable/i });
-      await waitFor(() => expect(enableButton).not.toBeDisabled());
+      await act(async () => {
+        // Flush preparation promises without waitFor: waitFor itself uses
+        // timers and can deadlock while fake timers are active.
+        for (let i = 0; i < 12; i += 1) await Promise.resolve();
+      });
+
+      const enableButton = screen.getByRole('button', { name: /Enable/i });
+      expect(enableButton).not.toBeDisabled();
       fireEvent.click(enableButton);
 
       expect(requestPermission).toHaveBeenCalledTimes(1);
