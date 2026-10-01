@@ -109,6 +109,39 @@ export async function notifyStatusPageSubscribers(
         continue;
       }
 
+      // Check if this service is currently in an active scheduled maintenance window on this status page
+      const now = new Date();
+      const activeMaintenance = await prisma.statusPageAnnouncement.findFirst({
+        where: {
+          statusPageId: page.id,
+          type: 'MAINTENANCE',
+          isActive: true,
+          publishAt: { lte: now },
+          startDate: { lte: now },
+          OR: [{ endDate: { gte: now } }, { endDate: null }],
+        },
+        select: { id: true, title: true, affectedServiceIds: true },
+      });
+
+      if (activeMaintenance) {
+        const affected = Array.isArray(activeMaintenance.affectedServiceIds)
+          ? (activeMaintenance.affectedServiceIds as string[])
+          : [];
+        const isServiceInMaintenance =
+          affected.length === 0 || affected.includes(incident.serviceId);
+
+        if (isServiceInMaintenance) {
+          logger.info('status_page.incident_notification_suppressed_maintenance', {
+            incidentId,
+            serviceId: incident.serviceId,
+            statusPageId: page.id,
+            announcementId: activeMaintenance.id,
+            maintenanceTitle: activeMaintenance.title,
+          });
+          continue;
+        }
+      }
+
       const displayName = page.organizationName || page.name;
       const branding =
         page.branding && typeof page.branding === 'object' && !Array.isArray(page.branding)
@@ -271,7 +304,9 @@ export async function notifyStatusPageSubscribers(
     return { success: totalFailed === 0, sent: totalSent, failed: totalFailed };
   } catch (error) {
     if (error instanceof BulkQueueBackpressureError) {
-      addOperationalMetric('opsknight_status_fanout_campaign_total', 1, { outcome: 'backpressured' });
+      addOperationalMetric('opsknight_status_fanout_campaign_total', 1, {
+        outcome: 'backpressured',
+      });
     }
     logger.error('Failed to notify status page subscribers', {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -512,12 +547,16 @@ export async function notifyStatusPageSubscribersAnnouncement(
     }
 
     if (!announcement.isActive || announcement.notificationTiming === 'NONE') {
-      logger.info(`Announcement ${announcementId} is inactive/withdrawn; skipping notification fan-out`);
+      logger.info(
+        `Announcement ${announcementId} is inactive/withdrawn; skipping notification fan-out`
+      );
       return { sent: 0, failed: 0, skipped: true };
     }
 
     if (announcement.publishAt && announcement.publishAt.getTime() > Date.now()) {
-      logger.info(`Announcement ${announcementId} publishAt is in the future; skipping notification fan-out`);
+      logger.info(
+        `Announcement ${announcementId} publishAt is in the future; skipping notification fan-out`
+      );
       return { sent: 0, failed: 0, skipped: true };
     }
 
@@ -750,7 +789,9 @@ export async function notifyStatusPageSubscribersAnnouncement(
           const result = await createCentralNotificationIntentsBatch(
             eligibleSubscriptions.map(sub => {
               const preferences =
-                sub.preferences && typeof sub.preferences === 'object' && !Array.isArray(sub.preferences)
+                sub.preferences &&
+                typeof sub.preferences === 'object' &&
+                !Array.isArray(sub.preferences)
                   ? (sub.preferences as Record<string, unknown>)
                   : null;
               const rawTz = sub.timezone || preferences?.timezone;
@@ -784,10 +825,14 @@ export async function notifyStatusPageSubscribersAnnouncement(
                 }
               }
 
-              const postedAtFormatted = formatDateTime(announcement.createdAt || new Date(), subTz, {
-                format: 'datetime',
-                includeTimeZone: true,
-              });
+              const postedAtFormatted = formatDateTime(
+                announcement.createdAt || new Date(),
+                subTz,
+                {
+                  format: 'datetime',
+                  includeTimeZone: true,
+                }
+              );
               const postedAtSectionForSub = `<p style="font-size: 14px; color: #9ca3af; margin-top: 16px; font-style: italic;">Posted on ${postedAtFormatted}</p>`;
 
               return {
@@ -875,7 +920,9 @@ export async function notifyStatusPageSubscribersAnnouncement(
     return { sent, failed };
   } catch (error) {
     if (error instanceof BulkQueueBackpressureError) {
-      addOperationalMetric('opsknight_status_fanout_campaign_total', 1, { outcome: 'backpressured' });
+      addOperationalMetric('opsknight_status_fanout_campaign_total', 1, {
+        outcome: 'backpressured',
+      });
       throw error;
     }
     logger.error('Failed to notify status page subscribers about announcement', {
