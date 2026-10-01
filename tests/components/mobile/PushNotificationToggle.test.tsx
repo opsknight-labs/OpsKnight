@@ -39,6 +39,7 @@ describe('PushNotificationToggle', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    delete (navigator as Navigator & { standalone?: boolean }).standalone;
     vi.unstubAllGlobals();
   });
 
@@ -214,6 +215,80 @@ describe('PushNotificationToggle', () => {
         '/api/user/push-subscription',
         expect.objectContaining({ method: 'POST' })
       );
+      expect(screen.getByRole('button', { name: /^Disable$/i })).toBeInTheDocument();
+    });
+  });
+
+  it('uses the direct subscribe gesture flow on macOS Safari', async () => {
+    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15'
+    );
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('MacIntel');
+
+    const requestPermission = vi.fn().mockResolvedValue('granted');
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'default',
+        requestPermission,
+      },
+      configurable: true,
+    });
+
+    let resolveSubscription!: (value: { endpoint: string }) => void;
+    const subscribe = vi.fn(
+      () =>
+        new Promise<{ endpoint: string }>(resolve => {
+          resolveSubscription = resolve;
+        })
+    );
+    const registration = {
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(null),
+        subscribe,
+      },
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(registration),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: Promise.resolve(registration),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/system/vapid-public-key')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ key: 'B' + 'A'.repeat(86) }),
+        };
+      }
+      if (typeof url === 'string' && url.includes('/api/user/push-subscription')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true }),
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    render(<PushNotificationToggle />);
+
+    const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    await waitFor(() => expect(enableButton).not.toBeDisabled());
+
+    const fetchCallsBeforeClick = mockFetch.mock.calls.length;
+    fireEvent.click(enableButton);
+
+    expect(subscribe).toHaveBeenCalledTimes(1);
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(mockFetch.mock.calls.length).toBe(fetchCallsBeforeClick);
+
+    resolveSubscription({ endpoint: 'https://web.push.apple.com/Q456' });
+
+    await waitFor(() => {
       expect(screen.getByRole('button', { name: /^Disable$/i })).toBeInTheDocument();
     });
   });
