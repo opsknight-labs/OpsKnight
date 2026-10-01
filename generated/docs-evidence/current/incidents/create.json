@@ -1,6 +1,6 @@
 {
   "release": "current",
-  "sourceRevision": "09f322e72df06fb65a77919414414a49e3c33908",
+  "sourceRevision": "056199fd8786351a4423aa171f66f7dca3578a84",
   "runtime": {
     "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:843ad4f9a55c3cc1b9b866eae705395c578faba10dfe4d3dfc15ae207b4dcc61",
     "digest": "opsknight-docs-v2@sha256:843ad4f9a55c3cc1b9b866eae705395c578faba10dfe4d3dfc15ae207b4dcc61",
@@ -13,5 +13,5 @@
     "width": 1440,
     "height": 900
   },
-  "capturedAt": "2026-10-01T05:26:06.223Z"
+  "capturedAt": "2026-10-01T05:29:05.644Z"
 }
