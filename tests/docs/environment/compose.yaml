@@ -17,7 +17,7 @@ services:
       - docs_postgres_data:/var/lib/postgresql/data
 
   opsknight-app:
-    image: ${DOCS_OPSKNIGHT_IMAGE:-localhost:15000/opsknight-docs-v2@sha256:eee032eb286f8ac5a23ee2ff6cb849a3aa80e35dd9ce9c05bbf56754bda7af99}
+    image: ${DOCS_OPSKNIGHT_IMAGE:-localhost:15000/opsknight-docs-v2@sha256:61cb9c50fb53b591feb880006a8c4d3583d21fc64a91aad0c27265f99baa7450}
     pull_policy: ${DOCS_IMAGE_PULL_POLICY:-always}
     ports: !override
       - '127.0.0.1:13200:3000'

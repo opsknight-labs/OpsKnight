@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "90b5303077e070e94e5eea3d696578dda40a9c5c",
+  "sourceRevision": "84b210b3faa220d136f55336434f8de06fdb8f61",
   "contracts": [
     {
       "id": "api:/api/events",
@@ -16860,6 +16860,78 @@
         "ui:/reset-password",
         "ui:/set-password",
         "configuration:AUTH_BREAK_GLASS_EMAIL"
+      ]
+    },
+    {
+      "id": "configuration:AUTO_DISMISS_TIMEOUT_MS",
+      "kind": "configuration",
+      "name": "AUTO_DISMISS_TIMEOUT_MS",
+      "owner": "platform",
+      "classification": "OPERATOR_FEATURE",
+      "sources": [
+        "src/components/layout/GlobalIncidentBanner.tsx"
+      ],
+      "contract": {
+        "name": "AUTO_DISMISS_TIMEOUT_MS",
+        "sources": [
+          "src/components/layout/GlobalIncidentBanner.tsx"
+        ],
+        "required": false,
+        "secret": false,
+        "scopes": [
+          "runtime"
+        ],
+        "defaults": [],
+        "allowedValues": [],
+        "type": "string",
+        "requiredWhen": "conditional or optional; inspect cited source",
+        "runtimeRoles": [
+          "web or integrated runtime"
+        ],
+        "deploymentSupport": [
+          "runtime"
+        ],
+        "restartRequired": true,
+        "deprecated": false,
+        "replacement": null,
+        "confidence": "incomplete"
+      },
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "capability-source",
+      "tests": [],
+      "runtimeEvidence": [],
+      "introducedVersion": "unknown",
+      "availability": "unknown",
+      "claims": [
+        {
+          "id": "configuration:AUTO_DISMISS_TIMEOUT_MS:classification",
+          "text": "AUTO_DISMISS_TIMEOUT_MS is classified as OPERATOR_FEATURE and owned by platform.",
+          "evidence": [
+            "src/components/layout/GlobalIncidentBanner.tsx"
+          ],
+          "verification": "source"
+        }
+      ],
+      "relatedFeatures": [
+        "api:/api/status/[slug]/history",
+        "api:/api/status/[slug]",
+        "api:/api/status/[slug]/rss",
+        "api:/api/status/[slug]/subscribe",
+        "api:/api/status/history",
+        "api:/api/status",
+        "api:/api/status/rss",
+        "api:/api/status/subscribe",
+        "api:/api/status/subscriptions/unsubscribe",
+        "api:/api/status/subscriptions/verify",
+        "ui:/action-items",
+        "ui:/audit"
       ]
     },
     {

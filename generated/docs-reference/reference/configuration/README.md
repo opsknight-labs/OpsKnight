@@ -394,6 +394,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: none discovered
 - Sources: `src/lib/auth.ts`
 
+## `AUTO_DISMISS_TIMEOUT_MS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/components/layout/GlobalIncidentBanner.tsx`
+
 ## `AWS_ACCESS_KEY_ID`
 
 - Type: string

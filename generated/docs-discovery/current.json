@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-01T14:58:48+05:30",
-  "sourceRevision": "90b5303077e070e94e5eea3d696578dda40a9c5c",
+  "generatedAt": "2026-10-01T15:26:53+05:30",
+  "sourceRevision": "84b210b3faa220d136f55336434f8de06fdb8f61",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -14731,6 +14731,31 @@
       "confidence": "incomplete"
     },
     {
+      "name": "AUTO_DISMISS_TIMEOUT_MS",
+      "sources": [
+        "src/components/layout/GlobalIncidentBanner.tsx"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "runtime"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "web or integrated runtime"
+      ],
+      "deploymentSupport": [
+        "runtime"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "AWS_ACCESS_KEY_ID",
       "sources": [
         "src/lib/email.ts"
@@ -24351,10 +24376,10 @@
     {
       "id": "src/contexts/IncidentAlertContext.tsx:AUTO_DISMISS_TIMEOUT_MS",
       "name": "AUTO_DISMISS_TIMEOUT_MS",
-      "value": 120000,
-      "expression": "120 * 1000",
+      "value": 12000,
+      "expression": "12 * 1000",
       "source": "src/contexts/IncidentAlertContext.tsx",
-      "references": 4,
+      "references": 8,
       "semanticClassification": "INTERNAL_IMPLEMENTATION"
     },
     {
@@ -78079,6 +78104,78 @@
         ]
       },
       {
+        "id": "configuration:AUTO_DISMISS_TIMEOUT_MS",
+        "kind": "configuration",
+        "name": "AUTO_DISMISS_TIMEOUT_MS",
+        "owner": "platform",
+        "classification": "OPERATOR_FEATURE",
+        "sources": [
+          "src/components/layout/GlobalIncidentBanner.tsx"
+        ],
+        "contract": {
+          "name": "AUTO_DISMISS_TIMEOUT_MS",
+          "sources": [
+            "src/components/layout/GlobalIncidentBanner.tsx"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "runtime"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "web or integrated runtime"
+          ],
+          "deploymentSupport": [
+            "runtime"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:AUTO_DISMISS_TIMEOUT_MS:classification",
+            "text": "AUTO_DISMISS_TIMEOUT_MS is classified as OPERATOR_FEATURE and owned by platform.",
+            "evidence": [
+              "src/components/layout/GlobalIncidentBanner.tsx"
+            ],
+            "verification": "source"
+          }
+        ],
+        "relatedFeatures": [
+          "api:/api/status/[slug]/history",
+          "api:/api/status/[slug]",
+          "api:/api/status/[slug]/rss",
+          "api:/api/status/[slug]/subscribe",
+          "api:/api/status/history",
+          "api:/api/status",
+          "api:/api/status/rss",
+          "api:/api/status/subscribe",
+          "api:/api/status/subscriptions/unsubscribe",
+          "api:/api/status/subscriptions/verify",
+          "ui:/action-items",
+          "ui:/audit"
+        ]
+      },
+      {
         "id": "configuration:AWS_ACCESS_KEY_ID",
         "kind": "configuration",
         "name": "AWS_ACCESS_KEY_ID",
@@ -114160,10 +114257,10 @@
         "contract": {
           "id": "src/contexts/IncidentAlertContext.tsx:AUTO_DISMISS_TIMEOUT_MS",
           "name": "AUTO_DISMISS_TIMEOUT_MS",
-          "value": 120000,
-          "expression": "120 * 1000",
+          "value": 12000,
+          "expression": "12 * 1000",
           "source": "src/contexts/IncidentAlertContext.tsx",
-          "references": 4,
+          "references": 8,
           "semanticClassification": "INTERNAL_IMPLEMENTATION"
         },
         "documentation": {
@@ -114192,7 +114289,7 @@
           },
           {
             "id": "limit:src/contexts/IncidentAlertContext.tsx:AUTO_DISMISS_TIMEOUT_MS:value",
-            "text": "AUTO_DISMISS_TIMEOUT_MS has the discovered numeric value 120000.",
+            "text": "AUTO_DISMISS_TIMEOUT_MS has the discovered numeric value 12000.",
             "evidence": [
               "src/contexts/IncidentAlertContext.tsx"
             ],
@@ -124240,11 +124337,11 @@
       }
     ],
     "summary": {
-      "total": 1161,
-      "claims": 1606,
+      "total": 1162,
+      "claims": 1607,
       "unsupportedClaims": 0,
-      "supported": 631,
-      "documentedSupported": 631,
+      "supported": 632,
+      "documentedSupported": 632,
       "undocumentedSupported": 0,
       "unresolvedSemanticContracts": 0,
       "uiRoutesWithoutExplicitDocumentation": 0,
@@ -124252,7 +124349,7 @@
         "api": 220,
         "api-scope": 7,
         "authorization-action": 9,
-        "configuration": 315,
+        "configuration": 316,
         "deployment-topology": 4,
         "enum": 73,
         "integration": 28,
@@ -124267,7 +124364,7 @@
       "byClassification": {
         "ADMIN_FEATURE": 83,
         "INTERNAL_IMPLEMENTATION": 530,
-        "OPERATOR_FEATURE": 344,
+        "OPERATOR_FEATURE": 345,
         "PUBLIC_API": 47,
         "PUBLIC_FEATURE": 157
       },
