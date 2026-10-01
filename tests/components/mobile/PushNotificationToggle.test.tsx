@@ -1597,4 +1597,86 @@ describe('PushNotificationToggle', () => {
       expect(screen.getByRole('button', { name: /Disable/i })).toBeInTheDocument();
     });
   });
+
+  it('rejects on iOS when installing worker fails and becomes redundant without activating', async () => {
+    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1'
+    );
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('iPhone');
+    Object.defineProperty(navigator, 'standalone', {
+      value: true,
+      configurable: true,
+    });
+
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'default',
+        requestPermission: vi.fn(),
+      },
+      configurable: true,
+    });
+
+    let stateChangeHandler: (() => void) | null = null;
+    const installingWorker = {
+      scriptURL: `${window.location.origin}/sw.js`,
+      state: 'installing',
+      addEventListener: vi.fn((event: string, handler: () => void) => {
+        if (event === 'statechange') {
+          stateChangeHandler = handler;
+        }
+      }),
+      removeEventListener: vi.fn(),
+    };
+
+    const registration: Record<string, unknown> = {
+      active: null,
+      waiting: null,
+      installing: installingWorker,
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(null),
+        subscribe: vi.fn(),
+      },
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+
+    // Worker fails installation and transitions to redundant
+    setTimeout(() => {
+      installingWorker.state = 'redundant';
+      if (stateChangeHandler) {
+        stateChangeHandler();
+      }
+    }, 20);
+
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(null),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: new Promise(() => {}),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/sw.js')) {
+        return {
+          ok: true,
+          status: 200,
+          redirected: false,
+          url: `${window.location.origin}/sw.js`,
+          headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    render(<PushNotificationToggle />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Service worker did not become ready. Retry.'
+      );
+    });
+    expect(screen.getByRole('button', { name: /Retry/i })).toBeInTheDocument();
+  });
 });

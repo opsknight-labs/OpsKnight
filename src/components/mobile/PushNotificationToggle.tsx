@@ -251,10 +251,7 @@ async function waitForRegistrationActive(
     };
 
     timer = setTimeout(() => {
-      // In iOS WebKit / Safari, PushManager is always available on the registration
-      // object even if active property propagation is delayed or client is uncontrolled.
-      // If pushManager is accessible, resolve the registration to proceed with enrollment.
-      if (registration.active || registration.pushManager) {
+      if (registration.active) {
         done();
       } else {
         fail(new ClientTimeoutError('The service worker did not become ready.'));
@@ -264,6 +261,8 @@ async function waitForRegistrationActive(
     const onStateChange = () => {
       if (registration.active || trackedWorker?.state === 'activated') {
         done();
+      } else if (trackedWorker?.state === 'redundant') {
+        fail(new Error('The service worker installation failed and became redundant.'));
       }
     };
 
@@ -284,6 +283,10 @@ async function waitForRegistrationActive(
     if (trackedWorker) {
       if (trackedWorker.state === 'activated' || registration.active) {
         done();
+        return;
+      }
+      if (trackedWorker.state === 'redundant') {
+        fail(new Error('The service worker installation failed and became redundant.'));
         return;
       }
       if (typeof trackedWorker.addEventListener === 'function') {
