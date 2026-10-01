@@ -10,7 +10,7 @@ reader:
 keywords: [OIDC login, configure SSO, OpenID Connect, Entra, Google Workspace, Okta, Auth0]
 verification:
   level: source
-  verified_at: 2026-09-29
+  verified_at: 2026-10-02
   evidence:
     - src/components/settings/SsoSettingsForm.tsx
     - src/app/(app)/settings/security/actions.ts
@@ -19,6 +19,7 @@ verification:
     - src/lib/oidc/provider-policy.ts
     - src/lib/oidc/scopes.ts
     - src/lib/oidc-identity-resolution.ts
+    - src/lib/local-auth-policy.ts
     - src/app/api/auth/oidc/logout-url/route.ts
 ---
 
@@ -342,6 +343,32 @@ under the `AUTH_SSO_*` configuration family. Requiring a new OpsKnight OIDC
 session does not necessarily force the identity provider to prompt for a
 password because the provider can reuse its own SSO session.
 
+## Configure OIDC session policy
+
+The SSO form can override maximum session lifetime and idle timeout for OIDC
+sessions. Leaving a field at its default uses the corresponding environment
+policy.
+
+| Control | Supported range | Environment default | Built-in fallback |
+| --- | --- | --- | --- |
+| Maximum session lifetime | 15 minutes to 30 days | `AUTH_SSO_SESSION_MAX_AGE_SECONDS` | 12 hours |
+| Idle inactivity timeout | 5 minutes to 7 days, and no longer than maximum lifetime | `AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS` | 4 hours |
+| Reauthentication window | 15 minutes to 30 days | `AUTH_SSO_REAUTH_AFTER_SECONDS` | 12 hours |
+| Session update interval | 1 minute to 24 hours | `AUTH_SSO_SESSION_UPDATE_AGE_SECONDS` | 1 hour |
+
+The UI overrides the first two values. When maximum lifetime is overridden, it
+also becomes the effective reauthentication window. Invalid environment values
+fall back to the built-in value, and an idle timeout longer than the maximum is
+clamped to the maximum. Treat shorter settings as an operational change: pilot
+them with responders so a renewal does not interrupt an incident.
+
+OIDC configuration changes increment the configuration version. Existing OIDC
+sessions whose version no longer matches are rejected and must authenticate
+again. Sessions also end when the absolute/renewal window or idle timeout is
+reached, when the linked user is no longer operational, or when the linked
+identity cannot be resolved. Monitor authentication audit events during rollout
+without recording tokens or authorization codes.
+
 ## Change the issuer or rotate the secret
 
 Rotating only the client secret does not change identity ownership. Create the
@@ -410,6 +437,13 @@ the selected authorization server, application, and connection.
 Confirm `NEXTAUTH_URL`, `NEXT_PUBLIC_APP_URL`, proxy forwarded headers, cookies,
 issuer configuration, and provider callback/logout allowlists all refer to the
 same public HTTPS origin.
+
+### Users are signed out after an SSO configuration change
+
+This is expected when the OIDC configuration version changes. Confirm the
+change was authorized, ask the user to start a new sign-in, and investigate
+only if the new login fails. Also check maximum lifetime, idle timeout, and
+reauthentication policy before assuming the provider revoked the session.
 
 For error-specific diagnosis, see
 [OIDC access problems](../../troubleshooting/login/oidc-access/). For account

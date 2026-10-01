@@ -10,7 +10,7 @@ reader:
 keywords: [SCIM provisioning, Entra provisioning, Okta provisioning, SCIM users, SCIM groups, team synchronization, identity lifecycle]
 verification:
   level: source
-  verified_at: 2026-10-01
+  verified_at: 2026-10-02
   evidence:
     - src/lib/scim.ts
     - src/app/api/scim/v2/Users/route.ts
@@ -253,6 +253,14 @@ OpsKnight accepts one active credential. Pause provisioning, select **Rotate
 Token**, update the provider, test one user and group update, then resume. There
 is no dual-token overlap. **Revoke** disables the UI-managed credential without
 deleting users or teams; remove `SCIM_BEARER_TOKEN` too for a complete shutdown.
+
+After generation or rotation, the UI is the controlled place to retrieve the
+active UI-managed token. Restrict Settings access accordingly and copy it only
+into the identity provider or secret-management workflow. The stored token is
+encrypted; the displayed token hint identifies the active credential but cannot
+authenticate. A UI-managed credential takes precedence over the environment
+fallback, so rotating only `SCIM_BEARER_TOKEN` has no effect while the
+UI-managed token remains active.
 
 ## Troubleshooting
 
