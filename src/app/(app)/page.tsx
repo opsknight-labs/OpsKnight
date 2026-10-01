@@ -23,7 +23,6 @@ import { Activity, AlertTriangle, List, Siren, UserRound, CheckCircle2 } from 'l
 import { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { buildIncidentListHref } from '@/lib/incident-links';
 import { dashboardUserReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
-import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { getDashboardOperationalSnapshot } from '@/lib/dashboard/dashboard-operational-snapshot';
 import { DashboardAnalyticsProvider } from '@/components/dashboard/DashboardAnalyticsProvider';
 import { resolveAccessContext } from '@/lib/access-context';

@@ -7,7 +7,12 @@ export default function DatabaseOffline({
   title?: string;
   errorMessage?: string;
 }) {
-  const target = describeDatabaseTarget(process.env.DATABASE_URL);
+  const isProduction = process.env.NODE_ENV === 'production';
+  const target = isProduction ? null : describeDatabaseTarget(process.env.DATABASE_URL);
+
+  const displayMessage = isProduction
+    ? 'OpsKnight cannot establish a connection to the PostgreSQL database cluster.'
+    : `OpsKnight can’t reach the PostgreSQL database${target ? ` at ${target}` : ''}.`;
 
   return (
     <div
@@ -52,12 +57,12 @@ export default function DatabaseOffline({
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>{title}</h1>
             <p style={{ margin: '0.5rem 0 0', color: 'var(--text-secondary, #4b5563)' }}>
-              OpsKnight can’t reach the PostgreSQL database{target ? ` at ${target}` : ''}.
+              {displayMessage}
             </p>
           </div>
         </div>
 
-        {errorMessage && (
+        {errorMessage && !isProduction && (
           <pre
             style={{
               marginTop: '1rem',
@@ -77,23 +82,41 @@ export default function DatabaseOffline({
         )}
 
         <div style={{ marginTop: '1rem' }}>
-          <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>How to fix</div>
-          <ol
-            style={{ margin: 0, paddingLeft: '1.25rem', color: 'var(--text-secondary, #4b5563)' }}
-          >
-            <li style={{ marginBottom: '0.25rem' }}>
-              Start Postgres: <code>docker compose up -d opsknight-db</code>
-            </li>
-            <li style={{ marginBottom: '0.25rem' }}>
-              If you run <code>npm run dev</code> on your host machine, set{' '}
-              <code>DATABASE_URL</code> host to <code>localhost</code> (not{' '}
-              <code>opsknight-db</code>).
-            </li>
-            <li>
-              Or run the app via Docker Compose (the in-network hostname <code>opsknight-db</code>{' '}
-              works from inside containers).
-            </li>
-          </ol>
+          <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>
+            {isProduction ? 'Troubleshooting steps' : 'How to fix'}
+          </div>
+          {isProduction ? (
+            <ul
+              style={{ margin: 0, paddingLeft: '1.25rem', color: 'var(--text-secondary, #4b5563)' }}
+            >
+              <li style={{ marginBottom: '0.25rem' }}>
+                Verify the primary database instance or connection pooler is active and accepting connections.
+              </li>
+              <li style={{ marginBottom: '0.25rem' }}>
+                Check network policies, VPC peering, and firewall rules between application servers and the database.
+              </li>
+              <li>
+                Review application server error logs for detailed connection diagnostic telemetry.
+              </li>
+            </ul>
+          ) : (
+            <ol
+              style={{ margin: 0, paddingLeft: '1.25rem', color: 'var(--text-secondary, #4b5563)' }}
+            >
+              <li style={{ marginBottom: '0.25rem' }}>
+                Start Postgres: <code>docker compose up -d opsknight-db</code>
+              </li>
+              <li style={{ marginBottom: '0.25rem' }}>
+                If you run <code>npm run dev</code> on your host machine, set{' '}
+                <code>DATABASE_URL</code> host to <code>localhost</code> (not{' '}
+                <code>opsknight-db</code>).
+              </li>
+              <li>
+                Or run the app via Docker Compose (the in-network hostname <code>opsknight-db</code>{' '}
+                works from inside containers).
+              </li>
+            </ol>
+          )}
         </div>
       </div>
     </div>

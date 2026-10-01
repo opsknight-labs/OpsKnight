@@ -73,8 +73,12 @@ export default async function IncidentDetailScreen({
       },
       assignee: true,
       team: true,
-      events: { orderBy: { createdAt: 'desc' } },
-      notes: { include: { user: true }, orderBy: { createdAt: 'desc' } },
+      events: { orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 200 },
+      notes: {
+        include: { user: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 100,
+      },
       notifications: {
         select: {
           id: true,
@@ -88,7 +92,7 @@ export default async function IncidentDetailScreen({
           failedAt: true,
           user: { select: { id: true, name: true, email: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 50,
       },
       watchers: { include: { user: true }, orderBy: { createdAt: 'asc' } },
@@ -106,17 +110,23 @@ export default async function IncidentDetailScreen({
   const canAcknowledgeIncident = permissions.capabilities.includes('incident.acknowledge.scoped');
   const canAddIncidentNote = permissions.capabilities.includes('incident.note.scoped');
 
-  const [users, teams, customFields] = await Promise.all([
-    canManageIncident
-      ? prisma.user.findMany({
-          where: { status: 'ACTIVE' },
-          select: { id: true, name: true, email: true, avatarUrl: true, gender: true, role: true },
-          orderBy: { name: 'asc' },
-        })
-      : Promise.resolve([]),
-    canManageIncident ? prisma.team.findMany({ orderBy: { name: 'asc' } }) : Promise.resolve([]),
-    prisma.customField.findMany({ orderBy: { order: 'asc' } }),
-  ]);
+  const [users, teams, customFields, totalEventsCount, totalNotesCount, totalNotificationsCount] =
+    await Promise.all([
+      canManageIncident
+        ? prisma.user.findMany({
+            where: { status: 'ACTIVE' },
+            select: { id: true, name: true, email: true, avatarUrl: true, gender: true, role: true },
+            orderBy: { name: 'asc' },
+          })
+        : Promise.resolve([]),
+      canManageIncident ? prisma.team.findMany({ orderBy: { name: 'asc' } }) : Promise.resolve([]),
+      prisma.customField.findMany({ orderBy: { order: 'asc' } }),
+      prisma.incidentEvent.count({ where: { incidentId: id } }),
+      prisma.incidentNote.count({ where: { incidentId: id } }),
+      prisma.notification.count({ where: { incidentId: id } }),
+    ]);
+
+  const totalActivityCount = totalEventsCount + totalNotesCount + totalNotificationsCount;
 
   const incidentJiraCapability = await getJiraCapabilities({
     serviceId: incident.serviceId,
@@ -163,6 +173,7 @@ export default async function IncidentDetailScreen({
 
   const activityContent = (
     <IncidentNotes
+      incidentId={id}
       notes={incident.notes.map(note => ({
         id: note.id,
         content: note.content,
@@ -171,11 +182,13 @@ export default async function IncidentDetailScreen({
       }))}
       canManage={canManageIncident || canAddIncidentNote}
       onAddNote={handleAddNote}
+      totalNotesCount={totalNotesCount}
     />
   );
 
   const timelineContent = (
     <IncidentTimeline
+      incidentId={id}
       events={incident.events.map(event => ({
         id: event.id,
         message: event.message,
@@ -203,6 +216,10 @@ export default async function IncidentDetailScreen({
       incidentCreatedAt={incident.createdAt}
       incidentAcknowledgedAt={incident.acknowledgedAt}
       incidentResolvedAt={incident.resolvedAt}
+      totalEventsCount={totalEventsCount}
+      totalNotesCount={totalNotesCount}
+      totalNotificationsCount={totalNotificationsCount}
+      totalActivityCount={totalActivityCount}
     />
   );
 
@@ -512,8 +529,8 @@ export default async function IncidentDetailScreen({
       <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6">
         <div className="min-w-0 space-y-4 lg:col-span-8 lg:space-y-6 2xl:col-span-9">
           <IncidentDetailTabs
-            eventCount={incident.events.length}
-            noteCount={incident.notes.length}
+            eventCount={totalEventsCount}
+            noteCount={totalNotesCount}
             activityContent={activityContent}
             timelineContent={timelineContent}
             postmortemContent={postmortemContent}

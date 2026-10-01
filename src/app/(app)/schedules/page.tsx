@@ -17,14 +17,100 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-export default async function SchedulesPage() {
+import { Prisma } from '@prisma/client';
+import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
+
+export default async function SchedulesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ page?: string; q?: string; search?: string; status?: string }>;
+} = {}) {
+  const params = await searchParams;
+  const requestedPage = parsePageParam(params?.page);
+  const searchQuery = (params?.q || params?.search || '').trim();
+  const statusFilter = params?.status || 'all';
+
   const [permissions, actor] = await Promise.all([
     getUserPermissions(),
     getCurrentAuthorizationActor(),
   ]);
 
+  const baseWhere = scheduleReadWhere(actor);
+  const filterConditions: Prisma.OnCallScheduleWhereInput[] = [baseWhere];
+
+  if (searchQuery) {
+    filterConditions.push({
+      OR: [
+        { name: { contains: searchQuery, mode: 'insensitive' } },
+        { timeZone: { contains: searchQuery, mode: 'insensitive' } },
+        {
+          layers: {
+            some: {
+              users: {
+                some: {
+                  user: {
+                    name: { contains: searchQuery, mode: 'insensitive' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    });
+  }
+
+  if (statusFilter === 'configured') {
+    filterConditions.push({
+      layers: { some: { users: { some: {} } } },
+    });
+  } else if (statusFilter === 'needs-setup') {
+    filterConditions.push({
+      NOT: { layers: { some: { users: { some: {} } } } },
+    });
+  }
+
+  const where: Prisma.OnCallScheduleWhereInput =
+    filterConditions.length === 1 ? baseWhere : { AND: filterConditions };
+
+  const [
+    allSchedulesCount,
+    totalLayersCount,
+    responderAgg,
+    configuredSchedulesCount,
+    needsSetupSchedulesCount,
+    totalFilteredCount,
+  ] = await Promise.all([
+    prisma.onCallSchedule.count({ where: baseWhere }),
+    prisma.onCallLayer.count({ where: { schedule: baseWhere } }),
+    prisma.onCallLayerUser.findMany({
+      where: { layer: { schedule: baseWhere }, user: { status: 'ACTIVE' } },
+      select: { userId: true },
+      distinct: ['userId'],
+    }),
+    prisma.onCallSchedule.count({
+      where: {
+        AND: [baseWhere, { layers: { some: { users: { some: {} } } } }],
+      },
+    }),
+    prisma.onCallSchedule.count({
+      where: {
+        AND: [baseWhere, { NOT: { layers: { some: { users: { some: {} } } } } }],
+      },
+    }),
+    prisma.onCallSchedule.count({ where }),
+  ]);
+
+  const pagination = calculatePaginationBounds({
+    totalItems: totalFilteredCount,
+    page: requestedPage,
+    pageSize: 50,
+  });
+
   const schedules = await prisma.onCallSchedule.findMany({
-    where: scheduleReadWhere(actor),
+    where,
+    skip: pagination.skip,
+    take: pagination.take,
     include: {
       layers: {
         include: {
@@ -48,13 +134,9 @@ export default async function SchedulesPage() {
     orderBy: { createdAt: 'desc' },
   });
 
-  const totalLayers = schedules.reduce((sum, schedule) => sum + schedule.layers.length, 0);
-  const totalUniqueResponders = new Set(
-    schedules.flatMap(s => s.layers.flatMap(l => l.users.map(u => u.userId)))
-  ).size;
-  const hasConfiguredResponders = schedules.some(schedule =>
-    schedule.layers.some(layer => layer.users.length > 0)
-  );
+  const totalLayers = totalLayersCount;
+  const totalUniqueResponders = responderAgg.length;
+  const hasConfiguredResponders = totalUniqueResponders > 0;
 
   const canManageSchedules = permissions.isAdminOrResponder;
 
@@ -123,7 +205,22 @@ export default async function SchedulesPage() {
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-6">
         {/* Schedules List with Live Search & Filters */}
         <div className="xl:col-span-3 space-y-4">
-          <ScheduleDirectoryList schedules={schedules} />
+          <ScheduleDirectoryList
+            schedules={schedules}
+            pagination={{
+              currentPage: pagination.page,
+              totalPages: pagination.totalPages,
+              totalItems: pagination.totalItems,
+              itemsPerPage: pagination.pageSize,
+            }}
+            filterCounts={{
+              total: allSchedulesCount,
+              configured: configuredSchedulesCount,
+              needsSetup: needsSetupSchedulesCount,
+            }}
+            currentSearch={searchQuery}
+            currentStatus={statusFilter}
+          />
         </div>
 
         {/* Sidebar: Step Guide & Quick Links */}

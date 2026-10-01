@@ -351,6 +351,7 @@ export default function SlackIntegrationPage({
 
     setBulkConnecting(true);
     let successCount = 0;
+    let failCount = 0;
 
     for (const channel of publicDisconnected) {
       try {
@@ -365,14 +366,24 @@ export default function SlackIntegrationPage({
             prev.map(ch => (ch.id === channel.id ? { ...ch, isMember: true } : ch))
           );
           successCount++;
+        } else {
+          failCount++;
+          logger.error('Bulk connect: failed to join channel', { channelId: channel.id });
         }
       } catch (_error) {
-        logger.error('Bulk connect: failed to join channel', { channelId: channel.id });
+        failCount++;
+        logger.error('Bulk connect: network error joining channel', { channelId: channel.id });
       }
     }
 
     setBulkConnecting(false);
-    toast.success(`Connected to ${successCount} channels`);
+    if (failCount === 0) {
+      toast.success(`Connected to ${successCount} channel${successCount !== 1 ? 's' : ''}`);
+    } else {
+      toast.warning(
+        `Connected to ${successCount} channel${successCount !== 1 ? 's' : ''}; ${failCount} failed`
+      );
+    }
   };
 
   const channelSummary = useMemo(() => {

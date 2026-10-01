@@ -8,6 +8,8 @@ import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { getRequestActorContext } from '@/lib/request-actor-context';
+import { assertCanViewUser } from '@/lib/rbac';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +21,9 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
   const { id } = await params;
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', `/m/users/${id}`));
+  await assertCanViewUser(id);
+
+  const incidentAccess = incidentReadWhere(context.actor);
 
   const user = await prisma.user.findUnique({
     where: { id },
@@ -29,7 +34,7 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
         },
       },
       assignedIncidents: {
-        where: { status: { in: activeIncidentStatuses() } },
+        where: { AND: [incidentAccess, { status: { in: activeIncidentStatuses() } }] },
         take: 5,
         orderBy: { createdAt: 'desc' },
         select: {
@@ -42,7 +47,9 @@ export default async function MobileUserDetailPage({ params }: PageProps) {
       },
       _count: {
         select: {
-          assignedIncidents: { where: { status: { in: activeIncidentStatuses() } } },
+          assignedIncidents: {
+            where: { AND: [incidentAccess, { status: { in: activeIncidentStatuses() } }] },
+          },
         },
       },
     },

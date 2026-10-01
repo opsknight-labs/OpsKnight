@@ -17,6 +17,7 @@ import {
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
+import { notify as toast } from '@/lib/toast';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Switch } from '@/components/ui/shadcn/switch';
@@ -132,7 +133,14 @@ function SummaryStrip({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bulkPaused: !paused }),
       });
-      if (res.ok) setPaused(v => !v);
+      if (res.ok) {
+        setPaused(v => !v);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body?.error || `Failed to ${paused ? 'resume' : 'pause'} bulk notifications`);
+      }
+    } catch {
+      toast.error(`Failed to ${paused ? 'resume' : 'pause'} bulk notifications`);
     } finally {
       setSaving(false);
     }
