@@ -538,12 +538,7 @@ export default function PushNotificationToggle() {
         // all SW/VAPID preparation is already complete, so no network or
         // service-worker work sits between the user tap and this request.
         stage = 'REQUEST_PERMISSION';
-        const permissionPromise = Notification.requestPermission();
-        permission = await promiseWithTimeout(
-          permissionPromise,
-          REQUEST_TIMEOUT_MS,
-          'Notification permission request timed out.'
-        );
+        permission = await Notification.requestPermission();
       }
 
       if (permission === 'denied') {
