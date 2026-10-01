@@ -37,12 +37,17 @@ import {
   Pencil,
   Check,
   RotateCcw,
+  Minimize2,
+  RefreshCw,
+  Tv,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SerializedSLAMetrics } from '@/lib/sla';
 import type { DashboardTemplate } from '@/lib/reports/dashboard-templates';
 import type { WidgetDefinition } from '@/lib/reports/widget-registry';
 import WidgetLibrary from '@/components/reports/WidgetLibrary';
+import DashboardShareModal from '@/components/reports/DashboardShareModal';
+import WidgetConfigModal, { ConfigurableWidget } from '@/components/reports/WidgetConfigModal';
 
 type Widget = {
   id: string;
@@ -115,13 +120,105 @@ export default function DashboardViewer({
   const [localWidgets, setLocalWidgets] = useState(widgets);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Share modal state
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const initialVisibility =
+    (savedDashboards.find(d => d.id === dashboardId)?.visibility as
+      | 'PRIVATE'
+      | 'TEAM'
+      | 'PUBLIC'
+      | undefined) || 'PRIVATE';
+  const [currentVisibility, setCurrentVisibility] = useState<'PRIVATE' | 'TEAM' | 'PUBLIC'>(
+    initialVisibility
+  );
+
+  // Widget configuration modal state
+  const [configuringWidget, setConfiguringWidget] = useState<ConfigurableWidget | null>(null);
+
+  // Auto-refresh interval (0 = off, 30s, 60s, 300s)
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(0);
+  const [refreshCountdown, setRefreshCountdown] = useState<number>(0);
+
+  // NOC / Kiosk presentation mode
+  const [isKioskMode, setIsKioskMode] = useState(false);
+
   // Sync state when dashboard/template changes
   useEffect(() => {
     setSavedBaseline(widgets);
     setLocalWidgets(widgets);
     setDashboardTitle(dashboardName);
     setDashboardDesc(dashboardDescription);
-  }, [dashboardId, currentTemplateId, widgets, dashboardName, dashboardDescription]);
+    const vis = savedDashboards.find(d => d.id === dashboardId)?.visibility;
+    if (vis === 'PRIVATE' || vis === 'TEAM' || vis === 'PUBLIC') {
+      setCurrentVisibility(vis);
+    }
+  }, [dashboardId, currentTemplateId, widgets, dashboardName, dashboardDescription, savedDashboards]);
+
+  // Auto-refresh timer with visibility detection
+  useEffect(() => {
+    if (autoRefreshInterval <= 0) {
+      setRefreshCountdown(0);
+      return;
+    }
+
+    setRefreshCountdown(autoRefreshInterval);
+
+    const intervalId = setInterval(() => {
+      // Pause countdown when document is in background to preserve resources
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+
+      setRefreshCountdown(prev => {
+        if (prev <= 1) {
+          router.refresh();
+          return autoRefreshInterval;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [autoRefreshInterval, router]);
+
+  // Fullscreen / Kiosk keyboard shortcut (F to toggle, Esc to exit)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setIsKioskMode(prev => !prev);
+      } else if (e.key === 'Escape' && isKioskMode) {
+        setIsKioskMode(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isKioskMode]);
+
+  const handleExportPdf = () => {
+    try {
+      window.print();
+    } catch {
+      notify.error('Could not open print dialog. Please try again.');
+    }
+  };
+
+  const handleSaveWidgetConfig = (updatedWidget: ConfigurableWidget) => {
+    setLocalWidgets(prev =>
+      prev.map(w => (w.id === updatedWidget.id ? (updatedWidget as Widget) : w))
+    );
+    notify.success('Widget settings updated. Click "Save Changes" to persist.');
+  };
 
   const isDirty =
     JSON.stringify(localWidgets) !== JSON.stringify(savedBaseline) ||
@@ -291,8 +388,63 @@ export default function DashboardViewer({
 
   return (
     <div className={cn('w-full px-4 py-6 space-y-6 transition-all', isEditing && 'pb-28')}>
+      {/* Executive Print Header (Visible in Print / PDF Only) */}
+      <div className="executive-print-header hidden">
+        <div className="flex items-start justify-between border-b-2 border-slate-300 pb-3 mb-4">
+          <div>
+            <div className="text-xl font-bold tracking-tight text-slate-900">
+              OpsKnight Executive Operations Report
+            </div>
+            <div className="text-sm font-semibold text-slate-700 mt-1">
+              Dashboard: {dashboardTitle}
+            </div>
+            {dashboardDesc && (
+              <p className="text-xs text-slate-500 mt-0.5">Description: {dashboardDesc}</p>
+            )}
+          </div>
+          <div className="text-right text-xs text-slate-600 space-y-1">
+            <div className="font-medium">Generated: {lastUpdated}</div>
+            <div>
+              Scope:{' '}
+              {TIME_WINDOWS.find(w => w.value === String(currentFilters.windowDays))?.label ||
+                `${currentFilters.windowDays} days`}
+              {currentFilters.teamId &&
+                ` • Team: ${filterOptions.teams.find(t => t.id === currentFilters.teamId)?.name || currentFilters.teamId}`}
+              {currentFilters.serviceId &&
+                ` • Service: ${filterOptions.services.find(s => s.id === currentFilters.serviceId)?.name || currentFilters.serviceId}`}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Kiosk Mode Floating Controls */}
+      {isKioskMode && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 bg-black/85 backdrop-blur-md border border-white/20 px-3.5 py-1.5 rounded-full text-xs text-white shadow-2xl animate-in fade-in">
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          <span className="font-semibold tracking-wide">NOC Wallboard</span>
+          {autoRefreshInterval > 0 && (
+            <span className="text-zinc-300">· Refresh in {refreshCountdown}s</span>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsKioskMode(false)}
+            className="h-6 px-2 text-xs text-zinc-300 hover:text-white hover:bg-white/10 ml-1"
+          >
+            Exit (Esc)
+          </Button>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
+      <div className={cn(
+        'relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6 transition-all',
+        isKioskMode && 'py-3'
+      )}>
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
         <div className="relative flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
@@ -342,7 +494,7 @@ export default function DashboardViewer({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {isTemplate && (
               <Button
                 variant="secondary"
@@ -351,9 +503,102 @@ export default function DashboardViewer({
                 disabled={isCloning}
               >
                 <Copy className="h-4 w-4" />
-                {isCloning ? 'Cloning...' : 'Clone Dashboard'}
+                <span>{isCloning ? 'Cloning...' : 'Clone Dashboard'}</span>
               </Button>
             )}
+
+            {/* Auto-Refresh Control */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className={cn(
+                    'bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white gap-1.5 text-xs font-medium h-9',
+                    autoRefreshInterval > 0 &&
+                      'border-emerald-500/50 text-emerald-400 bg-emerald-500/10'
+                  )}
+                  title={
+                    autoRefreshInterval > 0
+                      ? `Auto-refreshing every ${autoRefreshInterval}s (Next in ${refreshCountdown}s)`
+                      : 'Set auto-refresh interval'
+                  }
+                >
+                  <RefreshCw
+                    className={cn(
+                      'h-3.5 w-3.5',
+                      autoRefreshInterval > 0 && 'animate-spin [animation-duration:3s]'
+                    )}
+                  />
+                  <span>{autoRefreshInterval > 0 ? `${refreshCountdown}s` : 'Live'}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  Auto-Refresh Interval
+                </div>
+                <DropdownMenuItem onClick={() => setAutoRefreshInterval(0)}>
+                  <span>Off</span>
+                  {autoRefreshInterval === 0 && <Check className="h-4 w-4 ml-auto text-primary" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAutoRefreshInterval(30)}>
+                  <span>Every 30 seconds</span>
+                  {autoRefreshInterval === 30 && (
+                    <Check className="h-4 w-4 ml-auto text-primary" />
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAutoRefreshInterval(60)}>
+                  <span>Every 1 minute</span>
+                  {autoRefreshInterval === 60 && (
+                    <Check className="h-4 w-4 ml-auto text-primary" />
+                  )}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setAutoRefreshInterval(300)}>
+                  <span>Every 5 minutes</span>
+                  {autoRefreshInterval === 300 && (
+                    <Check className="h-4 w-4 ml-auto text-primary" />
+                  )}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Presentation Mode */}
+            <Button
+              variant="secondary"
+              size="icon"
+              className={cn(
+                'bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white h-9 w-9',
+                isKioskMode && 'border-primary text-primary'
+              )}
+              onClick={() => setIsKioskMode(prev => !prev)}
+              title={isKioskMode ? 'Exit Presentation Mode (Esc)' : 'Presentation Mode (Press F)'}
+            >
+              {isKioskMode ? <Minimize2 className="h-4 w-4" /> : <Tv className="h-4 w-4" />}
+            </Button>
+
+            {/* Export PDF Button */}
+            <Button
+              variant="secondary"
+              size="sm"
+              className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white gap-1.5 text-xs font-medium h-9"
+              onClick={handleExportPdf}
+              title="Print or Save as PDF"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Export PDF</span>
+            </Button>
+
+            {/* Share Button */}
+            <Button
+              variant="secondary"
+              size="sm"
+              className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white gap-1.5 text-xs font-medium h-9"
+              onClick={() => setIsShareModalOpen(true)}
+              title="Share dashboard link"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Share</span>
+            </Button>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -361,7 +606,7 @@ export default function DashboardViewer({
                   variant="secondary"
                   size="icon"
                   aria-label="Dashboard settings"
-                  className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white"
+                  className="bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white h-9 w-9"
                 >
                   <Settings className="h-4 w-4" />
                 </Button>
@@ -371,12 +616,16 @@ export default function DashboardViewer({
                   <LayoutDashboard className="h-4 w-4 mr-2" />
                   {isEditing ? 'Exit Edit Mode' : 'Edit Dashboard'}
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setIsKioskMode(prev => !prev)}>
+                  <Tv className="h-4 w-4 mr-2" />
+                  {isKioskMode ? 'Exit Presentation Mode' : 'Presentation Mode (F)'}
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem disabled>
+                <DropdownMenuItem onClick={handleExportPdf}>
                   <Download className="h-4 w-4 mr-2" />
                   Export as PDF
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled>
+                <DropdownMenuItem onClick={() => setIsShareModalOpen(true)}>
                   <Share2 className="h-4 w-4 mr-2" />
                   Share Dashboard
                 </DropdownMenuItem>
@@ -589,6 +838,10 @@ export default function DashboardViewer({
         onAddWidget={() => setIsWidgetLibraryOpen(true)}
         onUpdateLayout={newWidgets => setLocalWidgets(newWidgets)}
         onRemoveWidget={widgetId => setLocalWidgets(prev => prev.filter(w => w.id !== widgetId))}
+        onConfigureWidget={widgetId => {
+          const w = localWidgets.find(item => item.id === widgetId);
+          if (w) setConfiguringWidget(w);
+        }}
       />
 
       {/* Edit Mode Footer */}
@@ -689,6 +942,26 @@ export default function DashboardViewer({
         onClose={() => setIsWidgetLibraryOpen(false)}
         onAddWidget={handleAddWidget}
         existingWidgetDefIds={existingWidgetDefIds}
+      />
+
+      {/* Share Modal */}
+      <DashboardShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        dashboardId={dashboardId}
+        dashboardName={dashboardTitle}
+        isTemplate={isTemplate}
+        currentVisibility={currentVisibility}
+        currentFilters={currentFilters}
+        onVisibilityChange={setCurrentVisibility}
+      />
+
+      {/* Widget Configuration Modal */}
+      <WidgetConfigModal
+        isOpen={!!configuringWidget}
+        onClose={() => setConfiguringWidget(null)}
+        widget={configuringWidget}
+        onSave={handleSaveWidgetConfig}
       />
     </div>
   );
