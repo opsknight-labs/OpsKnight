@@ -29,6 +29,23 @@ request identifier, actor, attempted transition, and timestamps.
    stale/conflicting transition, and `5xx` requires server and worker inspection.
 4. Inspect queued side effects only after confirming the database transition.
 
+| Canonical status | Audit/timeline | Downstream work | Conclusion |
+| --- | --- | --- | --- |
+| unchanged | no accepted action | none | authorization, validation, or conflict before mutation |
+| changed | matching audit entry | pending | mutation succeeded; diagnose the responsible worker lane |
+| changed | matching audit entry | complete | client/cache is stale; reload canonical incident |
+| changed unexpectedly | actor/request does not match | another responder or automation won the race |
+
+Before retrying, copy the incident ID and reload it in a new request. A `409`
+normally means the command was based on stale state, not that the database is
+stuck. If another responder already acknowledged or resolved it, do not force the
+old transition.
+
+For ChatOps actions, compare the button response with the canonical web incident
+and audit actor. Expired or duplicate interaction callbacks should not be
+replayed manually. For API clients, reuse an idempotency key only for an exact
+retry of the same logical command; a different action needs a different key.
+
 If status changed but notifications did not, follow the notification runbook;
 repeating the lifecycle action can create unnecessary downstream work. If status
 did not change, verify the requested transition is legal from the current state
