@@ -18,22 +18,61 @@ import type { WidgetType } from '@/lib/reports/widget-registry';
  * Get the data for a specific metric key from the metrics object
  */
 export function getMetricData(metrics: SerializedSLAMetrics, metricKey: string): unknown {
-  // Handle nested keys like 'user.name'
-  if (metricKey.includes('.')) {
-    return metricKey.split('.').reduce<unknown>((obj, key) => {
-      if (obj && typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, key)) {
-        // eslint-disable-next-line security/detect-object-injection
-        return (obj as Record<string, unknown>)[key];
+  switch (metricKey) {
+    case 'totalIncidents':
+      return metrics.totalIncidents;
+    case 'activeIncidents':
+      return metrics.activeIncidents;
+    case 'highUrgencyCount':
+      return metrics.highUrgencyCount;
+    case 'mttd':
+    case 'mtta':
+      return metrics.mttd;
+    case 'mttr':
+      return metrics.mttr;
+    case 'ackRate':
+      return metrics.ackRate;
+    case 'resolveRate':
+      return metrics.resolveRate;
+    case 'ackCompliance':
+      return metrics.ackCompliance;
+    case 'resolveCompliance':
+      return metrics.resolveCompliance;
+    case 'trendSeries':
+    case 'incidentTrend':
+      return metrics.trendSeries;
+    case 'heatmapData':
+      return metrics.heatmapData;
+    case 'urgencyMix':
+    case 'incidentsByUrgency':
+    case 'urgencyDistribution':
+      return metrics.urgencyMix;
+    case 'statusMix':
+    case 'incidentsByStatus':
+    case 'statusDistribution':
+      return metrics.statusMix;
+    case 'topServices':
+    case 'topServicesChart':
+      return metrics.topServices;
+    case 'assigneeLoad':
+    case 'assigneeLoadChart':
+      return metrics.assigneeLoad;
+    case 'serviceMetrics':
+      return metrics.serviceMetrics;
+    case 'onCallLoad':
+      return metrics.onCallLoad;
+    case 'recurringTitles':
+      return metrics.recurringTitles;
+    case 'serviceSlaTable':
+      return metrics.serviceSlaTable;
+    case 'currentShifts':
+      return metrics.currentShifts;
+    default:
+      if (typeof metrics === 'object' && metrics !== null) {
+        return Reflect.get(metrics, metricKey);
       }
       return undefined;
-    }, metrics);
   }
-
-  if (Object.prototype.hasOwnProperty.call(metrics, metricKey)) {
-    // eslint-disable-next-line security/detect-object-injection
-    return (metrics as unknown as Record<string, unknown>)[metricKey];
-  }
-  return undefined;
 }
 
 /**

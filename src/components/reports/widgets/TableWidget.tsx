@@ -13,9 +13,8 @@ import { formatTimeMinutesMs } from '@/lib/time-format';
 
 function resolveNestedPath(obj: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((acc, key) => {
-    if (acc && typeof acc === 'object' && Object.prototype.hasOwnProperty.call(acc, key)) {
-      // eslint-disable-next-line security/detect-object-injection
-      return (acc as Record<string, unknown>)[key];
+    if (acc && typeof acc === 'object') {
+      return Reflect.get(acc, key);
     }
     return undefined;
   }, obj);
@@ -101,62 +100,73 @@ const TableWidget = memo(function TableWidget({ data, metricKey, maxRows = 5 }: 
  * Get column configuration based on metric type
  */
 function getColumnsForMetric(metricKey: string): ColumnConfig[] {
-  const configs: Record<string, ColumnConfig[]> = {
-    topServices: [
-      { key: 'name', label: 'Service' },
-      { key: 'count', label: 'Incidents', align: 'right' },
-    ],
-    assigneeLoad: [
-      { key: 'name', label: 'Assignee' },
-      { key: 'count', label: 'Incidents', align: 'right' },
-    ],
-    serviceMetrics: [
-      { key: 'name', label: 'Service' },
-      { key: 'status', label: 'Status', align: 'center' },
-      { key: 'count', label: 'Incidents', align: 'right' },
-      {
-        key: 'mtta',
-        label: 'MTTA',
-        align: 'right',
-        format: v => (typeof v === 'number' ? formatTimeMinutesMs(v * 60000) : '--'),
-      },
-    ],
-    onCallLoad: [
-      { key: 'name', label: 'User' },
-      {
-        key: 'hoursMs',
-        label: 'Hours',
-        align: 'right',
-        format: v => (typeof v === 'number' ? `${(v / 3600000).toFixed(1)}h` : '--'),
-      },
-      { key: 'incidentCount', label: 'Incidents', align: 'right' },
-    ],
-    recurringTitles: [
-      { key: 'title', label: 'Issue Title' },
-      { key: 'count', label: 'Occurrences', align: 'right' },
-    ],
-    serviceSlaTable: [
-      { key: 'name', label: 'Service' },
-      { key: 'ackRate', label: 'Ack Rate', align: 'right', format: v => v != null ? `${Number(v).toFixed(0)}%` : '–' },
-      {
-        key: 'resolveRate',
-        label: 'Resolve Rate',
-        align: 'right',
-        format: v => v != null ? `${Number(v).toFixed(0)}%` : '–',
-      },
-      { key: 'total', label: 'Total', align: 'right' },
-    ],
-    currentShifts: [
-      { key: 'user.name', label: 'On-Call' },
-      { key: 'schedule.name', label: 'Schedule' },
-    ],
-  };
-
-  // eslint-disable-next-line security/detect-object-injection
-  return configs[metricKey] || [
-    { key: 'name', label: 'Name' },
-    { key: 'count', label: 'Count', align: 'right' },
-  ];
+  switch (metricKey) {
+    case 'topServices':
+      return [
+        { key: 'name', label: 'Service' },
+        { key: 'count', label: 'Incidents', align: 'right' },
+      ];
+    case 'assigneeLoad':
+      return [
+        { key: 'name', label: 'Assignee' },
+        { key: 'count', label: 'Incidents', align: 'right' },
+      ];
+    case 'serviceMetrics':
+      return [
+        { key: 'name', label: 'Service' },
+        { key: 'status', label: 'Status', align: 'center' },
+        { key: 'count', label: 'Incidents', align: 'right' },
+        {
+          key: 'mtta',
+          label: 'MTTA',
+          align: 'right',
+          format: v => (typeof v === 'number' ? formatTimeMinutesMs(v * 60000) : '--'),
+        },
+      ];
+    case 'onCallLoad':
+      return [
+        { key: 'name', label: 'User' },
+        {
+          key: 'hoursMs',
+          label: 'Hours',
+          align: 'right',
+          format: v => (typeof v === 'number' ? `${(v / 3600000).toFixed(1)}h` : '--'),
+        },
+        { key: 'incidentCount', label: 'Incidents', align: 'right' },
+      ];
+    case 'recurringTitles':
+      return [
+        { key: 'title', label: 'Issue Title' },
+        { key: 'count', label: 'Occurrences', align: 'right' },
+      ];
+    case 'serviceSlaTable':
+      return [
+        { key: 'name', label: 'Service' },
+        {
+          key: 'ackRate',
+          label: 'Ack Rate',
+          align: 'right',
+          format: v => (v != null ? `${Number(v).toFixed(0)}%` : '–'),
+        },
+        {
+          key: 'resolveRate',
+          label: 'Resolve Rate',
+          align: 'right',
+          format: v => (v != null ? `${Number(v).toFixed(0)}%` : '–'),
+        },
+        { key: 'total', label: 'Total', align: 'right' },
+      ];
+    case 'currentShifts':
+      return [
+        { key: 'user.name', label: 'On-Call' },
+        { key: 'schedule.name', label: 'Schedule' },
+      ];
+    default:
+      return [
+        { key: 'name', label: 'Name' },
+        { key: 'count', label: 'Count', align: 'right' },
+      ];
+  }
 }
 
 export default TableWidget;
