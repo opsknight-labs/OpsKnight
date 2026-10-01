@@ -1414,4 +1414,63 @@ describe('PushNotificationToggle', () => {
     expect(screen.getByText('Off')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
+
+  it('bypasses unresolved navigator.serviceWorker.ready on iOS even when a waiting worker is present', async () => {
+    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1'
+    );
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('iPhone');
+    Object.defineProperty(navigator, 'standalone', {
+      value: true,
+      configurable: true,
+    });
+
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'default',
+        requestPermission: vi.fn().mockResolvedValue('granted'),
+      },
+      configurable: true,
+    });
+
+    const registration = {
+      active: { scriptURL: `${window.location.origin}/sw.js` },
+      waiting: { scriptURL: `${window.location.origin}/sw.js` },
+      installing: null,
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(null),
+      },
+    };
+
+    // WebKit bug: navigator.serviceWorker.ready never resolves for uncontrolled clients
+    const neverResolvingReady = new Promise<ServiceWorkerRegistration>(() => {});
+
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(registration),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: neverResolvingReady,
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/system/vapid-public-key')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ key: 'B' + 'A'.repeat(86) }),
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    render(<PushNotificationToggle />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Enable/i })).not.toBeDisabled();
+    });
+    expect(screen.getByText('Off')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });

@@ -272,15 +272,11 @@ export default function PushNotificationToggle() {
       stage = 'SW_READY';
       // In iOS WebKit / Safari, navigator.serviceWorker.ready never resolves
       // when the document is not controlled by the service worker, even when an
-      // active worker with PushManager is present. When already active and not
-      // waiting on an update, use the active registration directly.
+      // active worker with PushManager is present. Reusing the active registration
+      // directly avoids hanging indefinitely, even when an update is waiting
+      // (without activating or disturbing the waiting update).
       let readyRegistration: ServiceWorkerRegistration | null = null;
-      if (
-        detectPlatform() === 'ios' &&
-        registration?.active &&
-        registration.pushManager &&
-        !registration.waiting
-      ) {
+      if (detectPlatform() === 'ios' && registration?.active && registration.pushManager) {
         readyRegistration = registration;
       } else {
         readyRegistration = await promiseWithTimeout(
