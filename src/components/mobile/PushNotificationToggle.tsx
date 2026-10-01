@@ -222,14 +222,15 @@ export default function PushNotificationToggle() {
       const prepared = await preparePush();
       preparedPushRef.current = prepared;
       setPreflightReady(true);
-      setPreparing(false);
 
       if (Notification.permission === 'default') {
+        setPreparing(false);
         setPushState('PERMISSION_REQUIRED');
         return;
       }
 
       if (!prepared.subscription) {
+        setPreparing(false);
         setPushState('PERMISSION_REQUIRED');
         return;
       }
@@ -246,15 +247,18 @@ export default function PushNotificationToggle() {
         REQUEST_TIMEOUT_MS
       );
       if (response.status === 401) {
+        setPreparing(false);
         setPushState('AUTH_REQUIRED');
         return;
       }
       if (response.status === 403) {
+        setPreparing(false);
         setPushState('ERROR');
         setError('Your account is not allowed to manage Push notifications.');
         return;
       }
       if (!response.ok) {
+        setPreparing(false);
         setPushState('ERROR');
         setError(
           'Push status could not be verified. Your browser subscription was left unchanged.'
@@ -265,6 +269,7 @@ export default function PushNotificationToggle() {
         deviceRegistered?: boolean;
         accountEnabled?: boolean;
       };
+      setPreparing(false);
       setPushState(data.deviceRegistered && data.accountEnabled ? 'REGISTERED' : 'REPAIR_REQUIRED');
       setError('');
     } catch (stateError) {
@@ -458,7 +463,10 @@ export default function PushNotificationToggle() {
         );
         return;
       }
-      setPushState('PERMISSION_REQUIRED');
+      preparedPushRef.current = null;
+      setPreflightReady(false);
+      setPreparing(true);
+      await checkSupportAndState();
       haptics.selection();
     } catch (unsubscribeError) {
       logger.warn('push.unsubscribe_failed', {
