@@ -36,7 +36,6 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: 'OpsKnight',
   },
-  manifest: '/manifest.json',
 };
 
 export const viewport: Viewport = {
