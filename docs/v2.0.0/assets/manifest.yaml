@@ -67,9 +67,6 @@ assets:
   reports.png:
     evidence: analytics/reports.png
     sha256: 7cd64e6fd5490dc12ffebdc0d904a963bd2e517925b9b7636adcc5c7c4bfe5d4
-  service-objectives.png:
-    evidence: services/service-objectives.png
-    sha256: a56f8a08ff799f64f9c82a1a3289c5d2fc366e00c7d170963a898ceca778df0a
   services.png:
     evidence: services/list.png
     sha256: 73d2c47c630c929544b34a9700bf24b189f96a4d4883aedfdc9d7512697072e8
@@ -79,9 +76,6 @@ assets:
   system-logs.png:
     evidence: operations/system-logs.png
     sha256: d82d3a0113f7da74151a770315123cc896e26b82569137a8c10b7041db46b5fb
-  system-performance.png:
-    evidence: operations/performance.png
-    sha256: 988e2feee8e162e53654583fe4bfa6fb16ace4a58081df53ded03f326293f5fe
   teams.png:
     evidence: teams/list.png
     sha256: 47dc4b54bab97ce17145c83f9e9381637eb25c80af6c37486ba97ab583de52b7

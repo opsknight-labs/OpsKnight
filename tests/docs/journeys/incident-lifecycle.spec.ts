@@ -20,11 +20,17 @@ test.describe.serial('incident lifecycle documentation journey', () => {
     await captureEvidence(page, testInfo, 'incidents', 'acknowledge');
 
     await page.getByText('Timeline', { exact: true }).first().click();
-    await expect(page.getByText(/Incident triggered by production monitoring|acknowledged/i).first()).toBeVisible();
+    const timelineEvent = page.getByText(/Incident triggered by production monitoring|acknowledged/i).first();
+    await expect(timelineEvent).toBeVisible();
+    await timelineEvent.scrollIntoViewIfNeeded();
     await captureEvidence(page, testInfo, 'incidents', 'timeline');
 
-    await page.goto('/incidents/create');
-    await expect(page.locator('#main-content')).toBeVisible();
+    await page.goto('/incidents');
+    await expect(page.getByText(DOCS_FIXTURES.incident).first()).toBeVisible();
+    await page.getByRole('button', { name: /Create incident/i }).first().click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Declare Incident' })).toBeVisible();
+    await expect(page.getByLabel(/Incident Title/)).toBeVisible();
     await captureEvidence(page, testInfo, 'incidents', 'create');
   });
 });

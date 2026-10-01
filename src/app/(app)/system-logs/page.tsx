@@ -137,7 +137,6 @@ export default async function SystemLogsPage({
             name="level"
             defaultValue={params.level || ''}
             className="px-3 py-2 border border-border rounded-md bg-white text-sm"
-            onChange={e => e.currentTarget.form?.submit()}
           >
             <option value="">All Levels</option>
             <option value="error">❌ Errors</option>
