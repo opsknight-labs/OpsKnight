@@ -812,7 +812,7 @@
       "userTask": "Create, verify, assign, and review a privacy request.",
       "status": "READER_COMPLETE",
       "taskPage": true,
-      "screenshotCount": 0,
+      "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
       "humanVerified": false,
       "runtimeVerified": false
@@ -900,7 +900,7 @@
       "userTask": "Create and publish the OpsKnight status page.",
       "status": "READER_COMPLETE",
       "taskPage": true,
-      "screenshotCount": 0,
+      "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
       "humanVerified": false,
       "runtimeVerified": false

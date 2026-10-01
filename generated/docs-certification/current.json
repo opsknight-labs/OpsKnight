@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-01T09:36:57.202Z",
-  "sourceRevision": "c68eaa44008fe43a223a893aeae1e3924b317aef",
-  "documentationRevision": "c68eaa44008fe43a223a893aeae1e3924b317aef",
-  "productSourceRevision": "c68eaa44008fe43a223a893aeae1e3924b317aef",
-  "runtimeSourceRevision": "c68eaa44008fe43a223a893aeae1e3924b317aef",
-  "runtimeImageDigest": "localhost:15000/opsknight-docs-v2@sha256:eee032eb286f8ac5a23ee2ff6cb849a3aa80e35dd9ce9c05bbf56754bda7af99",
+  "generatedAt": "2026-10-01T10:08:02.819Z",
+  "sourceRevision": "84b210b3faa220d136f55336434f8de06fdb8f61",
+  "documentationRevision": "84b210b3faa220d136f55336434f8de06fdb8f61",
+  "productSourceRevision": "84b210b3faa220d136f55336434f8de06fdb8f61",
+  "runtimeSourceRevision": "84b210b3faa220d136f55336434f8de06fdb8f61",
+  "runtimeImageDigest": "localhost:15000/opsknight-docs-v2@sha256:61cb9c50fb53b591feb880006a8c4d3583d21fc64a91aad0c27265f99baa7450",
   "releaseState": "upcoming",
   "checks": {
     "frontmatter": "passed",
@@ -30,16 +30,16 @@
     "capabilitiesDocumented": 22,
     "uiRoutes": 101,
     "apiRoutes": 220,
-    "configurationItems": 315,
+    "configurationItems": 316,
     "integrationCandidates": 28,
     "databaseModels": 120,
     "runtimeRoles": 8,
-    "featureNodes": 1161,
+    "featureNodes": 1162,
     "unclassifiedFeatures": 0,
-    "evidenceBackedClaims": 1606,
+    "evidenceBackedClaims": 1607,
     "unsupportedClaims": 0,
-    "supportedProductFeatures": 631,
-    "documentedSupportedFeatures": 631,
+    "supportedProductFeatures": 632,
+    "documentedSupportedFeatures": 632,
     "undocumentedSupportedFeatures": 0,
     "unresolvedSemanticContracts": 0,
     "missingEvidence": 0,
@@ -100,9 +100,9 @@
       "generated/docs-evidence/current/teams/list.png"
     ],
     "runtime": {
-      "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:eee032eb286f8ac5a23ee2ff6cb849a3aa80e35dd9ce9c05bbf56754bda7af99",
-      "digest": "localhost:15000/opsknight-docs-v2@sha256:eee032eb286f8ac5a23ee2ff6cb849a3aa80e35dd9ce9c05bbf56754bda7af99",
-      "sourceRevision": "c68eaa44008fe43a223a893aeae1e3924b317aef"
+      "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:61cb9c50fb53b591feb880006a8c4d3583d21fc64a91aad0c27265f99baa7450",
+      "digest": "localhost:15000/opsknight-docs-v2@sha256:61cb9c50fb53b591feb880006a8c4d3583d21fc64a91aad0c27265f99baa7450",
+      "sourceRevision": "84b210b3faa220d136f55336434f8de06fdb8f61"
     }
   }
 }
