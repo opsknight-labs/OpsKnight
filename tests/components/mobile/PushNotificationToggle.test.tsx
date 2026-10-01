@@ -92,6 +92,9 @@ describe('PushNotificationToggle', () => {
       render(<PushNotificationToggle />);
 
       await act(async () => {
+        // Let preflight reach navigator.serviceWorker.ready so the readiness
+        // timeout is definitely armed before advancing past the old 8s budget.
+        for (let i = 0; i < 12; i += 1) await Promise.resolve();
         await vi.advanceTimersByTimeAsync(12_000);
         resolveReady(registration);
         for (let i = 0; i < 20; i += 1) await Promise.resolve();
