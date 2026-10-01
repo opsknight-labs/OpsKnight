@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "91f8f4e2dacbdd7624faa52a4f1262a2515ab3fe",
+  "sourceRevision": "da9ee55fc30e5c06bc384895f7f13d79ce83b61d",
   "contracts": [
     {
       "id": "api:/api/events",
@@ -27892,14 +27892,12 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
-        "src/app/api/system/vapid-public-key/route.ts",
-        "src/lib/push.ts"
+        "src/lib/notification-providers.ts"
       ],
       "contract": {
         "name": "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
         "sources": [
-          "src/app/api/system/vapid-public-key/route.ts",
-          "src/lib/push.ts"
+          "src/lib/notification-providers.ts"
         ],
         "required": false,
         "secret": false,
@@ -27922,16 +27920,27 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
-        "guides": [],
+        "concepts": [
+          "concepts/notifications.md"
+        ],
+        "guides": [
+          "guides/notifications/configure-routing.md",
+          "guides/notifications/inspect-delivery.md"
+        ],
         "reference": [
+          "reference/api/README.md",
           "reference/configuration/README.md"
         ],
         "troubleshooting": []
       },
       "documentationMapping": "capability-source",
-      "tests": [],
-      "runtimeEvidence": [],
+      "tests": [
+        "tests/integration/notification-flow.test.ts",
+        "tests/integration/notification-policy-outcomes.test.ts"
+      ],
+      "runtimeEvidence": [
+        "generated/docs-evidence/current/notifications/settings.png"
+      ],
       "introducedVersion": "unknown",
       "availability": "unknown",
       "claims": [
@@ -27939,8 +27948,7 @@
           "id": "configuration:NEXT_PUBLIC_VAPID_PUBLIC_KEY:classification",
           "text": "NEXT_PUBLIC_VAPID_PUBLIC_KEY is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
-            "src/app/api/system/vapid-public-key/route.ts",
-            "src/lib/push.ts"
+            "src/lib/notification-providers.ts"
           ],
           "verification": "source"
         }
@@ -42443,12 +42451,12 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
-        "src/lib/push.ts"
+        "src/lib/notification-providers.ts"
       ],
       "contract": {
         "name": "VAPID_PRIVATE_KEY",
         "sources": [
-          "src/lib/push.ts"
+          "src/lib/notification-providers.ts"
         ],
         "required": false,
         "secret": true,
@@ -42471,16 +42479,27 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
-        "guides": [],
+        "concepts": [
+          "concepts/notifications.md"
+        ],
+        "guides": [
+          "guides/notifications/configure-routing.md",
+          "guides/notifications/inspect-delivery.md"
+        ],
         "reference": [
+          "reference/api/README.md",
           "reference/configuration/README.md"
         ],
         "troubleshooting": []
       },
       "documentationMapping": "capability-source",
-      "tests": [],
-      "runtimeEvidence": [],
+      "tests": [
+        "tests/integration/notification-flow.test.ts",
+        "tests/integration/notification-policy-outcomes.test.ts"
+      ],
+      "runtimeEvidence": [
+        "generated/docs-evidence/current/notifications/settings.png"
+      ],
       "introducedVersion": "unknown",
       "availability": "unknown",
       "claims": [
@@ -42488,7 +42507,7 @@
           "id": "configuration:VAPID_PRIVATE_KEY:classification",
           "text": "VAPID_PRIVATE_KEY is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
-            "src/lib/push.ts"
+            "src/lib/notification-providers.ts"
           ],
           "verification": "source"
         }
@@ -42515,21 +42534,19 @@
       "owner": "privacy",
       "classification": "OPERATOR_FEATURE",
       "sources": [
-        "src/lib/push.ts"
+        "src/lib/notification-providers.ts"
       ],
       "contract": {
         "name": "VAPID_SUBJECT",
         "sources": [
-          "src/lib/push.ts"
+          "src/lib/notification-providers.ts"
         ],
         "required": false,
         "secret": false,
         "scopes": [
           "runtime"
         ],
-        "defaults": [
-          "mailto:admin@localhost"
-        ],
+        "defaults": [],
         "allowedValues": [],
         "type": "string",
         "requiredWhen": "conditional or optional; inspect cited source",
@@ -42542,12 +42559,18 @@
         "restartRequired": true,
         "deprecated": false,
         "replacement": null,
-        "confidence": "derived"
+        "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
-        "guides": [],
+        "concepts": [
+          "concepts/notifications.md"
+        ],
+        "guides": [
+          "guides/notifications/configure-routing.md",
+          "guides/notifications/inspect-delivery.md"
+        ],
         "reference": [
+          "reference/api/README.md",
           "reference/configuration/README.md"
         ],
         "troubleshooting": [
@@ -42555,8 +42578,13 @@
         ]
       },
       "documentationMapping": "capability-source",
-      "tests": [],
-      "runtimeEvidence": [],
+      "tests": [
+        "tests/integration/notification-flow.test.ts",
+        "tests/integration/notification-policy-outcomes.test.ts"
+      ],
+      "runtimeEvidence": [
+        "generated/docs-evidence/current/notifications/settings.png"
+      ],
       "introducedVersion": "unknown",
       "availability": "unknown",
       "claims": [
@@ -42564,7 +42592,7 @@
           "id": "configuration:VAPID_SUBJECT:classification",
           "text": "VAPID_SUBJECT is classified as OPERATOR_FEATURE and owned by privacy.",
           "evidence": [
-            "src/lib/push.ts"
+            "src/lib/notification-providers.ts"
           ],
           "verification": "source"
         }
@@ -52131,7 +52159,7 @@
         "value": 12000,
         "expression": "12_000",
         "source": "src/components/mobile/PushNotificationToggle.tsx",
-        "references": 13,
+        "references": 11,
         "semanticClassification": "SECURITY_OR_PUBLIC_BOUND"
       },
       "documentation": {

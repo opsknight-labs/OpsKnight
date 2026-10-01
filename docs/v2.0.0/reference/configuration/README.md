@@ -2170,7 +2170,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `src/app/api/system/vapid-public-key/route.ts`, `src/lib/push.ts`
+- Sources: `src/lib/notification-providers.ts`
 
 ## `NEXT_RUNTIME`
 
@@ -4480,7 +4480,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `src/lib/push.ts`
+- Sources: `src/lib/notification-providers.ts`
 
 ## `VAPID_SUBJECT`
 
@@ -4492,9 +4492,9 @@ Sets the polling interval while the general queue is idle.
 - Deployment support: runtime
 - Apply behavior: restart required
 - Deprecated: no
-- Extraction confidence: derived
-- Static default: `mailto:admin@localhost`
-- Sources: `src/lib/push.ts`
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/notification-providers.ts`
 
 ## `VERCEL_GIT_COMMIT_SHA`
 

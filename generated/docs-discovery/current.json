@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-01T19:53:01+05:30",
-  "sourceRevision": "91f8f4e2dacbdd7624faa52a4f1262a2515ab3fe",
+  "generatedAt": "2026-10-01T20:32:06+05:30",
+  "sourceRevision": "da9ee55fc30e5c06bc384895f7f13d79ce83b61d",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -13082,7 +13082,10 @@
       "signatureVerification": false,
       "deliveryFencing": false,
       "idempotent": false,
-      "errors": [],
+      "errors": [
+        "PUSH_PROVIDER_UNAVAILABLE",
+        "PUSH_VAPID_NOT_CONFIGURED"
+      ],
       "entities": [
         "notificationProvider",
         "statusPage"
@@ -13226,11 +13229,13 @@
         "src/lib/auth-jwt-encoder.ts",
         "src/lib/auth.ts",
         "src/lib/avatar.ts",
+        "src/lib/encrypted-provider-config.ts",
         "src/lib/encryption.ts",
         "src/lib/errors/index.ts",
         "src/lib/local-auth-policy.ts",
         "src/lib/logger.ts",
         "src/lib/network-security.ts",
+        "src/lib/notification-providers.ts",
         "src/lib/oidc-config.ts",
         "src/lib/oidc-identity-resolution.ts",
         "src/lib/oidc-provider.ts",
@@ -13269,8 +13274,10 @@
         "VALIDATION_FAILED"
       ],
       "entities": [
+        "notificationProvider",
         "oidcConfig",
         "oidcIdentity",
+        "statusPage",
         "systemSettings",
         "user",
         "userDevice"
@@ -18316,8 +18323,7 @@
     {
       "name": "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
       "sources": [
-        "src/app/api/system/vapid-public-key/route.ts",
-        "src/lib/push.ts"
+        "src/lib/notification-providers.ts"
       ],
       "required": false,
       "secret": false,
@@ -22760,7 +22766,7 @@
     {
       "name": "VAPID_PRIVATE_KEY",
       "sources": [
-        "src/lib/push.ts"
+        "src/lib/notification-providers.ts"
       ],
       "required": false,
       "secret": true,
@@ -22785,16 +22791,14 @@
     {
       "name": "VAPID_SUBJECT",
       "sources": [
-        "src/lib/push.ts"
+        "src/lib/notification-providers.ts"
       ],
       "required": false,
       "secret": false,
       "scopes": [
         "runtime"
       ],
-      "defaults": [
-        "mailto:admin@localhost"
-      ],
+      "defaults": [],
       "allowedValues": [],
       "type": "string",
       "requiredWhen": "conditional or optional; inspect cited source",
@@ -22807,7 +22811,7 @@
       "restartRequired": true,
       "deprecated": false,
       "replacement": null,
-      "confidence": "derived"
+      "confidence": "incomplete"
     },
     {
       "name": "VERCEL_GIT_COMMIT_SHA",
@@ -24517,7 +24521,7 @@
       "value": 8000,
       "expression": "8_000",
       "source": "src/components/mobile/MobilePwaCoordinator.tsx",
-      "references": 7,
+      "references": 6,
       "semanticClassification": "INTERNAL_IMPLEMENTATION"
     },
     {
@@ -24562,7 +24566,7 @@
       "value": 12000,
       "expression": "12_000",
       "source": "src/components/mobile/PushNotificationToggle.tsx",
-      "references": 13,
+      "references": 11,
       "semanticClassification": "SECURITY_OR_PUBLIC_BOUND"
     },
     {
@@ -24571,7 +24575,7 @@
       "value": 8000,
       "expression": "8_000",
       "source": "src/components/mobile/PushNotificationToggle.tsx",
-      "references": 7,
+      "references": 6,
       "semanticClassification": "PROVIDER_CONSTRAINT"
     },
     {
@@ -60952,7 +60956,10 @@
           "signatureVerification": false,
           "deliveryFencing": false,
           "idempotent": false,
-          "errors": [],
+          "errors": [
+            "PUSH_PROVIDER_UNAVAILABLE",
+            "PUSH_VAPID_NOT_CONFIGURED"
+          ],
           "entities": [
             "notificationProvider",
             "statusPage"
@@ -61369,11 +61376,13 @@
           "src/lib/auth-jwt-encoder.ts",
           "src/lib/auth.ts",
           "src/lib/avatar.ts",
+          "src/lib/encrypted-provider-config.ts",
           "src/lib/encryption.ts",
           "src/lib/errors/index.ts",
           "src/lib/local-auth-policy.ts",
           "src/lib/logger.ts",
           "src/lib/network-security.ts",
+          "src/lib/notification-providers.ts",
           "src/lib/oidc-config.ts",
           "src/lib/oidc-identity-resolution.ts",
           "src/lib/oidc-provider.ts",
@@ -61396,11 +61405,13 @@
             "src/lib/auth-jwt-encoder.ts",
             "src/lib/auth.ts",
             "src/lib/avatar.ts",
+            "src/lib/encrypted-provider-config.ts",
             "src/lib/encryption.ts",
             "src/lib/errors/index.ts",
             "src/lib/local-auth-policy.ts",
             "src/lib/logger.ts",
             "src/lib/network-security.ts",
+            "src/lib/notification-providers.ts",
             "src/lib/oidc-config.ts",
             "src/lib/oidc-identity-resolution.ts",
             "src/lib/oidc-provider.ts",
@@ -61439,8 +61450,10 @@
             "VALIDATION_FAILED"
           ],
           "entities": [
+            "notificationProvider",
             "oidcConfig",
             "oidcIdentity",
+            "statusPage",
             "systemSettings",
             "user",
             "userDevice"
@@ -61451,11 +61464,14 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/authentication.md"
+            "concepts/authentication.md",
+            "concepts/notifications.md"
           ],
           "guides": [
             "guides/administration/manage-users.md",
-            "guides/identity/configure-oidc.md"
+            "guides/identity/configure-oidc.md",
+            "guides/notifications/configure-routing.md",
+            "guides/notifications/inspect-delivery.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -61467,12 +61483,15 @@
         },
         "documentationMapping": "capability-source",
         "tests": [
+          "tests/integration/notification-flow.test.ts",
+          "tests/integration/notification-policy-outcomes.test.ts",
           "tests/lib/oidc-provider.test.ts",
           "tests/lib/oidc-validation-provider-matrix.test.ts",
           "tests/lib/user-deletion.test.ts"
         ],
         "runtimeEvidence": [
-          "generated/docs-evidence/current/administration/users.png"
+          "generated/docs-evidence/current/administration/users.png",
+          "generated/docs-evidence/current/notifications/settings.png"
         ],
         "introducedVersion": "unknown",
         "availability": "unknown",
@@ -61487,11 +61506,13 @@
               "src/lib/auth-jwt-encoder.ts",
               "src/lib/auth.ts",
               "src/lib/avatar.ts",
+              "src/lib/encrypted-provider-config.ts",
               "src/lib/encryption.ts",
               "src/lib/errors/index.ts",
               "src/lib/local-auth-policy.ts",
               "src/lib/logger.ts",
               "src/lib/network-security.ts",
+              "src/lib/notification-providers.ts",
               "src/lib/oidc-config.ts",
               "src/lib/oidc-identity-resolution.ts",
               "src/lib/oidc-provider.ts",
@@ -61516,11 +61537,13 @@
               "src/lib/auth-jwt-encoder.ts",
               "src/lib/auth.ts",
               "src/lib/avatar.ts",
+              "src/lib/encrypted-provider-config.ts",
               "src/lib/encryption.ts",
               "src/lib/errors/index.ts",
               "src/lib/local-auth-policy.ts",
               "src/lib/logger.ts",
               "src/lib/network-security.ts",
+              "src/lib/notification-providers.ts",
               "src/lib/oidc-config.ts",
               "src/lib/oidc-identity-resolution.ts",
               "src/lib/oidc-provider.ts",
@@ -89379,14 +89402,12 @@
         "owner": "platform",
         "classification": "OPERATOR_FEATURE",
         "sources": [
-          "src/app/api/system/vapid-public-key/route.ts",
-          "src/lib/push.ts"
+          "src/lib/notification-providers.ts"
         ],
         "contract": {
           "name": "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
           "sources": [
-            "src/app/api/system/vapid-public-key/route.ts",
-            "src/lib/push.ts"
+            "src/lib/notification-providers.ts"
           ],
           "required": false,
           "secret": false,
@@ -89409,16 +89430,27 @@
           "confidence": "incomplete"
         },
         "documentation": {
-          "concepts": [],
-          "guides": [],
+          "concepts": [
+            "concepts/notifications.md"
+          ],
+          "guides": [
+            "guides/notifications/configure-routing.md",
+            "guides/notifications/inspect-delivery.md"
+          ],
           "reference": [
+            "reference/api/README.md",
             "reference/configuration/README.md"
           ],
           "troubleshooting": []
         },
         "documentationMapping": "capability-source",
-        "tests": [],
-        "runtimeEvidence": [],
+        "tests": [
+          "tests/integration/notification-flow.test.ts",
+          "tests/integration/notification-policy-outcomes.test.ts"
+        ],
+        "runtimeEvidence": [
+          "generated/docs-evidence/current/notifications/settings.png"
+        ],
         "introducedVersion": "unknown",
         "availability": "unknown",
         "claims": [
@@ -89426,8 +89458,7 @@
             "id": "configuration:NEXT_PUBLIC_VAPID_PUBLIC_KEY:classification",
             "text": "NEXT_PUBLIC_VAPID_PUBLIC_KEY is classified as OPERATOR_FEATURE and owned by platform.",
             "evidence": [
-              "src/app/api/system/vapid-public-key/route.ts",
-              "src/lib/push.ts"
+              "src/lib/notification-providers.ts"
             ],
             "verification": "source"
           }
@@ -103930,12 +103961,12 @@
         "owner": "platform",
         "classification": "OPERATOR_FEATURE",
         "sources": [
-          "src/lib/push.ts"
+          "src/lib/notification-providers.ts"
         ],
         "contract": {
           "name": "VAPID_PRIVATE_KEY",
           "sources": [
-            "src/lib/push.ts"
+            "src/lib/notification-providers.ts"
           ],
           "required": false,
           "secret": true,
@@ -103958,16 +103989,27 @@
           "confidence": "incomplete"
         },
         "documentation": {
-          "concepts": [],
-          "guides": [],
+          "concepts": [
+            "concepts/notifications.md"
+          ],
+          "guides": [
+            "guides/notifications/configure-routing.md",
+            "guides/notifications/inspect-delivery.md"
+          ],
           "reference": [
+            "reference/api/README.md",
             "reference/configuration/README.md"
           ],
           "troubleshooting": []
         },
         "documentationMapping": "capability-source",
-        "tests": [],
-        "runtimeEvidence": [],
+        "tests": [
+          "tests/integration/notification-flow.test.ts",
+          "tests/integration/notification-policy-outcomes.test.ts"
+        ],
+        "runtimeEvidence": [
+          "generated/docs-evidence/current/notifications/settings.png"
+        ],
         "introducedVersion": "unknown",
         "availability": "unknown",
         "claims": [
@@ -103975,7 +104017,7 @@
             "id": "configuration:VAPID_PRIVATE_KEY:classification",
             "text": "VAPID_PRIVATE_KEY is classified as OPERATOR_FEATURE and owned by platform.",
             "evidence": [
-              "src/lib/push.ts"
+              "src/lib/notification-providers.ts"
             ],
             "verification": "source"
           }
@@ -104002,21 +104044,19 @@
         "owner": "privacy",
         "classification": "OPERATOR_FEATURE",
         "sources": [
-          "src/lib/push.ts"
+          "src/lib/notification-providers.ts"
         ],
         "contract": {
           "name": "VAPID_SUBJECT",
           "sources": [
-            "src/lib/push.ts"
+            "src/lib/notification-providers.ts"
           ],
           "required": false,
           "secret": false,
           "scopes": [
             "runtime"
           ],
-          "defaults": [
-            "mailto:admin@localhost"
-          ],
+          "defaults": [],
           "allowedValues": [],
           "type": "string",
           "requiredWhen": "conditional or optional; inspect cited source",
@@ -104029,12 +104069,18 @@
           "restartRequired": true,
           "deprecated": false,
           "replacement": null,
-          "confidence": "derived"
+          "confidence": "incomplete"
         },
         "documentation": {
-          "concepts": [],
-          "guides": [],
+          "concepts": [
+            "concepts/notifications.md"
+          ],
+          "guides": [
+            "guides/notifications/configure-routing.md",
+            "guides/notifications/inspect-delivery.md"
+          ],
           "reference": [
+            "reference/api/README.md",
             "reference/configuration/README.md"
           ],
           "troubleshooting": [
@@ -104042,8 +104088,13 @@
           ]
         },
         "documentationMapping": "capability-source",
-        "tests": [],
-        "runtimeEvidence": [],
+        "tests": [
+          "tests/integration/notification-flow.test.ts",
+          "tests/integration/notification-policy-outcomes.test.ts"
+        ],
+        "runtimeEvidence": [
+          "generated/docs-evidence/current/notifications/settings.png"
+        ],
         "introducedVersion": "unknown",
         "availability": "unknown",
         "claims": [
@@ -104051,7 +104102,7 @@
             "id": "configuration:VAPID_SUBJECT:classification",
             "text": "VAPID_SUBJECT is classified as OPERATOR_FEATURE and owned by privacy.",
             "evidence": [
-              "src/lib/push.ts"
+              "src/lib/notification-providers.ts"
             ],
             "verification": "source"
           }
@@ -114710,7 +114761,7 @@
           "value": 8000,
           "expression": "8_000",
           "source": "src/components/mobile/MobilePwaCoordinator.tsx",
-          "references": 7,
+          "references": 6,
           "semanticClassification": "INTERNAL_IMPLEMENTATION"
         },
         "documentation": {
@@ -114960,7 +115011,7 @@
           "value": 12000,
           "expression": "12_000",
           "source": "src/components/mobile/PushNotificationToggle.tsx",
-          "references": 13,
+          "references": 11,
           "semanticClassification": "SECURITY_OR_PUBLIC_BOUND"
         },
         "documentation": {
@@ -115026,7 +115077,7 @@
           "value": 8000,
           "expression": "8_000",
           "source": "src/components/mobile/PushNotificationToggle.tsx",
-          "references": 7,
+          "references": 6,
           "semanticClassification": "PROVIDER_CONSTRAINT"
         },
         "documentation": {
