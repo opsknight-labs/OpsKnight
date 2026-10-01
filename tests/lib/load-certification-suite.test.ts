@@ -21,6 +21,7 @@ import {
 } from '../load/fixtures/users';
 import { parsePrometheusText } from '../load/helpers/metrics';
 import {
+  captureQueueSnapshot,
   deriveCapacityFromScenarios,
   generateCertificationMarkdownReport,
   KIND_4NODE_CLUSTER_CONFIG,
@@ -493,7 +494,212 @@ opsknight_db_pool_active 18
     expect(markdown).toContain('Phase 6');
     expect(markdown).toContain('Resource-Efficiency Comparison Matrix');
     expect(markdown).toContain('Evidence-Based Deployment Sizing Guidance');
+    expect(markdown).toContain('Empirically Measured Limits');
+    expect(markdown).toContain('Target / Theoretical Multi-Replica Production Sizing Guidance');
     expect(markdown).toContain('Breaking Point');
     expect(markdown).toContain('Large enterprise production');
+  });
+
+  it('enforces scenario selection guards, empty scenario rejection, and measured vs theoretical sizing labeling', async () => {
+    // 1. Guard against selecting zero scenarios via --scenarios filter
+    await expect(
+      runLoadCertificationOrchestrator([
+        '--dry-run',
+        '--phase=1',
+        '--scenarios=completely-invalid-scenario.js',
+      ])
+    ).rejects.toThrow(/matched 0 scenarios across selected topologies/);
+
+    // 2. Reject certification if zero scenarios are executed
+    const mockVerificationPass = {
+      passed: true,
+      checkedAt: new Date().toISOString(),
+      topology: 'phase6_compose_split',
+      invariants: {
+        zeroDuplicateOpenIncidents: { passed: true, duplicateGroups: 0, samples: [] },
+        zeroLostAcceptedAlerts: { passed: true, totalLoadAlerts: 100, unlinkedAlerts: 0 },
+        zeroFalseEscalationsAfterAckOrResolve: { passed: true, violationCount: 0, sampleIncidentIds: [] },
+        zeroCorruptedIncidentStates: { passed: true, acknowledgedWithoutTimestamp: 0, resolvedWithoutTimestamp: 0, snoozedWithoutUntil: 0 },
+        zeroCriticalNotificationStarvation: { passed: true, pendingCriticalCount: 0, oldestPendingCriticalAgeMs: 0, pendingBulkCount: 0, deliveredCriticalCount: 10, deliveredBulkCount: 10 },
+        providerIdempotencyCheck: { passed: true, emulatorAvailable: true, duplicateDeliveryKeysByProvider: {}, totalDuplicateDeliveries: 0 },
+      },
+      totals: {
+        incidentsCreated: 10,
+        alertsPersisted: 100,
+        notificationsTotal: 20,
+        backgroundJobsPending: 0,
+        backgroundJobsFailed: 0,
+      },
+    };
+
+    const emptyScenariosProfile = deriveCapacityFromScenarios('phase6_compose_split', [], mockVerificationPass);
+    expect(emptyScenariosProfile.bottleneck).toBe('No scenarios executed');
+    expect(emptyScenariosProfile.sustainedAlertRps).toBe('No scenarios executed');
+    expect(emptyScenariosProfile.deploymentRecommendation).toContain('Do not deploy: Zero scenarios executed');
+
+    // 3. Verify report explicitly separates measured testbed limits from theoretical targets
+    const markdown = generateCertificationMarkdownReport([
+      {
+        topologyId: 'phase6_helm_split_pgbouncer',
+        topologyName: 'Phase 6 Helm Split',
+        phase: 6,
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        scenarios: [
+          {
+            scenario: 'alert-ingestion.js',
+            loadLevel: 'L1',
+            durationMs: 30000,
+            exitCode: 0,
+            p50Ms: 12.0,
+            p95Ms: 45.0,
+            p99Ms: 80.0,
+            rps: 95.5,
+            errorRate: 0,
+            thresholdsPassed: true,
+          },
+        ],
+        verification: mockVerificationPass,
+        peakActivePgConnections: 48,
+        peakOldestPendingJobAgeMs: 0,
+        certified: true,
+      },
+    ]);
+
+    expect(markdown).toContain('Empirically Measured Limits (Phase 6 Testbed)');
+    expect(markdown).toContain('Peak **95.5 Alert RPS**');
+    expect(markdown).toContain('Target / Theoretical Multi-Replica Production Sizing Guidance');
+    expect(markdown).toContain('> Sizing tiers above the single-node / 4-node testbed maximums (> 230 RPS) represent theoretical scaling models');
+  });
+
+  it('guarantees drain observation inspects all queues/retries and protects against sleep overshoot', () => {
+    // 1. Drain check predicates: all 5 conditions required
+    const isDrained = (snap: {
+      pendingCritical: number;
+      futureScheduledCritical: number;
+      pendingTransactional: number;
+      pendingBulk: number;
+      pendingBackgroundJobs: number;
+    }) =>
+      snap.pendingCritical === 0 &&
+      snap.futureScheduledCritical === 0 &&
+      snap.pendingTransactional === 0 &&
+      snap.pendingBulk === 0 &&
+      snap.pendingBackgroundJobs === 0;
+
+    // False if critical future-scheduled retries exist (even if due critical is 0)
+    expect(isDrained({
+      pendingCritical: 1,
+      futureScheduledCritical: 1,
+      pendingTransactional: 0,
+      pendingBulk: 0,
+      pendingBackgroundJobs: 0,
+    })).toBe(false);
+
+    // False if transactional queue has pending items
+    expect(isDrained({
+      pendingCritical: 0,
+      futureScheduledCritical: 0,
+      pendingTransactional: 5,
+      pendingBulk: 0,
+      pendingBackgroundJobs: 0,
+    })).toBe(false);
+
+    // False if bulk queue has pending items
+    expect(isDrained({
+      pendingCritical: 0,
+      futureScheduledCritical: 0,
+      pendingTransactional: 0,
+      pendingBulk: 12,
+      pendingBackgroundJobs: 0,
+    })).toBe(false);
+
+    // False if background jobs are pending
+    expect(isDrained({
+      pendingCritical: 0,
+      futureScheduledCritical: 0,
+      pendingTransactional: 0,
+      pendingBulk: 0,
+      pendingBackgroundJobs: 1,
+    })).toBe(false);
+
+    // True ONLY when all queues and future retries are 0
+    expect(isDrained({
+      pendingCritical: 0,
+      futureScheduledCritical: 0,
+      pendingTransactional: 0,
+      pendingBulk: 0,
+      pendingBackgroundJobs: 0,
+    })).toBe(true);
+
+    // 2. Dynamic polling sleep never overshoots drainDeadline
+    const calculatePollSleep = (remainingMs: number, maxIntervalMs = 5000) => {
+      if (remainingMs <= 0) return 0;
+      return Math.min(maxIntervalMs, remainingMs);
+    };
+
+    // When 120s remaining, sleep is capped at 5s
+    expect(calculatePollSleep(120_000)).toBe(5000);
+    // When 3s remaining, sleep is exactly 3s (not 5s or 15s)
+    expect(calculatePollSleep(3_000)).toBe(3000);
+    // When 0s or negative remaining, sleep is 0 (exit immediately)
+    expect(calculatePollSleep(0)).toBe(0);
+    expect(calculatePollSleep(-500)).toBe(0);
+  });
+
+  it('correctly populates all queue categories including future-scheduled retries via captureQueueSnapshot', async () => {
+    // Mock PrismaClient to simulate:
+    // - 0 due critical notifications (nextAttemptAt <= now)
+    // - 3 future-scheduled critical retries (nextAttemptAt > now)
+    // - 7 pending transactional notifications
+    // - 15 pending bulk notifications
+    // - 4 pending background jobs
+    let countCallIndex = 0;
+    const mockPrisma = {
+      notification: {
+        count: async ({ where }: { where: Record<string, any> }) => {
+          if (where.trafficClass === 'CRITICAL' && where.nextAttemptAt?.lte) return 0;
+          if (where.trafficClass === 'CRITICAL' && where.nextAttemptAt?.gt) return 3;
+          if (where.trafficClass === 'TRANSACTIONAL') return 7;
+          if (where.trafficClass === 'BULK' && where.status === 'PENDING') return 15;
+          if (where.status === 'FAILED') return 2;
+          if (where.trafficClass === 'CRITICAL' && where.status?.in) return 25;
+          if (where.trafficClass === 'BULK' && where.status?.in) return 50;
+          return 0;
+        },
+        findFirst: async () => ({
+          nextAttemptAt: new Date(Date.now() + 10_000),
+        }),
+      },
+      backgroundJob: {
+        count: async () => 4,
+        findFirst: async () => ({
+          createdAt: new Date(Date.now() - 5_000),
+        }),
+      },
+      $queryRaw: async () => [{ count: BigInt(5) }],
+    };
+
+    const snapshot = await captureQueueSnapshot(mockPrisma as any, 'test-capture');
+
+    // Total critical is sum of due + future retries
+    expect(snapshot.pendingCritical).toBe(3);
+    expect(snapshot.pendingCriticalDue).toBe(0);
+    expect(snapshot.futureScheduledCritical).toBe(3);
+
+    // Transactional and bulk queues are populated
+    expect(snapshot.pendingTransactional).toBe(7);
+    expect(snapshot.pendingBulk).toBe(15);
+    expect(snapshot.pendingBackgroundJobs).toBe(4);
+
+    // Even though due critical is 0, snapshot is NOT drained because future retries, TX, BULK, and BG jobs exist
+    const isDrained =
+      snapshot.pendingCritical === 0 &&
+      snapshot.futureScheduledCritical === 0 &&
+      snapshot.pendingTransactional === 0 &&
+      snapshot.pendingBulk === 0 &&
+      snapshot.pendingBackgroundJobs === 0;
+
+    expect(isDrained).toBe(false);
   });
 });

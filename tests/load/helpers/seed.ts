@@ -167,6 +167,15 @@ export async function runLoadSeed(options?: {
 
   const prisma = new PrismaClient();
   try {
+    for (let attempt = 1; attempt <= 15; attempt++) {
+      try {
+        await prisma.$queryRaw`SELECT 1`;
+        break;
+      } catch (err) {
+        if (attempt === 15) throw err;
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
     const teams = buildTeamFixtures(scale);
     const users = buildUserFixtures(scale, endpoints.pushBaseUrl);
     const schedules = buildScheduleFixtures(scale, users);
