@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { NextRequest } from 'next/server';
 import { GET as getServiceProviderConfig } from '@/app/api/scim/v2/ServiceProviderConfig/route';
 import { GET as getResourceTypes } from '@/app/api/scim/v2/ResourceTypes/route';
+import { GET as getResourceTypeById } from '@/app/api/scim/v2/ResourceTypes/[id]/route';
 import { GET as getSchemas } from '@/app/api/scim/v2/Schemas/route';
+import { GET as getSchemaById } from '@/app/api/scim/v2/Schemas/[id]/route';
 
 describe('SCIM Discovery Metadata Endpoints', () => {
   it('returns compliant ServiceProviderConfig metadata', async () => {
@@ -44,6 +46,23 @@ describe('SCIM Discovery Metadata Endpoints', () => {
     );
   });
 
+  it('returns single ResourceType by id and 404 for unknown type', async () => {
+    const req = new NextRequest('https://ops.example.com/api/scim/v2/ResourceTypes/Group');
+    const res = await getResourceTypeById(req, { params: Promise.resolve({ id: 'Group' }) });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.id).toBe('Group');
+    expect(body.endpoint).toBe('/Groups');
+
+    const notFoundReq = new NextRequest(
+      'https://ops.example.com/api/scim/v2/ResourceTypes/Unknown'
+    );
+    const notFoundRes = await getResourceTypeById(notFoundReq, {
+      params: Promise.resolve({ id: 'Unknown' }),
+    });
+    expect(notFoundRes.status).toBe(404);
+  });
+
   it('returns compliant Schemas metadata listing User and Group schemas', async () => {
     const req = new NextRequest('https://ops.example.com/api/scim/v2/Schemas');
     const res = await getSchemas(req);
@@ -65,5 +84,25 @@ describe('SCIM Discovery Metadata Endpoints', () => {
         }),
       ])
     );
+  });
+
+  it('returns single Schema by id and 404 for unknown schema', async () => {
+    const schemaUri = 'urn:ietf:params:scim:schemas:core:2.0:Group';
+    const req = new NextRequest(
+      `https://ops.example.com/api/scim/v2/Schemas/${encodeURIComponent(schemaUri)}`
+    );
+    const res = await getSchemaById(req, {
+      params: Promise.resolve({ id: encodeURIComponent(schemaUri) }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.id).toBe(schemaUri);
+    expect(body.name).toBe('Group');
+
+    const notFoundReq = new NextRequest('https://ops.example.com/api/scim/v2/Schemas/invalid');
+    const notFoundRes = await getSchemaById(notFoundReq, {
+      params: Promise.resolve({ id: 'invalid' }),
+    });
+    expect(notFoundRes.status).toBe(404);
   });
 });

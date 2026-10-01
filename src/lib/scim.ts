@@ -210,9 +210,16 @@ export async function revealScimToken(): Promise<string | null> {
 }
 
 export function scimError(status: number, detail: string) {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/scim+json; charset=utf-8',
+    'Cache-Control': 'no-store',
+  };
+  if (status === 401) {
+    headers['WWW-Authenticate'] = 'Bearer error="invalid_token"';
+  }
   return Response.json(
     { schemas: [SCIM_ERROR_SCHEMA], status: String(status), detail },
-    { status, headers: { 'Cache-Control': 'no-store' } }
+    { status, headers }
   );
 }
 

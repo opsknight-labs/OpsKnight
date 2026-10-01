@@ -108,6 +108,8 @@ describe('SCIM Groups HTTP lifecycle', () => {
       const unauthReq = new NextRequest('https://ops.example.com/api/scim/v2/Groups');
       const res = await listGroups(unauthReq);
       expect(res.status).toBe(401);
+      expect(res.headers.get('content-type')).toContain('application/scim+json');
+      expect(res.headers.get('www-authenticate')).toContain('Bearer');
       const data = await res.json();
       expect(data.schemas).toContain('urn:ietf:params:scim:api:messages:2.0:Error');
     });
@@ -118,6 +120,7 @@ describe('SCIM Groups HTTP lifecycle', () => {
       });
       const res = await listGroups(invalidReq);
       expect(res.status).toBe(401);
+      expect(res.headers.get('www-authenticate')).toContain('Bearer');
     });
   });
 
@@ -218,6 +221,7 @@ describe('SCIM Groups HTTP lifecycle', () => {
       );
 
       expect(res.status).toBe(201);
+      expect(res.headers.get('location')).toBe('https://ops.example.com/api/scim/v2/Groups/team-1');
       expect(txMock.team.create).toHaveBeenCalledWith({
         data: {
           name: 'Platform Engineering',

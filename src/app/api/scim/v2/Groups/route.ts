@@ -145,11 +145,13 @@ export async function POST(request: NextRequest) {
     });
 
     const baseUrl = request.nextUrl.origin;
+    const location = `${baseUrl}/api/scim/v2/Groups/${team.id}`;
     return Response.json(serializeScimGroup(team, baseUrl), {
       status: 201,
       headers: {
         'Content-Type': 'application/scim+json; charset=utf-8',
         'Cache-Control': 'no-store',
+        Location: location,
       },
     });
   } catch (error) {
