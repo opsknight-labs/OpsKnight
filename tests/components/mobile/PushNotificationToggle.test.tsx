@@ -100,7 +100,7 @@ describe('PushNotificationToggle', () => {
           subscribe: vi.fn(),
         },
       };
-      let resolveReady!: (registration: typeof registration) => void;
+      let resolveReady!: (value: typeof registration) => void;
       const ready = new Promise<typeof registration>(resolve => {
         resolveReady = resolve;
       });
