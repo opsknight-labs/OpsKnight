@@ -435,11 +435,13 @@ export default function ScimSettingsSection({
                 </li>
                 <li>
                   Under <strong>Mappings</strong>: Keep <em>Provision Microsoft Entra ID Users</em>{' '}
-                  <strong>Enabled</strong> and set <em>Provision Microsoft Entra ID Groups</em> to{' '}
-                  <strong>Disabled</strong> (group roles are mapped through OIDC token claims).
+                  <strong>Enabled</strong>. You can also enable{' '}
+                  <em>Provision Microsoft Entra ID Groups</em> to automatically synchronize security
+                  groups directly into OpsKnight Teams and roster memberships!
                 </li>
                 <li>
-                  Use <strong>Provision on demand</strong> to test an individual user immediately!
+                  Use <strong>Provision on demand</strong> to test an individual user or group
+                  immediately!
                 </li>
               </ol>
             </div>
@@ -482,6 +484,10 @@ export default function ScimSettingsSection({
                 <li>
                   Enable <strong>Create Users</strong>, <strong>Update User Attributes</strong>, and{' '}
                   <strong>Deactivate Users</strong>.
+                </li>
+                <li>
+                  Under <strong>Push Groups</strong>, link any Okta groups to automatically create
+                  and synchronize OpsKnight Teams and roster memberships in real time!
                 </li>
               </ol>
             </div>
