@@ -225,4 +225,31 @@ describe('DashboardViewer Component', () => {
     expect(screen.queryByText(/Editing mode/i)).toBeNull();
     expect(screen.getByText('Executive Operations')).toBeDefined();
   });
+
+  it('renders editing footer with dashboard-edit-footer class and opens widget library via Add Widget button', async () => {
+    const { container } = render(<DashboardViewer {...defaultProps} />);
+
+    // Enter edit mode
+    const settingsButton = screen.getByRole('button', { name: 'Dashboard settings' });
+    fireEvent.pointerDown(settingsButton, { button: 0 });
+    const editMenuItem = await screen.findByText(/Edit Dashboard/i);
+    fireEvent.click(editMenuItem);
+
+    // Verify footer has dashboard-edit-footer class to respect sidebar offset
+    const editFooter = screen.getByTestId('dashboard-edit-footer');
+    expect(editFooter).toBeDefined();
+    expect(editFooter.className).toContain('dashboard-edit-footer');
+
+    // Verify container has bottom padding to prevent content overlap
+    const rootContainer = container.firstElementChild as HTMLElement;
+    expect(rootContainer.className).toContain('pb-28');
+
+    // Click Add Widget in footer
+    const addWidgetButton = screen.getByRole('button', { name: /add widget/i });
+    fireEvent.click(addWidgetButton);
+
+    // Widget Library modal should open
+    expect(screen.getByText('Widget Library')).toBeDefined();
+    expect(screen.getByText('Choose widgets to add to your dashboard')).toBeDefined();
+  });
 });

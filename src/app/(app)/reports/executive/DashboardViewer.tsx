@@ -34,7 +34,10 @@ import {
   Plus,
   Trash2,
   Loader2,
+  Pencil,
+  Check,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { SerializedSLAMetrics } from '@/lib/sla';
 import type { DashboardTemplate } from '@/lib/reports/dashboard-templates';
 import type { WidgetDefinition } from '@/lib/reports/widget-registry';
@@ -286,7 +289,7 @@ export default function DashboardViewer({
   };
 
   return (
-    <div className="w-full px-4 py-6 space-y-6">
+    <div className={cn('w-full px-4 py-6 space-y-6 transition-all', isEditing && 'pb-28')}>
       {/* Header */}
       <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
@@ -308,19 +311,22 @@ export default function DashboardViewer({
                 )}
               </div>
               {isEditing && dashboardId ? (
-                <div className="space-y-1.5 mt-1 max-w-lg">
-                  <input
-                    type="text"
-                    value={dashboardTitle}
-                    onChange={e => setDashboardTitle(e.target.value)}
-                    className="text-xl md:text-2xl font-bold bg-zinc-900 border border-zinc-700 rounded px-2.5 py-1 text-white w-full focus:outline-none focus:ring-1 focus:ring-primary"
-                    placeholder="Dashboard title"
-                  />
+                <div className="space-y-2 mt-1 max-w-lg">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={dashboardTitle}
+                      onChange={e => setDashboardTitle(e.target.value)}
+                      className="text-xl md:text-2xl font-bold bg-black/40 border border-white/20 rounded-lg px-3 py-1.5 text-white w-full focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary placeholder-white/40 transition-all shadow-inner"
+                      placeholder="Dashboard title"
+                    />
+                    <Pencil className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40 pointer-events-none" />
+                  </div>
                   <input
                     type="text"
                     value={dashboardDesc}
                     onChange={e => setDashboardDesc(e.target.value)}
-                    className="text-xs md:text-sm text-zinc-300 bg-zinc-900 border border-zinc-700 rounded px-2.5 py-1 w-full focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="text-xs md:text-sm text-zinc-200 bg-black/40 border border-white/20 rounded-lg px-3 py-1.5 w-full focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary placeholder-white/40 transition-all shadow-inner"
                     placeholder="Dashboard description"
                   />
                 </div>
@@ -566,57 +572,92 @@ export default function DashboardViewer({
 
       {/* Edit Mode Footer */}
       {isEditing && (
-        <div className="fixed bottom-0 left-0 right-0 bg-card border-t p-4 flex items-center justify-between shadow-lg z-50">
-          <div className="flex items-center gap-4">
-            <div className="text-sm text-muted-foreground">
-              Editing mode - {localWidgets.length} widgets
+        <div
+          data-testid="dashboard-edit-footer"
+          className="dashboard-edit-footer bg-card/95 backdrop-blur-md border-t border-border shadow-2xl transition-[left] duration-200 ease-in-out"
+          style={{
+            paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))',
+          }}
+        >
+          <div className="w-full px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
+            {/* Left section: Editor Status Badge, Widget Count & Add Widget Button */}
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5">
+              <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 text-xs font-semibold select-none">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                </span>
+                <span>Editing mode - {localWidgets.length} widgets</span>
+              </div>
+
+              <Button
+                type="button"
+                size="sm"
+                className="gap-1.5 font-medium shadow-xs bg-primary hover:bg-primary/90 text-primary-foreground transition-all hover:scale-[1.02] active:scale-[0.98]"
+                onClick={() => setIsWidgetLibraryOpen(true)}
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add Widget</span>
+              </Button>
             </div>
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => setIsWidgetLibraryOpen(true)}
-            >
-              <Plus className="h-4 w-4" />
-              Add Widget
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            {isDirty && (
-              <span className="text-xs text-amber-400 self-center mr-1">Unsaved changes</span>
-            )}
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDashboardTitle(dashboardName);
-                setDashboardDesc(dashboardDescription);
-                setLocalWidgets(savedBaseline);
-                setIsEditing(false);
-              }}
-            >
-              Cancel
-            </Button>
-            {dashboardId ? (
+
+            {/* Right section: Unsaved Changes, Cancel & Save Changes / Done Buttons */}
+            <div className="flex items-center justify-end gap-2 sm:gap-2.5">
+              {isDirty && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-xs font-medium text-amber-600 dark:text-amber-400 animate-in fade-in duration-150">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  <span>Unsaved changes</span>
+                </div>
+              )}
+
               <Button
-                className="gap-2"
-                onClick={handleSaveChanges}
-                disabled={isSaving || !isDirty}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setDashboardTitle(dashboardName);
+                  setDashboardDesc(dashboardDescription);
+                  setLocalWidgets(savedBaseline);
+                  setIsEditing(false);
+                }}
+                disabled={isSaving}
+                className="hover:bg-muted"
               >
-                {isSaving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                {isSaving ? 'Saving...' : 'Save Changes'}
+                Cancel
               </Button>
-            ) : (
-              <Button
-                className="gap-2"
-                onClick={() => setIsEditing(false)}
-              >
-                <Save className="h-4 w-4" />
-                Done
-              </Button>
-            )}
+
+              {dashboardId ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="gap-2 font-medium shadow-xs min-w-[125px]"
+                  onClick={handleSaveChanges}
+                  disabled={isSaving || !isDirty}
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      <span>Save Changes</span>
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="gap-2 font-medium shadow-xs"
+                  onClick={() => setIsEditing(false)}
+                >
+                  <Check className="h-4 w-4" />
+                  <span>Done</span>
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       )}
