@@ -37,7 +37,9 @@ function PriorityPill({
   priority?: string | null;
   urgency?: string | null;
 }) {
-  const p = priority?.toUpperCase() || (urgency === 'HIGH' ? 'HIGH' : urgency ? urgency.toUpperCase() : 'ALERT');
+  const p =
+    priority?.toUpperCase() ||
+    (urgency === 'HIGH' ? 'HIGH' : urgency ? urgency.toUpperCase() : 'ALERT');
   const color =
     p === 'P1' || p === 'HIGH'
       ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-950/80 dark:text-rose-300 dark:border-rose-800/60'
@@ -56,12 +58,45 @@ function PriorityPill({
   );
 }
 
-function getPriorityBorder(priority?: string | null, urgency?: string | null): string {
+function getPriorityTheme(priority?: string | null, urgency?: string | null) {
   const p = priority?.toUpperCase();
-  if (p === 'P1' || (!p && urgency === 'HIGH')) return 'bg-rose-600';
-  if (p === 'P2' || (!p && urgency === 'MEDIUM')) return 'bg-amber-500';
-  if (p === 'P3' || (!p && urgency === 'LOW')) return 'bg-blue-500';
-  return 'bg-slate-500';
+  const u = urgency?.toUpperCase();
+  if (p === 'P1' || (!p && u === 'HIGH') || u === 'HIGH') {
+    return {
+      bar: 'bg-rose-600',
+      dotPing: 'bg-rose-400',
+      dot: 'bg-rose-600',
+      viewLink: 'text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300',
+      badgeText: 'text-rose-600 dark:text-rose-400',
+    };
+  }
+  if (p === 'P2' || (!p && u === 'MEDIUM') || u === 'MEDIUM') {
+    return {
+      bar: 'bg-amber-500',
+      dotPing: 'bg-amber-400',
+      dot: 'bg-amber-500',
+      viewLink: 'text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300',
+      badgeText: 'text-amber-600 dark:text-amber-400',
+    };
+  }
+  return {
+    bar: 'bg-blue-500',
+    dotPing: 'bg-blue-400',
+    dot: 'bg-blue-500',
+    viewLink: 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300',
+    badgeText: 'text-blue-600 dark:text-blue-400',
+  };
+}
+
+function formatTimeAgo(dateInput?: Date | string | null): string {
+  if (!dateInput) return 'Just now';
+  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  const ms = Date.now() - date.getTime();
+  if (isNaN(ms) || ms < 60000) return 'Just now';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  return `${hours}h ago`;
 }
 
 export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: IncidentAlertToastProps) {
@@ -84,7 +119,9 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
 
   // Compact Single Incident Alert Card
   if (!isMultiple) {
-    const barBg = getPriorityBorder(primaryIncident.priority, primaryIncident.urgency);
+    const theme = getPriorityTheme(primaryIncident.priority, primaryIncident.urgency);
+    const elapsed = formatTimeAgo(primaryIncident.createdAt);
+    const isAcked = primaryIncident.status === 'ACKNOWLEDGED';
 
     return (
       <div
@@ -94,14 +131,19 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
         )}
       >
         {/* Left priority accent stripe */}
-        <div className={cn('absolute left-0 top-0 bottom-0 w-1', barBg)} />
+        <div className={cn('absolute left-0 top-0 bottom-0 w-1', theme.bar)} />
 
         <div className="pl-3.5 pr-2.5 py-2.5 flex items-start gap-2.5">
           {/* Pulsing Beacon */}
           <div className="pt-1 shrink-0">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600" />
+              <span
+                className={cn(
+                  'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75',
+                  theme.dotPing
+                )}
+              />
+              <span className={cn('relative inline-flex rounded-full h-2 w-2', theme.dot)} />
             </span>
           </div>
 
@@ -129,13 +171,16 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
                 <Link
                   href={`/incidents/${primaryIncident.id}`}
                   onClick={() => sonnerToast.dismiss(toastId)}
-                  className="inline-flex items-center gap-0.5 font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 transition-colors"
+                  className={cn(
+                    'inline-flex items-center gap-0.5 font-bold transition-colors',
+                    theme.viewLink
+                  )}
                 >
                   <span>View</span>
                   <ArrowUpRight size={11} className="shrink-0" />
                 </Link>
 
-                {onAcknowledge && (
+                {onAcknowledge && !isAcked && (
                   <button
                     type="button"
                     onClick={() => handleAck(primaryIncident.id)}
@@ -152,7 +197,9 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
                 )}
               </div>
 
-              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Just now</span>
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                {elapsed}
+              </span>
             </div>
           </div>
 
@@ -173,6 +220,18 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
     );
   }
 
+  const hasCritical = incidents.some(
+    i => i.priority === 'P1' || i.urgency?.toUpperCase() === 'HIGH'
+  );
+  const hasWarning = incidents.some(
+    i => i.priority === 'P2' || i.urgency?.toUpperCase() === 'MEDIUM'
+  );
+  const multiTheme = hasCritical
+    ? getPriorityTheme('P1', 'HIGH')
+    : hasWarning
+      ? getPriorityTheme('P2', 'MEDIUM')
+      : getPriorityTheme('P3', 'LOW');
+
   // Compact Multiple Incidents Alert Card
   return (
     <div
@@ -182,17 +241,27 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
       )}
     >
       {/* Left accent bar */}
-      <div className="absolute left-0 top-0 bottom-0 w-1 bg-rose-600" />
+      <div className={cn('absolute left-0 top-0 bottom-0 w-1', multiTheme.bar)} />
 
       <div className="p-2.5">
         {/* Header */}
         <div className="pl-1.5 pr-0.5 flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-100 dark:border-slate-800/80">
           <div className="flex items-center gap-1.5">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600" />
+              <span
+                className={cn(
+                  'animate-ping absolute inline-flex h-full w-full rounded-full opacity-75',
+                  multiTheme.dotPing
+                )}
+              />
+              <span className={cn('relative inline-flex rounded-full h-2 w-2', multiTheme.dot)} />
             </span>
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+            <span
+              className={cn(
+                'text-[10px] font-extrabold uppercase tracking-wider',
+                multiTheme.badgeText
+              )}
+            >
               {incidents.length} New Incidents
             </span>
           </div>
@@ -242,7 +311,10 @@ export function IncidentAlertToast({ toastId, incidents, onAcknowledge }: Incide
           <Link
             href="/incidents"
             onClick={() => sonnerToast.dismiss(toastId)}
-            className="inline-flex items-center gap-0.5 font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 transition-colors"
+            className={cn(
+              'inline-flex items-center gap-0.5 font-bold transition-colors',
+              multiTheme.viewLink
+            )}
           >
             <span>View board</span>
             <ArrowUpRight size={11} className="shrink-0" />
