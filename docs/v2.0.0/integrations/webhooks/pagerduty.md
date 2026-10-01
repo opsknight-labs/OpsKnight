@@ -4,6 +4,7 @@ description: Connect PagerDuty Events API alerts to OpsKnight incident ingestion
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+reader: { status: READER_COMPLETE, task: "Connect PagerDuty lifecycle events and verify trigger acknowledge and resolve correlation." }
 keywords: ["PagerDuty Events API webhook", "connect PagerDuty Events API", "PagerDuty Events API alerts", "PagerDuty Events API integration"]
 verification:
   level: source

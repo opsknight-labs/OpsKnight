@@ -4,6 +4,7 @@ description: Connect Vercel alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+reader: { status: READER_COMPLETE, task: "Connect Vercel deployment webhooks and verify failure and success correlation." }
 keywords: ["Vercel webhook", "connect Vercel", "Vercel alerts", "Vercel integration"]
 verification:
   level: source
