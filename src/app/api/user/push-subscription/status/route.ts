@@ -8,6 +8,7 @@ import { logger, withRequestContext } from '@/lib/logger';
 import { AppError, isAppError } from '@/lib/errors';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { webPushDeviceKey } from '@/lib/web-push-subscription';
+import { getPushConfig } from '@/lib/notification-providers';
 
 const SubscriptionStatusSchema = z
   .object({
@@ -45,13 +46,19 @@ async function checkStatus(req: NextRequest) {
     }
 
     const endpoint = parsed.data.endpoint;
-    const [user, totalDevices] = await Promise.all([
+    const [user, totalDevices, pushConfig] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         select: { pushNotificationsEnabled: true },
       }),
       prisma.userDevice.count({ where: { userId, platform: 'web' } }),
+      getPushConfig(),
     ]);
+
+    const providerConfigured =
+      pushConfig.enabled &&
+      pushConfig.provider === 'web-push' &&
+      Boolean(pushConfig.vapidPublicKey && pushConfig.vapidPrivateKey);
 
     let deviceRegistered = false;
     if (endpoint) {
@@ -70,6 +77,7 @@ async function checkStatus(req: NextRequest) {
       accountEnabled: user?.pushNotificationsEnabled ?? false,
       deviceRegistered,
       totalDevices,
+      providerConfigured,
     });
   } catch (error) {
     logger.error('push.subscription.status_check_failed', {
