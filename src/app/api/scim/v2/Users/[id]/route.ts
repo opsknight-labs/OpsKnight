@@ -22,6 +22,16 @@ function normalizedEmail(value: unknown): string | null {
   return /^\S+@\S+\.\S+$/.test(email) && email.length <= 320 ? email : null;
 }
 
+function parseBoolean(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim().toLowerCase();
+    if (trimmed === 'true') return true;
+    if (trimmed === 'false') return false;
+  }
+  return null;
+}
+
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   if (!isScimRequestAuthorized(request.headers.get('authorization'))) {
     return scimError(401, 'Invalid SCIM bearer token.');
@@ -49,14 +59,42 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   let active = existing.status !== 'DISABLED';
   let name = existing.name;
   for (const operation of body.Operations) {
-    if (String(operation.op).toLowerCase() !== 'replace') {
-      return scimError(400, 'Only replace operations are supported.');
+    const op = String(operation.op ?? '').toLowerCase();
+    if (op !== 'replace' && op !== 'add') {
+      return scimError(400, 'Only add and replace operations are supported.');
     }
-    const path = String(operation.path).toLowerCase();
-    if (path === 'active' && typeof operation.value === 'boolean') active = operation.value;
-    else if (path === 'displayname' && typeof operation.value === 'string')
+    const path = typeof operation.path === 'string' ? operation.path.trim().toLowerCase() : '';
+    if (path === 'active') {
+      const parsed = parseBoolean(operation.value);
+      if (parsed === null) return scimError(400, 'Invalid active boolean value in SCIM patch.');
+      active = parsed;
+    } else if (path === 'displayname' && typeof operation.value === 'string') {
       name = operation.value.trim();
-    else return scimError(400, `Unsupported SCIM patch path: ${String(operation.path)}`);
+    } else if (
+      (path === 'name' || path === 'name.formatted') &&
+      typeof operation.value === 'string'
+    ) {
+      name = operation.value.trim();
+    } else if (
+      (path === 'name' || path === 'name.formatted') &&
+      typeof operation.value === 'object' &&
+      operation.value !== null &&
+      'formatted' in operation.value &&
+      typeof (operation.value as { formatted: unknown }).formatted === 'string'
+    ) {
+      name = ((operation.value as { formatted: string }).formatted || '').trim();
+    } else if (!path && typeof operation.value === 'object' && operation.value !== null) {
+      const valObj = operation.value as Record<string, unknown>;
+      if ('active' in valObj) {
+        const parsed = parseBoolean(valObj.active);
+        if (parsed !== null) active = parsed;
+      }
+      if (typeof valObj.displayName === 'string') {
+        name = valObj.displayName.trim();
+      } else if (typeof valObj['name.formatted'] === 'string') {
+        name = valObj['name.formatted'].trim();
+      }
+    }
   }
   try {
     const user = await updateUserSecurityState(

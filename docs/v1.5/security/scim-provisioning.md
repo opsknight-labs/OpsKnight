@@ -56,14 +56,14 @@ urn:ietf:params:scim:schemas:core:2.0:User
 
 Supported operations:
 
-| Method | Endpoint | Behavior |
-| --- | --- | --- |
-| `GET` | `/Users` | List/search SCIM-managed users. |
-| `POST` | `/Users` | Provision a user. |
-| `GET` | `/Users/{id}` | Read one SCIM resource. |
-| `PUT` | `/Users/{id}` | Replace supported user attributes. |
-| `PATCH` | `/Users/{id}` | Apply supported replace operations. |
-| `DELETE` | `/Users/{id}` | Deprovision the SCIM resource. |
+| Method   | Endpoint      | Behavior                            |
+| -------- | ------------- | ----------------------------------- |
+| `GET`    | `/Users`      | List/search SCIM-managed users.     |
+| `POST`   | `/Users`      | Provision a user.                   |
+| `GET`    | `/Users/{id}` | Read one SCIM resource.             |
+| `PUT`    | `/Users/{id}` | Replace supported user attributes.  |
+| `PATCH`  | `/Users/{id}` | Apply supported replace operations. |
+| `DELETE` | `/Users/{id}` | Deprovision the SCIM resource.      |
 
 OpsKnight currently implements **Users**, not SCIM Groups. Group-to-role lifecycle should therefore be designed around your OIDC role mapping or provider-side user provisioning policy rather than assuming a `/Groups` endpoint exists.
 
@@ -71,14 +71,14 @@ OpsKnight currently implements **Users**, not SCIM Groups. Group-to-role lifecyc
 
 OpsKnight serializes the following main fields:
 
-| SCIM field | OpsKnight meaning |
-| --- | --- |
-| `id` | Stable OpsKnight user ID used as the SCIM resource ID. |
-| `externalId` | Stable external provisioning identifier. |
-| `userName` | User email address. |
-| `displayName` | User display name. |
-| `emails` | Primary work email representation. |
-| `active` | Whether the OpsKnight account is active. |
+| SCIM field    | OpsKnight meaning                                      |
+| ------------- | ------------------------------------------------------ |
+| `id`          | Stable OpsKnight user ID used as the SCIM resource ID. |
+| `externalId`  | Stable external provisioning identifier.               |
+| `userName`    | User email address.                                    |
+| `displayName` | User display name.                                     |
+| `emails`      | Primary work email representation.                     |
+| `active`      | Whether the OpsKnight account is active.               |
 
 `externalId` is immutable for an existing SCIM resource.
 
@@ -103,14 +103,15 @@ Use a stable `externalId` from the identity platform. Do not recycle one person'
 
 `PUT` can update supported replacement fields such as email, display name, and active state.
 
-`PATCH` currently supports replace-style operations for supported paths such as:
+`PATCH` supports `add` and `replace` operations for supported paths such as:
 
 ```text
-active
+active (boolean or string "True"/"False")
 displayName
+name / name.formatted
 ```
 
-Unsupported operations/paths fail explicitly.
+Auxiliary attributes not modeled by OpsKnight are safely ignored per RFC 7644 to prevent breaking identity-provider synchronization cycles. Unsupported operations (such as `remove` on mandatory attributes) fail explicitly.
 
 Security-sensitive state changes use the same administrative invariants as normal OpsKnight account management.
 
@@ -194,14 +195,14 @@ Before enabling automatic provisioning broadly, verify:
 
 ## Troubleshooting
 
-| Symptom | Check |
-| --- | --- |
-| `401` from every request | `SCIM_BEARER_TOKEN` is set, at least 32 characters, and the IdP sends `Authorization: Bearer ...`. |
-| User lookup fails | Confirm the resource is still SCIM-managed and verify the `externalId` or `userName` filter. |
-| `409` on update | Check immutable `externalId`, duplicate email/external identity, and account invariants. |
+| Symptom                                            | Check                                                                                                        |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `401` from every request                           | `SCIM_BEARER_TOKEN` is set, at least 32 characters, and the IdP sends `Authorization: Bearer ...`.           |
+| User lookup fails                                  | Confirm the resource is still SCIM-managed and verify the `externalId` or `userName` filter.                 |
+| `409` on update                                    | Check immutable `externalId`, duplicate email/external identity, and account invariants.                     |
 | DELETE succeeds but user still exists in OpsKnight | Expected: the internal account is retained disabled for history while the SCIM external identity is removed. |
-| User still has a browser session after offboarding | Verify the SCIM operation completed and inspect account/session audit events. |
-| Provider expects SCIM Groups | OpsKnight v1.5 does not expose a Groups resource; use OIDC role mapping or provider-side assignment policy. |
+| User still has a browser session after offboarding | Verify the SCIM operation completed and inspect account/session audit events.                                |
+| Provider expects SCIM Groups                       | OpsKnight v1.5 does not expose a Groups resource; use OIDC role mapping or provider-side assignment policy.  |
 
 ## Related topics
 
