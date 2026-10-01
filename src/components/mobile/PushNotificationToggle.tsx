@@ -377,7 +377,12 @@ export default function PushNotificationToggle() {
 
       if (!subscription) {
         if (!prepared.applicationServerKey) {
-          throw new Error('Push public key is unavailable. Retry preparation.');
+          throw new ClientAppError({
+            code: 'PUSH_VAPID_INVALID',
+            error: 'Push public key is unavailable.',
+            action: 'Retry preparation. If it continues, contact your administrator.',
+            retryable: true,
+          });
         }
 
         const subscribeOptions: PushSubscriptionOptionsInit = {
@@ -434,12 +439,22 @@ export default function PushNotificationToggle() {
           subscribeError instanceof Error ? subscribeError.name : typeof subscribeError,
         error: subscribeError,
       });
-      setError(displayError(subscribeError, 'Failed to enable Push notifications.'));
-      setPushState(
-        typeof Notification !== 'undefined' && Notification.permission === 'denied'
-          ? 'PERMISSION_DENIED'
-          : 'ERROR'
-      );
+      const currentPermission =
+        typeof Notification !== 'undefined' ? Notification.permission : 'default';
+      if (currentPermission === 'denied') {
+        setError('Notifications are blocked in browser or device settings.');
+        setPushState('PERMISSION_DENIED');
+      } else if (
+        currentPermission === 'default' &&
+        subscribeError instanceof Error &&
+        subscribeError.name === 'NotAllowedError'
+      ) {
+        setError('Notification permission was not granted.');
+        setPushState('PERMISSION_REQUIRED');
+      } else {
+        setError(displayError(subscribeError, 'Failed to enable Push notifications.'));
+        setPushState('ERROR');
+      }
     } finally {
       setLoading(false);
     }
