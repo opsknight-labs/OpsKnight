@@ -1359,7 +1359,7 @@
     {
       "page": "integrations/communication/microsoft-teams/connect.md",
       "type": "how-to",
-      "userTask": "Register, connect, install, and validate Microsoft Teams ChatOps.",
+      "userTask": "Configure and validate Microsoft Teams ChatOps from Microsoft 365 through production incident workflows.",
       "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 0,
@@ -1502,7 +1502,7 @@
     {
       "page": "integrations/communication/slack/connect-with-oauth.md",
       "type": "how-to",
-      "userTask": "Connect and validate a Slack workspace using OAuth.",
+      "userTask": "Configure and validate Slack ChatOps from the Slack app through production incident workflows.",
       "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 0,

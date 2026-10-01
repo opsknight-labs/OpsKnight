@@ -17,7 +17,23 @@ Teams uses a registered Entra application, Azure Bot messaging endpoint, a
 Teams app package, tenant-scoped installation records, service destinations,
 and Adaptive Cards. It is not a Slack configuration with renamed fields.
 
-- [Connect Microsoft Teams](./connect)
+Start with [Connect and configure Microsoft Teams ChatOps](./connect), which
+covers the complete Microsoft 365 path from Entra registration and Azure Bot
+through package consent, destinations, actions, war rooms, and acceptance.
+
+## Recommended setup sequence
+
+1. [Register Entra, configure Azure Bot, and install the package](./connect).
+2. [Review RSC and Graph permissions](./permissions) before granting consent.
+3. [Configure service destinations](./configure-destinations) and test each one.
+4. [Link responder identities](./identity-linking).
+5. Validate [incident cards](./incident-notifications) and
+   [actions](./incident-actions) with a synthetic incident.
+6. Configure and rehearse [war rooms and video bridges](./war-rooms) when required.
+7. Document [troubleshooting](./troubleshooting) and
+   [disconnect/reconnect](./disconnect-reconnect) ownership.
+
+- [Connect and configure Microsoft Teams ChatOps](./connect)
 - [Configure service destinations](./configure-destinations)
 - [Send and verify a test](./send-test)
 - [Understand normal incident cards](./incident-notifications)
