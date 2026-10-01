@@ -9,14 +9,26 @@ const hidden = new Set(['/settings/service-objectives']);
 const internal = new Set(['/debug-mobile']);
 const operator = /^\/(?:system-logs|health|settings\/system)/;
 const admin = /^\/(?:audit|admin|users|teams|settings)/;
-// These routes expose a multi-step user operation. Concepts and reference pages
-// can supplement them, but cannot satisfy their route contract by themselves.
-const taskRequired = [
+// Mutation and configuration routes require task documentation by default. The
+// exceptions below are navigation/index surfaces without an operation of their
+// own. This exemption model prevents a new settings route from silently passing
+// with only a concept or generated reference page.
+const taskExempt = new Set([
+  '/settings/integrations',
+]);
+const taskRoutePatterns = [
   /^\/reports(?:\/|$)/,
+  /^\/events\/test$/,
   /^\/incidents\/(?:create|templates\/create)$/,
   /^\/services\/\[id\]\/webhooks\/(?:new|\[webhookId\]\/edit)$/,
-  /^\/settings\/(?:api-keys|custom-fields|notifications|status-pages)(?:\/|$)/,
+  /^\/m(?:$|\/(?!login$|forgot-password$))/,
 ];
+
+function requiresTaskDocumentation(route, classification) {
+  if (classification === 'HIDDEN' || classification === 'INTERNAL' || taskExempt.has(route)) return false;
+  if (route === '/settings' || route.startsWith('/settings/')) return true;
+  return taskRoutePatterns.some(pattern => pattern.test(route));
+}
 
 const routes = discovery.uiRoutes.map(route => {
   const node = nodes.get(route.route);
@@ -30,7 +42,7 @@ const routes = discovery.uiRoutes.map(route => {
     classification,
     documentation,
     documentationMapping: node?.documentationMapping ?? 'unmapped',
-    taskDocumentationRequired: taskRequired.some(pattern => pattern.test(route.route)),
+    taskDocumentationRequired: requiresTaskDocumentation(route.route, classification),
   };
 });
 const contract = { schemaVersion: 2, routes };

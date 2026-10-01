@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-09-28
+  verified_at: 2026-10-01
   evidence:
     - src/
     - deploy/
@@ -198,6 +198,20 @@ Sets the polling interval while the general queue is idle.
 
 ## Complete discovered inventory
 
+## `ALLOWED_VERSIONS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/sync-docs-to-website.sh`
+
 ## `API_KEY_SECRET`
 
 - Type: string
@@ -205,12 +219,12 @@ Sets the polling interval while the general queue is idle.
 - Allowed values: not statically complete
 - Secret: yes
 - Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `src/lib/api-keys.ts`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `src/lib/api-keys.ts`
 
 ## `APP_HOST_ALIASES`
 
@@ -238,7 +252,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `3000`
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`
 
 ## `APP_VERSION`
 
@@ -261,12 +275,12 @@ Sets the polling interval while the general queue is idle.
 - Allowed values: not statically complete
 - Secret: no
 - Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `src/lib/local-auth-policy.ts`
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`
 
 ## `AUTH_BREAK_GLASS_ENABLED`
 
@@ -275,12 +289,12 @@ Sets the polling interval while the general queue is idle.
 - Allowed values: not statically complete
 - Secret: no
 - Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `src/lib/local-auth-policy.ts`
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`
 
 ## `AUTH_LOCAL_LOGIN_ENABLED`
 
@@ -289,12 +303,12 @@ Sets the polling interval while the general queue is idle.
 - Allowed values: not statically complete
 - Secret: no
 - Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `src/lib/local-auth-policy.ts`
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`
 
 ## `AUTH_OPTIONS_CACHE_TTL_MS`
 
@@ -317,12 +331,12 @@ Sets the polling interval while the general queue is idle.
 - Allowed values: not statically complete
 - Secret: no
 - Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `src/lib/local-auth-policy.ts`
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`
 
 ## `AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS`
 
@@ -331,12 +345,12 @@ Sets the polling interval while the general queue is idle.
 - Allowed values: not statically complete
 - Secret: no
 - Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `src/lib/local-auth-policy.ts`
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`
 
 ## `AUTH_SSO_SESSION_MAX_AGE_SECONDS`
 
@@ -345,12 +359,12 @@ Sets the polling interval while the general queue is idle.
 - Allowed values: not statically complete
 - Secret: no
 - Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `src/lib/local-auth-policy.ts`
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`
 
 ## `AUTH_SSO_SESSION_UPDATE_AGE_SECONDS`
 
@@ -359,12 +373,12 @@ Sets the polling interval while the general queue is idle.
 - Allowed values: not statically complete
 - Secret: no
 - Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `src/lib/local-auth-policy.ts`
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`
 
 ## `AUTH_TRUST_HOST`
 
@@ -408,6 +422,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: none discovered
 - Sources: `src/lib/constants.ts`
 
+## `BASE_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `http://localhost:3000`
+- Sources: `scripts/test-integrations.cjs`, `scripts/test-integrations.ts`
+
 ## `BOOTSTRAP_SECRET`
 
 - Type: string
@@ -421,6 +449,20 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: not displayed
 - Sources: `src/app/setup/actions.ts`, `src/app/setup/page.tsx`
+
+## `BUILD_DIR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: build-time web bundle
+- Deployment support: build
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `.next`
+- Sources: `next.config.ts`
 
 ## `BUSINESS_HOURS_END`
 
@@ -562,6 +604,48 @@ Sets the polling interval while the general queue is idle.
 - Static default: none discovered
 - Sources: `src/lib/compliance/monitoring/config.ts`
 
+## `COMPOSE_LOG`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
+
+## `COMPOSE_PORT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
+
+## `COMPOSE_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `http://127.0.0.1:33000`
+- Sources: `scripts/multi-stage-load-test-25m.js`, `scripts/single-image-load-test-10m.js`
+
 ## `CONTENT_WIDTH`
 
 - Type: string
@@ -657,7 +741,7 @@ Sets the polling interval while the general queue is idle.
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
-- Static default: `5`
+- Static default: `15`, `5`
 - Sources: `deploy/compose/docker-compose.split.yml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `deploy/swarm/docker-stack.yml`, `src/lib/prisma.ts`
 
 ## `DATABASE_POOL_SIZE_GENERAL_WORKER`
@@ -756,7 +840,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/migration-job.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml`, `deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `src/app/(app)/settings/system/page.tsx`, `src/components/DatabaseOffline.tsx`, `src/lib/prisma-datasource.ts`
+- Sources: `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/migration-job.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml`, `deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `env.example`, `scripts/OpsKnight.mjs`, `scripts/create-sla-scheduler-online-index.cjs`, `scripts/create-status-platform-online-indexes.cjs`, `scripts/create-voice-attempt-online-indexes.cjs`, `scripts/fix-env.js`, `scripts/test-db.js`, `src/app/(app)/settings/system/page.tsx`, `src/components/DatabaseOffline.tsx`, `src/lib/prisma-datasource.ts`
 
 ## `DEFAULT_LIMIT`
 
@@ -772,6 +856,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: none discovered
 - Sources: `src/app/(public)/logs/LogsClient.tsx`
 
+## `DEGRADED`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/components/settings/microsoft-teams/WarRoomOperationsSection.tsx`
+
 ## `DIRECT_DATABASE_URL`
 
 - Type: string
@@ -786,6 +884,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: not displayed
 - Sources: `deploy/compose/docker-compose.external-db.yml`, `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `deploy/kubernetes/helm/opsknight/templates/migration-job.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml`, `deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`
 
+## `DISABLE_PWA`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `true`
+- Secret: no
+- Runtime roles: build-time web bundle
+- Deployment support: build
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: none discovered
+- Sources: `next.config.ts`
+
 ## `DOC_TOPICS`
 
 - Type: string
@@ -799,6 +911,188 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/app/(app)/help/page.tsx`
+
+## `DOCS_BASE_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/docs/run-kubernetes-journeys.sh`
+
+## `DOCS_DATABASE_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `scripts/docs/run-kubernetes-journeys.sh`
+
+## `DOCS_EXTERNAL_RUNTIME`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/docs/run-kubernetes-journeys.sh`
+
+## `DOCS_IMAGE_PULL_POLICY`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `always`
+- Sources: `scripts/docs/serve-test-image.sh`
+
+## `DOCS_IMPACT_BASE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `HEAD~1`
+- Sources: `scripts/docs/check-impact.mjs`
+
+## `DOCS_IMPACT_STRICT`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `true`
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: none discovered
+- Sources: `scripts/docs/check-impact.mjs`
+
+## `DOCS_OPSKNIGHT_IMAGE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/docs/certify.mjs`
+
+## `DOCS_SITE_BASE_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `http://127.0.0.1:15000`
+- Sources: `scripts/docs/crawl-rendered-site.mjs`
+
+## `DOCS_SITE_VERSION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `v2.0.0`
+- Sources: `scripts/docs/crawl-rendered-site.mjs`
+
+## `DOCS_SYNC_INCLUDE_UPCOMING`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `true`
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: none discovered
+- Sources: `scripts/sync-docs-to-website.sh`
+
+## `DOCS_WEBSITE_DIR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/docs/crawl-rendered-site.mjs`
+
+## `DURATION_SECONDS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
+
+## `ELAPSED`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
 
 ## `EMAIL_FROM`
 
@@ -840,7 +1134,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `src/app/(app)/settings/system/page.tsx`, `src/lib/__tests__/encryption.test.ts`, `src/lib/admin-health.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `env.example`, `src/app/(app)/settings/system/page.tsx`, `src/lib/__tests__/encryption.test.ts`, `src/lib/admin-health.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`
 
 ## `ENCRYPTION_KEYS`
 
@@ -849,12 +1143,12 @@ Sets the polling interval while the general queue is idle.
 - Allowed values: not statically complete
 - Secret: yes
 - Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `src/app/(app)/settings/system/page.tsx`, `src/lib/admin-health.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`
+- Sources: `env.example`, `src/app/(app)/settings/system/page.tsx`, `src/lib/admin-health.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`
 
 ## `ENCRYPTION_TARGETS`
 
@@ -869,6 +1163,20 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/compliance/evaluators/encryption.ts`
+
+## `END_TIME`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
 
 ## `ESCALATION_LOCK_TIMEOUT_MS`
 
@@ -897,6 +1205,20 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/config.ts`
+
+## `EXPECTED_INCIDENTS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/perf/dashboard-benchmark.ts`
 
 ## `EXTERNAL_DB_HOST`
 
@@ -1010,6 +1332,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: none discovered
 - Sources: `src/lib/version.ts`
 
+## `GITHUB_REF_NAME`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/validate-release-tag.cjs`
+
 ## `GITHUB_SHA`
 
 - Type: string
@@ -1022,7 +1358,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `src/lib/version.ts`
+- Sources: `scripts/docs/discover-capabilities.mjs`, `src/lib/version.ts`
 
 ## `IMAGE_DIGEST`
 
@@ -1037,6 +1373,34 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/version.ts`
+
+## `INCIDENT_COUNT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/perf/dashboard-seed.ts`
+
+## `INSTALL_LOCK_ID`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/create-status-platform-online-indexes.cjs`
 
 ## `INTEGRATED_REPLICAS`
 
@@ -1108,6 +1472,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: none discovered
 - Sources: `src/middleware.ts`
 
+## `INTERVAL_SECONDS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
+
 ## `JIRA_REQUEST_TIMEOUT_MS`
 
 - Type: string
@@ -1134,7 +1512,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `src/app/api/events/stream/route.ts`, `src/app/api/sla/stream/route.ts`, `src/app/api/widgets/stream/route.ts`, `src/lib/idempotency.ts`, `src/lib/logger.ts`, `src/lib/status-pages/publication-policy.ts`
+- Sources: `scripts/compliance/validate-sbom.mjs`, `scripts/docs/audit-reader-completeness.mjs`, `scripts/docs/certify.mjs`, `scripts/docs/crawl-rendered-site.mjs`, `scripts/docs/discover-capabilities.mjs`, `scripts/docs/generate-capacity-reference.mjs`, `scripts/docs/generate-integrations.mjs`, `scripts/docs/generate-route-contract.mjs`, `scripts/test-integrations.ts`, `src/app/api/events/stream/route.ts`, `src/app/api/sla/stream/route.ts`, `src/app/api/widgets/stream/route.ts`, `src/lib/idempotency.ts`, `src/lib/logger.ts`, `src/lib/status-pages/publication-policy.ts`
 
 ## `KEY_PREFIX`
 
@@ -1149,6 +1527,76 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/mobile-cache.ts`
+
+## `KIND_LOG`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
+
+## `KIND_PORT`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
+
+## `KIND_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `http://127.0.0.1:30080`
+- Sources: `scripts/multi-stage-load-test-25m.js`, `scripts/single-image-load-test-10m.js`
+
+## `LATEST_RELEASE_TAG`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/validate-release-tag.cjs`
+
+## `LOCK_ID`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/create-sla-scheduler-online-index.cjs`, `scripts/create-voice-attempt-online-indexes.cjs`
 
 ## `LOCK_TIMEOUT_MS`
 
@@ -1177,6 +1625,20 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: derived
 - Static default: `500`
 - Sources: `src/lib/logger.ts`
+
+## `LOG_DIR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
 
 ## `LOG_FORMAT`
 
@@ -1486,6 +1948,34 @@ Sets the polling interval while the general queue is idle.
 - Static default: none discovered
 - Sources: `src/lib/compliance/evidence/validate.ts`
 
+## `METRICS_CSV`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/multi-stage-load-test-25m.js`, `scripts/single-image-load-test-10m.js`
+
+## `METRICS_FILE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
+
 ## `MICROSOFT_TEAMS_APPLICATION_ID_URI`
 
 - Type: string
@@ -1527,6 +2017,20 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/app/(app)/settings/integrations/microsoft-teams/page.tsx`, `src/app/api/microsoft-teams/package/route.ts`
+
+## `MIGRATION_RECOVERY_MODE`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `aggressive`
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: none discovered
+- Sources: `scripts/auto-recover-migrations.ts`
 
 ## `MIN_CLEAN_SHADOW_CHECKS`
 
@@ -1595,8 +2099,8 @@ Sets the polling interval while the general queue is idle.
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
-- Static default: `http://localhost:3000`
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `src/app/(app)/services/[id]/page.tsx`, `src/app/(app)/settings/system/page.tsx`, `src/app/api/settings/app-url/route.ts`, `src/app/api/slack/oauth/callback/route.ts`, `src/app/robots.ts`, `src/app/setup/actions.ts`, `src/app/setup/page.tsx`, `src/lib/admin-health.ts`, `src/lib/app-url.ts`, `src/lib/auth-cookies.ts`, `src/lib/auth-public-origin.ts`, `src/lib/email-components.ts`, `src/lib/env-validation.ts`, `src/lib/notification-providers.ts`, `src/lib/request-host.ts`, `src/lib/status-page-resolver.ts`, `src/lib/status-pages/status-auth.ts`, `src/middleware.ts`
+- Static default: `http://localhost:3000`, `https://api.opsknight.com`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `src/app/(app)/services/[id]/page.tsx`, `src/app/(app)/settings/system/page.tsx`, `src/app/api/settings/app-url/route.ts`, `src/app/api/slack/oauth/callback/route.ts`, `src/app/robots.ts`, `src/app/setup/actions.ts`, `src/app/setup/page.tsx`, `src/components/settings/ApiKeysPanel.tsx`, `src/lib/admin-health.ts`, `src/lib/app-url.ts`, `src/lib/auth-cookies.ts`, `src/lib/auth-public-origin.ts`, `src/lib/email-components.ts`, `src/lib/env-validation.ts`, `src/lib/notification-providers.ts`, `src/lib/request-host.ts`, `src/lib/status-page-resolver.ts`, `src/lib/status-pages/status-auth.ts`, `src/middleware.ts`
 
 ## `NEXT_PUBLIC_APP_VERSION`
 
@@ -1694,7 +2198,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `src/app/(app)/settings/system/page.tsx`, `src/lib/secret-manager.ts`, `src/lib/user-notification-endpoints.ts`, `src/lib/voice/token.ts`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `env.example`, `src/app/(app)/settings/system/page.tsx`, `src/lib/secret-manager.ts`, `src/lib/user-notification-endpoints.ts`, `src/lib/voice/token.ts`
 
 ## `NEXTAUTH_URL`
 
@@ -1708,7 +2212,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `http://localhost:3000`, `localhost`
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `src/app/(app)/services/[id]/page.tsx`, `src/app/(app)/settings/system/page.tsx`, `src/app/api/prefer-desktop/route.ts`, `src/app/api/settings/app-url/route.ts`, `src/app/api/slack/oauth/callback/route.ts`, `src/app/setup/actions.ts`, `src/app/setup/page.tsx`, `src/lib/admin-health.ts`, `src/lib/app-config.ts`, `src/lib/app-url.ts`, `src/lib/auth-cookies.ts`, `src/lib/auth-public-origin.ts`, `src/lib/email-components.ts`, `src/lib/env-validation.ts`, `src/lib/notification-providers.ts`, `src/lib/request-host.ts`, `src/lib/sla-breach-monitor.ts`, `src/lib/status-page-resolver.ts`, `src/lib/status-pages/status-auth.ts`, `src/middleware.ts`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `src/app/(app)/services/[id]/page.tsx`, `src/app/(app)/settings/system/page.tsx`, `src/app/api/prefer-desktop/route.ts`, `src/app/api/settings/app-url/route.ts`, `src/app/api/slack/oauth/callback/route.ts`, `src/app/setup/actions.ts`, `src/app/setup/page.tsx`, `src/lib/admin-health.ts`, `src/lib/app-config.ts`, `src/lib/app-url.ts`, `src/lib/auth-cookies.ts`, `src/lib/auth-public-origin.ts`, `src/lib/email-components.ts`, `src/lib/env-validation.ts`, `src/lib/notification-providers.ts`, `src/lib/request-host.ts`, `src/lib/sla-breach-monitor.ts`, `src/lib/status-page-resolver.ts`, `src/lib/status-pages/status-auth.ts`, `src/middleware.ts`
 
 ## `NODE_ENV`
 
@@ -1716,13 +2220,13 @@ Sets the polling interval while the general queue is idle.
 - Required: conditional or optional; inspect cited source
 - Allowed values: `development`, `production`, `test`
 - Secret: no
-- Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Runtime roles: build-time web bundle
+- Deployment support: build
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `development`
-- Sources: `src/app/(app)/settings/system/page.tsx`, `src/app/api/health/route.ts`, `src/app/api/jira/webhook/route.ts`, `src/app/api/microsoft-teams/messages/route.ts`, `src/app/api/search/route.ts`, `src/app/api/slack/oauth/route.ts`, `src/app/providers.tsx`, `src/app/setup/page.tsx`, `src/components/DashboardRealtimeWrapper.tsx`, `src/components/WebVitalsReporter.tsx`, `src/components/ui/ErrorBoundary.tsx`, `src/lib/admin-health.ts`, `src/lib/api-keys.ts`, `src/lib/app-url.ts`, `src/lib/auth-cookies.ts`, `src/lib/auth-public-origin.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`, `src/lib/incident-collaboration/meeting-store.ts`, `src/lib/logger.ts`, `src/lib/microsoft-teams/auth.ts`, `src/lib/monitoring/sentry.ts`, `src/lib/provider-admission.ts`, `src/lib/retention-policy.ts`, `src/lib/secret-manager.ts`, `src/middleware.ts`
+- Sources: `next.config.ts`, `src/app/(app)/settings/system/page.tsx`, `src/app/api/health/route.ts`, `src/app/api/jira/webhook/route.ts`, `src/app/api/microsoft-teams/messages/route.ts`, `src/app/api/search/route.ts`, `src/app/api/slack/oauth/route.ts`, `src/app/providers.tsx`, `src/app/setup/page.tsx`, `src/components/DashboardRealtimeWrapper.tsx`, `src/components/DatabaseOffline.tsx`, `src/components/WebVitalsReporter.tsx`, `src/components/ui/ErrorBoundary.tsx`, `src/lib/admin-health.ts`, `src/lib/api-keys.ts`, `src/lib/app-url.ts`, `src/lib/auth-cookies.ts`, `src/lib/auth-public-origin.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`, `src/lib/incident-collaboration/meeting-store.ts`, `src/lib/logger.ts`, `src/lib/microsoft-teams/auth.ts`, `src/lib/monitoring/sentry.ts`, `src/lib/provider-admission.ts`, `src/lib/retention-policy.ts`, `src/lib/secret-manager.ts`, `src/middleware.ts`
 
 ## `NONCE_COOKIE_NAME`
 
@@ -1794,6 +2298,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: not displayed
 - Sources: `src/app/api/webhooks/notifications/provider-feedback/route.ts`
 
+## `NOW`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
+
 ## `OIDC_CONFIG_CACHE_TTL_MS`
 
 - Type: string
@@ -1829,12 +2347,12 @@ Sets the polling interval while the general queue is idle.
 - Allowed values: not statically complete
 - Secret: no
 - Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `true`
-- Sources: `src/lib/auth.ts`
+- Sources: `env.example`, `src/lib/auth.ts`
 
 ## `OPSKNIGHT_CUSTOM_CA_SECRET`
 
@@ -1862,7 +2380,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.external-db.yml`, `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`
+- Sources: `deploy/compose/docker-compose.external-db.yml`, `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `env.example`
 
 ## `OPSKNIGHT_DATABASE_URL_SECRET`
 
@@ -1926,13 +2444,27 @@ Sets the polling interval while the general queue is idle.
 - Required: yes
 - Allowed values: not statically complete
 - Secret: no
-- Runtime roles: web or integrated runtime
+- Runtime roles: operator command or startup script
 - Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
-- Static default: `ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix`, `ghcr.io/opsknight-labs/opsknight:latest`
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`
+- Static default: `ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix`, `ghcr.io/opsknight-labs/opsknight:latest`, `opsknight-local:test`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `scripts/soak-test-2h.sh`
+
+## `OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/network-security.ts`
 
 ## `OPSKNIGHT_NEXTAUTH_SECRET_SECRET`
 
@@ -2002,7 +2534,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `src/lib/runtime-role.ts`
+- Sources: `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `env.example`, `src/lib/runtime-role.ts`
 
 ## `OPSKNIGHT_PROCESS_ROLES`
 
@@ -2024,13 +2556,13 @@ Sets the polling interval while the general queue is idle.
 - Required: conditional or optional; inspect cited source
 - Allowed values: not statically complete
 - Secret: no
-- Runtime roles: web or integrated runtime
+- Runtime roles: operator command or startup script
 - Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
-- Static default: `always`
-- Sources: `deploy/compose/docker-compose.split.yml`
+- Static default: `always`, `never`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `scripts/soak-test-2h.sh`
 
 ## `OPSKNIGHT_SCHEDULER_PROFILE`
 
@@ -2044,7 +2576,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `src/lib/runtime-role.ts`
+- Sources: `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml`, `env.example`, `src/lib/runtime-role.ts`
 
 ## `OPSKNIGHT_SCHEDULER_PROFILES`
 
@@ -2073,6 +2605,62 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`
+
+## `OPSKNIGHT_TX_MAX_ATTEMPTS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/db-utils.ts`
+
+## `OPSKNIGHT_TX_MAX_ATTEMPTS_HIGH_LOAD`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/db-utils.ts`
+
+## `OPSKNIGHT_TX_MAX_WAIT_MS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/db-utils.ts`
+
+## `OPSKNIGHT_TX_TIMEOUT_MS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: runtime
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `src/lib/db-utils.ts`
 
 ## `OPSKNIGHT_WEB_DATABASE_URL_SECRET`
 
@@ -2127,7 +2715,7 @@ Sets the polling interval while the general queue is idle.
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
-- Static default: `50`
+- Static default: `100`
 - Sources: `deploy/compose/docker-compose.split.yml`
 
 ## `OPSKNIGHT_WORKER_BATCH_SIZE_PROJECTOR`
@@ -2183,7 +2771,7 @@ Sets the polling interval while the general queue is idle.
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
-- Static default: `100`
+- Static default: `50`
 - Sources: `deploy/compose/docker-compose.split.yml`
 
 ## `OPSKNIGHT_WORKER_BUSY_POLL_MS_PROJECTOR`
@@ -2239,7 +2827,7 @@ Sets the polling interval while the general queue is idle.
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: derived
-- Static default: `10`
+- Static default: `15`
 - Sources: `deploy/compose/docker-compose.split.yml`
 
 ## `OPSKNIGHT_WORKER_CONCURRENCY_PROJECTOR`
@@ -2410,6 +2998,34 @@ Sets the polling interval while the general queue is idle.
 - Static default: not displayed
 - Sources: `src/lib/__tests__/passwords.test.ts`, `src/lib/password-strength.ts`, `src/lib/passwords.ts`
 
+## `PERF_SEED_CONFIRM`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/perf/dashboard-seed.ts`
+
+## `PERF_SERVICE_ID`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/perf/dashboard-benchmark.ts`
+
 ## `PGBOUNCER_DB_HOST`
 
 - Type: string
@@ -2422,7 +3038,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `${EXTERNAL_DB_HOST:-`, `opsknight-db`
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`, `env.example`
 
 ## `PGBOUNCER_DB_NAME`
 
@@ -2436,7 +3052,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `${EXTERNAL_DB_NAME:-${POSTGRES_DB:-opsknight_db`, `opsknight_db`
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`, `env.example`
 
 ## `PGBOUNCER_DB_PASSWORD`
 
@@ -2450,7 +3066,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`, `env.example`
 
 ## `PGBOUNCER_DB_PASSWORD_FILE`
 
@@ -2478,7 +3094,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `${EXTERNAL_DB_PORT:-5432`, `5432`
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`, `env.example`
 
 ## `PGBOUNCER_DB_USER`
 
@@ -2492,7 +3108,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `${EXTERNAL_DB_USER:-${POSTGRES_USER:-opsknight`, `opsknight`
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`, `env.example`
 
 ## `PGBOUNCER_DEFAULT_POOL_SIZE`
 
@@ -2506,7 +3122,21 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `10`
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`, `env.example`
+
+## `PGBOUNCER_ENABLED`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `env.example`
 
 ## `PGBOUNCER_IMAGE`
 
@@ -2562,7 +3192,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `5`
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`, `env.example`
 
 ## `PGBOUNCER_SERVER_TLS_CA_FILE`
 
@@ -2576,7 +3206,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `env.example`
 
 ## `PGBOUNCER_SERVER_TLS_SSLMODE`
 
@@ -2590,7 +3220,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `disable`
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/swarm/docker-stack.pgbouncer.yml`, `env.example`
 
 ## `PGBOUNCER_TLS_CA_CERT`
 
@@ -2604,7 +3234,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: none discovered
-- Sources: `deploy/compose/docker-compose.pgbouncer-ca.yml`
+- Sources: `deploy/compose/docker-compose.pgbouncer-ca.yml`, `env.example`
 
 ## `PGDATA`
 
@@ -2660,7 +3290,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `opsknight_db`
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml`, `deploy/kubernetes/kustomize/base/postgres-statefulset.yaml`, `deploy/swarm/docker-stack.db.yml`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml`, `deploy/kubernetes/kustomize/base/postgres-statefulset.yaml`, `deploy/swarm/docker-stack.db.yml`, `env.example`
 
 ## `POSTGRES_INITDB_ARGS`
 
@@ -2688,7 +3318,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml`, `deploy/kubernetes/kustomize/base/postgres-statefulset.yaml`, `deploy/swarm/docker-stack.db.yml`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml`, `deploy/kubernetes/kustomize/base/postgres-statefulset.yaml`, `deploy/swarm/docker-stack.db.yml`, `env.example`
 
 ## `POSTGRES_PORT`
 
@@ -2702,7 +3332,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `5432`
-- Sources: `deploy/compose/docker-compose.yml`
+- Sources: `deploy/compose/docker-compose.yml`, `env.example`
 
 ## `POSTGRES_USER`
 
@@ -2716,7 +3346,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `opsknight`
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml`, `deploy/kubernetes/kustomize/base/postgres-statefulset.yaml`, `deploy/swarm/docker-stack.db.yml`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml`, `deploy/kubernetes/kustomize/base/postgres-statefulset.yaml`, `deploy/swarm/docker-stack.db.yml`, `env.example`
 
 ## `PRISMA_SLOW_QUERY_MS`
 
@@ -2744,7 +3374,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `src/app/api/health/deep/route.ts`, `src/app/api/metrics/route.ts`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `env.example`, `src/app/api/health/deep/route.ts`, `src/app/api/metrics/route.ts`
 
 ## `RECENT_DISPLAY_DAYS`
 
@@ -2816,6 +3446,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: none discovered
 - Sources: `src/lib/session-registry.ts`
 
+## `ROOT_DIR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/sync-docs-to-website.sh`
+
 ## `ROW_HEIGHT`
 
 - Type: string
@@ -2829,6 +3473,48 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/status-pages/reports/uptime-report-generator.ts`
+
+## `RUNTIME_DATABASE_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `deploy/kubernetes/helm/opsknight/templates/migration-job.yaml`
+
+## `SBOM_SOURCE_REF`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/compliance/validate-sbom.mjs`
+
+## `SBOM_SOURCE_SHA`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/compliance/validate-sbom.mjs`
 
 ## `SCHEDULER_HEALTH_MAX_INTERVAL_SECONDS`
 
@@ -2851,12 +3537,12 @@ Sets the polling interval while the general queue is idle.
 - Allowed values: not statically complete
 - Secret: yes
 - Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `src/lib/scim.ts`
+- Sources: `env.example`, `src/lib/scim.ts`
 
 ## `SENTRY_DSN`
 
@@ -2998,6 +3684,34 @@ Sets the polling interval while the general queue is idle.
 - Static default: not displayed
 - Sources: `src/app/setup/actions.ts`, `src/app/setup/page.tsx`
 
+## `SINGLE_COMPOSE_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `http://127.0.0.1:34000`
+- Sources: `scripts/single-image-load-test-10m.js`
+
+## `SINGLE_KIND_URL`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `http://127.0.0.1:34080`
+- Sources: `scripts/single-image-load-test-10m.js`
+
 ## `SINGLETON_ID`
 
 - Type: string
@@ -3117,12 +3831,12 @@ Sets the polling interval while the general queue is idle.
 - Allowed values: not statically complete
 - Secret: yes
 - Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `src/app/(app)/settings/integrations/slack/page.tsx`, `src/lib/slack-signature.ts`
+- Sources: `env.example`, `src/app/(app)/settings/integrations/slack/page.tsx`, `src/lib/slack-signature.ts`
 
 ## `SLACK_WEBHOOK_URL`
 
@@ -3138,6 +3852,48 @@ Sets the polling interval while the general queue is idle.
 - Static default: none discovered
 - Sources: `src/lib/slack.ts`
 
+## `SOAK_DURATION_SECONDS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `7200`
+- Sources: `scripts/soak-test-2h.sh`
+
+## `SOAK_INTERVAL_SECONDS`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `60`
+- Sources: `scripts/soak-test-2h.sh`
+
+## `SOAK_LOG_DIR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `./artifacts/soak-test`
+- Sources: `scripts/soak-test-2h.sh`
+
 ## `SOURCE_VERSION`
 
 - Type: string
@@ -3151,6 +3907,34 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/version.ts`
+
+## `SRC_DIR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/sync-docs-to-website.sh`
+
+## `START_TIME`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
 
 ## `STATE_COOKIE_NAME`
 
@@ -3390,6 +4174,34 @@ Sets the polling interval while the general queue is idle.
 - Static default: none discovered
 - Sources: `src/lib/mobile-principal-state.ts`
 
+## `SUMMARY_FILE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
+
+## `SUMMARY_MD`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/multi-stage-load-test-25m.js`, `scripts/single-image-load-test-10m.js`
+
 ## `SWARM_NETWORK_NAME`
 
 - Type: string
@@ -3446,6 +4258,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: `2`
 - Sources: `deploy/swarm/docker-stack.yml`
 
+## `SWARM_REPLICAS_PGBOUNCER`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `2`
+- Sources: `deploy/swarm/docker-stack.pgbouncer.yml`
+
 ## `SWARM_REPLICAS_SCHEDULER`
 
 - Type: string
@@ -3488,6 +4314,62 @@ Sets the polling interval while the general queue is idle.
 - Static default: `2`
 - Sources: `deploy/swarm/docker-stack.yml`
 
+## `SWARM_RUNTIME_MODE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `deploy/swarm/docker-stack.integrated.yml`
+
+## `TEAMS_E2E_DESTINATION_ID`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/ci/microsoft-teams-live-smoke.mjs`
+
+## `TEAMS_E2E_INCIDENT_ID`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/ci/microsoft-teams-live-smoke.mjs`
+
+## `TEAMS_E2E_MESSAGE_GENERATION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `1`
+- Sources: `scripts/ci/microsoft-teams-live-smoke.mjs`
+
 ## `TILE_W`
 
 - Type: string
@@ -3501,6 +4383,34 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/components/auth/LoginAnimation.tsx`
+
+## `TIMESTAMP`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/soak-test-2h.sh`
+
+## `TOTAL_DURATION_SEC`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/multi-stage-load-test-25m.js`, `scripts/single-image-load-test-10m.js`
 
 ## `TRUST_PROXY_HEADERS`
 
@@ -3523,12 +4433,12 @@ Sets the polling interval while the general queue is idle.
 - Allowed values: not statically complete
 - Secret: no
 - Runtime roles: web or integrated runtime
-- Deployment support: runtime
+- Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `src/lib/client-ip.ts`
+- Sources: `env.example`, `src/lib/client-ip.ts`
 
 ## `TRUSTED_PWA_SESSION_DAYS`
 
@@ -3585,6 +4495,20 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: none discovered
 - Sources: `src/lib/version.ts`
+
+## `VERSIONS_FILE`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/sync-docs-to-website.sh`
 
 ## `VITEST`
 
@@ -3654,7 +4578,21 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `src/lib/prisma-datasource.ts`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `env.example`, `src/lib/prisma-datasource.ts`
+
+## `WEBSITE_DIR`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/sync-docs-to-website.sh`
 
 ## `WORKER_ID`
 

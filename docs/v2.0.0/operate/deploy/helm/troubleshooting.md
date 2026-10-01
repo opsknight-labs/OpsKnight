@@ -20,6 +20,16 @@ verification:
 
 Capture `helm status`, `helm get values --all`, `helm get manifest`, Jobs, Pods, events, and failed-container logs. Redact secrets before sharing.
 
+```sh
+helm status opsknight -n opsknight
+helm get values opsknight -n opsknight --all
+helm get manifest opsknight -n opsknight > /tmp/opsknight-rendered.yaml
+kubectl -n opsknight get pods,jobs
+kubectl -n opsknight get events --sort-by=.lastTimestamp
+```
+
+Healthy output shows a deployed release, one intended runtime topology, a completed migration Job, and ready Pods without repeating warning events.
+
 ## Values schema or lint fails
 
 **Check:** the exact field/type and allowed enum/range in `values.schema.json`.
@@ -40,6 +50,12 @@ Capture `helm status`, `helm get values --all`, `helm get manifest`, Jobs, Pods,
 
 **Check:** hook Job logs/events, direct database DNS/TLS/CA/auth/privileges/schema, and image revision.
 
+```sh
+kubectl -n opsknight describe job -l app.kubernetes.io/component=migration
+kubectl -n opsknight logs job/opsknight-migration --all-containers=true
+kubectl -n opsknight get events --sort-by=.lastTimestamp | tail -50
+```
+
 **Recovery:** keep workloads stopped, correct the cause, delete/recreate only the failed hook according to Helm procedure, and rerun upgrade.
 
 **Verify:** hook completes once before workloads roll.
@@ -47,6 +63,15 @@ Capture `helm status`, `helm get values --all`, `helm get manifest`, Jobs, Pods,
 ## Workload rollout stalls
 
 **Check:** Pod Pending/CrashLoop, image pull, quota/resources, PVC, Secret keys, probes, NetworkPolicy, and database readiness.
+
+```sh
+kubectl -n opsknight get pods -o wide
+kubectl -n opsknight describe pod <pod-name>
+kubectl -n opsknight logs <pod-name> --all-containers=true --previous
+kubectl -n opsknight rollout status deployment/<deployment> --timeout=10m
+```
+
+`Pending` with scheduling events points to capacity/placement; `ImagePullBackOff` to image/auth; `CrashLoopBackOff` plus previous logs to application/configuration; failing readiness with a running process to dependency/schema/probe health.
 
 **Recovery:** fix the specific platform or configuration failure and resume the same release revision.
 
@@ -64,4 +89,3 @@ Capture `helm status`, `helm get values --all`, `helm get manifest`, Jobs, Pods,
 
 - [Kubernetes troubleshooting](../kubernetes/troubleshooting)
 - [Rollback](../../upgrades/rollback)
-

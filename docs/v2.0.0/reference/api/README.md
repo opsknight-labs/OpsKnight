@@ -6,7 +6,7 @@ product_area: api
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-09-28
+  verified_at: 2026-10-01
   evidence:
     - src/app/api/
 ---
@@ -30,6 +30,7 @@ Supported general-purpose contracts are documented separately:
 
 > These routes support the OpsKnight UI and are not a supported external API contract. Do not build external automation against them unless a dedicated contract page says otherwise.
 
+- `GET /api/action-items/owners` — `src/app/api/action-items/owners/route.ts`
 - `POST /api/admin/generate-reset-link` — `src/app/api/admin/generate-reset-link/route.ts`
 - `POST /api/admin/incident-collaboration/meetings/[meetingId]/retry-cleanup` — `src/app/api/admin/incident-collaboration/meetings/[meetingId]/retry-cleanup/route.ts`
 - `GET, POST /api/admin/incident-collaboration` — `src/app/api/admin/incident-collaboration/route.ts`

@@ -26,3 +26,22 @@ test('every UI route is explicitly classified and public surfaces have documenta
     }
   }
 });
+
+test('high-risk configuration and mutation routes require task guides', () => {
+  const required = [
+    '/events/test',
+    '/settings/incident-sla',
+    '/settings/integrations/chatops',
+    '/settings/privacy-requests',
+    '/settings/status-pages',
+    '/m',
+    '/m/incidents',
+  ];
+  const routes = new Map(contract.routes.map(route => [route.route, route]));
+  for (const path of required) {
+    const route = routes.get(path);
+    assert.ok(route, `${path}: missing from route contract`);
+    assert.equal(route.taskDocumentationRequired, true, `${path}: must require task documentation`);
+    assert.ok(route.documentation.guides.length > 0, `${path}: must map to a task guide`);
+  }
+});

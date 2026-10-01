@@ -27,6 +27,9 @@ export async function captureEvidence(page: Page, testInfo: TestInfo, journey: s
   if (!runtimeSourceRevision || !runtimeDigest) {
     throw new Error('Runtime image must expose an OCI source revision and repository digest');
   }
+  if (!/^[0-9a-f]{40}$/.test(runtimeSourceRevision)) {
+    throw new Error('Runtime image OCI revision must be a full 40-character Git SHA');
+  }
   execFileSync('git', ['merge-base', '--is-ancestor', runtimeSourceRevision, sourceRevision]);
   const productChanges = execFileSync(
     'git',
