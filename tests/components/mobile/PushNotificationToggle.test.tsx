@@ -69,7 +69,7 @@ describe('PushNotificationToggle', () => {
       ok: false,
       status: 404,
       redirected: false,
-      url: 'https://opsknight.example/sw.js',
+      url: `${window.location.origin}/sw.js`,
       headers: new Headers({ 'content-type': 'text/html; charset=utf-8' }),
     });
 
@@ -106,7 +106,7 @@ describe('PushNotificationToggle', () => {
       ok: true,
       status: 200,
       redirected: false,
-      url: 'https://opsknight.example/sw.js',
+      url: `${window.location.origin}/sw.js`,
       headers: new Headers({ 'content-type': 'text/html; charset=utf-8' }),
     });
 
@@ -190,7 +190,7 @@ describe('PushNotificationToggle', () => {
       ok: true,
       status: 200,
       redirected: false,
-      url: 'https://opsknight.example/sw.js',
+      url: `${window.location.origin}/sw.js`,
       headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
     });
 
