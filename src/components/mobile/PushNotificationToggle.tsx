@@ -97,7 +97,7 @@ function serviceWorkerFailureAction(stage: ServiceWorkerPreparationStage) {
     case 'SW_ASSET':
       return 'Service worker file could not be validated. Retry.';
     case 'SW_REGISTER':
-      return 'Service worker registration failed. Retry.';
+      return 'Browser rejected service worker registration. Check /sw.js, HTTPS, and site permissions.';
     case 'SW_READY':
       return 'Service worker did not become ready. Retry.';
   }
