@@ -6,6 +6,7 @@ const mockFetch = vi.fn();
 
 describe('PushNotificationToggle', () => {
   beforeEach(() => {
+    mockFetch.mockReset();
     vi.stubGlobal('fetch', mockFetch);
     Object.defineProperty(window, 'PushManager', {
       value: function PushManager() {},
@@ -37,6 +38,7 @@ describe('PushNotificationToggle', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -115,10 +117,104 @@ describe('PushNotificationToggle', () => {
     render(<PushNotificationToggle />);
 
     const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    await waitFor(() => expect(enableButton).not.toBeDisabled());
     fireEvent.click(enableButton);
 
     await waitFor(() => {
       expect(window.Notification.requestPermission).toHaveBeenCalled();
+      expect(registration.pushManager.subscribe).toHaveBeenCalled();
+    });
+  });
+
+  it('invokes iOS subscribe directly from the Enable gesture with no post-click setup fetch', async () => {
+    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15'
+    );
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('iPhone');
+    Object.defineProperty(navigator, 'standalone', {
+      value: true,
+      configurable: true,
+    });
+
+    const requestPermission = vi.fn().mockResolvedValue('granted');
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'default',
+        requestPermission,
+      },
+      configurable: true,
+    });
+
+    let resolveSubscription!: (value: {
+      endpoint: string;
+      toJSON: () => { endpoint: string };
+    }) => void;
+    const subscribe = vi.fn(
+      () =>
+        new Promise<{
+          endpoint: string;
+          toJSON: () => { endpoint: string };
+        }>(resolve => {
+          resolveSubscription = resolve;
+        })
+    );
+    const registration = {
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(null),
+        subscribe,
+      },
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(registration),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: Promise.resolve(registration),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/system/vapid-public-key')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ key: 'B' + 'A'.repeat(86) }),
+        };
+      }
+      if (typeof url === 'string' && url.includes('/api/user/push-subscription')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true }),
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    render(<PushNotificationToggle />);
+
+    const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    await waitFor(() => expect(enableButton).not.toBeDisabled());
+
+    const fetchCallsBeforeClick = mockFetch.mock.calls.length;
+    fireEvent.click(enableButton);
+
+    // The subscribe call itself must happen synchronously inside the user click.
+    expect(subscribe).toHaveBeenCalledTimes(1);
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(mockFetch.mock.calls.length).toBe(fetchCallsBeforeClick);
+
+    resolveSubscription({
+      endpoint: 'https://web.push.apple.com/Q123',
+      toJSON: () => ({ endpoint: 'https://web.push.apple.com/Q123' }),
+    });
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/user/push-subscription',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(screen.getByRole('button', { name: /^Disable$/i })).toBeInTheDocument();
     });
   });
 
@@ -318,9 +414,7 @@ describe('PushNotificationToggle', () => {
     });
     const registration = {
       pushManager: {
-        getSubscription: vi
-          .fn()
-          .mockRejectedValue(new Error('Push subscription lookup timed out.')),
+        getSubscription: vi.fn().mockResolvedValue(null),
         subscribe: vi.fn().mockRejectedValue(new Error('Push subscription creation timed out.')),
       },
     };
@@ -348,6 +442,7 @@ describe('PushNotificationToggle', () => {
     render(<PushNotificationToggle />);
 
     const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    await waitFor(() => expect(enableButton).not.toBeDisabled());
     fireEvent.click(enableButton);
 
     await waitFor(() => {
@@ -378,9 +473,21 @@ describe('PushNotificationToggle', () => {
       configurable: true,
     });
 
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/system/vapid-public-key')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ key: 'B' + 'A'.repeat(86) }),
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+
     render(<PushNotificationToggle />);
 
     const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    await waitFor(() => expect(enableButton).not.toBeDisabled());
     fireEvent.click(enableButton);
 
     await waitFor(() => {
@@ -431,7 +538,8 @@ describe('PushNotificationToggle', () => {
 
       render(<PushNotificationToggle />);
 
-      const enableButton = screen.getByRole('button', { name: /Enable/i });
+      const enableButton = await screen.findByRole('button', { name: /Enable/i });
+      await waitFor(() => expect(enableButton).not.toBeDisabled());
       fireEvent.click(enableButton);
 
       await act(async () => {
