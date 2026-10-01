@@ -457,7 +457,7 @@
     {
       "page": "guides/identity/configure-scim.md",
       "type": "tutorial",
-      "userTask": "Configure and verify SCIM provisioning and deprovisioning end to end.",
+      "userTask": "Configure and verify SCIM user and group provisioning end to end.",
       "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 0,
