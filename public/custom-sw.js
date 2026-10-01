@@ -416,8 +416,8 @@ const normalizePushPayload = raw => {
     urgency: data.urgency || nested.urgency || null,
     title: typeof data.title === 'string' ? data.title : 'OpsKnight',
     body: typeof data.body === 'string' ? data.body : 'New notification',
-    icon: data.icon || '/icons/app-icon-192.png',
-    badge: data.badge || nested.badge || '/icons/app-icon-192.png',
+    icon: data.icon || '/icons/opsknight-192.png',
+    badge: data.badge || nested.badge || '/icons/opsknight-192.png',
     url: safeAppPath(data.url || nested.url, fallbackUrl),
     actions: supportedVersion ? parseActions(data.actions || nested.actions) : undefined,
     tag:
@@ -443,8 +443,8 @@ const focusOrOpen = async path => {
 const showFeedback = (title, body, incidentId, suffix) =>
   self.registration.showNotification(title, {
     body,
-    icon: '/icons/app-icon-192.png',
-    badge: '/icons/app-icon-192.png',
+    icon: '/icons/opsknight-192.png',
+    badge: '/icons/opsknight-192.png',
     tag: `incident-${incidentId}-${suffix}`,
     requireInteraction: false,
     data: { incidentId, url: `/m/incidents/${encodeURIComponent(incidentId)}` },
