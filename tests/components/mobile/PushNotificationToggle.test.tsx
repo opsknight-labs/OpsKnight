@@ -1151,6 +1151,9 @@ describe('PushNotificationToggle', () => {
         configurable: true,
       });
       const registration = {
+        active: { scriptURL: `${window.location.origin}/sw.js` },
+        waiting: null,
+        installing: null,
         pushManager: {
           getSubscription: vi.fn().mockResolvedValue(null),
           subscribe: vi.fn().mockImplementation(() => new Promise(() => {})),
