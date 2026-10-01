@@ -53,7 +53,19 @@ The server calculates metrics from records the current authorization actor can r
 
 An empty chart is not automatically a runtime failure. It can mean no matching incidents exist in the selected window, the team/service combination has no matching records, the user cannot read those records, or the metric has no valid samples (for example, no resolved incidents for MTTR). Widen the time range, clear team/service filters, and compare with the incident list before escalating.
 
-The **Updated** timestamp reports when the server rendered the current view. It is not a background refresh guarantee. Reload the page when you need a newly computed snapshot.
+The **Updated** timestamp reports when the server rendered the current view.
+Open **Live** to refresh immediately or select automatic refresh every 30
+seconds, 1 minute, or 5 minutes. The countdown pauses while the browser tab is
+hidden and resumes when it becomes visible. Auto-refresh belongs to the current
+viewer session; it is not saved into the dashboard definition.
+
+## Monitor active incidents
+
+Add or read the **Active Incidents** and **Active Incidents Feed** widgets when
+the dashboard is used for live response. They show current incident state for
+the selected authorized scope, while historical metric widgets continue to use
+the chosen reporting window. Verify a live item against its incident detail
+before using the dashboard as an escalation decision source.
 
 ## Switch views safely
 

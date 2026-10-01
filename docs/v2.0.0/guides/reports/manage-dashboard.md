@@ -44,6 +44,21 @@ The editor compares local title, description, widget definitions, positions, and
 5. Close the library with **Done**.
 6. To remove a widget, use its remove control while still in edit mode.
 
+## Configure a widget
+
+In edit mode, open a widget's configuration control. Depending on the widget,
+you can:
+
+- replace its displayed title;
+- choose a width from one to four columns;
+- choose compact, standard, or expanded row height;
+- display a chart as line, bar, or pie; and
+- set an optional SLA target for gauges and rate widgets.
+
+Select **Apply Changes**, review the result, and then select **Save Changes**.
+Applying the modal does not persist the dashboard by itself. Use **Reset to
+default** beside the title when you want the registered widget name again.
+
 ## Reorder and save
 
 Drag a widget by its handle and drop it at the desired position. OpsKnight recalculates the grid order while retaining each widget's width and height. Keyboard dragging is supported by the grid interaction layer.
@@ -52,9 +67,42 @@ Select **Save Changes** only after reviewing the complete layout. A successful s
 
 For a template preview, **Done** exits editing but does not persist a new dashboard. Select **Clone Dashboard** first when you need a saved, editable copy.
 
-## Visibility and ownership
+## Share a dashboard and set visibility
 
-The API supports `PRIVATE`, `TEAM`, and `PUBLIC` visibility. The current dashboard editor does not expose a visibility control. New blank and cloned dashboards therefore use the product's creation defaults unless another supported administrative/API workflow sets visibility. Only the owner can update or delete a saved dashboard; team/public access is read access.
+Select **Share** or open the gear menu and choose **Share Dashboard**. The dialog
+builds a link to the current dashboard and includes non-default time-window,
+team, and service filters. Select **Copy** and test the URL as a user with the
+intended access level.
+
+For a saved dashboard, its owner can choose:
+
+- **Private** — only the owner can view and modify it;
+- **Team** — members of the owner's assigned team can view it; or
+- **Organization (Public)** — signed-in users in the OpsKnight organization can
+  discover and view it.
+
+Team and public visibility grant read access, not edit or delete ownership.
+Templates can be linked directly, but do not expose visibility controls and
+remain previews until cloned.
+
+## Export a PDF
+
+Set the required filters first, then select **Export PDF**. OpsKnight invokes
+the browser print dialog with the dashboard's print layout. Choose the browser's
+**Save as PDF** destination, verify page orientation and scaling in preview,
+and save. The export represents the currently rendered filters and data; it is
+not a scheduled report and does not update after saving.
+
+## Present on a NOC or TV display
+
+Select the presentation control or choose **Presentation Mode** from the gear
+menu. OpsKnight opens a fullscreen wallboard with a live clock. If auto-refresh
+was off, presentation mode changes it to 60 seconds. Press `Esc`, use the exit
+control, or leave browser fullscreen to return to the normal dashboard.
+
+For an unattended display, use a restricted read-only account, confirm the
+device's session policy, and test browser sleep/fullscreen behavior. Do not use
+a shared administrator session as a wallboard identity.
 
 ## Delete a dashboard
 
@@ -63,7 +111,7 @@ The API supports `PRIVATE`, `TEAM`, and `PUBLIC` visibility. The current dashboa
 3. Read the confirmation and approve only after recording any configuration you need to reproduce.
 4. OpsKnight deletes the dashboard and its widgets, then returns to **Reports & Dashboards**.
 
-Deletion cannot be undone in the UI. **Export as PDF** and **Share Dashboard** are visible but disabled in 2.0.
+Deletion cannot be undone in the UI.
 
 ## Verify saved changes
 
@@ -75,6 +123,13 @@ After **Save Changes** confirms success, reload the same URL. Confirm the name, 
 - **A widget is disabled in the library:** that widget definition is already present.
 - **Changes disappear:** verify this is a saved dashboard URL and that the save confirmation completed.
 - **Edit or delete fails:** confirm the signed-in user owns the dashboard.
+- **A recipient gets Not Found:** confirm visibility and that the recipient is
+  signed in with the required team/organization access.
+- **PDF is clipped:** change print orientation, paper size, margins, or scale in
+  the browser print dialog.
+- **Presentation does not enter fullscreen:** allow fullscreen for the site;
+  the wallboard overlay can still open when the browser rejects native
+  fullscreen.
 
 ## Next steps
 
