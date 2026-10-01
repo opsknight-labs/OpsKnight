@@ -67,6 +67,9 @@ export function getMetricData(metrics: SerializedSLAMetrics, metricKey: string):
       return metrics.serviceSlaTable;
     case 'currentShifts':
       return metrics.currentShifts;
+    case 'activeIncidentSummaries':
+    case 'activeIncidentsList':
+      return metrics.activeIncidentSummaries;
     default:
       if (typeof metrics === 'object' && metrics !== null) {
         return Reflect.get(metrics, metricKey);
@@ -139,7 +142,9 @@ export function getWidgetTypeForMetric(metricKey: string): WidgetType {
     metricKey === 'onCallLoad' ||
     metricKey === 'recurringTitles' ||
     metricKey === 'serviceSlaTable' ||
-    metricKey === 'currentShifts'
+    metricKey === 'currentShifts' ||
+    metricKey === 'activeIncidentSummaries' ||
+    metricKey === 'activeIncidentsList'
   ) {
     return 'table';
   }

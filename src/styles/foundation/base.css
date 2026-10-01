@@ -208,3 +208,91 @@ select option {
     position: relative;
     z-index: 1;
 }
+
+/* ==========================================================================
+   Executive Dashboard Print & PDF Export Styles
+   ========================================================================== */
+@media print {
+    @page {
+        size: landscape;
+        margin: 12mm 15mm;
+    }
+
+    /* Hide chrome, navigation, headers, footers, and edit controls */
+    nav,
+    aside,
+    header:not(.print-include),
+    .dashboard-edit-footer,
+    .no-print,
+    [data-no-print='true'],
+    .app-sidebar,
+    .sidebar,
+    button:not(.print-keep),
+    [role='dialog'],
+    .filter-bar-controls {
+        display: none !important;
+    }
+
+    /* Base page styling for crisp, clean PDF export */
+    html,
+    body,
+    .app-shell,
+    .page-shell {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        min-height: auto !important;
+        box-shadow: none !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Executive print header display */
+    .executive-print-header {
+        display: block !important;
+        margin-bottom: 1.5rem !important;
+        padding-bottom: 0.75rem !important;
+        border-bottom: 2px solid #e2e8f0 !important;
+    }
+
+    /* Keep widgets together without page breaks tearing across them */
+    .grid > div {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        box-shadow: none !important;
+        border: 1px solid #cbd5e1 !important;
+        background: #ffffff !important;
+    }
+
+    /* Ensure SVG charts scale cleanly */
+    svg {
+        max-width: 100% !important;
+    }
+
+    /* Text contrast adjustments */
+    .text-white,
+    .text-zinc-100,
+    .text-zinc-200 {
+        color: #0f172a !important;
+    }
+
+    .text-muted-foreground,
+    .text-zinc-400 {
+        color: #475569 !important;
+    }
+
+    .bg-card,
+    .bg-zinc-800,
+    .bg-zinc-900 {
+        background-color: #f8fafc !important;
+    }
+
+    .border,
+    .border-zinc-800,
+    .border-border {
+        border-color: #e2e8f0 !important;
+    }
+}
+
