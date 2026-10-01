@@ -181,5 +181,6 @@ export default function SettingsIcon({ name, className = '' }: IconProps) {
     ),
   };
 
+  // eslint-disable-next-line security/detect-object-injection
   return icons[name] || null;
 }
