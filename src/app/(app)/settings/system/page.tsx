@@ -20,10 +20,8 @@ import {
   CheckCircle2,
   XCircle,
   Layers,
-  ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
-import { Button } from '@/components/ui/shadcn/button';
 import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
 import { getScimConfig } from '@/lib/scim';
 
@@ -164,32 +162,12 @@ export default async function SystemSettingsPage() {
     );
 
     const ssoTab = (
-      <div className="space-y-8">
-        <SsoSettingsForm
-          initialConfig={oidcConfig}
-          callbackUrl={ssoCallbackUrl}
-          hasEncryptionKey={env.encryptionKey}
-        />
-        <SettingsSection
-          title="SCIM 2.0 User Provisioning"
-          description="Automate identity lifecycle management: provision, synchronize, and de-provision users directly from Microsoft Entra ID, Okta, or other enterprise identity providers."
-          footer={
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
-                OpsKnight implements RFC 7644 SCIM 2.0 for automated user lifecycle operations.
-              </p>
-              <Button variant="ghost" size="sm" asChild className="gap-1 text-xs h-8">
-                <Link href="/settings/users">
-                  View Provisioned Users
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
-            </div>
-          }
-        >
-          <ScimSettingsSection initialConfig={scimConfig} tenantUrl={scimTenantUrl} />
-        </SettingsSection>
-      </div>
+      <SsoSettingsForm
+        initialConfig={oidcConfig}
+        callbackUrl={ssoCallbackUrl}
+        hasEncryptionKey={env.encryptionKey}
+        scimSection={<ScimSettingsSection initialConfig={scimConfig} tenantUrl={scimTenantUrl} />}
+      />
     );
 
     const retentionTab = <RetentionPolicySettings />;

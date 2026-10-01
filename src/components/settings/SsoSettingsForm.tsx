@@ -69,7 +69,10 @@ type Props = {
   callbackUrl: string;
   hasEncryptionKey: boolean;
   configError?: string;
+  scimSection?: React.ReactNode;
 };
+
+export type SsoSubTab = 'connection' | 'roles' | 'scim' | 'policies';
 
 type Preset = {
   id: string;
@@ -181,8 +184,40 @@ export default function SsoSettingsForm({
   callbackUrl,
   hasEncryptionKey,
   configError,
+  scimSection,
 }: Props) {
   const router = useRouter();
+  const [activeSubTab, setActiveSubTab] = useState<SsoSubTab>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlTab = params.get('subtab') || params.get('tab');
+      if (urlTab && ['connection', 'roles', 'scim', 'policies'].includes(urlTab)) {
+        return urlTab as SsoSubTab;
+      }
+    }
+    return 'connection';
+  });
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const urlTab = params.get('subtab') || params.get('tab');
+      if (urlTab && ['connection', 'roles', 'scim', 'policies'].includes(urlTab)) {
+        setActiveSubTab(urlTab as SsoSubTab);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleTabChange = (tabId: SsoSubTab) => {
+    setActiveSubTab(tabId);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('subtab', tabId);
+      window.history.replaceState(null, '', url.toString());
+    }
+  };
   const initialIssuer = initialConfig?.issuer ?? '';
   const initialClientId = initialConfig?.clientId ?? '';
   const initialDomains = (initialConfig?.allowedDomains ?? []).join(', ');
@@ -268,6 +303,47 @@ export default function SsoSettingsForm({
     avatarUrl: initialConfig?.profileMapping?.avatarUrl ?? '',
   };
   const [profileMappingValues, setProfileMappingValues] = useState(initialProfileMapping);
+
+  const parsedDomainsCount = domains
+    .split(',')
+    .map(d => d.trim())
+    .filter(Boolean).length;
+
+  const subTabs = [
+    {
+      id: 'connection' as const,
+      label: 'Connection & Credentials',
+      icon: Key,
+      badge: selectedPreset
+        ? PROVIDER_PRESETS.find(p => p.id === selectedPreset)?.label
+        : undefined,
+    },
+    {
+      id: 'roles' as const,
+      label: 'Roles & Claims',
+      icon: Users,
+      badge:
+        Array.isArray(roleMappingPreview) && roleMappingPreview.length > 0
+          ? `${roleMappingPreview.length} rules`
+          : undefined,
+    },
+    ...(scimSection
+      ? [
+          {
+            id: 'scim' as const,
+            label: 'SCIM Provisioning',
+            icon: RefreshCw,
+            badge: 'SCIM 2.0',
+          },
+        ]
+      : []),
+    {
+      id: 'policies' as const,
+      label: 'Access & Session Policies',
+      icon: Clock,
+      badge: parsedDomainsCount > 0 ? `${parsedDomainsCount} domains` : undefined,
+    },
+  ];
 
   const handleTestConnection = async () => {
     if (!issuerUrl) {
@@ -582,812 +658,878 @@ export default function SsoSettingsForm({
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
-        <div className="flex items-start sm:items-center gap-3.5 pb-4 border-b">
-          <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 shrink-0">
-            <Key className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-foreground">Identity Provider Credentials</h3>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-              Configure the OIDC discovery endpoint and client authentication credentials from your
-              provider.
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Provider Template
-          </Label>
-          <div className="flex flex-wrap gap-2">
-            {PROVIDER_PRESETS.map(preset => {
-              const isSelected = selectedPreset === preset.id;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => handlePresetSelect(preset)}
-                  className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-                    isSelected
-                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                      : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-xs text-muted-foreground">{selectedPresetNote}</p>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="issuer-url" className="text-sm font-semibold">
-              Issuer URL <span className="text-destructive">*</span>
-            </Label>
-            <span className="text-[11px] text-muted-foreground">HTTPS OIDC discovery base</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                id="issuer-url"
-                type="url"
-                name="issuer"
-                placeholder="https://login.company.com"
-                value={issuerUrl}
-                onChange={event => {
-                  setIssuerUrl(event.target.value);
-                  setIssuerMigrationConfirmed(false);
-                  setTestStatus('idle');
-                  if (validationErrors.issuer) {
-                    setValidationErrors(current => ({ ...current, issuer: undefined }));
-                  }
-                }}
-                className={`pl-9 font-mono text-sm h-10 ${validationErrors.issuer ? 'border-destructive' : ''}`}
-              />
-            </div>
-            <Button
+      {/* Enterprise Identity Sub-Navigation Tabs */}
+      <div
+        className="flex items-center gap-1.5 p-1.5 rounded-xl bg-muted/60 border overflow-x-auto scrollbar-none"
+        role="tablist"
+        aria-label="Enterprise Identity Configuration Sections"
+      >
+        {subTabs.map(tab => {
+          const Icon = tab.icon;
+          const isActive = activeSubTab === tab.id;
+          return (
+            <button
+              key={tab.id}
               type="button"
-              variant="outline"
-              onClick={handleTestConnection}
-              disabled={testStatus === 'testing' || !issuerUrl}
-              className="h-10 text-xs gap-1.5 shrink-0 px-4 font-semibold"
-            >
-              {testStatus === 'testing' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {testStatus === 'testing' ? 'Testing...' : 'Test Connection'}
-            </Button>
-          </div>
-          {validationErrors.issuer && (
-            <p className="text-xs text-destructive flex items-center gap-1 font-medium">
-              <AlertTriangle className="h-3 w-3" />
-              {validationErrors.issuer}
-            </p>
-          )}
-
-          {issuerChanged && (
-            <Alert className="bg-destructive/5 border-destructive/30" role="alert">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-              <AlertDescription className="space-y-3">
-                <p>
-                  Changing the issuer replaces the identity trust boundary. Existing OIDC sessions
-                  and unused account-link approvals will be revoked.
-                </p>
-                <label className="flex items-start gap-2 font-medium cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="confirmIssuerMigration"
-                    checked={issuerMigrationConfirmed}
-                    onChange={event => setIssuerMigrationConfirmed(event.target.checked)}
-                    className="mt-0.5"
-                  />
-                  I understand and authorize this issuer migration
-                </label>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {testStatus !== 'idle' && (
-            <div
-              className={`rounded-lg border p-3 text-xs flex items-center gap-2 ${
-                testStatus === 'success'
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
-                  : testStatus === 'error'
-                    ? 'bg-destructive/10 border-destructive/30 text-destructive'
-                    : 'bg-muted text-muted-foreground'
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => handleTabChange(tab.id)}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+                isActive
+                  ? 'bg-background text-foreground shadow-sm font-semibold'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
               }`}
             >
-              {testStatus === 'success' ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-              ) : (
-                <AlertTriangle className="h-4 w-4 shrink-0" />
+              <Icon
+                className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`}
+              />
+              <span>{tab.label}</span>
+              {tab.badge && (
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                    isActive
+                      ? 'bg-primary/10 text-primary font-semibold'
+                      : 'bg-background/80 text-muted-foreground border'
+                  }`}
+                >
+                  {tab.badge}
+                </span>
               )}
-              <div className="flex-1">
-                <span className="font-semibold">{testMessage}</span>
-                {lastTested && <span className="opacity-70 ml-2">({lastTested})</span>}
-              </div>
-            </div>
-          )}
-        </div>
+            </button>
+          );
+        })}
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Tab 1: Connection & Credentials */}
+      <div className={activeSubTab === 'connection' ? 'space-y-6' : 'hidden'}>
+        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+          <div className="flex items-start sm:items-center gap-3.5 pb-4 border-b">
+            <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 shrink-0">
+              <Key className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-foreground">Identity Provider Credentials</h3>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Configure the OIDC discovery endpoint and client authentication credentials from
+                your provider.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Provider Template
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {PROVIDER_PRESETS.map(preset => {
+                const isSelected = selectedPreset === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => handlePresetSelect(preset)}
+                    className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+                      isSelected
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                        : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">{selectedPresetNote}</p>
+          </div>
+
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="client-id" className="text-sm font-semibold">
-                Client ID <span className="text-destructive">*</span>
+              <Label htmlFor="issuer-url" className="text-sm font-semibold">
+                Issuer URL <span className="text-destructive">*</span>
               </Label>
-              <a
-                href="https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] text-muted-foreground hover:text-primary inline-flex items-center gap-0.5"
-              >
-                Help <ExternalLink className="h-2.5 w-2.5" />
-              </a>
+              <span className="text-[11px] text-muted-foreground">HTTPS OIDC discovery base</span>
             </div>
-            <Input
-              id="client-id"
-              type="text"
-              name="clientId"
-              placeholder="e.g. 0oa123abcXYZ"
-              value={clientIdValue}
-              onChange={event => {
-                setClientIdValue(event.target.value);
-                if (validationErrors.clientId) {
-                  setValidationErrors(current => ({ ...current, clientId: undefined }));
-                }
-              }}
-              className={`font-mono text-sm h-10 ${validationErrors.clientId ? 'border-destructive' : ''}`}
-            />
-            {validationErrors.clientId && (
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  id="issuer-url"
+                  type="url"
+                  name="issuer"
+                  placeholder="https://login.company.com"
+                  value={issuerUrl}
+                  onChange={event => {
+                    setIssuerUrl(event.target.value);
+                    setIssuerMigrationConfirmed(false);
+                    setTestStatus('idle');
+                    if (validationErrors.issuer) {
+                      setValidationErrors(current => ({ ...current, issuer: undefined }));
+                    }
+                  }}
+                  className={`pl-9 font-mono text-sm h-10 ${validationErrors.issuer ? 'border-destructive' : ''}`}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleTestConnection}
+                disabled={testStatus === 'testing' || !issuerUrl}
+                className="h-10 text-xs gap-1.5 shrink-0 px-4 font-semibold"
+              >
+                {testStatus === 'testing' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {testStatus === 'testing' ? 'Testing...' : 'Test Connection'}
+              </Button>
+            </div>
+            {validationErrors.issuer && (
               <p className="text-xs text-destructive flex items-center gap-1 font-medium">
                 <AlertTriangle className="h-3 w-3" />
-                {validationErrors.clientId}
+                {validationErrors.issuer}
+              </p>
+            )}
+
+            {issuerChanged && (
+              <Alert className="bg-destructive/5 border-destructive/30" role="alert">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <AlertDescription className="space-y-3">
+                  <p>
+                    Changing the issuer replaces the identity trust boundary. Existing OIDC sessions
+                    and unused account-link approvals will be revoked.
+                  </p>
+                  <label className="flex items-start gap-2 font-medium cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="confirmIssuerMigration"
+                      checked={issuerMigrationConfirmed}
+                      onChange={event => setIssuerMigrationConfirmed(event.target.checked)}
+                      className="mt-0.5"
+                    />
+                    I understand and authorize this issuer migration
+                  </label>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {testStatus !== 'idle' && (
+              <div
+                className={`rounded-lg border p-3 text-xs flex items-center gap-2 ${
+                  testStatus === 'success'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                    : testStatus === 'error'
+                      ? 'bg-destructive/10 border-destructive/30 text-destructive'
+                      : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {testStatus === 'success' ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                )}
+                <div className="flex-1">
+                  <span className="font-semibold">{testMessage}</span>
+                  {lastTested && <span className="opacity-70 ml-2">({lastTested})</span>}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="client-id" className="text-sm font-semibold">
+                  Client ID <span className="text-destructive">*</span>
+                </Label>
+                <a
+                  href="https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-muted-foreground hover:text-primary inline-flex items-center gap-0.5"
+                >
+                  Help <ExternalLink className="h-2.5 w-2.5" />
+                </a>
+              </div>
+              <Input
+                id="client-id"
+                type="text"
+                name="clientId"
+                placeholder="e.g. 0oa123abcXYZ"
+                value={clientIdValue}
+                onChange={event => {
+                  setClientIdValue(event.target.value);
+                  if (validationErrors.clientId) {
+                    setValidationErrors(current => ({ ...current, clientId: undefined }));
+                  }
+                }}
+                className={`font-mono text-sm h-10 ${validationErrors.clientId ? 'border-destructive' : ''}`}
+              />
+              {validationErrors.clientId && (
+                <p className="text-xs text-destructive flex items-center gap-1 font-medium">
+                  <AlertTriangle className="h-3 w-3" />
+                  {validationErrors.clientId}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="client-secret" className="text-sm font-semibold">
+                  Client Secret{' '}
+                  {clientSecretRequired ? (
+                    <span className="text-destructive">*</span>
+                  ) : (
+                    <span className="text-muted-foreground font-normal text-xs">
+                      (optional to update)
+                    </span>
+                  )}
+                </Label>
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Lock className="h-3 w-3 text-muted-foreground" />
+                  Encrypted at rest
+                </span>
+              </div>
+              <div className="relative">
+                <Input
+                  id="client-secret"
+                  type={showSecret ? 'text' : 'password'}
+                  name="clientSecret"
+                  placeholder={
+                    initialConfig?.hasClientSecret
+                      ? '••••••••  (Secret configured)'
+                      : 'Enter client secret'
+                  }
+                  autoComplete="off"
+                  value={clientSecretValue}
+                  onChange={event => {
+                    setClientSecretValue(event.target.value);
+                    if (validationErrors.clientSecret) {
+                      setValidationErrors(current => ({ ...current, clientSecret: undefined }));
+                    }
+                  }}
+                  className={`font-mono text-sm h-10 pr-10 ${validationErrors.clientSecret ? 'border-destructive' : ''}`}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowSecret(!showSecret)}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                  aria-label={showSecret ? 'Hide secret' : 'Show secret'}
+                  title={showSecret ? 'Hide secret' : 'Show secret'}
+                >
+                  {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              {validationErrors.clientSecret && (
+                <p className="text-xs text-destructive flex items-center gap-1 font-medium">
+                  <AlertTriangle className="h-3 w-3" />
+                  {validationErrors.clientSecret}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-semibold">Token Endpoint Authentication</Label>
+              <span className="text-[11px] text-muted-foreground">
+                client_secret_basic / client_secret_post
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label
+                htmlFor="auth-method-basic"
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                  tokenEndpointAuthMethodValue === 'client_secret_basic'
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                    : 'border-border hover:bg-muted/30'
+                }`}
+              >
+                <input
+                  type="radio"
+                  id="auth-method-basic"
+                  name="tokenEndpointAuthMethod"
+                  value="client_secret_basic"
+                  checked={tokenEndpointAuthMethodValue === 'client_secret_basic'}
+                  onChange={() => setTokenEndpointAuthMethodValue('client_secret_basic')}
+                  className="mt-0.5 accent-primary h-4 w-4"
+                />
+                <div className="space-y-0.5">
+                  <span className="text-xs font-semibold text-foreground block">
+                    Client Secret Basic
+                  </span>
+                  <span className="text-[11px] text-muted-foreground block leading-relaxed">
+                    HTTP Basic Authorization header (default standard)
+                  </span>
+                </div>
+              </label>
+
+              <label
+                htmlFor="auth-method-post"
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                  tokenEndpointAuthMethodValue === 'client_secret_post'
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                    : 'border-border hover:bg-muted/30'
+                }`}
+              >
+                <input
+                  type="radio"
+                  id="auth-method-post"
+                  name="tokenEndpointAuthMethod"
+                  value="client_secret_post"
+                  checked={tokenEndpointAuthMethodValue === 'client_secret_post'}
+                  onChange={() => setTokenEndpointAuthMethodValue('client_secret_post')}
+                  className="mt-0.5 accent-primary h-4 w-4"
+                />
+                <div className="space-y-0.5">
+                  <span className="text-xs font-semibold text-foreground block">
+                    Client Secret Post
+                  </span>
+                  <span className="text-[11px] text-muted-foreground block leading-relaxed">
+                    Credentials sent in POST body (Auth0/Okta POST client)
+                  </span>
+                </div>
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Must match your application&apos;s authentication configuration in your Identity
+              Provider.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="provider-label" className="text-sm font-semibold">
+                Custom Button Label
+              </Label>
+              <span className="text-[11px] text-muted-foreground">
+                Optional sign-in display text
+              </span>
+            </div>
+            <Input
+              id="provider-label"
+              type="text"
+              name="providerLabel"
+              placeholder="Auto-detect from issuer"
+              value={providerLabelValue}
+              onChange={event => setProviderLabelValue(event.target.value)}
+              className="text-sm h-10"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Tab: Access & Session Policies (Part 1 - Provisioning & Domains) */}
+      <div className={activeSubTab === 'policies' ? 'space-y-6' : 'hidden'}>
+        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+          <div className="flex items-start sm:items-center gap-3.5 pb-4 border-b">
+            <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
+              <Users className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-foreground">
+                User Provisioning & Restrictions
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Control how accounts are created upon login and enforce company domain boundaries.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-muted/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label htmlFor="auto-provision" className="text-sm font-semibold cursor-pointer">
+                Just-In-Time (JIT) Account Auto-Provisioning
+              </Label>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Automatically create an OpsKnight user account on first successful SSO sign-in.
+                Disable to require existing administrator invitations.
+              </p>
+            </div>
+            <Switch
+              id="auto-provision"
+              name="autoProvision"
+              checked={autoProvision}
+              onCheckedChange={setAutoProvision}
+              className="shrink-0"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="allowed-domains" className="text-sm font-semibold">
+                Allowed Email Domains
+              </Label>
+              <span className="text-[11px] text-muted-foreground">Comma-separated whitelist</span>
+            </div>
+            <Input
+              id="allowed-domains"
+              type="text"
+              name="allowedDomains"
+              placeholder="e.g. acme.com, engineering.acme.com"
+              value={domains}
+              onChange={event => setDomains(event.target.value)}
+              className="font-mono text-sm h-10"
+            />
+            {selectedPreset === 'azure' ? (
+              <p className="text-xs text-muted-foreground">
+                Access is scoped to the configured Microsoft Entra tenant authority. Email domain
+                filtering is not applied for Entra authorization.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Leave empty to allow any domain verified and sent by your identity provider.
               </p>
             )}
           </div>
 
+          {selectedPreset === 'auth0' && (
+            <div className="space-y-2">
+              <Label htmlFor="organization-id" className="text-sm font-semibold">
+                Required Auth0 Organization ID
+              </Label>
+              <Input
+                id="organization-id"
+                name="organizationId"
+                value={organizationIdValue}
+                onChange={event => setOrganizationIdValue(event.target.value)}
+                placeholder="org_..."
+                className="font-mono text-sm h-10"
+              />
+              <p className="text-xs text-muted-foreground">
+                When set, the signed ID-token org_id claim must match exactly.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Tab 2: Roles & Claims */}
+      <div className={activeSubTab === 'roles' ? 'space-y-6' : 'hidden'}>
+        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
+          <div className="flex items-start sm:items-center gap-3.5 pb-4 border-b">
+            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+              <Sliders className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-foreground">Claims, Scopes & Role Mapping</h3>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Assign OpsKnight roles dynamically and sync profile fields from OIDC token claims.
+              </p>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label htmlFor="client-secret" className="text-sm font-semibold">
-                Client Secret{' '}
-                {clientSecretRequired ? (
-                  <span className="text-destructive">*</span>
-                ) : (
-                  <span className="text-muted-foreground font-normal text-xs">
-                    (optional to update)
-                  </span>
-                )}
+              <Label htmlFor="custom-scopes" className="text-sm font-semibold">
+                Custom OIDC Scopes
               </Label>
-              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                <Lock className="h-3 w-3 text-muted-foreground" />
-                Encrypted at rest
+              <span className="text-[11px] text-muted-foreground">
+                openid, email, profile included by default
               </span>
             </div>
-            <div className="relative">
-              <Input
-                id="client-secret"
-                type={showSecret ? 'text' : 'password'}
-                name="clientSecret"
-                placeholder={
-                  initialConfig?.hasClientSecret
-                    ? '••••••••  (Secret configured)'
-                    : 'Enter client secret'
-                }
-                autoComplete="off"
-                value={clientSecretValue}
-                onChange={event => {
-                  setClientSecretValue(event.target.value);
-                  if (validationErrors.clientSecret) {
-                    setValidationErrors(current => ({ ...current, clientSecret: undefined }));
-                  }
-                }}
-                className={`font-mono text-sm h-10 pr-10 ${validationErrors.clientSecret ? 'border-destructive' : ''}`}
-              />
+            <Input
+              id="custom-scopes"
+              type="text"
+              name="customScopes"
+              placeholder={selectedPreset === 'okta' ? 'e.g. groups' : 'Optional provider scopes'}
+              value={customScopesValue}
+              onChange={event => setCustomScopesValue(event.target.value)}
+              className="font-mono text-sm h-10"
+            />
+            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+              <span className="text-[11px] text-muted-foreground mr-1">Quick add:</span>
+              {oidcScopeSuggestions(selectedPreset).map(scope => {
+                const currentScopes = customScopesValue.split(/\s+/).filter(Boolean);
+                const isIncluded = currentScopes.includes(scope);
+                return (
+                  <button
+                    key={scope}
+                    type="button"
+                    onClick={() => {
+                      if (isIncluded) {
+                        setCustomScopesValue(currentScopes.filter(s => s !== scope).join(' '));
+                      } else {
+                        setCustomScopesValue([...currentScopes, scope].join(' '));
+                      }
+                    }}
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
+                      isIncluded
+                        ? 'bg-primary/10 border-primary/30 text-primary font-semibold'
+                        : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
+                    }`}
+                  >
+                    {isIncluded ? `✓ ${scope}` : `+ ${scope}`}
+                  </button>
+                );
+              })}
+            </div>
+            {oidcScopeSuggestions(selectedPreset).length === 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                No additional OAuth scopes are recommended for this provider.
+              </p>
+            )}
+            {selectedPreset === 'azure' && (
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Tip for Microsoft Entra ID: Configure group claims in Azure Portal under App
+                registrations → Token configuration → Add groups claim. Do not request{' '}
+                <code className="font-mono">groups</code> as an OAuth scope.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-3 pt-2">
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">Claim-to-Role Mapping Rules</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Automatically grant Admin, Responder, or Auditor roles based on user group or role
+                claims.
+              </p>
+            </div>
+            <RoleMappingEditor
+              key={roleMappingResetKey}
+              initialMappings={initialRoleMapping}
+              onChange={setRoleMappingPreview}
+            />
+          </div>
+
+          <div className="space-y-3 pt-4 border-t">
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">
+                User Profile Attribute Claims
+              </h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Map IdP token claim names to user profile properties on each login.
+              </p>
+            </div>
+            {enabled ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="rounded-xl border bg-muted/20 p-3.5 space-y-1.5">
+                  <Label htmlFor="claim-dept" className="text-xs font-semibold">
+                    Department Claim
+                  </Label>
+                  <Input
+                    id="claim-dept"
+                    type="text"
+                    name="profileMapping.department"
+                    placeholder="e.g. department"
+                    value={profileMappingValues.department}
+                    onChange={event =>
+                      setProfileMappingValues(current => ({
+                        ...current,
+                        department: event.target.value,
+                      }))
+                    }
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
+                <div className="rounded-xl border bg-muted/20 p-3.5 space-y-1.5">
+                  <Label htmlFor="claim-title" className="text-xs font-semibold">
+                    Job Title Claim
+                  </Label>
+                  <Input
+                    id="claim-title"
+                    type="text"
+                    name="profileMapping.jobTitle"
+                    placeholder="e.g. title"
+                    value={profileMappingValues.jobTitle}
+                    onChange={event =>
+                      setProfileMappingValues(current => ({
+                        ...current,
+                        jobTitle: event.target.value,
+                      }))
+                    }
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
+                <div className="rounded-xl border bg-muted/20 p-3.5 space-y-1.5">
+                  <Label htmlFor="claim-avatar" className="text-xs font-semibold">
+                    Avatar URL Claim
+                  </Label>
+                  <Input
+                    id="claim-avatar"
+                    type="text"
+                    name="profileMapping.avatarUrl"
+                    placeholder="e.g. picture"
+                    value={profileMappingValues.avatarUrl}
+                    onChange={event =>
+                      setProfileMappingValues(current => ({
+                        ...current,
+                        avatarUrl: event.target.value,
+                      }))
+                    }
+                    className="h-8 text-xs font-mono"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed bg-muted/20 p-4 text-xs text-muted-foreground flex items-center gap-2">
+                <Shield className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span>Enable SSO in Card 1 to configure profile attribute claims.</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Tab 3: SCIM Provisioning */}
+      {scimSection && (
+        <div className={activeSubTab === 'scim' ? 'space-y-6' : 'hidden'}>{scimSection}</div>
+      )}
+
+      {/* Tab: Access & Session Policies (Part 2 - Session & Inactivity) */}
+      <div className={activeSubTab === 'policies' ? 'space-y-6' : 'hidden'}>
+        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b">
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
+                <Clock className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-foreground">
+                    Session & Inactivity Policies
+                  </h3>
+                  {(sessionMaxAge != null || sessionIdleTimeout != null) && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/10"
+                    >
+                      Customized
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  Control maximum session duration and idle timeout for SSO logins. Responders
+                  receive an interactive renewal prompt 5 minutes before expiration.
+                </p>
+              </div>
+            </div>
+            {(sessionMaxAge != null || sessionIdleTimeout != null) && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setShowSecret(!showSecret)}
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
-                aria-label={showSecret ? 'Hide secret' : 'Show secret'}
-                title={showSecret ? 'Hide secret' : 'Show secret'}
+                onClick={() => {
+                  setSessionMaxAge(null);
+                  setSessionIdleTimeout(null);
+                  setIsCustomMaxAge(false);
+                  setIsCustomIdleTimeout(false);
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground h-8 shrink-0"
               >
-                {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                Reset to Defaults
               </Button>
-            </div>
-            {validationErrors.clientSecret && (
-              <p className="text-xs text-destructive flex items-center gap-1 font-medium">
-                <AlertTriangle className="h-3 w-3" />
-                {validationErrors.clientSecret}
-              </p>
             )}
           </div>
-        </div>
 
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <Label className="text-sm font-semibold">Token Endpoint Authentication</Label>
-            <span className="text-[11px] text-muted-foreground">
-              client_secret_basic / client_secret_post
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label
-              htmlFor="auth-method-basic"
-              className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                tokenEndpointAuthMethodValue === 'client_secret_basic'
-                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                  : 'border-border hover:bg-muted/30'
-              }`}
-            >
-              <input
-                type="radio"
-                id="auth-method-basic"
-                name="tokenEndpointAuthMethod"
-                value="client_secret_basic"
-                checked={tokenEndpointAuthMethodValue === 'client_secret_basic'}
-                onChange={() => setTokenEndpointAuthMethodValue('client_secret_basic')}
-                className="mt-0.5 accent-primary h-4 w-4"
-              />
-              <div className="space-y-0.5">
-                <span className="text-xs font-semibold text-foreground block">
-                  Client Secret Basic
-                </span>
-                <span className="text-[11px] text-muted-foreground block leading-relaxed">
-                  HTTP Basic Authorization header (default standard)
-                </span>
+          {/* Setting 1: Maximum Session Lifetime */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-semibold">Maximum Session Lifetime</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Hard re-authentication threshold for SSO logins (allowed: 15m to 30 days).
+                </p>
               </div>
-            </label>
-
-            <label
-              htmlFor="auth-method-post"
-              className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                tokenEndpointAuthMethodValue === 'client_secret_post'
-                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                  : 'border-border hover:bg-muted/30'
-              }`}
-            >
-              <input
-                type="radio"
-                id="auth-method-post"
-                name="tokenEndpointAuthMethod"
-                value="client_secret_post"
-                checked={tokenEndpointAuthMethodValue === 'client_secret_post'}
-                onChange={() => setTokenEndpointAuthMethodValue('client_secret_post')}
-                className="mt-0.5 accent-primary h-4 w-4"
-              />
-              <div className="space-y-0.5">
-                <span className="text-xs font-semibold text-foreground block">
-                  Client Secret Post
-                </span>
-                <span className="text-[11px] text-muted-foreground block leading-relaxed">
-                  Credentials sent in POST body (Auth0/Okta POST client)
-                </span>
-              </div>
-            </label>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Must match your application&apos;s authentication configuration in your Identity
-            Provider.
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="provider-label" className="text-sm font-semibold">
-              Custom Button Label
-            </Label>
-            <span className="text-[11px] text-muted-foreground">Optional sign-in display text</span>
-          </div>
-          <Input
-            id="provider-label"
-            type="text"
-            name="providerLabel"
-            placeholder="Auto-detect from issuer"
-            value={providerLabelValue}
-            onChange={event => setProviderLabelValue(event.target.value)}
-            className="text-sm h-10"
-          />
-        </div>
-      </div>
-
-      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
-        <div className="flex items-start sm:items-center gap-3.5 pb-4 border-b">
-          <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
-            <Users className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-foreground">
-              User Provisioning & Restrictions
-            </h3>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-              Control how accounts are created upon login and enforce company domain boundaries.
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-xl border bg-muted/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <Label htmlFor="auto-provision" className="text-sm font-semibold cursor-pointer">
-              Just-In-Time (JIT) Account Auto-Provisioning
-            </Label>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Automatically create an OpsKnight user account on first successful SSO sign-in.
-              Disable to require existing administrator invitations.
-            </p>
-          </div>
-          <Switch
-            id="auto-provision"
-            name="autoProvision"
-            checked={autoProvision}
-            onCheckedChange={setAutoProvision}
-            className="shrink-0"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="allowed-domains" className="text-sm font-semibold">
-              Allowed Email Domains
-            </Label>
-            <span className="text-[11px] text-muted-foreground">Comma-separated whitelist</span>
-          </div>
-          <Input
-            id="allowed-domains"
-            type="text"
-            name="allowedDomains"
-            placeholder="e.g. acme.com, engineering.acme.com"
-            value={domains}
-            onChange={event => setDomains(event.target.value)}
-            className="font-mono text-sm h-10"
-          />
-          {selectedPreset === 'azure' ? (
-            <p className="text-xs text-muted-foreground">
-              Access is scoped to the configured Microsoft Entra tenant authority. Email domain
-              filtering is not applied for Entra authorization.
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Leave empty to allow any domain verified and sent by your identity provider.
-            </p>
-          )}
-        </div>
-
-        {selectedPreset === 'auth0' && (
-          <div className="space-y-2">
-            <Label htmlFor="organization-id" className="text-sm font-semibold">
-              Required Auth0 Organization ID
-            </Label>
-            <Input
-              id="organization-id"
-              name="organizationId"
-              value={organizationIdValue}
-              onChange={event => setOrganizationIdValue(event.target.value)}
-              placeholder="org_..."
-              className="font-mono text-sm h-10"
-            />
-            <p className="text-xs text-muted-foreground">
-              When set, the signed ID-token org_id claim must match exactly.
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
-        <div className="flex items-start sm:items-center gap-3.5 pb-4 border-b">
-          <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
-            <Sliders className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-foreground">Claims, Scopes & Role Mapping</h3>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-              Assign OpsKnight roles dynamically and sync profile fields from OIDC token claims.
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="custom-scopes" className="text-sm font-semibold">
-              Custom OIDC Scopes
-            </Label>
-            <span className="text-[11px] text-muted-foreground">
-              openid, email, profile included by default
-            </span>
-          </div>
-          <Input
-            id="custom-scopes"
-            type="text"
-            name="customScopes"
-            placeholder={selectedPreset === 'okta' ? 'e.g. groups' : 'Optional provider scopes'}
-            value={customScopesValue}
-            onChange={event => setCustomScopesValue(event.target.value)}
-            className="font-mono text-sm h-10"
-          />
-          <div className="flex items-center gap-1.5 flex-wrap pt-1">
-            <span className="text-[11px] text-muted-foreground mr-1">Quick add:</span>
-            {oidcScopeSuggestions(selectedPreset).map(scope => {
-              const currentScopes = customScopesValue.split(/\s+/).filter(Boolean);
-              const isIncluded = currentScopes.includes(scope);
-              return (
-                <button
-                  key={scope}
-                  type="button"
-                  onClick={() => {
-                    if (isIncluded) {
-                      setCustomScopesValue(currentScopes.filter(s => s !== scope).join(' '));
-                    } else {
-                      setCustomScopesValue([...currentScopes, scope].join(' '));
-                    }
-                  }}
-                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
-                    isIncluded
-                      ? 'bg-primary/10 border-primary/30 text-primary font-semibold'
-                      : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
-                  }`}
-                >
-                  {isIncluded ? `✓ ${scope}` : `+ ${scope}`}
-                </button>
-              );
-            })}
-          </div>
-          {oidcScopeSuggestions(selectedPreset).length === 0 && (
-            <p className="text-[11px] text-muted-foreground">
-              No additional OAuth scopes are recommended for this provider.
-            </p>
-          )}
-          {selectedPreset === 'azure' && (
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Tip for Microsoft Entra ID: Configure group claims in Azure Portal under App
-              registrations → Token configuration → Add groups claim. Do not request{' '}
-              <code className="font-mono">groups</code> as an OAuth scope.
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-3 pt-2">
-          <div>
-            <h4 className="text-sm font-semibold text-foreground">Claim-to-Role Mapping Rules</h4>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Automatically grant Admin, Responder, or Auditor roles based on user group or role
-              claims.
-            </p>
-          </div>
-          <RoleMappingEditor
-            key={roleMappingResetKey}
-            initialMappings={initialRoleMapping}
-            onChange={setRoleMappingPreview}
-          />
-        </div>
-
-        <div className="space-y-3 pt-4 border-t">
-          <div>
-            <h4 className="text-sm font-semibold text-foreground">User Profile Attribute Claims</h4>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Map IdP token claim names to user profile properties on each login.
-            </p>
-          </div>
-          {enabled ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="rounded-xl border bg-muted/20 p-3.5 space-y-1.5">
-                <Label htmlFor="claim-dept" className="text-xs font-semibold">
-                  Department Claim
-                </Label>
-                <Input
-                  id="claim-dept"
-                  type="text"
-                  name="profileMapping.department"
-                  placeholder="e.g. department"
-                  value={profileMappingValues.department}
-                  onChange={event =>
-                    setProfileMappingValues(current => ({
-                      ...current,
-                      department: event.target.value,
-                    }))
-                  }
-                  className="h-8 text-xs font-mono"
-                />
-              </div>
-              <div className="rounded-xl border bg-muted/20 p-3.5 space-y-1.5">
-                <Label htmlFor="claim-title" className="text-xs font-semibold">
-                  Job Title Claim
-                </Label>
-                <Input
-                  id="claim-title"
-                  type="text"
-                  name="profileMapping.jobTitle"
-                  placeholder="e.g. title"
-                  value={profileMappingValues.jobTitle}
-                  onChange={event =>
-                    setProfileMappingValues(current => ({
-                      ...current,
-                      jobTitle: event.target.value,
-                    }))
-                  }
-                  className="h-8 text-xs font-mono"
-                />
-              </div>
-              <div className="rounded-xl border bg-muted/20 p-3.5 space-y-1.5">
-                <Label htmlFor="claim-avatar" className="text-xs font-semibold">
-                  Avatar URL Claim
-                </Label>
-                <Input
-                  id="claim-avatar"
-                  type="text"
-                  name="profileMapping.avatarUrl"
-                  placeholder="e.g. picture"
-                  value={profileMappingValues.avatarUrl}
-                  onChange={event =>
-                    setProfileMappingValues(current => ({
-                      ...current,
-                      avatarUrl: event.target.value,
-                    }))
-                  }
-                  className="h-8 text-xs font-mono"
-                />
-              </div>
+              <Badge variant="outline" className="text-[11px] font-mono shrink-0">
+                {sessionMaxAge == null
+                  ? 'Default: 12 Hours'
+                  : `Active: ${formatDurationSeconds(sessionMaxAge)}`}
+              </Badge>
             </div>
-          ) : (
-            <div className="rounded-xl border border-dashed bg-muted/20 p-4 text-xs text-muted-foreground flex items-center gap-2">
-              <Shield className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span>Enable SSO in Card 1 to configure profile attribute claims.</span>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Card 3: Session & Inactivity Policies */}
-      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b">
-          <div className="flex items-start sm:items-center gap-3.5">
-            <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
-              <Clock className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-foreground">
-                  Session & Inactivity Policies
-                </h3>
-                {(sessionMaxAge != null || sessionIdleTimeout != null) && (
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/10"
+            <div className="flex flex-wrap items-center gap-2">
+              {[
+                { label: '8 Hours (Shift)', seconds: 28800 },
+                { label: '12 Hours (Recommended)', seconds: 43200 },
+                { label: '24 Hours (1 Day)', seconds: 86400 },
+                { label: '7 Days', seconds: 604800 },
+              ].map(preset => {
+                const isSelected =
+                  !isCustomMaxAge &&
+                  (sessionMaxAge === preset.seconds ||
+                    (sessionMaxAge == null && preset.seconds === 43200));
+                return (
+                  <button
+                    key={preset.seconds}
+                    type="button"
+                    onClick={() => {
+                      setSessionMaxAge(preset.seconds);
+                      setIsCustomMaxAge(false);
+                    }}
+                    className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium cursor-pointer ${
+                      isSelected
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                        : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
+                    }`}
                   >
-                    Customized
-                  </Badge>
-                )}
+                    {preset.label}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setIsCustomMaxAge(true)}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium cursor-pointer ${
+                  isCustomMaxAge
+                    ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                    : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
+                }`}
+              >
+                Custom...
+              </button>
+            </div>
+
+            {isCustomMaxAge && (
+              <div className="flex items-center gap-2 pt-1 max-w-xs">
+                <Input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="Value"
+                  value={customMaxAgeValue}
+                  onChange={e => {
+                    setCustomMaxAgeValue(e.target.value);
+                    const secs = toSeconds(e.target.value, customMaxAgeUnit);
+                    setSessionMaxAge(secs > 0 ? secs : null);
+                  }}
+                  className="h-9 text-xs font-mono w-28"
+                />
+                <select
+                  value={customMaxAgeUnit}
+                  onChange={e => {
+                    const unit = e.target.value as 'minutes' | 'hours' | 'days';
+                    setCustomMaxAgeUnit(unit);
+                    const secs = toSeconds(customMaxAgeValue, unit);
+                    setSessionMaxAge(secs > 0 ? secs : null);
+                  }}
+                  className="h-9 text-xs rounded-md border border-input bg-background px-2.5 py-1 text-foreground"
+                >
+                  <option value="minutes">Minutes</option>
+                  <option value="hours">Hours</option>
+                  <option value="days">Days</option>
+                </select>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                Control maximum session duration and idle timeout for SSO logins. Responders receive
-                an interactive renewal prompt 5 minutes before expiration.
-              </p>
-            </div>
-          </div>
-          {(sessionMaxAge != null || sessionIdleTimeout != null) && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setSessionMaxAge(null);
-                setSessionIdleTimeout(null);
-                setIsCustomMaxAge(false);
-                setIsCustomIdleTimeout(false);
-              }}
-              className="text-xs text-muted-foreground hover:text-foreground h-8 shrink-0"
-            >
-              Reset to Defaults
-            </Button>
-          )}
-        </div>
-
-        {/* Setting 1: Maximum Session Lifetime */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-sm font-semibold">Maximum Session Lifetime</Label>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Hard re-authentication threshold for SSO logins (allowed: 15m to 30 days).
-              </p>
-            </div>
-            <Badge variant="outline" className="text-[11px] font-mono shrink-0">
-              {sessionMaxAge == null
-                ? 'Default: 12 Hours'
-                : `Active: ${formatDurationSeconds(sessionMaxAge)}`}
-            </Badge>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {[
-              { label: '8 Hours (Shift)', seconds: 28800 },
-              { label: '12 Hours (Recommended)', seconds: 43200 },
-              { label: '24 Hours (1 Day)', seconds: 86400 },
-              { label: '7 Days', seconds: 604800 },
-            ].map(preset => {
-              const isSelected =
-                !isCustomMaxAge &&
-                (sessionMaxAge === preset.seconds ||
-                  (sessionMaxAge == null && preset.seconds === 43200));
-              return (
-                <button
-                  key={preset.seconds}
-                  type="button"
-                  onClick={() => {
-                    setSessionMaxAge(preset.seconds);
-                    setIsCustomMaxAge(false);
-                  }}
-                  className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium cursor-pointer ${
-                    isSelected
-                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                      : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setIsCustomMaxAge(true)}
-              className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium cursor-pointer ${
-                isCustomMaxAge
-                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                  : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
-              }`}
-            >
-              Custom...
-            </button>
-          </div>
-
-          {isCustomMaxAge && (
-            <div className="flex items-center gap-2 pt-1 max-w-xs">
-              <Input
-                type="number"
-                min="1"
-                step="1"
-                placeholder="Value"
-                value={customMaxAgeValue}
-                onChange={e => {
-                  setCustomMaxAgeValue(e.target.value);
-                  const secs = toSeconds(e.target.value, customMaxAgeUnit);
-                  setSessionMaxAge(secs > 0 ? secs : null);
-                }}
-                className="h-9 text-xs font-mono w-28"
-              />
-              <select
-                value={customMaxAgeUnit}
-                onChange={e => {
-                  const unit = e.target.value as 'minutes' | 'hours' | 'days';
-                  setCustomMaxAgeUnit(unit);
-                  const secs = toSeconds(customMaxAgeValue, unit);
-                  setSessionMaxAge(secs > 0 ? secs : null);
-                }}
-                className="h-9 text-xs rounded-md border border-input bg-background px-2.5 py-1 text-foreground"
-              >
-                <option value="minutes">Minutes</option>
-                <option value="hours">Hours</option>
-                <option value="days">Days</option>
-              </select>
-            </div>
-          )}
-        </div>
-
-        {/* Setting 2: Idle Inactivity Timeout */}
-        <div className="space-y-3 pt-4 border-t">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-sm font-semibold">Idle Inactivity Timeout</Label>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Terminates sessions when no authentic user activity occurs (allowed: 5m to 7 days).
-              </p>
-            </div>
-            <Badge variant="outline" className="text-[11px] font-mono shrink-0">
-              {sessionIdleTimeout == null
-                ? 'Default: 4 Hours'
-                : `Active: ${formatDurationSeconds(sessionIdleTimeout)}`}
-            </Badge>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {[
-              { label: '1 Hour (Strict)', seconds: 3600 },
-              { label: '2 Hours', seconds: 7200 },
-              { label: '4 Hours (Recommended)', seconds: 14400 },
-              { label: '8 Hours', seconds: 28800 },
-            ].map(preset => {
-              const isSelected =
-                !isCustomIdleTimeout &&
-                (sessionIdleTimeout === preset.seconds ||
-                  (sessionIdleTimeout == null && preset.seconds === 14400));
-              return (
-                <button
-                  key={preset.seconds}
-                  type="button"
-                  onClick={() => {
-                    setSessionIdleTimeout(preset.seconds);
-                    setIsCustomIdleTimeout(false);
-                  }}
-                  className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium cursor-pointer ${
-                    isSelected
-                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                      : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setIsCustomIdleTimeout(true)}
-              className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium cursor-pointer ${
-                isCustomIdleTimeout
-                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                  : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
-              }`}
-            >
-              Custom...
-            </button>
-          </div>
-
-          {isCustomIdleTimeout && (
-            <div className="flex items-center gap-2 pt-1 max-w-xs">
-              <Input
-                type="number"
-                min="1"
-                step="1"
-                placeholder="Value"
-                value={customIdleValue}
-                onChange={e => {
-                  setCustomIdleValue(e.target.value);
-                  const secs = toSeconds(e.target.value, customIdleUnit);
-                  setSessionIdleTimeout(secs > 0 ? secs : null);
-                }}
-                className="h-9 text-xs font-mono w-28"
-              />
-              <select
-                value={customIdleUnit}
-                onChange={e => {
-                  const unit = e.target.value as 'minutes' | 'hours' | 'days';
-                  setCustomIdleUnit(unit);
-                  const secs = toSeconds(customIdleValue, unit);
-                  setSessionIdleTimeout(secs > 0 ? secs : null);
-                }}
-                className="h-9 text-xs rounded-md border border-input bg-background px-2.5 py-1 text-foreground"
-              >
-                <option value="minutes">Minutes</option>
-                <option value="hours">Hours</option>
-                <option value="days">Days</option>
-              </select>
-            </div>
-          )}
-
-          {sessionIdleTimeout != null &&
-            sessionMaxAge != null &&
-            sessionIdleTimeout > sessionMaxAge && (
-              <p className="text-xs text-destructive flex items-center gap-1 font-medium">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                Idle inactivity timeout cannot exceed maximum session lifetime.
-              </p>
             )}
+          </div>
+
+          {/* Setting 2: Idle Inactivity Timeout */}
+          <div className="space-y-3 pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-sm font-semibold">Idle Inactivity Timeout</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Terminates sessions when no authentic user activity occurs (allowed: 5m to 7
+                  days).
+                </p>
+              </div>
+              <Badge variant="outline" className="text-[11px] font-mono shrink-0">
+                {sessionIdleTimeout == null
+                  ? 'Default: 4 Hours'
+                  : `Active: ${formatDurationSeconds(sessionIdleTimeout)}`}
+              </Badge>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {[
+                { label: '1 Hour (Strict)', seconds: 3600 },
+                { label: '2 Hours', seconds: 7200 },
+                { label: '4 Hours (Recommended)', seconds: 14400 },
+                { label: '8 Hours', seconds: 28800 },
+              ].map(preset => {
+                const isSelected =
+                  !isCustomIdleTimeout &&
+                  (sessionIdleTimeout === preset.seconds ||
+                    (sessionIdleTimeout == null && preset.seconds === 14400));
+                return (
+                  <button
+                    key={preset.seconds}
+                    type="button"
+                    onClick={() => {
+                      setSessionIdleTimeout(preset.seconds);
+                      setIsCustomIdleTimeout(false);
+                    }}
+                    className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium cursor-pointer ${
+                      isSelected
+                        ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                        : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setIsCustomIdleTimeout(true)}
+                className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium cursor-pointer ${
+                  isCustomIdleTimeout
+                    ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                    : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
+                }`}
+              >
+                Custom...
+              </button>
+            </div>
+
+            {isCustomIdleTimeout && (
+              <div className="flex items-center gap-2 pt-1 max-w-xs">
+                <Input
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="Value"
+                  value={customIdleValue}
+                  onChange={e => {
+                    setCustomIdleValue(e.target.value);
+                    const secs = toSeconds(e.target.value, customIdleUnit);
+                    setSessionIdleTimeout(secs > 0 ? secs : null);
+                  }}
+                  className="h-9 text-xs font-mono w-28"
+                />
+                <select
+                  value={customIdleUnit}
+                  onChange={e => {
+                    const unit = e.target.value as 'minutes' | 'hours' | 'days';
+                    setCustomIdleUnit(unit);
+                    const secs = toSeconds(customIdleValue, unit);
+                    setSessionIdleTimeout(secs > 0 ? secs : null);
+                  }}
+                  className="h-9 text-xs rounded-md border border-input bg-background px-2.5 py-1 text-foreground"
+                >
+                  <option value="minutes">Minutes</option>
+                  <option value="hours">Hours</option>
+                  <option value="days">Days</option>
+                </select>
+              </div>
+            )}
+
+            {sessionIdleTimeout != null &&
+              sessionMaxAge != null &&
+              sessionIdleTimeout > sessionMaxAge && (
+                <p className="text-xs text-destructive flex items-center gap-1 font-medium">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Idle inactivity timeout cannot exceed maximum session lifetime.
+                </p>
+              )}
+          </div>
         </div>
       </div>
 
-      <div className="rounded-xl border bg-amber-500/5 border-amber-500/25 p-4 flex items-start gap-3">
-        <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-        <div className="space-y-0.5 text-xs">
-          <p className="font-semibold text-amber-800 dark:text-amber-300">
-            Verify Before Enforcing Workspace-Wide
-          </p>
-          <p className="text-muted-foreground leading-relaxed">
-            Always verify the callback URL and login flow in a private browser window before asking
-            team members to use SSO. Misconfigured credentials can lock users out of OpsKnight.
-          </p>
+      {activeSubTab !== 'scim' && (
+        <div className="rounded-xl border bg-amber-500/5 border-amber-500/25 p-4 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+          <div className="space-y-0.5 text-xs">
+            <p className="font-semibold text-amber-800 dark:text-amber-300">
+              Verify Before Enforcing Workspace-Wide
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              Always verify the callback URL and login flow in a private browser window before
+              asking team members to use SSO. Misconfigured credentials can lock users out of
+              OpsKnight.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {state?.code === 'SETTINGS_CHANGED' && (
         <Alert className="bg-amber-500/10 border-amber-500/30" role="alert">
@@ -1422,35 +1564,37 @@ export default function SsoSettingsForm({
         </InlineNotice>
       )}
 
-      <div className="sticky bottom-4 z-10 rounded-xl border bg-card/95 backdrop-blur-md p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
-        <div className="text-xs text-muted-foreground">
-          {lastSaved ? (
-            <span
-              className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium"
-              role="status"
-              aria-live="polite"
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Configuration saved at {lastSaved}
-            </span>
-          ) : isDirty ? (
-            <span className="text-amber-600 dark:text-amber-400 font-medium">
-              You have unsaved changes
-            </span>
-          ) : (
-            <span>SSO configuration is synchronized</span>
-          )}
-        </div>
+      {activeSubTab !== 'scim' && (
+        <div className="sticky bottom-4 z-10 rounded-xl border bg-card/95 backdrop-blur-md p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
+          <div className="text-xs text-muted-foreground">
+            {lastSaved ? (
+              <span
+                className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium"
+                role="status"
+                aria-live="polite"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Configuration saved at {lastSaved}
+              </span>
+            ) : isDirty ? (
+              <span className="text-amber-600 dark:text-amber-400 font-medium">
+                You have unsaved changes
+              </span>
+            ) : (
+              <span>SSO configuration is synchronized</span>
+            )}
+          </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {isDirty && (
-            <Button type="reset" variant="outline" size="sm" className="h-9 text-xs">
-              Discard Changes
-            </Button>
-          )}
-          <SubmitButton disabled={isSaveDisabled || state?.code === 'SETTINGS_CHANGED'} />
+          <div className="flex items-center gap-2 shrink-0">
+            {isDirty && (
+              <Button type="reset" variant="outline" size="sm" className="h-9 text-xs">
+                Discard Changes
+              </Button>
+            )}
+            <SubmitButton disabled={isSaveDisabled || state?.code === 'SETTINGS_CHANGED'} />
+          </div>
         </div>
-      </div>
+      )}
     </form>
   );
 }
