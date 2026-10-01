@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/user/push-subscription/status/route';
 import prisma from '@/lib/prisma';
 import { getPushConfig } from '@/lib/notification-providers';
@@ -33,8 +34,8 @@ vi.mock('@/lib/web-push-subscription', () => ({
   webPushDeviceKey: vi.fn((endpoint: string) => `key:${endpoint}`),
 }));
 
-function makeRequest(endpoint = 'https://example.com/push/device-1'): Request {
-  return new Request('http://localhost/api/user/push-subscription/status', {
+function makeRequest(endpoint = 'https://example.com/push/device-1'): NextRequest {
+  return new NextRequest('http://localhost/api/user/push-subscription/status', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ endpoint }),
