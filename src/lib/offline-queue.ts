@@ -1,5 +1,6 @@
 'use client';
 
+import { promiseWithTimeout } from '@/lib/client-timeout';
 import {
   deriveOfflineLaneKey,
   readMobilePrincipalContext,
@@ -70,6 +71,7 @@ const SENDING_LEASE_MS = 60 * 1000;
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
 const MAX_PARALLEL_LANES = 4;
 const MAX_OPERATIONS_PER_FLUSH = 32;
+const BACKGROUND_SYNC_TIMEOUT_MS = 3_000;
 const TERMINAL_STATES = new Set<OfflineQueueState>(['SUCCEEDED', 'FAILED', 'FORBIDDEN']);
 const EXECUTOR_ID = `window:${generateId()}`;
 
@@ -199,6 +201,30 @@ export async function setOfflineQueuePrincipal(context: MobilePrincipalContext):
   }
 }
 
+async function registerBackgroundSyncBestEffort() {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+
+  try {
+    const registration = await promiseWithTimeout(
+      navigator.serviceWorker.ready,
+      BACKGROUND_SYNC_TIMEOUT_MS,
+      'Service worker readiness timed out while registering Background Sync.'
+    );
+    const syncRegistration = registration as ServiceWorkerRegistration & {
+      sync?: { register(tag: string): Promise<void> };
+    };
+    if (!syncRegistration.sync?.register) return;
+    await promiseWithTimeout(
+      syncRegistration.sync.register('opsknight-sync'),
+      BACKGROUND_SYNC_TIMEOUT_MS,
+      'Background Sync registration timed out.'
+    );
+  } catch {
+    // Background Sync is enhancement-only. IndexedDB persistence is the
+    // authoritative success condition; foreground replay remains available.
+  }
+}
+
 export const enqueueRequest = async (request: EnqueueRequestInput) => {
   if (!hasIndexedDb()) return '';
   const principal = readMobilePrincipalContext();
@@ -237,17 +263,9 @@ export const enqueueRequest = async (request: EnqueueRequestInput) => {
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('opsknight:offline-queue-changed'));
-    try {
-      if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.ready;
-        const syncRegistration = registration as ServiceWorkerRegistration & {
-          sync?: { register(tag: string): Promise<void> };
-        };
-        await syncRegistration.sync?.register('opsknight-sync');
-      }
-    } catch {
-      // Background Sync is enhancement-only; foreground replay remains authoritative.
-    }
+    // Once IndexedDB persistence succeeds, enqueueing is complete. Background
+    // Sync is best-effort and must never delay the responder-facing action.
+    void registerBackgroundSyncBestEffort();
   }
   return payload.id;
 };

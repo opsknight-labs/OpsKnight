@@ -57,6 +57,40 @@ describe('incident status browser transport', () => {
     );
   });
 
+  it('queues a never-settling mobile request after the bounded transport timeout', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
+          return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              reject(new DOMException('The request was aborted.', 'AbortError'));
+            });
+          });
+        })
+      );
+
+      const mutation = mutateIncidentStatus({
+        incidentId: 'inc-1',
+        status: 'ACKNOWLEDGED',
+        expectedStatus: 'OPEN',
+      });
+
+      await vi.advanceTimersByTimeAsync(12_000);
+
+      await expect(mutation).resolves.toEqual({ state: 'QUEUED', queueId: 'queue-1' });
+      expect(mocks.enqueueRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          idempotencyKey: 'incident-status:inc-1:stable-request-id',
+          expectedState: 'OPEN',
+        })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not downgrade an authoritative conflict into an offline replay', async () => {
     vi.stubGlobal(
       'fetch',

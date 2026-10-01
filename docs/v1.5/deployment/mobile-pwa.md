@@ -15,7 +15,7 @@ Open the OpsKnight URL on a mobile device over HTTPS, then use the browser's ins
 - **iPhone/iPad (Safari):** Share → **Add to Home Screen**.
 - **Android (Chrome):** browser menu → **Install app** or **Add to Home Screen**.
 
-The manifest requests standalone display and portrait orientation. The PWA service worker is disabled in development and can also be disabled by setting `DISABLE_PWA=true`; in either case installation and web push will not work as a production PWA flow. The production build generates `/sw.js` and imports `/custom-sw.js` for OpsKnight's push and offline-queue handlers.
+The manifest requests standalone display without locking device orientation. The PWA service worker is disabled in development and can also be disabled by setting `DISABLE_PWA=true`; in either case installation and web push will not work as a production PWA flow. The production build generates `/sw.js` and imports `/custom-sw.js` for OpsKnight's push and offline-queue handlers.
 
 ## Push notifications
 
@@ -69,6 +69,20 @@ Before announcing mobile support to responders:
 5. Test an offline incident status update, reconnect, and verify the resulting incident timeline.
 6. Test denied notification permission and a missing/invalid VAPID configuration so support staff know the expected errors.
 
+## Real-device release gate
+
+Browser CI does not certify iOS Home Screen service-worker or background Push behavior. Before a release that changes Push, service-worker lifecycle, offline replay, or installability, test at least one physical iPhone/iPad and one physical Android device.
+
+For iOS, record the device model, iOS version, OpsKnight build/commit, and verify this sequence from the **installed Home Screen app**:
+
+1. Launch the installed PWA and confirm `/sw.js` controls the app.
+2. Open **More → Push notifications**, enable Push, accept permission, and confirm the state becomes **On**.
+3. Send a test Push while the PWA is foregrounded, backgrounded, and fully closed.
+4. Deploy a newer OpsKnight build while the PWA remains open; confirm **OpsKnight update ready** appears and activation happens only after **Reload** is tapped.
+5. Exercise an incident status action with connectivity removed or deliberately degraded, reconnect, and verify the queued action reaches the incident timeline exactly once.
+6. Reopen the PWA after the update and repeat one Push test to confirm the new worker and existing subscription remain healthy.
+
+Do not treat Chromium production-PWA CI as a substitute for this physical-device gate.
 ## Troubleshooting
 
 **The app does not offer installation**
