@@ -6,7 +6,7 @@ product_area: platform
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-01
+  verified_at: 2026-10-02
   evidence:
     - generated/docs-discovery/current.json
     - generated/docs-contracts/current.json

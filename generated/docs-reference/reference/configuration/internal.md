@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-01
+  verified_at: 2026-10-02
   evidence:
     - src/
     - scripts/
