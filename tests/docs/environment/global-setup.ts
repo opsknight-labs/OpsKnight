@@ -221,6 +221,79 @@ export default async function globalSetup() {
       if (existingFixture) await prisma.incident.update({ where: { id: existingFixture.id }, data: incidentData });
       else await prisma.incident.create({ data: { title: item.title, ...incidentData } });
     }
+
+    const seededIncidents = await prisma.incident.findMany({
+      where: { title: { in: [DOCS_FIXTURES.incident, ...incidentFixtures.map(item => item.title)] } },
+      select: { id: true, title: true, createdAt: true },
+    });
+    const incidentByTitle = new Map(seededIncidents.map(item => [item.title, item]));
+    const resolvedEmailIncident = incidentByTitle.get('Delayed transactional email delivery');
+    if (!resolvedEmailIncident) throw new Error('Documentation incident fixture was not created');
+
+    const postmortem = await prisma.postmortem.upsert({
+      where: { incidentId: resolvedEmailIncident.id },
+      update: {
+        title: 'Transactional email delivery degradation review',
+        summary: 'Provider throttling delayed password reset messages for customers in two regions.',
+        rootCause: 'A provider account limit was lower than the production burst rate.',
+        resolution: 'Traffic was shifted and provider capacity was increased.',
+        lessons: 'Provider admission capacity must be part of release readiness checks.',
+        status: 'PUBLISHED',
+        createdById: admin.id,
+      },
+      create: {
+        incidentId: resolvedEmailIncident.id,
+        title: 'Transactional email delivery degradation review',
+        summary: 'Provider throttling delayed password reset messages for customers in two regions.',
+        rootCause: 'A provider account limit was lower than the production burst rate.',
+        resolution: 'Traffic was shifted and provider capacity was increased.',
+        lessons: 'Provider admission capacity must be part of release readiness checks.',
+        status: 'PUBLISHED',
+        createdById: admin.id,
+      },
+    });
+    const actionItemFixtures = [
+      { id: 'docs-action-provider-capacity', title: 'Add provider capacity checks to release readiness', description: 'Alert before transactional delivery approaches the contracted provider rate.', ownerId: additionalUsers[0].id, status: 'IN_PROGRESS' as const, priority: 'HIGH' as const, days: 7 },
+      { id: 'docs-action-failover-drill', title: 'Run quarterly notification-provider failover drill', description: 'Exercise regional traffic shift and record recovery time.', ownerId: responder.id, status: 'OPEN' as const, priority: 'HIGH' as const, days: 14 },
+      { id: 'docs-action-dashboard', title: 'Publish delivery saturation dashboard', description: 'Break down provider admission, retry age, and permanent failures.', ownerId: additionalUsers[1].id, status: 'OPEN' as const, priority: 'MEDIUM' as const, days: 21 },
+      { id: 'docs-action-runbook', title: 'Update customer communications runbook', description: 'Add templates for delayed authentication email delivery.', ownerId: additionalUsers[3].id, status: 'COMPLETED' as const, priority: 'LOW' as const, days: -2 },
+    ];
+    for (const item of actionItemFixtures) {
+      await prisma.actionItem.upsert({
+        where: { id: item.id },
+        update: { title: item.title, description: item.description, ownerId: item.ownerId, status: item.status, priority: item.priority, dueDate: new Date(now + item.days * 86_400_000), completedAt: item.status === 'COMPLETED' ? new Date(now - 86_400_000) : null },
+        create: { id: item.id, postmortemId: postmortem.id, incidentId: resolvedEmailIncident.id, title: item.title, description: item.description, ownerId: item.ownerId, status: item.status, priority: item.priority, source: 'POSTMORTEM', dueDate: new Date(now + item.days * 86_400_000), completedAt: item.status === 'COMPLETED' ? new Date(now - 86_400_000) : null },
+      });
+    }
+
+    const eventTemplates = [
+      { suffix: 'triggered', type: 'STATUS_CHANGE' as const, message: 'Incident triggered by production monitoring' },
+      { suffix: 'assigned', type: 'ASSIGNMENT' as const, message: 'Assigned to the primary Commerce Reliability responder' },
+      { suffix: 'acknowledged', type: 'ACKNOWLEDGED' as const, message: 'Incident acknowledged after initial triage' },
+    ];
+    for (const [incidentIndex, incident] of seededIncidents.entries()) {
+      for (const [eventIndex, event] of eventTemplates.entries()) {
+        await prisma.incidentEvent.upsert({
+          where: { id: `docs-event-${incidentIndex}-${event.suffix}` },
+          update: { incidentId: incident.id, message: event.message, type: event.type, createdAt: new Date(incident.createdAt.getTime() + eventIndex * 180_000) },
+          create: { id: `docs-event-${incidentIndex}-${event.suffix}`, incidentId: incident.id, message: event.message, type: event.type, createdAt: new Date(incident.createdAt.getTime() + eventIndex * 180_000) },
+        });
+      }
+    }
+
+    const auditFixtures = [
+      { id: 'docs-audit-service', action: 'SERVICE_UPDATED', entityType: 'SERVICE' as const, entityId: service.id, details: { name: DOCS_FIXTURES.service, field: 'escalationPolicy' } },
+      { id: 'docs-audit-schedule', action: 'SCHEDULE_UPDATED', entityType: 'SCHEDULE' as const, entityId: schedule.id, details: { name: DOCS_FIXTURES.schedule, field: 'rotation' } },
+      { id: 'docs-audit-status-page', action: 'STATUS_PAGE_UPDATED', entityType: 'STATUS_PAGE' as const, entityId: primaryStatusPage.id, details: { name: DOCS_FIXTURES.statusPage, field: 'services' } },
+      { id: 'docs-audit-api-key', action: 'API_KEY_CREATED', entityType: 'API_KEY' as const, entityId: 'docs-api-contract-key', details: { name: 'Documentation contract verification' } },
+    ];
+    for (const [index, item] of auditFixtures.entries()) {
+      await prisma.auditLog.upsert({
+        where: { id: item.id },
+        update: { ...item, actorId: admin.id, actorEmail: admin.email, actorName: admin.name, createdAt: new Date(now - index * 900_000) },
+        create: { ...item, actorId: admin.id, actorEmail: admin.email, actorName: admin.name, createdAt: new Date(now - index * 900_000) },
+      });
+    }
     void viewer;
   } finally {
     await prisma.$disconnect();
