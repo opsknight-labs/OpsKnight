@@ -29,6 +29,31 @@ the public snapshot directly.
 4. Resolve the public slug/custom hostname and request it without an authenticated session.
 5. Compare origin output with CDN/proxy output and its cache headers.
 
+Capture three timestamps in UTC: the source incident/announcement update, the
+latest projection/snapshot, and the public response observation. Then choose the
+first stale boundary:
+
+| Boundary | Evidence | Repair |
+| --- | --- | --- |
+| source | internal incident or announcement never changed | repair the originating workflow |
+| membership/privacy | snapshot omits only one service or field | correct page membership or visibility policy |
+| projector | source is newer than projection cursor/snapshot | restore projector worker and database access |
+| origin route | snapshot is current but origin route is stale/erroring | inspect route operation and application logs |
+| proxy/CDN | origin is current but public hostname is stale | correct cache key/TTL or purge the affected object |
+
+Use an unauthenticated request so an administrator session cannot hide a public
+route problem:
+
+```bash
+curl -sS -D /tmp/status-headers.txt -o /tmp/status-body.html \
+  'https://<public-status-host>/<page-path>'
+```
+
+Review `Age`, `Cache-Control`, `ETag`, `Last-Modified`, and proxy-specific cache
+headers. Do not attach the response body externally if the page is private or
+contains subscriber data. A custom hostname failure with a healthy default route
+points to DNS, TLS, host routing, or CDN configuration rather than projection.
+
 If the snapshot is current but content is absent, review service membership and
 privacy policy. If origin is current but the public response is stale, purge or
 correct proxy caching. If projection is behind, repair the projector worker or

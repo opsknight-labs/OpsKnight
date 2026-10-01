@@ -30,6 +30,39 @@ logs; repeated blind restarts can hide a deterministic configuration failure.
 5. If Next.js starts but readiness fails, query `/api/health?mode=readiness`
    from inside the workload and inspect the reported dependency.
 
+Classify the first fatal message before taking action:
+
+| Phase | Typical evidence | Correct boundary |
+| --- | --- | --- |
+| image start | exec-format error, missing command, permission denied | image platform, command, filesystem permissions |
+| configuration | named environment validation error | Secret/ConfigMap value and mount |
+| database | DNS, TLS, authentication, timeout | database connection runbook |
+| migration | failed migration or index installer | migration runbook; one owner only |
+| application bind | address in use or wrong port | process/port configuration |
+| readiness | process runs but dependency check fails | dependency reported by health response |
+
+Capture configuration *names* and sources without exposing values. In
+Kubernetes, this command shows references and status while keeping Secret data
+out of the output:
+
+```bash
+kubectl -n <namespace> describe pod <pod>
+kubectl -n <namespace> logs <pod> --all-containers --previous --tail=200
+kubectl -n <namespace> get job -o wide
+```
+
+In Compose:
+
+```bash
+docker compose ps
+docker compose logs --since=15m <service>
+docker inspect <container> --format '{{.State.Status}} {{.State.ExitCode}} {{.State.Error}}'
+```
+
+Do not paste `docker inspect`'s full JSON into a ticket because it can contain
+environment secrets. After each correction, recreate only the affected workload
+and confirm its image digest and runtime role still match the release plan.
+
 For containers, record `docker compose ps` and application/database logs. For
 Kubernetes, record pod events, init/migration job logs, rendered environment
 references, and termination status. Never paste secret values into an issue.
