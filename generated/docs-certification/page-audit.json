@@ -655,7 +655,7 @@
     {
       "page": "guides/incidents/configure-incident-sla.md",
       "type": "how-to",
-      "userTask": "Configure and verify an incident SLA policy.",
+      "userTask": "Configure and verify incident classification and SLA policy from alert severity through breach behavior.",
       "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 0,
