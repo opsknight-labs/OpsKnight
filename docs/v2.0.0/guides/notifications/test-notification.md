@@ -1,5 +1,6 @@
 ---
 title: Test notification delivery
+order: 9
 description: Verify provider, endpoint, routing, queue, and recipient behavior with a controlled notification and synthetic incident.
 type: how-to
 product_area: notifications

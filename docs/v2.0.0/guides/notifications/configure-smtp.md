@@ -1,5 +1,6 @@
 ---
 title: Configure SMTP email
+order: 3
 description: Connect an SMTP relay, verify its sender identity, test delivery, and rotate credentials safely.
 type: how-to
 product_area: notifications

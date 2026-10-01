@@ -1,5 +1,6 @@
 ---
 title: Configure Web Push
+order: 8
 description: Configure VAPID credentials and verify browser push delivery for the OpsKnight PWA.
 type: how-to
 product_area: notifications

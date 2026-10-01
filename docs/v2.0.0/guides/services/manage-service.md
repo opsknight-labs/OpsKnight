@@ -7,6 +7,7 @@ audience: [administrator, responder]
 reader:
   status: READER_COMPLETE
   task: Create, configure, verify, and retire an OpsKnight service.
+  evidence: [docs/v2.0.0/assets/services.png]
 verification:
   level: source
   verified_at: 2026-10-02
@@ -19,6 +20,8 @@ verification:
 ---
 
 # Create and manage a service
+
+![Services with ownership and operational state](/docs/v2.0.0/assets/services.png)
 
 ## Before you begin
 
@@ -34,7 +37,8 @@ Open **Services**. Select an existing service or choose **Create service**.
 
 1. Enter a unique, recognizable name and useful description.
 2. Assign the responsible team and verify membership/lead coverage.
-3. Attach the tested escalation policy and on-call schedule.
+3. Attach the tested escalation policy and verify its steps target the intended
+   on-call schedule. A service does not attach a schedule directly.
 4. Open **Notifications** and configure provider destinations and routing.
 5. Open **Integrations** or **Webhooks** and add only sources that belong to the
    service; send a synthetic test from each source.

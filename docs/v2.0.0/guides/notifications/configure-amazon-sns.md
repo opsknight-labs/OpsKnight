@@ -1,5 +1,6 @@
 ---
 title: Configure Amazon SNS SMS
+order: 7
 description: Configure an AWS region and least-privilege SNS credentials for SMS notifications.
 type: how-to
 product_area: notifications

@@ -1,5 +1,6 @@
 ---
 title: Create an on-call schedule
+order: 3
 description: Create a timezone-aware schedule, add initial coverage, and verify the current and next responder.
 type: how-to
 product_area: on-call

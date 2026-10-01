@@ -1,5 +1,6 @@
 ---
 title: Track incident action items
+order: 8
 description: Create, own, prioritize, review, export, and optionally link remediation work to Jira.
 type: how-to
 product_area: incidents

@@ -55,6 +55,8 @@ test('audited product routes map to purpose-built task guides', () => {
     '/services/[id]': 'guides/services/manage-service.md',
     '/settings/security': 'guides/administration/manage-sessions.md',
     '/settings/security-compliance': 'guides/compliance/evaluate-and-export.md',
+    '/settings/notifications': 'guides/notifications/configure-provider.md',
+    '/settings/profile': 'guides/profile/manage-profile-and-preferences.md',
     '/teams': 'guides/teams/manage-team.md',
     '/teams/[id]': 'guides/teams/manage-team.md',
   };

@@ -1,5 +1,6 @@
 ---
 title: Acknowledge an incident
+order: 4
 description: Take response ownership, verify escalation stops, and handle acknowledgement conflicts safely.
 type: how-to
 product_area: incidents

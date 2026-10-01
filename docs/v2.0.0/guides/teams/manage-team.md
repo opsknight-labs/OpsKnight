@@ -7,6 +7,7 @@ audience: [administrator, responder]
 reader:
   status: READER_COMPLETE
   task: Create, configure, verify, and safely remove an OpsKnight team.
+  evidence: [docs/v2.0.0/assets/teams.png]
 verification:
   level: source
   verified_at: 2026-10-02
@@ -18,6 +19,8 @@ verification:
 ---
 
 # Create and manage a team
+
+![Teams with member and service ownership context](/docs/v2.0.0/assets/teams.png)
 
 ## Before you begin
 

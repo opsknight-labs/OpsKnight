@@ -1,5 +1,6 @@
 ---
 title: Use mobile operational views
+order: 4
 description: Navigate schedules, policies, services, teams, users, status, analytics, and postmortems on mobile.
 type: how-to
 product_area: mobile

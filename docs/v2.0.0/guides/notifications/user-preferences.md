@@ -1,5 +1,6 @@
 ---
 title: Configure responder notification preferences
+order: 11
 description: Enable usable personal endpoints and verify quiet-hours, opt-out, channel, and incident eligibility.
 type: how-to
 product_area: notifications
@@ -21,7 +22,9 @@ The administrator must configure the provider. Know which channels the escalatio
 
 ## Open the feature
 
-Open **Settings → Notifications** in the responder profile/preferences area.
+Open **Settings → Profile**, then select the **Notifications** tab. The
+administrator-only **Settings → Notifications** page configures providers; it
+does not contain responder preferences.
 
 ## Configure preferences
 
@@ -51,6 +54,6 @@ Re-enable the prior channel/window or remove an obsolete endpoint after an alter
 
 ## Next steps
 
+- [Manage your profile and preferences](../profile/manage-profile-and-preferences)
 - [Configure routing](./configure-routing)
 - [Test notification](./test-notification)
-

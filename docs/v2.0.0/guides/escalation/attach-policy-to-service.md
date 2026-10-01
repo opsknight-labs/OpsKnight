@@ -1,5 +1,6 @@
 ---
 title: Attach an escalation policy to a service
+order: 6
 description: Select, save, verify, and safely replace the escalation policy used by a service's new incidents.
 type: how-to
 product_area: escalation

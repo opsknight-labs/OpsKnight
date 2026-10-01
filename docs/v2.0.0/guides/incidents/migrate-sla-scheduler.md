@@ -1,5 +1,6 @@
 ---
 title: Migrate the SLA scheduler to indexed mode
+order: 11
 description: Move safely from legacy scanning through shadow comparison to indexed SLA scheduling.
 type: how-to
 product_area: incidents

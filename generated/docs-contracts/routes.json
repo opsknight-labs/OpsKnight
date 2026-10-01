@@ -757,10 +757,11 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [
+          "guides/notifications/README.md",
           "concepts/notifications.md"
         ],
         "guides": [
-          "guides/notifications/configure-routing.md"
+          "guides/notifications/configure-provider.md"
         ],
         "reference": [],
         "troubleshooting": []
@@ -819,7 +820,8 @@
           "concepts/authentication.md"
         ],
         "guides": [
-          "guides/administration/manage-users.md"
+          "guides/profile/manage-profile-and-preferences.md",
+          "guides/notifications/user-preferences.md"
         ],
         "reference": [],
         "troubleshooting": []

@@ -1,5 +1,6 @@
 ---
 title: Add an on-call override
+order: 6
 description: Temporarily replace scheduled coverage without rewriting the rotation.
 type: how-to
 product_area: on-call

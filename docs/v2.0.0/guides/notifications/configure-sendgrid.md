@@ -1,5 +1,6 @@
 ---
 title: Configure SendGrid email
+order: 5
 description: Configure a verified SendGrid sender and restricted API key for OpsKnight email delivery.
 type: how-to
 product_area: notifications

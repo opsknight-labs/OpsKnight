@@ -1,5 +1,6 @@
 ---
 title: Manage incident templates
+order: 9
 description: Create, use, and delete reusable incident defaults with the current 2.0 template workflow.
 type: how-to
 product_area: incidents

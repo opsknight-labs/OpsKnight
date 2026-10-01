@@ -1,5 +1,6 @@
 ---
 title: Retry failed notifications safely
+order: 13
 description: Classify retryable, permanent, deferred, or superseded notification outcomes before replaying delivery.
 type: how-to
 product_area: notifications

@@ -1,5 +1,6 @@
 ---
 title: Build an on-call schedule
+order: 2
 description: Create a schedule, define rotation layers, add responders, and verify coverage.
 type: tutorial
 product_area: on-call

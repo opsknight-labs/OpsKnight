@@ -1,5 +1,6 @@
 ---
 title: Assign an incident
+order: 5
 description: Assign, reassign, or unassign an incident without confusing ownership with acknowledgement.
 type: how-to
 product_area: incidents

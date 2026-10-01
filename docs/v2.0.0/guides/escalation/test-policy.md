@@ -1,5 +1,6 @@
 ---
 title: Test an escalation policy
+order: 7
 description: Validate target resolution, timing, notification delivery, acknowledgement behavior, and fallback progression end to end.
 type: how-to
 product_area: escalation

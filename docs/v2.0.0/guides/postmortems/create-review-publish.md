@@ -7,6 +7,7 @@ audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
   task: Create, review, publish, and follow up on an incident postmortem.
+  evidence: [docs/v2.0.0/assets/postmortems.png]
 verification:
   level: source
   verified_at: 2026-10-01
@@ -14,6 +15,8 @@ verification:
 ---
 
 # Create, review, and publish a postmortem
+
+![Postmortem workspace for resolved incidents](/docs/v2.0.0/assets/postmortems.png)
 
 ## Before you begin
 

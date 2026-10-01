@@ -1,5 +1,6 @@
 ---
 title: Configure an escalation policy
+order: 3
 description: Build, attach, and test ordered incident notification steps.
 type: tutorial
 product_area: escalation

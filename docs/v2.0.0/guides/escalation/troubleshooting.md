@@ -1,5 +1,6 @@
 ---
 title: Troubleshoot escalation policies
+order: 8
 description: Diagnose missing targets, wrong recipients, timing, duplicate pages, non-advancement, and acknowledgement suppression failures.
 type: troubleshooting
 product_area: escalation

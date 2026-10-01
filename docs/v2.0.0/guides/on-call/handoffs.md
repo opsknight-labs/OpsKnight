@@ -1,5 +1,6 @@
 ---
 title: Verify on-call handoffs
+order: 5
 description: Validate responder transitions, time-zone behavior, gaps, overlaps, and operational handoff readiness.
 type: how-to
 product_area: on-call

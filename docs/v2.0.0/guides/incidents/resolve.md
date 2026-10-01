@@ -1,5 +1,6 @@
 ---
 title: Resolve and reopen an incident
+order: 7
 description: Close active response with an auditable resolution record, or safely reopen work that returns.
 type: how-to
 product_area: incidents

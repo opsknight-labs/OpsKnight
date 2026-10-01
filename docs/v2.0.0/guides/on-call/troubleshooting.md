@@ -1,5 +1,6 @@
 ---
 title: Troubleshoot on-call schedules
+order: 8
 description: Diagnose empty coverage, wrong responders, time-zone or handoff errors, override conflicts, and paging mismatches.
 type: troubleshooting
 product_area: on-call

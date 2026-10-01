@@ -1,5 +1,6 @@
 ---
 title: Configure Amazon SES email
+order: 6
 description: Configure an SES region, sending identity, and least-privilege credentials for OpsKnight.
 type: how-to
 product_area: notifications

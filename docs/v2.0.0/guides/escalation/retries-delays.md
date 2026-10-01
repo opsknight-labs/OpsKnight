@@ -1,5 +1,6 @@
 ---
 title: Configure escalation retries and delays
+order: 5
 description: Set and validate escalation timing without creating alert storms, dead time, or impossible response objectives.
 type: how-to
 product_area: escalation

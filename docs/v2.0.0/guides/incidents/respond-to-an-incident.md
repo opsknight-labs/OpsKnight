@@ -1,5 +1,6 @@
 ---
 title: Respond to an incident end to end
+order: 2
 description: Follow the complete OpsKnight response journey from alert receipt through acknowledgement, ownership, communication, escalation, resolution, and follow-up.
 type: tutorial
 product_area: incidents

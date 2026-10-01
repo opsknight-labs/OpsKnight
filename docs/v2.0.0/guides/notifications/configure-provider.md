@@ -1,5 +1,6 @@
 ---
 title: Configure a notification provider
+order: 2
 description: Add provider credentials, sender identity, endpoint settings, test delivery, and safe credential rotation.
 type: how-to
 product_area: notifications

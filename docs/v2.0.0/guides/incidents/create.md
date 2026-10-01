@@ -1,5 +1,6 @@
 ---
 title: Create an incident
+order: 3
 description: Create a manual incident with the right service, response settings, ownership, and deduplication behavior.
 type: how-to
 product_area: incidents

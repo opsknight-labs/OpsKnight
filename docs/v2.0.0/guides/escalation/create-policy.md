@@ -1,5 +1,6 @@
 ---
 title: Create an escalation policy
+order: 2
 description: Create an ordered escalation policy with valid targets, channels, delays, retries, and a testable fallback path.
 type: how-to
 product_area: escalation

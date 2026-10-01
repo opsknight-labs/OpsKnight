@@ -1,5 +1,6 @@
 ---
 title: Test an on-call route
+order: 7
 description: Trigger a controlled incident and verify schedule resolution, escalation target, notification delivery, and responder action.
 type: how-to
 product_area: on-call

@@ -1,5 +1,6 @@
 ---
 title: Install the mobile PWA and enable push
+order: 2
 description: Install OpsKnight on a trusted device, enable push notifications, and verify incident deep links.
 type: how-to
 product_area: mobile

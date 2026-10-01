@@ -1,5 +1,6 @@
 ---
 title: Understand mobile offline state and updates
+order: 5
 description: Distinguish cached, queued, failed, and confirmed mobile state and recover safely after reconnecting.
 type: how-to
 product_area: mobile

@@ -1,5 +1,6 @@
 ---
 title: Configure Resend email
+order: 4
 description: Configure a verified Resend sender and API key for OpsKnight email delivery.
 type: how-to
 product_area: notifications

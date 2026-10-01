@@ -26,8 +26,6 @@ Configure the single supported status page and map the affected services.
 
 Identify the customer-facing impact, approved wording, affected services/components, intended component state, privacy settings, and person authorized to publish. Internal incident visibility does not automatically define public output.
 
-![Status page administration for production services](/docs/v2.0.0/assets/status-pages.png)
-
 ## Open the feature
 
 Open **Settings → Status page** to review the single installation-wide page and service/component mapping. During response, open the incident's status communication controls.

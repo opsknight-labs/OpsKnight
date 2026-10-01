@@ -4,11 +4,13 @@ description: Search incident lifecycle events across services and correlate them
 type: how-to
 product_area: administration
 audience: [administrator, operator]
-reader: { status: READER_COMPLETE, task: Find and interpret incident lifecycle events in Event Logs. }
+reader: { status: READER_COMPLETE, task: Find and interpret incident lifecycle events in Event Logs., evidence: [docs/v2.0.0/assets/event-logs.png] }
 verification: { level: source, verified_at: 2026-10-01, evidence: [src/app/(app)/events/page.tsx, src/components/events/EventsListTable.tsx] }
 ---
 
 # Review Event Logs
+
+![Event Logs with searchable incident lifecycle events](/docs/v2.0.0/assets/event-logs.png)
 
 ## Before you begin
 

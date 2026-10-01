@@ -1,5 +1,6 @@
 ---
 title: Escalate an incident
+order: 6
 description: Advance an open incident to its next escalation-policy step and verify the resulting pages safely.
 type: how-to
 product_area: escalation

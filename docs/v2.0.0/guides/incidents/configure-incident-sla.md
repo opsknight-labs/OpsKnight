@@ -1,5 +1,6 @@
 ---
 title: Configure incident SLA and classification policy
+order: 10
 description: Define workspace objectives, priority rules, classification, support hours, and service inheritance.
 type: how-to
 product_area: incidents

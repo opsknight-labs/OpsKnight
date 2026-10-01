@@ -1,5 +1,6 @@
 ---
 title: Configure on-call rotations
+order: 4
 description: Add responders, handoff intervals, coverage restrictions, and layer precedence to an on-call schedule.
 type: how-to
 product_area: on-call

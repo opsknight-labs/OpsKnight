@@ -1,5 +1,6 @@
 ---
 title: Configure escalation policy steps
+order: 4
 description: Select escalation targets and channels, order fallbacks, and verify runtime target resolution.
 type: how-to
 product_area: escalation
