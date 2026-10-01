@@ -1,6 +1,7 @@
 /**
  * Reusable Email Components
  * Modern, responsive HTML components for email templates
+ * Supports light & dark mode via dm-* CSS classes and @media (prefers-color-scheme: dark).
  */
 
 export interface EmailStyles {
@@ -40,8 +41,8 @@ export function sanitizeUrl(url: string | null | undefined): string {
 }
 
 /**
- * Email container with responsive layout and OpsKnight branding
- * Fully optimized for both mobile and laptop/desktop screens
+ * Email container with responsive layout and OpsKnight branding.
+ * Supports light and dark mode via CSS class hooks (dm-*).
  */
 export function EmailContainer(content: string, styles: EmailStyles = {}): string {
   const backgroundColor = styles.backgroundColor || '#ffffff';
@@ -54,8 +55,8 @@ export function EmailContainer(content: string, styles: EmailStyles = {}): strin
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="x-apple-disable-message-reformatting">
-    <meta name="color-scheme" content="light">
-    <meta name="supported-color-schemes" content="light">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>OpsKnight Notification</title>
     <!--[if gte mso 9]>
@@ -67,7 +68,7 @@ export function EmailContainer(content: string, styles: EmailStyles = {}): strin
     </xml>
     <![endif]-->
     <style type="text/css">
-        :root { color-scheme: light; supported-color-schemes: light; }
+        :root { color-scheme: light dark; supported-color-schemes: light dark; }
         html, body { margin: 0 auto !important; padding: 0 !important; height: 100% !important; width: 100% !important; }
         * { -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; box-sizing: border-box; }
         table, td { mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important; }
@@ -133,18 +134,95 @@ export function EmailContainer(content: string, styles: EmailStyles = {}): strin
             .desktop-table-cell { padding: 20px 36px !important; font-size: 16px !important; }
             .desktop-button a { padding: 20px 56px !important; font-size: 18px !important; min-width: 340px !important; }
         }
+
+        /* ─── Dark Mode ──────────────────────────────────────────────────────── */
+        @media (prefers-color-scheme: dark) {
+            /* Outer wrapper & main card */
+            body { background-color: #0a0f1e !important; }
+            .dm-bg-outer { background-color: #0a0f1e !important; }
+            .dm-bg-card { background-color: #111827 !important; border-color: #1f2937 !important; box-shadow: 0 4px 24px rgba(0,0,0,0.6) !important; }
+
+            /* Content section */
+            .dm-bg-content { background-color: #1e293b !important; }
+
+            /* Footer & muted sections */
+            .dm-bg-footer { background-color: #0f172a !important; }
+            .dm-bg-muted  { background-color: #0f172a !important; border-color: #1f2937 !important; }
+            .dm-border    { border-top-color: #1f2937 !important; }
+
+            /* Typography */
+            .dm-text-heading   { color: #f1f5f9 !important; }
+            .dm-text-subheading{ color: #e2e8f0 !important; }
+            .dm-text-body      { color: #94a3b8 !important; }
+            .dm-text-muted     { color: #64748b !important; }
+            .dm-text-secondary { color: #cbd5e1 !important; }
+            .dm-text-brand     { color: #f1f5f9 !important; }
+            .dm-link-color     { color: #60a5fa !important; }
+
+            /* Alert boxes */
+            .dm-alert-info    { background-color: rgba(30, 58, 138, 0.45) !important; }
+            .dm-alert-title-info  { color: #bfdbfe !important; }
+            .dm-alert-body-info   { color: #dbeafe !important; }
+
+            .dm-alert-warning { background-color: rgba(120, 53, 15, 0.45) !important; }
+            .dm-alert-title-warning { color: #fde68a !important; }
+            .dm-alert-body-warning  { color: #fef3c7 !important; }
+
+            .dm-alert-error   { background-color: rgba(127, 29, 29, 0.45) !important; }
+            .dm-alert-title-error { color: #fecaca !important; }
+            .dm-alert-body-error  { color: #fee2e2 !important; }
+
+            .dm-alert-success { background-color: rgba(20, 83, 45, 0.45) !important; }
+            .dm-alert-title-success { color: #bbf7d0 !important; }
+            .dm-alert-body-success  { color: #dcfce7 !important; }
+
+            /* InfoCard rows */
+            .dm-info-card           { border-color: #1f2937 !important; }
+            .dm-info-row-even       { background-color: #1e293b !important; }
+            .dm-info-row-odd        { background-color: #0f172a !important; }
+            .dm-info-label          { color: #64748b !important; border-bottom-color: #1f2937 !important; }
+            .dm-info-value          { color: #e2e8f0 !important; border-bottom-color: #1f2937 !important; }
+
+            /* Incident email – context & description boxes */
+            .dm-context-box { background-color: #0f172a !important; border-color: #334155 !important; color: #94a3b8 !important; }
+            .dm-desc-box    { background-color: #0f172a !important; border-color: #334155 !important; }
+            .dm-desc-label  { color: #64748b !important; }
+            .dm-desc-text   { color: #cbd5e1 !important; }
+
+            /* Shift reminder checklist */
+            .dm-checklist { background-color: rgba(76, 29, 149, 0.3) !important; border-color: rgba(109, 40, 217, 0.5) !important; color: #c4b5fd !important; }
+
+            /* Shift handoff incident items */
+            .dm-incident-item  { background-color: #0f172a !important; border-color: #1f2937 !important; }
+            .dm-incident-title { color: #f1f5f9 !important; }
+            .dm-incident-meta  { color: #64748b !important; }
+
+            /* Status-page subscriber – specific cards */
+            .dm-affected-box         { background-color: rgba(127, 29, 29, 0.3) !important; border-color: rgba(220, 38, 38, 0.4) !important; }
+            .dm-tip-box              { background-color: rgba(120, 53, 15, 0.3) !important; border-color: rgba(217, 119, 6, 0.4) !important; }
+            .dm-tip-text             { color: #fef3c7 !important; }
+            .dm-resolved-card        { background-color: rgba(20, 83, 45, 0.3) !important; border-color: rgba(22, 163, 74, 0.4) !important; }
+            .dm-resolved-card-primary  { color: #bbf7d0 !important; }
+            .dm-resolved-card-secondary{ color: #86efac !important; }
+            .dm-status-card          { background-color: rgba(30, 58, 138, 0.3) !important; border-color: #2563eb !important; }
+            .dm-status-label         { color: #64748b !important; }
+            .dm-status-value         { color: #f1f5f9 !important; }
+
+            /* Dividers inside content */
+            .dm-divider-top { border-top-color: #1f2937 !important; }
+        }
     </style>
 </head>
 <body style="margin: 0; padding: 0; background-color: ${outerBackground}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; color: #1e293b;">
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: ${outerBackground}; table-layout: fixed;">
         <tr>
-            <td align="center" class="mobile-outer-padding desktop-outer-padding" style="padding: 32px 16px;">
+            <td align="center" class="mobile-outer-padding desktop-outer-padding dm-bg-outer" style="padding: 32px 16px;">
                 <!--[if mso]>
                 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="640" align="center">
                 <tr>
                 <td>
                 <![endif]-->
-                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="mobile-container desktop-container" style="max-width: 640px; margin: 0 auto; background-color: ${backgroundColor}; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04); border: 1px solid #e2e8f0;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="mobile-container desktop-container dm-bg-card" style="max-width: 640px; margin: 0 auto; background-color: ${backgroundColor}; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04); border: 1px solid #e2e8f0;">
                     <tr>
                         <td style="padding: 0;">
                             ${content}
@@ -164,8 +242,9 @@ export function EmailContainer(content: string, styles: EmailStyles = {}): strin
 }
 
 /**
- * Branded email header with OpsKnight logo and gradient
- * Mobile-responsive with flexible layout
+ * Branded email header with OpsKnight logo and gradient.
+ * Mobile-responsive with flexible layout.
+ * Headers use dark gradients — they naturally look good in both light and dark mode.
  */
 export function EmailHeader(title: string, subtitle?: string, styles: EmailStyles = {}): string {
   const headerGradient =
@@ -217,13 +296,13 @@ export function EmailHeader(title: string, subtitle?: string, styles: EmailStyle
 }
 
 /**
- * Content section with responsive padding
+ * Content section with responsive padding and dark mode support.
  */
 export function EmailContent(content: string): string {
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
-        <td class="mobile-padding desktop-padding" style="padding: 32px 32px; background: #ffffff;">
+        <td class="mobile-padding desktop-padding dm-bg-content" style="padding: 32px 32px; background: #ffffff;">
             ${content}
         </td>
     </tr>
@@ -231,7 +310,8 @@ export function EmailContent(content: string): string {
 }
 
 /**
- * Status badge with icon - OpsKnight branded
+ * Status badge with icon - OpsKnight branded.
+ * Uses solid colored backgrounds — renders correctly in both light and dark mode.
  */
 export function StatusBadge(
   status: string,
@@ -290,8 +370,9 @@ export function StatusBadge(
 }
 
 /**
- * Call-to-action button with OpsKnight branded gradient
- * Optimized for mobile with large touch targets
+ * Call-to-action button with OpsKnight branded gradient.
+ * Optimized for mobile with large touch targets.
+ * Button colors are explicit — work in both light and dark mode.
  */
 export function EmailButton(text: string, url: string, styles: EmailStyles = {}): string {
   const buttonBackground =
@@ -314,8 +395,9 @@ export function EmailButton(text: string, url: string, styles: EmailStyles = {})
 }
 
 /**
- * Information card with label and value
- * Fluid responsive widths optimized for mobile and desktop screens
+ * Information card with label and value.
+ * Fluid responsive widths optimized for mobile and desktop screens.
+ * Dark mode: dm-info-* classes override row/cell backgrounds and text in dark mode.
  */
 export function InfoCard(
   items: Array<{ label: string; value: string; highlight?: boolean }>,
@@ -325,11 +407,11 @@ export function InfoCard(
   const rows = items
     .map(
       (item, idx) => `
-        <tr style="${idx % 2 === 1 ? 'background: #f8fafc;' : 'background: #ffffff;'}">
-            <td class="mobile-table-cell desktop-table-cell mobile-table-label" style="padding: 12px 18px; border-bottom: 1px solid #e2e8f0; font-size: 13px; font-weight: 600; color: #64748b; width: 34%; min-width: 90px; vertical-align: middle;">
+        <tr class="${idx % 2 === 0 ? 'dm-info-row-even' : 'dm-info-row-odd'}" style="${idx % 2 === 1 ? 'background: #f8fafc;' : 'background: #ffffff;'}">
+            <td class="mobile-table-cell desktop-table-cell mobile-table-label dm-info-label" style="padding: 12px 18px; border-bottom: 1px solid #e2e8f0; font-size: 13px; font-weight: 600; color: #64748b; width: 34%; min-width: 90px; vertical-align: middle;">
                 ${escapeHtml(item.label)}
             </td>
-            <td class="mobile-table-cell desktop-table-cell" style="padding: 12px 18px; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #1e293b; width: 66%; word-break: break-word; vertical-align: middle; ${item.highlight ? 'font-weight: 600;' : ''}">
+            <td class="mobile-table-cell desktop-table-cell dm-info-value" style="padding: 12px 18px; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #1e293b; width: 66%; word-break: break-word; vertical-align: middle; ${item.highlight ? 'font-weight: 600;' : ''}">
                 ${escapeHtml(item.value)}
             </td>
         </tr>
@@ -338,13 +420,14 @@ export function InfoCard(
     .join('');
 
   return `
-<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; border-left: 4px solid ${accentColor}; margin: 20px 0;">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="dm-info-card" style="background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; border-left: 4px solid ${accentColor}; margin: 20px 0;">
     ${rows}
 </table>`.trim();
 }
 
 /**
- * Alert box for important messages with OpsKnight colors
+ * Alert box for important messages with OpsKnight colors.
+ * Dark mode: dm-alert-* classes swap background and text colors appropriately.
  */
 export function AlertBox(
   title: string,
@@ -378,18 +461,17 @@ export function AlertBox(
   const safeMessage = escapeHtml(message);
 
   return `
-<div style="background: ${color.bg}; border-left: 4px solid ${color.border}; padding: 20px 22px; border-radius: 12px; margin: 20px 0;">
-    <h3 style="margin: 0 0 10px 0; color: ${color.title}; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;">
+<div class="dm-alert-${type}" style="background: ${color.bg}; border-left: 4px solid ${color.border}; padding: 20px 22px; border-radius: 12px; margin: 20px 0;">
+    <h3 class="dm-alert-title-${type}" style="margin: 0 0 10px 0; color: ${color.title}; font-size: 16px; font-weight: 700; letter-spacing: -0.01em;">
         ${safeTitle}
     </h3>
-    <p style="margin: 0; color: ${color.text}; font-size: 14px; line-height: 1.6;">
+    <p class="dm-alert-body-${type}" style="margin: 0; color: ${color.text}; font-size: 14px; line-height: 1.6;">
         ${safeMessage}
     </p>
 </div>`.trim();
 }
 
 /**
- * Dedicated OpsKnight product promotion card
  * @deprecated Dedicated promo card is removed to keep transactional alert emails clean, subtle, and focused.
  */
 export function OpsKnightPromoCard(): string {
@@ -397,8 +479,9 @@ export function OpsKnightPromoCard(): string {
 }
 
 /**
- * Footer with OpsKnight branding and notification context
+ * Footer with OpsKnight branding and notification context.
  * Subtle, minimalist, and elegant.
+ * Dark mode: dm-bg-footer and dm-border classes handle background and border.
  */
 export function EmailFooter(
   unsubscribeUrl?: string,
@@ -412,14 +495,14 @@ export function EmailFooter(
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
-        <td style="padding: 24px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-            <p style="margin: 0 0 6px 0; color: #64748b; font-size: 13px; line-height: 1.5;">
+        <td class="dm-bg-footer dm-border" style="padding: 24px 32px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
+            <p style="margin: 0 0 6px 0; color: #64748b; font-size: 13px; line-height: 1.5;" class="dm-text-body">
                 This is an automated notification from <a href="${safeBrandUrl}" target="_blank" rel="noopener noreferrer" style="color: #0f172a; text-decoration: none; font-weight: 700;"><strong style="color: #0f172a;">OpsKnight</strong></a> Incident Management.
             </p>
-            <p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 12px; line-height: 1.5;">
+            <p style="margin: 0 0 8px 0; color: #94a3b8; font-size: 12px; line-height: 1.5;" class="dm-text-muted">
                 <a href="${safeBrandUrl}" target="_blank" rel="noopener noreferrer" style="color: #94a3b8; text-decoration: none;">OpsKnight</a> &bull; Open-Source Incident Response
             </p>
-            <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;">
+            <p style="margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;" class="dm-text-muted">
                 ${
                   safeSettings && safeSettings !== '#'
                     ? `<a href="${safeSettings}" style="color: #64748b; text-decoration: underline; margin-right: 12px;">Notification Settings</a>`
@@ -437,13 +520,13 @@ export function EmailFooter(
 }
 
 /**
- * SVG Icons (inline for email compatibility)
- */
-
-/**
- * Header specifically for Status Page Subscribers
- * Shows the Organization Name prominently instead of OpsKnight
- * Maintains the premium OpsKnight aesthetic
+ * Header specifically for Status Page Subscribers.
+ * Shows the Organization Name in the brand bar ONCE.
+ * The h1 title shows the update type (e.g. "Incident Reported"), not the org name again.
+ * Maintains the premium OpsKnight aesthetic.
+ *
+ * Fix: Previously the org name appeared twice — once in the brand bar and again as <h1>.
+ * Now: brand bar = org name; h1 = update type (title param); subtitle = specific detail.
  */
 export function SubscriberEmailHeader(
   pageName: string,
@@ -455,11 +538,8 @@ export function SubscriberEmailHeader(
     styles.headerGradient || 'linear-gradient(135deg, #1e293b 0%, #334155 40%, #475569 100%)';
   const displayName = escapeHtml(styles.brandName || pageName);
   const logoAlt = escapeHtml(styles.logoAlt || displayName);
-  const logoWidth = styles.logoWidth || 52;
-  const brandLogo = getOpsKnightLogo(logoWidth, {
-    ...styles,
-    logoAlt,
-  });
+  const logoWidth = styles.logoWidth || 40;
+  const brandLogo = getOpsKnightLogo(logoWidth, { ...styles, logoAlt });
   const safeTitle = escapeHtml(title);
   const safeSubtitle = subtitle ? escapeHtml(subtitle) : undefined;
   const brandUrl = sanitizeUrl(styles.brandUrl || 'https://opsknight.com/');
@@ -468,46 +548,28 @@ export function SubscriberEmailHeader(
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
         <td class="mobile-header-padding desktop-header-padding" style="background: ${headerGradient}; padding: 36px 32px; text-align: left; position: relative;">
-            <!-- Brand Header -->
-            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 20px;">
+            <!-- Brand Bar: org name shown once -->
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 20px;">
                 <tr>
-                    <td align="left" valign="middle">
-                        <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-                            <tr>
-                                <td style="padding-right: 12px; vertical-align: middle;">
-                                    <a href="${brandUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
-                                        ${brandLogo}
-                                    </a>
-                                </td>
-                                <td style="vertical-align: middle;">
-                                    <a href="${brandUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
-                                        <span class="mobile-logo-name desktop-logo-name" style="font-size: 22px; font-weight: 700; color: #ffffff !important; letter-spacing: -0.01em; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;">
-                                            ${displayName}
-                                        </span>
-                                    </a>
-                                </td>
-                            </tr>
-                        </table>
+                    <td style="padding-right: 12px; vertical-align: middle;">
+                        <a href="${brandUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                            ${brandLogo}
+                        </a>
                     </td>
-                    <td align="right" valign="middle" class="mobile-hide">
-                        <a href="https://opsknight.com/" target="_blank" rel="noopener noreferrer" style="color: rgba(255, 255, 255, 0.7); text-decoration: none; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;">
-                            Powered by OpsKnight
+                    <td style="vertical-align: middle;">
+                        <a href="${brandUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
+                            <span class="mobile-logo-name desktop-logo-name" style="font-size: 20px; font-weight: 700; color: #ffffff !important; letter-spacing: -0.01em; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap;">
+                                ${displayName}
+                            </span>
                         </a>
                     </td>
                 </tr>
             </table>
 
-            <!-- Organization Name (The Sender) -->
-            <h1 class="mobile-font-large desktop-font-title" style="margin: 0 0 10px 0; color: #ffffff !important; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3;">
-                ${displayName}
+            <!-- Update type as h1 (not the org name) -->
+            <h1 class="mobile-font-large desktop-font-title" style="margin: 0 0 ${safeSubtitle ? '10px' : '0'} 0; color: #ffffff !important; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3;">
+                ${safeTitle}
             </h1>
-            
-            <!-- Update Type Badge -->
-            <div style="margin-bottom: 18px;">
-                <span style="display: inline-block; padding: 5px 12px; background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 8px; color: #ffffff !important; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;">
-                    ${safeTitle}
-                </span>
-            </div>
 
             ${
               safeSubtitle
@@ -524,7 +586,9 @@ export function SubscriberEmailHeader(
 }
 
 /**
- * Footer providing "Powered by" marketing while handling Unsubscribe
+ * Footer for status-page subscriber emails.
+ * Provides "Powered by OpsKnight" branding and handles Unsubscribe.
+ * Dark mode: dm-bg-footer and dm-border classes handle background and border.
  */
 export function SubscriberEmailFooter(unsubscribeUrl: string, pageName: string): string {
   const safeUnsubscribe = sanitizeUrl(unsubscribeUrl);
@@ -533,18 +597,18 @@ export function SubscriberEmailFooter(unsubscribeUrl: string, pageName: string):
   return `
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
     <tr>
-        <td style="padding: 28px 20px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
-            <p style="margin: 0 0 12px 0; color: #64748b; font-size: 13px; line-height: 1.6;">
+        <td class="dm-bg-footer dm-border" style="padding: 28px 20px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
+            <p style="margin: 0 0 12px 0; color: #64748b; font-size: 13px; line-height: 1.6;" class="dm-text-body">
                 You received this email because you are subscribed to <strong>${safePageName}</strong> updates.
             </p>
             
             <p style="margin: 0 0 24px 0; font-size: 13px;">
-                <a href="${safeUnsubscribe}" style="color: #64748b; text-decoration: underline;">Unsubscribe from updates</a>
+                <a href="${safeUnsubscribe}" style="color: #64748b; text-decoration: underline;" class="dm-text-muted">Unsubscribe from updates</a>
             </p>
 
             <!-- OpsKnight Marketing -->
             <div>
-                <p style="margin: 0 0 6px 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;">
+                <p style="margin: 0 0 6px 0; color: #94a3b8; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;" class="dm-text-muted">
                     Powered by
                 </p>
                 <a href="https://opsknight.com/" target="_blank" rel="noopener noreferrer" style="text-decoration: none; display: inline-block;">
@@ -554,7 +618,7 @@ export function SubscriberEmailFooter(unsubscribeUrl: string, pageName: string):
                                 ${getOpsKnightLogo(22)}
                             </td>
                             <td style="vertical-align: middle;">
-                                <span style="color: #0f172a; font-size: 15px; font-weight: 700; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; letter-spacing: -0.01em;">OpsKnight</span>
+                                <span style="color: #0f172a; font-size: 15px; font-weight: 700; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif; letter-spacing: -0.01em;" class="dm-text-brand">OpsKnight</span>
                             </td>
                         </tr>
                     </table>
