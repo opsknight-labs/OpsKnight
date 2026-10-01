@@ -1473,4 +1473,128 @@ describe('PushNotificationToggle', () => {
     expect(screen.getByText('Off')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
+
+  it('handles fresh PWA installation on iOS when service worker is initially installing and ready never settles', async () => {
+    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1'
+    );
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('iPhone');
+    Object.defineProperty(navigator, 'standalone', {
+      value: true,
+      configurable: true,
+    });
+
+    const requestPermissionMock = vi.fn().mockResolvedValue('granted');
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'default',
+        requestPermission: requestPermissionMock,
+      },
+      configurable: true,
+    });
+
+    let stateChangeHandler: (() => void) | null = null;
+    const installingWorker = {
+      scriptURL: `${window.location.origin}/sw.js`,
+      state: 'installing',
+      addEventListener: vi.fn((event: string, handler: () => void) => {
+        if (event === 'statechange') {
+          stateChangeHandler = handler;
+        }
+      }),
+      removeEventListener: vi.fn(),
+    };
+
+    const subscribeMock = vi.fn().mockResolvedValue({
+      endpoint: 'https://push.apple.com/sub/ios-fresh-test',
+      toJSON: () => ({ endpoint: 'https://push.apple.com/sub/ios-fresh-test' }),
+      unsubscribe: vi.fn().mockResolvedValue(true),
+    });
+
+    const registration: Record<string, unknown> = {
+      active: null,
+      waiting: null,
+      installing: installingWorker,
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(null),
+        subscribe: subscribeMock,
+      },
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+
+    // Simulate worker activating shortly after registration
+    setTimeout(() => {
+      installingWorker.state = 'activated';
+      registration.active = { scriptURL: `${window.location.origin}/sw.js` };
+      if (stateChangeHandler) {
+        stateChangeHandler();
+      }
+    }, 20);
+
+    const neverResolvingReady = new Promise<ServiceWorkerRegistration>(() => {});
+
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        // Fresh install: no initial registration
+        getRegistration: vi.fn().mockResolvedValue(null),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: neverResolvingReady,
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/sw.js')) {
+        return {
+          ok: true,
+          status: 200,
+          redirected: false,
+          url: `${window.location.origin}/sw.js`,
+          headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
+        };
+      }
+      if (typeof url === 'string' && url.includes('/api/system/vapid-public-key')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ key: 'B' + 'A'.repeat(86) }),
+        };
+      }
+      if (typeof url === 'string' && url.includes('/api/user/push-subscription')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true }),
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    render(<PushNotificationToggle />);
+
+    // Must resolve preflight and display Enable button promptly without timing out
+    const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    await waitFor(() => {
+      expect(enableButton).not.toBeDisabled();
+    });
+    expect(screen.getByText('Off')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    // Tapping Enable must trigger the native iOS permission prompt from user gesture
+    fireEvent.click(enableButton);
+
+    await waitFor(() => {
+      expect(requestPermissionMock).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(subscribeMock).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('On')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Disable/i })).toBeInTheDocument();
+    });
+  });
 });
