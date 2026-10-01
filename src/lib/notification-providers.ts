@@ -576,7 +576,12 @@ export async function getSMSConfig(
 }
 
 /**
- * Get Push notification configuration from database only
+ * Get the effective Web Push configuration.
+ *
+ * Stored provider configuration has priority. A complete environment VAPID
+ * pair remains supported for deployments that intentionally configure Push
+ * without a database provider record. Public-key-only environment config is
+ * rejected because it can subscribe devices but can never deliver to them.
  */
 export async function getPushConfig(): Promise<PushConfig> {
   try {
@@ -614,6 +619,27 @@ export async function getPushConfig(): Promise<PushConfig> {
     logger.error('Failed to load Push config from database', {
       component: 'notification-providers',
       error,
+    });
+  }
+
+  const envPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
+  const envPrivateKey = process.env.VAPID_PRIVATE_KEY?.trim();
+  if (envPublicKey && envPrivateKey) {
+    return {
+      enabled: true,
+      provider: 'web-push',
+      vapidPublicKey: envPublicKey,
+      vapidPrivateKey: envPrivateKey,
+      vapidSubject: process.env.VAPID_SUBJECT?.trim() || 'mailto:admin@localhost',
+      vapidKeyHistory: [],
+    };
+  }
+
+  if (envPublicKey || envPrivateKey) {
+    logger.warn('Ignoring incomplete environment Web Push configuration', {
+      component: 'notification-providers',
+      hasPublicKey: Boolean(envPublicKey),
+      hasPrivateKey: Boolean(envPrivateKey),
     });
   }
 
