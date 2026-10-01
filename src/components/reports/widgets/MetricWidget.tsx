@@ -86,16 +86,22 @@ const MetricWidget = memo(function MetricWidget({
   const trendIsContextOnly = definition?.direction === 'context_only';
 
   // Variant colors
-  const variantStyles = {
-    default: 'text-foreground',
-    success: 'text-green-500',
-    warning: 'text-yellow-500',
-    danger: 'text-red-500',
+  const getVariantStyle = (v: string): string => {
+    switch (v) {
+      case 'success':
+        return 'text-green-500';
+      case 'warning':
+        return 'text-yellow-500';
+      case 'danger':
+        return 'text-red-500';
+      default:
+        return 'text-foreground';
+    }
   };
 
   return (
     <div className="flex flex-col justify-center h-full">
-      <div className={`text-3xl font-bold ${variantStyles[variant]}`}>{formatValue(value)}</div>
+      <div className={`text-3xl font-bold ${getVariantStyle(variant)}`}>{formatValue(value)}</div>
 
       {showTrend && delta !== null && (
         <div

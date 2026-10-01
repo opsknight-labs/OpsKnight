@@ -3,8 +3,30 @@ import prisma from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { Prisma } from '@prisma/client';
+import { z } from 'zod';
 
-const dashboardVisibilities = new Set(['PRIVATE', 'TEAM', 'PUBLIC']);
+const CreateDashboardSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(200).trim(),
+  description: z.string().max(2000).nullish(),
+  visibility: z.enum(['PRIVATE', 'TEAM', 'PUBLIC']).default('PRIVATE'),
+  teamId: z.string().nullish(),
+  sourceTemplate: z.string().max(100).nullish(),
+  templateId: z.string().nullish(), // backward compat
+  widgets: z.array(z.object({
+    widgetType: z.string().min(1),
+    metricKey: z.string().min(1),
+    widgetDefinitionId: z.string().max(100).nullish(),
+    title: z.string().max(200).nullish(),
+    position: z.object({
+      x: z.number().int().min(0),
+      y: z.number().int().min(0),
+      w: z.number().int().min(1).max(4),
+      h: z.number().int().min(1).max(4),
+    }).default({ x: 0, y: 0, w: 1, h: 1 }),
+    config: z.record(z.unknown()).default({}),
+  })).max(50, 'Maximum 50 widgets per dashboard').default([]),
+});
 
 export const dynamic = 'force-dynamic';
 
@@ -112,11 +134,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, description, templateId, visibility = 'PRIVATE', teamId, widgets = [] } = body;
-
-    if (!name || typeof name !== 'string' || !dashboardVisibilities.has(visibility)) {
-      return NextResponse.json({ error: 'Invalid dashboard configuration' }, { status: 400 });
+    const parseResult = CreateDashboardSchema.safeParse(body);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: 'Invalid dashboard configuration', details: parseResult.error.flatten().fieldErrors },
+        { status: 400 }
+      );
     }
+    const { name, description, visibility, teamId, sourceTemplate, templateId, widgets } = parseResult.data;
+
     const teamIds = new Set(user.teamMemberships.map(membership => membership.teamId));
     if (
       (visibility === 'TEAM' && (typeof teamId !== 'string' || !teamIds.has(teamId))) ||
@@ -127,7 +153,7 @@ export async function POST(request: NextRequest) {
 
     // If creating from template, clone the template's widgets
     let widgetsToCreate = widgets;
-    if (templateId) {
+    if (templateId && widgets.length === 0) {
       const template = await prisma.dashboard.findUnique({
         where: { id: templateId },
         include: { widgets: true },
@@ -142,9 +168,14 @@ export async function POST(request: NextRequest) {
       widgetsToCreate = template.widgets.map(w => ({
         widgetType: w.widgetType,
         metricKey: w.metricKey,
+        widgetDefinitionId: w.widgetDefinitionId || null,
         title: w.title,
-        position: w.position,
-        config: w.config,
+        position: (w.position && typeof w.position === 'object' && !Array.isArray(w.position)
+          ? w.position
+          : { x: 0, y: 0, w: 1, h: 1 }) as { x: number; y: number; w: number; h: number },
+        config: (w.config && typeof w.config === 'object' && !Array.isArray(w.config)
+          ? w.config
+          : {}) as Record<string, unknown>,
       }));
     }
 
@@ -152,19 +183,20 @@ export async function POST(request: NextRequest) {
       data: {
         name,
         description,
-        templateId,
+        templateId: sourceTemplate || templateId,
         visibility,
         userId: user.id,
         teamId: visibility === 'TEAM' ? teamId : null,
         layout: { columns: 4, rowHeight: 120 },
         config: { timeRange: 7, refreshInterval: 60 },
         widgets: {
-          create: widgetsToCreate.map((w: any) => ({
+          create: widgetsToCreate.map(w => ({
             widgetType: w.widgetType,
             metricKey: w.metricKey,
+            widgetDefinitionId: w.widgetDefinitionId || null,
             title: w.title || null,
-            position: w.position || { x: 0, y: 0, w: 1, h: 1 },
-            config: w.config || {},
+            position: (w.position || { x: 0, y: 0, w: 1, h: 1 }) as Prisma.InputJsonValue,
+            config: (w.config || {}) as Prisma.InputJsonValue,
           })),
         },
       },

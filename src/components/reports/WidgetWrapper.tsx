@@ -39,16 +39,21 @@ const WidgetWrapper = memo(function WidgetWrapper({
   onExpand,
   className = '',
 }: WidgetWrapperProps) {
-  const sizeClasses = {
-    compact: 'p-2',
-    normal: 'p-3',
-    large: 'p-4',
+  const getSizeClass = (s: 'compact' | 'normal' | 'large'): string => {
+    switch (s) {
+      case 'compact':
+        return 'p-2';
+      case 'large':
+        return 'p-4';
+      default:
+        return 'p-3';
+    }
   };
 
   return (
     <Card className={`h-full flex flex-col overflow-hidden ${className}`}>
       <CardHeader
-        className={`${sizeClasses[size]} pb-2 flex flex-row items-center justify-between gap-2 border-b border-border/50`}
+        className={`${getSizeClass(size)} pb-2 flex flex-row items-center justify-between gap-2 border-b border-border/50`}
       >
         <div className="flex items-center gap-2 flex-1 min-w-0">
           {isEditing && (
@@ -98,7 +103,7 @@ const WidgetWrapper = memo(function WidgetWrapper({
         </div>
       </CardHeader>
 
-      <CardContent className={`flex-1 ${sizeClasses[size]} pt-2 overflow-auto`}>
+      <CardContent className={`flex-1 ${getSizeClass(size)} pt-2 overflow-auto`}>
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="flex flex-col items-center gap-2 text-muted-foreground">

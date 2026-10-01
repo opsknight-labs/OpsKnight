@@ -11,8 +11,17 @@ import {
 } from '@/components/ui/shadcn/table';
 import { formatTimeMinutesMs } from '@/lib/time-format';
 
+function resolveNestedPath(obj: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((acc, key) => {
+    if (acc && typeof acc === 'object') {
+      return Reflect.get(acc, key);
+    }
+    return undefined;
+  }, obj);
+}
+
 type TableWidgetProps = {
-  data: Array<Record<string, any>>;
+  data: Array<Record<string, unknown>>;
   metricKey: string;
   maxRows?: number;
 };
@@ -20,7 +29,7 @@ type TableWidgetProps = {
 type ColumnConfig = {
   key: string;
   label: string;
-  format?: (value: any) => string;
+  format?: (value: unknown) => string;
   align?: 'left' | 'center' | 'right';
 };
 
@@ -58,15 +67,21 @@ const TableWidget = memo(function TableWidget({ data, metricKey, maxRows = 5 }: 
         </TableHeader>
         <TableBody>
           {displayData.map((row, idx) => (
-            <TableRow key={row.id || idx} className="hover:bg-muted/50">
-              {columns.map(col => (
-                <TableCell
-                  key={col.key}
-                  className={`text-xs py-2 ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''}`}
-                >
-                  {col.format ? col.format(row[col.key]) : (row[col.key] ?? '--')}
-                </TableCell>
-              ))}
+            <TableRow
+              key={typeof row.id === 'string' || typeof row.id === 'number' ? row.id : idx}
+              className="hover:bg-muted/50"
+            >
+              {columns.map(col => {
+                const cellValue = resolveNestedPath(row, col.key);
+                return (
+                  <TableCell
+                    key={col.key}
+                    className={`text-xs py-2 ${col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''}`}
+                  >
+                    {col.format ? col.format(cellValue) : (cellValue as React.ReactNode ?? '--')}
+                  </TableCell>
+                );
+              })}
             </TableRow>
           ))}
         </TableBody>
@@ -85,63 +100,73 @@ const TableWidget = memo(function TableWidget({ data, metricKey, maxRows = 5 }: 
  * Get column configuration based on metric type
  */
 function getColumnsForMetric(metricKey: string): ColumnConfig[] {
-  const configs: Record<string, ColumnConfig[]> = {
-    topServices: [
-      { key: 'name', label: 'Service' },
-      { key: 'count', label: 'Incidents', align: 'right' },
-    ],
-    assigneeLoad: [
-      { key: 'name', label: 'Assignee' },
-      { key: 'count', label: 'Incidents', align: 'right' },
-    ],
-    serviceMetrics: [
-      { key: 'name', label: 'Service' },
-      { key: 'status', label: 'Status', align: 'center' },
-      { key: 'count', label: 'Incidents', align: 'right' },
-      {
-        key: 'mtta',
-        label: 'MTTA',
-        align: 'right',
-        format: v => (v ? formatTimeMinutesMs(v * 60000) : '--'),
-      },
-    ],
-    onCallLoad: [
-      { key: 'name', label: 'User' },
-      {
-        key: 'hoursMs',
-        label: 'Hours',
-        align: 'right',
-        format: v => (v ? `${(v / 3600000).toFixed(1)}h` : '--'),
-      },
-      { key: 'incidentCount', label: 'Incidents', align: 'right' },
-    ],
-    recurringTitles: [
-      { key: 'title', label: 'Issue Title' },
-      { key: 'count', label: 'Occurrences', align: 'right' },
-    ],
-    serviceSlaTable: [
-      { key: 'name', label: 'Service' },
-      { key: 'ackRate', label: 'Ack Rate', align: 'right', format: v => `${(v ?? 0).toFixed(0)}%` },
-      {
-        key: 'resolveRate',
-        label: 'Resolve Rate',
-        align: 'right',
-        format: v => `${(v ?? 0).toFixed(0)}%`,
-      },
-      { key: 'total', label: 'Total', align: 'right' },
-    ],
-    currentShifts: [
-      { key: 'user.name', label: 'On-Call' },
-      { key: 'schedule.name', label: 'Schedule' },
-    ],
-  };
-
-  return (
-    configs[metricKey] || [
-      { key: 'name', label: 'Name' },
-      { key: 'count', label: 'Count', align: 'right' },
-    ]
-  );
+  switch (metricKey) {
+    case 'topServices':
+      return [
+        { key: 'name', label: 'Service' },
+        { key: 'count', label: 'Incidents', align: 'right' },
+      ];
+    case 'assigneeLoad':
+      return [
+        { key: 'name', label: 'Assignee' },
+        { key: 'count', label: 'Incidents', align: 'right' },
+      ];
+    case 'serviceMetrics':
+      return [
+        { key: 'name', label: 'Service' },
+        { key: 'status', label: 'Status', align: 'center' },
+        { key: 'count', label: 'Incidents', align: 'right' },
+        {
+          key: 'mtta',
+          label: 'MTTA',
+          align: 'right',
+          format: v => (typeof v === 'number' ? formatTimeMinutesMs(v * 60000) : '--'),
+        },
+      ];
+    case 'onCallLoad':
+      return [
+        { key: 'name', label: 'User' },
+        {
+          key: 'hoursMs',
+          label: 'Hours',
+          align: 'right',
+          format: v => (typeof v === 'number' ? `${(v / 3600000).toFixed(1)}h` : '--'),
+        },
+        { key: 'incidentCount', label: 'Incidents', align: 'right' },
+      ];
+    case 'recurringTitles':
+      return [
+        { key: 'title', label: 'Issue Title' },
+        { key: 'count', label: 'Occurrences', align: 'right' },
+      ];
+    case 'serviceSlaTable':
+      return [
+        { key: 'name', label: 'Service' },
+        {
+          key: 'ackRate',
+          label: 'Ack Rate',
+          align: 'right',
+          format: v => (v != null ? `${Number(v).toFixed(0)}%` : '–'),
+        },
+        {
+          key: 'resolveRate',
+          label: 'Resolve Rate',
+          align: 'right',
+          format: v => (v != null ? `${Number(v).toFixed(0)}%` : '–'),
+        },
+        { key: 'total', label: 'Total', align: 'right' },
+      ];
+    case 'currentShifts':
+      return [
+        { key: 'user.name', label: 'On-Call' },
+        { key: 'schedule.name', label: 'Schedule' },
+      ];
+    default:
+      return [
+        { key: 'name', label: 'Name' },
+        { key: 'count', label: 'Count', align: 'right' },
+      ];
+  }
 }
 
 export default TableWidget;
