@@ -431,7 +431,7 @@ export function IncidentAlertProvider({
     }
   }, [recentIncidents, clearDismissal, acknowledgeIncident, dismissedAt, viewingIncidentId]);
 
-  // Derive visible active critical incidents scoped to the recency threshold (2 hours)
+  // Derive visible active critical incidents scoped to the four-hour recency threshold.
   const activeCriticalIncidents = useMemo(() => {
     const now = Date.now();
     return Array.from(incidentsMap.values())

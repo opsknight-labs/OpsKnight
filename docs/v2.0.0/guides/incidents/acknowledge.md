@@ -17,6 +17,9 @@ verification:
     - src/components/incident/detail/actions.ts
     - src/lib/incidents/lifecycle.ts
     - src/lib/incidents/operator-lifecycle.ts
+    - src/contexts/IncidentAlertContext.tsx
+    - src/components/layout/GlobalIncidentBanner.tsx
+    - src/components/incident/IncidentAlertToast.tsx
 ---
 
 # Acknowledge an incident
@@ -70,6 +73,22 @@ Refresh the page once if the header and timeline disagree. If the source page is
 Mobile, supported ChatOps actions, voice workflows, and authenticated API clients can acknowledge an incident when the actor and integration have the required access. Regardless of channel, verify the canonical incident page when the action is operationally important. Provider cards and push notifications are views of incident state, not a separate source of truth.
 
 Never share an interactive action URL or authentication credential to let another person acknowledge as you.
+
+## Understand realtime incident alerts
+
+The global banner includes active `P1`, `P2`, or high-urgency incidents created
+within the last four hours. It automatically dismisses after 12 seconds; hover
+over it to pause the countdown. Manual or automatic dismissal persists while
+navigating in the same browser session. A genuinely new or newly escalated
+`P1`/high-urgency incident can reopen it.
+
+Realtime toast cards are for new, unacknowledged arrivals. Initial stream sync
+only toasts incidents created within roughly one minute; subsequent unseen
+arrivals must be no more than three minutes old. OpsKnight avoids duplicating a
+toast in the same browser session and suppresses the alert while you are already
+viewing that incident. Use **View** to open the incident or **Acknowledge** to
+claim it directly. A dismissed banner or toast is only a presentation choice;
+it does not acknowledge, suppress, or resolve the incident.
 
 ## How acknowledgement works with other states
 

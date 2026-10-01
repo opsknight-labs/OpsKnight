@@ -13,7 +13,7 @@ verification:
 
 # Operate privacy requests
 
-Privacy Requests is the controlled workflow for a request concerning an active OpsKnight user. The supported types are `ACCESS`, `PORTABILITY`, `RECTIFICATION`, `ERASURE`, `RESTRICTION`, and `OBJECTION`. Access, portability, and erasure have product automation; the other types require documented manual review and processing.
+Privacy Requests is the controlled workflow for a request concerning an active OpsKnight user or a status-page subscriber. The supported types are `ACCESS`, `PORTABILITY`, `RECTIFICATION`, `ERASURE`, `RESTRICTION`, and `OBJECTION`. Eligible user access, portability, and erasure requests have product automation; the other request types require documented manual review and processing. Every `STATUS_SUBSCRIBER` request requires manual fulfilment in 2.0.
 
 The lifecycle is `RECEIVED` → `IDENTITY_VERIFICATION` → `IN_REVIEW` or verified `PROCESSING` → `COMPLETED`. Operators can use `BLOCKED` or `REJECTED` where the state machine permits. Processing cannot begin without recorded identity verification.
 
