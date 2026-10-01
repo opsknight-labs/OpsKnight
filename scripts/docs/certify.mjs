@@ -24,7 +24,10 @@ run('node', ['scripts/check-docs-links.cjs']);
 run('node', ['scripts/docs/check-reader-quality.mjs', ...(releaseCertification ? ['--release'] : [])]);
 run('node', ['scripts/docs/check-dangerous-claims.mjs']);
 run('node', ['scripts/check-docs-capabilities.cjs']);
-run('node', ['scripts/docs/check-evidence.mjs']);
+// Static certification must reject stale committed evidence immediately. A
+// full runtime pass is also the supported recovery path after a rebase or
+// product update, so validate evidence after Playwright has refreshed it.
+if (!fullRuntime) run('node', ['scripts/docs/check-evidence.mjs']);
 run('node', ['scripts/docs/check-review-signoffs.mjs', ...(releaseCertification ? ['--release'] : [])]);
 run('node', ['scripts/docs/check-feature-graph.mjs']);
 run('node', ['--test', ...readdirSync(join(root, 'tests/docs/tooling')).filter(name => name.endsWith('.test.mjs')).map(name => `tests/docs/tooling/${name}`)]);

@@ -1,6 +1,6 @@
 schemaVersion: 1
 purpose: Generated topic inventory only. It makes no claim that a topic was ported or reviewed.
-sourceDigest: e31c75ba33c91f762629984fe392087d5dc1527b8035896689758ae2f996d3ab
+sourceDigest: 47a632d40ada6cb09d4f8b92b2eef7780fd2a8509b8889a4e6e926fdf1d4229c
 topics:
   - id: readme_1
     source: docs/v1.5/README.md
@@ -6216,53 +6216,61 @@ topics:
     topic: Authentication
   - id: security_scim_provisioning_4
     source: docs/v1.5/security/scim-provisioning.md
-    level: 2
-    topic: Supported resource
+    level: 3
+    topic: 1. In-App UI Management (Recommended)
   - id: security_scim_provisioning_5
     source: docs/v1.5/security/scim-provisioning.md
-    level: 2
-    topic: Supported user attributes
+    level: 3
+    topic: 2. Environment Variable Fallback
   - id: security_scim_provisioning_6
     source: docs/v1.5/security/scim-provisioning.md
     level: 2
-    topic: Filtering
+    topic: Supported resource
   - id: security_scim_provisioning_7
     source: docs/v1.5/security/scim-provisioning.md
     level: 2
-    topic: Provisioning behavior
+    topic: Supported user attributes
   - id: security_scim_provisioning_8
     source: docs/v1.5/security/scim-provisioning.md
     level: 2
-    topic: Updating a user
+    topic: Filtering
   - id: security_scim_provisioning_9
     source: docs/v1.5/security/scim-provisioning.md
     level: 2
-    topic: Deprovisioning and DELETE
+    topic: Provisioning behavior
   - id: security_scim_provisioning_10
     source: docs/v1.5/security/scim-provisioning.md
     level: 2
-    topic: OIDC and SCIM together
+    topic: Updating a user
   - id: security_scim_provisioning_11
     source: docs/v1.5/security/scim-provisioning.md
     level: 2
-    topic: Role ownership
+    topic: Deprovisioning and DELETE
   - id: security_scim_provisioning_12
     source: docs/v1.5/security/scim-provisioning.md
     level: 2
-    topic: Microsoft Entra provisioning
+    topic: OIDC and SCIM together
   - id: security_scim_provisioning_13
     source: docs/v1.5/security/scim-provisioning.md
     level: 2
-    topic: Okta provisioning
+    topic: Role ownership
   - id: security_scim_provisioning_14
     source: docs/v1.5/security/scim-provisioning.md
     level: 2
-    topic: Operational checks
+    topic: Microsoft Entra provisioning
   - id: security_scim_provisioning_15
     source: docs/v1.5/security/scim-provisioning.md
     level: 2
-    topic: Troubleshooting
+    topic: Okta provisioning
   - id: security_scim_provisioning_16
+    source: docs/v1.5/security/scim-provisioning.md
+    level: 2
+    topic: Operational checks
+  - id: security_scim_provisioning_17
+    source: docs/v1.5/security/scim-provisioning.md
+    level: 2
+    topic: Troubleshooting
+  - id: security_scim_provisioning_18
     source: docs/v1.5/security/scim-provisioning.md
     level: 2
     topic: Related topics

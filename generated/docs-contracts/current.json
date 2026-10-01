@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "7fb973735e663e761c5655525abe25fcfe9756f0",
+  "sourceRevision": "90b5303077e070e94e5eea3d696578dda40a9c5c",
   "contracts": [
     {
       "id": "api:/api/events",
@@ -6813,8 +6813,10 @@
       "sources": [
         "src/app/api/scim/v2/Users/[id]/route.ts",
         "src/lib/audit.ts",
+        "src/lib/avatar.ts",
         "src/lib/db-locks.ts",
         "src/lib/db-utils.ts",
+        "src/lib/encryption.ts",
         "src/lib/logger.ts",
         "src/lib/prisma-datasource.ts",
         "src/lib/prisma.ts",
@@ -6830,8 +6832,10 @@
         "sources": [
           "src/app/api/scim/v2/Users/[id]/route.ts",
           "src/lib/audit.ts",
+          "src/lib/avatar.ts",
           "src/lib/db-locks.ts",
           "src/lib/db-utils.ts",
+          "src/lib/encryption.ts",
           "src/lib/logger.ts",
           "src/lib/prisma-datasource.ts",
           "src/lib/prisma.ts",
@@ -6857,6 +6861,8 @@
         "idempotent": false,
         "errors": [],
         "entities": [
+          "systemConfig",
+          "systemSettings",
           "user"
         ],
         "runtimeDependencies": [
@@ -6896,8 +6902,10 @@
           "evidence": [
             "src/app/api/scim/v2/Users/[id]/route.ts",
             "src/lib/audit.ts",
+            "src/lib/avatar.ts",
             "src/lib/db-locks.ts",
             "src/lib/db-utils.ts",
+            "src/lib/encryption.ts",
             "src/lib/logger.ts",
             "src/lib/prisma-datasource.ts",
             "src/lib/prisma.ts",
@@ -6915,8 +6923,10 @@
           "evidence": [
             "src/app/api/scim/v2/Users/[id]/route.ts",
             "src/lib/audit.ts",
+            "src/lib/avatar.ts",
             "src/lib/db-locks.ts",
             "src/lib/db-utils.ts",
+            "src/lib/encryption.ts",
             "src/lib/logger.ts",
             "src/lib/prisma-datasource.ts",
             "src/lib/prisma.ts",
@@ -6953,6 +6963,8 @@
       "sources": [
         "src/app/api/scim/v2/Users/route.ts",
         "src/lib/audit.ts",
+        "src/lib/avatar.ts",
+        "src/lib/encryption.ts",
         "src/lib/logger.ts",
         "src/lib/prisma-datasource.ts",
         "src/lib/prisma.ts",
@@ -6966,6 +6978,8 @@
         "sources": [
           "src/app/api/scim/v2/Users/route.ts",
           "src/lib/audit.ts",
+          "src/lib/avatar.ts",
+          "src/lib/encryption.ts",
           "src/lib/logger.ts",
           "src/lib/prisma-datasource.ts",
           "src/lib/prisma.ts",
@@ -6988,6 +7002,8 @@
         "idempotent": false,
         "errors": [],
         "entities": [
+          "systemConfig",
+          "systemSettings",
           "user"
         ],
         "runtimeDependencies": [
@@ -7023,6 +7039,8 @@
           "evidence": [
             "src/app/api/scim/v2/Users/route.ts",
             "src/lib/audit.ts",
+            "src/lib/avatar.ts",
+            "src/lib/encryption.ts",
             "src/lib/logger.ts",
             "src/lib/prisma-datasource.ts",
             "src/lib/prisma.ts",
@@ -7038,6 +7056,8 @@
           "evidence": [
             "src/app/api/scim/v2/Users/route.ts",
             "src/lib/audit.ts",
+            "src/lib/avatar.ts",
+            "src/lib/encryption.ts",
             "src/lib/logger.ts",
             "src/lib/prisma-datasource.ts",
             "src/lib/prisma.ts",
