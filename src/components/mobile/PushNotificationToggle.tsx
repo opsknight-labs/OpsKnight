@@ -71,6 +71,21 @@ function standaloneMode() {
   );
 }
 
+function requiresDirectSubscribeGesture(platform: 'ios' | 'android' | 'desktop') {
+  if (platform === 'ios') return true;
+
+  const userAgent = navigator.userAgent || '';
+  const appleWebKit = /AppleWebKit/i.test(userAgent);
+  const safari = /Safari/i.test(userAgent);
+  const chromium = /Chrome|Chromium|CriOS|Edg|EdgiOS|OPR|OPiOS/i.test(userAgent);
+  const firefox = /Firefox|FxiOS/i.test(userAgent);
+
+  // Safari's Web Push contract expects PushManager.subscribe() to be called
+  // immediately from the gesture. Chromium and Firefox keep the explicit
+  // Notification.requestPermission() flow below.
+  return appleWebKit && safari && !chromium && !firefox;
+}
+
 type PushStage =
   | 'INIT'
   | 'REQUEST_PERMISSION'
@@ -325,11 +340,11 @@ export default function PushNotificationToggle() {
           applicationServerKey: prepared.applicationServerKey as unknown as BufferSource,
         };
 
-        if (platform === 'ios') {
-          // iOS/iPadOS Home Screen web apps require the subscription request to
-          // originate from direct user interaction. All asynchronous setup is
-          // completed during preflight, so subscribe() is invoked before any
-          // await or network request in this click handler.
+        if (requiresDirectSubscribeGesture(platform)) {
+          // Safari, including iOS/iPadOS Home Screen web apps, requires the
+          // subscription request to originate from direct user interaction.
+          // All asynchronous setup is completed during preflight, so subscribe()
+          // is invoked before any await or network request in this click handler.
           stage = 'CREATE_SUBSCRIPTION';
           const subscriptionPromise = prepared.registration.pushManager.subscribe(subscribeOptions);
           subscription = await promiseWithTimeout(
