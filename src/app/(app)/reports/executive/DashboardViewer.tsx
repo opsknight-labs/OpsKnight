@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { notify } from '@/lib/toast';
@@ -181,6 +181,74 @@ export default function DashboardViewer({
     return () => clearInterval(intervalId);
   }, [autoRefreshInterval, router]);
 
+  // Live clock for TV / Wallboard mode
+  const [wallboardClock, setWallboardClock] = useState<string>('');
+  useEffect(() => {
+    if (!isKioskMode) return;
+    const updateClock = () => {
+      const now = new Date();
+      setWallboardClock(
+        now.toLocaleTimeString(undefined, {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      );
+    };
+    updateClock();
+    const id = setInterval(updateClock, 1000);
+    return () => clearInterval(id);
+  }, [isKioskMode]);
+
+  const enterKioskMode = useCallback(async () => {
+    setIsKioskMode(true);
+    if (autoRefreshInterval === 0) {
+      setAutoRefreshInterval(60);
+    }
+    try {
+      if (
+        typeof document !== 'undefined' &&
+        !document.fullscreenElement &&
+        document.documentElement.requestFullscreen
+      ) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch {
+      // Browser permissions or security might reject requestFullscreen, ignore
+    }
+  }, [autoRefreshInterval]);
+
+  const exitKioskMode = useCallback(async () => {
+    setIsKioskMode(false);
+    try {
+      if (typeof document !== 'undefined' && document.fullscreenElement && document.exitFullscreen) {
+        await document.exitFullscreen();
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const toggleKioskMode = useCallback(() => {
+    if (isKioskMode) {
+      void exitKioskMode();
+    } else {
+      void enterKioskMode();
+    }
+  }, [isKioskMode, enterKioskMode, exitKioskMode]);
+
+  // Sync with native fullscreen changes (e.g. user pressed Esc on browser)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (typeof document !== 'undefined' && !document.fullscreenElement && isKioskMode) {
+        setIsKioskMode(false);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, [isKioskMode]);
+
   // Fullscreen / Kiosk keyboard shortcut (F to toggle, Esc to exit)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -195,15 +263,15 @@ export default function DashboardViewer({
 
       if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
-        setIsKioskMode(prev => !prev);
+        toggleKioskMode();
       } else if (e.key === 'Escape' && isKioskMode) {
-        setIsKioskMode(false);
+        void exitKioskMode();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isKioskMode]);
+  }, [isKioskMode, toggleKioskMode, exitKioskMode]);
 
   const handleExportPdf = () => {
     try {
@@ -387,25 +455,38 @@ export default function DashboardViewer({
   };
 
   return (
-    <div className={cn('w-full px-4 py-6 space-y-6 transition-all', isEditing && 'pb-28')}>
+    <div
+      className={cn(
+        'w-full px-4 py-6 space-y-6 transition-all print:p-0 print:space-y-4',
+        isEditing && 'pb-28'
+      )}
+    >
       {/* Executive Print Header (Visible in Print / PDF Only) */}
-      <div className="executive-print-header hidden">
+      <div className="executive-print-header hidden print:block">
         <div className="flex items-start justify-between border-b-2 border-slate-300 pb-3 mb-4">
           <div>
-            <div className="text-xl font-bold tracking-tight text-slate-900">
-              OpsKnight Executive Operations Report
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm uppercase tracking-wider font-extrabold text-blue-600">
+                OpsKnight
+              </span>
+              <span className="text-slate-300">|</span>
+              <span className="text-lg font-bold tracking-tight text-slate-900">
+                Executive Reliability & Operations Report
+              </span>
             </div>
-            <div className="text-sm font-semibold text-slate-700 mt-1">
+            <div className="text-base font-bold text-slate-800 mt-1">
               Dashboard: {dashboardTitle}
             </div>
             {dashboardDesc && (
-              <p className="text-xs text-slate-500 mt-0.5">Description: {dashboardDesc}</p>
+              <p className="text-xs text-slate-600 mt-0.5 max-w-2xl">
+                Description: {dashboardDesc}
+              </p>
             )}
           </div>
           <div className="text-right text-xs text-slate-600 space-y-1">
-            <div className="font-medium">Generated: {lastUpdated}</div>
+            <div className="font-semibold text-slate-800">Generated: {lastUpdated}</div>
             <div>
-              Scope:{' '}
+              <span className="font-medium text-slate-700">Scope:</span>{' '}
               {TIME_WINDOWS.find(w => w.value === String(currentFilters.windowDays))?.label ||
                 `${currentFilters.windowDays} days`}
               {currentFilters.teamId &&
@@ -417,34 +498,168 @@ export default function DashboardViewer({
         </div>
       </div>
 
-      {/* Kiosk Mode Floating Controls */}
+      {/* TV / NOC Wallboard Full-Screen Takeover Overlay */}
       {isKioskMode && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 bg-black/85 backdrop-blur-md border border-white/20 px-3.5 py-1.5 rounded-full text-xs text-white shadow-2xl animate-in fade-in">
-          <span className="flex h-2 w-2 relative">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-          </span>
-          <span className="font-semibold tracking-wide">NOC Wallboard</span>
-          {autoRefreshInterval > 0 && (
-            <span className="text-zinc-300">· Refresh in {refreshCountdown}s</span>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsKioskMode(false)}
-            className="h-6 px-2 text-xs text-zinc-300 hover:text-white hover:bg-white/10 ml-1"
-          >
-            Exit (Esc)
-          </Button>
+        <div
+          role="region"
+          aria-label="NOC Wallboard Presentation"
+          className="fixed inset-0 z-[99999] bg-[#09090b] text-zinc-100 overflow-y-auto flex flex-col p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-200 print:hidden"
+        >
+          {/* Wallboard Top Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-zinc-800/80 bg-zinc-950/60 -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 lg:-mx-8 lg:-mt-8 p-4 sm:p-6 lg:p-8 backdrop-blur-md sticky top-0 z-50">
+            {/* Left: Branding & Status */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold select-none shadow-xs">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                </span>
+                <span className="tracking-wider">NOC Wallboard</span>
+                <span className="text-zinc-600">•</span>
+                <span className="text-emerald-400 font-bold">LIVE</span>
+              </div>
+              {wallboardClock && (
+                <div className="font-mono text-xs text-zinc-300 bg-zinc-900/90 px-2.5 py-1 rounded-md border border-zinc-800 shadow-xs">
+                  {wallboardClock}
+                </div>
+              )}
+            </div>
+
+            {/* Center: Title & Scope */}
+            <div className="flex flex-col items-center text-center">
+              <div className="text-lg md:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                {dashboardTitle}
+                {isTemplate && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-zinc-800 text-amber-400 border border-zinc-700">
+                    <Sparkles className="h-2.5 w-2.5" />
+                    Template
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-zinc-400 flex items-center gap-2 mt-0.5">
+                <span>
+                  {TIME_WINDOWS.find(w => w.value === String(currentFilters.windowDays))?.label ||
+                    `${currentFilters.windowDays}d`}
+                </span>
+                <span>•</span>
+                <span>
+                  {currentFilters.teamId
+                    ? filterOptions.teams.find(t => t.id === currentFilters.teamId)?.name || 'Team'
+                    : 'All Teams'}
+                </span>
+                <span>•</span>
+                <span>
+                  {currentFilters.serviceId
+                    ? filterOptions.services.find(s => s.id === currentFilters.serviceId)?.name ||
+                      'Service'
+                    : 'All Services'}
+                </span>
+                <span>•</span>
+                <span>{localWidgets.length} widgets</span>
+              </div>
+            </div>
+
+            {/* Right: Controls & Exit */}
+            <div className="flex items-center gap-2.5">
+              {/* Auto Refresh pill & control */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      'bg-zinc-900/90 border-zinc-700/80 text-zinc-200 hover:text-white gap-1.5 text-xs font-medium h-9',
+                      autoRefreshInterval > 0 &&
+                        'border-emerald-500/50 text-emerald-400 bg-emerald-500/10'
+                    )}
+                  >
+                    <RefreshCw
+                      className={cn(
+                        'h-3.5 w-3.5',
+                        autoRefreshInterval > 0 && 'animate-spin [animation-duration:3s]'
+                      )}
+                    />
+                    <span>{autoRefreshInterval > 0 ? `${refreshCountdown}s` : 'Manual'}</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800 text-zinc-200">
+                  <div className="px-2 py-1 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                    Auto-Refresh Interval
+                  </div>
+                  <DropdownMenuItem onClick={() => setAutoRefreshInterval(0)}>
+                    <span>Off (Manual)</span>
+                    {autoRefreshInterval === 0 && (
+                      <Check className="h-4 w-4 ml-auto text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setAutoRefreshInterval(30)}>
+                    <span>Every 30 seconds</span>
+                    {autoRefreshInterval === 30 && (
+                      <Check className="h-4 w-4 ml-auto text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setAutoRefreshInterval(60)}>
+                    <span>Every 1 minute</span>
+                    {autoRefreshInterval === 60 && (
+                      <Check className="h-4 w-4 ml-auto text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setAutoRefreshInterval(300)}>
+                    <span>Every 5 minutes</span>
+                    {autoRefreshInterval === 300 && (
+                      <Check className="h-4 w-4 ml-auto text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => router.refresh()}
+                className="bg-zinc-900/90 border-zinc-700/80 text-zinc-200 hover:text-white h-9 px-2.5"
+                title="Refresh metrics now"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+              </Button>
+
+              {/* Exit TV Mode Button */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={exitKioskMode}
+                className="bg-zinc-900/90 hover:bg-zinc-800 border-zinc-700 text-zinc-200 hover:text-white font-medium text-xs h-9 gap-1.5"
+              >
+                <Minimize2 className="h-3.5 w-3.5" />
+                <span>Exit (Esc)</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* NOC Grid Area */}
+          <div className="flex-1 w-full max-w-[1920px] mx-auto">
+            <DashboardGrid
+              widgets={localWidgets}
+              metrics={metrics}
+              isEditing={false}
+              isLoading={false}
+              columns={layout?.columns ?? 4}
+              rowHeight={layout?.rowHeight ?? 150}
+              gap={16}
+            />
+          </div>
         </div>
       )}
 
       {/* Header */}
-      <div className={cn(
-        'relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6 transition-all',
-        isKioskMode && 'py-3'
-      )}>
+      <div
+        className={cn(
+          'relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6 transition-all print:hidden',
+          isKioskMode && 'py-3'
+        )}
+      >
         <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
         <div className="relative flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
@@ -570,7 +785,7 @@ export default function DashboardViewer({
                 'bg-zinc-800/90 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-200 hover:text-white h-9 w-9',
                 isKioskMode && 'border-primary text-primary'
               )}
-              onClick={() => setIsKioskMode(prev => !prev)}
+              onClick={toggleKioskMode}
               title={isKioskMode ? 'Exit Presentation Mode (Esc)' : 'Presentation Mode (Press F)'}
             >
               {isKioskMode ? <Minimize2 className="h-4 w-4" /> : <Tv className="h-4 w-4" />}
@@ -616,7 +831,7 @@ export default function DashboardViewer({
                   <LayoutDashboard className="h-4 w-4 mr-2" />
                   {isEditing ? 'Exit Edit Mode' : 'Edit Dashboard'}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsKioskMode(prev => !prev)}>
+                <DropdownMenuItem onClick={toggleKioskMode}>
                   <Tv className="h-4 w-4 mr-2" />
                   {isKioskMode ? 'Exit Presentation Mode' : 'Presentation Mode (F)'}
                 </DropdownMenuItem>
@@ -683,7 +898,7 @@ export default function DashboardViewer({
       </div>
 
       {/* Filters Bar */}
-      <div className="flex flex-wrap items-center gap-3 p-4 bg-card rounded-lg border">
+      <div className="flex flex-wrap items-center gap-3 p-4 bg-card rounded-lg border print:hidden">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Filter className="h-4 w-4" />
           <span>Filters:</span>
