@@ -33,6 +33,23 @@ test.describe('production PWA service-worker contract', () => {
     const workerText = await workerResponse.text();
     expect(workerText).toMatch(/custom-sw\.js/);
 
+    // The public VAPID endpoint must never advertise a half-configured Push
+    // setup. It either exposes an enabled public key backed by a deliverable
+    // server key pair, or returns the typed not-configured contract.
+    const vapidResponse = await request.get('/api/system/vapid-public-key');
+    expect([200, 503]).toContain(vapidResponse.status());
+    const vapidBody = await vapidResponse.json();
+    if (vapidResponse.ok()) {
+      expect(vapidBody).toMatchObject({ enabled: true });
+      expect(typeof vapidBody.publicKey).toBe('string');
+      expect(vapidBody.publicKey.length).toBeGreaterThan(0);
+    } else {
+      expect(vapidBody).toMatchObject({
+        code: 'PUSH_VAPID_NOT_CONFIGURED',
+        retryable: false,
+      });
+    }
+
     await page.goto('/login');
     // The app can render more than one branded OpsKnight image (for example
     // install/browser chrome), so use a unique interactive login contract rather
@@ -58,6 +75,19 @@ test.describe('production PWA service-worker contract', () => {
     expect(registration).not.toBeNull();
     expect(registration?.scope).toBe('http://127.0.0.1:3100/');
     expect(registration?.scriptURL).toContain('/sw.js');
+
+    const pushCapabilities = await page.evaluate(() => ({
+      serviceWorker: 'serviceWorker' in navigator,
+      pushManager: 'PushManager' in window,
+      notifications: 'Notification' in window,
+      secureContext: window.isSecureContext || window.location.hostname === 'localhost',
+    }));
+    expect(pushCapabilities).toEqual({
+      serviceWorker: true,
+      pushManager: true,
+      notifications: true,
+      secureContext: true,
+    });
 
     // First navigation may register the worker after the document request. Reload
     // once so the production page is demonstrably controlled by the generated SW.
