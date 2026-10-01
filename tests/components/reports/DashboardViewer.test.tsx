@@ -281,11 +281,46 @@ describe('DashboardViewer Component', () => {
     fireEvent.click(presentationBtn);
 
     expect(screen.getByText('NOC Wallboard')).toBeDefined();
+    expect(screen.getByText('LIVE')).toBeDefined();
+    expect(screen.getByRole('region', { name: /NOC Wallboard Presentation/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /Exit \(Esc\)/i })).toBeDefined();
 
     // Exit Kiosk mode
     fireEvent.click(screen.getByRole('button', { name: /Exit \(Esc\)/i }));
-    expect(screen.queryByText('NOC Wallboard')).toBeNull();
+    expect(screen.queryByRole('region', { name: /NOC Wallboard Presentation/i })).toBeNull();
+  });
+
+  it('exits Kiosk presentation mode when Escape key is pressed', () => {
+    render(<DashboardViewer {...defaultProps} />);
+
+    // Enter kiosk mode
+    const presentationBtn = screen.getByTitle(/Presentation Mode \(Press F\)/i);
+    fireEvent.click(presentationBtn);
+    expect(screen.getByRole('region', { name: /NOC Wallboard Presentation/i })).toBeDefined();
+
+    // Press Escape
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: /NOC Wallboard Presentation/i })).toBeNull();
+  });
+
+  it('renders print header with scope details and applies print:hidden to screen chrome', () => {
+    const { container } = render(<DashboardViewer {...defaultProps} />);
+
+    // Print header exists and has proper classes
+    const printHeader = container.querySelector('.executive-print-header');
+    expect(printHeader).not.toBeNull();
+    expect(printHeader?.className).toContain('hidden');
+    expect(printHeader?.className).toContain('print:block');
+    expect(printHeader?.textContent).toContain('Executive Reliability & Operations Report');
+    expect(printHeader?.textContent).toContain('Dashboard: Executive Operations');
+    expect(printHeader?.textContent).toContain('Description: High level reliability overview');
+    expect(printHeader?.textContent).toContain('7 days');
+
+    // Screen header and filters bar have print:hidden
+    const screenHeader = container.querySelector('.executive-screen-header, [class*="print:hidden"]');
+    expect(screenHeader).not.toBeNull();
+    expect(screenHeader?.className).toContain('print:hidden');
   });
 });
+
 

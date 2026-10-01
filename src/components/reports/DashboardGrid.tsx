@@ -246,6 +246,8 @@ const SortableWidgetItem = memo(function SortableWidgetItem({
     <div
       ref={setNodeRef}
       style={style}
+      data-widget-type={widget.widgetType}
+      data-widget-id={widget.id}
       className={`relative transition-opacity duration-200 ${
         isEditing ? 'group/widget' : ''
       } ${isDragging ? 'z-50' : ''}`}
