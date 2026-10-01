@@ -74,7 +74,7 @@ describe('PushNotificationToggle', () => {
     });
   });
 
-  it('requests permission synchronously when user clicks Enable', async () => {
+  it('subscribes directly from the Enable gesture on desktop without a separate permission request', async () => {
     Object.defineProperty(window, 'Notification', {
       value: {
         permission: 'default',
@@ -122,8 +122,8 @@ describe('PushNotificationToggle', () => {
     fireEvent.click(enableButton);
 
     await waitFor(() => {
-      expect(window.Notification.requestPermission).toHaveBeenCalled();
       expect(registration.pushManager.subscribe).toHaveBeenCalled();
+      expect(window.Notification.requestPermission).not.toHaveBeenCalled();
     });
   });
 
@@ -291,6 +291,111 @@ describe('PushNotificationToggle', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /^Disable$/i })).toBeInTheDocument();
     });
+  });
+
+  it('shows the typed administrator message when VAPID is not configured', async () => {
+    const registration = {
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(null),
+      },
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(registration),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: Promise.resolve(registration),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/system/vapid-public-key')) {
+        return {
+          ok: false,
+          status: 503,
+          json: async () => ({
+            error: 'Push notifications are not configured on this server.',
+            code: 'PUSH_VAPID_NOT_CONFIGURED',
+            action: 'Push is not configured by your administrator.',
+            retryable: false,
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    });
+
+    render(<PushNotificationToggle />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Push is not configured by your administrator.'
+      );
+      expect(screen.getByRole('button', { name: /Retry/i })).toBeInTheDocument();
+    });
+  });
+
+  it('ignores a stale reconciliation completion after a newer run wins', async () => {
+    const subscription = {
+      endpoint: 'https://push.example.com/race-endpoint',
+      unsubscribe: vi.fn().mockResolvedValue(true),
+    };
+    const registration = {
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(subscription),
+      },
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(registration),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: Promise.resolve(registration),
+      },
+      configurable: true,
+    });
+
+    let resolveFirst!: (value: unknown) => void;
+    const firstStatus = new Promise(resolve => {
+      resolveFirst = resolve;
+    });
+    let statusCalls = 0;
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/user/push-subscription/status')) {
+        statusCalls += 1;
+        if (statusCalls === 1) return firstStatus;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ deviceRegistered: false, accountEnabled: true }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    });
+
+    render(<PushNotificationToggle />);
+
+    await waitFor(() => expect(statusCalls).toBe(1));
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+
+    await waitFor(() => {
+      expect(statusCalls).toBe(2);
+      expect(screen.getByRole('button', { name: /Repair/i })).toBeInTheDocument();
+    });
+
+    resolveFirst({
+      ok: true,
+      status: 200,
+      json: async () => ({ deviceRegistered: true, accountEnabled: true }),
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button', { name: /Repair/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Disable$/i })).not.toBeInTheDocument();
   });
 
   it('fails closed when push subscription reconciliation endpoint returns an error', async () => {
@@ -527,16 +632,24 @@ describe('PushNotificationToggle', () => {
   });
 
   it('handles permission denied cleanly without hanging in working state', async () => {
+    let permission: NotificationPermission = 'default';
+    const requestPermission = vi.fn().mockResolvedValue('granted');
     Object.defineProperty(window, 'Notification', {
       value: {
-        permission: 'default',
-        requestPermission: vi.fn().mockResolvedValue('denied'),
+        get permission() {
+          return permission;
+        },
+        requestPermission,
       },
       configurable: true,
     });
     const registration = {
       pushManager: {
         getSubscription: vi.fn().mockResolvedValue(null),
+        subscribe: vi.fn().mockImplementation(async () => {
+          permission = 'denied';
+          throw new DOMException('Permission denied', 'NotAllowedError');
+        }),
       },
     };
     Object.defineProperty(navigator, 'serviceWorker', {
@@ -571,6 +684,7 @@ describe('PushNotificationToggle', () => {
         screen.getByText(/Notifications are blocked in browser or device settings/i)
       ).toBeInTheDocument();
     });
+    expect(requestPermission).not.toHaveBeenCalled();
   });
 
   it('recovers cleanly when push registration hangs indefinitely', async () => {
