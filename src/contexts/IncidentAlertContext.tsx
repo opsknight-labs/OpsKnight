@@ -50,19 +50,48 @@ export interface IncidentAlertContextValue {
   dismissIncident: (id: string) => void;
   acknowledgeIncident: (id: string) => Promise<void>;
   isAcknowledging: boolean;
+  pauseAutoDismiss: () => void;
+  resumeAutoDismiss: () => void;
 }
 
 const IncidentAlertContext = createContext<IncidentAlertContextValue | null>(null);
 
-export const AUTO_DISMISS_TIMEOUT_MS = 120 * 1000; // 120 seconds
+export const AUTO_DISMISS_TIMEOUT_MS = 12 * 1000; // 12 seconds
 export const DISMISSED_STORAGE_KEY = 'opsknight:banner_dismissed_at';
 export const SHOWN_STORAGE_KEY = 'opsknight:banner_shown_at';
-const RECENCY_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const TOASTED_STORAGE_KEY = 'opsknight:toasted_incident_ids';
+export const RECENCY_THRESHOLD_MS = 4 * 60 * 60 * 1000; // 4 hours
 
-export function isP1OrHighUrgency(item: {
-  priority?: unknown;
-  urgency?: unknown;
-}): boolean {
+function getStoredToastedIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = sessionStorage.getItem(TOASTED_STORAGE_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) {
+        return new Set(arr.filter((x): x is string => typeof x === 'string'));
+      }
+    }
+  } catch {
+    // Ignore storage read error
+  }
+  return new Set();
+}
+
+function persistToastedId(id: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = sessionStorage.getItem(TOASTED_STORAGE_KEY);
+    const set = new Set<string>(raw ? JSON.parse(raw) : []);
+    set.add(id);
+    const trimmed = Array.from(set).slice(-100);
+    sessionStorage.setItem(TOASTED_STORAGE_KEY, JSON.stringify(trimmed));
+  } catch {
+    // Ignore storage write error
+  }
+}
+
+export function isP1OrHighUrgency(item: { priority?: unknown; urgency?: unknown }): boolean {
   const priority = typeof item.priority === 'string' ? item.priority.toUpperCase() : null;
   const urgency = typeof item.urgency === 'string' ? item.urgency.toUpperCase() : null;
   return priority === 'P1' || urgency === 'HIGH';
@@ -123,6 +152,8 @@ export function IncidentAlertProvider({
     });
     return map;
   });
+  const incidentsMapRef = useRef<Map<string, CriticalIncidentSummary>>(incidentsMap);
+  incidentsMapRef.current = incidentsMap;
 
   // Global banner dismissal timestamp in sessionStorage (persists across page navigation)
   const [dismissedAt, setDismissedAt] = useState<number | null>(() => {
@@ -163,9 +194,29 @@ export function IncidentAlertProvider({
   const knownIncidentIdsRef = useRef<Set<string>>(new Set(initialIncidents.map(i => i.id)));
   const toastedIdsRef = useRef<Set<string>>(new Set(initialIncidents.map(i => i.id)));
 
+  // Hydrate already-toasted incident IDs from session storage to prevent duplicate toasts on refresh
+  useEffect(() => {
+    const stored = getStoredToastedIds();
+    stored.forEach(id => toastedIdsRef.current.add(id));
+  }, []);
+
+  // Context-aware suppression: check if currently viewing an incident's detail page
+  const viewingIncidentIdMatch = /^\/incidents\/([^/?#]+)/.exec(pathname);
+  const viewingIncidentId = viewingIncidentIdMatch?.at(1) ?? null;
+
+  // Auto-dismiss timer & hover pause control
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const isPausedRef = useRef(false);
+  const remainingMsRef = useRef<number>(AUTO_DISMISS_TIMEOUT_MS);
+  const timerStartRef = useRef<number>(Date.now());
+
   const dismissBanner = useCallback(() => {
     const now = Date.now();
     setDismissedAt(now);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     try {
       sessionStorage.setItem(DISMISSED_STORAGE_KEY, String(now));
       sessionStorage.removeItem(SHOWN_STORAGE_KEY);
@@ -176,6 +227,10 @@ export function IncidentAlertProvider({
 
   const clearDismissal = useCallback(() => {
     setDismissedAt(null);
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     try {
       sessionStorage.removeItem(DISMISSED_STORAGE_KEY);
       sessionStorage.removeItem(SHOWN_STORAGE_KEY);
@@ -184,32 +239,53 @@ export function IncidentAlertProvider({
     }
   }, []);
 
-  const acknowledgeIncident = useCallback(
-    async (id: string) => {
-      setIsAcknowledging(true);
-      try {
-        setIncidentsMap(prev => {
-          const existing = prev.get(id);
-          if (!existing) return prev;
-          const next = new Map(prev);
-          next.set(id, {
-            ...existing,
-            status: 'ACKNOWLEDGED',
-            acknowledgedAt: new Date().toISOString(),
-          });
-          return next;
-        });
+  const pauseAutoDismiss = useCallback(() => {
+    if (isPausedRef.current) return;
+    isPausedRef.current = true;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    const elapsed = Date.now() - timerStartRef.current;
+    remainingMsRef.current = Math.max(0, remainingMsRef.current - elapsed);
+  }, []);
 
-        await updateIncidentStatus(id, 'ACKNOWLEDGED');
-        notify.success('Incident acknowledged');
-      } catch (err) {
-        notify.error(err, { description: 'Failed to acknowledge incident' });
-      } finally {
-        setIsAcknowledging(false);
-      }
-    },
-    []
-  );
+  const resumeAutoDismiss = useCallback(() => {
+    if (!isPausedRef.current) return;
+    isPausedRef.current = false;
+    timerStartRef.current = Date.now();
+    if (remainingMsRef.current > 0) {
+      timerRef.current = setTimeout(() => {
+        dismissBanner();
+      }, remainingMsRef.current);
+    } else {
+      dismissBanner();
+    }
+  }, [dismissBanner]);
+
+  const acknowledgeIncident = useCallback(async (id: string) => {
+    setIsAcknowledging(true);
+    try {
+      setIncidentsMap(prev => {
+        const existing = prev.get(id);
+        if (!existing) return prev;
+        const next = new Map(prev);
+        next.set(id, {
+          ...existing,
+          status: 'ACKNOWLEDGED',
+          acknowledgedAt: new Date().toISOString(),
+        });
+        return next;
+      });
+
+      await updateIncidentStatus(id, 'ACKNOWLEDGED');
+      notify.success('Incident acknowledged');
+    } catch (err) {
+      notify.error(err, { description: 'Failed to acknowledge incident' });
+    } finally {
+      setIsAcknowledging(false);
+    }
+  }, []);
 
   // Sync with real-time SSE stream updates (push-based)
   useEffect(() => {
@@ -231,14 +307,25 @@ export function IncidentAlertProvider({
       const parsed = parseIncidentFromRecord(item);
       if (!parsed) continue;
 
-      const isResolvedOrSuppressed = parsed.status === 'RESOLVED' || parsed.status === 'SUPPRESSED';
+      // Contextual suppression: skip toast if user is actively in that incident war room
+      if (viewingIncidentId && parsed.id === viewingIncidentId) {
+        knownIncidentIdsRef.current.add(parsed.id);
+        continue;
+      }
+
+      // Do not toast resolved, suppressed, or already-acknowledged incidents
+      const isExcludedFromToast =
+        parsed.status === 'RESOLVED' ||
+        parsed.status === 'SUPPRESSED' ||
+        parsed.status === 'ACKNOWLEDGED';
+
       const createdTime = new Date(parsed.createdAt).getTime();
       const ageMs = now - createdTime;
 
       if (isFirstSync) {
         // On initial sync, flag as new arrival only if freshly created (within 60s)
         const isFresh = !isNaN(createdTime) && ageMs <= 60_000 && ageMs >= -60_000;
-        if (isFresh && !isResolvedOrSuppressed && !toastedIdsRef.current.has(parsed.id)) {
+        if (isFresh && !isExcludedFromToast && !toastedIdsRef.current.has(parsed.id)) {
           newArrivals.push({
             id: parsed.id,
             title: parsed.title,
@@ -248,6 +335,7 @@ export function IncidentAlertProvider({
             createdAt: parsed.createdAt,
           });
           toastedIdsRef.current.add(parsed.id);
+          persistToastedId(parsed.id);
           if (isP1OrHighUrgency(parsed)) {
             shouldClearDismissal = true;
           }
@@ -255,10 +343,11 @@ export function IncidentAlertProvider({
         knownIncidentIdsRef.current.add(parsed.id);
       } else {
         // Subsequent sync: any new incident ID not previously seen is a genuine new arrival
-        const isUnseen = !knownIncidentIdsRef.current.has(parsed.id) && !toastedIdsRef.current.has(parsed.id);
-        const withinMaxAge = isNaN(createdTime) || ageMs <= 15 * 60 * 1000;
+        const isUnseen =
+          !knownIncidentIdsRef.current.has(parsed.id) && !toastedIdsRef.current.has(parsed.id);
+        const withinMaxAge = isNaN(createdTime) || ageMs <= 3 * 60 * 1000;
 
-        if (isUnseen && !isResolvedOrSuppressed && withinMaxAge) {
+        if (isUnseen && !isExcludedFromToast && withinMaxAge) {
           newArrivals.push({
             id: parsed.id,
             title: parsed.title,
@@ -268,6 +357,7 @@ export function IncidentAlertProvider({
             createdAt: parsed.createdAt,
           });
           toastedIdsRef.current.add(parsed.id);
+          persistToastedId(parsed.id);
           if (isP1OrHighUrgency(parsed)) {
             shouldClearDismissal = true;
           }
@@ -279,45 +369,53 @@ export function IncidentAlertProvider({
     hasInitializedRef.current = true;
 
     // Update critical incidents map for the emergency banner
-    setIncidentsMap(prev => {
-      let changed = false;
-      const next = new Map(prev);
+    let mapChanged = false;
+    const nextMap = new Map(incidentsMapRef.current);
 
-      for (const item of recentIncidents) {
-        const parsed = parseIncidentFromRecord(item);
-        if (!parsed) continue;
+    for (const item of recentIncidents) {
+      const parsed = parseIncidentFromRecord(item);
+      if (!parsed) continue;
 
-        const isCritical = isCriticalIncident(parsed);
-        const existing = next.get(parsed.id);
+      const isCritical = isCriticalIncident(parsed);
+      const existing = nextMap.get(parsed.id);
 
-        if (parsed.status === 'RESOLVED' || !isCritical) {
-          if (next.has(parsed.id)) {
-            next.delete(parsed.id);
-            changed = true;
-          }
-        } else {
-          // If status, priority, or title changed, or new critical incident
-          if (!existing || JSON.stringify(existing) !== JSON.stringify(parsed)) {
-            next.set(parsed.id, parsed);
-            changed = true;
+      if (parsed.status === 'RESOLVED' || !isCritical) {
+        if (nextMap.has(parsed.id)) {
+          nextMap.delete(parsed.id);
+          mapChanged = true;
+        }
+      } else {
+        // If status, priority, or title changed, or new critical incident
+        if (!existing || JSON.stringify(existing) !== JSON.stringify(parsed)) {
+          nextMap.set(parsed.id, parsed);
+          mapChanged = true;
 
-            // If an incident escalates (e.g. from P2/medium to P1 or HIGH urgency), re-open banner across all pages
-            const wasHighOrP1 = existing && isP1OrHighUrgency(existing);
-            const isHighOrP1 = isP1OrHighUrgency(parsed);
-            const updatedTime = parsed.updatedAt ? new Date(parsed.updatedAt).getTime() : 0;
-            const isEscalation =
-              (existing && !wasHighOrP1 && isHighOrP1) ||
-              (!existing && isHighOrP1 && (updatedTime >= mountTimestampRef.current - 60_000 || updatedTime > (dismissedAt ?? 0)));
+          // Only clear dismissal if an existing incident genuinely escalates to P1/HIGH
+          // or if a new critical incident / escalation arrived via SSE after dismissal
+          const wasHighOrP1 = existing && isP1OrHighUrgency(existing);
+          const isHighOrP1 = isP1OrHighUrgency(parsed);
+          const isTrueEscalation = Boolean(existing && !wasHighOrP1 && isHighOrP1);
+          const createdTime = new Date(parsed.createdAt).getTime();
+          const updatedTime = parsed.updatedAt ? new Date(parsed.updatedAt).getTime() : 0;
+          const isEscalationOrNewCritical = Boolean(
+            !isFirstSync &&
+            isHighOrP1 &&
+            (isTrueEscalation ||
+              (!existing &&
+                (createdTime >= (dismissedAt ?? 0) || updatedTime >= (dismissedAt ?? 0))))
+          );
 
-            if (isEscalation) {
-              shouldClearDismissal = true;
-            }
+          if (isEscalationOrNewCritical) {
+            shouldClearDismissal = true;
           }
         }
       }
+    }
 
-      return changed ? next : prev;
-    });
+    if (mapChanged) {
+      incidentsMapRef.current = nextMap;
+      setIncidentsMap(nextMap);
+    }
 
     if (shouldClearDismissal) {
       clearDismissal();
@@ -325,18 +423,15 @@ export function IncidentAlertProvider({
 
     // Fire rich top-right alert popup card
     if (newArrivals.length > 0) {
-      notify.incident(
-        newArrivals.length === 1 ? newArrivals[0] : newArrivals,
-        {
-          onAcknowledge: async (id: string) => {
-            await acknowledgeIncident(id);
-          },
-        }
-      );
+      notify.incident(newArrivals.length === 1 ? newArrivals[0] : newArrivals, {
+        onAcknowledge: async (id: string) => {
+          await acknowledgeIncident(id);
+        },
+      });
     }
-  }, [recentIncidents, clearDismissal, acknowledgeIncident, dismissedAt]);
+  }, [recentIncidents, clearDismissal, acknowledgeIncident, dismissedAt, viewingIncidentId]);
 
-  // Derive visible active critical incidents scoped to the last 24h
+  // Derive visible active critical incidents scoped to the recency threshold (2 hours)
   const activeCriticalIncidents = useMemo(() => {
     const now = Date.now();
     return Array.from(incidentsMap.values())
@@ -353,16 +448,20 @@ export function IncidentAlertProvider({
         if (b.status === 'OPEN' && a.status !== 'OPEN') return 1;
 
         // P1 or HIGH urgency incidents take top rank (1)
-        const rankA = isP1OrHighUrgency(a) ? 1 : a.priority === 'P2' || a.urgency?.toUpperCase() === 'MEDIUM' ? 2 : 3;
-        const rankB = isP1OrHighUrgency(b) ? 1 : b.priority === 'P2' || b.urgency?.toUpperCase() === 'MEDIUM' ? 2 : 3;
+        const rankA = isP1OrHighUrgency(a)
+          ? 1
+          : a.priority === 'P2' || a.urgency?.toUpperCase() === 'MEDIUM'
+            ? 2
+            : 3;
+        const rankB = isP1OrHighUrgency(b)
+          ? 1
+          : b.priority === 'P2' || b.urgency?.toUpperCase() === 'MEDIUM'
+            ? 2
+            : 3;
         if (rankA !== rankB) return rankA - rankB;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }, [incidentsMap]);
-
-  // Context-aware suppression: check if currently viewing an incident's detail page
-  const viewingIncidentIdMatch = /^\/incidents\/([^/?#]+)/.exec(pathname);
-  const viewingIncidentId = viewingIncidentIdMatch?.at(1) ?? null;
 
   // Filter out contextually suppressed incidents (when user is inside that incident's war room)
   const displayableIncidents = useMemo(() => {
@@ -379,16 +478,22 @@ export function IncidentAlertProvider({
       if (!isP1OrHighUrgency(inc)) return false;
       const createdTime = new Date(inc.createdAt).getTime();
       const updatedTime = inc.updatedAt ? new Date(inc.updatedAt).getTime() : 0;
-      return createdTime > dismissedAt || updatedTime > dismissedAt;
+      return createdTime >= dismissedAt || updatedTime >= dismissedAt;
     });
   }, [displayableIncidents, dismissedAt]);
 
   const isBannerVisible = displayableIncidents.length > 0 && hasNewIncidentAfterDismissal;
   const isDismissed = Boolean(dismissedAt && !hasNewIncidentAfterDismissal);
 
-  // Timebound banner: auto-dismiss after 120s and stay hidden until the next incident
+  // Timebound banner: auto-dismiss after AUTO_DISMISS_TIMEOUT_MS and stay hidden until the next incident
   useEffect(() => {
-    if (!isBannerVisible) return;
+    if (!isBannerVisible) {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
 
     let shownAt = Date.now();
     try {
@@ -409,17 +514,25 @@ export function IncidentAlertProvider({
 
     const elapsed = Date.now() - shownAt;
     const remaining = Math.max(0, AUTO_DISMISS_TIMEOUT_MS - elapsed);
+    remainingMsRef.current = remaining;
+    timerStartRef.current = Date.now();
+    isPausedRef.current = false;
 
     if (remaining <= 0) {
       dismissBanner();
       return;
     }
 
-    const timer = setTimeout(() => {
+    timerRef.current = setTimeout(() => {
       dismissBanner();
     }, remaining);
 
-    return () => clearTimeout(timer);
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
   }, [isBannerVisible, dismissBanner]);
 
   // Clean up shown timestamp when no critical incidents exist
@@ -479,6 +592,8 @@ export function IncidentAlertProvider({
       dismissIncident,
       acknowledgeIncident,
       isAcknowledging,
+      pauseAutoDismiss,
+      resumeAutoDismiss,
     }),
     [
       activeCriticalIncidents,
@@ -494,6 +609,8 @@ export function IncidentAlertProvider({
       dismissIncident,
       acknowledgeIncident,
       isAcknowledging,
+      pauseAutoDismiss,
+      resumeAutoDismiss,
     ]
   );
 

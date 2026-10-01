@@ -337,14 +337,14 @@ describe('IncidentAlertContext', () => {
     expect(result.current.currentIncident?.id).toBe('inc-new-p1');
   });
 
-  it('excludes stale incidents older than 24 hours from the emergency banner', () => {
+  it('excludes stale incidents older than 4 hours from the emergency banner', () => {
     const staleIncident = {
       id: 'inc-old',
       title: 'Old Incident from last week',
       status: 'OPEN',
       priority: 'P1',
       urgency: 'HIGH',
-      createdAt: new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(), // 7 days ago
+      createdAt: hoursAgo(5), // 5 hours ago (> 4h)
     };
 
     mockUseRealtime.mockReturnValue({
@@ -362,7 +362,7 @@ describe('IncidentAlertContext', () => {
     expect(result.current.isBannerVisible).toBe(false);
   });
 
-  it('auto-dismisses the banner after 120 seconds and remains hidden across route changes until next incident', () => {
+  it('auto-dismisses the banner after 12 seconds and remains hidden across route changes until next incident', () => {
     vi.useFakeTimers();
     try {
       const existingIncident = {
@@ -387,13 +387,13 @@ describe('IncidentAlertContext', () => {
       expect(result.current.isBannerVisible).toBe(true);
       expect(sessionStorage.getItem(SHOWN_STORAGE_KEY)).toBeDefined();
 
-      // Advance clock by 119 seconds -> banner should still be visible
+      // Advance clock by 11 seconds -> banner should still be visible
       act(() => {
-        vi.advanceTimersByTime(119 * 1000);
+        vi.advanceTimersByTime(11 * 1000);
       });
       expect(result.current.isBannerVisible).toBe(true);
 
-      // Advance clock by remaining 1 second (total 120s) -> auto-dismiss triggers!
+      // Advance clock by remaining 1 second (total 12s) -> auto-dismiss triggers!
       act(() => {
         vi.advanceTimersByTime(1 * 1000);
       });
@@ -432,14 +432,14 @@ describe('IncidentAlertContext', () => {
     }
   });
 
-  it('initializes as dismissed if 120 seconds have already elapsed in sessionStorage without showing banner', () => {
-    const shownTimestamp = Date.now() - 130 * 1000; // 130s ago (>120s)
+  it('initializes as dismissed if 12 seconds have already elapsed in sessionStorage without showing banner', () => {
+    const shownTimestamp = Date.now() - 15 * 1000; // 15s ago (>12s)
     sessionStorage.setItem(SHOWN_STORAGE_KEY, String(shownTimestamp));
 
     const initialIncidents: CriticalIncidentSummary[] = [
       {
         id: 'inc-past-timer',
-        title: 'Past 120s Incident',
+        title: 'Past 12s Incident',
         status: 'OPEN',
         urgency: 'HIGH',
         priority: null,
@@ -736,5 +736,144 @@ describe('IncidentAlertContext', () => {
       ]),
       expect.anything()
     );
+  });
+
+  it('pauses auto-dismiss timer on pauseAutoDismiss and resumes on resumeAutoDismiss', () => {
+    vi.useFakeTimers();
+    try {
+      const incident = {
+        id: 'inc-hover-test',
+        title: 'Hover Test Incident',
+        status: 'OPEN',
+        priority: 'P1',
+        urgency: 'HIGH',
+        createdAt: new Date().toISOString(),
+      };
+
+      mockUseRealtime.mockReturnValue({
+        recentIncidents: [incident],
+      });
+
+      const wrapper = ({ children }: { children: React.ReactNode }) => (
+        <IncidentAlertProvider>{children}</IncidentAlertProvider>
+      );
+
+      const { result } = renderHook(() => useIncidentAlert(), { wrapper });
+      expect(result.current.isBannerVisible).toBe(true);
+
+      // Advance by 6 seconds
+      act(() => {
+        vi.advanceTimersByTime(6 * 1000);
+      });
+      expect(result.current.isBannerVisible).toBe(true);
+
+      // User hovers over banner -> pauses auto dismiss
+      act(() => {
+        result.current.pauseAutoDismiss();
+      });
+
+      // Advance by 20 seconds while hovered -> should NOT dismiss!
+      act(() => {
+        vi.advanceTimersByTime(20 * 1000);
+      });
+      expect(result.current.isBannerVisible).toBe(true);
+
+      // User unhovers -> resumes timer with remaining ~6s
+      act(() => {
+        result.current.resumeAutoDismiss();
+      });
+
+      // Advance by 5s -> still visible
+      act(() => {
+        vi.advanceTimersByTime(5 * 1000);
+      });
+      expect(result.current.isBannerVisible).toBe(true);
+
+      // Advance remaining 2s -> auto-dismisses!
+      act(() => {
+        vi.advanceTimersByTime(2 * 1000);
+      });
+      expect(result.current.isBannerVisible).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does NOT trigger duplicate toast on remount/refresh if incident ID was already toasted in sessionStorage', () => {
+    sessionStorage.setItem(
+      'opsknight:toasted_incident_ids',
+      JSON.stringify(['inc-previously-toasted'])
+    );
+
+    const freshIncident = {
+      id: 'inc-previously-toasted',
+      title: 'Already Toasted Incident',
+      status: 'OPEN',
+      priority: 'P1',
+      urgency: 'HIGH',
+      createdAt: new Date().toISOString(), // fresh, created just now
+    };
+
+    mockUseRealtime.mockReturnValue({
+      recentIncidents: [freshIncident],
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <IncidentAlertProvider>{children}</IncidentAlertProvider>
+    );
+
+    renderHook(() => useIncidentAlert(), { wrapper });
+
+    // Must NOT toast again because ID is in sessionStorage
+    expect(mockNotify.incident).not.toHaveBeenCalled();
+  });
+
+  it('contextually suppresses toast when viewing the incident on /incidents/[id]', () => {
+    mockPathname.mockReturnValue('/incidents/inc-viewing');
+
+    const incident = {
+      id: 'inc-viewing',
+      title: 'Incident Being Viewed',
+      status: 'OPEN',
+      priority: 'P1',
+      urgency: 'HIGH',
+      createdAt: new Date().toISOString(),
+    };
+
+    mockUseRealtime.mockReturnValue({
+      recentIncidents: [incident],
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <IncidentAlertProvider>{children}</IncidentAlertProvider>
+    );
+
+    renderHook(() => useIncidentAlert(), { wrapper });
+
+    // Toast must be suppressed for the actively viewed incident
+    expect(mockNotify.incident).not.toHaveBeenCalled();
+  });
+
+  it('does NOT trigger new-arrival toast for incidents that are already acknowledged', () => {
+    const ackedIncident = {
+      id: 'inc-already-acked',
+      title: 'Already Acknowledged Incident',
+      status: 'ACKNOWLEDGED',
+      priority: 'P1',
+      urgency: 'HIGH',
+      createdAt: new Date().toISOString(),
+    };
+
+    mockUseRealtime.mockReturnValue({
+      recentIncidents: [ackedIncident],
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <IncidentAlertProvider>{children}</IncidentAlertProvider>
+    );
+
+    renderHook(() => useIncidentAlert(), { wrapper });
+
+    expect(mockNotify.incident).not.toHaveBeenCalled();
   });
 });
