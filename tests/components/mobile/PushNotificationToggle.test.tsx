@@ -74,8 +74,31 @@ describe('PushNotificationToggle', () => {
     });
   });
 
-  it('does not show On when the device is registered but server Push is unavailable', async () => {
-    mockFetch.mockImplementation(async (url: string) => {
+  it('shows server unavailable and still lets the user remove the device subscription', async () => {
+    const unsubscribe = vi.fn().mockResolvedValue(true);
+    const subscription = {
+      endpoint: 'https://push.example.com/test-endpoint',
+      unsubscribe,
+    };
+    const registration = {
+      pushManager: {
+        getSubscription: vi
+          .fn()
+          .mockResolvedValueOnce(subscription)
+          .mockResolvedValueOnce(subscription)
+          .mockResolvedValueOnce(null),
+      },
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(registration),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: Promise.resolve(registration),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
       if (typeof url === 'string' && url.includes('/api/user/push-subscription/status')) {
         return {
           ok: true,
@@ -84,6 +107,29 @@ describe('PushNotificationToggle', () => {
             deviceRegistered: true,
             accountEnabled: true,
             providerConfigured: false,
+          }),
+        };
+      }
+      if (
+        typeof url === 'string' &&
+        url.includes('/api/user/push-subscription') &&
+        init?.method === 'DELETE'
+      ) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true, remainingDevices: 0 }),
+        };
+      }
+      if (typeof url === 'string' && url.includes('/api/system/vapid-public-key')) {
+        return {
+          ok: false,
+          status: 503,
+          json: async () => ({
+            error: 'Push notifications are not configured on this server.',
+            code: 'PUSH_VAPID_NOT_CONFIGURED',
+            action: 'Push is not configured by your administrator.',
+            retryable: false,
           }),
         };
       }
@@ -100,10 +146,27 @@ describe('PushNotificationToggle', () => {
         )
       ).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Retry/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Remove this device/i })).toBeInTheDocument();
     });
 
-    expect(screen.queryByRole('button', { name: /^Disable$/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Send test push/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Remove this device/i }));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/user/push-subscription',
+        expect.objectContaining({ method: 'DELETE' })
+      );
+      expect(unsubscribe).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /Remove this device/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Push is not configured by your administrator.'
+      );
+    });
   });
 
   it('subscribes directly from the Enable gesture on desktop without a separate permission request', async () => {
