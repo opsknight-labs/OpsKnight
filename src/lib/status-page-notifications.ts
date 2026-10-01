@@ -111,7 +111,7 @@ export async function notifyStatusPageSubscribers(
 
       // Check if this service is currently in an active scheduled maintenance window on this status page
       const now = new Date();
-      const activeMaintenance = await prisma.statusPageAnnouncement.findFirst({
+      const activeMaintenances = await prisma.statusPageAnnouncement.findMany({
         where: {
           statusPageId: page.id,
           type: 'MAINTENANCE',
@@ -123,23 +123,22 @@ export async function notifyStatusPageSubscribers(
         select: { id: true, title: true, affectedServiceIds: true },
       });
 
-      if (activeMaintenance) {
-        const affected = Array.isArray(activeMaintenance.affectedServiceIds)
-          ? (activeMaintenance.affectedServiceIds as string[])
+      const matchingMaintenance = activeMaintenances.find(maintenance => {
+        const affected = Array.isArray(maintenance.affectedServiceIds)
+          ? (maintenance.affectedServiceIds as string[])
           : [];
-        const isServiceInMaintenance =
-          affected.length === 0 || affected.includes(incident.serviceId);
+        return affected.length === 0 || affected.includes(incident.serviceId);
+      });
 
-        if (isServiceInMaintenance) {
-          logger.info('status_page.incident_notification_suppressed_maintenance', {
-            incidentId,
-            serviceId: incident.serviceId,
-            statusPageId: page.id,
-            announcementId: activeMaintenance.id,
-            maintenanceTitle: activeMaintenance.title,
-          });
-          continue;
-        }
+      if (matchingMaintenance) {
+        logger.info('status_page.incident_notification_suppressed_maintenance', {
+          incidentId,
+          serviceId: incident.serviceId,
+          statusPageId: page.id,
+          announcementId: matchingMaintenance.id,
+          maintenanceTitle: matchingMaintenance.title,
+        });
+        continue;
       }
 
       const displayName = page.organizationName || page.name;

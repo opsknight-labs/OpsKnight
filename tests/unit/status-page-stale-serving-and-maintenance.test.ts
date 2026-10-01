@@ -176,17 +176,68 @@ describe('Status Page Rebuild Serving & Maintenance Suppression', () => {
       ] as unknown as Awaited<ReturnType<typeof prisma.statusPage.findMany>>);
 
       // Mock an active maintenance announcement that affects the payment service
-      vi.mocked(prisma.statusPageAnnouncement.findFirst).mockResolvedValue({
-        id: 'maint-1',
-        title: 'Scheduled Payment Gateway Upgrade',
-        affectedServiceIds: [serviceId],
-      } as unknown as Awaited<ReturnType<typeof prisma.statusPageAnnouncement.findFirst>>);
+      vi.mocked(prisma.statusPageAnnouncement.findMany).mockResolvedValue([
+        {
+          id: 'maint-1',
+          title: 'Scheduled Payment Gateway Upgrade',
+          affectedServiceIds: [serviceId],
+        },
+      ] as unknown as Awaited<ReturnType<typeof prisma.statusPageAnnouncement.findMany>>);
 
       const result = await notifyStatusPageSubscribers(incidentId, 'investigating');
 
       // The notification should succeed without sending emails (skipped due to active maintenance)
       expect(result.success).toBe(true);
       expect(result.sent).toBe(0);
+    });
+
+    it('delivers incident subscriber notifications when active maintenance exists for a different service', async () => {
+      const incidentId = 'inc-789';
+      const serviceId = 'srv-auth';
+      const otherServiceId = 'srv-payment';
+      const pageId = 'page-123';
+      const now = new Date();
+
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+        id: incidentId,
+        title: 'Auth Login Spike',
+        serviceId,
+        visibility: 'PUBLIC',
+        status: 'OPEN',
+        createdAt: now,
+        updatedAt: now,
+        service: { id: serviceId, name: 'Auth Service' },
+      } as unknown as Awaited<ReturnType<typeof prisma.incident.findUnique>>);
+
+      vi.mocked(prisma.statusPage.findMany).mockResolvedValue([
+        {
+          id: pageId,
+          name: 'Acme Status',
+          enabled: true,
+          showIncidents: true,
+          organizationName: 'Acme Corp',
+          services: [{ serviceId, showOnPage: true }],
+        },
+      ] as unknown as Awaited<ReturnType<typeof prisma.statusPage.findMany>>);
+
+      // Maintenance is active only for payment service, NOT auth service
+      vi.mocked(prisma.statusPageAnnouncement.findMany).mockResolvedValue([
+        {
+          id: 'maint-1',
+          title: 'Scheduled Payment Upgrade',
+          affectedServiceIds: [otherServiceId],
+        },
+      ] as unknown as Awaited<ReturnType<typeof prisma.statusPageAnnouncement.findMany>>);
+
+      // Subscriptions
+      vi.mocked(prisma.statusPageSubscription.findMany).mockResolvedValueOnce([
+        { id: 'sub-1', email: 'user@example.com', token: 'token-1' },
+      ] as unknown as Awaited<ReturnType<typeof prisma.statusPageSubscription.findMany>>);
+
+      const result = await notifyStatusPageSubscribers(incidentId, 'investigating');
+
+      expect(result.success).toBe(true);
+      expect(result.sent).toBe(1);
     });
 
     it('delivers incident subscriber notifications when no active maintenance window applies', async () => {
@@ -218,14 +269,12 @@ describe('Status Page Rebuild Serving & Maintenance Suppression', () => {
       ] as unknown as Awaited<ReturnType<typeof prisma.statusPage.findMany>>);
 
       // No active maintenance window
-      vi.mocked(prisma.statusPageAnnouncement.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.statusPageAnnouncement.findMany).mockResolvedValue([]);
 
       // Subscriptions
-      vi.mocked(prisma.statusPageSubscription.findMany)
-        .mockResolvedValueOnce([
-          { id: 'sub-1', email: 'user@example.com', token: 'token-1' },
-        ] as unknown as Awaited<ReturnType<typeof prisma.statusPageSubscription.findMany>>)
-        .mockResolvedValueOnce([]);
+      vi.mocked(prisma.statusPageSubscription.findMany).mockResolvedValueOnce([
+        { id: 'sub-1', email: 'user@example.com', token: 'token-1' },
+      ] as unknown as Awaited<ReturnType<typeof prisma.statusPageSubscription.findMany>>);
 
       const result = await notifyStatusPageSubscribers(incidentId, 'investigating');
 
