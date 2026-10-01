@@ -88,12 +88,14 @@ type PreparedPush = {
   applicationServerKey: Uint8Array | null;
 };
 
-type ServiceWorkerPreparationStage = 'SW_LOOKUP' | 'SW_REGISTER' | 'SW_READY';
+type ServiceWorkerPreparationStage = 'SW_LOOKUP' | 'SW_ASSET' | 'SW_REGISTER' | 'SW_READY';
 
 function serviceWorkerFailureAction(stage: ServiceWorkerPreparationStage) {
   switch (stage) {
     case 'SW_LOOKUP':
       return 'Service worker registration could not be checked. Retry.';
+    case 'SW_ASSET':
+      return 'Service worker file could not be validated. Retry.';
     case 'SW_REGISTER':
       return 'Service worker registration failed. Retry.';
     case 'SW_READY':
@@ -115,6 +117,100 @@ function hasOpsKnightServiceWorker(registration: ServiceWorkerRegistration | und
   return [registration.active, registration.waiting, registration.installing].some(
     worker => serviceWorkerPath(worker) === '/sw.js'
   );
+}
+
+function serviceWorkerAssetError(action: string, diagnostics: Record<string, unknown>): never {
+  logger.warn('push.service_worker_asset_preflight_failed', {
+    component: 'PushNotificationToggle',
+    ...diagnostics,
+  });
+  throw new ClientAppError({
+    code: 'PUSH_SW_REGISTRATION_FAILED',
+    error: 'Push notifications could not validate the service worker file.',
+    action,
+    retryable: true,
+  });
+}
+
+async function preflightServiceWorkerAsset() {
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      '/sw.js',
+      {
+        cache: 'no-store',
+        redirect: 'follow',
+        headers: { 'Cache-Control': 'no-cache' },
+      },
+      REQUEST_TIMEOUT_MS
+    );
+  } catch (error) {
+    logger.warn('push.service_worker_asset_preflight_failed', {
+      component: 'PushNotificationToggle',
+      reason: 'FETCH_FAILED',
+      browserException: error instanceof Error ? error.name : typeof error,
+    });
+    throw new ClientAppError({
+      code: 'PUSH_SW_REGISTRATION_FAILED',
+      error: 'Push notifications could not reach the service worker file.',
+      action: 'Service worker file could not be reached. Check the deployment and retry.',
+      retryable: true,
+    });
+  }
+
+  const expectedUrl = new URL('/sw.js', window.location.origin);
+  const responseUrl = new URL(response.url || expectedUrl.toString(), window.location.origin);
+  const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+
+  if (response.redirected) {
+    serviceWorkerAssetError(
+      responseUrl.origin !== window.location.origin
+        ? 'Service worker redirected to another origin. Check reverse proxy or host routing.'
+        : 'Service worker endpoint redirected. Serve /sw.js directly without redirects.',
+      {
+        reason: 'REDIRECTED',
+        status: response.status,
+        responseOrigin: responseUrl.origin,
+      }
+    );
+  }
+
+  if (responseUrl.origin !== window.location.origin || responseUrl.pathname !== '/sw.js') {
+    serviceWorkerAssetError(
+      'Service worker resolved to the wrong URL. Check reverse proxy or host routing.',
+      {
+        reason: 'WRONG_URL',
+        status: response.status,
+        responseOrigin: responseUrl.origin,
+        responsePath: responseUrl.pathname,
+      }
+    );
+  }
+
+  if (response.status !== 200) {
+    serviceWorkerAssetError(
+      response.status === 404
+        ? 'Service worker file is missing from this deployment.'
+        : `Service worker endpoint returned HTTP ${response.status}. Check the deployment.`,
+      {
+        reason: response.status === 404 ? 'NOT_FOUND' : 'HTTP_STATUS',
+        status: response.status,
+      }
+    );
+  }
+
+  if (!/(?:javascript|ecmascript)/i.test(contentType)) {
+    serviceWorkerAssetError(
+      contentType.includes('text/html')
+        ? 'Service worker returned HTML instead of JavaScript. Check reverse proxy or host routing.'
+        : 'Service worker returned an invalid content type. Serve /sw.js as JavaScript.',
+      {
+        reason: contentType.includes('text/html') ? 'HTML_RESPONSE' : 'INVALID_MIME',
+        status: response.status,
+        contentType: contentType || 'missing',
+      }
+    );
+  }
 }
 
 export default function PushNotificationToggle() {
@@ -161,6 +257,9 @@ export default function PushNotificationToggle() {
       // continue the normal lifecycle. In particular, a waiting update should
       // not cause Push preflight to re-register /sw.js on iOS.
       if (!hasOpsKnightServiceWorker(registration)) {
+        stage = 'SW_ASSET';
+        await preflightServiceWorkerAsset();
+
         stage = 'SW_REGISTER';
         registration = await promiseWithTimeout(
           navigator.serviceWorker.register('/sw.js', { scope: '/' }),
