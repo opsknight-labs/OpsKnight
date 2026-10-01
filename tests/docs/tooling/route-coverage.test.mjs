@@ -48,6 +48,7 @@ test('high-risk configuration and mutation routes require task guides', () => {
 
 test('audited product routes map to purpose-built task guides', () => {
   const expected = {
+    '/': 'guides/dashboard/use-command-center.md',
     '/analytics': 'guides/analytics/use-analytics.md',
     '/events': 'guides/administration/review-event-logs.md',
     '/postmortems': 'guides/postmortems/create-review-publish.md',
@@ -57,6 +58,7 @@ test('audited product routes map to purpose-built task guides', () => {
     '/settings/security-compliance': 'guides/compliance/evaluate-and-export.md',
     '/settings/notifications': 'guides/notifications/configure-provider.md',
     '/settings/profile': 'guides/profile/manage-profile-and-preferences.md',
+    '/settings': 'guides/administration/settings-overview.md',
     '/teams': 'guides/teams/manage-team.md',
     '/teams/[id]': 'guides/teams/manage-team.md',
   };
@@ -66,5 +68,19 @@ test('audited product routes map to purpose-built task guides', () => {
     const route = routes.get(path);
     assert.ok(route, `${path}: missing from route contract`);
     assert.ok(route.documentation.guides.includes(guide), `${path}: must map to ${guide}`);
+  }
+});
+
+test('cross-cutting public UX surfaces have purpose-built documentation', () => {
+  const routes = new Map(contract.routes.map(route => [route.route, route]));
+  assert.ok(
+    routes.get('/shortcuts')?.documentation.reference.includes('reference/keyboard-shortcuts.md'),
+    '/shortcuts must map to the verified shortcut reference'
+  );
+  for (const page of [
+    'docs/v2.0.0/guides/navigation/search-and-notifications.md',
+    'docs/v2.0.0/reference/accessibility.md',
+  ]) {
+    assert.ok(existsSync(page), `cross-cutting UX guide missing: ${page}`);
   }
 });

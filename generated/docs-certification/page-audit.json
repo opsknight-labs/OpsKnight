@@ -3,14 +3,14 @@
   "purpose": "Reader-completeness audit. Mapping and source verification do not imply task usability.",
   "counts": {
     "DISCOVERED": 0,
-    "MAPPED": 113,
+    "MAPPED": 117,
     "DRAFTED": 0,
-    "READER_COMPLETE": 195,
+    "READER_COMPLETE": 198,
     "HUMAN_VERIFIED": 0,
     "RUNTIME_VERIFIED": 0
   },
-  "taskPages": 193,
-  "readerCompleteTaskPages": 193,
+  "taskPages": 196,
+  "readerCompleteTaskPages": 196,
   "humanVerifiedTaskPages": 0,
   "runtimeVerifiedTaskPages": 0,
   "pages": [
@@ -378,6 +378,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "guides/administration/settings-overview.md",
+      "type": "how-to",
+      "userTask": "Find the correct Settings area for an account, workspace, integration, notification, or system change.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
       "page": "guides/analytics/README.md",
       "type": "concept",
       "userTask": null,
@@ -447,6 +458,28 @@
       "page": "guides/compliance/evaluate-and-export.md",
       "type": "how-to",
       "userTask": "Evaluate compliance controls, investigate drift, and export verifiable evidence.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/dashboard/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/dashboard/use-command-center.md",
+      "type": "how-to",
+      "userTask": "Use the Command Center to assess operational state and select the next incident-response action.",
       "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 0,
@@ -788,6 +821,28 @@
       "page": "guides/mobile/use-mobile-operations.md",
       "type": "how-to",
       "userTask": "Inspect operational context from the mobile application.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/navigation/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/navigation/search-and-notifications.md",
+      "type": "how-to",
+      "userTask": "Find an authorized record and process personal in-app notifications.",
       "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 0,
@@ -2853,6 +2908,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "reference/accessibility.md",
+      "type": "reference",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
       "page": "reference/api/README.md",
       "type": "reference",
       "userTask": null,
@@ -2942,6 +3008,17 @@
     },
     {
       "page": "reference/health.md",
+      "type": "reference",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "reference/keyboard-shortcuts.md",
       "type": "reference",
       "userTask": null,
       "status": "MAPPED",

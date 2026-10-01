@@ -29,6 +29,8 @@ Use reference pages when you need an exact contract rather than a workflow:
 - [Metrics](./metrics)
 - [Runtime limits](./limits)
 - [Product feature classification](./features)
+- [Keyboard shortcuts](./keyboard-shortcuts)
+- [Accessibility support and validation](./accessibility)
 
 Reference content is generated or validated against routes, schemas, types,
 configuration, deployment manifests, and tests. It must describe implemented

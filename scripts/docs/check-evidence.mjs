@@ -27,6 +27,24 @@ for (const [asset, record] of Object.entries(assetManifest.assets ?? {})) {
     if (publicHash !== record.sha256) failures.push(`reader asset ${asset}: digest differs from manifest`);
   }
 }
+for (const [asset, record] of Object.entries(assetManifest.manualAssets ?? {})) {
+  const publicFile = `docs/v2.0.0/assets/${asset}`;
+  if (!exists(publicFile)) failures.push(`manual reader asset ${asset}: missing ${publicFile}`);
+  if (!record.provenance) failures.push(`manual reader asset ${asset}: missing provenance`);
+  if (!record.classification) failures.push(`manual reader asset ${asset}: missing classification`);
+  if (exists(publicFile)) {
+    const publicHash = createHash('sha256').update(readFileSync(resolve(repositoryRoot, publicFile))).digest('hex');
+    if (publicHash !== record.sha256) failures.push(`manual reader asset ${asset}: digest differs from manifest`);
+  }
+}
+const registeredAssets = new Set([
+  ...Object.keys(assetManifest.assets ?? {}),
+  ...Object.keys(assetManifest.manualAssets ?? {}),
+]);
+for (const file of filesUnder('docs/v2.0.0/assets', path => /\.(?:png|jpe?g|webp|gif|svg)$/i.test(path))) {
+  const asset = file.replace('docs/v2.0.0/assets/', '');
+  if (!registeredAssets.has(asset)) failures.push(`reader asset ${asset}: not registered in assets/manifest.yaml`);
+}
 for (const [id, capability] of Object.entries(inventory.capabilities ?? {})) {
   for (const evidence of capability.evidence ?? []) {
     if (!exists(evidence)) failures.push(`${id}: missing evidence ${evidence}`);

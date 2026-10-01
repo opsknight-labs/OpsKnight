@@ -91,3 +91,12 @@ assets:
   dashboard-edit.png:
     evidence: analytics/dashboard-edit.png
     sha256: 521544573961736cc259f0ac0dfdaed1d60b491d945c406e5986bc2a38c0b574
+manualAssets:
+  teams-incident-card.png:
+    sha256: 184bcc4b1fd76b0f99df89d8f0275dca5e8909592f811fc558426da0a6a0a6e2
+    provenance: User-supplied Microsoft Teams incident-card capture added in commit ed8195f334eeeed14cccce1674322d986023bc38.
+    classification: manual-product-example
+  teams-chatops-war-room.png:
+    sha256: ab76f52b3403136e3b3471f6dcee85a791fd337465c1ba25862ff28be870aff4
+    provenance: User-supplied Microsoft Teams ChatOps war-room capture added in commit ed8195f334eeeed14cccce1674322d986023bc38.
+    classification: manual-product-example

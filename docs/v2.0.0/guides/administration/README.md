@@ -12,6 +12,7 @@ verification: { level: source, verified_at: 2026-10-01, evidence: [src/app/(app)
 
 Common tasks:
 
+- [Find the correct Settings area](./settings-overview)
 - [Manage users](./manage-users) and [permissions](./manage-permissions)
 - [Review and revoke sessions](./manage-sessions)
 - [Create and rotate API keys](./api-keys)

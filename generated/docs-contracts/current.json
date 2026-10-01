@@ -11557,10 +11557,12 @@
       },
       "documentation": {
         "concepts": [
-          "start/what-is-opsknight.md",
-          "start/README.md"
+          "guides/dashboard/README.md",
+          "start/what-is-opsknight.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/dashboard/use-command-center.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
@@ -13343,7 +13345,7 @@
       "documentation": {
         "concepts": [],
         "guides": [
-          "guides/administration/manage-permissions.md"
+          "guides/administration/settings-overview.md"
         ],
         "reference": [
           "reference/configuration/README.md"
@@ -14005,7 +14007,7 @@
         "concepts": [],
         "guides": [],
         "reference": [
-          "reference/features.md"
+          "reference/keyboard-shortcuts.md"
         ],
         "troubleshooting": []
       },

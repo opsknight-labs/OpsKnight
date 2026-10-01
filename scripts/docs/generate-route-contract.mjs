@@ -17,6 +17,7 @@ const taskExempt = new Set([
   '/settings/integrations',
 ]);
 const taskRoutePatterns = [
+  /^\/$/,
   /^\/reports(?:\/|$)/,
   /^\/events\/test$/,
   /^\/incidents\/(?:create|templates\/create)$/,

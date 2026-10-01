@@ -199,15 +199,17 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "start/what-is-opsknight.md",
-          "start/README.md"
+          "guides/dashboard/README.md",
+          "start/what-is-opsknight.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/dashboard/use-command-center.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/policies/[id]",
@@ -777,7 +779,7 @@
       "documentation": {
         "concepts": [],
         "guides": [
-          "guides/administration/manage-permissions.md"
+          "guides/administration/settings-overview.md"
         ],
         "reference": [
           "reference/configuration/README.md"
@@ -1001,7 +1003,7 @@
         "concepts": [],
         "guides": [],
         "reference": [
-          "reference/features.md"
+          "reference/keyboard-shortcuts.md"
         ],
         "troubleshooting": []
       },
