@@ -710,6 +710,93 @@ describe('PushNotificationToggle', () => {
     });
   });
 
+  it('allows an iOS permission decision to take longer than network timeouts', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15'
+      );
+      vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('iPhone');
+      Object.defineProperty(navigator, 'standalone', {
+        value: true,
+        configurable: true,
+      });
+
+      let resolvePermission!: (value: NotificationPermission) => void;
+      const requestPermission = vi.fn(
+        () =>
+          new Promise<NotificationPermission>(resolve => {
+            resolvePermission = resolve;
+          })
+      );
+      Object.defineProperty(window, 'Notification', {
+        value: {
+          permission: 'default',
+          requestPermission,
+        },
+        configurable: true,
+      });
+
+      const subscribe = vi.fn().mockResolvedValue({
+        endpoint: 'https://web.push.apple.com/slow-permission',
+      });
+      const registration = {
+        active: { scriptURL: `${window.location.origin}/sw.js` },
+        waiting: null,
+        installing: null,
+        pushManager: {
+          getSubscription: vi.fn().mockResolvedValue(null),
+          subscribe,
+        },
+      };
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(registration),
+          register: vi.fn().mockResolvedValue(registration),
+          ready: Promise.resolve(registration),
+        },
+        configurable: true,
+      });
+
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes('/api/system/vapid-public-key')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ key: 'B' + 'A'.repeat(86) }),
+          };
+        }
+        if (url.includes('/api/user/push-subscription')) {
+          return { ok: true, status: 200, json: async () => ({ success: true }) };
+        }
+        return { ok: false, status: 404 };
+      });
+
+      render(<PushNotificationToggle />);
+
+      const enableButton = await screen.findByRole('button', { name: /Enable/i });
+      await waitFor(() => expect(enableButton).not.toBeDisabled());
+      fireEvent.click(enableButton);
+
+      expect(requestPermission).toHaveBeenCalledTimes(1);
+      expect(subscribe).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(subscribe).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolvePermission('granted');
+        await Promise.resolve();
+      });
+
+      expect(subscribe).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('requests Safari notification permission before macOS Push subscription', async () => {
     vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15'
