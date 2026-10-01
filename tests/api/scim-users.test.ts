@@ -23,6 +23,7 @@ import { GET as listUsers } from '@/app/api/scim/v2/Users/route';
 import {
   DELETE as deleteUser,
   GET as getUser,
+  PATCH as patchUser,
   PUT as replaceUser,
 } from '@/app/api/scim/v2/Users/[id]/route';
 
@@ -143,5 +144,87 @@ describe('SCIM Users HTTP lifecycle', () => {
       context
     );
     expect(getAfterDelete.status).toBe(404);
+  });
+
+  it('handles PATCH with string booleans ("False"/"True") and "add" operations from Entra', async () => {
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(scimUser as never);
+    vi.mocked(updateUserSecurityState).mockResolvedValue({
+      ...scimUser,
+      status: 'DISABLED',
+    } as never);
+
+    const response = await patchUser(
+      request('https://ops.example.com/api/scim/v2/Users/user-1', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          Operations: [
+            { op: 'replace', path: 'active', value: 'False' },
+            { op: 'Add', path: 'name.givenName', value: 'Alice' },
+          ],
+        }),
+      }),
+      context
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateUserSecurityState).toHaveBeenCalledWith(
+      'user-1',
+      { status: 'DISABLED' },
+      expect.objectContaining({
+        roleSource: 'SCIM',
+        tokenVersion: { increment: 1 },
+      })
+    );
+  });
+
+  it('handles PATCH with name.formatted and re-enabling user with string "True"', async () => {
+    vi.mocked(prisma.user.findFirst).mockResolvedValue({
+      ...scimUser,
+      status: 'DISABLED',
+    } as never);
+    vi.mocked(updateUserSecurityState).mockResolvedValue({
+      ...scimUser,
+      status: 'ACTIVE',
+      name: 'Alice Smith',
+    } as never);
+
+    const response = await patchUser(
+      request('https://ops.example.com/api/scim/v2/Users/user-1', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          Operations: [
+            { op: 'Replace', path: 'active', value: 'True' },
+            { op: 'replace', path: 'name.formatted', value: 'Alice Smith' },
+          ],
+        }),
+      }),
+      context
+    );
+
+    expect(response.status).toBe(200);
+    expect(updateUserSecurityState).toHaveBeenCalledWith(
+      'user-1',
+      { status: 'ACTIVE' },
+      expect.objectContaining({
+        name: 'Alice Smith',
+        roleSource: 'SCIM',
+      })
+    );
+  });
+
+  it('rejects PATCH with invalid active string value', async () => {
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(scimUser as never);
+
+    const response = await patchUser(
+      request('https://ops.example.com/api/scim/v2/Users/user-1', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          Operations: [{ op: 'replace', path: 'active', value: 'not-a-bool' }],
+        }),
+      }),
+      context
+    );
+
+    expect(response.status).toBe(400);
   });
 });

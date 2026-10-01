@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
+import { getDefaultAvatar, isDefaultAvatar } from '@/lib/avatar';
 import { updateUserSecurityState } from '@/lib/users/admin-invariants';
 import { isScimRequestAuthorized, scimError, serializeScimUser } from '@/lib/scim';
 
@@ -9,6 +10,7 @@ const select = {
   scimExternalId: true,
   email: true,
   name: true,
+  avatarUrl: true,
   status: true,
   createdAt: true,
   updatedAt: true,
@@ -22,8 +24,18 @@ function normalizedEmail(value: unknown): string | null {
   return /^\S+@\S+\.\S+$/.test(email) && email.length <= 320 ? email : null;
 }
 
+function parseBoolean(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim().toLowerCase();
+    if (trimmed === 'true') return true;
+    if (trimmed === 'false') return false;
+  }
+  return null;
+}
+
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  if (!isScimRequestAuthorized(request.headers.get('authorization'))) {
+  if (!(await isScimRequestAuthorized(request.headers.get('authorization')))) {
     return scimError(401, 'Invalid SCIM bearer token.');
   }
   const { id } = await context.params;
@@ -35,7 +47,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  if (!isScimRequestAuthorized(request.headers.get('authorization'))) {
+  if (!(await isScimRequestAuthorized(request.headers.get('authorization')))) {
     return scimError(401, 'Invalid SCIM bearer token.');
   }
   const { id } = await context.params;
@@ -48,22 +60,71 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (!Array.isArray(body?.Operations)) return scimError(400, 'Operations array is required.');
   let active = existing.status !== 'DISABLED';
   let name = existing.name;
+  let avatarUrl = existing.avatarUrl;
+
   for (const operation of body.Operations) {
-    if (String(operation.op).toLowerCase() !== 'replace') {
-      return scimError(400, 'Only replace operations are supported.');
+    const op = String(operation.op ?? '').toLowerCase();
+    if (op !== 'replace' && op !== 'add') {
+      return scimError(400, 'Only add and replace operations are supported.');
     }
-    const path = String(operation.path).toLowerCase();
-    if (path === 'active' && typeof operation.value === 'boolean') active = operation.value;
-    else if (path === 'displayname' && typeof operation.value === 'string')
+    const path = typeof operation.path === 'string' ? operation.path.trim().toLowerCase() : '';
+    if (path === 'active') {
+      const parsed = parseBoolean(operation.value);
+      if (parsed === null) return scimError(400, 'Invalid active boolean value in SCIM patch.');
+      active = parsed;
+    } else if (path === 'displayname' && typeof operation.value === 'string') {
       name = operation.value.trim();
-    else return scimError(400, `Unsupported SCIM patch path: ${String(operation.path)}`);
+    } else if (
+      (path === 'name' || path === 'name.formatted') &&
+      typeof operation.value === 'string'
+    ) {
+      name = operation.value.trim();
+    } else if (
+      (path === 'name' || path === 'name.formatted') &&
+      typeof operation.value === 'object' &&
+      operation.value !== null &&
+      'formatted' in operation.value &&
+      typeof (operation.value as { formatted: unknown }).formatted === 'string'
+    ) {
+      name = ((operation.value as { formatted: string }).formatted || '').trim();
+    } else if (path === 'photos' || path === 'avatarurl') {
+      if (typeof operation.value === 'string' && /^https?:\/\//i.test(operation.value)) {
+        avatarUrl = operation.value.trim();
+      } else if (Array.isArray(operation.value)) {
+        const photoVal = operation.value[0]?.value;
+        if (typeof photoVal === 'string' && /^https?:\/\//i.test(photoVal)) {
+          avatarUrl = photoVal.trim();
+        }
+      }
+    } else if (!path && typeof operation.value === 'object' && operation.value !== null) {
+      const valObj = operation.value as Record<string, unknown>;
+      if ('active' in valObj) {
+        const parsed = parseBoolean(valObj.active);
+        if (parsed !== null) active = parsed;
+      }
+      if (typeof valObj.displayName === 'string') {
+        name = valObj.displayName.trim();
+      } else if (typeof valObj['name.formatted'] === 'string') {
+        name = valObj['name.formatted'].trim();
+      }
+      if (typeof valObj.avatarUrl === 'string' && /^https?:\/\//i.test(valObj.avatarUrl)) {
+        avatarUrl = valObj.avatarUrl.trim();
+      }
+    }
   }
+
+  // If name changed and user had default system avatar, update avatar to new initials
+  if (name !== existing.name && isDefaultAvatar(avatarUrl)) {
+    avatarUrl = getDefaultAvatar(name, existing.scimExternalId ?? existing.id);
+  }
+
   try {
     const user = await updateUserSecurityState(
       id,
       { status: active ? 'ACTIVE' : 'DISABLED' },
       {
         name: name || existing.name,
+        avatarUrl,
         roleSource: 'SCIM',
         ...(!active ? { tokenVersion: { increment: 1 } } : {}),
       }
@@ -82,7 +143,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 }
 
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  if (!isScimRequestAuthorized(request.headers.get('authorization'))) {
+  if (!(await isScimRequestAuthorized(request.headers.get('authorization')))) {
     return scimError(401, 'Invalid SCIM bearer token.');
   }
   const { id } = await context.params;
@@ -104,6 +165,22 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       : existing.name;
   const active = body?.active !== false;
 
+  let avatarUrl = existing.avatarUrl;
+  if (Array.isArray(body?.photos)) {
+    const photoObj = body.photos[0];
+    if (
+      typeof photoObj === 'object' &&
+      photoObj !== null &&
+      'value' in photoObj &&
+      typeof (photoObj as { value: unknown }).value === 'string' &&
+      /^https?:\/\//i.test((photoObj as { value: string }).value)
+    ) {
+      avatarUrl = (photoObj as { value: string }).value.trim();
+    }
+  } else if (name !== existing.name && isDefaultAvatar(avatarUrl)) {
+    avatarUrl = getDefaultAvatar(name, existing.scimExternalId ?? existing.id);
+  }
+
   try {
     const user = await updateUserSecurityState(
       id,
@@ -111,6 +188,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       {
         email,
         name,
+        avatarUrl,
         roleSource: 'SCIM',
         tokenVersion: { increment: 1 },
       }
@@ -129,7 +207,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  if (!isScimRequestAuthorized(request.headers.get('authorization'))) {
+  if (!(await isScimRequestAuthorized(request.headers.get('authorization')))) {
     return scimError(401, 'Invalid SCIM bearer token.');
   }
   const { id } = await context.params;

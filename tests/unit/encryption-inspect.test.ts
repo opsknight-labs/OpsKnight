@@ -52,8 +52,8 @@ describe('Encryption Inspector Unit Tests', () => {
   });
 
   it('classifies legacy v1 format ciphertext correctly', async () => {
-    // Generate valid legacy v1 AES-256-CBC ciphertext (iv:hex)
-    const iv = crypto.randomBytes(16);
+    // Generate valid legacy v1 AES-256-CBC ciphertext (iv:hex) with fixed IV to avoid random PKCS#7 false-positive collision
+    const iv = Buffer.from('000102030405060708090a0b0c0d0e0f', 'hex');
     const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key2, 'hex'), iv);
     let encrypted = cipher.update('my-legacy-secret', 'utf8', 'hex');
     encrypted += cipher.final('hex');
@@ -208,7 +208,7 @@ describe('Encryption Inspector Unit Tests', () => {
     ];
 
     // Legacy v1 ciphertext encrypted with key1
-    const iv = crypto.randomBytes(16);
+    const iv = Buffer.from('000102030405060708090a0b0c0d0e0f', 'hex');
     const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key1, 'hex'), iv);
     let encrypted = cipher.update('legacy-v1-secret', 'utf8', 'hex');
     encrypted += cipher.final('hex');

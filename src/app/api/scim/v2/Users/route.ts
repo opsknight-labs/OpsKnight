@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
+import { getDefaultAvatar } from '@/lib/avatar';
 import {
   SCIM_LIST_SCHEMA,
   isScimRequestAuthorized,
@@ -14,17 +15,18 @@ const select = {
   scimExternalId: true,
   email: true,
   name: true,
+  avatarUrl: true,
   status: true,
   createdAt: true,
   updatedAt: true,
 } as const;
 
-function authorized(request: NextRequest): boolean {
-  return isScimRequestAuthorized(request.headers.get('authorization'));
+async function authorized(request: NextRequest): Promise<boolean> {
+  return await isScimRequestAuthorized(request.headers.get('authorization'));
 }
 
 export async function GET(request: NextRequest) {
-  if (!authorized(request)) return scimError(401, 'Invalid SCIM bearer token.');
+  if (!(await authorized(request))) return scimError(401, 'Invalid SCIM bearer token.');
   try {
     const filter = parseScimFilter(request.nextUrl.searchParams.get('filter'));
     const startIndex = Math.max(1, Number(request.nextUrl.searchParams.get('startIndex')) || 1);
@@ -61,11 +63,27 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!authorized(request)) return scimError(401, 'Invalid SCIM bearer token.');
+  if (!(await authorized(request))) return scimError(401, 'Invalid SCIM bearer token.');
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const email = typeof body?.userName === 'string' ? body.userName.trim().toLowerCase() : '';
   const externalId = typeof body?.externalId === 'string' ? body.externalId.trim() : '';
-  const displayName = typeof body?.displayName === 'string' ? body.displayName.trim() : '';
+
+  let displayName = typeof body?.displayName === 'string' ? body.displayName.trim() : '';
+
+  // Handle SCIM name object ({ formatted, givenName, familyName })
+  if (!displayName && typeof body?.name === 'object' && body.name !== null) {
+    const nameObj = body.name as Record<string, unknown>;
+    if (typeof nameObj.formatted === 'string' && nameObj.formatted.trim()) {
+      displayName = nameObj.formatted.trim();
+    } else {
+      const given = typeof nameObj.givenName === 'string' ? nameObj.givenName.trim() : '';
+      const family = typeof nameObj.familyName === 'string' ? nameObj.familyName.trim() : '';
+      displayName = [given, family].filter(Boolean).join(' ');
+    }
+  }
+
+  const resolvedName = displayName || (email.includes('@') ? email.split('@')[0] : email);
+
   if (!email || !externalId || !/^\S+@\S+\.\S+$/.test(email)) {
     return scimError(400, 'userName email and externalId are required.');
   }
@@ -74,10 +92,38 @@ export async function POST(request: NextRequest) {
     select: { id: true },
   });
   if (collision) return scimError(409, 'A user with this userName or externalId already exists.');
+
+  // Extract photo if passed in SCIM payload
+  let avatarUrl: string | null = null;
+  if (Array.isArray(body?.photos)) {
+    const photoObj =
+      body.photos.find(
+        (p: unknown) =>
+          typeof p === 'object' &&
+          p !== null &&
+          ('type' in p ? (p as { type: unknown }).type === 'photo' : false)
+      ) ?? body.photos[0];
+    if (
+      typeof photoObj === 'object' &&
+      photoObj !== null &&
+      'value' in photoObj &&
+      typeof (photoObj as { value: unknown }).value === 'string' &&
+      /^https?:\/\//i.test((photoObj as { value: string }).value)
+    ) {
+      avatarUrl = (photoObj as { value: string }).value.trim();
+    }
+  }
+
+  // Generate deterministic default avatar if no IdP photo was provided
+  if (!avatarUrl) {
+    avatarUrl = getDefaultAvatar(resolvedName, externalId);
+  }
+
   const user = await prisma.user.create({
     data: {
       email,
-      name: displayName || email.split('@')[0],
+      name: resolvedName,
+      avatarUrl,
       scimExternalId: externalId,
       role: 'USER',
       roleSource: 'SCIM',
@@ -96,6 +142,6 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  if (!authorized(request)) return scimError(401, 'Invalid SCIM bearer token.');
+  if (!(await authorized(request))) return scimError(401, 'Invalid SCIM bearer token.');
   return scimError(405, 'PATCH requires a user resource URL.');
 }
