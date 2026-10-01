@@ -74,6 +74,38 @@ describe('PushNotificationToggle', () => {
     });
   });
 
+  it('does not show On when the device is registered but server Push is unavailable', async () => {
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/user/push-subscription/status')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            deviceRegistered: true,
+            accountEnabled: true,
+            providerConfigured: false,
+          }),
+        };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    });
+
+    render(<PushNotificationToggle />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Server unavailable')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          /Server Push configuration is unavailable. Your device subscription is still saved./i
+        )
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Retry/i })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('button', { name: /^Disable$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Send test push/i })).toBeDisabled();
+  });
+
   it('subscribes directly from the Enable gesture on desktop without a separate permission request', async () => {
     Object.defineProperty(window, 'Notification', {
       value: {
