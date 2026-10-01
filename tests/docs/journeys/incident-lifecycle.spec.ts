@@ -18,5 +18,13 @@ test.describe.serial('incident lifecycle documentation journey', () => {
     if (await acknowledge.isVisible()) await acknowledge.click();
     await expect(page.getByText('Acknowledged').first()).toBeVisible();
     await captureEvidence(page, testInfo, 'incidents', 'acknowledge');
+
+    await page.getByText('Timeline', { exact: true }).first().click();
+    await expect(page.getByText(/Incident triggered by production monitoring|acknowledged/i).first()).toBeVisible();
+    await captureEvidence(page, testInfo, 'incidents', 'timeline');
+
+    await page.goto('/incidents/create');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'incidents', 'create');
   });
 });

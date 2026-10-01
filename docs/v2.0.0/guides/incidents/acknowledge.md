@@ -7,6 +7,7 @@ audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
   task: Acknowledge an incident and verify ownership and escalation effects.
+  evidence: [docs/v2.0.0/assets/incident-detail.png, docs/v2.0.0/assets/incident-acknowledged.png, docs/v2.0.0/assets/incident-timeline.png]
 verification:
   level: test
   verified_at: 2026-09-29
@@ -50,6 +51,8 @@ OpsKnight applies lifecycle commands against the status you loaded. If another r
 
 ## Verify acknowledgement
 
+![Acknowledged incident with stopped escalation and recorded response timing](/docs/v2.0.0/assets/incident-acknowledged.png)
+
 Confirm all of the following:
 
 - The header shows **Acknowledged**.
@@ -59,6 +62,8 @@ Confirm all of the following:
 - Any acknowledgement-dependent delivery or ChatOps projection eventually reflects the change.
 
 Refresh the page once if the header and timeline disagree. If the source page is correct but a Slack or Teams card is stale, treat that as a projection/delivery issue; do not acknowledge repeatedly.
+
+![Incident timeline after the acknowledgement transition](/docs/v2.0.0/assets/incident-timeline.png)
 
 ## Acknowledge from another response channel
 

@@ -7,6 +7,7 @@ audience: [administrator, operator]
 reader:
   status: READER_COMPLETE
   task: Configure and verify an OpsKnight notification provider.
+  evidence: [docs/v2.0.0/assets/notification-settings.png]
 verification:
   level: source
   verified_at: 2026-09-29
@@ -14,6 +15,8 @@ verification:
 ---
 
 # Configure a notification provider
+
+![Notification settings with provider configuration and operational controls](/docs/v2.0.0/assets/notification-settings.png)
 
 ## Before you begin
 
@@ -57,4 +60,3 @@ For rotation, create the new provider credential, update OpsKnight, test, then r
 - [Configure routing](./configure-routing)
 - [Test a notification](./test-notification)
 - [Inspect delivery](./inspect-delivery)
-

@@ -7,6 +7,7 @@ audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
   task: Publish, verify, update, and close an incident on the single supported status page.
+  evidence: [docs/v2.0.0/assets/status-pages.png]
 verification:
   level: source
   verified_at: 2026-09-27
@@ -16,6 +17,8 @@ verification:
 ---
 
 # Publish a status update
+
+![Status-page administration for the single supported public page](/docs/v2.0.0/assets/status-pages.png)
 
 ## Before you begin
 

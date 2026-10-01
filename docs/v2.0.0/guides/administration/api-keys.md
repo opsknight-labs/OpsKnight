@@ -7,6 +7,7 @@ audience: [administrator, operator]
 reader:
   status: READER_COMPLETE
   task: Create, test, rotate, and revoke a least-privileged API key.
+  evidence: [docs/v2.0.0/assets/api-keys.png]
 verification:
   level: source
   verified_at: 2026-09-29
@@ -14,6 +15,8 @@ verification:
 ---
 
 # Manage API keys
+
+![API key administration with scoped credentials and lifecycle controls](/docs/v2.0.0/assets/api-keys.png)
 
 ## Before you begin
 

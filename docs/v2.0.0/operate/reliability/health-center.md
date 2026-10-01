@@ -7,6 +7,7 @@ audience: [operator, administrator]
 reader:
   status: READER_COMPLETE
   task: Diagnose a degraded workflow from Health Center and prove recovery.
+  evidence: [docs/v2.0.0/assets/health-center.png]
 verification:
   level: source
   verified_at: 2026-09-29
@@ -14,6 +15,8 @@ verification:
 ---
 
 # Use the Health Center
+
+![Health Center showing application dependencies and operational checks](/docs/v2.0.0/assets/health-center.png)
 
 ## Before you begin
 

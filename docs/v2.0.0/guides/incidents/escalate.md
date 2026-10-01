@@ -7,6 +7,7 @@ audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
   task: Escalate an open incident and verify the next policy action.
+  evidence: [docs/v2.0.0/assets/incident-detail.png]
 verification:
   level: source
   verified_at: 2026-09-29
@@ -18,6 +19,8 @@ verification:
 ---
 
 # Escalate an incident
+
+![Incident detail with the active escalation state](/docs/v2.0.0/assets/incident-detail.png)
 
 Manual escalation asks OpsKnight to execute the current step of an open incident's escalation plan immediately. Use it when the current response needs broader or faster attention; do not use it as a substitute for assigning an owner, acknowledging, or repairing a broken policy.
 

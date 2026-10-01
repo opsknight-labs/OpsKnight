@@ -49,7 +49,7 @@ export default async function globalSetup() {
       update: { ...person, status: 'ACTIVE', passwordHash: fixturePasswordHash, timeZone: 'America/New_York', emailNotificationsEnabled: true },
       create: { ...person, status: 'ACTIVE', passwordHash: fixturePasswordHash, timeZone: 'America/New_York', emailNotificationsEnabled: true },
     })));
-    const apiKeySecret = process.env.API_KEY_SECRET || process.env.NEXTAUTH_SECRET || 'docs-runtime-only-nextauth-secret';
+    const apiKeySecret = process.env.API_KEY_SECRET || 'docs-runtime-only-api-key-secret';
     const tokenHash = createHmac('sha256', apiKeySecret)
       .update(`opsknight:api-key:v2:${DOCS_API_KEY}`)
       .digest('hex');

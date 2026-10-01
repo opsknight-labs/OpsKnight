@@ -8,6 +8,7 @@ keywords: [configure on-call, on-call schedule, responder rotation, escalation p
 reader:
   status: READER_COMPLETE
   task: Configure and verify on-call coverage and escalation for the first service.
+  evidence: [docs/v2.0.0/assets/on-call-schedules.png, docs/v2.0.0/assets/escalation-policies.png]
 verification:
   level: source
   verified_at: 2026-09-29
@@ -18,6 +19,8 @@ verification:
 ---
 
 # Configure on-call for your first service
+
+![Production on-call schedules with current responder coverage](/docs/v2.0.0/assets/on-call-schedules.png)
 
 This tutorial creates a one-responder schedule for a safe first alert. Expand it into a production rotation only after the end-to-end test succeeds.
 

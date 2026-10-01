@@ -7,6 +7,7 @@ audience: [administrator, responder]
 reader:
   status: READER_COMPLETE
   task: Create and verify an on-call schedule.
+  evidence: [docs/v2.0.0/assets/on-call-schedules.png, docs/v2.0.0/assets/on-call-schedule-detail.png]
 verification:
   level: source
   verified_at: 2026-09-29
@@ -17,6 +18,8 @@ verification:
 
 # Create an on-call schedule
 
+![On-call schedule directory with multiple production rotations](/docs/v2.0.0/assets/on-call-schedules.png)
+
 ## Before you begin
 
 Activate intended responders and choose the authoritative IANA time zone, coverage window, handoff time, and responder order. The schedule time zone controls local entry and daylight-saving behavior.
@@ -26,6 +29,8 @@ Activate intended responders and choose the authoritative IANA time zone, covera
 Open **Schedules** and expand **Create Schedule**.
 
 ## Configure the schedule
+
+![Schedule detail with rotation coverage and responder ownership](/docs/v2.0.0/assets/on-call-schedule-detail.png)
 
 1. Enter a unique operational name such as `Payments Primary`.
 2. Select the schedule time zone.

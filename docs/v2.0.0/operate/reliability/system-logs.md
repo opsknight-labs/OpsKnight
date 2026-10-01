@@ -7,6 +7,7 @@ audience: [operator, administrator]
 reader:
   status: READER_COMPLETE
   task: Configure logging, correlate a failure across roles, and verify recovery.
+  evidence: [docs/v2.0.0/assets/system-logs.png]
 verification:
   level: source
   verified_at: 2026-09-29
@@ -14,6 +15,8 @@ verification:
 ---
 
 # Operate with system logs
+
+![System Logs with severity counters, filters, and structured entries](/docs/v2.0.0/assets/system-logs.png)
 
 OpsKnight writes application logs to stdout/stderr and retains a small copy in each Node.js process. **System Logs** displays that in-process copy. Use it for immediate diagnosis on a single web replica; use your container logging platform for durable, searchable, multi-replica history.
 

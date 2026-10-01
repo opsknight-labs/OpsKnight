@@ -7,6 +7,7 @@ audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
   task: Create, manage, verify, and close incident follow-up action items.
+  evidence: [docs/v2.0.0/assets/action-items.png]
 verification:
   level: source
   verified_at: 2026-09-29
@@ -18,6 +19,8 @@ verification:
 ---
 
 # Track incident action items
+
+![Action-item board with realistic owners, priorities, due dates, and states](/docs/v2.0.0/assets/action-items.png)
 
 Action items turn incident and postmortem findings into accountable work. Use them for a measurable change that remains after live response—such as adding an alert, removing a failure mode, testing restore procedures, or revising an escalation policy. Do not use them as live lifecycle commands or as a replacement for timeline notes.
 

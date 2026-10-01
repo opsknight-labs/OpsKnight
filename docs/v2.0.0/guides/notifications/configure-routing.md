@@ -7,6 +7,7 @@ audience: [administrator, responder]
 reader:
   status: READER_COMPLETE
   task: Configure and validate an end-to-end notification route.
+  evidence: [docs/v2.0.0/assets/notification-settings.png]
 verification:
   level: source
   verified_at: 2026-09-27

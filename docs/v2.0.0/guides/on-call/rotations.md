@@ -7,6 +7,7 @@ audience: [administrator, responder]
 reader:
   status: READER_COMPLETE
   task: Configure and verify an on-call rotation layer.
+  evidence: [docs/v2.0.0/assets/on-call-schedule-detail.png]
 verification:
   level: source
   verified_at: 2026-09-29
@@ -14,6 +15,8 @@ verification:
 ---
 
 # Configure on-call rotations
+
+![Schedule detail showing rotation coverage and responder order](/docs/v2.0.0/assets/on-call-schedule-detail.png)
 
 ## Before you begin
 
@@ -54,4 +57,3 @@ Use [overrides](./overrides) for temporary swaps. For a recurring change, update
 
 - [Verify handoffs](./handoffs)
 - [Test on-call routing](./test-on-call)
-
