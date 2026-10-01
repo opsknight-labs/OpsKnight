@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-01T20:32:06+05:30",
-  "sourceRevision": "da9ee55fc30e5c06bc384895f7f13d79ce83b61d",
+  "generatedAt": "2026-10-01T21:47:37+05:30",
+  "sourceRevision": "31f50bcb5c535b197b0398851a398b7cb8240ede",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -24572,8 +24572,8 @@
     {
       "id": "src/components/mobile/PushNotificationToggle.tsx:SERVICE_WORKER_READY_TIMEOUT_MS",
       "name": "SERVICE_WORKER_READY_TIMEOUT_MS",
-      "value": 8000,
-      "expression": "8_000",
+      "value": 25000,
+      "expression": "25_000",
       "source": "src/components/mobile/PushNotificationToggle.tsx",
       "references": 6,
       "semanticClassification": "PROVIDER_CONSTRAINT"
@@ -25209,6 +25209,15 @@
       "semanticClassification": "INTERNAL_IMPLEMENTATION"
     },
     {
+      "id": "src/lib/incidents/status-client.ts:INCIDENT_MUTATION_TIMEOUT_MS",
+      "name": "INCIDENT_MUTATION_TIMEOUT_MS",
+      "value": 12000,
+      "expression": "12_000",
+      "source": "src/lib/incidents/status-client.ts",
+      "references": 2,
+      "semanticClassification": "INTERNAL_IMPLEMENTATION"
+    },
+    {
       "id": "src/lib/integrations/aws-sns-verification.ts:MAX_CERT_BYTES",
       "name": "MAX_CERT_BYTES",
       "value": 32768,
@@ -25575,6 +25584,15 @@
       "expression": "15_000",
       "source": "src/lib/notification-recovery.ts",
       "references": 2,
+      "semanticClassification": "INTERNAL_IMPLEMENTATION"
+    },
+    {
+      "id": "src/lib/offline-queue.ts:BACKGROUND_SYNC_TIMEOUT_MS",
+      "name": "BACKGROUND_SYNC_TIMEOUT_MS",
+      "value": 3000,
+      "expression": "3_000",
+      "source": "src/lib/offline-queue.ts",
+      "references": 3,
       "semanticClassification": "INTERNAL_IMPLEMENTATION"
     },
     {
@@ -115144,8 +115162,8 @@
         "contract": {
           "id": "src/components/mobile/PushNotificationToggle.tsx:SERVICE_WORKER_READY_TIMEOUT_MS",
           "name": "SERVICE_WORKER_READY_TIMEOUT_MS",
-          "value": 8000,
-          "expression": "8_000",
+          "value": 25000,
+          "expression": "25_000",
           "source": "src/components/mobile/PushNotificationToggle.tsx",
           "references": 6,
           "semanticClassification": "PROVIDER_CONSTRAINT"
@@ -115176,7 +115194,7 @@
           },
           {
             "id": "limit:src/components/mobile/PushNotificationToggle.tsx:SERVICE_WORKER_READY_TIMEOUT_MS:value",
-            "text": "SERVICE_WORKER_READY_TIMEOUT_MS has the discovered numeric value 8000.",
+            "text": "SERVICE_WORKER_READY_TIMEOUT_MS has the discovered numeric value 25000.",
             "evidence": [
               "src/components/mobile/PushNotificationToggle.tsx"
             ],
@@ -119090,6 +119108,58 @@
         ]
       },
       {
+        "id": "limit:src/lib/incidents/status-client.ts:INCIDENT_MUTATION_TIMEOUT_MS",
+        "kind": "limit",
+        "name": "src/lib/incidents/status-client.ts:INCIDENT_MUTATION_TIMEOUT_MS",
+        "owner": "incident",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "src/lib/incidents/status-client.ts"
+        ],
+        "contract": {
+          "id": "src/lib/incidents/status-client.ts:INCIDENT_MUTATION_TIMEOUT_MS",
+          "name": "INCIDENT_MUTATION_TIMEOUT_MS",
+          "value": 12000,
+          "expression": "12_000",
+          "source": "src/lib/incidents/status-client.ts",
+          "references": 2,
+          "semanticClassification": "INTERNAL_IMPLEMENTATION"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/limits.md"
+          ],
+          "troubleshooting": [
+            "troubleshooting/incidents/lifecycle-stuck.md"
+          ]
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "limit:src/lib/incidents/status-client.ts:INCIDENT_MUTATION_TIMEOUT_MS:classification",
+            "text": "src/lib/incidents/status-client.ts:INCIDENT_MUTATION_TIMEOUT_MS is classified as INTERNAL_IMPLEMENTATION and owned by incident.",
+            "evidence": [
+              "src/lib/incidents/status-client.ts"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "limit:src/lib/incidents/status-client.ts:INCIDENT_MUTATION_TIMEOUT_MS:value",
+            "text": "INCIDENT_MUTATION_TIMEOUT_MS has the discovered numeric value 12000.",
+            "evidence": [
+              "src/lib/incidents/status-client.ts"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "limit:src/lib/integrations/aws-sns-verification.ts:MAX_CERT_BYTES",
         "kind": "limit",
         "name": "src/lib/integrations/aws-sns-verification.ts:MAX_CERT_BYTES",
@@ -121654,6 +121724,64 @@
             "text": "LEGACY_RETRY_INTERVAL_MS has the discovered numeric value 15000.",
             "evidence": [
               "src/lib/notification-recovery.ts"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
+        "id": "limit:src/lib/offline-queue.ts:BACKGROUND_SYNC_TIMEOUT_MS",
+        "kind": "limit",
+        "name": "src/lib/offline-queue.ts:BACKGROUND_SYNC_TIMEOUT_MS",
+        "owner": "deployment",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "src/lib/offline-queue.ts"
+        ],
+        "contract": {
+          "id": "src/lib/offline-queue.ts:BACKGROUND_SYNC_TIMEOUT_MS",
+          "name": "BACKGROUND_SYNC_TIMEOUT_MS",
+          "value": 3000,
+          "expression": "3_000",
+          "source": "src/lib/offline-queue.ts",
+          "references": 3,
+          "semanticClassification": "INTERNAL_IMPLEMENTATION"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/limits.md"
+          ],
+          "troubleshooting": [
+            "operate/deploy/docker-compose/troubleshooting.md",
+            "operate/deploy/helm/troubleshooting.md",
+            "operate/deploy/kubernetes/troubleshooting.md",
+            "operate/deploy/kustomize/troubleshooting.md",
+            "operate/deploy/swarm/troubleshooting.md",
+            "troubleshooting/installation/startup-fails.md",
+            "troubleshooting/kubernetes/pods-not-ready.md"
+          ]
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "limit:src/lib/offline-queue.ts:BACKGROUND_SYNC_TIMEOUT_MS:classification",
+            "text": "src/lib/offline-queue.ts:BACKGROUND_SYNC_TIMEOUT_MS is classified as INTERNAL_IMPLEMENTATION and owned by deployment.",
+            "evidence": [
+              "src/lib/offline-queue.ts"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "limit:src/lib/offline-queue.ts:BACKGROUND_SYNC_TIMEOUT_MS:value",
+            "text": "BACKGROUND_SYNC_TIMEOUT_MS has the discovered numeric value 3000.",
+            "evidence": [
+              "src/lib/offline-queue.ts"
             ],
             "verification": "source"
           }
@@ -125583,8 +125711,8 @@
       }
     ],
     "summary": {
-      "total": 1170,
-      "claims": 1623,
+      "total": 1172,
+      "claims": 1627,
       "unsupportedClaims": 0,
       "supported": 639,
       "documentedSupported": 639,
@@ -125599,7 +125727,7 @@
         "deployment-topology": 4,
         "enum": 73,
         "integration": 28,
-        "limit": 226,
+        "limit": 228,
         "model": 120,
         "notification-provider": 9,
         "permission": 37,
@@ -125609,7 +125737,7 @@
       },
       "byClassification": {
         "ADMIN_FEATURE": 83,
-        "INTERNAL_IMPLEMENTATION": 531,
+        "INTERNAL_IMPLEMENTATION": 533,
         "OPERATOR_FEATURE": 345,
         "PUBLIC_API": 54,
         "PUBLIC_FEATURE": 157
