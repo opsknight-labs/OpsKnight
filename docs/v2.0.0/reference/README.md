@@ -33,13 +33,3 @@ Use reference pages when you need an exact contract rather than a workflow:
 Reference content is generated or validated against routes, schemas, types,
 configuration, deployment manifests, and tests. It must describe implemented
 contracts without speculative guidance.
-
-- API
-- CLI
-- Configuration
-- Permissions
-- Notifications
-- Webhooks
-- Metrics
-- Health
-- Limits

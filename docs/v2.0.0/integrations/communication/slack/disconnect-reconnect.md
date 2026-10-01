@@ -1,5 +1,6 @@
 ---
 title: Disconnect or reconnect Slack
+order: 14
 description: Rotate or revoke a Slack workspace connection and safely revalidate destinations, identities, actions, and war rooms.
 type: how-to
 product_area: chatops

@@ -1,5 +1,6 @@
 ---
 title: Troubleshoot Microsoft Teams
+order: 10
 description: Diagnose tenant, installation, destination, card, and war-room failures.
 type: troubleshooting
 product_area: chatops

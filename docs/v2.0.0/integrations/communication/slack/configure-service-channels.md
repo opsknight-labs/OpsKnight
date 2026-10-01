@@ -1,5 +1,6 @@
 ---
 title: Configure Slack service channels
+order: 4
 description: Route service incident messages to one or more Slack destinations.
 type: how-to
 product_area: chatops

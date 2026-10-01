@@ -9,8 +9,20 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 addFormats(ajv);
 const validate = ajv.compile(schema);
 const failures = [];
+const markdownFiles = filesUnder('docs/v2.0.0', path => path.endsWith('.md'));
 
-for (const file of filesUnder('docs/v2.0.0', path => path.endsWith('.md'))) {
+// A page and a same-named directory landing normalize to the same public URL.
+// Reject the pair so the website cannot shadow README.md or emit duplicate nav.
+const markdownSet = new Set(markdownFiles);
+for (const file of markdownFiles) {
+  if (!file.endsWith('/README.md')) continue;
+  const siblingPage = `${file.slice(0, -'/README.md'.length)}.md`;
+  if (markdownSet.has(siblingPage)) {
+    failures.push(`${siblingPage} and ${file}: duplicate documentation URL slug`);
+  }
+}
+
+for (const file of markdownFiles) {
   const source = readRepositoryFile(file);
   const match = source.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
   if (!match) {

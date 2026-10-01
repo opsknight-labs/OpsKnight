@@ -1,5 +1,6 @@
 ---
 title: Disconnect or reconnect Microsoft Teams
+order: 11
 description: Rotate or replace Teams tenant and Bot credentials while safely revalidating installations, destinations, cards, actions, and war rooms.
 type: how-to
 product_area: chatops

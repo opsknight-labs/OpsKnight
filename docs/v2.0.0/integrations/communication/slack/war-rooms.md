@@ -1,5 +1,6 @@
 ---
 title: Operate Slack incident war rooms
+order: 10
 description: Create, synchronize, and close incident-scoped Slack channels.
 type: how-to
 product_area: chatops

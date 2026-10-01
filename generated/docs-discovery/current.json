@@ -28527,8 +28527,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -28702,8 +28702,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -28879,8 +28879,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -36619,6 +36619,8 @@
             "concepts/authentication.md"
           ],
           "guides": [
+            "guides/analytics/README.md",
+            "guides/analytics/use-analytics.md",
             "guides/identity/configure-oidc.md",
             "guides/reports/README.md",
             "guides/reports/create-dashboard.md",
@@ -36784,6 +36786,8 @@
             "concepts/authentication.md"
           ],
           "guides": [
+            "guides/analytics/README.md",
+            "guides/analytics/use-analytics.md",
             "guides/identity/configure-oidc.md",
             "guides/reports/README.md",
             "guides/reports/create-dashboard.md",
@@ -38487,8 +38491,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -39229,8 +39233,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -39912,8 +39916,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -40158,8 +40162,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -46583,7 +46587,7 @@
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
-            "integrations/issue-tracking/jira.md",
+            "integrations/issue-tracking/jira/README.md",
             "reference/api/README.md",
             "reference/api/authentication.md",
             "reference/api/errors.md",
@@ -47072,8 +47076,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -47269,8 +47273,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -47461,8 +47465,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -47624,8 +47628,8 @@
             "guides/notifications/inspect-delivery.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md"
           ],
           "troubleshooting": [
@@ -47806,8 +47810,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -47993,8 +47997,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -53117,8 +53121,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -56102,8 +56106,8 @@
             "guides/incidents/resolve.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/api/authentication.md",
             "reference/api/errors.md",
@@ -56294,8 +56298,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -56483,8 +56487,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -56622,8 +56626,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md"
           ],
           "troubleshooting": [
@@ -56789,8 +56793,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -56961,8 +56965,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -57099,8 +57103,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md"
           ],
           "troubleshooting": [
@@ -57256,8 +57260,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -57427,8 +57431,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -57615,8 +57619,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -57801,8 +57805,8 @@
             "guides/on-call/overrides.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/permissions.md"
           ],
@@ -65348,7 +65352,9 @@
           "concepts": [
             "concepts/analytics.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/analytics/use-analytics.md"
+          ],
           "reference": [
             "reference/metrics.md"
           ],
@@ -65458,10 +65464,10 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [
-            "integrations/README.md"
+          "concepts": [],
+          "guides": [
+            "guides/administration/review-event-logs.md"
           ],
-          "guides": [],
           "reference": [
             "reference/api/events.md"
           ],
@@ -66105,6 +66111,7 @@
             "concepts/postmortem-workflow.md"
           ],
           "guides": [
+            "guides/postmortems/create-review-publish.md",
             "guides/incidents/action-items.md"
           ],
           "reference": [],
@@ -66162,6 +66169,7 @@
             "concepts/postmortem-workflow.md"
           ],
           "guides": [
+            "guides/postmortems/create-review-publish.md",
             "guides/incidents/action-items.md"
           ],
           "reference": [],
@@ -66219,6 +66227,7 @@
             "concepts/postmortem-workflow.md"
           ],
           "guides": [
+            "guides/postmortems/create-review-publish.md",
             "guides/incidents/action-items.md"
           ],
           "reference": [],
@@ -66634,7 +66643,9 @@
             "concepts/services.md",
             "integrations/README.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/services/manage-service.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -66745,7 +66756,9 @@
             "concepts/services.md",
             "concepts/teams.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/services/manage-service.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -66800,7 +66813,9 @@
             "concepts/services.md",
             "concepts/teams.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/services/manage-service.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -66967,7 +66982,9 @@
             "concepts/services.md",
             "concepts/teams.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/services/manage-service.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -67826,6 +67843,7 @@
             "concepts/compliance.md"
           ],
           "guides": [
+            "guides/compliance/evaluate-and-export.md",
             "operate/security/hardening.md"
           ],
           "reference": [],
@@ -67879,6 +67897,7 @@
             "concepts/authentication.md"
           ],
           "guides": [
+            "guides/administration/manage-sessions.md",
             "operate/security/hardening.md"
           ],
           "reference": [],
@@ -68424,7 +68443,9 @@
             "concepts/teams.md",
             "concepts/services.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/teams/manage-team.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -68479,7 +68500,9 @@
             "concepts/teams.md",
             "concepts/services.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/teams/manage-team.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -78199,10 +78222,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -78379,10 +78402,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -81057,10 +81080,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -81174,10 +81197,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -81290,10 +81313,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -81478,10 +81501,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -81588,10 +81611,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -81698,10 +81721,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -81910,10 +81933,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -82179,10 +82202,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -83563,10 +83586,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -84130,10 +84153,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -84235,10 +84258,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -84333,10 +84356,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -84437,10 +84460,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -84542,10 +84565,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -85226,10 +85249,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -88480,8 +88503,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/configuration/README.md"
           ],
           "troubleshooting": [
@@ -88644,8 +88667,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/configuration/README.md"
           ],
           "troubleshooting": [
@@ -89181,6 +89204,10 @@
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md",
+            "guides/services/README.md",
+            "guides/services/manage-service.md",
+            "guides/teams/README.md",
+            "guides/teams/manage-team.md",
             "operate/deploy/docker-compose/external-postgres.md",
             "operate/deploy/docker-compose/integrated.md",
             "operate/deploy/docker-compose/pgbouncer.md",
@@ -89190,16 +89217,16 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/configuration/README.md",
             "reference/health.md"
@@ -89795,10 +89822,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -89952,6 +89979,10 @@
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md",
+            "guides/services/README.md",
+            "guides/services/manage-service.md",
+            "guides/teams/README.md",
+            "guides/teams/manage-team.md",
             "operate/deploy/docker-compose/external-postgres.md",
             "operate/deploy/docker-compose/integrated.md",
             "operate/deploy/docker-compose/pgbouncer.md",
@@ -89961,16 +89992,16 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/configuration/README.md",
             "reference/health.md"
@@ -90157,9 +90188,9 @@
             "operate/reliability/scaling.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
-            "integrations/issue-tracking/jira.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
+            "integrations/issue-tracking/jira/README.md",
             "reference/api/README.md",
             "reference/configuration/README.md",
             "reference/health.md",
@@ -90452,10 +90483,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -91019,10 +91050,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -91125,10 +91156,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -91227,10 +91258,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -91406,10 +91437,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -91505,10 +91536,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -91617,10 +91648,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -91792,10 +91823,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -91891,10 +91922,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -91991,10 +92022,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -92087,10 +92118,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -92192,10 +92223,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -92349,10 +92380,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -92454,10 +92485,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -92631,10 +92662,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -93020,10 +93051,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -93122,10 +93153,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -93230,10 +93261,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -93336,10 +93367,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -93442,10 +93473,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -93552,10 +93583,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -93660,10 +93691,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -93766,10 +93797,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -93872,10 +93903,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -93982,10 +94013,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -94090,10 +94121,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -94196,10 +94227,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -94302,10 +94333,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -94506,10 +94537,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -94614,10 +94645,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -94720,10 +94751,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -94826,10 +94857,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -95534,10 +95565,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -95639,10 +95670,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -95741,10 +95772,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -95841,10 +95872,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -95946,10 +95977,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -96051,10 +96082,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -96157,10 +96188,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -96329,10 +96360,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -96429,10 +96460,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -96528,10 +96559,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -96630,10 +96661,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -96730,10 +96761,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -96833,10 +96864,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -96933,10 +96964,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -97032,10 +97063,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -97287,10 +97318,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -97391,10 +97422,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -97500,10 +97531,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -97608,10 +97639,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -97719,10 +97750,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -97910,10 +97941,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "operate/reliability/health-and-metrics.md",
             "operate/reliability/scaling.md",
             "start/production-install.md",
@@ -98230,8 +98261,8 @@
             "guides/notifications/inspect-delivery.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/configuration/README.md"
           ],
@@ -98540,10 +98571,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -100053,8 +100084,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/configuration/README.md"
           ],
           "troubleshooting": [
@@ -100143,8 +100174,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/configuration/README.md"
           ],
           "troubleshooting": [
@@ -100233,8 +100264,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/configuration/README.md"
           ],
           "troubleshooting": [
@@ -100321,8 +100352,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/configuration/README.md"
           ],
           "troubleshooting": [
@@ -100563,8 +100594,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/configuration/README.md"
           ],
           "troubleshooting": [
@@ -102510,10 +102541,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -102613,10 +102644,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -102719,10 +102750,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -102825,10 +102856,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -102931,10 +102962,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -103029,10 +103060,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -103129,10 +103160,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -103227,10 +103258,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -103323,10 +103354,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -104709,10 +104740,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -110960,10 +110991,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -111095,10 +111126,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -111212,10 +111243,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -111322,10 +111353,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -111432,10 +111463,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -111542,10 +111573,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -111678,10 +111709,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -111829,10 +111860,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -111945,10 +111976,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -112064,10 +112095,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -112208,10 +112239,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -112339,10 +112370,10 @@
             "operate/deploy/docker-compose/split.md",
             "operate/deploy/docker-compose/troubleshooting.md",
             "operate/deploy/docker-compose/upgrade.md",
-            "operate/deploy/helm.md",
-            "operate/deploy/kubernetes.md",
-            "operate/deploy/kustomize.md",
-            "operate/deploy/swarm.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
             "start/production-install.md",
             "start/quickstart.md"
           ],
@@ -112731,6 +112762,8 @@
             "concepts/analytics.md"
           ],
           "guides": [
+            "guides/analytics/README.md",
+            "guides/analytics/use-analytics.md",
             "guides/reports/README.md",
             "guides/reports/create-dashboard.md",
             "guides/reports/manage-dashboard.md",
@@ -112798,6 +112831,8 @@
             "concepts/analytics.md"
           ],
           "guides": [
+            "guides/analytics/README.md",
+            "guides/analytics/use-analytics.md",
             "guides/reports/README.md",
             "guides/reports/create-dashboard.md",
             "guides/reports/manage-dashboard.md",
@@ -113753,8 +113788,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/limits.md"
           ],
           "troubleshooting": [
@@ -114141,8 +114176,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/limits.md"
           ],
           "troubleshooting": [
@@ -120413,8 +120448,8 @@
             "guides/notifications/inspect-delivery.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/limits.md"
           ],
@@ -120483,8 +120518,8 @@
             "guides/notifications/inspect-delivery.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/limits.md"
           ],
@@ -120567,8 +120602,8 @@
             "guides/notifications/inspect-delivery.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/limits.md"
           ],
@@ -120636,8 +120671,8 @@
             "guides/notifications/inspect-delivery.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/api/README.md",
             "reference/limits.md"
           ],
@@ -124927,8 +124962,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/limits.md"
           ],
           "troubleshooting": [
@@ -124989,8 +125024,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/limits.md"
           ],
           "troubleshooting": [
@@ -125050,8 +125085,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/limits.md"
           ],
           "troubleshooting": [
@@ -125111,8 +125146,8 @@
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
-            "integrations/communication/microsoft-teams.md",
-            "integrations/communication/slack.md",
+            "integrations/communication/microsoft-teams/README.md",
+            "integrations/communication/slack/README.md",
             "reference/limits.md"
           ],
           "troubleshooting": [

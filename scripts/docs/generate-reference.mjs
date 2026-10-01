@@ -93,18 +93,28 @@ const criticalBody = Object.entries(criticalConfiguration)
   .filter(([name]) => variables.some(variable => variable.name === name))
   .map(([name, [description, type, role, reload, sensitivity]]) => `### \`${name}\`\n\n${description}\n\n- Type and valid value: ${type}\n- Runtime role: ${role}\n- Apply behavior: ${reload}\n- Sensitivity: ${sensitivity}\n`)
   .join('\n');
+const criticalNames = new Set(Object.keys(criticalConfiguration));
+const productionVariables = variables.filter(
+  variable =>
+    !criticalNames.has(variable.name) &&
+    variable.sources.some(source => source === 'env.example' || source.startsWith('deploy/'))
+);
+const internalVariables = variables.filter(
+  variable => !criticalNames.has(variable.name) && !productionVariables.includes(variable)
+);
+const renderVariable = variable => `## \`${variable.name}\`\n\n- Type: ${variable.type}\n- Required: ${variable.required ? 'yes' : variable.requiredWhen}\n- Allowed values: ${variable.allowedValues.length ? variable.allowedValues.map(value => `\`${value}\``).join(', ') : 'not statically complete'}\n- Secret: ${variable.secret ? 'yes' : 'no'}\n- Runtime roles: ${variable.runtimeRoles.join(', ')}\n- Deployment support: ${variable.deploymentSupport.join(', ')}\n- Apply behavior: ${variable.restartRequired ? 'restart required' : 'runtime reload supported'}\n- Deprecated: ${variable.deprecated ? `yes; use \`${variable.replacement}\`` : 'no'}\n- Extraction confidence: ${variable.confidence}\n- Static default: ${variable.secret ? 'not displayed' : variable.defaults.length ? variable.defaults.map(value => `\`${value}\``).join(', ') : 'none discovered'}\n- Sources: ${variable.sources.map(source => `\`${source}\``).join(', ')}\n`;
 const configurationBody = `${frontmatter({
   title: 'Configuration reference',
-  description: 'Generated inventory of environment configuration used by source and deployment manifests.',
+  description: 'Supported production environment configuration exposed by OpsKnight deployment manifests.',
   area: 'configuration',
   evidence: ['src/', 'deploy/'],
 })}
 
 # Configuration reference
 
-This generated inventory identifies configuration names found in current source
-and deployment manifests. Required and default values are conservative static
-inferences; the listed source remains authoritative for parsing and validation.
+This operator reference contains settings exposed by deployment manifests or
+the supported environment template. Required and default values are conservative
+static inferences; the listed source remains authoritative for validation.
 
 ## Curated production contract
 
@@ -114,9 +124,24 @@ over a scanner-inferred default.
 
 ${criticalBody}
 
-## Complete discovered inventory
+## Supported production inventory
 
-${variables.map(variable => `## \`${variable.name}\`\n\n- Type: ${variable.type}\n- Required: ${variable.required ? 'yes' : variable.requiredWhen}\n- Allowed values: ${variable.allowedValues.length ? variable.allowedValues.map(value => `\`${value}\``).join(', ') : 'not statically complete'}\n- Secret: ${variable.secret ? 'yes' : 'no'}\n- Runtime roles: ${variable.runtimeRoles.join(', ')}\n- Deployment support: ${variable.deploymentSupport.join(', ')}\n- Apply behavior: ${variable.restartRequired ? 'restart required' : 'runtime reload supported'}\n- Deprecated: ${variable.deprecated ? `yes; use \`${variable.replacement}\`` : 'no'}\n- Extraction confidence: ${variable.confidence}\n- Static default: ${variable.secret ? 'not displayed' : variable.defaults.length ? variable.defaults.map(value => `\`${value}\``).join(', ') : 'none discovered'}\n- Sources: ${variable.sources.map(source => `\`${source}\``).join(', ')}\n`).join('\n')}
+${productionVariables.map(renderVariable).join('\n')}
+`;
+const internalConfigurationBody = `${frontmatter({
+  title: 'Internal and tooling configuration inventory',
+  description: 'Discovered build, test, documentation, and implementation variables that are not supported deployment configuration.',
+  area: 'configuration',
+  evidence: ['src/', 'scripts/', 'tests/'],
+})}
+
+# Internal and tooling configuration inventory
+
+These names were discovered in source, build, test, or documentation tooling
+but are not exposed by the supported deployment manifests or environment
+template. They are inventory, not a normal production configuration contract.
+
+${internalVariables.map(renderVariable).join('\n')}
 `;
 
 const routes = inspectApi();
@@ -223,6 +248,7 @@ mkdirSync(resolve(root, 'api'), { recursive: true });
 mkdirSync(resolve(root, 'configuration'), { recursive: true });
 writeFileSync(resolve(root, 'permissions.md'), permissionBody);
 writeFileSync(resolve(root, 'configuration/README.md'), configurationBody);
+writeFileSync(resolve(root, 'configuration/internal.md'), internalConfigurationBody);
 writeFileSync(resolve(root, 'api/README.md'), apiBody);
 writeFileSync(resolve(root, 'limits.md'), limitsBody);
 writeFileSync(resolve(root, 'features.md'), featureBody);

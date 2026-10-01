@@ -1,5 +1,6 @@
 ---
 title: Slack permissions and scopes
+order: 3
 description: Understand the exact required and optional Slack bot scopes.
 type: reference
 product_area: chatops

@@ -1,5 +1,6 @@
 ---
 title: Microsoft Teams permissions
+order: 3
 description: Review base and optional Teams resource-specific consent permissions.
 type: reference
 product_area: chatops

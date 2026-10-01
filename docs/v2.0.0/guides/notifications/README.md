@@ -18,3 +18,13 @@ to distinguish routing, queue, provider, and destination failures.
 
 Provider-specific requirements and limits remain in the
 [notification provider reference](../../reference/notifications/).
+
+## Provider setup
+
+- [SMTP](./configure-smtp)
+- [Resend](./configure-resend)
+- [SendGrid](./configure-sendgrid)
+- [Amazon SES](./configure-amazon-ses)
+- [Amazon SNS SMS](./configure-amazon-sns)
+- [Web Push](./configure-web-push)
+- [Twilio voice, SMS, and WhatsApp](../../integrations/communication/voice)

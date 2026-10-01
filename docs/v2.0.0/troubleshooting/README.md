@@ -17,5 +17,16 @@ Troubleshooting is organized by symptom rather than component internals. Each
 page must identify observable signals, safe diagnostic steps, likely causes,
 recovery actions, and escalation evidence.
 
-Areas include installation, login, notifications, incidents, integrations,
-status pages, workers, scheduler, database, Kubernetes, and upgrades.
+Choose the symptom area:
+
+- [Installation](./installation/)
+- [Login and access](./login/)
+- [Notification delivery](./notifications/)
+- [Incident processing](./incidents/)
+- [Inbound integrations](./integrations/)
+- [Status pages](./status-pages/)
+- [Workers](./workers/)
+- [Scheduler](./scheduler/)
+- [Database and PgBouncer](./database/)
+- [Kubernetes](./kubernetes/)
+- [Upgrades and migrations](./upgrades/)

@@ -1,5 +1,6 @@
 ---
 title: Send and verify a Microsoft Teams test
+order: 5
 description: Test an exact Teams destination and diagnose installation, channel, Bot transport, or delivery failures.
 type: how-to
 product_area: chatops

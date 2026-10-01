@@ -1,5 +1,6 @@
 ---
 title: Configure Microsoft Teams war rooms
+order: 9
 description: Enable consented channel creation, lifecycle management, and membership sync.
 type: how-to
 product_area: chatops

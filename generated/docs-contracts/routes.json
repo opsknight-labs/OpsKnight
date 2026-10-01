@@ -26,7 +26,9 @@
         "concepts": [
           "concepts/analytics.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/analytics/use-analytics.md"
+        ],
         "reference": [
           "reference/metrics.md"
         ],
@@ -57,10 +59,10 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "integrations/README.md"
+        "concepts": [],
+        "guides": [
+          "guides/administration/review-event-logs.md"
         ],
-        "guides": [],
         "reference": [
           "reference/api/events.md"
         ],
@@ -272,6 +274,7 @@
           "concepts/postmortem-workflow.md"
         ],
         "guides": [
+          "guides/postmortems/create-review-publish.md",
           "guides/incidents/action-items.md"
         ],
         "reference": [],
@@ -291,6 +294,7 @@
           "concepts/postmortem-workflow.md"
         ],
         "guides": [
+          "guides/postmortems/create-review-publish.md",
           "guides/incidents/action-items.md"
         ],
         "reference": [],
@@ -310,6 +314,7 @@
           "concepts/postmortem-workflow.md"
         ],
         "guides": [
+          "guides/postmortems/create-review-publish.md",
           "guides/incidents/action-items.md"
         ],
         "reference": [],
@@ -435,7 +440,9 @@
           "concepts/services.md",
           "integrations/README.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/services/manage-service.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
@@ -470,7 +477,9 @@
           "concepts/services.md",
           "concepts/teams.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/services/manage-service.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
@@ -487,7 +496,9 @@
           "concepts/services.md",
           "concepts/teams.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/services/manage-service.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
@@ -540,7 +551,9 @@
           "concepts/services.md",
           "concepts/teams.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/services/manage-service.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
@@ -824,6 +837,7 @@
           "concepts/compliance.md"
         ],
         "guides": [
+          "guides/compliance/evaluate-and-export.md",
           "operate/security/hardening.md"
         ],
         "reference": [],
@@ -842,6 +856,7 @@
           "concepts/authentication.md"
         ],
         "guides": [
+          "guides/administration/manage-sessions.md",
           "operate/security/hardening.md"
         ],
         "reference": [],
@@ -1017,7 +1032,9 @@
           "concepts/teams.md",
           "concepts/services.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/teams/manage-team.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
@@ -1034,7 +1051,9 @@
           "concepts/teams.md",
           "concepts/services.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/teams/manage-team.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },

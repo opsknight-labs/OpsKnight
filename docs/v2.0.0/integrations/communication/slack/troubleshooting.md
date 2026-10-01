@@ -1,5 +1,6 @@
 ---
 title: Troubleshoot Slack
+order: 13
 description: Diagnose OAuth, delivery, interactive-action, identity, and war-room failures.
 type: troubleshooting
 product_area: chatops

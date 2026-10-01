@@ -1,5 +1,6 @@
 ---
 title: Connect Microsoft Teams
+order: 2
 description: Register the Entra and Azure Bot resources and install the generated Teams package.
 type: how-to
 product_area: chatops

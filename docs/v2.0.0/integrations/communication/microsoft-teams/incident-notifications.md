@@ -1,5 +1,6 @@
 ---
 title: Understand Microsoft Teams incident cards
+order: 6
 description: Learn the content, lifecycle, delivery, update, and source-of-truth behavior of normal OpsKnight Adaptive Cards.
 type: concept
 product_area: chatops

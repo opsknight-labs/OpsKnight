@@ -1,5 +1,6 @@
 ---
 title: Use Microsoft Teams incident actions
+order: 7
 description: Act on OpsKnight incidents from verified Adaptive Cards.
 type: how-to
 product_area: chatops

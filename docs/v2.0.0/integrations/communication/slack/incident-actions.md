@@ -1,5 +1,6 @@
 ---
 title: Use Slack incident actions
+order: 7
 description: Acknowledge, resolve, annotate, and inspect incidents from Slack.
 type: concept
 product_area: chatops

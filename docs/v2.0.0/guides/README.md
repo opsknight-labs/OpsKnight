@@ -17,5 +17,12 @@ Every guide states prerequisites, steps, expected results, verification,
 common mistakes, and related concepts. Published guides must be backed by a
 test, current source/configuration, or a certified runtime journey.
 
-Browse by task area: incidents, on-call, escalation, notifications, ChatOps,
-status pages, identity, Jira, [reports and dashboards](./reports/), and administration.
+Browse by task area:
+
+- [Incidents](./incidents/), [on-call](./on-call/), and [escalation](./escalation/)
+- [Services](./services/) and [teams](./teams/)
+- [Notifications](./notifications/), [ChatOps](./chatops/), and [status pages](./status-pages/)
+- [Identity](./identity/), [administration](./administration/), and [privacy](./privacy/)
+- [Postmortems](./postmortems/) and [Compliance Control Center](./compliance/)
+- [Analytics](./analytics/), [reports and dashboards](./reports/), and [mobile/PWA](./mobile/)
+- [Jira](./jira/) and provider-specific [integrations](../integrations/)

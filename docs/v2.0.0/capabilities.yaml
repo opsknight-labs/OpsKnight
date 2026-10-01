@@ -17,9 +17,9 @@ capabilities:
     title: Organize services and ownership teams
     product_area: services
     status: documented
-    required: { concepts: true, guides: false, reference: true, tests: true, evidence: false }
+    required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
     concepts: [concepts/services.md, concepts/teams.md]
-    guides: []
+    guides: [guides/services/README.md, guides/services/manage-service.md, guides/teams/README.md, guides/teams/manage-team.md]
     reference: [reference/api/README.md]
     tests: [tests/lib/authorization-filters.test.ts]
     sources: [src/app/(app)/services, src/app/(app)/teams]
@@ -80,7 +80,7 @@ capabilities:
     required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
     concepts: [concepts/chatops.md]
     guides: [guides/chatops/configure-global-policy.md, guides/chatops/create-war-room.md]
-    reference: [integrations/communication/slack.md, integrations/communication/microsoft-teams.md]
+    reference: [integrations/communication/slack/README.md, integrations/communication/microsoft-teams/README.md]
     tests: [tests/architecture/war-room-provider-neutral-contract.test.ts]
     sources: [src/lib/war-room, src/lib/chatops, src/lib/slack.ts, src/lib/microsoft-teams, src/app/api/slack, src/app/api/microsoft-teams]
     evidence: []
@@ -104,7 +104,7 @@ capabilities:
     required: { concepts: false, guides: true, reference: true, tests: true, evidence: false }
     concepts: []
     guides: [guides/jira/connect-jira.md]
-    reference: [integrations/issue-tracking/jira.md]
+    reference: [integrations/issue-tracking/jira/README.md]
     tests: [tests/unit/jira-issue-creation.test.ts, tests/architecture/jira-enterprise-hardening-contract.test.ts]
     sources: [src/lib/jira-sync.ts, src/app/api/jira/webhook/route.ts]
     evidence: []
@@ -163,7 +163,7 @@ capabilities:
     status: documented
     required: { concepts: true, guides: true, reference: true, tests: true, evidence: true }
     concepts: [concepts/analytics.md]
-    guides: [guides/reports/README.md, guides/reports/create-dashboard.md, guides/reports/read-dashboard.md, guides/reports/manage-dashboard.md, guides/reports/troubleshooting.md]
+    guides: [guides/analytics/README.md, guides/analytics/use-analytics.md, guides/reports/README.md, guides/reports/create-dashboard.md, guides/reports/read-dashboard.md, guides/reports/manage-dashboard.md, guides/reports/troubleshooting.md]
     reference: [reference/api/README.md, reference/metrics.md]
     tests: [tests/unit/analytics-panels.test.ts, tests/api/reports-metrics-response.test.ts]
     sources: [src/app/(app)/analytics, src/app/(app)/reports, src/app/api/dashboards, src/components/reports, src/lib/reports]
@@ -223,7 +223,7 @@ capabilities:
     status: documented
     required: { concepts: true, guides: true, reference: true, tests: true, evidence: false }
     concepts: [operate/deploy/README.md, operate/deploy/architecture/integrated-vs-split.md, operate/deploy/architecture/runtime-roles.md, operate/deploy/architecture/database-connections.md]
-    guides: [start/quickstart.md, start/production-install.md, operate/deploy/docker-compose/prerequisites.md, operate/deploy/docker-compose/integrated.md, operate/deploy/docker-compose/split.md, operate/deploy/docker-compose/external-postgres.md, operate/deploy/docker-compose/pgbouncer.md, operate/deploy/docker-compose/reverse-proxy.md, operate/deploy/docker-compose/upgrade.md, operate/deploy/docker-compose/troubleshooting.md, operate/deploy/docker-compose/production-checklist.md, operate/deploy/kubernetes.md, operate/deploy/swarm.md, operate/deploy/helm.md, operate/deploy/kustomize.md]
+    guides: [start/quickstart.md, start/production-install.md, operate/deploy/docker-compose/prerequisites.md, operate/deploy/docker-compose/integrated.md, operate/deploy/docker-compose/split.md, operate/deploy/docker-compose/external-postgres.md, operate/deploy/docker-compose/pgbouncer.md, operate/deploy/docker-compose/reverse-proxy.md, operate/deploy/docker-compose/upgrade.md, operate/deploy/docker-compose/troubleshooting.md, operate/deploy/docker-compose/production-checklist.md, operate/deploy/kubernetes-operations.md, operate/deploy/swarm-operations.md, operate/deploy/helm-operations.md, operate/deploy/kustomize-operations.md]
     reference: [reference/configuration/README.md, reference/health.md]
     tests: [tests/lib/deployment-config-unit.test.ts]
     sources: [deploy/compose, deploy/kubernetes, deploy/swarm]

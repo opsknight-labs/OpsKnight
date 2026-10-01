@@ -1,5 +1,6 @@
 ---
 title: Link Microsoft Teams responder identities
+order: 8
 description: Map a verified Teams user to the correct OpsKnight responder for authorized and attributable incident actions.
 type: how-to
 product_area: chatops

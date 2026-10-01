@@ -1,5 +1,6 @@
 ---
 title: Slack ChatOps
+order: 1
 description: Connect Slack, route incident messages, act on incidents, and operate war rooms.
 type: concept
 product_area: chatops

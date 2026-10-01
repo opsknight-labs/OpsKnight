@@ -1,5 +1,6 @@
 ---
 title: Link Slack responder identities
+order: 9
 description: Associate a Slack user with an OpsKnight responder account.
 type: how-to
 product_area: chatops

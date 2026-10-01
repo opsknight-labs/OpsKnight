@@ -1,5 +1,6 @@
 ---
 title: Connect Slack using OAuth
+order: 2
 description: Install or reconnect the OpsKnight Slack app and verify the workspace.
 type: how-to
 product_area: chatops

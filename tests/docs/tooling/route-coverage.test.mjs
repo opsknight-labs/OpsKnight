@@ -45,3 +45,24 @@ test('high-risk configuration and mutation routes require task guides', () => {
     assert.ok(route.documentation.guides.length > 0, `${path}: must map to a task guide`);
   }
 });
+
+test('audited product routes map to purpose-built task guides', () => {
+  const expected = {
+    '/analytics': 'guides/analytics/use-analytics.md',
+    '/events': 'guides/administration/review-event-logs.md',
+    '/postmortems': 'guides/postmortems/create-review-publish.md',
+    '/services': 'guides/services/manage-service.md',
+    '/services/[id]': 'guides/services/manage-service.md',
+    '/settings/security': 'guides/administration/manage-sessions.md',
+    '/settings/security-compliance': 'guides/compliance/evaluate-and-export.md',
+    '/teams': 'guides/teams/manage-team.md',
+    '/teams/[id]': 'guides/teams/manage-team.md',
+  };
+  const routes = new Map(contract.routes.map(route => [route.route, route]));
+
+  for (const [path, guide] of Object.entries(expected)) {
+    const route = routes.get(path);
+    assert.ok(route, `${path}: missing from route contract`);
+    assert.ok(route.documentation.guides.includes(guide), `${path}: must map to ${guide}`);
+  }
+});

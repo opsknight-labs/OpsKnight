@@ -1,5 +1,6 @@
 ---
 title: Use Slack incident commands
+order: 11
 description: Run supported signed slash commands and verify their authoritative OpsKnight incident effects.
 type: how-to
 product_area: chatops

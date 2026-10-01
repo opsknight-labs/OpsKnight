@@ -1,5 +1,6 @@
 ---
 title: Understand Slack incident notifications
+order: 6
 description: Learn how OpsKnight projects incident lifecycle state to Slack destinations and how updates, identity, and delivery failures behave.
 type: concept
 product_area: chatops

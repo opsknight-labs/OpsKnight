@@ -1,5 +1,6 @@
 ---
 title: Acknowledge and resolve incidents from Slack
+order: 8
 description: Use Slack message actions safely and verify incident, escalation, timeline, and message convergence.
 type: how-to
 product_area: chatops

@@ -1,5 +1,6 @@
 ---
 title: Slack rate limits and retry behavior
+order: 12
 description: Understand Slack throttling boundaries, queued retries, convergence, and safe operator response.
 type: reference
 product_area: chatops

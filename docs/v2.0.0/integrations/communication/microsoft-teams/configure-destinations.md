@@ -1,5 +1,6 @@
 ---
 title: Configure Microsoft Teams destinations
+order: 4
 description: Map OpsKnight services to Teams channels and test Adaptive Card delivery.
 type: how-to
 product_area: chatops

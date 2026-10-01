@@ -1,5 +1,6 @@
 ---
 title: Send and verify a Slack test
+order: 5
 description: Test an exact Slack service destination and distinguish workspace, channel-access, queue, and delivery failures.
 type: how-to
 product_area: chatops
