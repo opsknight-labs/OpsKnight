@@ -584,44 +584,77 @@ export async function getSMSConfig(
  * rejected because it can subscribe devices but can never deliver to them.
  */
 export async function getPushConfig(): Promise<PushConfig> {
+  let webPushProvider: Awaited<
+    ReturnType<typeof prisma.notificationProvider.findUnique>
+  > = null;
+
   try {
-    const webPushProvider = await prisma.notificationProvider.findUnique({
+    webPushProvider = await prisma.notificationProvider.findUnique({
       where: { provider: 'web-push' },
     });
-
-    if (webPushProvider && webPushProvider.enabled && webPushProvider.config) {
-      try {
-        const config = await getDecryptedConfig('web-push', webPushProvider.config);
-        if (
-          config.vapidPublicKey &&
-          config.vapidPrivateKey &&
-          !String(config.vapidPrivateKey).startsWith('enc:')
-        ) {
-          return {
-            enabled: true,
-            provider: 'web-push',
-            vapidPublicKey: config.vapidPublicKey as string,
-            vapidPrivateKey: config.vapidPrivateKey as string,
-            vapidSubject: config.vapidSubject as string | undefined,
-            vapidKeyHistory: Array.isArray(config.vapidKeyHistory)
-              ? (config.vapidKeyHistory as Array<{ publicKey: string; privateKey: string }>)
-              : [],
-          };
-        }
-      } catch (error) {
-        logger.error('Failed to load Web Push config due to decryption failure', {
-          component: 'notification-providers',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
   } catch (error) {
+    // A database lookup failure means we cannot prove that no stored provider
+    // exists. Fail closed rather than silently activating environment credentials.
     logger.error('Failed to load Push config from database', {
       component: 'notification-providers',
       error,
     });
+    return {
+      enabled: false,
+      provider: null,
+    };
   }
 
+  if (webPushProvider) {
+    // A stored provider record is authoritative. Explicit disable, malformed
+    // configuration, or decryption failure must never fall through to env.
+    if (!webPushProvider.enabled || !webPushProvider.config) {
+      return {
+        enabled: false,
+        provider: null,
+      };
+    }
+
+    try {
+      const config = await getDecryptedConfig('web-push', webPushProvider.config);
+      if (
+        config.vapidPublicKey &&
+        config.vapidPrivateKey &&
+        !String(config.vapidPrivateKey).startsWith('enc:')
+      ) {
+        return {
+          enabled: true,
+          provider: 'web-push',
+          vapidPublicKey: config.vapidPublicKey as string,
+          vapidPrivateKey: config.vapidPrivateKey as string,
+          vapidSubject: config.vapidSubject as string | undefined,
+          vapidKeyHistory: Array.isArray(config.vapidKeyHistory)
+            ? (config.vapidKeyHistory as Array<{ publicKey: string; privateKey: string }>)
+            : [],
+        };
+      }
+
+      logger.warn('Stored Web Push provider is enabled but incomplete', {
+        component: 'notification-providers',
+      });
+      return {
+        enabled: false,
+        provider: null,
+      };
+    } catch (error) {
+      logger.error('Failed to load Web Push config due to decryption failure', {
+        component: 'notification-providers',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return {
+        enabled: false,
+        provider: null,
+      };
+    }
+  }
+
+  // Environment fallback is only valid when there is no stored web-push
+  // provider record at all.
   const envPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
   const envPrivateKey = process.env.VAPID_PRIVATE_KEY?.trim();
   if (envPublicKey && envPrivateKey) {
