@@ -22,8 +22,10 @@ test.describe.serial('incident lifecycle documentation journey', () => {
     await page.getByText('Timeline', { exact: true }).first().click();
     const timelineEvent = page.getByText(/Incident triggered by production monitoring|acknowledged/i).first();
     await expect(timelineEvent).toBeVisible();
-    await timelineEvent.scrollIntoViewIfNeeded();
-    await captureEvidence(page, testInfo, 'incidents', 'timeline');
+    const timelinePanel = page
+      .getByRole('tab', { name: 'Timeline' })
+      .locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]');
+    await captureEvidence(page, testInfo, 'incidents', 'timeline', timelinePanel);
 
     await page.goto('/incidents');
     await expect(page.getByText(DOCS_FIXTURES.incident).first()).toBeVisible();

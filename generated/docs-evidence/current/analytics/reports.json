@@ -1,10 +1,10 @@
 {
   "release": "current",
-  "sourceRevision": "84b210b3faa220d136f55336434f8de06fdb8f61",
+  "sourceRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed",
   "runtime": {
-    "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:61cb9c50fb53b591feb880006a8c4d3583d21fc64a91aad0c27265f99baa7450",
-    "digest": "localhost:15000/opsknight-docs-v2@sha256:61cb9c50fb53b591feb880006a8c4d3583d21fc64a91aad0c27265f99baa7450",
-    "sourceRevision": "84b210b3faa220d136f55336434f8de06fdb8f61"
+    "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:40c7adb7b32a8138af402f3f4a2439f427a121dfb747003051f307bb390f1c98",
+    "digest": "localhost:15000/opsknight-docs-v2@sha256:40c7adb7b32a8138af402f3f4a2439f427a121dfb747003051f307bb390f1c98",
+    "sourceRevision": "7caf5d9f6573d7097063520f62d66cd6698c84ed"
   },
   "route": "/reports",
   "journey": "analytics",
@@ -13,5 +13,5 @@
     "width": 1440,
     "height": 900
   },
-  "capturedAt": "2026-10-01T10:07:34.847Z"
+  "capturedAt": "2026-10-01T14:19:33.496Z"
 }
