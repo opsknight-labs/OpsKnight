@@ -21,6 +21,7 @@ export type PushState =
   | 'REGISTERING'
   | 'REGISTERED'
   | 'REPAIR_REQUIRED'
+  | 'SERVER_UNAVAILABLE'
   | 'ERROR';
 
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -322,10 +323,18 @@ export default function PushNotificationToggle() {
       const data = (await response.json()) as {
         deviceRegistered?: boolean;
         accountEnabled?: boolean;
+        providerConfigured?: boolean;
       };
       if (!isCurrent()) return;
 
       setPreparing(false);
+      if (data.providerConfigured === false) {
+        setPushState('SERVER_UNAVAILABLE');
+        setError(
+          'Server Push configuration is unavailable. Your device subscription is still saved.'
+        );
+        return;
+      }
       setPushState(data.deviceRegistered && data.accountEnabled ? 'REGISTERED' : 'REPAIR_REQUIRED');
       setError('');
     } catch (stateError) {
@@ -615,6 +624,8 @@ export default function PushNotificationToggle() {
         return 'On';
       case 'REPAIR_REQUIRED':
         return 'Needs repair';
+      case 'SERVER_UNAVAILABLE':
+        return 'Server unavailable';
       case 'ERROR':
         return 'Needs attention';
     }
@@ -675,7 +686,8 @@ export default function PushNotificationToggle() {
             onClick={() =>
               void (pushState === 'REGISTERED'
                 ? unsubscribe()
-                : pushState === 'ERROR' && !preflightReady
+                : (pushState === 'ERROR' && !preflightReady) ||
+                    pushState === 'SERVER_UNAVAILABLE'
                   ? checkSupportAndState()
                   : subscribeOrRepair())
             }
@@ -691,7 +703,8 @@ export default function PushNotificationToggle() {
                   ? 'Disable'
                   : pushState === 'REPAIR_REQUIRED'
                     ? 'Repair'
-                    : pushState === 'ERROR' && !preflightReady
+                    : (pushState === 'ERROR' && !preflightReady) ||
+                        pushState === 'SERVER_UNAVAILABLE'
                       ? 'Retry'
                       : 'Enable'}
           </Button>
