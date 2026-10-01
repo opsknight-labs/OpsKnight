@@ -40,6 +40,9 @@ vi.mock('@/lib/logger', () => ({
 describe('Fail-Closed Secret Decryption', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    delete process.env.VAPID_PRIVATE_KEY;
+    delete process.env.VAPID_SUBJECT;
   });
 
   describe('decryptProviderConfig Direct Failure Modes', () => {
@@ -195,6 +198,86 @@ describe('Fail-Closed Secret Decryption', () => {
       expect(pushConfig.enabled).toBe(false);
       expect(pushConfig.provider).toBeNull();
       expect(pushConfig.vapidPrivateKey).toBeUndefined();
+    });
+
+    it('keeps a stored disabled Web Push provider authoritative over valid environment credentials', async () => {
+      vi.mocked(prisma.notificationProvider.findUnique).mockResolvedValue({
+        id: 'prov-push-disabled',
+        provider: 'web-push',
+        enabled: false,
+        config: {
+          vapidPublicKey: 'stored-public',
+          vapidPrivateKey: 'stored-private',
+        },
+      } as never);
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = 'env-public-key';
+      process.env.VAPID_PRIVATE_KEY = 'env-private-key';
+
+      const pushConfig = await getPushConfig();
+
+      expect(pushConfig.enabled).toBe(false);
+      expect(pushConfig.provider).toBeNull();
+      expect(pushConfig.vapidPublicKey).toBeUndefined();
+    });
+
+    it('fails closed on stored Web Push decryption failure even when valid env credentials exist', async () => {
+      const { getEncryptionKey, decrypt } = await import('@/lib/encryption');
+      vi.mocked(getEncryptionKey).mockResolvedValue(
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+      );
+      vi.mocked(decrypt).mockRejectedValue(new Error('Corrupted private key'));
+
+      vi.mocked(prisma.notificationProvider.findUnique).mockResolvedValue({
+        id: 'prov-push-corrupt',
+        provider: 'web-push',
+        enabled: true,
+        config: {
+          vapidPublicKey: 'stored-public',
+          vapidPrivateKey: 'enc:corrupted_private_key',
+        },
+      } as never);
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = 'env-public-key';
+      process.env.VAPID_PRIVATE_KEY = 'env-private-key';
+
+      const pushConfig = await getPushConfig();
+
+      expect(pushConfig.enabled).toBe(false);
+      expect(pushConfig.provider).toBeNull();
+      expect(pushConfig.vapidPrivateKey).toBeUndefined();
+    });
+
+    it('uses a complete environment VAPID pair when no database provider is configured', async () => {
+      vi.mocked(prisma.notificationProvider.findUnique).mockResolvedValue(null);
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = 'env-public-key';
+      process.env.VAPID_PRIVATE_KEY = 'env-private-key';
+      process.env.VAPID_SUBJECT = 'mailto:env@example.com';
+
+      const pushConfig = await getPushConfig();
+
+      expect(pushConfig).toMatchObject({
+        enabled: true,
+        provider: 'web-push',
+        vapidPublicKey: 'env-public-key',
+        vapidPrivateKey: 'env-private-key',
+        vapidSubject: 'mailto:env@example.com',
+      });
+    });
+
+    it('fails closed for an incomplete environment VAPID configuration', async () => {
+      vi.mocked(prisma.notificationProvider.findUnique).mockResolvedValue(null);
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = 'public-without-private';
+
+      const pushConfig = await getPushConfig();
+
+      expect(pushConfig.enabled).toBe(false);
+      expect(pushConfig.provider).toBeNull();
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Ignoring incomplete environment Web Push configuration',
+        expect.objectContaining({
+          hasPublicKey: true,
+          hasPrivateKey: false,
+        })
+      );
     });
   });
 

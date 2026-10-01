@@ -180,22 +180,6 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
         }
       }
     }
-    if (
-      vapidDetailsList.length === 0 &&
-      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY &&
-      process.env.VAPID_PRIVATE_KEY
-    ) {
-      const publicKey = normalizeVapidKey(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
-      const privateKey = normalizeVapidKey(process.env.VAPID_PRIVATE_KEY);
-      if (publicKey && privateKey) {
-        vapidDetailsList.push({
-          subject: process.env.VAPID_SUBJECT || 'mailto:admin@localhost',
-          publicKey,
-          privateKey,
-        });
-      }
-    }
-
     if (pushConfig.provider !== 'web-push') {
       return {
         success: false,
