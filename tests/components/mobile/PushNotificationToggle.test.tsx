@@ -503,7 +503,7 @@ describe('PushNotificationToggle', () => {
     });
   });
 
-  it('subscribes directly from the Enable gesture on desktop without a separate permission request', async () => {
+  it('requests notification permission from the Enable gesture before desktop subscription', async () => {
     Object.defineProperty(window, 'Notification', {
       value: {
         permission: 'default',
@@ -553,13 +553,13 @@ describe('PushNotificationToggle', () => {
     await waitFor(() => expect(enableButton).not.toBeDisabled());
     fireEvent.click(enableButton);
 
+    expect(window.Notification.requestPermission).toHaveBeenCalledTimes(1);
     await waitFor(() => {
       expect(registration.pushManager.subscribe).toHaveBeenCalled();
-      expect(window.Notification.requestPermission).not.toHaveBeenCalled();
     });
   });
 
-  it('invokes iOS subscribe directly from the Enable gesture with no post-click setup fetch', async () => {
+  it('requests native iOS permission from Enable before subscribing with no setup fetch', async () => {
     vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
       'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15'
     );
@@ -635,10 +635,11 @@ describe('PushNotificationToggle', () => {
     const fetchCallsBeforeClick = mockFetch.mock.calls.length;
     fireEvent.click(enableButton);
 
-    // The subscribe call itself must happen synchronously inside the user click.
-    expect(subscribe).toHaveBeenCalledTimes(1);
-    expect(requestPermission).not.toHaveBeenCalled();
+    // The native permission request must be invoked synchronously from the
+    // user gesture. SW/VAPID setup was completed before the button enabled.
+    expect(requestPermission).toHaveBeenCalledTimes(1);
     expect(mockFetch.mock.calls.length).toBe(fetchCallsBeforeClick);
+    await waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1));
 
     resolveSubscription({
       endpoint: 'https://web.push.apple.com/Q123',
@@ -654,7 +655,7 @@ describe('PushNotificationToggle', () => {
     });
   });
 
-  it('uses the direct subscribe gesture flow on macOS Safari', async () => {
+  it('requests Safari notification permission before macOS Push subscription', async () => {
     vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15'
     );
@@ -720,9 +721,9 @@ describe('PushNotificationToggle', () => {
     const fetchCallsBeforeClick = mockFetch.mock.calls.length;
     fireEvent.click(enableButton);
 
-    expect(subscribe).toHaveBeenCalledTimes(1);
-    expect(requestPermission).not.toHaveBeenCalled();
+    expect(requestPermission).toHaveBeenCalledTimes(1);
     expect(mockFetch.mock.calls.length).toBe(fetchCallsBeforeClick);
+    await waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1));
 
     resolveSubscription({ endpoint: 'https://web.push.apple.com/Q456' });
 
@@ -1083,7 +1084,10 @@ describe('PushNotificationToggle', () => {
 
   it('handles permission denied cleanly without hanging in working state', async () => {
     let permission: NotificationPermission = 'default';
-    const requestPermission = vi.fn().mockResolvedValue('granted');
+    const requestPermission = vi.fn().mockImplementation(async () => {
+      permission = 'denied';
+      return 'denied' as NotificationPermission;
+    });
     Object.defineProperty(window, 'Notification', {
       value: {
         get permission() {
@@ -1099,10 +1103,7 @@ describe('PushNotificationToggle', () => {
       installing: null,
       pushManager: {
         getSubscription: vi.fn().mockResolvedValue(null),
-        subscribe: vi.fn().mockImplementation(async () => {
-          permission = 'denied';
-          throw new DOMException('Permission denied', 'NotAllowedError');
-        }),
+        subscribe: vi.fn(),
       },
     };
     Object.defineProperty(navigator, 'serviceWorker', {
@@ -1137,7 +1138,8 @@ describe('PushNotificationToggle', () => {
         screen.getByText(/Notifications are blocked in browser or device settings/i)
       ).toBeInTheDocument();
     });
-    expect(requestPermission).not.toHaveBeenCalled();
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    expect(registration.pushManager.subscribe).not.toHaveBeenCalled();
   });
 
   it('recovers cleanly when push registration hangs indefinitely', async () => {
