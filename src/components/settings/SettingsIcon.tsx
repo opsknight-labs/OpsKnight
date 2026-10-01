@@ -7,6 +7,7 @@ type IconProps = {
     | 'security'
     | 'api-keys'
     | 'system'
+    | 'system-logs'
     | 'status-page'
     | 'help'
     | 'notifications'
@@ -158,7 +159,28 @@ export default function SettingsIcon({ name, className = '' }: IconProps) {
         />
       </svg>
     ),
+    'system-logs': (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className={className}>
+        <polyline
+          points="4 17 10 11 4 5"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <line
+          x1="12"
+          y1="19"
+          x2="20"
+          y2="19"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    ),
   };
 
+  // eslint-disable-next-line security/detect-object-injection
   return icons[name] || null;
 }

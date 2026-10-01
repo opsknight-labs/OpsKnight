@@ -74,6 +74,7 @@ function standaloneMode() {
 
 type PushStage =
   | 'INIT'
+  | 'REQUEST_PERMISSION'
   | 'SERVICE_WORKER_READY'
   | 'FETCH_VAPID_KEY'
   | 'READ_SUBSCRIPTION'
@@ -88,14 +89,16 @@ type PreparedPush = {
   applicationServerKey: Uint8Array | null;
 };
 
-type ServiceWorkerPreparationStage = 'SW_LOOKUP' | 'SW_REGISTER' | 'SW_READY';
+type ServiceWorkerPreparationStage = 'SW_LOOKUP' | 'SW_ASSET' | 'SW_REGISTER' | 'SW_READY';
 
 function serviceWorkerFailureAction(stage: ServiceWorkerPreparationStage) {
   switch (stage) {
     case 'SW_LOOKUP':
       return 'Service worker registration could not be checked. Retry.';
+    case 'SW_ASSET':
+      return 'Service worker file could not be validated. Retry.';
     case 'SW_REGISTER':
-      return 'Service worker registration failed. Retry.';
+      return 'Browser rejected service worker registration. Check /sw.js, HTTPS, and site permissions.';
     case 'SW_READY':
       return 'Service worker did not become ready. Retry.';
   }
@@ -115,6 +118,100 @@ function hasOpsKnightServiceWorker(registration: ServiceWorkerRegistration | und
   return [registration.active, registration.waiting, registration.installing].some(
     worker => serviceWorkerPath(worker) === '/sw.js'
   );
+}
+
+function serviceWorkerAssetError(action: string, diagnostics: Record<string, unknown>): never {
+  logger.warn('push.service_worker_asset_preflight_failed', {
+    component: 'PushNotificationToggle',
+    ...diagnostics,
+  });
+  throw new ClientAppError({
+    code: 'PUSH_SW_REGISTRATION_FAILED',
+    error: 'Push notifications could not validate the service worker file.',
+    action,
+    retryable: true,
+  });
+}
+
+async function preflightServiceWorkerAsset() {
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      '/sw.js',
+      {
+        cache: 'no-store',
+        redirect: 'follow',
+        headers: { 'Cache-Control': 'no-cache' },
+      },
+      REQUEST_TIMEOUT_MS
+    );
+  } catch (error) {
+    logger.warn('push.service_worker_asset_preflight_failed', {
+      component: 'PushNotificationToggle',
+      reason: 'FETCH_FAILED',
+      browserException: error instanceof Error ? error.name : typeof error,
+    });
+    throw new ClientAppError({
+      code: 'PUSH_SW_REGISTRATION_FAILED',
+      error: 'Push notifications could not reach the service worker file.',
+      action: 'Service worker file could not be reached. Check the deployment and retry.',
+      retryable: true,
+    });
+  }
+
+  const expectedUrl = new URL('/sw.js', window.location.origin);
+  const responseUrl = new URL(response.url || expectedUrl.toString(), window.location.origin);
+  const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+
+  if (response.redirected) {
+    serviceWorkerAssetError(
+      responseUrl.origin !== window.location.origin
+        ? 'Service worker redirected to another origin. Check reverse proxy or host routing.'
+        : 'Service worker endpoint redirected. Serve /sw.js directly without redirects.',
+      {
+        reason: 'REDIRECTED',
+        status: response.status,
+        responseOrigin: responseUrl.origin,
+      }
+    );
+  }
+
+  if (responseUrl.origin !== window.location.origin || responseUrl.pathname !== '/sw.js') {
+    serviceWorkerAssetError(
+      'Service worker resolved to the wrong URL. Check reverse proxy or host routing.',
+      {
+        reason: 'WRONG_URL',
+        status: response.status,
+        responseOrigin: responseUrl.origin,
+        responsePath: responseUrl.pathname,
+      }
+    );
+  }
+
+  if (response.status !== 200) {
+    serviceWorkerAssetError(
+      response.status === 404
+        ? 'Service worker file is missing from this deployment.'
+        : `Service worker endpoint returned HTTP ${response.status}. Check the deployment.`,
+      {
+        reason: response.status === 404 ? 'NOT_FOUND' : 'HTTP_STATUS',
+        status: response.status,
+      }
+    );
+  }
+
+  if (!/(?:javascript|ecmascript)/i.test(contentType)) {
+    serviceWorkerAssetError(
+      contentType.includes('text/html')
+        ? 'Service worker returned HTML instead of JavaScript. Check reverse proxy or host routing.'
+        : 'Service worker returned an invalid content type. Serve /sw.js as JavaScript.',
+      {
+        reason: contentType.includes('text/html') ? 'HTML_RESPONSE' : 'INVALID_MIME',
+        status: response.status,
+        contentType: contentType || 'missing',
+      }
+    );
+  }
 }
 
 export default function PushNotificationToggle() {
@@ -161,6 +258,9 @@ export default function PushNotificationToggle() {
       // continue the normal lifecycle. In particular, a waiting update should
       // not cause Push preflight to re-register /sw.js on iOS.
       if (!hasOpsKnightServiceWorker(registration)) {
+        stage = 'SW_ASSET';
+        await preflightServiceWorkerAsset();
+
         stage = 'SW_REGISTER';
         registration = await promiseWithTimeout(
           navigator.serviceWorker.register('/sw.js', { scope: '/' }),
@@ -431,6 +531,27 @@ export default function PushNotificationToggle() {
     setPushState('REGISTERING');
     let stage: PushStage = 'INIT';
     try {
+      let permission = Notification.permission;
+      if (permission === 'default') {
+        // Invoke the native permission request synchronously from the explicit
+        // Enable gesture. This is the reliable iOS Home Screen PWA ceremony:
+        // all SW/VAPID preparation is already complete, so no network or
+        // service-worker work sits between the user tap and this request.
+        stage = 'REQUEST_PERMISSION';
+        permission = await Notification.requestPermission();
+      }
+
+      if (permission === 'denied') {
+        setPushState('PERMISSION_DENIED');
+        setError('Notifications are blocked in browser or device settings.');
+        return;
+      }
+      if (permission !== 'granted') {
+        setPushState('PERMISSION_REQUIRED');
+        setError('Notification permission was not granted.');
+        return;
+      }
+
       let subscription = prepared.subscription;
 
       if (!subscription) {
@@ -448,9 +569,10 @@ export default function PushNotificationToggle() {
           applicationServerKey: prepared.applicationServerKey as unknown as BufferSource,
         };
 
-        // Keep one standards-based ceremony across browsers. All asynchronous
-        // preparation is complete before the button is enabled, so a new
-        // subscription is always initiated directly from the user gesture.
+        // All asynchronous SW/VAPID preparation is complete before Enable is
+        // available. With permission already granted, subscribe remains a
+        // direct gesture-path call; after a native permission prompt, no
+        // additional setup work runs before subscription creation.
         stage = 'CREATE_SUBSCRIPTION';
         const subscriptionPromise = prepared.registration.pushManager.subscribe(subscribeOptions);
         subscription = await promiseWithTimeout(
