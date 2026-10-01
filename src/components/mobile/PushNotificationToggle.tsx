@@ -270,11 +270,21 @@ export default function PushNotificationToggle() {
       }
 
       stage = 'SW_READY';
-      const readyRegistration = await promiseWithTimeout(
-        navigator.serviceWorker.ready,
-        SERVICE_WORKER_READY_TIMEOUT_MS,
-        'The service worker did not become ready.'
-      );
+      // In iOS WebKit / Safari, navigator.serviceWorker.ready never resolves
+      // when the document is not controlled by the service worker, even when an
+      // active worker with PushManager is present. Reusing the active registration
+      // directly avoids hanging indefinitely, even when an update is waiting
+      // (without activating or disturbing the waiting update).
+      let readyRegistration: ServiceWorkerRegistration | null = null;
+      if (detectPlatform() === 'ios' && registration?.active && registration.pushManager) {
+        readyRegistration = registration;
+      } else {
+        readyRegistration = await promiseWithTimeout(
+          navigator.serviceWorker.ready,
+          SERVICE_WORKER_READY_TIMEOUT_MS,
+          'The service worker did not become ready.'
+        );
+      }
 
       if (!readyRegistration?.pushManager) {
         throw new Error('Ready service worker registration does not expose PushManager.');
@@ -823,9 +833,7 @@ export default function PushNotificationToggle() {
         )
       }
       title="Push notifications"
-      status={
-        preparing && pushState !== 'REGISTERED' ? 'Preparing…' : pushStatusLabel(pushState)
-      }
+      status={preparing && pushState !== 'REGISTERED' ? 'Preparing…' : pushStatusLabel(pushState)}
       action={
         // Install-required/blocked are already communicated by the status
         // line above; the action slot only needs a control when there is
@@ -850,15 +858,12 @@ export default function PushNotificationToggle() {
             variant={pushState === 'REGISTERED' ? 'outline' : 'default'}
             className="min-h-11 gap-1.5"
             disabled={
-              loading ||
-              pushState === 'REGISTERING' ||
-              (pushState !== 'REGISTERED' && preparing)
+              loading || pushState === 'REGISTERING' || (pushState !== 'REGISTERED' && preparing)
             }
             onClick={() =>
               void (pushState === 'REGISTERED'
                 ? unsubscribe()
-                : (pushState === 'ERROR' && !preflightReady) ||
-                    pushState === 'SERVER_UNAVAILABLE'
+                : (pushState === 'ERROR' && !preflightReady) || pushState === 'SERVER_UNAVAILABLE'
                   ? checkSupportAndState()
                   : subscribeOrRepair())
             }
