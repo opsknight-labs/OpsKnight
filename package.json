@@ -80,6 +80,7 @@
     "docs:links": "node scripts/check-docs-links.cjs",
     "docs:capabilities": "node scripts/check-docs-capabilities.cjs",
     "docs:certify": "node scripts/docs/certify.mjs",
+    "docs:certify:release": "node scripts/docs/certify.mjs --release",
     "docs:certify:external": "node scripts/docs/certify.mjs --external-runtime",
     "docs:certify:static": "node scripts/docs/certify.mjs --static",
     "docs:crawl-site": "node scripts/docs/crawl-rendered-site.mjs",

@@ -66,6 +66,9 @@ const runtimeInspection = runtimeImage ? JSON.parse(execFileSync(
 ))[0] : undefined;
 const documentationRevision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const runtimeSourceRevision = runtimeInspection?.Config?.Labels?.['org.opencontainers.image.revision'];
+if (fullRuntime && !/^[0-9a-f]{40}$/.test(runtimeSourceRevision ?? '')) {
+  throw new Error('Runtime image OCI revision must be a full 40-character Git SHA.');
+}
 
 const report = {
   schemaVersion: 2,

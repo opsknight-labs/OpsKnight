@@ -75,17 +75,17 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "integrations/README.md"
+        "concepts": [],
+        "guides": [
+          "guides/integrations/send-test-event.md"
         ],
-        "guides": [],
         "reference": [
           "reference/api/events.md"
         ],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/help",
@@ -577,7 +577,7 @@
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/custom-fields",
@@ -604,12 +604,15 @@
         "concepts": [
           "concepts/incident-sla.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/incidents/configure-incident-sla.md",
+          "guides/incidents/migrate-sla-scheduler.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/integrations/chatops",
@@ -618,15 +621,17 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/chatops.md",
-          "guides/chatops/create-war-room.md"
+          "guides/chatops/create-war-room.md",
+          "concepts/chatops.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/chatops/configure-global-policy.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/integrations/jira",
@@ -644,7 +649,7 @@
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/integrations/microsoft-teams",
@@ -662,7 +667,7 @@
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/integrations",
@@ -696,7 +701,7 @@
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/notifications/history",
@@ -766,7 +771,7 @@
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/privacy-requests",
@@ -775,14 +780,21 @@
       "classification": "ADMIN_FEATURE",
       "documentation": {
         "concepts": [
+          "guides/privacy/README.md",
           "concepts/privacy.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/privacy/manage-request.md",
+          "guides/privacy/export-data.md",
+          "guides/privacy/process-erasure.md"
+        ],
         "reference": [],
-        "troubleshooting": []
+        "troubleshooting": [
+          "guides/privacy/retention-and-troubleshooting.md"
+        ]
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/profile",
@@ -800,7 +812,7 @@
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/security-compliance",
@@ -818,7 +830,7 @@
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/security",
@@ -836,7 +848,7 @@
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/service-objectives",
@@ -870,7 +882,7 @@
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/status-pages/[pageId]",
@@ -878,10 +890,10 @@
       "kind": "ui",
       "classification": "ADMIN_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/status-pages.md"
-        ],
+        "concepts": [],
         "guides": [
+          "guides/status-pages/create-and-configure.md",
+          "guides/status-pages/subscribers-and-api-access.md",
           "guides/status-pages/publish-update.md"
         ],
         "reference": [],
@@ -900,6 +912,8 @@
           "concepts/status-pages.md"
         ],
         "guides": [
+          "guides/status-pages/create-and-configure.md",
+          "guides/status-pages/subscribers-and-api-access.md",
           "guides/status-pages/publish-update.md"
         ],
         "reference": [],
@@ -924,7 +938,7 @@
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/system",
@@ -942,7 +956,7 @@
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/settings/system/performance",
@@ -959,7 +973,7 @@
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/shortcuts",
@@ -1073,12 +1087,14 @@
           "concepts/mobile.md",
           "concepts/analytics.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/offline-and-updates.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/help",
@@ -1089,12 +1105,15 @@
         "concepts": [
           "concepts/mobile.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/install-and-notifications.md",
+          "guides/mobile/offline-and-updates.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/incidents/[id]",
@@ -1103,15 +1122,17 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/incidents.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/respond-to-incidents.md",
+          "guides/mobile/offline-and-updates.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/incidents/create",
@@ -1119,17 +1140,17 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
+          "guides/mobile/respond-to-incidents.md",
+          "guides/mobile/offline-and-updates.md",
           "guides/incidents/create.md"
         ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/incidents",
@@ -1138,15 +1159,17 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/incidents.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/respond-to-incidents.md",
+          "guides/mobile/offline-and-updates.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/more",
@@ -1157,12 +1180,15 @@
         "concepts": [
           "concepts/mobile.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/install-and-notifications.md",
+          "guides/mobile/offline-and-updates.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/notifications",
@@ -1171,15 +1197,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/notifications.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/install-and-notifications.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m",
@@ -1190,12 +1217,15 @@
         "concepts": [
           "concepts/mobile.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/respond-to-incidents.md",
+          "guides/mobile/install-and-notifications.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/policies/[id]",
@@ -1204,15 +1234,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/escalation-policies.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/policies",
@@ -1221,15 +1252,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/escalation-policies.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/postmortems/[id]",
@@ -1238,15 +1270,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/postmortems.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/postmortems",
@@ -1255,15 +1288,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/postmortems.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/schedules/[id]",
@@ -1272,15 +1306,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/schedules.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/schedules",
@@ -1289,15 +1324,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/schedules.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/services/[id]",
@@ -1306,15 +1342,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/services.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/services",
@@ -1323,15 +1360,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/services.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/status",
@@ -1340,15 +1378,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/status-pages.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/teams/[id]",
@@ -1357,15 +1396,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/teams.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/teams",
@@ -1374,15 +1414,16 @@
       "classification": "PUBLIC_FEATURE",
       "documentation": {
         "concepts": [
-          "concepts/mobile.md",
           "concepts/teams.md"
         ],
-        "guides": [],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/users/[id]",
@@ -1390,17 +1431,16 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
+          "guides/mobile/use-mobile-operations.md",
           "guides/administration/manage-users.md"
         ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/m/users",
@@ -1408,17 +1448,16 @@
       "kind": "ui",
       "classification": "PUBLIC_FEATURE",
       "documentation": {
-        "concepts": [
-          "concepts/mobile.md"
-        ],
+        "concepts": [],
         "guides": [
+          "guides/mobile/use-mobile-operations.md",
           "guides/administration/manage-users.md"
         ],
         "reference": [],
         "troubleshooting": []
       },
       "documentationMapping": "explicit-route-rule",
-      "taskDocumentationRequired": false
+      "taskDocumentationRequired": true
     },
     {
       "route": "/logs",

@@ -27409,7 +27409,12 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -27586,7 +27591,12 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -27763,7 +27773,12 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -27941,7 +27956,12 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -28200,6 +28220,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -28374,6 +28395,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -28550,6 +28572,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -28773,7 +28796,12 @@
             "guides/administration/manage-permissions.md",
             "guides/identity/configure-oidc.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -33467,7 +33495,12 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -33637,7 +33670,12 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -33849,7 +33887,12 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -34051,7 +34094,12 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -34234,7 +34282,12 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -34423,7 +34476,12 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -34600,7 +34658,12 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -34774,7 +34837,12 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -34949,7 +35017,12 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -36603,9 +36676,12 @@
             "guides/administration/manage-permissions.md",
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
-            "guides/incidents/resolve.md"
+            "guides/incidents/migrate-sla-scheduler.md",
+            "guides/incidents/resolve.md",
+            "guides/integrations/send-test-event.md"
           ],
           "reference": [
             "integrations/README.md",
@@ -38070,6 +38146,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -38285,8 +38362,10 @@
             "guides/administration/manage-users.md",
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -38470,8 +38549,10 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -38807,6 +38888,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -39489,6 +39571,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -39732,6 +39815,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md",
@@ -39974,8 +40058,10 @@
             "guides/administration/manage-permissions.md",
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -40422,8 +40508,10 @@
             "guides/administration/manage-permissions.md",
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -40587,7 +40675,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -40781,9 +40871,12 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
-            "guides/incidents/resolve.md"
+            "guides/incidents/migrate-sla-scheduler.md",
+            "guides/incidents/resolve.md",
+            "guides/integrations/send-test-event.md"
           ],
           "reference": [
             "integrations/README.md",
@@ -40966,7 +41059,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -41091,7 +41186,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -41289,9 +41386,12 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
-            "guides/incidents/resolve.md"
+            "guides/incidents/migrate-sla-scheduler.md",
+            "guides/incidents/resolve.md",
+            "guides/integrations/send-test-event.md"
           ],
           "reference": [
             "integrations/README.md",
@@ -41540,9 +41640,12 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
-            "guides/incidents/resolve.md"
+            "guides/incidents/migrate-sla-scheduler.md",
+            "guides/incidents/resolve.md",
+            "guides/integrations/send-test-event.md"
           ],
           "reference": [
             "integrations/README.md",
@@ -41721,7 +41824,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -41847,7 +41952,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -42006,7 +42113,8 @@
             "concepts/authentication.md"
           ],
           "guides": [
-            "guides/identity/configure-oidc.md"
+            "guides/identity/configure-oidc.md",
+            "guides/integrations/send-test-event.md"
           ],
           "reference": [
             "integrations/README.md",
@@ -42230,9 +42338,12 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
-            "guides/incidents/resolve.md"
+            "guides/incidents/migrate-sla-scheduler.md",
+            "guides/incidents/resolve.md",
+            "guides/integrations/send-test-event.md"
           ],
           "reference": [
             "integrations/README.md",
@@ -42415,7 +42526,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -42541,7 +42654,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -42737,9 +42852,12 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
-            "guides/incidents/resolve.md"
+            "guides/incidents/migrate-sla-scheduler.md",
+            "guides/incidents/resolve.md",
+            "guides/integrations/send-test-event.md"
           ],
           "reference": [
             "integrations/README.md",
@@ -42995,6 +43113,7 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/identity/configure-oidc.md",
+            "guides/integrations/send-test-event.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
           ],
@@ -43173,7 +43292,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -43299,7 +43420,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -43425,7 +43548,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -43551,7 +43676,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -43747,9 +43874,12 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
-            "guides/incidents/resolve.md"
+            "guides/incidents/migrate-sla-scheduler.md",
+            "guides/incidents/resolve.md",
+            "guides/integrations/send-test-event.md"
           ],
           "reference": [
             "integrations/README.md",
@@ -43980,9 +44110,12 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
-            "guides/incidents/resolve.md"
+            "guides/incidents/migrate-sla-scheduler.md",
+            "guides/incidents/resolve.md",
+            "guides/integrations/send-test-event.md"
           ],
           "reference": [
             "integrations/README.md",
@@ -44126,7 +44259,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -44240,7 +44375,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -44438,9 +44575,12 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
-            "guides/incidents/resolve.md"
+            "guides/incidents/migrate-sla-scheduler.md",
+            "guides/incidents/resolve.md",
+            "guides/integrations/send-test-event.md"
           ],
           "reference": [
             "integrations/README.md",
@@ -44693,9 +44833,12 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
-            "guides/incidents/resolve.md"
+            "guides/incidents/migrate-sla-scheduler.md",
+            "guides/incidents/resolve.md",
+            "guides/integrations/send-test-event.md"
           ],
           "reference": [
             "integrations/README.md",
@@ -44878,7 +45021,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -45004,7 +45149,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -45129,7 +45276,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -45254,7 +45403,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -45379,7 +45530,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -45567,9 +45720,12 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
-            "guides/incidents/resolve.md"
+            "guides/incidents/migrate-sla-scheduler.md",
+            "guides/incidents/resolve.md",
+            "guides/integrations/send-test-event.md"
           ],
           "reference": [
             "integrations/README.md",
@@ -45746,7 +45902,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -46084,6 +46242,7 @@
         "documentation": {
           "concepts": [],
           "guides": [
+            "guides/integrations/send-test-event.md",
             "guides/jira/connect-jira.md"
           ],
           "reference": [
@@ -46214,7 +46373,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -46568,6 +46729,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md",
@@ -46764,6 +46926,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md",
@@ -46955,6 +47118,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md",
@@ -47119,6 +47283,7 @@
             "concepts/notifications.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md"
@@ -47298,6 +47463,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md",
@@ -47486,6 +47652,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -47635,8 +47802,10 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -51807,6 +51976,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md",
@@ -52195,13 +52365,20 @@
           "guides": [
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
-            "guides/on-call/overrides.md"
+            "guides/on-call/overrides.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -53126,7 +53303,9 @@
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md",
-            "guides/status-pages/publish-update.md"
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -53310,7 +53489,9 @@
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md",
-            "guides/status-pages/publish-update.md"
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -53496,7 +53677,9 @@
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md",
-            "guides/status-pages/publish-update.md"
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -53691,7 +53874,9 @@
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md",
-            "guides/status-pages/publish-update.md"
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -54773,11 +54958,14 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -54967,6 +55155,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -55155,6 +55344,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -55295,6 +55485,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -55459,6 +55650,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -55630,6 +55822,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -55769,6 +55962,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -55923,6 +56117,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -56093,6 +56288,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -56280,6 +56476,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -56465,6 +56662,7 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md"
@@ -56597,7 +56795,9 @@
             "concepts/status-pages.md"
           ],
           "guides": [
-            "guides/status-pages/publish-update.md"
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md"
@@ -56700,7 +56900,9 @@
             "concepts/status-pages.md"
           ],
           "guides": [
-            "guides/status-pages/publish-update.md"
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md"
@@ -56785,7 +56987,9 @@
             "concepts/status-pages.md"
           ],
           "guides": [
-            "guides/status-pages/publish-update.md"
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md"
@@ -56941,7 +57145,9 @@
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md",
-            "guides/status-pages/publish-update.md"
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -57141,7 +57347,9 @@
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md",
-            "guides/status-pages/publish-update.md"
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -57350,7 +57558,9 @@
             "guides/notifications/inspect-delivery.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md",
-            "guides/status-pages/publish-update.md"
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -57515,7 +57725,14 @@
             "concepts/status-pages.md"
           ],
           "guides": [
-            "guides/status-pages/publish-update.md"
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md",
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md"
@@ -58056,7 +58273,9 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
-            "guides/status-pages/publish-update.md"
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -58261,7 +58480,14 @@
           ],
           "guides": [
             "guides/identity/configure-oidc.md",
-            "guides/status-pages/publish-update.md"
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md",
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -58530,7 +58756,14 @@
           ],
           "guides": [
             "guides/identity/configure-oidc.md",
-            "guides/status-pages/publish-update.md"
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md",
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -58805,7 +59038,14 @@
           ],
           "guides": [
             "guides/identity/configure-oidc.md",
-            "guides/status-pages/publish-update.md"
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md",
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -59490,7 +59730,9 @@
             "guides/administration/manage-permissions.md",
             "guides/on-call/build-schedule.md",
             "guides/on-call/overrides.md",
-            "guides/status-pages/publish-update.md"
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -62969,6 +63211,7 @@
             "concepts/notifications.md"
           ],
           "guides": [
+            "guides/integrations/send-test-event.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md"
           ],
@@ -63140,9 +63383,12 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md",
+            "guides/integrations/send-test-event.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md"
           ],
@@ -63315,6 +63561,7 @@
             "concepts/notifications.md"
           ],
           "guides": [
+            "guides/integrations/send-test-event.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md"
           ],
@@ -63538,7 +63785,12 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
-            "guides/identity/configure-oidc.md"
+            "guides/identity/configure-oidc.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -63771,7 +64023,12 @@
           ],
           "guides": [
             "guides/administration/manage-permissions.md",
-            "guides/identity/configure-oidc.md"
+            "guides/identity/configure-oidc.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -64103,10 +64360,10 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [
-            "integrations/README.md"
+          "concepts": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
           ],
-          "guides": [],
           "reference": [
             "reference/api/events.md"
           ],
@@ -65768,7 +66025,10 @@
           "concepts": [
             "concepts/incident-sla.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/incidents/configure-incident-sla.md",
+            "guides/incidents/migrate-sla-scheduler.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -65818,10 +66078,12 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/chatops.md",
-            "guides/chatops/create-war-room.md"
+            "guides/chatops/create-war-room.md",
+            "concepts/chatops.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/chatops/configure-global-policy.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -66299,11 +66561,18 @@
         },
         "documentation": {
           "concepts": [
+            "guides/privacy/README.md",
             "concepts/privacy.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/privacy/manage-request.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/process-erasure.md"
+          ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "explicit-route-rule",
         "tests": [],
@@ -66614,10 +66883,10 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [
-            "concepts/status-pages.md"
-          ],
+          "concepts": [],
           "guides": [
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/subscribers-and-api-access.md",
             "guides/status-pages/publish-update.md"
           ],
           "reference": [],
@@ -66677,6 +66946,8 @@
             "concepts/status-pages.md"
           ],
           "guides": [
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/subscribers-and-api-access.md",
             "guides/status-pages/publish-update.md"
           ],
           "reference": [],
@@ -67227,7 +67498,9 @@
             "concepts/mobile.md",
             "concepts/analytics.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/offline-and-updates.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -67282,7 +67555,10 @@
           "concepts": [
             "concepts/mobile.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/install-and-notifications.md",
+            "guides/mobile/offline-and-updates.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -67335,10 +67611,12 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/incidents.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/respond-to-incidents.md",
+            "guides/mobile/offline-and-updates.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -67390,10 +67668,10 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [
-            "concepts/mobile.md"
-          ],
+          "concepts": [],
           "guides": [
+            "guides/mobile/respond-to-incidents.md",
+            "guides/mobile/offline-and-updates.md",
             "guides/incidents/create.md"
           ],
           "reference": [],
@@ -67448,10 +67726,12 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/incidents.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/respond-to-incidents.md",
+            "guides/mobile/offline-and-updates.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -67506,7 +67786,10 @@
           "concepts": [
             "concepts/mobile.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/install-and-notifications.md",
+            "guides/mobile/offline-and-updates.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -67559,10 +67842,11 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/notifications.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/install-and-notifications.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -67617,7 +67901,10 @@
           "concepts": [
             "concepts/mobile.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/respond-to-incidents.md",
+            "guides/mobile/install-and-notifications.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -67670,10 +67957,11 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/escalation-policies.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/use-mobile-operations.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -67726,10 +68014,11 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/escalation-policies.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/use-mobile-operations.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -67782,10 +68071,11 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/postmortems.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/use-mobile-operations.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -67838,10 +68128,11 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/postmortems.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/use-mobile-operations.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -67894,10 +68185,11 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/schedules.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/use-mobile-operations.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -67950,10 +68242,11 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/schedules.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/use-mobile-operations.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -68006,10 +68299,11 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/services.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/use-mobile-operations.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -68062,10 +68356,11 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/services.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/use-mobile-operations.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -68118,10 +68413,11 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/status-pages.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/use-mobile-operations.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -68174,10 +68470,11 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/teams.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/use-mobile-operations.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -68230,10 +68527,11 @@
         },
         "documentation": {
           "concepts": [
-            "concepts/mobile.md",
             "concepts/teams.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/use-mobile-operations.md"
+          ],
           "reference": [],
           "troubleshooting": []
         },
@@ -68285,10 +68583,9 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [
-            "concepts/mobile.md"
-          ],
+          "concepts": [],
           "guides": [
+            "guides/mobile/use-mobile-operations.md",
             "guides/administration/manage-users.md"
           ],
           "reference": [],
@@ -68342,10 +68639,9 @@
           "kind": "ui"
         },
         "documentation": {
-          "concepts": [
-            "concepts/mobile.md"
-          ],
+          "concepts": [],
           "guides": [
+            "guides/mobile/use-mobile-operations.md",
             "guides/administration/manage-users.md"
           ],
           "reference": [],
@@ -70134,7 +70430,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -72176,7 +72474,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -72212,7 +72512,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -72248,7 +72550,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -75645,7 +75949,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -75681,7 +75987,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -75717,7 +76025,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -75753,7 +76063,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -75789,7 +76101,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -75825,7 +76139,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -75861,7 +76177,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -75897,7 +76215,9 @@
             "operate/data/backup-and-restore.md"
           ],
           "reference": [],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -83750,7 +84070,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -83843,7 +84165,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -85296,8 +85620,10 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -85614,8 +85940,10 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -85928,7 +86256,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -86322,8 +86652,10 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -86563,8 +86895,10 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -86882,6 +87216,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -87045,6 +87380,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -87279,8 +87615,10 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -87579,6 +87917,7 @@
             "operate/deploy/architecture/runtime-roles.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md",
@@ -88341,6 +88680,7 @@
             "operate/deploy/architecture/runtime-roles.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md",
@@ -88535,10 +88875,16 @@
             "concepts/privacy.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/jira/connect-jira.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md",
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md",
             "operate/reliability/health-and-metrics.md",
             "operate/reliability/scaling.md"
           ],
@@ -96610,6 +96956,7 @@
             "concepts/notifications.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md"
@@ -98434,6 +98781,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -98523,6 +98871,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -98612,6 +98961,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -98699,6 +99049,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -98940,6 +99291,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -102536,7 +102888,9 @@
           "reference": [
             "reference/configuration/README.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -103291,7 +103645,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -103362,7 +103718,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -103432,7 +103790,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -103502,7 +103862,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -103572,7 +103934,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -103642,7 +104006,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -103713,7 +104079,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -103784,7 +104152,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -103855,7 +104225,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -103925,7 +104297,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -103995,7 +104369,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104065,7 +104441,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104136,7 +104514,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104207,7 +104587,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104278,7 +104660,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104349,7 +104733,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104420,7 +104806,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104491,7 +104879,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104562,7 +104952,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104632,7 +105024,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104703,7 +105097,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104774,7 +105170,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104845,7 +105243,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104916,7 +105316,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -104986,7 +105388,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -105056,7 +105460,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -105126,7 +105532,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -105197,7 +105605,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -107278,7 +107688,9 @@
           "reference": [
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -107330,7 +107742,9 @@
           "reference": [
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -107382,7 +107796,9 @@
           "reference": [
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -107434,7 +107850,9 @@
           "reference": [
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -107600,7 +108018,9 @@
           "reference": [
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -107652,7 +108072,9 @@
           "reference": [
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -107704,7 +108126,9 @@
           "reference": [
             "reference/permissions.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -110722,7 +111146,12 @@
           "concepts": [
             "concepts/mobile.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/mobile/install-and-notifications.md",
+            "guides/mobile/offline-and-updates.md",
+            "guides/mobile/respond-to-incidents.md",
+            "guides/mobile/use-mobile-operations.md"
+          ],
           "reference": [
             "reference/limits.md"
           ],
@@ -112032,6 +112461,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -112419,6 +112849,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -112494,7 +112925,9 @@
             "concepts/status-pages.md"
           ],
           "guides": [
-            "guides/status-pages/publish-update.md"
+            "guides/status-pages/create-and-configure.md",
+            "guides/status-pages/publish-update.md",
+            "guides/status-pages/subscribers-and-api-access.md"
           ],
           "reference": [
             "reference/api/README.md",
@@ -116868,8 +117301,10 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -116940,8 +117375,10 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -117012,8 +117449,10 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -117084,8 +117523,10 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -117156,8 +117597,10 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -117228,8 +117671,10 @@
           "guides": [
             "guides/incidents/acknowledge.md",
             "guides/incidents/assign.md",
+            "guides/incidents/configure-incident-sla.md",
             "guides/incidents/create.md",
             "guides/incidents/escalate.md",
+            "guides/incidents/migrate-sla-scheduler.md",
             "guides/incidents/resolve.md"
           ],
           "reference": [
@@ -117293,7 +117738,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -117356,7 +117803,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -117418,7 +117867,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -117480,7 +117931,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -117542,7 +117995,9 @@
         },
         "documentation": {
           "concepts": [],
-          "guides": [],
+          "guides": [
+            "guides/integrations/send-test-event.md"
+          ],
           "reference": [
             "integrations/README.md",
             "integrations/catalog.yaml",
@@ -118511,6 +118966,7 @@
             "concepts/notifications.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md"
@@ -118580,6 +119036,7 @@
             "concepts/notifications.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md"
@@ -118663,6 +119120,7 @@
             "concepts/notifications.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md"
@@ -118731,6 +119189,7 @@
             "concepts/notifications.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md",
             "guides/notifications/configure-routing.md",
             "guides/notifications/inspect-delivery.md"
@@ -121047,12 +121506,20 @@
           "concepts": [
             "concepts/privacy.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
+          ],
           "reference": [
             "reference/api/README.md",
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -121103,12 +121570,20 @@
           "concepts": [
             "concepts/privacy.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
+          ],
           "reference": [
             "reference/api/README.md",
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [
@@ -121691,7 +122166,13 @@
           "concepts": [
             "concepts/privacy.md"
           ],
-          "guides": [],
+          "guides": [
+            "guides/privacy/README.md",
+            "guides/privacy/export-data.md",
+            "guides/privacy/manage-request.md",
+            "guides/privacy/process-erasure.md",
+            "guides/privacy/retention-and-troubleshooting.md"
+          ],
           "reference": [
             "reference/api/README.md",
             "reference/limits.md"
@@ -121763,7 +122244,9 @@
           "reference": [
             "reference/limits.md"
           ],
-          "troubleshooting": []
+          "troubleshooting": [
+            "guides/privacy/retention-and-troubleshooting.md"
+          ]
         },
         "documentationMapping": "capability-source",
         "tests": [],
@@ -122941,6 +123424,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -123002,6 +123486,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -123062,6 +123547,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [
@@ -123122,6 +123608,7 @@
             "concepts/chatops.md"
           ],
           "guides": [
+            "guides/chatops/configure-global-policy.md",
             "guides/chatops/create-war-room.md"
           ],
           "reference": [

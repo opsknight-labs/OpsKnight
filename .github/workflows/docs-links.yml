@@ -2,6 +2,12 @@ name: Documentation quality
 
 on:
   workflow_dispatch:
+    inputs:
+      release_certification:
+        description: Enforce human review, task verification, and v1.5 parity release gates
+        required: false
+        default: false
+        type: boolean
   pull_request:
     branches: [main]
     paths:
@@ -55,8 +61,8 @@ jobs:
           npm run docs:routes
           npm run docs:v15-parity
           npm run docs:claims
-      - name: Reject generated documentation drift
-        run: git diff --exit-code -- generated/docs-discovery/current.json generated/docs-contracts/current.json generated/docs-contracts/capacity.json generated/docs-contracts/routes.json generated/docs-contracts/integrations.json generated/docs-reference generated/docs-certification/v15-parity-report.md docs/internal/certification/v1.5-topic-inventory.yaml docs/v2.0.0/integrations/catalog.yaml
+      - name: Reject generated and published-reference drift
+        run: git diff --exit-code -- generated/docs-discovery/current.json generated/docs-contracts/current.json generated/docs-contracts/capacity.json generated/docs-contracts/routes.json generated/docs-contracts/integrations.json generated/docs-reference generated/docs-certification/v15-parity-report.md docs/internal/certification/v1.5-topic-inventory.yaml docs/v2.0.0/integrations/catalog.yaml docs/v2.0.0/reference/features.md docs/v2.0.0/reference/configuration/README.md docs/v2.0.0/reference/api/README.md
       - name: Validate 2.0.0 documentation contracts
         run: npm run docs:certify:static
       - name: Detect documentation impact
@@ -79,3 +85,16 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Run full documentation certification
         run: npm run docs:certify
+
+  release-certification:
+    if: github.event_name == 'workflow_dispatch' && inputs.release_certification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Enforce final 2.0.0 release evidence
+        run: npm run docs:certify:release

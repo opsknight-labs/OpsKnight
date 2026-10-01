@@ -5,12 +5,12 @@
     "DISCOVERED": 0,
     "MAPPED": 78,
     "DRAFTED": 0,
-    "READER_COMPLETE": 165,
+    "READER_COMPLETE": 180,
     "HUMAN_VERIFIED": 0,
     "RUNTIME_VERIFIED": 0
   },
-  "taskPages": 164,
-  "readerCompleteTaskPages": 164,
+  "taskPages": 178,
+  "readerCompleteTaskPages": 178,
   "humanVerifiedTaskPages": 0,
   "runtimeVerifiedTaskPages": 0,
   "pages": [
@@ -345,6 +345,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "guides/chatops/configure-global-policy.md",
+      "type": "how-to",
+      "userTask": "Configure and verify the workspace ChatOps policy.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
       "page": "guides/chatops/create-war-room.md",
       "type": "concept",
       "userTask": null,
@@ -488,6 +499,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "guides/incidents/configure-incident-sla.md",
+      "type": "how-to",
+      "userTask": "Configure and verify an incident SLA policy.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
       "page": "guides/incidents/create.md",
       "type": "how-to",
       "userTask": "Create and validate a manual incident.",
@@ -521,6 +543,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "guides/incidents/migrate-sla-scheduler.md",
+      "type": "how-to",
+      "userTask": "Migrate SLA scheduling from LEGACY to INDEXED.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
       "page": "guides/incidents/resolve.md",
       "type": "how-to",
       "userTask": "Resolve an incident with evidence or reopen it safely.",
@@ -543,9 +576,64 @@
       "runtimeVerified": false
     },
     {
+      "page": "guides/integrations/send-test-event.md",
+      "type": "how-to",
+      "userTask": "Send and verify a test event.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
       "page": "guides/jira/connect-jira.md",
       "type": "tutorial",
       "userTask": "Connect Jira and validate incident-to-issue synchronization end to end.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/mobile/install-and-notifications.md",
+      "type": "how-to",
+      "userTask": "Install and verify OpsKnight mobile push.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/mobile/offline-and-updates.md",
+      "type": "how-to",
+      "userTask": "Recover mobile state after an offline period or PWA update.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/mobile/respond-to-incidents.md",
+      "type": "how-to",
+      "userTask": "Respond to an incident from a mobile device.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/mobile/use-mobile-operations.md",
+      "type": "how-to",
+      "userTask": "Inspect operational context from the mobile application.",
       "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 0,
@@ -697,6 +785,61 @@
       "runtimeVerified": false
     },
     {
+      "page": "guides/privacy/README.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "READER_COMPLETE",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/privacy/export-data.md",
+      "type": "how-to",
+      "userTask": "Produce and validate a privacy export.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/privacy/manage-request.md",
+      "type": "how-to",
+      "userTask": "Create, verify, assign, and review a privacy request.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/privacy/process-erasure.md",
+      "type": "how-to",
+      "userTask": "Preview and safely execute a verified erasure request.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/privacy/retention-and-troubleshooting.md",
+      "type": "troubleshooting",
+      "userTask": "Diagnose a blocked privacy request safely.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
       "page": "guides/reports/README.md",
       "type": "concept",
       "userTask": null,
@@ -752,6 +895,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "guides/status-pages/create-and-configure.md",
+      "type": "how-to",
+      "userTask": "Create and publish the OpsKnight status page.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
       "page": "guides/status-pages/publish-update.md",
       "type": "how-to",
       "userTask": "Publish, verify, update, and close an incident on the single supported status page.",
@@ -759,6 +913,17 @@
       "taskPage": true,
       "screenshotCount": 2,
       "screenshotAssessment": "EVIDENCED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "guides/status-pages/subscribers-and-api-access.md",
+      "type": "how-to",
+      "userTask": "Configure status-page subscriber and API delivery.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
       "humanVerified": false,
       "runtimeVerified": false
     },
