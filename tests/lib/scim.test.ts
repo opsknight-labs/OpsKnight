@@ -9,17 +9,17 @@ afterEach(() => {
 });
 
 describe('SCIM protocol helpers', () => {
-  it('fails closed without a strong configured bearer token', () => {
+  it('fails closed without a strong configured bearer token', async () => {
     delete process.env.SCIM_BEARER_TOKEN;
-    expect(isScimRequestAuthorized('Bearer anything')).toBe(false);
+    expect(await isScimRequestAuthorized('Bearer anything')).toBe(false);
     process.env.SCIM_BEARER_TOKEN = 'short';
-    expect(isScimRequestAuthorized('Bearer short')).toBe(false);
+    expect(await isScimRequestAuthorized('Bearer short')).toBe(false);
   });
 
-  it('compares a configured bearer token exactly', () => {
+  it('compares a configured bearer token exactly', async () => {
     process.env.SCIM_BEARER_TOKEN = 'a-secure-scim-token-with-at-least-32-characters';
-    expect(isScimRequestAuthorized(`Bearer ${process.env.SCIM_BEARER_TOKEN}`)).toBe(true);
-    expect(isScimRequestAuthorized('Bearer wrong-token')).toBe(false);
+    expect(await isScimRequestAuthorized(`Bearer ${process.env.SCIM_BEARER_TOKEN}`)).toBe(true);
+    expect(await isScimRequestAuthorized('Bearer wrong-token')).toBe(false);
   });
 
   it('accepts only bounded externalId and userName equality filters', () => {
@@ -32,7 +32,7 @@ describe('SCIM protocol helpers', () => {
     expect(() => parseScimFilter('userName co "example"')).toThrow(/unsupported/i);
   });
 
-  it('serializes an OpsKnight user as a SCIM user resource', () => {
+  it('serializes an OpsKnight user as a SCIM user resource with avatar photos', () => {
     const timestamp = new Date('2026-09-11T00:00:00.000Z');
     expect(
       serializeScimUser({
@@ -40,6 +40,7 @@ describe('SCIM protocol helpers', () => {
         scimExternalId: 'directory-1',
         email: 'user@example.com',
         name: 'User',
+        avatarUrl: 'https://example.com/avatar.png',
         status: 'DISABLED',
         createdAt: timestamp,
         updatedAt: timestamp,
@@ -48,6 +49,7 @@ describe('SCIM protocol helpers', () => {
       id: 'u1',
       externalId: 'directory-1',
       userName: 'user@example.com',
+      photos: [{ value: 'https://example.com/avatar.png', type: 'photo', primary: true }],
       active: false,
     });
   });

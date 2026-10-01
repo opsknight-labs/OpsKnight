@@ -532,3 +532,53 @@ export async function revokeAllSessions(): Promise<{ success?: boolean; error?: 
     };
   }
 }
+
+export async function getScimConfigAction() {
+  await assertAdmin();
+  const { getScimConfig } = await import('@/lib/scim');
+  return getScimConfig();
+}
+
+export async function generateScimTokenAction() {
+  try {
+    const actor = await assertAdmin();
+    const { generateAndSaveScimToken } = await import('@/lib/scim');
+    const result = await generateAndSaveScimToken(actor.id);
+    revalidatePath('/settings/security');
+    return { success: true, ...result };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to generate SCIM token',
+    };
+  }
+}
+
+export async function revokeScimTokenAction() {
+  try {
+    const actor = await assertAdmin();
+    const { revokeScimToken } = await import('@/lib/scim');
+    await revokeScimToken(actor.id);
+    revalidatePath('/settings/security');
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to revoke SCIM token',
+    };
+  }
+}
+
+export async function revealScimTokenAction() {
+  try {
+    await assertAdmin();
+    const { revealScimToken } = await import('@/lib/scim');
+    const token = await revealScimToken();
+    return { success: true, token };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to reveal SCIM token',
+    };
+  }
+}

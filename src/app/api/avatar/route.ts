@@ -101,6 +101,15 @@ export async function GET(request: NextRequest) {
 
     const svg = avatar.toString();
 
+    // If style is initials and Dicebear generated empty text (e.g. for numeric seeds like "2"),
+    // fall back to clean SVG with seed initials/number so user never gets a blank avatar.
+    if (styleParam === 'initials' && /<text[^>]*>\s*<\/text>/.test(svg)) {
+      const fallbackSvg = generateFallbackSvg(sanitizedSeed, bgColor, radius);
+      return new NextResponse(fallbackSvg, {
+        headers: securityHeaders,
+      });
+    }
+
     return new NextResponse(svg, {
       headers: securityHeaders,
     });
