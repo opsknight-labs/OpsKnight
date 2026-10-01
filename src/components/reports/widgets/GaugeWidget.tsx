@@ -32,16 +32,20 @@ const GaugeWidget = memo(function GaugeWidget({
   // Auto-determine color based on thresholds
   const getColor = (): string => {
     if (variant !== 'auto') {
-      const colorMap = {
-        default: '#6b7280',
-        success: '#22c55e',
-        warning: '#eab308',
-        danger: '#ef4444',
-      };
-      return colorMap[variant];
+      switch (variant) {
+        case 'success':
+          return '#22c55e';
+        case 'warning':
+          return '#eab308';
+        case 'danger':
+          return '#ef4444';
+        default:
+          return '#6b7280';
+      }
     }
 
     // Auto color based on value
+    if (value == null) return '#9ca3af'; // neutral gray
     if (displayValue >= 95) return '#22c55e'; // green
     if (displayValue >= 80) return '#eab308'; // yellow
     return '#ef4444'; // red
@@ -112,7 +116,7 @@ const GaugeWidget = memo(function GaugeWidget({
 
       {/* Value */}
       <div className="text-2xl font-bold" style={{ color }}>
-        {value !== null ? `${value.toFixed(0)}%` : '--'}
+        {value != null ? `${value.toFixed(0)}%` : 'N/A'}
       </div>
 
       {/* Label */}
