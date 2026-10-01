@@ -31,6 +31,19 @@ vi.mock('@/lib/logger', async importOriginal => {
   };
 });
 
+type MockLogEntry = {
+  level: string;
+  message: string;
+  timestamp: string;
+  component?: string;
+  duration?: number;
+  error?: {
+    message?: string;
+    stack?: string;
+    name?: string;
+  };
+};
+
 describe('SystemLogsPage & SystemLogsError', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -61,26 +74,30 @@ describe('SystemLogsPage & SystemLogsError', () => {
       expires: '1h',
     });
 
-    vi.mocked(loggerModule.getLogBuffer).mockReturnValueOnce([
+    const mockLogs: MockLogEntry[] = [
       {
-        level: 'info' as any,
+        level: 'info',
         message: 'System initialization complete',
         timestamp: '2026-10-01T12:00:00.000Z',
         component: 'bootstrap',
       },
       {
-        level: 'fatal' as any, // unmapped level test
+        level: 'fatal', // unmapped level test
         message: 'Unexpected crash report',
         timestamp: 'invalid-date', // invalid timestamp test
         component: 'engine',
-        error: { stack: 'at foo.bar()' } as any, // missing error.message test
+        error: { stack: 'at foo.bar()' }, // missing error.message test
       },
       {
-        level: 'warn' as any,
+        level: 'warn',
         message: '',
         timestamp: '2026-10-01T12:02:00.000Z',
       },
-    ]);
+    ];
+
+    vi.mocked(loggerModule.getLogBuffer).mockReturnValueOnce(
+      mockLogs as unknown as ReturnType<typeof loggerModule.getLogBuffer>
+    );
 
     const pageElement = await SystemLogsPage({ searchParams: Promise.resolve({}) });
     render(pageElement);
@@ -98,20 +115,24 @@ describe('SystemLogsPage & SystemLogsError', () => {
       expires: '1h',
     });
 
-    vi.mocked(loggerModule.getLogBuffer).mockReturnValueOnce([
+    const filterLogs: MockLogEntry[] = [
       {
-        level: 'error' as any,
+        level: 'error',
         message: 'Database connection failed',
         timestamp: '2026-10-01T12:00:00.000Z',
         component: 'database',
       },
       {
-        level: 'info' as any,
+        level: 'info',
         message: 'Worker healthcheck ok',
         timestamp: '2026-10-01T12:01:00.000Z',
         component: 'worker',
       },
-    ]);
+    ];
+
+    vi.mocked(loggerModule.getLogBuffer).mockReturnValueOnce(
+      filterLogs as unknown as ReturnType<typeof loggerModule.getLogBuffer>
+    );
 
     const pageElement = await SystemLogsPage({
       searchParams: Promise.resolve({ search: 'database' }),
