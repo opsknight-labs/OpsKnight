@@ -41,6 +41,22 @@ describe('mobile/PWA enterprise architecture contract', () => {
     expect(auth).not.toContain("credentials?.rememberMe === 'true' || isMobileClient");
   });
 
+  it('keeps mobile Push permission on the explicit Enable gesture path', () => {
+    const pushToggle = fs.readFileSync(
+      'src/components/mobile/PushNotificationToggle.tsx',
+      'utf8'
+    );
+
+    expect(pushToggle).toContain("stage = 'REQUEST_PERMISSION'");
+    expect(pushToggle).toContain('Notification.requestPermission()');
+    expect(pushToggle).toMatch(
+      /const subscribeOrRepair = async \(\) => \{[\s\S]*Notification\.requestPermission\(\)[\s\S]*pushManager\.subscribe/
+    );
+    expect(pushToggle).not.toMatch(
+      /useEffect\([\s\S]{0,1200}Notification\.requestPermission\(/
+    );
+  });
+
   it('keeps dynamic authenticated routes and APIs out of service-worker caches', () => {
     const config = fs.readFileSync('next.config.ts', 'utf8');
     expect(config).toContain("handler: 'NetworkOnly'");
