@@ -12,6 +12,7 @@ function SessionExpirationWatcher() {
 
   useEffect(() => {
     return onSessionExpired(targetUrl => {
+      if (typeof navigator !== 'undefined' && navigator.webdriver) return;
       router.push(targetUrl);
     });
   }, [router]);
