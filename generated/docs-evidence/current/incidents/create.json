@@ -1,10 +1,10 @@
 {
   "release": "current",
-  "sourceRevision": "056199fd8786351a4423aa171f66f7dca3578a84",
+  "sourceRevision": "c68eaa44008fe43a223a893aeae1e3924b317aef",
   "runtime": {
-    "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:843ad4f9a55c3cc1b9b866eae705395c578faba10dfe4d3dfc15ae207b4dcc61",
-    "digest": "opsknight-docs-v2@sha256:843ad4f9a55c3cc1b9b866eae705395c578faba10dfe4d3dfc15ae207b4dcc61",
-    "sourceRevision": "09f322e72"
+    "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:eee032eb286f8ac5a23ee2ff6cb849a3aa80e35dd9ce9c05bbf56754bda7af99",
+    "digest": "localhost:15000/opsknight-docs-v2@sha256:eee032eb286f8ac5a23ee2ff6cb849a3aa80e35dd9ce9c05bbf56754bda7af99",
+    "sourceRevision": "c68eaa44008fe43a223a893aeae1e3924b317aef"
   },
   "route": "/incidents",
   "journey": "incidents",
@@ -13,5 +13,5 @@
     "width": 1440,
     "height": 900
   },
-  "capturedAt": "2026-10-01T05:29:05.644Z"
+  "capturedAt": "2026-10-01T09:36:39.337Z"
 }

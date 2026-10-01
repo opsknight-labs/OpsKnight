@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-01T09:23:01.595Z",
-  "sourceRevision": "7fb973735e663e761c5655525abe25fcfe9756f0",
-  "documentationRevision": "7fb973735e663e761c5655525abe25fcfe9756f0",
-  "productSourceRevision": "7fb973735e663e761c5655525abe25fcfe9756f0",
-  "runtimeSourceRevision": "7fb973735e663e761c5655525abe25fcfe9756f0",
-  "runtimeImageDigest": "localhost:15000/opsknight-docs-v2@sha256:acf20afa15e643a91185afbc67457dc7034554d44c9099ae08d680a2c3cf01d0",
+  "generatedAt": "2026-10-01T09:36:57.202Z",
+  "sourceRevision": "c68eaa44008fe43a223a893aeae1e3924b317aef",
+  "documentationRevision": "c68eaa44008fe43a223a893aeae1e3924b317aef",
+  "productSourceRevision": "c68eaa44008fe43a223a893aeae1e3924b317aef",
+  "runtimeSourceRevision": "c68eaa44008fe43a223a893aeae1e3924b317aef",
+  "runtimeImageDigest": "localhost:15000/opsknight-docs-v2@sha256:eee032eb286f8ac5a23ee2ff6cb849a3aa80e35dd9ce9c05bbf56754bda7af99",
   "releaseState": "upcoming",
   "checks": {
     "frontmatter": "passed",
@@ -53,9 +53,9 @@
     "humanReviewAreasPassed": 0,
     "humanReviewAreasPending": 7,
     "humanReviewAreasFailed": 0,
-    "v15Topics": 1604,
+    "v15Topics": 1606,
     "v15TopicsReviewed": 0,
-    "v15TopicsPending": 1604,
+    "v15TopicsPending": 1606,
     "taskDocumentationPages": 178,
     "readerCompleteTaskPages": 178,
     "humanVerifiedTaskPages": 0,
@@ -100,9 +100,9 @@
       "generated/docs-evidence/current/teams/list.png"
     ],
     "runtime": {
-      "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:acf20afa15e643a91185afbc67457dc7034554d44c9099ae08d680a2c3cf01d0",
-      "digest": "localhost:15000/opsknight-docs-v2@sha256:acf20afa15e643a91185afbc67457dc7034554d44c9099ae08d680a2c3cf01d0",
-      "sourceRevision": "7fb973735e663e761c5655525abe25fcfe9756f0"
+      "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:eee032eb286f8ac5a23ee2ff6cb849a3aa80e35dd9ce9c05bbf56754bda7af99",
+      "digest": "localhost:15000/opsknight-docs-v2@sha256:eee032eb286f8ac5a23ee2ff6cb849a3aa80e35dd9ce9c05bbf56754bda7af99",
+      "sourceRevision": "c68eaa44008fe43a223a893aeae1e3924b317aef"
     }
   }
 }
