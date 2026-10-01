@@ -22,7 +22,7 @@ import {
   Sliders,
   Globe,
 } from 'lucide-react';
-import { KEYBOARD_SHORTCUTS } from '@/components/KeyboardShortcutsProvider';
+import { KEYBOARD_SHORTCUTS } from '@/lib/keyboard-shortcuts';
 
 const CATEGORY_META = new Map<
   string,

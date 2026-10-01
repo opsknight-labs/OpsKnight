@@ -27,9 +27,11 @@ access boundary rather than a data problem.
 ## Open the feature
 
 Use the desktop sidebar to move between Dashboard, Incidents, Services, Teams,
-on-call, analytics, and settings surfaces available to your role. Open sidebar
-search or focus a visible search input with `/`. Select the bell in the top bar
-to open the personal in-app notification drawer.
+on-call, analytics, and settings surfaces available to your role. Press
+`Cmd+K` on macOS or `Ctrl+K` elsewhere to open product-wide sidebar search.
+Press `/` only in a page that implements a local search shortcut, such as the
+Incidents list. Select the bell in the top bar to open the personal in-app
+notification drawer.
 
 ## Configure and use search
 
@@ -40,10 +42,12 @@ to open the personal in-app notification drawer.
    are broad.
 4. Open the result and verify its record identity before taking an action.
 
-Search is permission-aware. Incident and service queries apply authorization
-filters, and privileged-only result types are not a bypass around normal access.
-The endpoint is rate limited, so rapid automation or repeated queries can return
-a temporary rate-limit response.
+Record results are permission-aware. Incident and service queries apply
+authorization filters, and privileged-only result types are not a bypass around
+normal access. Generic navigation suggestions are a static convenience list and
+can include a destination the current role cannot use; the destination still
+enforces authorization. The endpoint is rate limited, so rapid automation or
+repeated queries can return a temporary rate-limit response.
 
 ## Process the notification inbox
 
@@ -53,9 +57,10 @@ a temporary rate-limit response.
 3. Select a notification with an incident target to open that incident.
 4. Use the inline control to mark one item read, or **Mark all as read** after
    reviewing the outstanding items.
-5. Treat the **Live** badge as an active event stream and **Polling** as the
-   fallback state. Either mode can deliver updates; verify critical work on the
-   Incidents page rather than relying only on the badge.
+5. Interpret **Live** as a connected event stream, **Reconnecting** as an SSE
+   retry/backoff period, and **Polling** as the fallback used only when the
+   browser does not support EventSource. Verify critical work on the Incidents
+   page rather than relying only on the badge.
 
 ## How it works
 

@@ -1,0 +1,45 @@
+schemaVersion: 1
+capabilities:
+  - id: command-center
+    name: Command Center
+    owner: analytics
+    classification: public-workflow
+    sources: [src/app/(app)/page.tsx, src/components/dashboard/DashboardCommandCenter.tsx]
+    documentation: docs/v2.0.0/guides/dashboard/use-command-center.md
+    requiredPhrases: [Ops Pulse, My Queue, Critical Focus, Services at Risk, Quick Actions, Incident History Heatmap, Latest incidents, Performance, Team Load, SLA Alerts]
+  - id: global-search-and-inbox
+    name: Global search and notification inbox
+    owner: platform
+    classification: public-workflow
+    sources: [src/components/SidebarSearch.tsx, src/components/TopbarNotifications.tsx]
+    documentation: docs/v2.0.0/guides/navigation/search-and-notifications.md
+    requiredPhrases: [permission-aware, Cmd+K, All, Unread, Incidents, Shifts, Live, Reconnecting, Polling, Delivery History]
+  - id: keyboard-shortcuts
+    name: Keyboard shortcuts
+    owner: platform
+    classification: public-workflow
+    sources: [src/lib/keyboard-shortcuts.ts, src/components/GlobalKeyboardHandler.tsx, src/components/incident/IncidentsListTable.tsx]
+    documentation: docs/v2.0.0/reference/keyboard-shortcuts.md
+    requiredPhrases: [canonical shortcut registry, Cmd/Ctrl+K, Create Incident, Incident-list triage]
+  - id: accessibility
+    name: Accessibility
+    owner: platform
+    classification: public-contract
+    sources: [src/components/SkipLink.tsx, src/app/globals.css]
+    documentation: docs/v2.0.0/reference/accessibility.md
+    requiredPhrases: [skip link, reduced-motion, Organization acceptance test, Known boundaries]
+  - id: settings-hub
+    name: Settings hub
+    owner: administration
+    classification: public-workflow
+    sources: [src/app/(app)/settings/page.tsx, src/components/settings/navConfig.ts]
+    documentation: docs/v2.0.0/guides/administration/settings-overview.md
+    requiredPhrases: [Account and identity, Workspace and governance, Integrations and ChatOps, System and reliability]
+  - id: mobile-push-preflight
+    name: Mobile Push preparation
+    owner: mobile
+    classification: public-workflow
+    sources: [src/components/mobile/PushNotificationToggle.tsx]
+    documentation: docs/v2.0.0/guides/mobile/install-and-notifications.md
+    requiredPhrases: [GET /sw.js, no redirect, JavaScript/EcmaScript, DISABLE_PWA]
+

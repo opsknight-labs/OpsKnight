@@ -14,6 +14,9 @@ verification:
     - src/components/dashboard/DashboardCommandCenter.tsx
     - src/components/dashboard/widgets/SLABreachAlertsWidget.tsx
     - src/components/dashboard/OnCallWidget.tsx
+    - src/components/dashboard/QuickActionsPanel.tsx
+    - src/components/dashboard/DashboardAnalyticsWidgets.tsx
+    - src/components/incident/IncidentsListTable.tsx
     - src/components/DashboardExport.tsx
 ---
 
@@ -58,6 +61,21 @@ window. Unassigned identifies incidents without an assignee.
 - **On-call context** shows current coverage based on schedules visible to you.
 - **SLA Alerts** shows approaching or breached acknowledgement/resolution targets
   and links the responder to the affected work.
+- **Quick Actions** opens the Create Incident modal or navigates to Analytics and
+  Services. Creating an incident is a mutation; verify the form before submit.
+- **Incident History Heatmap** visualizes incident volume across the displayed
+  historical buckets. Treat color intensity as a comparative signal and inspect
+  the underlying incidents before drawing a conclusion.
+- **Latest incidents** is a read-only recent-incident table scoped by the active
+  dashboard filters and time window. Open a row to respond on the incident page.
+- **Performance** summarizes MTTA, MTTR, acknowledgement-SLA compliance, and
+  resolution-SLA compliance for the dashboard scope. Empty/unavailable data is
+  different from a measured zero.
+- **Team Load** summarizes operational load by responder/team using the current
+  analytics snapshot; use it to investigate distribution, not as a standalone
+  performance assessment.
+- **Who's On-Call** lists current visible shifts. Validate coverage on the owning
+  schedule before relying on it for a handoff.
 
 Realtime updates can refresh current incident metrics after incident events.
 When population filters are active, the client requests filtered metrics so a
@@ -74,7 +92,10 @@ all-time record.
    after the realtime event or a manual refresh.
 3. Compare **My Queue** with the same assignee filter on the Incidents page.
 4. Open an SLA warning and verify the incident deadline and state.
-5. If your role permits export, export the selected view and confirm its scope
+5. Compare the heatmap and Latest incidents with the same window on Incidents.
+6. Compare Performance and Team Load with Analytics using equivalent scope.
+7. Follow an on-call entry to its schedule and confirm current coverage.
+8. If your role permits export, export the selected view and confirm its scope
    matches the visible filters rather than assuming it is workspace-wide.
 
 ## Change or undo the view
@@ -106,4 +127,3 @@ incident workflow permits, from the incident itself.
 - [Use Analytics](../analytics/use-analytics)
 - [Read a saved dashboard](../reports/read-dashboard)
 - [Understand permissions](../../reference/permissions)
-

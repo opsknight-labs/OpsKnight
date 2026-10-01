@@ -96,5 +96,15 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
       - name: Enforce final 2.0.0 release evidence
         run: npm run docs:certify:release
+      - name: Preserve exact release certificate and evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: docs-release-certification-${{ github.sha }}
+          path: |
+            generated/docs-certification/
+            generated/docs-evidence/current/
+          if-no-files-found: error

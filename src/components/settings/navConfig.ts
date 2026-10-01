@@ -210,7 +210,7 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         id: 'health-center',
         label: 'System Health Center',
         description:
-          'Inspect database health, background job workers, Redis queue, and SLA monitors',
+          'Inspect database health, background jobs and queues, scheduler state, notification delivery, and SLA monitors',
         href: '/settings/system/health',
         icon: 'activity',
         requiresAdmin: true,

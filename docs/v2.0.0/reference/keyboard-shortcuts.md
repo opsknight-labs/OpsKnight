@@ -16,7 +16,8 @@ verification:
 
 # Keyboard shortcuts
 
-Open `/shortcuts` or press `?` to see the in-product shortcut view. Shortcuts are
+Open `/shortcuts` or press `?` to see the in-product shortcut view. The runtime
+handler, popup, and page consume one canonical shortcut registry. Shortcuts are
 ignored while focus is in an input, textarea, editable region, and—where the
 local handler specifies it—a dialog. A `g` sequence must be completed within one
 second.
@@ -33,16 +34,13 @@ second.
 | `g`, then `c` | Schedules |
 | `g`, then `p` | Escalation policies |
 | `g`, then `a` | Analytics |
+| `Cmd/Ctrl+K` | Open product-wide search |
 | `?` | Toggle shortcut help |
 | `c` or `Cmd/Ctrl+C` with no selected text | Open Quick Create |
 | `n` on an Incidents route | Open Create Incident |
 
-The keyboard provider also registers `g h` for Dashboard, `g p` for Profile,
-`g e` for Security, `g a` for API Keys, `g n` for Notifications, `/` for an
-element marked as the current search input, and `r` for a route refresh. Context
-determines which handler receives overlapping sequences; use the visible
-`/shortcuts` page as the product-facing list and verify critical shortcuts in
-your deployed build.
+`/` is not a product-wide search shortcut. It focuses local search where a page
+implements that behavior, including the Incidents list.
 
 ## Incident-list triage
 
@@ -56,16 +54,6 @@ your deployed build.
 | `Enter` or `o` | Open the focused incident |
 | `/` | Focus incident search |
 | `Esc` | Clear selected/focused incident state |
-
-## Known display boundary
-
-The exported `KEYBOARD_SHORTCUTS` list currently advertises `Cmd+K`, `Cmd+S`,
-`Esc`, and `g w`, but the keyboard provider itself does not register handlers
-for all of those entries. Some may be supplied by a focused component or native
-dialog behavior. Do not build an operating procedure around an advertised entry
-until it works in the target page and browser. This page deliberately documents
-registered handlers and calls out the mismatch rather than claiming unsupported
-global behavior.
 
 ## Accessibility and safety
 
@@ -81,4 +69,3 @@ incident identity; these commands can mutate incident state.
 - If a browser or assistive technology captures a key, use the visible control.
 - If the shortcut overlay and behavior disagree, report the page, browser,
   focused element, keys pressed, and expected action.
-

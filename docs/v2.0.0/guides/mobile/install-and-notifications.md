@@ -101,8 +101,13 @@ from security settings if the device is lost or untrusted.
   browser and OS settings, then return and retry.
 - **Needs repair:** select **Repair** to reconcile an expired or mismatched
   browser/server subscription, then send a test.
-- **Preparation fails:** reload over HTTPS. If it continues, verify service
-  worker support and ask an administrator to check VAPID configuration.
+- **Preparation fails:** request `GET /sw.js` from the same public origin and
+  verify HTTP `200`, no redirect, final path `/sw.js`, a JavaScript/EcmaScript
+  MIME type, and worker JavaScript rather than login/application HTML. If any
+  check fails, inspect reverse-proxy rewrites, authentication redirects,
+  `DISABLE_PWA`, and whether the deployed container contains the public
+  service-worker asset. After `/sw.js` is correct, reload the installed app and
+  retry; then investigate VAPID configuration if preparation still fails.
 - **Push is On but silent:** check OS focus/battery restrictions and use **Send
   test Push**. An expired endpoint changes the card to **Needs repair**.
 - **Wrong deep link:** preserve notification payload details and inspect service-worker logs.

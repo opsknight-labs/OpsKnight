@@ -3,7 +3,7 @@
   "purpose": "Reader-completeness audit. Mapping and source verification do not imply task usability.",
   "counts": {
     "DISCOVERED": 0,
-    "MAPPED": 117,
+    "MAPPED": 118,
     "DRAFTED": 0,
     "READER_COMPLETE": 198,
     "HUMAN_VERIFIED": 0,
@@ -2172,6 +2172,17 @@
     },
     {
       "page": "operate/deploy/architecture/database-connections.md",
+      "type": "concept",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "humanVerified": false,
+      "runtimeVerified": false
+    },
+    {
+      "page": "operate/deploy/architecture/diagrams.md",
       "type": "concept",
       "userTask": null,
       "status": "MAPPED",
