@@ -43,6 +43,171 @@ describe('PushNotificationToggle', () => {
     vi.unstubAllGlobals();
   });
 
+  it('shows a stage-aware message when the service worker never becomes ready', async () => {
+    vi.useFakeTimers();
+    try {
+      const registration = {
+        active: { scriptURL: 'https://opsknight.example/sw.js' },
+        waiting: null,
+        installing: null,
+        pushManager: {
+          getSubscription: vi.fn().mockResolvedValue(null),
+        },
+      };
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(registration),
+          register: vi.fn().mockResolvedValue(registration),
+          ready: new Promise(() => {}),
+        },
+        configurable: true,
+      });
+
+      render(<PushNotificationToggle />);
+
+      await act(async () => {
+        // Let preflight reach the ready wait, then exhaust the 25s budget.
+        for (let i = 0; i < 12; i += 1) await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(25_000);
+        for (let i = 0; i < 12; i += 1) await Promise.resolve();
+      });
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Service worker did not become ready. Retry.'
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('allows iOS-style service worker readiness to take longer than the old 8 second budget', async () => {
+    vi.useFakeTimers();
+    try {
+      Object.defineProperty(window, 'Notification', {
+        value: {
+          permission: 'default',
+          requestPermission: vi.fn().mockResolvedValue('granted'),
+        },
+        configurable: true,
+      });
+
+      const registration = {
+        active: { scriptURL: 'https://opsknight.example/sw.js?build=previous' },
+        waiting: null,
+        installing: null,
+        pushManager: {
+          getSubscription: vi.fn().mockResolvedValue(null),
+          subscribe: vi.fn(),
+        },
+      };
+      let resolveReady!: (value: typeof registration) => void;
+      const ready = new Promise<typeof registration>(resolve => {
+        resolveReady = resolve;
+      });
+      const register = vi.fn().mockResolvedValue(registration);
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(registration),
+          register,
+          ready,
+        },
+        configurable: true,
+      });
+
+      mockFetch.mockImplementation(async (url: string) => {
+        if (typeof url === 'string' && url.includes('/api/system/vapid-public-key')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ key: 'B' + 'A'.repeat(86) }),
+          };
+        }
+        return { ok: true, status: 200, json: async () => ({}) };
+      });
+
+      render(<PushNotificationToggle />);
+
+      await act(async () => {
+        // Let preflight reach navigator.serviceWorker.ready so the readiness
+        // timeout is definitely armed before advancing past the old 8s budget.
+        for (let i = 0; i < 12; i += 1) await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(12_000);
+        resolveReady(registration);
+        for (let i = 0; i < 20; i += 1) await Promise.resolve();
+      });
+
+      const enableButton = screen.getByRole('button', { name: /Enable/i });
+      expect(enableButton).not.toBeDisabled();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(register).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reuses an existing /sw.js registration with a waiting update and returns the ready registration', async () => {
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'default',
+        requestPermission: vi.fn().mockResolvedValue('granted'),
+      },
+      configurable: true,
+    });
+
+    const existingGetSubscription = vi.fn().mockRejectedValue(
+      new Error('The pre-ready registration should not be used for Push lookup.')
+    );
+    const existingRegistration = {
+      active: { scriptURL: 'https://opsknight.example/sw.js?build=old' },
+      waiting: { scriptURL: 'https://opsknight.example/sw.js?build=new' },
+      installing: null,
+      pushManager: {
+        getSubscription: existingGetSubscription,
+      },
+    };
+    const readyGetSubscription = vi.fn().mockResolvedValue(null);
+    const readyRegistration = {
+      active: { scriptURL: 'https://opsknight.example/sw.js?build=old' },
+      waiting: { scriptURL: 'https://opsknight.example/sw.js?build=new' },
+      installing: null,
+      pushManager: {
+        getSubscription: readyGetSubscription,
+        subscribe: vi.fn(),
+      },
+    };
+    const register = vi.fn().mockResolvedValue(existingRegistration);
+
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(existingRegistration),
+        register,
+        ready: Promise.resolve(readyRegistration),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/system/vapid-public-key')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ key: 'B' + 'A'.repeat(86) }),
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+
+    render(<PushNotificationToggle />);
+
+    const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    await waitFor(() => expect(enableButton).not.toBeDisabled());
+
+    expect(register).not.toHaveBeenCalled();
+    expect(existingGetSubscription).not.toHaveBeenCalled();
+    expect(readyGetSubscription).toHaveBeenCalledTimes(1);
+  });
+
   it('reconciles subscription state and sends a test push', async () => {
     mockFetch.mockImplementation(async (url: string) => {
       if (typeof url === 'string' && url.includes('/api/user/push-subscription')) {
