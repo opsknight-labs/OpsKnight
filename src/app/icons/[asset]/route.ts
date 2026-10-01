@@ -14,22 +14,22 @@ const ICON_BACKGROUND = '#0f172a';
 
 // The canonical URLs are versioned by name so iOS/Android do not reuse the
 // old, visually off-centre install artwork from their icon caches.
-const ICON_SPECS: Record<string, IconSpec> = {
-  'opsknight-192.png': { size: 192, logoScale: 0.78 },
-  'opsknight-512.png': { size: 512, logoScale: 0.78 },
-  'opsknight-maskable-192.png': { size: 192, logoScale: 0.65 },
-  'opsknight-maskable-512.png': { size: 512, logoScale: 0.65 },
-  'opsknight-apple-touch.png': { size: 180, logoScale: 0.78 },
+const ICON_SPECS = new Map<string, IconSpec>([
+  ['opsknight-192.png', { size: 192, logoScale: 0.78 }],
+  ['opsknight-512.png', { size: 512, logoScale: 0.78 }],
+  ['opsknight-maskable-192.png', { size: 192, logoScale: 0.65 }],
+  ['opsknight-maskable-512.png', { size: 512, logoScale: 0.65 }],
+  ['opsknight-apple-touch.png', { size: 180, logoScale: 0.78 }],
 
   // Compatibility aliases for older manifests and queued Push payloads. The
   // stale PNG files are deliberately removed, so these names now render the
   // corrected centered artwork too.
-  'app-icon-192.png': { size: 192, logoScale: 0.78 },
-  'app-icon-512.png': { size: 512, logoScale: 0.78 },
-  'app-icon-maskable-192.png': { size: 192, logoScale: 0.65 },
-  'app-icon-maskable-512.png': { size: 512, logoScale: 0.65 },
-  'apple-touch-icon.png': { size: 180, logoScale: 0.78 },
-};
+  ['app-icon-192.png', { size: 192, logoScale: 0.78 }],
+  ['app-icon-512.png', { size: 512, logoScale: 0.78 }],
+  ['app-icon-maskable-192.png', { size: 192, logoScale: 0.65 }],
+  ['app-icon-maskable-512.png', { size: 512, logoScale: 0.65 }],
+  ['apple-touch-icon.png', { size: 180, logoScale: 0.78 }],
+]);
 
 let cachedLogoDataUrl: string | null = null;
 
@@ -46,7 +46,7 @@ export async function GET(
   { params }: { params: Promise<{ asset: string }> }
 ) {
   const { asset } = await params;
-  const spec = ICON_SPECS[asset];
+  const spec = ICON_SPECS.get(asset);
 
   if (!spec) {
     return new Response('Not found', { status: 404 });
