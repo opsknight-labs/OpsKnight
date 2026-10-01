@@ -253,6 +253,13 @@ Supported general-purpose contracts are documented separately:
 
 ## Identity protocol endpoints
 
+- `GET, PUT, PATCH, DELETE /api/scim/v2/Groups/[id]` — `src/app/api/scim/v2/Groups/[id]/route.ts`
+- `GET, POST /api/scim/v2/Groups` — `src/app/api/scim/v2/Groups/route.ts`
+- `GET /api/scim/v2/ResourceTypes/[id]` — `src/app/api/scim/v2/ResourceTypes/[id]/route.ts`
+- `GET /api/scim/v2/ResourceTypes` — `src/app/api/scim/v2/ResourceTypes/route.ts`
+- `GET /api/scim/v2/Schemas/[id]` — `src/app/api/scim/v2/Schemas/[id]/route.ts`
+- `GET /api/scim/v2/Schemas` — `src/app/api/scim/v2/Schemas/route.ts`
+- `GET /api/scim/v2/ServiceProviderConfig` — `src/app/api/scim/v2/ServiceProviderConfig/route.ts`
 - `GET, PUT, PATCH, DELETE /api/scim/v2/Users/[id]` — `src/app/api/scim/v2/Users/[id]/route.ts`
 - `GET, POST, PATCH /api/scim/v2/Users` — `src/app/api/scim/v2/Users/route.ts`
 

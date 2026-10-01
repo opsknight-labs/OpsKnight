@@ -71,13 +71,15 @@ test.describe.serial('operational documentation surfaces', () => {
     await captureEvidence(page, testInfo, 'analytics', 'reports');
 
     await page.goto('/reports/executive?template=sre-operations');
-    await expect(page.getByText('SRE Operations').first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SRE Operations', exact: true })).toBeVisible();
     await expect(page.getByText('Incident Calendar').first()).toBeVisible();
     await captureEvidence(page, testInfo, 'analytics', 'dashboard-template');
 
     await page.goto('/reports/executive/docs-dashboard-executive');
-    await expect(page.getByText('Production Reliability Overview').first()).toBeVisible();
-    await expect(page.getByText('Service Health').first()).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Production Reliability Overview', exact: true })
+    ).toBeVisible();
+    await expect(page.getByText('Service Health', { exact: true }).filter({ visible: true }).first()).toBeVisible();
     await captureEvidence(page, testInfo, 'analytics', 'dashboard-saved');
 
     await page.getByRole('button', { name: 'Dashboard settings' }).click();
