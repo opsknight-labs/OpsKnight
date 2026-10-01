@@ -24,27 +24,31 @@ https://YOUR_OPSKNIGHT_URL/api/scim/v2/Users
 
 ## Authentication
 
-Configure a high-entropy bearer token in the OpsKnight environment:
+OpsKnight supports two methods for configuring the SCIM bearer token:
+
+### 1. In-App UI Management (Recommended)
+
+Administrators can generate, view, copy, rotate, and revoke SCIM tokens directly from the OpsKnight web interface under **Settings $\to$ Security & Authentication $\to$ SCIM 2.0 User Provisioning**.
+
+- Tokens are encrypted at rest using authenticated AES-256-GCM envelope encryption.
+- No container restarts or `.env` modifications are required.
+- Full audit trail is logged for token generation, rotation, and revocation events.
+
+### 2. Environment Variable Fallback
+
+Alternatively, configure a high-entropy bearer secret in your environment:
 
 ```text
 SCIM_BEARER_TOKEN=<at-least-32-character-random-secret>
 ```
 
-Identity providers must send:
+Identity providers send the token via standard HTTP Bearer authentication:
 
 ```http
 Authorization: Bearer <SCIM_BEARER_TOKEN>
 ```
 
-OpsKnight rejects missing/short configured tokens and performs timing-safe comparison of the supplied bearer token.
-
-Generate a token with a cryptographically secure secret generator, for example:
-
-```bash
-openssl rand -hex 32
-```
-
-Store the token in the identity provider's SCIM connector and in your production secret manager. Do not commit it to source control.
+OpsKnight rejects missing or short configured tokens and performs timing-safe comparison of the supplied bearer token.
 
 ## Supported resource
 

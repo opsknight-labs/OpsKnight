@@ -11,7 +11,10 @@ import { SettingsSection } from '@/components/settings/layout/SettingsSection';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import Link from 'next/link';
-import { ShieldCheck, KeyRound, Fingerprint, ExternalLink } from 'lucide-react';
+import ScimSettingsSection from '@/components/settings/ScimSettingsSection';
+import { getScimConfig } from '@/lib/scim';
+import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
+import { ShieldCheck, KeyRound, Fingerprint, ExternalLink, Users } from 'lucide-react';
 
 export default async function SecuritySettingsPage() {
   const session = await getServerSession(await getAuthOptions());
@@ -45,6 +48,16 @@ export default async function SecuritySettingsPage() {
     user?.lastOidcSync || (user?.oidcIdentities && user.oidcIdentities.length > 0)
   );
   const isAdmin = user?.role === 'ADMIN';
+
+  const systemSettings = isAdmin
+    ? await prisma.systemSettings.findUnique({
+        where: { id: 'default' },
+        select: { appUrl: true },
+      })
+    : null;
+  const authOrigin = resolveAuthPublicOrigin({ dbAppUrl: systemSettings?.appUrl ?? null });
+  const scimTenantUrl = `${authOrigin.origin}/api/scim/v2`;
+  const scimConfig = isAdmin ? await getScimConfig() : null;
 
   // Fetch recent user-specific audit logs
   let recentAuditLogs: SecurityAuditItem[] = [];
@@ -262,7 +275,30 @@ export default async function SecuritySettingsPage() {
         </div>
       </SettingsSection>
 
-      {/* Section 4: Recent Security Activity */}
+      {/* Section 4: SCIM 2.0 User Provisioning (Admins only) */}
+      {isAdmin && scimConfig && (
+        <SettingsSection
+          title="SCIM 2.0 User Provisioning"
+          description="Automate identity lifecycle management: provision, synchronize, and de-provision users directly from Microsoft Entra ID, Okta, or other enterprise identity providers."
+          footer={
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                OpsKnight implements RFC 7644 SCIM 2.0 for automated user lifecycle operations.
+              </p>
+              <Button variant="ghost" size="sm" asChild className="gap-1 text-xs h-8">
+                <Link href="/settings/users">
+                  View Provisioned Users
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            </div>
+          }
+        >
+          <ScimSettingsSection initialConfig={scimConfig} tenantUrl={scimTenantUrl} />
+        </SettingsSection>
+      )}
+
+      {/* Section 5: Recent Security Activity */}
       <SettingsSection
         title="Recent Security Activity"
         description="Audit history of authentication and credential events on your account."
