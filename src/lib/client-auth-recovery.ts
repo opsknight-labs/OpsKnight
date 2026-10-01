@@ -104,6 +104,7 @@ export async function verifyClientSession(): Promise<ClientSessionVerificationRe
     try {
       const response = await fetch(`/api/auth/session?_ts=${Date.now()}`, {
         method: 'GET',
+        credentials: 'include',
         headers: {
           'Cache-Control': 'no-store',
         },

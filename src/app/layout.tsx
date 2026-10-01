@@ -29,7 +29,7 @@ export const metadata: Metadata = {
       { url: '/logo.svg', type: 'image/svg+xml' },
       { url: '/logo.png', type: 'image/png' },
     ],
-    apple: '/icons/apple-touch-icon.png',
+    apple: '/icons/opsknight-apple-touch.png',
   },
   appleWebApp: {
     capable: true,
