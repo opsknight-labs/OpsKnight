@@ -4,6 +4,8 @@ import {
   generateShiftReminderEmailHTML,
   generateShiftHandoffEmailHTML,
 } from '@/lib/email';
+import { getUserInviteEmailTemplate } from '@/lib/user-invite-email-template';
+import { getPasswordResetEmailTemplate } from '@/lib/password-reset-email-template';
 
 describe('Dynamic Colorful Incident Email Templates', () => {
   const baseIncident = {
@@ -206,5 +208,147 @@ describe('Shift Reminder & Handoff Email Templates', () => {
     expect(html).toContain('Kafka Consumer Lag Spike');
     expect(html).toContain('https://opsknight.com/incidents/inc-101');
     expect(html).toContain('https://opsknight.com/incidents/inc-102');
+  });
+
+  it('caps the number of active incidents in shift handoff email to default limit of 5 with an overflow card', () => {
+    const incidents = Array.from({ length: 9 }, (_, i) => ({
+      id: `inc-${i + 1}`,
+      title: `Incident Service Outage #${i + 1}`,
+      status: i % 2 === 0 ? 'TRIGGERED' : 'ACKNOWLEDGED',
+      incidentUrl: `https://opsknight.com/incidents/inc-${i + 1}`,
+    }));
+
+    const data = {
+      userName: 'David Miller',
+      scheduleName: 'Platform Infrastructure Rotation',
+      scheduleUrl: 'https://opsknight.com/schedules/sched-456',
+      activeIncidents: incidents,
+      timeZone: 'UTC',
+    };
+
+    const html = generateShiftHandoffEmailHTML(data);
+
+    // Should indicate total count
+    expect(html).toContain('9 active incident(s)');
+    expect(html).toContain('showing top 5');
+
+    // Should render the first 5 incidents
+    for (let i = 1; i <= 5; i++) {
+      expect(html).toContain(`Incident Service Outage #${i}`);
+      expect(html).toContain(`https://opsknight.com/incidents/inc-${i}`);
+    }
+
+    // Should NOT render incidents beyond the cap
+    expect(html).not.toContain('Incident Service Outage #6');
+    expect(html).not.toContain('https://opsknight.com/incidents/inc-6');
+
+    // Should render overflow card indicating + 4 more
+    expect(html).toContain('+ 4 more active incidents assigned to this shift.');
+    expect(html).toContain('View all on schedule');
+  });
+
+  it('allows custom maxIncidents cap in shift handoff email', () => {
+    const incidents = Array.from({ length: 4 }, (_, i) => ({
+      id: `inc-${i + 1}`,
+      title: `Incident #${i + 1}`,
+      status: 'TRIGGERED',
+      incidentUrl: `https://opsknight.com/incidents/inc-${i + 1}`,
+    }));
+
+    const html = generateShiftHandoffEmailHTML({
+      userName: 'David Miller',
+      scheduleName: 'Tier 1 Support',
+      scheduleUrl: 'https://opsknight.com/schedules/sched-789',
+      activeIncidents: incidents,
+      timeZone: 'UTC',
+      maxIncidents: 2,
+    });
+
+    expect(html).toContain('Incident #1');
+    expect(html).toContain('Incident #2');
+    expect(html).not.toContain('Incident #3');
+    expect(html).toContain('+ 2 more active incidents assigned to this shift.');
+  });
+});
+
+describe('Email Templates Dark Mode Compliance', () => {
+  it('includes dark mode media query and color-scheme metadata in container', () => {
+    const baseIncident = {
+      id: 'inc-999',
+      title: 'Dark Mode Verification Incident',
+      status: 'TRIGGERED',
+      urgency: 'HIGH',
+      service: { name: 'Core API' },
+      createdAt: new Date('2026-09-05T10:00:00Z'),
+    };
+
+    const html = generateIncidentEmailHTML(baseIncident, 'UTC', 'triggered');
+
+    // Must declare light dark color-scheme in meta and CSS root
+    expect(html).toContain('name="color-scheme" content="light dark"');
+    expect(html).toContain('name="supported-color-schemes" content="light dark"');
+    expect(html).toContain('@media (prefers-color-scheme: dark)');
+
+    // Must include dm-* class hooks for background, cards, text, and containers
+    expect(html).toContain('dm-bg-outer');
+    expect(html).toContain('dm-bg-card');
+    expect(html).toContain('dm-bg-content');
+    expect(html).toContain('dm-bg-footer');
+    expect(html).toContain('dm-text-heading');
+    expect(html).toContain('dm-text-body');
+  });
+});
+
+describe('User Invite Email Template', () => {
+  it('generates standardized invite email with 40px logo, [OpsKnight] subject, and dark mode support', () => {
+    const result = getUserInviteEmailTemplate({
+      userName: 'Jordan Lee',
+      inviteUrl: 'https://opsknight.com/invite/tok123',
+      invitedBy: 'Admin Team',
+      expiresInDays: 7,
+    });
+
+    expect(result.subject).toBe("[OpsKnight] You're invited to join");
+    expect(result.html).toContain('width="40"');
+    expect(result.html).toContain('Hi Jordan Lee,');
+    expect(result.html).toContain(
+      'You have been invited by <strong>Admin Team</strong> to join OpsKnight.'
+    );
+    expect(result.html).toContain(
+      'Click the button below to set your password and access your account.'
+    );
+    expect(result.html).toContain('This invite link expires in 7 days');
+    expect(result.html).toContain('https://opsknight.com/invite/tok123');
+    expect(result.html).toContain('@media (prefers-color-scheme: dark)');
+    expect(result.html).toContain('dm-text-heading');
+
+    expect(result.text).toContain('[OpsKnight] Invitation');
+    expect(result.text).toContain('Hi Jordan Lee,');
+    expect(result.text).toContain('https://opsknight.com/invite/tok123');
+  });
+});
+
+describe('Password Reset Email Template', () => {
+  it('generates clean reset email with standardized subject, 40px logo, no AlertBox emoji, and dark mode support', () => {
+    const result = getPasswordResetEmailTemplate({
+      userName: 'Alex Morgan',
+      resetLink: 'https://opsknight.com/reset-password/tok456',
+      expiryMinutes: 60,
+    });
+
+    expect(result.subject).toBe('[OpsKnight] Reset your password');
+    expect(result.html).toContain('width="40"');
+    expect(result.html).toContain('Hi Alex Morgan,');
+    expect(result.html).toContain('Security Notice');
+    expect(result.html).not.toContain('🛡️ Security Notice');
+    expect(result.html).toContain('This link expires in 60 minutes');
+    expect(result.html).toContain('https://opsknight.com/reset-password/tok456');
+    expect(result.html).toContain('@media (prefers-color-scheme: dark)');
+    expect(result.html).toContain('dm-text-heading');
+
+    expect(result.text).toContain('[OpsKnight] Password Reset Request');
+    expect(result.text).toContain('Hi Alex Morgan,');
+    expect(result.text).toContain('This is an automated message from OpsKnight.');
+    expect(result.text).not.toContain('Incident Management');
   });
 });

@@ -705,15 +705,15 @@ export function generateIncidentEmailHTML(
 
   const context =
     eventMessage && !isDuplicateMessage
-      ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid ${presentation.accentColor};border-radius:8px;padding:12px 16px;margin:16px 0;color:#334155;font-size:13px;line-height:1.5;">${escapeHtml(eventMessage)}</div>`
+      ? `<div class="dm-context-box" style="background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid ${presentation.accentColor};border-radius:8px;padding:12px 16px;margin:16px 0;color:#334155;font-size:13px;line-height:1.5;">${escapeHtml(eventMessage)}</div>`
       : '';
 
   const description = incident.description
-    ? `<div class="desktop-font-body" style="margin-top:20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid ${presentation.accentColor};border-radius:8px;padding:14px 18px;">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;margin-bottom:6px;">
+    ? `<div class="desktop-font-body dm-desc-box" style="margin-top:20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid ${presentation.accentColor};border-radius:8px;padding:14px 18px;">
+        <div class="dm-desc-label" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;margin-bottom:6px;">
           Incident Description
         </div>
-        <div style="white-space:pre-wrap;font-size:14px;color:#334155;line-height:1.6;word-break:break-word;">
+        <div class="dm-desc-text" style="white-space:pre-wrap;font-size:14px;color:#334155;line-height:1.6;word-break:break-word;">
           ${escapeHtml(incident.description)}
         </div>
       </div>`
@@ -726,8 +726,8 @@ export function generateIncidentEmailHTML(
     }) +
       EmailContent(`
         <div style="margin-bottom:16px">${StatusBadge(presentation.label.toUpperCase(), presentation.badge)}</div>
-        <div class="desktop-font-body" style="font-size:14px;color:#475569;margin-bottom:18px;line-height:1.5;">${escapeHtml(presentation.message)}</div>
-        <h2 class="desktop-font-title" style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 16px 0;line-height:1.35;letter-spacing:-0.01em;">${escapeHtml(incident.title)}</h2>
+        <div class="desktop-font-body dm-text-body" style="font-size:14px;color:#475569;margin-bottom:18px;line-height:1.5;">${escapeHtml(presentation.message)}</div>
+        <h2 class="desktop-font-title dm-text-heading" style="font-size:20px;font-weight:700;color:#0f172a;margin:0 0 16px 0;line-height:1.35;letter-spacing:-0.01em;">${escapeHtml(incident.title)}</h2>
         ${context}
         ${InfoCard(infoItems, { accentColor: presentation.accentColor })}
         ${description}
@@ -874,13 +874,13 @@ export function generateShiftReminderEmailHTML(data: ShiftReminderData): string 
     }) +
       EmailContent(`
         <div style="margin-bottom:18px">${StatusBadge('UPCOMING ON-CALL', 'schedule')}</div>
-        <h2 style="font-size:22px;color:#0f172a;margin-bottom:12px">Hi ${escapeHtml(data.userName)}, your on-call shift is starting soon!</h2>
-        <p style="font-size:14px;color:#475569;margin-bottom:20px;line-height:1.6">
+        <h2 class="dm-text-heading" style="font-size:22px;color:#0f172a;margin-bottom:12px">Hi ${escapeHtml(data.userName)}, your on-call shift is starting soon!</h2>
+        <p class="dm-text-body" style="font-size:14px;color:#475569;margin-bottom:20px;line-height:1.6">
           You are scheduled to go on-call for <strong>${escapeHtml(data.scheduleName)}</strong> in approximately <strong>${data.minutesUntilStart} minute(s)</strong>.
           Please ensure your notification channels are active and you are prepared to respond to alerts.
         </p>
         ${InfoCard(infoItems, { accentColor: '#7c3aed' })}
-        <div style="margin-top:24px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:16px 20px;color:#5b21b6;font-size:13px;line-height:1.6">
+        <div class="dm-checklist" style="margin-top:24px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:16px 20px;color:#5b21b6;font-size:13px;line-height:1.6">
           <strong>💡 Responder Checklist:</strong>
           <ul style="margin:8px 0 0 0;padding-left:20px">
             <li>Verify your phone/SMS and mobile push notifications are unmuted.</li>
@@ -919,24 +919,44 @@ export type ShiftHandoffData = {
     incidentUrl: string;
   }>;
   timeZone: string;
+  maxIncidents?: number;
 };
+
+export const DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS = 5;
 
 export function generateShiftHandoffEmailHTML(data: ShiftHandoffData): string {
   const headerGradient = 'linear-gradient(135deg, #1e3a8a 0%, #312e81 45%, #4338ca 100%)';
   const buttonBackground = 'linear-gradient(135deg, #3730a3 0%, #4338ca 100%)';
   const buttonShadow = '0 8px 20px rgba(67, 56, 202, 0.35)';
 
-  const incidentListHtml = data.activeIncidents
+  const maxIncidents = data.maxIncidents ?? DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS;
+  const displayedIncidents = data.activeIncidents.slice(0, maxIncidents);
+  const remainingCount = data.activeIncidents.length - displayedIncidents.length;
+
+  const incidentListHtml = displayedIncidents
     .map(
       inc => `
-      <div style="padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px">
-        <div style="font-weight:600;font-size:14px;color:#0f172a">${escapeHtml(inc.title)}</div>
-        <div style="font-size:12px;color:#64748b;margin-top:4px">
-          Status: <strong>${escapeHtml(inc.status)}</strong> · <a href="${escapeHtml(inc.incidentUrl)}" style="color:#2563eb;text-decoration:none;font-weight:600">Open Incident &rarr;</a>
+      <div class="dm-incident-item" style="padding:10px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px">
+        <div class="dm-incident-title" style="font-weight:600;font-size:14px;color:#0f172a">${escapeHtml(inc.title)}</div>
+        <div class="dm-incident-meta" style="font-size:12px;color:#64748b;margin-top:4px">
+          Status: <strong>${escapeHtml(inc.status)}</strong> · <a href="${escapeHtml(inc.incidentUrl)}" class="dm-link-color" style="color:#2563eb;text-decoration:none;font-weight:600">Open Incident &rarr;</a>
         </div>
       </div>`
     )
     .join('');
+
+  const overflowHtml =
+    remainingCount > 0
+      ? `
+      <div class="dm-incident-item" style="padding:12px 14px;background:#f1f5f9;border:1px dashed #cbd5e1;border-radius:8px;margin-bottom:8px;text-align:center">
+        <span class="dm-text-muted" style="font-size:13px;color:#64748b;font-weight:500">
+          + ${remainingCount} more active incident${remainingCount === 1 ? '' : 's'} assigned to this shift.
+        </span>
+        <div style="margin-top:6px">
+          <a href="${escapeHtml(data.scheduleUrl)}" class="dm-link-color" style="color:#2563eb;text-decoration:none;font-size:13px;font-weight:600">View all on schedule &rarr;</a>
+        </div>
+      </div>`
+      : '';
 
   return EmailContainer(
     EmailHeader('Shift Rotation Handoff', `Schedule: ${data.scheduleName}`, {
@@ -945,12 +965,13 @@ export function generateShiftHandoffEmailHTML(data: ShiftHandoffData): string {
     }) +
       EmailContent(`
         <div style="margin-bottom:18px">${StatusBadge('SHIFT HANDOFF', 'schedule')}</div>
-        <h2 style="font-size:22px;color:#0f172a;margin-bottom:12px">Hi ${escapeHtml(data.userName)}, you are now On-Call</h2>
-        <p style="font-size:14px;color:#475569;margin-bottom:20px;line-height:1.6">
+        <h2 class="dm-text-heading" style="font-size:22px;color:#0f172a;margin-bottom:12px">Hi ${escapeHtml(data.userName)}, you are now On-Call</h2>
+        <p class="dm-text-body" style="font-size:14px;color:#475569;margin-bottom:20px;line-height:1.6">
           Your on-call shift for <strong>${escapeHtml(data.scheduleName)}</strong> has started.
-          The following <strong>${data.activeIncidents.length} active incident(s)</strong> have been automatically reassigned to you:
+          The following <strong>${data.activeIncidents.length} active incident(s)</strong> have been automatically reassigned to you${remainingCount > 0 ? ` (showing top ${displayedIncidents.length})` : ''}:
         </p>
         ${incidentListHtml}
+        ${overflowHtml}
         <div style="margin-top:28px;text-align:center;">${EmailButton('View Schedule & Incidents', escapeHtml(data.scheduleUrl), { buttonBackground, buttonShadow })}</div>
       `) +
       EmailFooter()
@@ -962,7 +983,14 @@ export async function sendShiftHandoffEmail(
 ): Promise<EmailDeliveryResult> {
   const subject = `🔄 [Shift Handoff] You are now On-Call for "${data.scheduleName}" (${data.activeIncidents.length} active incidents)`;
   const html = generateShiftHandoffEmailHTML(data);
-  const text = `Shift Handoff: You are now on-call for "${data.scheduleName}" with ${data.activeIncidents.length} active incident(s).\n\nSchedule: ${data.scheduleUrl}`;
+  const maxIncidents = data.maxIncidents ?? DEFAULT_MAX_SHIFT_HANDOFF_INCIDENTS;
+  const displayed = data.activeIncidents.slice(0, maxIncidents);
+  const remaining = data.activeIncidents.length - displayed.length;
+  const incidentLines = displayed
+    .map(i => `- ${i.title} (${i.status}): ${i.incidentUrl}`)
+    .join('\n');
+  const overflowLine = remaining > 0 ? `\n...and ${remaining} more active incident(s)` : '';
+  const text = `Shift Handoff: You are now on-call for "${data.scheduleName}" with ${data.activeIncidents.length} active incident(s).\n\n${incidentLines}${overflowLine}\n\nSchedule: ${data.scheduleUrl}`;
   return sendEmail({
     to: data.to,
     subject,

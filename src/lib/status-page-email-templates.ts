@@ -1,6 +1,9 @@
 /**
- * Modern Email templates for Status Page using OpsKnight Brand Colors
- * Brand Colors: Primary Red (#d32f2f), Dark (#0b0b0f), Accent Red (#ff5252)
+ * Modern Email templates for Status Page using OpsKnight Brand Colors.
+ * Brand Colors: Primary Red (#d32f2f), Dark (#0b0b0f), Accent Red (#ff5252).
+ * Supports light & dark mode via dm-* CSS classes defined in EmailContainer.
+ *
+ * Note: Subject line formats match existing test expectations and must not change.
  */
 
 import {
@@ -89,6 +92,7 @@ export function getVerificationEmailTemplate(
             headerGradient: 'linear-gradient(135deg, #0b0b0f 0%, #111827 45%, #0f172a 100%)',
             logoUrl: resolvedLogoUrl,
             brandName: displayName,
+            logoWidth: 40,
           }
         )}
         ${EmailContent(`
@@ -97,11 +101,11 @@ export function getVerificationEmailTemplate(
                 <div style="display: inline-block; background: rgba(16, 185, 129, 0.12); border-radius: 999px; padding: 12px 22px; margin-bottom: 20px; border: 1px solid rgba(16, 185, 129, 0.35);">
                     <span style="font-size: 32px; filter: drop-shadow(0 2px 4px rgba(16, 185, 129, 0.25));">✉️</span>
                 </div>
-                <h2 style="margin: 0 0 16px 0; color: #111827; font-size: 26px; font-weight: 800; letter-spacing: -0.02em;">
-                    Welcome to Status Updates!
+                <h2 class="dm-text-heading" style="margin: 0 0 16px 0; color: #111827; font-size: 26px; font-weight: 800; letter-spacing: -0.02em;">
+                    Confirm Your Subscription
                 </h2>
-                <p style="margin: 0; color: #6b7280; font-size: 16px; line-height: 1.6;">
-                    You're one click away from receiving important updates about <strong style="color: #10b981;">${safeDisplayName}</strong>
+                <p class="dm-text-body" style="margin: 0; color: #6b7280; font-size: 16px; line-height: 1.6;">
+                    Please verify your email address to start receiving status updates for <strong style="color: #10b981;">${safeDisplayName}</strong>.
                 </p>
             </div>
             
@@ -111,7 +115,7 @@ export function getVerificationEmailTemplate(
                     To complete your subscription and start receiving notifications about incidents and status changes, please verify your email address:
                 </p>
                 
-                ${EmailButton('Verify Email Address →', data.verificationUrl, {
+                ${EmailButton('Verify Email Address \u2192', data.verificationUrl, {
                   buttonBackground: 'linear-gradient(135deg, #10b981 0%, #22c55e 100%)',
                   buttonShadow: '0 10px 24px rgba(16, 185, 129, 0.35)',
                 })}
@@ -122,19 +126,19 @@ export function getVerificationEmailTemplate(
             </div>
             
             <!-- Alternative Link -->
-            <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin: 24px 0; border: 1px solid #e2e8f0;">
-                <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px; font-weight: 600;">
+            <div class="dm-bg-muted" style="background: #f8fafc; border-radius: 12px; padding: 20px; margin: 24px 0; border: 1px solid #e2e8f0;">
+                <p class="dm-text-muted" style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px; font-weight: 600;">
                     Button not working?
                 </p>
-                <p style="margin: 0; color: #9ca3af; font-size: 13px; line-height: 1.6; word-break: break-all;">
-                    Copy and paste this link: <a href="${safeVerificationUrl}" style="color: #10b981; text-decoration: none;">${safeVerificationUrl}</a>
+                <p class="dm-text-secondary" style="margin: 0; color: #9ca3af; font-size: 13px; line-height: 1.6; word-break: break-all;">
+                    Copy and paste this link: <a href="${safeVerificationUrl}" class="dm-link-color" style="color: #10b981; text-decoration: none;">${safeVerificationUrl}</a>
                 </p>
             </div>
             
             <!-- Security Note -->
-            <div style="text-align: center; margin-top: 32px; padding-top: 32px; border-top: 1px solid #e5e7eb;">
-                <p style="margin: 0; color: #9ca3af; font-size: 14px; line-height: 1.6;">
-                    If you didn't subscribe to these updates, you can safely ignore this email.
+            <div style="text-align: center; margin-top: 32px; padding-top: 32px; border-top: 1px solid #e5e7eb;" class="dm-divider-top">
+                <p class="dm-text-body" style="margin: 0; color: #9ca3af; font-size: 14px; line-height: 1.6;">
+                    If you did not subscribe to these updates, you can safely ignore this email.
                 </p>
             </div>
         `)}
@@ -157,7 +161,7 @@ ${data.verificationUrl}
 
 This verification link will expire in 7 days.
 
-If you didn't subscribe, you can safely ignore this email.
+If you did not subscribe, you can safely ignore this email.
     `.trim();
 
   return { subject, html, text };
@@ -186,6 +190,7 @@ export function getIncidentCreatedTemplate(data: EmailTemplateData): {
             headerGradient: 'linear-gradient(135deg, #7f1d1d 0%, #b91c1c 50%, #dc2626 100%)',
             logoUrl: resolvedLogoUrl,
             brandName: displayName,
+            logoWidth: 40,
           }
         )}
         ${EmailContent(`
@@ -207,16 +212,16 @@ export function getIncidentCreatedTemplate(data: EmailTemplateData): {
                 ? `
             <!-- Affected Services -->
             <div style="margin: 32px 0;">
-                <h3 style="margin: 0 0 16px 0; color: #1f2937; font-size: 18px; font-weight: 700;">
+                <h3 class="dm-text-subheading" style="margin: 0 0 16px 0; color: #1f2937; font-size: 18px; font-weight: 700;">
                     Affected Services
                 </h3>
-                <div style="background: linear-gradient(135deg, #fff1f2 0%, #fee2e2 100%); border: 1px solid #fecaca; border-radius: 12px; padding: 24px;">
+                <div class="dm-affected-box" style="background: linear-gradient(135deg, #fff1f2 0%, #fee2e2 100%); border: 1px solid #fecaca; border-radius: 12px; padding: 24px;">
                     ${safeAffectedServices
                       .map(
                         service => `
-                        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(239, 68, 68, 0.1); last-child:border-bottom: none;">
-                            <div style="width: 10px; height: 10px; background: #dc2626; border-radius: 50%; box-shadow: 0 0 8px rgba(220, 38, 38, 0.4);"></div>
-                            <span style="color: #111827; font-size: 15px; font-weight: 600;">${service}</span>
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(239, 68, 68, 0.1);">
+                            <div style="width: 10px; height: 10px; background: #dc2626; border-radius: 50%; box-shadow: 0 0 8px rgba(220, 38, 38, 0.4); flex-shrink: 0;"></div>
+                            <span class="dm-text-subheading" style="color: #111827; font-size: 15px; font-weight: 600;">${service}</span>
                         </div>
                     `
                       )
@@ -228,15 +233,15 @@ export function getIncidentCreatedTemplate(data: EmailTemplateData): {
             }
             
             <!-- Call to Action -->
-            ${EmailButton('View Incident Details →', resolvedIncidentUrl, {
+            ${EmailButton('View Incident Details \u2192', resolvedIncidentUrl, {
               buttonBackground: 'linear-gradient(135deg, #b91c1c 0%, #dc2626 100%)',
               buttonShadow: '0 10px 22px rgba(185, 28, 28, 0.35)',
             })}
             
             <!-- Status Updates Info -->
-            <div style="margin-top: 40px; padding: 24px; background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border-radius: 12px; text-align: center; border: 1px solid #fed7aa;">
-                <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.7;">
-                    💡 We'll keep you updated on the progress. Check the status page for real-time updates.
+            <div class="dm-tip-box" style="margin-top: 40px; padding: 24px; background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border-radius: 12px; text-align: center; border: 1px solid #fed7aa;">
+                <p class="dm-tip-text" style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.7;">
+                    We will keep you updated as the situation progresses. Check the status page for real-time updates.
                 </p>
             </div>
         `)}
@@ -256,8 +261,7 @@ ${data.incidentTitle || 'New Incident'}
 
 ${data.incidentDescription || ''}
 
-${data.affectedServices && data.affectedServices.length > 0 ? `Affected Services:\n${data.affectedServices.map(s => `- ${s}`).join('\n')}\n\n` : ''}
-View incident details: ${resolvedIncidentUrl}
+${data.affectedServices && data.affectedServices.length > 0 ? `Affected Services:\n${data.affectedServices.map(s => `- ${s}`).join('\n')}\n\n` : ''}View incident details: ${resolvedIncidentUrl}
 
 ---
 You're receiving this because you subscribed to ${displayName} status updates.
@@ -289,6 +293,7 @@ export function getIncidentResolvedTemplate(data: EmailTemplateData): {
             headerGradient: 'linear-gradient(135deg, #166534 0%, #16a34a 45%, #22c55e 100%)',
             logoUrl: resolvedLogoUrl,
             brandName: displayName,
+            logoWidth: 40,
           }
         )}
         ${EmailContent(`
@@ -313,16 +318,16 @@ export function getIncidentResolvedTemplate(data: EmailTemplateData): {
             )}
             
             <!-- Success Message -->
-            <div style="text-align: center; margin: 32px 0; padding: 28px; background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border-radius: 12px; border: 1px solid #86efac;">
-                <p style="margin: 0; color: #166534; font-size: 16px; font-weight: 600; line-height: 1.6;">
-                    🎉 Everything is back up and running smoothly!
+            <div class="dm-resolved-card" style="text-align: center; margin: 32px 0; padding: 28px; background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); border-radius: 12px; border: 1px solid #86efac;">
+                <p class="dm-resolved-card-primary" style="margin: 0; color: #166534; font-size: 16px; font-weight: 600; line-height: 1.6;">
+                    This incident has been resolved and all systems are back to normal operation.
                 </p>
-                <p style="margin: 12px 0 0 0; color: #15803d; font-size: 14px; line-height: 1.6;">
+                <p class="dm-resolved-card-secondary" style="margin: 12px 0 0 0; color: #15803d; font-size: 14px; line-height: 1.6;">
                     Thank you for your patience while we resolved this issue.
                 </p>
             </div>
             
-            ${EmailButton('View Status Page →', data.statusPageUrl, {
+            ${EmailButton('View Status Page \u2192', data.statusPageUrl, {
               buttonBackground: 'linear-gradient(135deg, #16a34a 0%, #22c55e 100%)',
               buttonShadow: '0 10px 22px rgba(22, 163, 74, 0.35)',
             })}
@@ -376,9 +381,10 @@ export function getStatusChangeTemplate(data: EmailTemplateData): {
           headerGradient: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%)',
           logoUrl: resolvedLogoUrl,
           brandName: displayName,
+          logoWidth: 40,
         })}
         ${EmailContent(`
-            <h2 style="margin: 0 0 24px 0; color: #111827; font-size: 24px; font-weight: 700;">
+            <h2 class="dm-text-heading" style="margin: 0 0 24px 0; color: #111827; font-size: 24px; font-weight: 700;">
                 Status Change Notification
             </h2>
 
@@ -386,11 +392,11 @@ export function getStatusChangeTemplate(data: EmailTemplateData): {
                 ${StatusBadge((data.incidentStatus || 'Updated').toUpperCase(), 'info')}
             </div>
             
-            <div style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); padding: 24px; margin: 24px 0; border-radius: 12px; border-left: 4px solid #2563eb;">
-                <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">
+            <div class="dm-status-card" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); padding: 24px; margin: 24px 0; border-radius: 12px; border-left: 4px solid #2563eb;">
+                <p class="dm-status-label" style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">
                     Current Status
                 </p>
-                <p style="margin: 0; color: #111827; font-size: 18px; font-weight: 700;">
+                <p class="dm-status-value" style="margin: 0; color: #111827; font-size: 18px; font-weight: 700;">
                     ${safeIncidentStatus}
                 </p>
             </div>
@@ -399,7 +405,7 @@ export function getStatusChangeTemplate(data: EmailTemplateData): {
               safeIncidentDescription
                 ? `
             <div style="margin: 24px 0;">
-                <p style="margin: 0; color: #374151; font-size: 15px; line-height: 1.7;">
+                <p class="dm-text-body" style="margin: 0; color: #374151; font-size: 15px; line-height: 1.7;">
                     ${safeIncidentDescription}
                 </p>
             </div>
@@ -407,7 +413,7 @@ export function getStatusChangeTemplate(data: EmailTemplateData): {
                 : ''
             }
             
-            ${EmailButton('View Full Status →', data.statusPageUrl, {
+            ${EmailButton('View Full Status \u2192', data.statusPageUrl, {
               buttonBackground: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
               buttonShadow: '0 10px 22px rgba(37, 99, 235, 0.35)',
             })}
