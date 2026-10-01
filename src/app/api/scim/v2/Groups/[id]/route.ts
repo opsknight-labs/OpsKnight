@@ -76,6 +76,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       // Synchronize members if passed
       if (Array.isArray(body?.members)) {
         await tx.teamMember.deleteMany({ where: { teamId: id } });
+        const addedUserIds = new Set<string>();
         for (const m of body.members as Array<unknown>) {
           const rawVal =
             typeof m === 'object' && m !== null && 'value' in m
@@ -89,7 +90,8 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
               },
               select: { id: true },
             });
-            if (user) {
+            if (user && !addedUserIds.has(user.id)) {
+              addedUserIds.add(user.id);
               await tx.teamMember.create({
                 data: {
                   teamId: id,
@@ -290,12 +292,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
       if (replaceAllMembers !== null) {
         await tx.teamMember.deleteMany({ where: { teamId: id } });
+        const addedUserIds = new Set<string>();
         for (const userId of replaceAllMembers) {
           const user = await tx.user.findFirst({
             where: { OR: [{ id: userId }, { scimExternalId: userId }] },
             select: { id: true },
           });
-          if (user) {
+          if (user && !addedUserIds.has(user.id)) {
+            addedUserIds.add(user.id);
             await tx.teamMember.create({
               data: { teamId: id, userId: user.id, role: 'MEMBER' },
             });
@@ -406,6 +410,13 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   try {
     await prisma.$transaction(async tx => {
       await tx.teamMember.deleteMany({ where: { teamId: id } });
+      await tx.service.updateMany({ where: { teamId: id }, data: { teamId: null } });
+      await tx.incident.updateMany({ where: { teamId: id }, data: { teamId: null } });
+      await tx.escalationRule.updateMany({
+        where: { targetTeamId: id },
+        data: { targetTeamId: null },
+      });
+      await tx.dashboard.updateMany({ where: { teamId: id }, data: { teamId: null } });
       await tx.team.delete({ where: { id } });
     });
 

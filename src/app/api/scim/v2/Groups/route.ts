@@ -108,6 +108,7 @@ export async function POST(request: NextRequest) {
       });
 
       if (Array.isArray(body?.members)) {
+        const addedUserIds = new Set<string>();
         for (const m of body.members as Array<unknown>) {
           const rawVal =
             typeof m === 'object' && m !== null && 'value' in m
@@ -121,7 +122,8 @@ export async function POST(request: NextRequest) {
               },
               select: { id: true },
             });
-            if (user) {
+            if (user && !addedUserIds.has(user.id)) {
+              addedUserIds.add(user.id);
               await tx.teamMember.create({
                 data: {
                   teamId: created.id,

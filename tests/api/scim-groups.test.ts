@@ -18,6 +18,18 @@ const txMock = {
     findFirst: vi.fn(),
     findMany: vi.fn(),
   },
+  service: {
+    updateMany: vi.fn(),
+  },
+  incident: {
+    updateMany: vi.fn(),
+  },
+  escalationRule: {
+    updateMany: vi.fn(),
+  },
+  dashboard: {
+    updateMany: vi.fn(),
+  },
 };
 
 vi.mock('@/lib/prisma', () => ({
@@ -251,6 +263,26 @@ describe('SCIM Groups HTTP lifecycle', () => {
       expect(body.id).toBe('team-1');
       expect(body.displayName).toBe('Platform Engineering');
       expect(body.members[0].value).toBe('user-1');
+    });
+
+    it('gracefully deduplicates members if duplicate member references are sent', async () => {
+      vi.mocked(prisma.team.findFirst).mockResolvedValue(null as never);
+      txMock.team.create.mockResolvedValue({ id: 'team-1' });
+      txMock.user.findFirst.mockResolvedValue({ id: 'user-1' });
+      txMock.teamMember.create.mockResolvedValue({ id: 'tm-1' });
+
+      const res = await createGroup(
+        request('https://ops.example.com/api/scim/v2/Groups', {
+          method: 'POST',
+          body: JSON.stringify({
+            displayName: 'Platform Engineering',
+            members: [{ value: 'user-1' }, { value: 'user-1' }],
+          }),
+        })
+      );
+
+      expect(res.status).toBe(201);
+      expect(txMock.teamMember.create).toHaveBeenCalledTimes(1);
     });
   });
 
