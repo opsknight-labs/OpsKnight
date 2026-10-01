@@ -19,10 +19,13 @@ const mockContextValue = {
   acknowledgeIncident: vi.fn(),
   isAcknowledging: false,
   activeCriticalIncidents: [] as CriticalIncidentSummary[],
+  pauseAutoDismiss: vi.fn(),
+  resumeAutoDismiss: vi.fn(),
 };
 
 vi.mock('@/contexts/IncidentAlertContext', () => ({
   useIncidentAlert: () => mockContextValue,
+  AUTO_DISMISS_TIMEOUT_MS: 12000,
 }));
 
 describe('GlobalIncidentBanner', () => {

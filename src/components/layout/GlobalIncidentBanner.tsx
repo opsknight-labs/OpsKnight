@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowRight, ChevronLeft, ChevronRight, X, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useIncidentAlert } from '@/contexts/IncidentAlertContext';
+import { useIncidentAlert, AUTO_DISMISS_TIMEOUT_MS } from '@/contexts/IncidentAlertContext';
 
 function formatElapsed(dateInput: string | Date): string {
   const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
@@ -28,7 +28,11 @@ export default function GlobalIncidentBanner() {
     nextIncident,
     prevIncident,
     dismissBanner,
+    pauseAutoDismiss,
+    resumeAutoDismiss,
   } = useIncidentAlert();
+
+  const [isHovered, setIsHovered] = useState(false);
 
   // Tick for elapsed duration every 30 seconds
   const [, setTick] = useState(0);
@@ -59,6 +63,14 @@ export default function GlobalIncidentBanner() {
   return (
     <aside
       aria-label="Active critical incident notification"
+      onMouseEnter={() => {
+        setIsHovered(true);
+        pauseAutoDismiss?.();
+      }}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        resumeAutoDismiss?.();
+      }}
       className={cn(
         'relative z-30 w-full transition-all duration-200 border-b shadow-md text-xs sm:text-sm',
         isCritical
@@ -197,7 +209,7 @@ export default function GlobalIncidentBanner() {
               'inline-flex items-center justify-center h-7 w-7 rounded-md shrink-0 transition-all cursor-pointer shadow-xs border',
               'bg-white/15 hover:bg-white/25 active:bg-white/30 text-white border-white/30 hover:border-white/50 focus:outline-none focus:ring-2 focus:ring-white/60'
             )}
-            title="Dismiss banner (auto-dismisses after 120s, reopens if a new P1 or high-urgency incident occurs)"
+            title="Dismiss banner (auto-dismisses in 12s, reopens if a new P1 or high-urgency incident occurs)"
             aria-label="Dismiss banner"
           >
             <X size={15} className="shrink-0 stroke-[2.5] text-white" />
@@ -205,6 +217,26 @@ export default function GlobalIncidentBanner() {
           </button>
         </div>
       </div>
+
+      {/* Bottom auto-dismiss countdown progress bar */}
+      <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-black/20 overflow-hidden pointer-events-none">
+        <div
+          className={cn(
+            'h-full origin-left',
+            isCritical ? 'bg-rose-300 dark:bg-rose-400' : 'bg-amber-300 dark:bg-amber-400'
+          )}
+          style={{
+            animation: `bannerProgress ${AUTO_DISMISS_TIMEOUT_MS}ms linear forwards`,
+            animationPlayState: isHovered ? 'paused' : 'running',
+          }}
+        />
+      </div>
+      <style>{`
+        @keyframes bannerProgress {
+          0% { width: 100%; }
+          100% { width: 0%; }
+        }
+      `}</style>
     </aside>
   );
 }
