@@ -4,6 +4,7 @@ description: Connect Better Uptime alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+reader: { status: READER_COMPLETE, task: "Connect Better Uptime incident webhooks and verify recovery." }
 keywords: ["Better Uptime webhook", "connect Better Uptime", "Better Uptime alerts", "Better Uptime integration"]
 verification:
   level: source

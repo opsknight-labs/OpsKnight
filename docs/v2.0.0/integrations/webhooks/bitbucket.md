@@ -4,6 +4,7 @@ description: Connect Bitbucket alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+reader: { status: READER_COMPLETE, task: "Connect Bitbucket pipeline or commit-status webhooks and verify recovery." }
 keywords: ["Bitbucket webhook", "connect Bitbucket", "Bitbucket alerts", "Bitbucket integration"]
 verification:
   level: source

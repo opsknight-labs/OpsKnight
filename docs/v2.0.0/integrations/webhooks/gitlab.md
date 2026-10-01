@@ -4,6 +4,7 @@ description: Connect GitLab alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+reader: { status: READER_COMPLETE, task: "Connect GitLab pipeline and job webhooks and verify success correlation." }
 keywords: ["GitLab webhook", "connect GitLab", "GitLab alerts", "GitLab integration"]
 verification:
   level: source

@@ -4,6 +4,7 @@ description: Connect UptimeRobot alerts to OpsKnight incident ingestion.
 type: integration
 product_area: integrations
 audience: [administrator, operator]
+reader: { status: READER_COMPLETE, task: "Connect an UptimeRobot webhook alert contact and verify down and up delivery." }
 keywords: ["UptimeRobot webhook", "connect UptimeRobot", "UptimeRobot alerts", "UptimeRobot integration"]
 verification:
   level: source
