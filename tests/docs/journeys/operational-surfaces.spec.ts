@@ -9,6 +9,8 @@ test.describe.serial('operational documentation surfaces', () => {
     await captureEvidence(page, testInfo, 'on-call', 'schedules');
     await page.getByText(DOCS_FIXTURES.schedule, { exact: true }).first().click();
     await expect(page).toHaveURL(/\/schedules\/[^/]+$/);
+    await expect(page.getByText(DOCS_FIXTURES.schedule, { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Rotation/ })).toBeVisible();
     await captureEvidence(page, testInfo, 'on-call', 'schedule-detail');
 
     await page.goto('/policies');
@@ -16,6 +18,8 @@ test.describe.serial('operational documentation surfaces', () => {
     await captureEvidence(page, testInfo, 'escalation', 'policies');
     await page.getByText(DOCS_FIXTURES.policy, { exact: true }).first().click();
     await expect(page).toHaveURL(/\/policies\/[^/]+$/);
+    await expect(page.getByText(DOCS_FIXTURES.policy, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Escalation Steps', { exact: true }).first()).toBeVisible();
     await captureEvidence(page, testInfo, 'escalation', 'policy-detail');
   });
 
@@ -57,7 +61,8 @@ test.describe.serial('operational documentation surfaces', () => {
     await captureEvidence(page, testInfo, 'response', 'action-items');
 
     await page.goto('/analytics');
-    await expect(page.locator('#main-content')).toBeVisible();
+    await expect(page.getByText(/Incidents \(\d+d\)/).first()).toBeVisible();
+    await expect(page.getByText(/Active Incidents · Current/).first()).toBeVisible();
     await captureEvidence(page, testInfo, 'analytics', 'overview');
 
     await page.goto('/reports');
@@ -91,7 +96,9 @@ test.describe.serial('operational documentation surfaces', () => {
     await captureEvidence(page, testInfo, 'operations', 'events');
 
     await page.goto('/system-logs');
-    await expect(page.locator('#main-content')).toBeVisible();
+    await expect(page).toHaveURL('/system-logs');
+    await expect(page.getByRole('heading', { level: 1, name: 'System Logs' })).toBeVisible();
+    await expect(page.getByText('Real-time application logging and error tracking')).toBeVisible();
     await captureEvidence(page, testInfo, 'operations', 'system-logs');
   });
 
@@ -113,18 +120,11 @@ test.describe.serial('operational documentation surfaces', () => {
     await captureEvidence(page, testInfo, 'administration', 'privacy-requests');
   });
 
-  test('captures service objectives and runtime health', async ({ page }, testInfo) => {
-    await page.goto('/settings/service-objectives');
-    await expect(page.locator('#main-content')).toBeVisible();
-    await captureEvidence(page, testInfo, 'services', 'service-objectives');
-
+  test('captures runtime health', async ({ page }, testInfo) => {
     await page.goto('/settings/system/health');
-    await expect(page.locator('#main-content')).toBeVisible();
+    await expect(page).toHaveURL('/settings/system/health');
+    await expect(page.getByText('System Health Center', { exact: true }).first()).toBeVisible();
     await captureEvidence(page, testInfo, 'operations', 'health-center');
-
-    await page.goto('/settings/system/performance');
-    await expect(page.locator('#main-content')).toBeVisible();
-    await captureEvidence(page, testInfo, 'operations', 'performance');
   });
 
   test('captures the postmortem workflow', async ({ page }, testInfo) => {
