@@ -20,6 +20,9 @@ describe('PushNotificationToggle', () => {
       configurable: true,
     });
     const registration = {
+      active: { scriptURL: 'https://opsknight.example/sw.js' },
+      waiting: null,
+      installing: null,
       pushManager: {
         getSubscription: vi.fn().mockResolvedValue({
           endpoint: 'https://push.example.com/test-endpoint',
@@ -41,6 +44,169 @@ describe('PushNotificationToggle', () => {
     vi.restoreAllMocks();
     delete (navigator as Navigator & { standalone?: boolean }).standalone;
     vi.unstubAllGlobals();
+  });
+
+  it('reports a missing /sw.js file before attempting registration', async () => {
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'default',
+        requestPermission: vi.fn().mockResolvedValue('granted'),
+      },
+      configurable: true,
+    });
+
+    const register = vi.fn();
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(null),
+        register,
+        ready: new Promise(() => {}),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 404,
+      redirected: false,
+      url: 'https://opsknight.example/sw.js',
+      headers: new Headers({ 'content-type': 'text/html; charset=utf-8' }),
+    });
+
+    render(<PushNotificationToggle />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Service worker file is missing from this deployment.'
+      );
+    });
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('reports HTML returned from /sw.js before attempting registration', async () => {
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'default',
+        requestPermission: vi.fn().mockResolvedValue('granted'),
+      },
+      configurable: true,
+    });
+
+    const register = vi.fn();
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(null),
+        register,
+        ready: new Promise(() => {}),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      redirected: false,
+      url: 'https://opsknight.example/sw.js',
+      headers: new Headers({ 'content-type': 'text/html; charset=utf-8' }),
+    });
+
+    render(<PushNotificationToggle />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Service worker returned HTML instead of JavaScript. Check reverse proxy or host routing.'
+      );
+    });
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('reports a redirected /sw.js response before attempting registration', async () => {
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'default',
+        requestPermission: vi.fn().mockResolvedValue('granted'),
+      },
+      configurable: true,
+    });
+
+    const register = vi.fn();
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(null),
+        register,
+        ready: new Promise(() => {}),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      redirected: true,
+      url: 'https://login.example.com/sw.js',
+      headers: new Headers({ 'content-type': 'application/javascript' }),
+    });
+
+    render(<PushNotificationToggle />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Service worker redirected to another origin. Check reverse proxy or host routing.'
+      );
+    });
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('registers /sw.js after a valid JavaScript preflight', async () => {
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'default',
+        requestPermission: vi.fn().mockResolvedValue('granted'),
+      },
+      configurable: true,
+    });
+
+    const registration = {
+      active: { scriptURL: 'https://opsknight.example/sw.js' },
+      waiting: null,
+      installing: null,
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue({
+          endpoint: 'https://push.example.com/preflight',
+        }),
+      },
+    };
+    const register = vi.fn().mockResolvedValue(registration);
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(null),
+        register,
+        ready: Promise.resolve(registration),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      redirected: false,
+      url: 'https://opsknight.example/sw.js',
+      headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
+    });
+
+    render(<PushNotificationToggle />);
+
+    const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    await waitFor(() => expect(enableButton).not.toBeDisabled());
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/sw.js',
+      expect.objectContaining({
+        cache: 'no-store',
+        redirect: 'follow',
+      })
+    );
+    expect(register).toHaveBeenCalledWith('/sw.js', { scope: '/' });
   });
 
   it('shows a stage-aware message when the service worker never becomes ready', async () => {
