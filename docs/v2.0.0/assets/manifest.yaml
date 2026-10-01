@@ -1,34 +1,90 @@
 schemaVersion: 1
 source: generated/docs-evidence/current
-approvedSourceRevision: bfe04be1822eb11791963b4ceedd53cc77ec9bf0
+approvedSourceRevision: bc0e03fae4c7dd29ccf7a6f229a1a91e1b4c67c1
 runtimeImage: opsknight-docs-v2@sha256:c5a9bce0deaa5bc64747b064020d3f2a678aeabd4a7ee43f3ef1d005d7812701
 runtimeSourceRevision: bfe04be1822eb11791963b4ceedd53cc77ec9bf0
 assets:
-  action-items.png: { evidence: response/action-items.png, sha256: 07777216c5838d3a816eea386c7ca3b1a179fac1d4a87210fbf60a1f8cb3f68f }
-  analytics-overview.png: { evidence: analytics/overview.png, sha256: f3bb0be30b99c50d2bee2e0c5c2a0e583b40bb08349de798dc8f59588e8045fd }
-  api-keys.png: { evidence: administration/api-keys.png, sha256: c80641952eb9b047e975072d6c69e64904f4960f136d658dd30270b7fce87bc2 }
-  audit-log.png: { evidence: administration/audit-log.png, sha256: 80c6e3dd723b2a4b23510736005fd829384b6341d050da7b30c6067295acf8c7 }
-  custom-fields.png: { evidence: administration/custom-fields.png, sha256: 03e95853eed58af149903baf1dfd87f8624aa4feb97abf31e3f4ff6b63b15656 }
-  escalation-policies.png: { evidence: escalation/policies.png, sha256: 9d2dd0fc53755c7696728e77b47b30909fc5633a50e436e90c856dc6cd70ac21 }
-  escalation-policy-detail.png: { evidence: escalation/policy-detail.png, sha256: 7211d24a5d45838fe86748ae6989abfa14692311d57a2b2597c823c377f7e00c }
-  event-logs.png: { evidence: operations/events.png, sha256: 8ea509ab47310d11bc0b3e97ee923d285f5fa2eed63f9be73ac5a82eac6521a3 }
-  health-center.png: { evidence: operations/health-center.png, sha256: 50ff602cc734425aaa3879c0b0b593749b1e13802da6f07800232a19419fcd98 }
-  incident-acknowledged.png: { evidence: incidents/acknowledge.png, sha256: b18a1ef34c92c02970fe8391f7a45313950cdc6df6f52470bbf8be2dc0269b6a }
-  incident-create.png: { evidence: incidents/create.png, sha256: 8c2abb2f80dba05e13cc7ecaf570df28181d5b59cfb36acca1217d727574fa15 }
-  incident-detail.png: { evidence: incidents/detail.png, sha256: 5e9ad7c98b7145681754d6e0d5aa62b304ba79e670ad8d871b0981fd551bed1c }
-  incident-timeline.png: { evidence: incidents/timeline.png, sha256: bf022067ba77353346debfdf85e7b7fd867deadf51f28ec48e4c951b8d876c80 }
-  incidents-list.png: { evidence: incidents/list.png, sha256: 52484889a9d5ec70a490908bcbd97f28118c2a7da74dcebd820018d683dbb5d8 }
-  integration-settings.png: { evidence: integrations/settings.png, sha256: 82983d5f0f2de8c1ecbbe118125bece95e41ccfaf0a2dda112bc49a4222db012 }
-  notification-settings.png: { evidence: notifications/settings.png, sha256: bd78b6609d4f1133586f02822cc1ec1a3954049991d4d747feb690be83e57c4a }
-  on-call-schedule-detail.png: { evidence: on-call/schedule-detail.png, sha256: 9e38fed19add4c96624ceb92b5b0403a24ab2df3c987fcf721eca44928ce1bfb }
-  on-call-schedules.png: { evidence: on-call/schedules.png, sha256: e6c35d561be6cbbcf951e3a15801c35c0c75a559e39dd6cb4ca741f306098ae3 }
-  postmortems.png: { evidence: response/postmortems.png, sha256: a1857064d928cbd8899a46d2b909fbc3876403cc6046ea48ded13c8da937af91 }
-  privacy-requests.png: { evidence: administration/privacy-requests.png, sha256: 17186486fda2c2721f0175593560db8f51d5ecc3a3d8c856cbfacc287dd78a50 }
-  reports.png: { evidence: analytics/reports.png, sha256: a9f3a263ea03fef57b8cf70a5db7bfb6141f893cfa9d2c2675cb507c755e43e6 }
-  service-objectives.png: { evidence: services/service-objectives.png, sha256: a110d42672dd62a04694f88601b1acdd4d73482afd0685b14209276386a177d0 }
-  services.png: { evidence: services/list.png, sha256: 9f39a38f3baf2f955a95993e8275adbb7a7b52e63ceaea8807549f2a8cdfaf58 }
-  status-pages.png: { evidence: status-pages/list.png, sha256: 3d577b5b961007d7dba0345bf6ffb22a14eee508622224ddbfc70478f1480c47 }
-  system-logs.png: { evidence: operations/system-logs.png, sha256: d903a18394f3963105736749264eaa68d684552e8342fe6fb6c183fde6bf0f79 }
-  system-performance.png: { evidence: operations/performance.png, sha256: 181a5d632d93195418598bcbc63541b4c95905d88a6d00db82dea0115ee95b1e }
-  teams.png: { evidence: teams/list.png, sha256: 25ec0a7a058e13c49f0d6c1f87fc32fcd87acf795352f9d27554ef85bda45de7 }
-  users.png: { evidence: administration/users.png, sha256: 5a59342728e9f73073b9ded0ac3842694e4f33b2c179671c33b64bdb66403c2c }
+  action-items.png:
+    evidence: response/action-items.png
+    sha256: ce208715361e8f565019c660b1be0313e6e35079471aa7c16cc431f48baa7dd0
+  analytics-overview.png:
+    evidence: analytics/overview.png
+    sha256: 05ace921afe5ab0218162a1c946b7dfcec25ad577ebdd4579c9087671f784185
+  api-keys.png:
+    evidence: administration/api-keys.png
+    sha256: 93273dc9b15c1391d877e43033e5f2f7b8046f8f2137fe22f100d88e9978cd77
+  audit-log.png:
+    evidence: administration/audit-log.png
+    sha256: 8528dfdb608b4ffa7ddbf64ed5935f85cbaa78866f1a32f750250a9074d511b3
+  custom-fields.png:
+    evidence: administration/custom-fields.png
+    sha256: f488352f0ad4e34c3ac4e93c3a9b1065f2bf6406b2300248dfe6e8d53b9d65c2
+  escalation-policies.png:
+    evidence: escalation/policies.png
+    sha256: 4642254c8bb5b63328b32a79af3f02b47ba3e8a38e2c4336c0e1e68a36d84205
+  escalation-policy-detail.png:
+    evidence: escalation/policy-detail.png
+    sha256: cab57116f10e9c3438603b58eec22233316b6a360a21309605268afdec6b1899
+  event-logs.png:
+    evidence: operations/events.png
+    sha256: 7e2ad9c48a0f3e6dc07742e119925789304c12609cba0676387c0560e1cce402
+  health-center.png:
+    evidence: operations/health-center.png
+    sha256: 2804c9cd065146a12caef8e9778e1e05034aa9f3938c5b1e111dfc2eb0d31d9f
+  incident-acknowledged.png:
+    evidence: incidents/acknowledge.png
+    sha256: f34bac963576a45c38c98d2cd39dbc5558e9983ad5f9af5ac525abd5e2e8e766
+  incident-create.png:
+    evidence: incidents/create.png
+    sha256: a821710d5e7b6c0a4b2378fe1f4398705a6c59c18a28f0ddf678fbc632581249
+  incident-detail.png:
+    evidence: incidents/detail.png
+    sha256: 36332027805ed7f42f7fe820e2eb1261571b312818723e06fe9b35fdec8c839b
+  incident-timeline.png:
+    evidence: incidents/timeline.png
+    sha256: 917d591e6d3bf41ba3ba12d2d4c16857d2fca8cf87af7e32736b2d2d8432bdaf
+  incidents-list.png:
+    evidence: incidents/list.png
+    sha256: ae194658f4f09b5d59d0e891f395c8a8ecae024baaa2bc1c28d5397f2fc196cb
+  integration-settings.png:
+    evidence: integrations/settings.png
+    sha256: 82983d5f0f2de8c1ecbbe118125bece95e41ccfaf0a2dda112bc49a4222db012
+  notification-settings.png:
+    evidence: notifications/settings.png
+    sha256: 18c0273c3de1a966a7b32bc7aa1d30c263f27f102973dfdc40754f41882b5de6
+  on-call-schedule-detail.png:
+    evidence: on-call/schedule-detail.png
+    sha256: c7fd81bc754419f94029955a0515b16e8fe1dc21a2798c2a1c8519582361894d
+  on-call-schedules.png:
+    evidence: on-call/schedules.png
+    sha256: eb8253189a06fea19237c428b87d651558ef45d8e2a401927f9792d17d51bafd
+  postmortems.png:
+    evidence: response/postmortems.png
+    sha256: 2e509aa3253556550d3304cb75a40a317ef428a53924cf38c069ea77148b171c
+  privacy-requests.png:
+    evidence: administration/privacy-requests.png
+    sha256: c20908a24d690517a653f21d76671fe330fabdb9d917ceb0e4ba78999d5c1480
+  reports.png:
+    evidence: analytics/reports.png
+    sha256: bde898d46ca889aa6b94b2ef7bb9ecbf25e9eb561d9ddf38c14e4fd640ba3253
+  service-objectives.png:
+    evidence: services/service-objectives.png
+    sha256: 59c0c475e5c308da95cba0ca0ebc8095a546f0943953347b7c07e818096b4c9c
+  services.png:
+    evidence: services/list.png
+    sha256: 49cccbe1e0aa78004584339e440528d5c5196394249ffe05973e1fcfd6880db1
+  status-pages.png:
+    evidence: status-pages/list.png
+    sha256: ecbfb3ca875bc87c8419f229bb72738c0d756a4027056c374f520b65591e213c
+  system-logs.png:
+    evidence: operations/system-logs.png
+    sha256: 942cea5ce7033518eb1625367454f46a6c11b94f5ba527f70b4a4cbbed00e835
+  system-performance.png:
+    evidence: operations/performance.png
+    sha256: 8953054368263330de3e0b7532e52d6fe68a7ff27010cca8b831aabc0af8eb83
+  teams.png:
+    evidence: teams/list.png
+    sha256: aff330ae0f4271318378ba232243b78d44c919fe2716e1fe668d711a80dd91c3
+  users.png:
+    evidence: administration/users.png
+    sha256: b0f57b88aec8ad190221bf9f3b513029313a49b2104ebc194417d65d0fdbc065

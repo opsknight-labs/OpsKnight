@@ -10,6 +10,12 @@ const supportedTopologyIds = [
   'compose_split_pgbouncer_external_db_ca', 'swarm_single_node_split',
   'swarm_ha_split', 'kind_helm_split_pgbouncer',
   'kind_kustomize_split_pgbouncer', 'phase6_compose_integrated',
+  'phase6_compose_split', 'phase6_compose_split_pgbouncer',
+  'phase6_swarm_integrated', 'phase6_swarm_split',
+  'phase6_swarm_split_pgbouncer', 'phase6_swarm_ha_split_pgbouncer',
+  'phase6_helm_integrated', 'phase6_helm_split',
+  'phase6_helm_split_pgbouncer', 'phase6_kustomize_integrated',
+  'phase6_kustomize_split', 'phase6_kustomize_split_pgbouncer',
 ];
 
 test('capacity documentation remains evidence driven', () => {
