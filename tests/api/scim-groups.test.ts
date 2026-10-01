@@ -15,6 +15,8 @@ const txMock = {
   },
   user: {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    findMany: vi.fn(),
   },
 };
 
@@ -96,6 +98,7 @@ describe('SCIM Groups HTTP lifecycle', () => {
     vi.clearAllMocks();
     process.env.SCIM_BEARER_TOKEN = token;
     txMock.team.findUniqueOrThrow.mockResolvedValue(mockTeam);
+    txMock.user.findMany.mockResolvedValue([{ id: 'user-1' }]);
   });
 
   afterAll(() => {
@@ -206,7 +209,7 @@ describe('SCIM Groups HTTP lifecycle', () => {
     it('creates a new group and associates members successfully', async () => {
       vi.mocked(prisma.team.findFirst).mockResolvedValue(null as never);
       txMock.team.create.mockResolvedValue({ id: 'team-1' });
-      txMock.user.findUnique.mockResolvedValue({ id: 'user-1' });
+      txMock.user.findFirst.mockResolvedValue({ id: 'user-1' });
       txMock.teamMember.create.mockResolvedValue({ id: 'tm-1' });
 
       const res = await createGroup(
@@ -322,7 +325,7 @@ describe('SCIM Groups HTTP lifecycle', () => {
     it('replaces group and synchronizes members', async () => {
       vi.mocked(prisma.team.findUnique).mockResolvedValue({ id: 'team-1', name: 'Old' } as never);
       vi.mocked(prisma.team.findFirst).mockResolvedValue(null as never);
-      txMock.user.findUnique.mockResolvedValue({ id: 'user-2' });
+      txMock.user.findFirst.mockResolvedValue({ id: 'user-2' });
 
       const updatedTeam = {
         ...mockTeam,
@@ -403,7 +406,7 @@ describe('SCIM Groups HTTP lifecycle', () => {
 
     it('adds a member to the group', async () => {
       vi.mocked(prisma.team.findUnique).mockResolvedValue(mockTeam as never);
-      txMock.user.findUnique.mockResolvedValue({ id: 'user-2' });
+      txMock.user.findFirst.mockResolvedValue({ id: 'user-2' });
 
       const res = await patchGroup(
         request('https://ops.example.com/api/scim/v2/Groups/team-1', {
@@ -450,7 +453,7 @@ describe('SCIM Groups HTTP lifecycle', () => {
 
     it('replaces all members with a new set', async () => {
       vi.mocked(prisma.team.findUnique).mockResolvedValue(mockTeam as never);
-      txMock.user.findUnique.mockResolvedValue({ id: 'user-99' });
+      txMock.user.findFirst.mockResolvedValue({ id: 'user-99' });
 
       const res = await patchGroup(
         request('https://ops.example.com/api/scim/v2/Groups/team-1', {

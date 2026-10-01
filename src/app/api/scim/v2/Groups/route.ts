@@ -60,7 +60,11 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    return scimError(400, error instanceof Error ? error.message : 'Invalid SCIM request.');
+    return scimError(
+      400,
+      error instanceof Error ? error.message : 'Invalid SCIM request.',
+      'invalidFilter'
+    );
   }
 }
 
@@ -71,10 +75,10 @@ export async function POST(request: NextRequest) {
   const externalId = typeof body?.externalId === 'string' ? body.externalId.trim() : '';
 
   if (!displayName) {
-    return scimError(400, 'displayName is required.');
+    return scimError(400, 'displayName is required.', 'invalidValue');
   }
   if (displayName.length > 100) {
-    return scimError(400, 'displayName must not exceed 100 characters.');
+    return scimError(400, 'displayName must not exceed 100 characters.', 'invalidValue');
   }
 
   const collisionWhere = externalId
@@ -86,7 +90,11 @@ export async function POST(request: NextRequest) {
     select: { id: true },
   });
   if (collision) {
-    return scimError(409, 'A group with this displayName or externalId already exists.');
+    return scimError(
+      409,
+      'A group with this displayName or externalId already exists.',
+      'uniqueness'
+    );
   }
 
   try {
@@ -100,11 +108,17 @@ export async function POST(request: NextRequest) {
       });
 
       if (Array.isArray(body?.members)) {
-        for (const m of body.members as Array<{ value?: unknown }>) {
-          const userId = typeof m?.value === 'string' ? m.value.trim() : null;
+        for (const m of body.members as Array<unknown>) {
+          const rawVal =
+            typeof m === 'object' && m !== null && 'value' in m
+              ? (m as { value?: unknown }).value
+              : m;
+          const userId = typeof rawVal === 'string' ? rawVal.trim() : null;
           if (userId) {
-            const user = await tx.user.findUnique({
-              where: { id: userId },
+            const user = await tx.user.findFirst({
+              where: {
+                OR: [{ id: userId }, { scimExternalId: userId }],
+              },
               select: { id: true },
             });
             if (user) {

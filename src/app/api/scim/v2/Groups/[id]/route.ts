@@ -46,7 +46,10 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   const externalId = typeof body?.externalId === 'string' ? body.externalId.trim() : undefined;
 
   if (!displayName) {
-    return scimError(400, 'displayName is required.');
+    return scimError(400, 'displayName is required.', 'invalidValue');
+  }
+  if (displayName.length > 100) {
+    return scimError(400, 'displayName must not exceed 100 characters.', 'invalidValue');
   }
 
   // Check name uniqueness if changed
@@ -56,7 +59,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       select: { id: true },
     });
     if (collision) {
-      return scimError(409, 'A group with this displayName already exists.');
+      return scimError(409, 'A group with this displayName already exists.', 'uniqueness');
     }
   }
 
@@ -73,11 +76,17 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       // Synchronize members if passed
       if (Array.isArray(body?.members)) {
         await tx.teamMember.deleteMany({ where: { teamId: id } });
-        for (const m of body.members as Array<{ value?: unknown }>) {
-          const userId = typeof m?.value === 'string' ? m.value.trim() : null;
+        for (const m of body.members as Array<unknown>) {
+          const rawVal =
+            typeof m === 'object' && m !== null && 'value' in m
+              ? (m as { value?: unknown }).value
+              : m;
+          const userId = typeof rawVal === 'string' ? rawVal.trim() : null;
           if (userId) {
-            const user = await tx.user.findUnique({
-              where: { id: userId },
+            const user = await tx.user.findFirst({
+              where: {
+                OR: [{ id: userId }, { scimExternalId: userId }],
+              },
               select: { id: true },
             });
             if (user) {
@@ -142,9 +151,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (!existing) return scimError(404, 'SCIM group not found.');
 
   const body = (await request.json().catch(() => null)) as { Operations?: PatchOperation[] } | null;
-  if (!Array.isArray(body?.Operations)) return scimError(400, 'Operations array is required.');
+  if (!Array.isArray(body?.Operations))
+    return scimError(400, 'Operations array is required.', 'invalidValue');
 
   let nextName = existing.name;
+  let nextExternalId: string | null | undefined = undefined;
   const membersToAdd = new Set<string>();
   const membersToRemove = new Set<string>();
   let replaceAllMembers: string[] | null = null;
@@ -154,74 +165,104 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const path = typeof operation.path === 'string' ? operation.path.trim() : '';
 
     if (op !== 'add' && op !== 'remove' && op !== 'replace') {
-      return scimError(400, 'Only add, remove, and replace operations are supported.');
+      return scimError(
+        400,
+        'Only add, remove, and replace operations are supported.',
+        'invalidValue'
+      );
     }
 
-    // 1. Rename group: displayName
+    // 1. Rename group: displayName or externalId
     if (path.toLowerCase() === 'displayname') {
       if (typeof operation.value === 'string' && operation.value.trim()) {
         nextName = operation.value.trim();
+      }
+    } else if (path.toLowerCase() === 'externalid') {
+      if (typeof operation.value === 'string') {
+        nextExternalId = operation.value.trim() || null;
       }
     } else if (!path && typeof operation.value === 'object' && operation.value !== null) {
       const valObj = operation.value as Record<string, unknown>;
       if (typeof valObj.displayName === 'string' && valObj.displayName.trim()) {
         nextName = valObj.displayName.trim();
       }
+      if (typeof valObj.externalId === 'string') {
+        nextExternalId = valObj.externalId.trim() || null;
+      }
       if (Array.isArray(valObj.members)) {
+        const extracted = (valObj.members as Array<unknown>)
+          .map(m => {
+            const rawVal =
+              typeof m === 'object' && m !== null && 'value' in m
+                ? (m as { value?: unknown }).value
+                : m;
+            return typeof rawVal === 'string' ? rawVal.trim() : '';
+          })
+          .filter(Boolean);
+
         if (op === 'replace') {
-          replaceAllMembers = valObj.members
-            .map(m => (typeof m?.value === 'string' ? m.value.trim() : ''))
-            .filter(Boolean);
+          replaceAllMembers = extracted;
         } else if (op === 'add') {
-          for (const m of valObj.members) {
-            if (typeof m?.value === 'string' && m.value.trim()) {
-              membersToAdd.add(m.value.trim());
-            }
+          for (const m of extracted) {
+            membersToAdd.add(m);
           }
         }
       }
     }
 
     // 2. Members operations
-    // Handle path "members[value eq \"...\"]" (standard Entra ID / Okta member removal)
-    const removeMatch = /^members\[value\s+eq\s+"([^"\r\n]+)"\]$/i.exec(path);
+    // Handle path "members[value eq \"...\"]" (standard Entra ID / Okta member removal with or without quotes)
+    const removeMatch = /^members\[value\s+eq\s+["']?([^"'\]\r\n]+)["']?\]$/i.exec(path);
     if (removeMatch) {
       if (op === 'remove') {
         membersToRemove.add(removeMatch[1].trim());
       }
     } else if (path.toLowerCase() === 'members') {
+      const extractIds = (val: unknown): string[] => {
+        if (Array.isArray(val)) {
+          return val
+            .map(m => {
+              const rawVal =
+                typeof m === 'object' && m !== null && 'value' in m
+                  ? (m as { value?: unknown }).value
+                  : m;
+              return typeof rawVal === 'string' ? rawVal.trim() : '';
+            })
+            .filter(Boolean);
+        }
+        if (typeof val === 'object' && val !== null) {
+          const rawVal = (val as { value?: unknown }).value;
+          return typeof rawVal === 'string' && rawVal.trim() ? [rawVal.trim()] : [];
+        }
+        if (typeof val === 'string' && val.trim()) {
+          return [val.trim()];
+        }
+        return [];
+      };
+
       if (op === 'add') {
-        if (Array.isArray(operation.value)) {
-          for (const m of operation.value as Array<{ value?: unknown }>) {
-            if (typeof m?.value === 'string' && m.value.trim()) {
-              membersToAdd.add(m.value.trim());
-            }
-          }
-        } else if (typeof operation.value === 'object' && operation.value !== null) {
-          const val = (operation.value as { value?: unknown }).value;
-          if (typeof val === 'string' && val.trim()) {
-            membersToAdd.add(val.trim());
-          }
+        for (const m of extractIds(operation.value)) {
+          membersToAdd.add(m);
         }
       } else if (op === 'remove') {
-        if (Array.isArray(operation.value)) {
-          for (const m of operation.value as Array<{ value?: unknown }>) {
-            if (typeof m?.value === 'string' && m.value.trim()) {
-              membersToRemove.add(m.value.trim());
-            }
+        const ids = extractIds(operation.value);
+        if (ids.length > 0) {
+          for (const m of ids) {
+            membersToRemove.add(m);
           }
         } else if (!operation.value) {
           // Remove all members
           replaceAllMembers = [];
         }
       } else if (op === 'replace') {
-        if (Array.isArray(operation.value)) {
-          replaceAllMembers = (operation.value as Array<{ value?: unknown }>)
-            .map(m => (typeof m?.value === 'string' ? m.value.trim() : ''))
-            .filter(Boolean);
-        }
+        replaceAllMembers = extractIds(operation.value);
       }
     }
+  }
+
+  // Validate displayName length
+  if (nextName.length > 100) {
+    return scimError(400, 'displayName must not exceed 100 characters.', 'invalidValue');
   }
 
   // Check for displayName collision if renamed
@@ -231,24 +272,27 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       select: { id: true },
     });
     if (collision) {
-      return scimError(409, 'A group with this displayName already exists.');
+      return scimError(409, 'A group with this displayName already exists.', 'uniqueness');
     }
   }
 
   try {
     const updated = await prisma.$transaction(async tx => {
-      if (nextName !== existing.name) {
+      const updateData: { name?: string; scimExternalId?: string | null } = {};
+      if (nextName !== existing.name) updateData.name = nextName;
+      if (nextExternalId !== undefined) updateData.scimExternalId = nextExternalId;
+      if (Object.keys(updateData).length > 0) {
         await tx.team.update({
           where: { id },
-          data: { name: nextName },
+          data: updateData,
         });
       }
 
       if (replaceAllMembers !== null) {
         await tx.teamMember.deleteMany({ where: { teamId: id } });
         for (const userId of replaceAllMembers) {
-          const user = await tx.user.findUnique({
-            where: { id: userId },
+          const user = await tx.user.findFirst({
+            where: { OR: [{ id: userId }, { scimExternalId: userId }] },
             select: { id: true },
           });
           if (user) {
@@ -260,10 +304,23 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       } else {
         // Remove members
         if (membersToRemove.size > 0) {
+          const usersToDelete = await tx.user.findMany({
+            where: {
+              OR: [
+                { id: { in: Array.from(membersToRemove) } },
+                { scimExternalId: { in: Array.from(membersToRemove) } },
+              ],
+            },
+            select: { id: true },
+          });
+          const resolvedDeleteIds = usersToDelete.map(u => u.id);
+          const allDeleteIds = Array.from(
+            new Set([...resolvedDeleteIds, ...Array.from(membersToRemove)])
+          );
           await tx.teamMember.deleteMany({
             where: {
               teamId: id,
-              userId: { in: Array.from(membersToRemove) },
+              userId: { in: allDeleteIds },
             },
           });
         }
@@ -271,8 +328,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         // Add members
         if (membersToAdd.size > 0) {
           for (const userId of membersToAdd) {
-            const user = await tx.user.findUnique({
-              where: { id: userId },
+            const user = await tx.user.findFirst({
+              where: {
+                OR: [{ id: userId }, { scimExternalId: userId }],
+              },
               select: { id: true },
             });
             if (user) {

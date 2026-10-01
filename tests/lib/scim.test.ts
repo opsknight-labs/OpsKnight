@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  getScimSchemas,
   getServiceProviderConfig,
   isScimRequestAuthorized,
   parseScimFilter,
@@ -65,6 +66,12 @@ describe('SCIM protocol helpers', () => {
     expect(parseScimGroupFilter('displayName eq "Platform Engineers"')).toEqual({
       name: 'Platform Engineers',
     });
+    expect(parseScimGroupFilter("displayName eq 'Platform Engineers'")).toEqual({
+      name: 'Platform Engineers',
+    });
+    expect(parseScimGroupFilter('(displayName eq "Platform Engineers")')).toEqual({
+      name: 'Platform Engineers',
+    });
     expect(parseScimGroupFilter('externalId eq "ext-grp-42"')).toEqual({
       scimExternalId: 'ext-grp-42',
     });
@@ -125,5 +132,14 @@ describe('SCIM protocol helpers', () => {
     expect(config.filter.supported).toBe(true);
     expect(config.authenticationSchemes[0].type).toBe('oauthbearertoken');
     expect(config.meta.location).toBe('https://ops.example.com/api/scim/v2/ServiceProviderConfig');
+  });
+
+  it('generates RFC 7643 schema descriptors with attribute definitions', () => {
+    const schemas = getScimSchemas('https://ops.example.com');
+    expect(schemas).toHaveLength(2);
+    const groupSchema = schemas.find(s => s.name === 'Group');
+    expect(groupSchema).toBeDefined();
+    expect(groupSchema?.attributes.some(a => a.name === 'displayName' && a.required)).toBe(true);
+    expect(groupSchema?.attributes.some(a => a.name === 'members' && a.multiValued)).toBe(true);
   });
 });

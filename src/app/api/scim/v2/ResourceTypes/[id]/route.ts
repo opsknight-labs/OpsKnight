@@ -37,10 +37,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     },
   };
 
-  const matched = resourceTypes[id];
-  if (!matched) {
+  if (id !== 'User' && id !== 'Group') {
     return scimError(404, `ResourceType '${id}' not found.`);
   }
+
+  const matched = id === 'User' ? resourceTypes.User : resourceTypes.Group;
 
   return Response.json(matched, {
     headers: {

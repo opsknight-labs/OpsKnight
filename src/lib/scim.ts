@@ -209,7 +209,7 @@ export async function revealScimToken(): Promise<string | null> {
   return envToken.length >= 32 ? envToken : null;
 }
 
-export function scimError(status: number, detail: string) {
+export function scimError(status: number, detail: string, scimType?: string) {
   const headers: Record<string, string> = {
     'Content-Type': 'application/scim+json; charset=utf-8',
     'Cache-Control': 'no-store',
@@ -218,7 +218,12 @@ export function scimError(status: number, detail: string) {
     headers['WWW-Authenticate'] = 'Bearer error="invalid_token"';
   }
   return Response.json(
-    { schemas: [SCIM_ERROR_SCHEMA], status: String(status), detail },
+    {
+      schemas: [SCIM_ERROR_SCHEMA],
+      status: String(status),
+      ...(scimType ? { scimType } : {}),
+      detail,
+    },
     { status, headers }
   );
 }
@@ -259,10 +264,14 @@ export function parseScimFilter(
   filter: string | null
 ): { scimExternalId: string } | { email: string } | null {
   if (!filter) return null;
-  const match = /^(externalId|userName)\s+eq\s+"([^"\r\n]{1,320})"$/i.exec(filter.trim());
+  const cleaned = filter
+    .trim()
+    .replace(/^\((.*)\)$/, '$1')
+    .trim();
+  const match = /^(externalId|userName)\s+eq\s+["']?([^"'\r\n]{1,320})["']?$/i.exec(cleaned);
   if (!match) throw new Error('Unsupported SCIM filter. Use externalId eq or userName eq.');
   return match[1].toLowerCase() === 'externalid'
-    ? { scimExternalId: match[2] }
+    ? { scimExternalId: match[2].trim() }
     : { email: match[2].trim().toLowerCase() };
 }
 
@@ -307,7 +316,11 @@ export function parseScimGroupFilter(
   filter: string | null
 ): { name?: string; scimExternalId?: string; id?: string } | null {
   if (!filter) return null;
-  const match = /^(displayName|externalId|id)\s+eq\s+"([^"\r\n]{1,320})"$/i.exec(filter.trim());
+  const cleaned = filter
+    .trim()
+    .replace(/^\((.*)\)$/, '$1')
+    .trim();
+  const match = /^(displayName|externalId|id)\s+eq\s+["']?([^"'\r\n]{1,320})["']?$/i.exec(cleaned);
   if (!match) {
     throw new Error('Unsupported SCIM group filter. Use displayName eq, externalId eq, or id eq.');
   }
@@ -363,4 +376,155 @@ export function getServiceProviderConfig(baseUrl = '') {
       location: baseUrl ? `${baseUrl}/api/scim/v2/ServiceProviderConfig` : undefined,
     },
   };
+}
+
+export function getScimSchemas(baseUrl = '') {
+  return [
+    {
+      schemas: [SCIM_SCHEMA_SCHEMA],
+      id: SCIM_USER_SCHEMA,
+      name: 'User',
+      description: 'OpsKnight User Account Schema',
+      attributes: [
+        {
+          name: 'userName',
+          type: 'string',
+          multiValued: false,
+          description: 'Unique identifier for the User, typically user email address.',
+          required: true,
+          caseExact: false,
+          mutability: 'readWrite',
+          returned: 'default',
+          uniqueness: 'server',
+        },
+        {
+          name: 'displayName',
+          type: 'string',
+          multiValued: false,
+          description: 'The name of the User, suitable for display to end-users.',
+          required: false,
+          caseExact: false,
+          mutability: 'readWrite',
+          returned: 'default',
+          uniqueness: 'none',
+        },
+        {
+          name: 'emails',
+          type: 'complex',
+          multiValued: true,
+          description: 'Email addresses for the user.',
+          required: false,
+          subAttributes: [
+            { name: 'value', type: 'string', multiValued: false, required: false },
+            { name: 'type', type: 'string', multiValued: false, required: false },
+            { name: 'primary', type: 'boolean', multiValued: false, required: false },
+          ],
+        },
+        {
+          name: 'photos',
+          type: 'complex',
+          multiValued: true,
+          description: 'URLs of photos of the User.',
+          required: false,
+          subAttributes: [
+            { name: 'value', type: 'reference', multiValued: false, required: false },
+            { name: 'type', type: 'string', multiValued: false, required: false },
+            { name: 'primary', type: 'boolean', multiValued: false, required: false },
+          ],
+        },
+        {
+          name: 'active',
+          type: 'boolean',
+          multiValued: false,
+          description: 'A Boolean value indicating the User administrative status.',
+          required: false,
+          mutability: 'readWrite',
+        },
+        {
+          name: 'externalId',
+          type: 'string',
+          multiValued: false,
+          description:
+            'A unique identifier for the resource as defined by the provisioning client.',
+          required: false,
+          mutability: 'readWrite',
+        },
+      ],
+      meta: {
+        resourceType: 'Schema',
+        location: baseUrl
+          ? `${baseUrl}/api/scim/v2/Schemas/${encodeURIComponent(SCIM_USER_SCHEMA)}`
+          : undefined,
+      },
+    },
+    {
+      schemas: [SCIM_SCHEMA_SCHEMA],
+      id: SCIM_GROUP_SCHEMA,
+      name: 'Group',
+      description: 'OpsKnight Group Schema',
+      attributes: [
+        {
+          name: 'displayName',
+          type: 'string',
+          multiValued: false,
+          description: 'A human-readable name for the Group.',
+          required: true,
+          caseExact: false,
+          mutability: 'readWrite',
+          returned: 'default',
+          uniqueness: 'server',
+        },
+        {
+          name: 'externalId',
+          type: 'string',
+          multiValued: false,
+          description:
+            'A unique identifier for the resource as defined by the provisioning client.',
+          required: false,
+          mutability: 'readWrite',
+        },
+        {
+          name: 'members',
+          type: 'complex',
+          multiValued: true,
+          description: 'A list of members of the Group.',
+          required: false,
+          mutability: 'readWrite',
+          subAttributes: [
+            {
+              name: 'value',
+              type: 'string',
+              multiValued: false,
+              description: 'Identifier of the member of this Group.',
+              required: true,
+              mutability: 'immutable',
+            },
+            {
+              name: '$ref',
+              type: 'reference',
+              referenceTypes: ['User'],
+              multiValued: false,
+              description: 'The URI that corresponds to the member resource of this Group.',
+              required: false,
+              mutability: 'immutable',
+            },
+            {
+              name: 'display',
+              type: 'string',
+              multiValued: false,
+              description: 'A human-readable name for the member.',
+              required: false,
+              mutability: 'readOnly',
+            },
+          ],
+        },
+      ],
+      meta: {
+        resourceType: 'Schema',
+        location: baseUrl
+          ? `${baseUrl}/api/scim/v2/Schemas/${encodeURIComponent(SCIM_GROUP_SCHEMA)}`
+          : undefined,
+      },
+    },
+  ];
 }
