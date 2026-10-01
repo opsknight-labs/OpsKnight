@@ -178,5 +178,5 @@ Restore the matching encryption key/keyring version. Do not overwrite data or re
 - [Authentication](../../concepts/authentication.md)
 - [Permissions](../../concepts/permissions.md)
 - [API keys](../../guides/administration/api-keys.md)
-- [Configuration reference](../../reference/configuration/README.md)
+- [Configuration reference](../../reference/configuration/)
 - [Back up and restore](../data/backup-and-restore.md)

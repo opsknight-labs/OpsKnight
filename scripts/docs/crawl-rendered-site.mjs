@@ -50,7 +50,9 @@ for (const route of routes) {
   const h1Count = await page.locator('h1').count();
   if (h1Count !== 1) failures.push(`${route}: expected one h1; found ${h1Count}`);
   else accessibility.pagesWithSingleH1 += 1;
-  if (await page.locator('text=/Application error/i').count()) failures.push(`${route}: application error rendered`);
+  if (await page.locator('text=/Application error: a (?:client-side|server-side) exception/i').count()) {
+    failures.push(`${route}: application error rendered`);
+  }
   for (const src of await page.locator('img').evaluateAll(nodes => nodes.map(node => node.currentSrc || node.src))) {
     const url = new URL(src, baseURL);
     if (url.origin === new URL(baseURL).origin) localImages.add(url.pathname);

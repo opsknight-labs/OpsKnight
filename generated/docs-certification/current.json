@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-01T04:33:36.456Z",
-  "sourceRevision": "bc0e03fae4c7dd29ccf7a6f229a1a91e1b4c67c1",
-  "documentationRevision": "bc0e03fae4c7dd29ccf7a6f229a1a91e1b4c67c1",
-  "productSourceRevision": "bfe04be1822eb11791963b4ceedd53cc77ec9bf0",
-  "runtimeSourceRevision": "bfe04be1822eb11791963b4ceedd53cc77ec9bf0",
-  "runtimeImageDigest": "opsknight-docs-v2@sha256:c5a9bce0deaa5bc64747b064020d3f2a678aeabd4a7ee43f3ef1d005d7812701",
+  "generatedAt": "2026-10-01T05:29:24.783Z",
+  "sourceRevision": "056199fd8786351a4423aa171f66f7dca3578a84",
+  "documentationRevision": "056199fd8786351a4423aa171f66f7dca3578a84",
+  "productSourceRevision": "09f322e72",
+  "runtimeSourceRevision": "09f322e72",
+  "runtimeImageDigest": "opsknight-docs-v2@sha256:843ad4f9a55c3cc1b9b866eae705395c578faba10dfe4d3dfc15ae207b4dcc61",
   "releaseState": "upcoming",
   "checks": {
     "frontmatter": "passed",
@@ -25,7 +25,7 @@
     "websiteBuild": "release-gated"
   },
   "counts": {
-    "documentationPages": 238,
+    "documentationPages": 243,
     "capabilitiesDiscovered": 22,
     "capabilitiesDocumented": 22,
     "uiRoutes": 101,
@@ -48,7 +48,7 @@
     "rawLimits": 225,
     "publicLimits": 51,
     "journeyFiles": 3,
-    "evidenceScreenshots": 29,
+    "evidenceScreenshots": 32,
     "humanReviewAreas": 7,
     "humanReviewAreasPassed": 0,
     "humanReviewAreasPending": 7,
@@ -56,8 +56,8 @@
     "v15Topics": 1604,
     "v15TopicsReviewed": 0,
     "v15TopicsPending": 1604,
-    "taskDocumentationPages": 160,
-    "readerCompleteTaskPages": 160,
+    "taskDocumentationPages": 164,
+    "readerCompleteTaskPages": 164,
     "humanVerifiedTaskPages": 0,
     "runtimeVerifiedTaskPages": 0
   },
@@ -71,6 +71,9 @@
       "generated/docs-evidence/current/administration/custom-fields.png",
       "generated/docs-evidence/current/administration/privacy-requests.png",
       "generated/docs-evidence/current/administration/users.png",
+      "generated/docs-evidence/current/analytics/dashboard-edit.png",
+      "generated/docs-evidence/current/analytics/dashboard-saved.png",
+      "generated/docs-evidence/current/analytics/dashboard-template.png",
       "generated/docs-evidence/current/analytics/overview.png",
       "generated/docs-evidence/current/analytics/reports.png",
       "generated/docs-evidence/current/escalation/policies.png",
@@ -97,9 +100,9 @@
       "generated/docs-evidence/current/teams/list.png"
     ],
     "runtime": {
-      "requestedImage": "opsknight-docs-v2@sha256:c5a9bce0deaa5bc64747b064020d3f2a678aeabd4a7ee43f3ef1d005d7812701",
-      "digest": "opsknight-docs-v2@sha256:c5a9bce0deaa5bc64747b064020d3f2a678aeabd4a7ee43f3ef1d005d7812701",
-      "sourceRevision": "bfe04be1822eb11791963b4ceedd53cc77ec9bf0"
+      "requestedImage": "localhost:15000/opsknight-docs-v2@sha256:843ad4f9a55c3cc1b9b866eae705395c578faba10dfe4d3dfc15ae207b4dcc61",
+      "digest": "opsknight-docs-v2@sha256:843ad4f9a55c3cc1b9b866eae705395c578faba10dfe4d3dfc15ae207b4dcc61",
+      "sourceRevision": "09f322e72"
     }
   }
 }

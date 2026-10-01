@@ -713,7 +713,7 @@
       "userTask": "Create and verify a saved dashboard.",
       "status": "READER_COMPLETE",
       "taskPage": true,
-      "screenshotCount": 0,
+      "screenshotCount": 2,
       "screenshotAssessment": "UNASSESSED",
       "humanVerified": false,
       "runtimeVerified": false
@@ -724,7 +724,7 @@
       "userTask": "Maintain a saved dashboard and its widgets.",
       "status": "READER_COMPLETE",
       "taskPage": true,
-      "screenshotCount": 0,
+      "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
       "humanVerified": false,
       "runtimeVerified": false
