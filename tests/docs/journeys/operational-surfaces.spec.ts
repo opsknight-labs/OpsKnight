@@ -7,10 +7,16 @@ test.describe.serial('operational documentation surfaces', () => {
     await page.goto('/schedules');
     await expect(page.getByText(DOCS_FIXTURES.schedule).first()).toBeVisible();
     await captureEvidence(page, testInfo, 'on-call', 'schedules');
+    await page.getByText(DOCS_FIXTURES.schedule, { exact: true }).first().click();
+    await expect(page).toHaveURL(/\/schedules\/[^/]+$/);
+    await captureEvidence(page, testInfo, 'on-call', 'schedule-detail');
 
     await page.goto('/policies');
     await expect(page.getByText(DOCS_FIXTURES.policy).first()).toBeVisible();
     await captureEvidence(page, testInfo, 'escalation', 'policies');
+    await page.getByText(DOCS_FIXTURES.policy, { exact: true }).first().click();
+    await expect(page).toHaveURL(/\/policies\/[^/]+$/);
+    await captureEvidence(page, testInfo, 'escalation', 'policy-detail');
   });
 
   test('captures notification and status administration', async ({ page }, testInfo) => {
@@ -71,5 +77,43 @@ test.describe.serial('operational documentation surfaces', () => {
     await page.goto('/system-logs');
     await expect(page.locator('#main-content')).toBeVisible();
     await captureEvidence(page, testInfo, 'operations', 'system-logs');
+  });
+
+  test('captures security and configuration surfaces', async ({ page }, testInfo) => {
+    await page.goto('/settings/api-keys');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'administration', 'api-keys');
+
+    await page.goto('/settings/custom-fields');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'administration', 'custom-fields');
+
+    await page.goto('/settings/security');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'identity', 'security-settings');
+
+    await page.goto('/settings/privacy-requests');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'administration', 'privacy-requests');
+  });
+
+  test('captures service objectives and runtime health', async ({ page }, testInfo) => {
+    await page.goto('/settings/service-objectives');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'services', 'service-objectives');
+
+    await page.goto('/settings/system/health');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'operations', 'health-center');
+
+    await page.goto('/settings/system/performance');
+    await expect(page.locator('#main-content')).toBeVisible();
+    await captureEvidence(page, testInfo, 'operations', 'performance');
+  });
+
+  test('captures the postmortem workflow', async ({ page }, testInfo) => {
+    await page.goto('/postmortems');
+    await expect(page.getByText('Transactional email delivery degradation review').first()).toBeVisible();
+    await captureEvidence(page, testInfo, 'response', 'postmortems');
   });
 });

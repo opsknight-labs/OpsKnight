@@ -1,10 +1,10 @@
 {
   "release": "current",
-  "sourceRevision": "9aa30de59f46376548a1277dcf0be63042871047",
+  "sourceRevision": "bfe04be1822eb11791963b4ceedd53cc77ec9bf0",
   "runtime": {
-    "requestedImage": "opsknight-docs-v2@sha256:4666672ba9ee0af4528d3c4820da282cb0c4cb4a3b5209833c5144eb2560a81e",
-    "digest": "opsknight-docs-v2@sha256:4666672ba9ee0af4528d3c4820da282cb0c4cb4a3b5209833c5144eb2560a81e",
-    "sourceRevision": "9fee71362c70ba65f4b1c5d2ab4d0d36610ecc28"
+    "requestedImage": "opsknight-docs-v2@sha256:c5a9bce0deaa5bc64747b064020d3f2a678aeabd4a7ee43f3ef1d005d7812701",
+    "digest": "opsknight-docs-v2@sha256:c5a9bce0deaa5bc64747b064020d3f2a678aeabd4a7ee43f3ef1d005d7812701",
+    "sourceRevision": "bfe04be1822eb11791963b4ceedd53cc77ec9bf0"
   },
   "route": "/schedules",
   "journey": "on-call",
@@ -13,5 +13,5 @@
     "width": 1440,
     "height": 900
   },
-  "capturedAt": "2026-09-28T13:49:32.570Z"
+  "capturedAt": "2026-10-01T04:24:54.739Z"
 }

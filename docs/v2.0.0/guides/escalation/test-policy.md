@@ -7,6 +7,7 @@ audience: [administrator, responder]
 reader:
   status: READER_COMPLETE
   task: Test an escalation policy end to end.
+  evidence: [docs/v2.0.0/assets/escalation-policy-detail.png]
 verification:
   level: test
   verified_at: 2026-09-29
@@ -14,6 +15,8 @@ verification:
 ---
 
 # Test an escalation policy
+
+![Escalation policy detail with ordered response steps](/docs/v2.0.0/assets/escalation-policy-detail.png)
 
 ## Before you begin
 
@@ -57,4 +60,3 @@ Resolve and clearly label the test, remove temporary service/policy/override cha
 
 - [Escalation troubleshooting](./troubleshooting)
 - [Inspect delivery](../notifications/inspect-delivery)
-

@@ -8,6 +8,7 @@ keywords: [create service, create team, first service, service ownership, add re
 reader:
   status: READER_COMPLETE
   task: Create and verify the first team, responder, and service ownership boundary.
+  evidence: [docs/v2.0.0/assets/services.png, docs/v2.0.0/assets/teams.png]
 verification:
   level: source
   verified_at: 2026-09-29
@@ -19,6 +20,8 @@ verification:
 ---
 
 # Create your first team and service
+
+![Service directory populated with operational ownership and health](/docs/v2.0.0/assets/services.png)
 
 Teams establish operational ownership; services receive alerts and incidents. This tutorial creates both before configuring paging.
 

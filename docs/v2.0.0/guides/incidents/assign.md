@@ -7,6 +7,7 @@ audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
   task: Assign, reassign, or unassign an incident and verify ownership.
+  evidence: [docs/v2.0.0/assets/incident-detail.png]
 verification:
   level: source
   verified_at: 2026-09-29
@@ -17,6 +18,8 @@ verification:
 ---
 
 # Assign an incident
+
+![Incident detail with assignee, service, priority, and response controls](/docs/v2.0.0/assets/incident-detail.png)
 
 Assignment records who is responsible for coordinating the incident. An incident can be assigned to one active user, one existing team, or nobody. User and team assignments are mutually exclusive.
 

@@ -20,6 +20,8 @@ verification:
 
 # Services and response ownership
 
+![Service directory showing ownership and live operational state](/docs/v2.0.0/assets/services.png)
+
 A service is OpsKnight's primary boundary for alert ingestion, incident history,
 operational ownership, escalation, reliability reporting, and downstream
 communications.

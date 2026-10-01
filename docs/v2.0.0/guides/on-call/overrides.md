@@ -7,6 +7,7 @@ audience: [administrator, responder]
 reader:
   status: READER_COMPLETE
   task: Add, verify, and remove a temporary on-call override.
+  evidence: [docs/v2.0.0/assets/on-call-schedule-detail.png]
 verification:
   level: source
   verified_at: 2026-09-27
@@ -16,6 +17,8 @@ verification:
 ---
 
 # Add an on-call override
+
+![Schedule detail used to verify effective coverage and overrides](/docs/v2.0.0/assets/on-call-schedule-detail.png)
 
 ## Before you begin
 

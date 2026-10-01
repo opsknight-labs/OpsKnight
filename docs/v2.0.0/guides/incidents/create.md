@@ -7,6 +7,7 @@ audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
   task: Create and validate a manual incident.
+  evidence: [docs/v2.0.0/assets/incident-create.png]
 verification:
   level: source
   verified_at: 2026-09-29
@@ -18,6 +19,8 @@ verification:
 ---
 
 # Create an incident
+
+![Manual incident creation form in the production interface](/docs/v2.0.0/assets/incident-create.png)
 
 Create an incident manually when a person identifies an operational problem before an integration does, or when you need a controlled exercise. For monitoring alerts, prefer the service integration so OpsKnight can deduplicate, reopen, and resolve incidents from the source automatically.
 

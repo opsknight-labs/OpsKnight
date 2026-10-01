@@ -7,6 +7,7 @@ audience: [administrator]
 reader:
   status: READER_COMPLETE
   task: Invite, review, update, deactivate, reactivate, and offboard users safely.
+  evidence: [docs/v2.0.0/assets/users.png]
 keywords: [invite users, disable account, delete user, user roles, team membership, offboarding]
 verification:
   level: source
@@ -23,6 +24,8 @@ verification:
 ---
 
 # Manage users and account lifecycle
+
+![User directory populated with active responders and administrators](/docs/v2.0.0/assets/users.png)
 
 The **Users** area controls human accounts, application roles, team membership,
 contact data, notification preferences, invitations, and deactivation. Treat

@@ -18,6 +18,8 @@ verification:
 
 # Teams and operational ownership
 
+![Team directory with named production ownership groups](/docs/v2.0.0/assets/teams.png)
+
 Teams group active users around service ownership and resource scope. A team has
 a unique name, description, members with team-local roles, an optional lead,
 owned services, per-member notification participation, and audit activity.

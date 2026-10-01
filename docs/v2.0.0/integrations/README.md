@@ -13,6 +13,8 @@ verification:
 
 # Integrations
 
+![Integration settings in the production application](/docs/v2.0.0/assets/integration-settings.png)
+
 The machine-readable `integrations/catalog.yaml` includes inbound alert adapters,
 Slack, Microsoft Teams, Jira, outbound webhooks, notification delivery, OIDC,
 and SCIM. Inbound provider pages are generated from source-derived contracts;

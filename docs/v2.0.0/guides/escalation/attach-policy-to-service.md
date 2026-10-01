@@ -7,6 +7,7 @@ audience: [administrator]
 reader:
   status: READER_COMPLETE
   task: Attach and verify an escalation policy on a service.
+  evidence: [docs/v2.0.0/assets/escalation-policy-detail.png, docs/v2.0.0/assets/services.png]
 verification:
   level: source
   verified_at: 2026-09-29
@@ -14,6 +15,8 @@ verification:
 ---
 
 # Attach an escalation policy to a service
+
+![Escalation policy detail before attaching it to a service](/docs/v2.0.0/assets/escalation-policy-detail.png)
 
 ## Before you begin
 
@@ -52,4 +55,3 @@ Reattach the prior valid policy, save, and retest. Never leave a production serv
 
 - [Test policy](./test-policy)
 - [Inspect notification delivery](../notifications/inspect-delivery)
-
