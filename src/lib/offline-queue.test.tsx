@@ -252,7 +252,9 @@ describe('offline-queue', () => {
       if (originalServiceWorker) {
         Object.defineProperty(navigator, 'serviceWorker', originalServiceWorker);
       } else {
-        delete (navigator as Navigator & { serviceWorker?: ServiceWorkerContainer }).serviceWorker;
+        delete (
+          navigator as unknown as { serviceWorker?: ServiceWorkerContainer }
+        ).serviceWorker;
       }
       vi.useRealTimers();
     }
