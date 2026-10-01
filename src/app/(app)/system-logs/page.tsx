@@ -19,16 +19,18 @@ export default async function SystemLogsPage({
 
   if (!session?.user?.email) {
     redirect('/login');
+    return null;
   }
 
   // Only admins can view logs
   const user = session.user as { email: string; role?: string };
   if (user.role !== 'ADMIN') {
     redirect('/');
+    return null;
   }
 
   // Get all logs from buffer (newest first)
-  const allLogs = getLogBuffer(500).reverse();
+  const allLogs = (getLogBuffer(500) || []).reverse();
 
   // Apply filters
   let filteredLogs = allLogs;
@@ -38,8 +40,9 @@ export default async function SystemLogsPage({
   }
 
   if (params.component) {
+    const compFilter = params.component.toLowerCase();
     filteredLogs = filteredLogs.filter(log =>
-      log.component?.toLowerCase().includes(params.component!.toLowerCase())
+      Boolean(log.component && log.component.toLowerCase().includes(compFilter))
     );
   }
 
@@ -47,9 +50,9 @@ export default async function SystemLogsPage({
     const searchLower = params.search.toLowerCase();
     filteredLogs = filteredLogs.filter(
       log =>
-        log.message.toLowerCase().includes(searchLower) ||
-        log.component?.toLowerCase().includes(searchLower) ||
-        log.error?.message.toLowerCase().includes(searchLower)
+        Boolean(log.message && String(log.message).toLowerCase().includes(searchLower)) ||
+        Boolean(log.component && String(log.component).toLowerCase().includes(searchLower)) ||
+        Boolean(log.error?.message && String(log.error.message).toLowerCase().includes(searchLower))
     );
   }
 
@@ -70,6 +73,16 @@ export default async function SystemLogsPage({
     warn: { variant: 'warning', border: 'border-l-yellow-600', emoji: '⚠️' },
     info: { variant: 'info', border: 'border-l-blue-600', emoji: 'ℹ️' },
     debug: { variant: 'neutral', border: 'border-l-gray-600', emoji: '🔍' },
+  };
+
+  const fallbackConfig: {
+    variant: 'danger' | 'warning' | 'info' | 'neutral';
+    border: string;
+    emoji: string;
+  } = {
+    variant: 'info',
+    border: 'border-l-slate-400',
+    emoji: '📝',
   };
 
   return (
@@ -137,7 +150,6 @@ export default async function SystemLogsPage({
             name="level"
             defaultValue={params.level || ''}
             className="px-3 py-2 border border-border rounded-md bg-white text-sm"
-            onChange={e => e.currentTarget.form?.submit()}
           >
             <option value="">All Levels</option>
             <option value="error">❌ Errors</option>
@@ -198,8 +210,17 @@ export default async function SystemLogsPage({
           </div>
         ) : (
           filteredLogs.map((log, index) => {
-            const config = levelConfig[log.level as LogLevel];
-            const timestamp = new Date(log.timestamp);
+            const config = levelConfig[log.level as LogLevel] || fallbackConfig;
+            const dateObj = new Date(log.timestamp);
+            const timeString = !isNaN(dateObj.getTime())
+              ? dateObj.toLocaleTimeString('en-US', {
+                  timeZone: 'UTC',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false,
+                })
+              : log.timestamp || 'unknown';
 
             return (
               <details
@@ -211,17 +232,9 @@ export default async function SystemLogsPage({
                   <div className="flex-1 min-w-0 overflow-hidden">
                     <div className="flex items-center gap-2 flex-wrap mb-0.5">
                       <Badge variant={config.variant} size="xs" className="uppercase">
-                        {log.level}
+                        {log.level || 'info'}
                       </Badge>
-                      <span className="text-xs text-muted-foreground font-mono">
-                        {timestamp.toLocaleTimeString('en-US', {
-                          timeZone: 'UTC',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                          hour12: false,
-                        })}
-                      </span>
+                      <span className="text-xs text-muted-foreground font-mono">{timeString}</span>
                       {log.component && (
                         <Badge variant="outline" size="xs" className="uppercase">
                           {log.component}
@@ -233,8 +246,10 @@ export default async function SystemLogsPage({
                         </Badge>
                       )}
                     </div>
-                    <div className="text-sm font-medium leading-snug truncate">{log.message}</div>
-                    {log.error && (
+                    <div className="text-sm font-medium leading-snug truncate">
+                      {log.message || '(no message)'}
+                    </div>
+                    {log.error?.message && (
                       <div className="mt-1 text-xs text-red-600 truncate">{log.error.message}</div>
                     )}
                   </div>
