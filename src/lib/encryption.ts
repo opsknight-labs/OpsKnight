@@ -19,8 +19,21 @@ function isValidHexKey(value: string): boolean {
   return /^[0-9a-f]{64}$/i.test(value);
 }
 
-function isWeakKey(value: string): boolean {
-  return /^0{64}$/i.test(value) || /^([0-9a-f])\1{63}$/i.test(value);
+const KNOWN_WEAK_ENCRYPTION_KEYS = new Set([
+  '0000000000000000000000000000000000000000000000000000000000000000',
+  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+]);
+
+export function isWeakKey(value: string): boolean {
+  if (process.env.ALLOW_INSECURE_SECRETS === 'true' || process.env.ALLOW_INSECURE_SECRETS === '1') {
+    return false;
+  }
+  const normalized = value.toLowerCase();
+  if (KNOWN_WEAK_ENCRYPTION_KEYS.has(normalized)) {
+    return true;
+  }
+  return /^0{64}$/.test(normalized) || /^([0-9a-f])\1{63}$/.test(normalized);
 }
 
 type EncryptionKeyEntry = { id: string; key: string };

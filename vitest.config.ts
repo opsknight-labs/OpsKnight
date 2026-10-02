@@ -27,6 +27,7 @@ export default defineConfig({
       '**/.next/**',
       'tests/e2e/**',
       'tests/docs/journeys/**',
+      'tests/readme/**',
     ],
     coverage: {
       provider: 'v8',

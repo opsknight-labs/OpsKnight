@@ -21,3 +21,4 @@ data:
   # Set to 'false' on old replicas during a rolling upgrade to hold them on the
   # legacy direct-dispatch path. Remove after all replicas are updated.
   NOTIFICATION_CONTROL_PLANE_PERSONAL: 'true'
+  ALLOW_INSECURE_SECRETS: 'false'

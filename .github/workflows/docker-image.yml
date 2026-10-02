@@ -289,6 +289,7 @@ jobs:
           COMPOSE_PROJECT="ci-split-${GITHUB_SHA:0:8}"
           export OPSKNIGHT_IMAGE="$IMAGE"
           export OPSKNIGHT_PULL_POLICY="if_not_present"
+          export ALLOW_INSECURE_SECRETS="true"
           export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
           export APP_PORT=33000
           export POSTGRES_PORT=35432
@@ -374,6 +375,7 @@ jobs:
           export OPSKNIGHT_IMAGE="$IMAGE"
           export PGBOUNCER_IMAGE="opsknight-pgbouncer:1.26.0"
           export OPSKNIGHT_PULL_POLICY="if_not_present"
+          export ALLOW_INSECURE_SECRETS="true"
           export APP_PORT=33001
           export OPSKNIGHT_DATABASE_URL="postgresql://ext_opsknight_user:ext_strong_secret_password@${EXT_DB_CONTAINER}:5432/ext_opsknight_db?sslmode=verify-full&sslrootcert=/etc/ssl/certs/custom-ca.crt"
           export PGBOUNCER_DB_HOST="$EXT_DB_CONTAINER"
