@@ -22,12 +22,16 @@ services:
       - '127.0.0.1:13200:3000'
     environment:
       NODE_ENV: production
+      # checkov:skip=CKV_SECRET_4: Ephemeral documentation-only database URI.
       DATABASE_URL: postgresql://opsknight_docs:opsknight_docs@opsknight-db:5432/opsknight_docs?schema=public
       DIRECT_DATABASE_URL: postgresql://opsknight_docs:opsknight_docs@opsknight-db:5432/opsknight_docs?schema=public
       NEXTAUTH_URL: http://localhost:13200
       NEXT_PUBLIC_APP_URL: https://ops.northstar.example
+      # checkov:skip=CKV_SECRET_6: Ephemeral documentation-only secret.
       NEXTAUTH_SECRET: docs-runtime-only-nextauth-secret
+      # checkov:skip=CKV_SECRET_6: Ephemeral documentation-only secret.
       API_KEY_SECRET: docs-runtime-only-api-key-secret
+      # checkov:skip=CKV_SECRET_6: Ephemeral documentation-only encryption key.
       ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
       NEXTAUTH_COOKIE_SECURE: 'false'
       PORT: '3000'

@@ -5,8 +5,11 @@ metadata:
   namespace: opsknight-docs
 type: Opaque
 stringData:
+  # checkov:skip=CKV_SECRET_4: Ephemeral documentation-only database URI.
   database-url: "postgresql://opsknight_docs:opsknight_docs@postgres:5432/opsknight_docs?schema=public"
+  # checkov:skip=CKV_SECRET_6: Ephemeral documentation-only secret.
   nextauth-secret: docs-kubernetes-runtime-only-nextauth-secret
+  # checkov:skip=CKV_SECRET_6: Ephemeral documentation-only encryption key.
   encryption-key: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
 ---
 apiVersion: v1
@@ -23,6 +26,8 @@ kind: StatefulSet
 metadata:
   name: postgres
   namespace: opsknight-docs
+  annotations:
+    checkov.io/skip1: CKV_K8S_40=The pinned PostgreSQL image requires its packaged non-root UID in this isolated test namespace.
 spec:
   serviceName: postgres
   replicas: 1
@@ -32,9 +37,17 @@ spec:
     metadata:
       labels: { app: docs-postgres }
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: postgres
-          image: postgres:15-alpine
+          image: postgres:15-alpine@sha256:f7d23353e1b15400d22ebe31189f4d314b87a4c129cc400c8c2d8d4ca127bf81
+          imagePullPolicy: Always
           env:
             - { name: POSTGRES_USER, value: opsknight_docs }
             - { name: POSTGRES_PASSWORD, value: opsknight_docs }
@@ -44,9 +57,25 @@ spec:
             exec: { command: [pg_isready, -U, opsknight_docs, -d, opsknight_docs] }
             initialDelaySeconds: 3
             periodSeconds: 3
-          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+          livenessProbe:
+            exec: { command: [pg_isready, -U, opsknight_docs, -d, opsknight_docs] }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: postgres-tmp, mountPath: /tmp }
       volumes:
         - name: data
+          emptyDir: {}
+        - name: postgres-tmp
           emptyDir: {}
 ---
 apiVersion: v1
@@ -63,6 +92,9 @@ kind: Deployment
 metadata:
   name: opsknight
   namespace: opsknight-docs
+  annotations:
+    checkov.io/skip1: CKV_K8S_40=The revision-bound product image defines its tested non-root runtime UID.
+    checkov.io/skip2: CKV_K8S_35=The application contract consumes runtime Secret values through environment variables.
 spec:
   replicas: 1
   selector:
@@ -71,6 +103,10 @@ spec:
     metadata:
       labels: { app: docs-opsknight }
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: opsknight
           image: ghcr.io/opsknight-labs/opsknight-test@sha256:4364470f96e793e24a3c85cad62ed429cfe179f23aa5eb8a26ddcc864e2303dd
@@ -97,6 +133,23 @@ spec:
               httpHeaders: [{ name: Host, value: "localhost:3200" }]
             initialDelaySeconds: 30
             periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: "/api/health?mode=liveness"
+              port: http
+              httpHeaders: [{ name: Host, value: "localhost:3200" }]
+            initialDelaySeconds: 45
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: 1, memory: 1Gi }
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
             capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: runtime-tmp, mountPath: /tmp }
+      volumes:
+        - name: runtime-tmp
+          emptyDir: {}
