@@ -153,11 +153,80 @@ jobs:
           grep -q 'startupProbe:' /tmp/opsknight-helm.yaml
           grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
 
+  release-documentation:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout release revision
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install release dependencies
+        env:
+          HUSKY: '0'
+        run: npm ci --ignore-scripts --legacy-peer-deps
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Install documentation browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Build revision-bound certification image
+        run: |
+          docker build --build-arg BUILD_REVISION=${{ github.sha }} -t opsknight-docs-release:${{ github.sha }} .
+          echo "DOCS_OPSKNIGHT_IMAGE=$(docker image inspect --format '{{.Id}}' opsknight-docs-release:${{ github.sha }})" >> "$GITHUB_ENV"
+
+      - name: Checkout website renderer
+        uses: actions/checkout@v7
+        with:
+          repository: opsknight-labs/OpsKnight-website
+          path: opsknight-website
+
+      - name: Build rendered documentation site
+        run: |
+          ./scripts/sync-docs-to-website.sh ./opsknight-website
+          npm ci --ignore-scripts --prefix ./opsknight-website
+          npm run build --prefix ./opsknight-website
+          python3 -m http.server 15000 --directory ./opsknight-website/out > /tmp/opsknight-docs-site.log 2>&1 &
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:15000/docs/v2.0.0/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/opsknight-docs-site.log
+          exit 1
+
+      - name: Enforce exact release documentation evidence
+        env:
+          DOCS_IMAGE_PULL_POLICY: never
+          DOCS_EXPECTED_PRODUCT_REVISION: ${{ github.sha }}
+          DOCS_WEBSITE_DIR: ${{ github.workspace }}/opsknight-website
+          DOCS_SITE_BASE_URL: http://127.0.0.1:15000
+        run: npm run docs:certify:release
+
+      - name: Preserve release documentation evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: docs-release-certification-${{ github.sha }}
+          path: |
+            generated/docs-certification/
+            generated/docs-evidence/current/
+          if-no-files-found: error
+
   build:
-    needs: release-quality
+    needs: [release-quality, release-documentation]
     if: >-
       always() &&
-      (needs.release-quality.result == 'success' || needs.release-quality.result == 'skipped')
+      (needs.release-quality.result == 'success' || needs.release-quality.result == 'skipped') &&
+      (needs.release-documentation.result == 'success' || needs.release-documentation.result == 'skipped')
     runs-on: ubuntu-22.04
     services:
       postgres:
