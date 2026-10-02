@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import type { Locator, Page, TestInfo } from '@playwright/test';
+import { isImmutableContainerReference } from '../../../scripts/docs/immutable-container-reference.mjs';
 
 const GLOBAL_ERROR_TEXT = /Dashboard couldn't load|Try again|Analytics couldn't load|Something went wrong/i;
 const VISIBLE_LOADING_SKELETON =
@@ -49,7 +50,7 @@ export async function captureEvidence(
   }
   const sourceRevision = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const requestedImage = process.env.DOCS_OPSKNIGHT_IMAGE;
-  if (!requestedImage || (!requestedImage.includes('@sha256:') && !/^sha256:[0-9a-f]{64}$/.test(requestedImage))) {
+  if (!isImmutableContainerReference(requestedImage)) {
     throw new Error('DOCS_OPSKNIGHT_IMAGE must be an immutable digest reference');
   }
   const imageInspection = JSON.parse(execFileSync(
@@ -62,6 +63,9 @@ export async function captureEvidence(
     ?? imageInspection.Id;
   if (!runtimeSourceRevision || !runtimeDigest) {
     throw new Error('Runtime image must expose an OCI source revision and immutable content digest');
+  }
+  if (!isImmutableContainerReference(runtimeDigest)) {
+    throw new Error('Runtime image inspection must return an immutable content digest or local image ID');
   }
   if (!/^[0-9a-f]{40}$/.test(runtimeSourceRevision)) {
     throw new Error('Runtime image OCI revision must be a full 40-character Git SHA');

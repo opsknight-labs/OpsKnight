@@ -50,9 +50,9 @@ Use the service runbook and observability evidence to bound impact, time, affect
 
 Use routine Slack/Teams destination cards for distributed awareness. Create a [war room](../chatops/create-war-room) when the response needs an incident-scoped coordination space. Keep authoritative status in OpsKnight; provider chat history is collaboration evidence, not the lifecycle source of truth.
 
-## 5. Escalate when needed
+## 5. Escalate from a supported Teams card when needed
 
-Escalate when the current response requires broader/faster attention and the next policy step is appropriate. Inspect the current target/step before acting. Do not repeatedly escalate after an ambiguous response.
+Escalate when the current response requires broader/faster attention and the next policy step is appropriate. In 2.0, manual escalation is available only from a capability-enabled Microsoft Teams Adaptive Card—not from the Web incident page or standard Slack actions. Inspect the current target/step before acting and do not repeatedly escalate after an ambiguous response.
 
 Follow [Escalate an incident](./escalate) and verify the timeline plus notification delivery.
 
@@ -64,7 +64,7 @@ During response, keep immediate operational steps in the timeline/coordination c
 
 Resolve only after service health/trigger condition is verified and the observation period has passed. Complete required custom fields, record impact/mitigation/resolution summary, assign remaining action items, and confirm active escalation should end.
 
-Follow [Resolve and reopen](./resolve).
+Follow [Resolve an incident](./resolve). If the condition later returns, use correlation-driven ingestion or an authorized public API update; the Web UI has no manual Reopen action.
 
 ## Verify the completed response
 
@@ -92,4 +92,3 @@ Confirm:
 
 - Review the postmortem/follow-up workflow and [action items](./action-items).
 - Test the service's [on-call](../on-call/build-schedule), [escalation](../escalation/configure-policy), and [notification delivery](../notifications/inspect-delivery) before the next event.
-

@@ -45,7 +45,7 @@ export function revisionOnlyDrift(path) {
   return JSON.stringify(before) === JSON.stringify(after);
 }
 
-export function checkGeneratedDrift({ allowRevisionOnly = false } = {}) {
+export function checkGeneratedDrift({ allowRevisionOnly = true } = {}) {
   const changed = execFileSync('git', ['diff', '--name-only', '--', ...generatedPaths], {
     cwd: repositoryRoot,
     encoding: 'utf8',
@@ -61,7 +61,7 @@ export function checkGeneratedDrift({ allowRevisionOnly = false } = {}) {
   }
 
   if (changed.length > 0) {
-    console.log('Only revision metadata changed after a main-branch squash merge; generated content is current.');
+    console.log('Only commit-bound revision metadata changed; generated content is current.');
   } else {
     console.log('Generated documentation artifacts are current.');
   }

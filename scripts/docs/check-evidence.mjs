@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import YAML from 'yaml';
 import { exists, filesUnder, readRepositoryFile, repositoryRoot } from './discovery-lib.mjs';
+import { isImmutableContainerReference } from './immutable-container-reference.mjs';
 
 const inventory = YAML.parse(readFileSync(resolve(repositoryRoot, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
 const failures = [];
@@ -34,7 +35,7 @@ function revisionIsAccepted(revision) {
   }
 }
 
-if (!assetManifest.runtimeImage?.includes('@sha256:')) failures.push('reader assets: runtime image is not immutable');
+if (!isImmutableContainerReference(assetManifest.runtimeImage)) failures.push('reader assets: runtime image is not immutable');
 for (const revisionField of ['approvedSourceRevision', 'runtimeSourceRevision']) {
   if (!revisionIsAccepted(assetManifest[revisionField])) failures.push(`reader assets: ${revisionField} is not in the accepted HEAD lineage`);
 }
@@ -81,8 +82,8 @@ if (exists('generated/docs-evidence')) {
     for (const field of ['release', 'sourceRevision', 'route', 'journey', 'browser', 'viewport', 'runtime']) if (!metadata[field]) failures.push(`${file}: missing ${field}`);
     if (metadata.runtime) {
       for (const field of ['requestedImage', 'digest', 'sourceRevision']) if (!metadata.runtime[field]) failures.push(`${file}: missing runtime.${field}`);
-      if (!metadata.runtime.requestedImage?.includes('@sha256:')) failures.push(`${file}: runtime image is not immutable`);
-      if (!metadata.runtime.digest?.includes('@sha256:')) failures.push(`${file}: runtime digest is not immutable`);
+      if (!isImmutableContainerReference(metadata.runtime.requestedImage)) failures.push(`${file}: runtime image is not immutable`);
+      if (!isImmutableContainerReference(metadata.runtime.digest)) failures.push(`${file}: runtime digest is not immutable`);
       if (!revisionIsAccepted(metadata.runtime.sourceRevision)) failures.push(`${file}: runtime source revision is not in the accepted HEAD lineage`);
     }
   }

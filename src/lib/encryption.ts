@@ -303,20 +303,20 @@ export async function decryptWithKey(encryptedText: string, keyHex: string): Pro
     const encryptedPayload = parts[4];
 
     const dekDecipher = crypto.createDecipheriv(algorithm, masterKey, dekIv);
-    let dekHex = dekDecipher.update(encryptedDek, 'hex', 'utf8');
-    dekHex += dekDecipher.final('utf8');
+    const dekHex = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat([
+      dekDecipher.update(encryptedDek, 'hex'),
+      dekDecipher.final(),
+    ]));
     if (!/^[0-9a-f]{64}$/i.test(dekHex)) {
       throw new Error('Decrypted DEK is not a valid 32-byte hex key');
     }
     const dek = Buffer.from(dekHex, 'hex');
 
     const payloadDecipher = crypto.createDecipheriv(algorithm, dek, payloadIv);
-    let decrypted = payloadDecipher.update(encryptedPayload, 'hex', 'utf8');
-    decrypted += payloadDecipher.final('utf8');
-    if (decrypted.includes('\uFFFD') || /[\x00-\x08\x0E-\x1F]/.test(decrypted)) {
-      throw new Error('Decryption produced invalid plaintext characters');
-    }
-    return decrypted;
+    return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat([
+      payloadDecipher.update(encryptedPayload, 'hex'),
+      payloadDecipher.final(),
+    ]));
   }
 
   // Legacy v1 format: iv:ciphertext
@@ -327,12 +327,10 @@ export async function decryptWithKey(encryptedText: string, keyHex: string): Pro
   }
   const iv = Buffer.from(parts[0], 'hex');
   const decipher = crypto.createDecipheriv(algorithm, masterKey, iv);
-  let decrypted = decipher.update(parts[1], 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  if (decrypted.includes('\uFFFD') || /[\x00-\x08\x0E-\x1F]/.test(decrypted)) {
-    throw new Error('Decryption produced invalid plaintext characters');
-  }
-  return decrypted;
+  return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat([
+    decipher.update(parts[1], 'hex'),
+    decipher.final(),
+  ]));
 }
 
 /**

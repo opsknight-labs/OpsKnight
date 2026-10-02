@@ -1,13 +1,13 @@
 ---
-title: Resolve and reopen an incident
+title: Resolve an incident
 order: 7
-description: Close active response with an auditable resolution record, or safely reopen work that returns.
+description: Close active response with an auditable resolution record and understand how correlated recurrence reopens work.
 type: how-to
 product_area: incidents
 audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
-  task: Resolve an incident with evidence or reopen it safely.
+  task: Resolve an incident with evidence and handle a later recurrence through supported ingestion or API paths.
   evidence: [docs/v2.0.0/assets/incident-acknowledged.png, docs/v2.0.0/assets/incident-timeline.png]
 verification:
   level: source
@@ -19,7 +19,7 @@ verification:
     - src/lib/incidents/operator-lifecycle.ts
 ---
 
-# Resolve and reopen an incident
+# Resolve an incident
 
 ![Incident response controls before resolution](/docs/v2.0.0/assets/incident-acknowledged.png)
 
@@ -65,19 +65,17 @@ Confirm:
 
 Do not repeatedly resolve because a provider card is stale. Verify canonical state, then diagnose the projection.
 
-## Undo resolution by reopening
+## When the condition returns
 
-Reopen when the same operational event returns and the existing context remains the right response record. Create a new incident when the event is unrelated, requires separate reporting, or should not share the original deduplication identity.
+The 2.0 Web incident page has no manual **Reopen** action. Do not look for a button or describe a direct Web reopen procedure.
 
-1. Open the resolved incident.
-2. Review the previous resolution note and confirm the condition has genuinely returned.
-3. Select **Reopen**.
-4. Add context to the timeline describing the new symptom and evidence.
-5. Verify status returns to **Open**.
-6. Verify a new escalation generation starts at the applicable first step and receives a new next-escalation time.
-7. Confirm the prior resolution and SLA history are still present.
+When an inbound event with the same service and deduplication key arrives inside the 30-minute correlation window, OpsKnight can automatically reopen the recently resolved incident. An authorized API client can also set the incident status to `OPEN` with `PATCH /api/incidents/{id}`. Use a new incident when the event is unrelated, requires separate reporting, or must not share the original correlation identity.
 
-Reopening clears the terminal resolution state for active response but does not erase the historical resolution event. Automated ingestion may also reopen a recently resolved incident when the same service and deduplication key recur inside the 30-minute reopen window.
+After a supported reopen, verify status is **Open**, a new escalation generation and next-escalation time are present, and the earlier resolution, timeline, and incident-lifetime SLA history remain intact. Add recurrence evidence through a supported timeline note/comment path.
+
+## Undo or correct a resolution
+
+There is no Web undo button. If the same correlated condition has returned, use the supported ingestion or authorized API reopen paths above. If the resolution note is incomplete, preserve the original audit record and add corrective context to the timeline rather than rewriting history. Create a separate incident when the new event has a different operational identity.
 
 ## Troubleshooting
 
@@ -93,9 +91,9 @@ Refresh and read the new state. Another responder may already have resolved, sno
 
 Confirm the incident is resolved and its escalation generation completed. Then inspect queued jobs and delivery operations for stale or already-dispatched work. A notification that was handed to a provider before resolution cannot always be recalled.
 
-### Reopen is unavailable
+### There is no Reopen button
 
-Only a resolved incident can be reopened. Confirm access and refresh the page. For a different operational event, create a new incident instead.
+This is expected in 2.0. Use correlation-driven ingestion, an explicitly authorized public API client, or create a separate incident according to the event identity. Do not change state by editing a provider message.
 
 ### The incident reopened automatically
 
