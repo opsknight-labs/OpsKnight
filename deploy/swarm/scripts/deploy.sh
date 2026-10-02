@@ -297,12 +297,12 @@ export PGBOUNCER_DB_USER="${DB_USER}"
 
 # Fail-closed production secrets check
 if [ "${STRICT_SECRETS}" = "true" ]; then
-  if [ -z "${NEXTAUTH_SECRET:-}" ] || [ "${NEXTAUTH_SECRET}" = "opsknight_super_secret_jwt_and_session_signing_key_change_in_production_min32chars" ] || [ "${NEXTAUTH_SECRET}" = "change_this_to_a_random_secret_in_production" ]; then
+  if [ -z "${NEXTAUTH_SECRET:-}" ] || [ "${NEXTAUTH_SECRET}" = "opsknight_super_secret_jwt_and_session_signing_key_change_in_production_min32chars" ] || [ "${NEXTAUTH_SECRET}" = "change_this_to_a_random_secret_in_production" ] || [ "${NEXTAUTH_SECRET}" = "changeme_to_a_secure_random_string" ]; then
     echo "❌ [FATAL] STRICT_SECRETS enforced: NEXTAUTH_SECRET is empty or using known default placeholder." >&2
     echo "   Provide a secure secret with: export NEXTAUTH_SECRET='...'" >&2
     exit 1
   fi
-  if [ -z "${API_KEY_SECRET:-}" ] || [ "${API_KEY_SECRET}" = "change_this_to_a_separate_random_api_key_secret_in_production" ] || [ "${API_KEY_SECRET}" = "${NEXTAUTH_SECRET}" ]; then
+  if [ -z "${API_KEY_SECRET:-}" ] || [ "${API_KEY_SECRET}" = "change_this_to_a_separate_random_api_key_secret_in_production" ] || [ "${API_KEY_SECRET}" = "changeme_to_a_different_secure_random_string" ] || [ "${API_KEY_SECRET}" = "${NEXTAUTH_SECRET}" ]; then
     echo "❌ [FATAL] STRICT_SECRETS enforced: API_KEY_SECRET must be a separate non-placeholder secret." >&2
     echo "   Provide an independent secret with: export API_KEY_SECRET='...'" >&2
     exit 1
@@ -333,11 +333,24 @@ fi
 # Fallback values for development / evaluation
 NEXTAUTH_SECRET="${NEXTAUTH_SECRET:-opsknight_super_secret_jwt_and_session_signing_key_change_in_production_min32chars}"
 API_KEY_SECRET="${API_KEY_SECRET:-change_this_to_a_separate_random_api_key_secret_in_production}"
-ENCRYPTION_KEY="${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
-# Swarm services always mount a keyring secret. Preserve legacy single-key
-# behavior by representing ENCRYPTION_KEY as a one-entry keyring when an
-# explicit rotation keyring was not supplied.
-ENCRYPTION_KEYS="${ENCRYPTION_KEYS:-legacy:${ENCRYPTION_KEY}}"
+
+# Preserve the historical k1 identifier for existing v3:k1:* ciphertext.
+# For keyring-only deployments, mirror the active key material into the legacy
+# secret mount so the declarative stack does not inject a weak placeholder or a
+# second logical encryption key.
+if [ -z "${ENCRYPTION_KEYS:-}" ]; then
+  ENCRYPTION_KEY="${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
+  ENCRYPTION_KEYS="k1:${ENCRYPTION_KEY}"
+elif [ -z "${ENCRYPTION_KEY:-}" ]; then
+  FIRST_KEY_ENTRY="${ENCRYPTION_KEYS%%,*}"
+  FIRST_KEY_MATERIAL="${FIRST_KEY_ENTRY#*:}"
+  if [ "${FIRST_KEY_MATERIAL}" = "${FIRST_KEY_ENTRY}" ] || ! [[ "${FIRST_KEY_MATERIAL}" =~ ^[0-9A-Fa-f]{64}$ ]]; then
+    echo "❌ [FATAL] ENCRYPTION_KEYS first entry must use id:64-hex-key syntax." >&2
+    exit 1
+  fi
+  ENCRYPTION_KEY="${FIRST_KEY_MATERIAL}"
+fi
+export ENCRYPTION_KEY
 export ENCRYPTION_KEYS
 export ALLOW_INSECURE_SECRETS
 
