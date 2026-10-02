@@ -9,7 +9,7 @@ reader: { status: READER_COMPLETE, task: Install and verify OpsKnight mobile pus
 verification:
   level: source
   verified_at: 2026-10-01
-  evidence: ["src/components/mobile/PwaInstallCard.tsx", "src/components/mobile/PushNotificationToggle.tsx", "src/components/mobile/MobilePwaCoordinator.tsx", "src/lib/service-worker-runtime.ts", "src/app/api/system/vapid-public-key/route.ts", "src/app/api/user/push-subscription/status/route.ts", "src/lib/notification-providers.ts", "public/custom-sw.js", "tests/e2e/mobile-pwa-production.spec.ts"]
+  evidence: ["src/components/mobile/PwaInstallCard.tsx", "src/components/mobile/PushNotificationToggle.tsx", "src/components/mobile/MobilePwaCoordinator.tsx", "src/lib/service-worker-runtime.ts", "src/app/api/system/vapid-public-key/route.ts", "src/app/api/user/push-subscription/status/route.ts", "src/lib/notification-providers.ts", "public/custom-sw.js", "tests/e2e/mobile-pwa-production.spec.ts", "tests/lib/service-worker-push-subscription-change.test.ts"]
 ---
 
 # Install the mobile PWA and enable push
@@ -102,7 +102,11 @@ from security settings if the device is lost or untrusted.
 - **Permission denied/Blocked:** change the site's notification permission in
   browser and OS settings, then return and retry.
 - **Needs repair:** select **Repair** to reconcile an expired or mismatched
-  browser/server subscription, then send a test.
+  browser/server subscription, then send a test. When the browser's push
+  service rotates an endpoint (for example an Android Chrome token refresh),
+  the service worker re-subscribes and saves the new endpoint automatically
+  while the session is valid; if that save is rejected, the card shows
+  **Needs repair** the next time the app is open.
 - **Preparation fails:** request `GET /sw.js` from the same public origin and
   verify HTTP `200`, no redirect, final path `/sw.js`, a JavaScript/EcmaScript
   MIME type, and worker JavaScript rather than login/application HTML. If any
