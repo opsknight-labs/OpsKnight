@@ -1,12 +1,16 @@
 #!/usr/bin/env sh
 set -eu
 
-compose_file="tests/docs/environment/compose.yaml"
+base_compose_file="deploy/compose/docker-compose.yml"
+docs_compose_file="tests/docs/environment/compose.yaml"
 project_name="opsknight-docs-v2-capture"
 pull_policy="${DOCS_IMAGE_PULL_POLICY:-always}"
 
 compose() {
-  docker compose --project-name "$project_name" -f "$compose_file" "$@"
+  docker compose --project-name "$project_name" \
+    -f "$base_compose_file" \
+    -f "$docs_compose_file" \
+    "$@"
 }
 
 cleanup() {
