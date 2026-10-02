@@ -1,6 +1,8 @@
 <div align="center">
 
-<img src="public/readme/hero.webp" alt="OpsKnight incident detail with analytics and on-call schedule views" width="100%">
+<a href="https://opsknight.com/">
+  <img src="public/readme/hero.webp" alt="OpsKnight incident detail with analytics and on-call schedule views" width="100%">
+</a>
 
 # OpsKnight
 
