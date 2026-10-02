@@ -137,8 +137,6 @@ jobs:
           repository: opsknight-labs/OpsKnight-website
           path: opsknight-website
       - name: Build the rendered documentation site from this revision
-        env:
-          DOCS_SYNC_INCLUDE_UPCOMING: 'true'
         run: |
           ./scripts/sync-docs-to-website.sh ./opsknight-website
           npm ci --ignore-scripts --prefix ./opsknight-website

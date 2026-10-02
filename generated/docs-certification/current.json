@@ -6,7 +6,7 @@
   "productSourceRevision": "a379a492bfb02552899967c3dc8b67b970d56957",
   "runtimeSourceRevision": "a379a492bfb02552899967c3dc8b67b970d56957",
   "runtimeImageDigest": "localhost:15000/opsknight-docs-v2@sha256:0ac0900f61f3a8d8f8c3b160661620261319ceb561882f1da5bfb4a985268107",
-  "releaseState": "upcoming",
+  "releaseState": "released",
   "checks": {
     "frontmatter": "passed",
     "links": "passed",
