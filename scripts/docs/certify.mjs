@@ -72,6 +72,27 @@ const runtimeSourceRevision = runtimeInspection?.Config?.Labels?.['org.openconta
 if (fullRuntime && !/^[0-9a-f]{40}$/.test(runtimeSourceRevision ?? '')) {
   throw new Error('Runtime image OCI revision must be a full 40-character Git SHA.');
 }
+if (releaseCertification) {
+  const expectedProductRevision = process.env.DOCS_EXPECTED_PRODUCT_REVISION;
+  if (!/^[0-9a-f]{40}$/.test(expectedProductRevision ?? '')) {
+    throw new Error('Release certification requires DOCS_EXPECTED_PRODUCT_REVISION as a full Git SHA.');
+  }
+  if (runtimeSourceRevision !== expectedProductRevision) {
+    throw new Error(
+      `Runtime image revision ${runtimeSourceRevision ?? 'missing'} does not match expected product revision ${expectedProductRevision}.`
+    );
+  }
+  if (!process.env.DOCS_SITE_BASE_URL || !process.env.DOCS_WEBSITE_DIR) {
+    throw new Error('Release certification requires DOCS_SITE_BASE_URL and DOCS_WEBSITE_DIR for the rendered-site crawl.');
+  }
+  run('node', ['scripts/docs/crawl-rendered-site.mjs']);
+  const renderedSite = JSON.parse(
+    readFileSync(join(root, 'generated/docs-certification/rendered-site.json'), 'utf8')
+  );
+  if (renderedSite.sourceRevision !== documentationRevision) {
+    throw new Error('Rendered-site certificate does not match the documentation revision.');
+  }
+}
 
 const report = {
   schemaVersion: 2,
@@ -97,7 +118,8 @@ const report = {
     humanReviewSignoffs: reviewerSignoffs.every(status => status === 'passed') ? 'passed' : 'pending',
     v15KnowledgeParity: v15Reviewed.length === v15InventoryIds.size ? 'passed' : 'pending',
     runtimeJourneys: fullRuntime ? 'passed' : 'not-run',
-    websiteBuild: 'release-gated',
+    websiteBuild: releaseCertification ? 'passed' : 'release-gated',
+    renderedSiteCrawl: releaseCertification ? 'passed' : 'release-gated',
   },
   counts: {
     documentationPages: pages.length,
@@ -147,6 +169,9 @@ const report = {
         digest: runtimeInspection.RepoDigests?.find(value => value.includes('@sha256:')),
         sourceRevision: runtimeInspection.Config?.Labels?.['org.opencontainers.image.revision'],
       },
+    } : {}),
+    ...(releaseCertification ? {
+      renderedSite: 'generated/docs-certification/rendered-site.json',
     } : {}),
   },
 };

@@ -2,12 +2,15 @@
 import { chromium } from '@playwright/test';
 import { readdirSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const root = resolve(import.meta.dirname, '../..');
 const websiteRoot = resolve(process.env.DOCS_WEBSITE_DIR || join(root, '../opsknight-website-docs-v2'));
 const version = process.env.DOCS_SITE_VERSION || 'v2.0.0';
 const baseURL = process.env.DOCS_SITE_BASE_URL || 'http://127.0.0.1:15000';
 const contentRoot = join(websiteRoot, 'content/docs', version);
+const sourceRevision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+const websiteRevision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: websiteRoot, encoding: 'utf8' }).trim();
 
 const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
   const path = join(directory, entry.name);
@@ -111,6 +114,8 @@ await browser.close();
 const report = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
+  sourceRevision,
+  websiteRevision,
   baseURL,
   version,
   routesChecked: routes.length,

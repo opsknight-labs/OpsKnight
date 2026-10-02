@@ -261,7 +261,7 @@ export default function TopbarNotifications() {
     });
   }, []);
 
-  const { isConnected: isLive } = useNotificationStream<Notification>({
+  const { isConnected: isLive, connectionState } = useNotificationStream<Notification>({
     onNotifications: handleIncomingNotifications,
     onUnreadCount: count => setUnreadCount(count),
     onError: error => {
@@ -271,7 +271,17 @@ export default function TopbarNotifications() {
       }
     },
   });
-  const connectionLabel = isLive ? 'Live' : pollingRequired ? 'Polling' : 'Reconnecting';
+  const connectionLabel = pollingRequired
+    ? 'Polling'
+    : connectionState === 'live'
+      ? 'Live'
+      : connectionState === 'connecting'
+        ? 'Connecting'
+        : connectionState === 'offline'
+          ? 'Offline'
+          : connectionState === 'paused'
+            ? 'Paused'
+            : 'Reconnecting';
 
   // Demand-driven loading: only fetch 50 notifications when the user actually opens the drawer
   useEffect(() => {

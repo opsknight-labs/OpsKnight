@@ -65,6 +65,12 @@ jobs:
         run: git diff --exit-code -- generated/docs-discovery/current.json generated/docs-contracts/current.json generated/docs-contracts/capacity.json generated/docs-contracts/routes.json generated/docs-contracts/integrations.json generated/docs-reference generated/docs-certification/v15-parity-report.md docs/internal/certification/v1.5-topic-inventory.yaml docs/v2.0.0/integrations/catalog.yaml docs/v2.0.0/reference/features.md docs/v2.0.0/reference/configuration/README.md docs/v2.0.0/reference/api/README.md
       - name: Validate 2.0.0 documentation contracts
         run: npm run docs:certify:static
+      - name: Preserve revision-bound static certificate
+        uses: actions/upload-artifact@v6
+        with:
+          name: docs-static-certification-${{ github.sha }}
+          path: generated/docs-certification/static.json
+          if-no-files-found: error
       - name: Detect documentation impact
         if: github.event_name == 'pull_request'
         env:
@@ -91,13 +97,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Checkout website renderer
+        uses: actions/checkout@v7
+        with:
+          repository: opsknight-labs/OpsKnight-website
+          path: opsknight-website
       - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npx playwright install --with-deps chromium
+      - name: Build revision-bound OpsKnight image
+        run: docker build --build-arg BUILD_REVISION=${{ github.sha }} -t opsknight-docs-release:${{ github.sha }} .
+      - name: Build the rendered documentation site from this revision
+        run: |
+          ./scripts/sync-docs-to-website.sh ./opsknight-website
+          npm ci --ignore-scripts --prefix ./opsknight-website
+          npm run build --prefix ./opsknight-website
+          python3 -m http.server 15000 --directory ./opsknight-website/out > /tmp/opsknight-docs-site.log 2>&1 &
+          echo $! > /tmp/opsknight-docs-site.pid
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:15000/docs/v2.0.0/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/opsknight-docs-site.log
+          exit 1
       - name: Enforce final 2.0.0 release evidence
+        env:
+          DOCS_OPSKNIGHT_IMAGE: opsknight-docs-release:${{ github.sha }}
+          DOCS_IMAGE_PULL_POLICY: never
+          DOCS_EXPECTED_PRODUCT_REVISION: ${{ github.sha }}
+          DOCS_WEBSITE_DIR: ${{ github.workspace }}/opsknight-website
+          DOCS_SITE_BASE_URL: http://127.0.0.1:15000
         run: npm run docs:certify:release
       - name: Preserve exact release certificate and evidence
         if: always()

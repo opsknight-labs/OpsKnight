@@ -537,6 +537,20 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: not displayed
 - Sources: `scripts/docs/run-kubernetes-journeys.sh`
 
+## `DOCS_EXPECTED_PRODUCT_REVISION`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: operator command or startup script
+- Deployment support: operation
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `scripts/docs/certify.mjs`
+
 ## `DOCS_EXTERNAL_RUNTIME`
 
 - Type: string
@@ -619,7 +633,7 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: `http://127.0.0.1:15000`
-- Sources: `scripts/docs/crawl-rendered-site.mjs`
+- Sources: `scripts/docs/certify.mjs`, `scripts/docs/crawl-rendered-site.mjs`
 
 ## `DOCS_SITE_VERSION`
 
@@ -661,7 +675,7 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `scripts/docs/crawl-rendered-site.mjs`
+- Sources: `scripts/docs/certify.mjs`, `scripts/docs/crawl-rendered-site.mjs`
 
 ## `DURATION_SECONDS`
 

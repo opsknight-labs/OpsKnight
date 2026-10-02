@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "1b8f84d10ccb736618c3439dcb7c8ff6dffc7f65",
+  "sourceRevision": "a41fcd25049cbbd28ec6ea08c94fd111a367811f",
   "contracts": [
     {
       "id": "api:/api/events",
@@ -20983,6 +20983,78 @@
       ]
     },
     {
+      "id": "configuration:DOCS_EXPECTED_PRODUCT_REVISION",
+      "kind": "configuration",
+      "name": "DOCS_EXPECTED_PRODUCT_REVISION",
+      "owner": "platform",
+      "classification": "OPERATOR_FEATURE",
+      "sources": [
+        "scripts/docs/certify.mjs"
+      ],
+      "contract": {
+        "name": "DOCS_EXPECTED_PRODUCT_REVISION",
+        "sources": [
+          "scripts/docs/certify.mjs"
+        ],
+        "required": false,
+        "secret": false,
+        "scopes": [
+          "operation"
+        ],
+        "defaults": [],
+        "allowedValues": [],
+        "type": "string",
+        "requiredWhen": "conditional or optional; inspect cited source",
+        "runtimeRoles": [
+          "operator command or startup script"
+        ],
+        "deploymentSupport": [
+          "operation"
+        ],
+        "restartRequired": true,
+        "deprecated": false,
+        "replacement": null,
+        "confidence": "incomplete"
+      },
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "capability-source",
+      "tests": [],
+      "runtimeEvidence": [],
+      "introducedVersion": "unknown",
+      "availability": "unknown",
+      "claims": [
+        {
+          "id": "configuration:DOCS_EXPECTED_PRODUCT_REVISION:classification",
+          "text": "DOCS_EXPECTED_PRODUCT_REVISION is classified as OPERATOR_FEATURE and owned by platform.",
+          "evidence": [
+            "scripts/docs/certify.mjs"
+          ],
+          "verification": "source"
+        }
+      ],
+      "relatedFeatures": [
+        "api:/api/status/[slug]/history",
+        "api:/api/status/[slug]",
+        "api:/api/status/[slug]/rss",
+        "api:/api/status/[slug]/subscribe",
+        "api:/api/status/history",
+        "api:/api/status",
+        "api:/api/status/rss",
+        "api:/api/status/subscribe",
+        "api:/api/status/subscriptions/unsubscribe",
+        "api:/api/status/subscriptions/verify",
+        "ui:/action-items",
+        "ui:/audit"
+      ]
+    },
+    {
       "id": "configuration:DOCS_EXTERNAL_RUNTIME",
       "kind": "configuration",
       "name": "DOCS_EXTERNAL_RUNTIME",
@@ -21363,11 +21435,13 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
+        "scripts/docs/certify.mjs",
         "scripts/docs/crawl-rendered-site.mjs"
       ],
       "contract": {
         "name": "DOCS_SITE_BASE_URL",
         "sources": [
+          "scripts/docs/certify.mjs",
           "scripts/docs/crawl-rendered-site.mjs"
         ],
         "required": false,
@@ -21410,6 +21484,7 @@
           "id": "configuration:DOCS_SITE_BASE_URL:classification",
           "text": "DOCS_SITE_BASE_URL is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
+            "scripts/docs/certify.mjs",
             "scripts/docs/crawl-rendered-site.mjs"
           ],
           "verification": "source"
@@ -21585,11 +21660,13 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
+        "scripts/docs/certify.mjs",
         "scripts/docs/crawl-rendered-site.mjs"
       ],
       "contract": {
         "name": "DOCS_WEBSITE_DIR",
         "sources": [
+          "scripts/docs/certify.mjs",
           "scripts/docs/crawl-rendered-site.mjs"
         ],
         "required": false,
@@ -21630,6 +21707,7 @@
           "id": "configuration:DOCS_WEBSITE_DIR:classification",
           "text": "DOCS_WEBSITE_DIR is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
+            "scripts/docs/certify.mjs",
             "scripts/docs/crawl-rendered-site.mjs"
           ],
           "verification": "source"

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-02T02:41:16+05:30",
-  "sourceRevision": "1b8f84d10ccb736618c3439dcb7c8ff6dffc7f65",
+  "generatedAt": "2026-10-02T03:17:08+05:30",
+  "sourceRevision": "a41fcd25049cbbd28ec6ea08c94fd111a367811f",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -16053,6 +16053,31 @@
       "confidence": "incomplete"
     },
     {
+      "name": "DOCS_EXPECTED_PRODUCT_REVISION",
+      "sources": [
+        "scripts/docs/certify.mjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "DOCS_EXTERNAL_RUNTIME",
       "sources": [
         "scripts/docs/run-kubernetes-journeys.sh"
@@ -16186,6 +16211,7 @@
     {
       "name": "DOCS_SITE_BASE_URL",
       "sources": [
+        "scripts/docs/certify.mjs",
         "scripts/docs/crawl-rendered-site.mjs"
       ],
       "required": false,
@@ -16267,6 +16293,7 @@
     {
       "name": "DOCS_WEBSITE_DIR",
       "sources": [
+        "scripts/docs/certify.mjs",
         "scripts/docs/crawl-rendered-site.mjs"
       ],
       "required": false,
@@ -82549,6 +82576,78 @@
         ]
       },
       {
+        "id": "configuration:DOCS_EXPECTED_PRODUCT_REVISION",
+        "kind": "configuration",
+        "name": "DOCS_EXPECTED_PRODUCT_REVISION",
+        "owner": "platform",
+        "classification": "OPERATOR_FEATURE",
+        "sources": [
+          "scripts/docs/certify.mjs"
+        ],
+        "contract": {
+          "name": "DOCS_EXPECTED_PRODUCT_REVISION",
+          "sources": [
+            "scripts/docs/certify.mjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:DOCS_EXPECTED_PRODUCT_REVISION:classification",
+            "text": "DOCS_EXPECTED_PRODUCT_REVISION is classified as OPERATOR_FEATURE and owned by platform.",
+            "evidence": [
+              "scripts/docs/certify.mjs"
+            ],
+            "verification": "source"
+          }
+        ],
+        "relatedFeatures": [
+          "api:/api/status/[slug]/history",
+          "api:/api/status/[slug]",
+          "api:/api/status/[slug]/rss",
+          "api:/api/status/[slug]/subscribe",
+          "api:/api/status/history",
+          "api:/api/status",
+          "api:/api/status/rss",
+          "api:/api/status/subscribe",
+          "api:/api/status/subscriptions/unsubscribe",
+          "api:/api/status/subscriptions/verify",
+          "ui:/action-items",
+          "ui:/audit"
+        ]
+      },
+      {
         "id": "configuration:DOCS_EXTERNAL_RUNTIME",
         "kind": "configuration",
         "name": "DOCS_EXTERNAL_RUNTIME",
@@ -82929,11 +83028,13 @@
         "owner": "platform",
         "classification": "OPERATOR_FEATURE",
         "sources": [
+          "scripts/docs/certify.mjs",
           "scripts/docs/crawl-rendered-site.mjs"
         ],
         "contract": {
           "name": "DOCS_SITE_BASE_URL",
           "sources": [
+            "scripts/docs/certify.mjs",
             "scripts/docs/crawl-rendered-site.mjs"
           ],
           "required": false,
@@ -82976,6 +83077,7 @@
             "id": "configuration:DOCS_SITE_BASE_URL:classification",
             "text": "DOCS_SITE_BASE_URL is classified as OPERATOR_FEATURE and owned by platform.",
             "evidence": [
+              "scripts/docs/certify.mjs",
               "scripts/docs/crawl-rendered-site.mjs"
             ],
             "verification": "source"
@@ -83151,11 +83253,13 @@
         "owner": "platform",
         "classification": "OPERATOR_FEATURE",
         "sources": [
+          "scripts/docs/certify.mjs",
           "scripts/docs/crawl-rendered-site.mjs"
         ],
         "contract": {
           "name": "DOCS_WEBSITE_DIR",
           "sources": [
+            "scripts/docs/certify.mjs",
             "scripts/docs/crawl-rendered-site.mjs"
           ],
           "required": false,
@@ -83196,6 +83300,7 @@
             "id": "configuration:DOCS_WEBSITE_DIR:classification",
             "text": "DOCS_WEBSITE_DIR is classified as OPERATOR_FEATURE and owned by platform.",
             "evidence": [
+              "scripts/docs/certify.mjs",
               "scripts/docs/crawl-rendered-site.mjs"
             ],
             "verification": "source"
@@ -125750,11 +125855,11 @@
       }
     ],
     "summary": {
-      "total": 1172,
-      "claims": 1627,
+      "total": 1173,
+      "claims": 1628,
       "unsupportedClaims": 0,
-      "supported": 639,
-      "documentedSupported": 639,
+      "supported": 640,
+      "documentedSupported": 640,
       "undocumentedSupported": 0,
       "unresolvedSemanticContracts": 0,
       "uiRoutesWithoutExplicitDocumentation": 0,
@@ -125762,7 +125867,7 @@
         "api": 227,
         "api-scope": 7,
         "authorization-action": 9,
-        "configuration": 316,
+        "configuration": 317,
         "deployment-topology": 4,
         "enum": 73,
         "integration": 28,
@@ -125777,7 +125882,7 @@
       "byClassification": {
         "ADMIN_FEATURE": 83,
         "INTERNAL_IMPLEMENTATION": 533,
-        "OPERATOR_FEATURE": 345,
+        "OPERATOR_FEATURE": 346,
         "PUBLIC_API": 54,
         "PUBLIC_FEATURE": 157
       },

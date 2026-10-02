@@ -53,8 +53,8 @@ Open **Settings → Profile**. The page contains **Profile & Identity**,
 Personal channel switches participate in notification eligibility; they do not
 configure provider credentials or service routing. SMS, voice, and WhatsApp
 require a usable phone number. Quiet hours suppress low-urgency SMS, voice, push,
-and WhatsApp during the configured window; the current UI states that P1 and P2
-alerts bypass quiet hours. Timezone affects displayed timestamps and schedule
+and WhatsApp during the configured window; Medium and High urgency alerts bypass
+quiet hours regardless of their separate P1–P5 priority. Timezone affects displayed timestamps and schedule
 context. Team, schedule, policy, incident, and SLA cards reflect current records
 the signed-in user may see.
 

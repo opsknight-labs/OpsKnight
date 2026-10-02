@@ -53,7 +53,7 @@ Only Web receives ingress. Migration uses a direct PostgreSQL connection. Every
 role runs the same immutable image with a different `OPSKNIGHT_PROCESS_ROLE`.
 Do not run integrated and split ownership against the same database.
 
-## Incident event and delivery flow
+## Incident event and delivery flows
 
 ```mermaid
 sequenceDiagram
@@ -62,14 +62,21 @@ sequenceDiagram
   participant DB as PostgreSQL
   participant Scheduler as Scheduler
   participant Critical as Critical worker
+  participant General as General worker
+  participant Bulk as Bulk worker
   participant Provider as Paging/ChatOps provider
   Source->>Web: Authenticated event
   Web->>DB: Classify, create/deduplicate incident, enqueue durable work
   Scheduler->>DB: Claim due escalation/SLA transitions
-  Critical->>DB: Claim critical delivery job
-  Critical->>Provider: Send notification or incident card
+  Critical->>DB: Claim escalation and critical-notification work
+  General->>DB: Claim normal operational work
+  Bulk->>DB: Claim public-incident, bulk-notification, and status fan-out work
+  Critical->>Provider: Send latency-sensitive responder page/card
+  Bulk->>Provider: Send bulk/public notification class
   Provider-->>Critical: Outcome/callback
+  Provider-->>Bulk: Outcome/callback
   Critical->>DB: Persist attempt and outcome
+  Bulk->>DB: Persist attempt and outcome
 ```
 
 ## Queue-lane ownership
@@ -111,4 +118,3 @@ are replayed.
 - [Runtime roles](./runtime-roles)
 - [Database connections](./database-connections)
 - [Mobile installation and Push](../../../guides/mobile/install-and-notifications)
-

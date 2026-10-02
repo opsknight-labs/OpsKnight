@@ -57,10 +57,11 @@ repeated queries can return a temporary rate-limit response.
 3. Select a notification with an incident target to open that incident.
 4. Use the inline control to mark one item read, or **Mark all as read** after
    reviewing the outstanding items.
-5. Interpret **Live** as a connected event stream, **Reconnecting** as an SSE
-   retry/backoff period, and **Polling** as the fallback used only when the
-   browser does not support EventSource. Verify critical work on the Incidents
-   page rather than relying only on the badge.
+5. Interpret **Connecting** as initial setup, **Live** as a connected event
+   stream, **Reconnecting** as an SSE retry/backoff period, **Offline** as a lost
+   network, **Paused** as a background/hidden page, and **Polling** as the
+   fallback used only when the browser lacks EventSource. Verify critical work
+   on the Incidents page rather than relying only on the badge.
 
 ## How it works
 

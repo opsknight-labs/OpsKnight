@@ -9,7 +9,8 @@ verification:
   verified_at: 2026-10-02
   evidence:
     - src/components/GlobalKeyboardHandler.tsx
-    - src/components/KeyboardShortcutsProvider.tsx
+    - src/components/KeyboardShortcuts.tsx
+    - src/lib/keyboard-shortcuts.ts
     - src/components/incident/IncidentsListTable.tsx
     - src/app/(app)/shortcuts/page.tsx
 ---

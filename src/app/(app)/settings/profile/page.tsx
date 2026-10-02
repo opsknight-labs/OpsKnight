@@ -253,8 +253,8 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
               footer={
                 <p className="text-xs text-muted-foreground flex items-center gap-2">
                   <Flame className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                  High & Medium urgency alerts (P1 & P2 incidents) always bypass quiet hours to
-                  ensure operational safety.
+                  Medium and High urgency alerts always bypass quiet hours to ensure operational
+                  safety.
                 </p>
               }
             >

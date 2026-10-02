@@ -570,8 +570,7 @@ export default async function Dashboard({
                         )}
                         <Link
                           href={buildIncidentListHref({
-                            filter: 'all_open',
-                            urgency: 'HIGH',
+                            filter: 'critical_focus',
                             ...(service ? { serviceId: service } : {}),
                           })}
                           className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
