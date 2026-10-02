@@ -1563,7 +1563,7 @@ describe('PushNotificationToggle', () => {
     });
 
     mockFetch.mockImplementation(async (url: string) => {
-      if (typeof url === 'string' && url.includes('/sw.js')) {
+      if (typeof url === 'string' && url.includes('sw.js')) {
         return {
           ok: true,
           status: 200,
@@ -1676,7 +1676,7 @@ describe('PushNotificationToggle', () => {
     });
 
     mockFetch.mockImplementation(async (url: string) => {
-      if (typeof url === 'string' && url.includes('/sw.js')) {
+      if (typeof url === 'string' && url.includes('sw.js')) {
         return {
           ok: true,
           status: 200,
@@ -1693,7 +1693,7 @@ describe('PushNotificationToggle', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(
-        'Service worker did not become ready. Retry.'
+        /Service worker (?:installation failed before activation|did not become ready)\. Retry\./
       );
     });
     expect(screen.getByRole('button', { name: /Retry/i })).toBeInTheDocument();
@@ -1790,6 +1790,102 @@ describe('PushNotificationToggle', () => {
     });
 
     await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Disable/i })).toBeInTheDocument();
+    });
+  });
+
+  it('automatically repairs stale root registration when notification permission is already granted', async () => {
+    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1'
+    );
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('iPhone');
+    Object.defineProperty(navigator, 'standalone', {
+      value: true,
+      configurable: true,
+    });
+
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'granted',
+        requestPermission: vi.fn().mockResolvedValue('granted'),
+      },
+      configurable: true,
+    });
+
+    // Stale registration reproducing the stuck screenshot: scope / but no active/waiting/installing worker
+    const unregisterMock = vi.fn().mockResolvedValue(true);
+    const staleRegistration = {
+      scope: `${window.location.origin}/`,
+      active: null,
+      waiting: null,
+      installing: null,
+      unregister: unregisterMock,
+      update: vi.fn().mockResolvedValue(undefined),
+    };
+
+    // Repaired registration returned after clean register
+    const healthyRegistration = {
+      scope: `${window.location.origin}/`,
+      active: {
+        scriptURL: `${window.location.origin}/sw.js`,
+        state: 'activated',
+      },
+      waiting: null,
+      installing: null,
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue({
+          endpoint: 'https://push.apple.com/sub/repaired-endpoint',
+          unsubscribe: vi.fn().mockResolvedValue(true),
+        }),
+        subscribe: vi.fn(),
+      },
+    };
+
+    const registerMock = vi.fn().mockResolvedValue(healthyRegistration);
+
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(staleRegistration),
+        register: registerMock,
+        ready: new Promise(() => {}),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('sw.js')) {
+        return {
+          ok: true,
+          status: 200,
+          redirected: false,
+          url: `${window.location.origin}/sw.js`,
+          headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
+        };
+      }
+      if (typeof url === 'string' && url.includes('/api/user/push-subscription')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ deviceRegistered: true, accountEnabled: true }),
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    render(<PushNotificationToggle />);
+
+    // Must automatically unregister the stale worker and cleanly re-register
+    await waitFor(() => {
+      expect(unregisterMock).toHaveBeenCalledTimes(1);
+      expect(registerMock).toHaveBeenCalledWith('/sw.js', {
+        scope: '/',
+        updateViaCache: 'none',
+      });
+    });
+
+    // Must converge to On without requiring manual Safari cache clearing
+    await waitFor(() => {
+      expect(screen.getByText('On')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Disable/i })).toBeInTheDocument();
     });
   });

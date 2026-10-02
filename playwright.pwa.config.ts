@@ -24,6 +24,10 @@ export default defineConfig({
       name: 'pwa-production-chromium',
       use: { ...devices['Pixel 5'] },
     },
+    {
+      name: 'pwa-production-webkit',
+      use: { ...devices['iPhone 14'], serviceWorkers: 'allow' },
+    },
   ],
   webServer: {
     // The production PWA contract must run against a built Next.js application;

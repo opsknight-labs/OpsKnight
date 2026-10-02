@@ -153,14 +153,15 @@ jobs:
           run-smoke: 'false'
           run-validation: 'false'
 
-      - name: Install production PWA browser engine
-        run: npx playwright install --with-deps chromium
+      - name: Install production PWA browser engines
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Run generated service-worker contract
         run: >-
           npx playwright test
           -c playwright.pwa.config.ts
           --project=pwa-production-chromium
+          --project=pwa-production-webkit
 
       - name: Upload production PWA Playwright report
         if: failure()
