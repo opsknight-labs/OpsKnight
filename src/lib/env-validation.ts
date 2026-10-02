@@ -6,7 +6,7 @@
  */
 
 import { logger } from './logger';
-import { isWeakKey } from './encryption';
+import { getEncryptionKeyringEntries, isWeakKey } from './encryption';
 
 export const KNOWN_PLACEHOLDER_NEXTAUTH_SECRETS = new Set([
   'opsknight_super_secret_jwt_and_session_signing_key_change_in_production_min32chars',
@@ -166,13 +166,21 @@ export function validateProductionEnv(): void {
 
     // 2. ENCRYPTION_KEY / ENCRYPTION_KEYS placeholder check
     const legacyKey = process.env.ENCRYPTION_KEY?.trim();
-    if (legacyKey && isWeakKey(legacyKey)) {
+    const keyring = process.env.ENCRYPTION_KEYS?.trim();
+    const parsedKeyring = keyring ? getEncryptionKeyringEntries() : [];
+
+    if (keyring && parsedKeyring.length === 0) {
+      insecureSecrets.push(
+        'ENCRYPTION_KEYS is invalid, duplicated, malformed, or contains a weak production key.'
+      );
+    }
+
+    if (legacyKey && isWeakKey(legacyKey) && parsedKeyring.length === 0) {
       insecureSecrets.push(
         'ENCRYPTION_KEY is a known weak or default placeholder. Provide a unique 64-character hex key.'
       );
     }
 
-    const keyring = process.env.ENCRYPTION_KEYS?.trim();
     if (keyring) {
       for (const rawEntry of keyring.split(',')) {
         const sep = rawEntry.indexOf(':');
