@@ -901,22 +901,67 @@ jobs:
             prerelease=true
           fi
 
+          release_notes_file=".github/releases/${tag}.md"
+          curated_body_file="$(mktemp)"
+          has_curated_notes=false
+          if [ -f "$release_notes_file" ]; then
+            echo "Found curated release notes in ${release_notes_file}"
+            parsed_title="$(RELEASE_NOTES_FILE="$release_notes_file" CURATED_BODY_FILE="$curated_body_file" node <<'NODE'
+            const fs = require('node:fs');
+            const content = fs.readFileSync(process.env.RELEASE_NOTES_FILE, 'utf8');
+            const lines = content.split('\n');
+            let title = '';
+            let body = content;
+            if (lines[0].startsWith('# ')) {
+              title = lines[0].replace(/^#\s+/, '').trim();
+              body = lines.slice(1).join('\n').trimStart();
+            }
+            fs.writeFileSync(process.env.CURATED_BODY_FILE, body);
+            process.stdout.write(title);
+            NODE
+            )"
+            if [ -n "$parsed_title" ]; then
+              title="$parsed_title"
+            fi
+            has_curated_notes=true
+          fi
+
           release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq .id 2>/dev/null || true)"
           if [ -n "$release_id" ]; then
             echo "GitHub Release ${tag} already exists; refreshing latest/prerelease flags and certification evidence."
-            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
-              -f name="$title" \
-              -F prerelease="$prerelease" \
-              -f make_latest="$make_latest" >/dev/null
+            if [ "$has_curated_notes" = true ]; then
+              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+                -f name="$title" \
+                -F body=@"$curated_body_file" \
+                -F prerelease="$prerelease" \
+                -f make_latest="$make_latest" >/dev/null
+            else
+              gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+                -f name="$title" \
+                -F prerelease="$prerelease" \
+                -f make_latest="$make_latest" >/dev/null
+            fi
           else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
-              -f tag_name="$tag" \
-              -f target_commitish="${GITHUB_SHA}" \
-              -f name="$title" \
-              -F generate_release_notes=true \
-              -F prerelease="$prerelease" \
-              -f make_latest="$make_latest" >/dev/null
+            if [ "$has_curated_notes" = true ]; then
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
+                -f tag_name="$tag" \
+                -f target_commitish="${GITHUB_SHA}" \
+                -f name="$title" \
+                -F body=@"$curated_body_file" \
+                -F generate_release_notes=false \
+                -F prerelease="$prerelease" \
+                -f make_latest="$make_latest" >/dev/null
+            else
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
+                -f tag_name="$tag" \
+                -f target_commitish="${GITHUB_SHA}" \
+                -f name="$title" \
+                -F generate_release_notes=true \
+                -F prerelease="$prerelease" \
+                -f make_latest="$make_latest" >/dev/null
+            fi
           fi
+          rm -f "$curated_body_file"
 
           summary_asset="$(find release-certification -name "release-certification-${tag}.json" -print -quit)"
           test -n "$summary_asset"
@@ -930,7 +975,9 @@ jobs:
           gh release upload "$tag" "$summary_asset" --clobber
 
           release_body="$(gh release view "$tag" --json body --jq .body)"
-          release_body="$(RELEASE_BODY="$release_body" node <<'NODE'
+          updated_body_file="$(mktemp)"
+          RELEASE_BODY="$release_body" UPDATED_BODY_FILE="$updated_body_file" node <<'NODE'
+          const fs = require('node:fs');
           const marker = '<!-- opsknight-release-certification -->';
           const section = `${marker}
           ## Release certification
@@ -939,11 +986,11 @@ jobs:
           `;
           const body = process.env.RELEASE_BODY || '';
           const withoutOld = body.includes(marker) ? body.slice(0, body.indexOf(marker)).trimEnd() : body.trimEnd();
-          process.stdout.write(`${withoutOld}${withoutOld ? '\n\n' : ''}${section}\n`);
+          fs.writeFileSync(process.env.UPDATED_BODY_FILE, `${withoutOld}${withoutOld ? '\n\n' : ''}${section}\n`);
           NODE
-          )"
           release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq .id)"
-          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -f body="$release_body" >/dev/null
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -F body=@"$updated_body_file" >/dev/null
+          rm -f "$updated_body_file"
 
           if [ "$make_latest" = true ]; then
             latest_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
