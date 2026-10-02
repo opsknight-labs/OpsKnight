@@ -4,8 +4,9 @@ import * as React from 'react';
 import { useActionState, useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { useForm } from 'react-hook-form';
+import { useForm, type FieldErrors } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
+import { notify as toast } from '@/lib/toast';
 import Link from 'next/link';
 import * as z from 'zod';
 import {
@@ -64,7 +65,6 @@ import {
 } from '@/components/ui/shadcn/form';
 import { Input } from '@/components/ui/shadcn/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
-import { Switch } from '@/components/ui/shadcn/switch';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
 import { cn } from '@/lib/utils';
@@ -491,9 +491,22 @@ function CreateIncidentModalContent({
     }
   }, [contextData, loading]);
 
+  const services = useMemo(() => contextData?.services || [], [contextData?.services]);
+  const users = useMemo(() => contextData?.users || [], [contextData?.users]);
+  const teams = useMemo(() => contextData?.teams || [], [contextData?.teams]);
+  const templates = useMemo(() => contextData?.templates || [], [contextData?.templates]);
+  const customFields = useMemo(() => contextData?.customFields || [], [contextData?.customFields]);
+
   const [state, formAction, isPending] = useActionState(
     async (_prevState: { id: string } | null, formData: FormData) => {
-      return await createIncident(formData);
+      try {
+        return await createIncident(formData);
+      } catch (err) {
+        toast.error(err, {
+          description: 'Failed to create incident. Please check the fields and try again.',
+        });
+        return null;
+      }
     },
     null
   );
@@ -505,8 +518,57 @@ function CreateIncidentModalContent({
     }
   }, [state, router, onClose]);
 
+  const onInvalid = useCallback((errors: FieldErrors<FormValues>) => {
+    const missingFields: string[] = [];
+    if (errors.serviceId) {
+      missingFields.push('Affected Service');
+    }
+    if (errors.title) {
+      missingFields.push('Incident Title');
+    }
+    Object.keys(errors).forEach(key => {
+      if (key !== 'serviceId' && key !== 'title') {
+        missingFields.push(key);
+      }
+    });
+
+    if (errors.serviceId && !errors.title) {
+      toast.warning('Please select an affected service.', {
+        description: 'An affected service is required before creating the incident.',
+      });
+      setServiceOpen(true);
+    } else if (errors.title && !errors.serviceId) {
+      toast.warning(errors.title.message || 'Please enter an incident title.', {
+        description: 'The incident title must be at least 5 characters long.',
+      });
+      titleInputRef.current?.focus();
+    } else {
+      toast.warning('Please fill in all required fields.', {
+        description: `Required fields missing: ${missingFields.join(', ')}.`,
+      });
+      if (errors.serviceId) {
+        setServiceOpen(true);
+      } else if (errors.title) {
+        titleInputRef.current?.focus();
+      }
+    }
+  }, []);
+
   const onSubmit = useCallback(
     (data: FormValues) => {
+      const missingCustomFields = customFields.filter(field => {
+        if (!field.required) return false;
+        const effectiveValue = (customFieldValues[field.id] ?? field.defaultValue ?? '').trim();
+        return !effectiveValue;
+      });
+      if (missingCustomFields.length > 0) {
+        const names = missingCustomFields.map(f => f.name).join(', ');
+        toast.warning(`Required field missing: ${names}`, {
+          description: 'Please fill in all required custom fields before creating the incident.',
+        });
+        return;
+      }
+
       const formData = new FormData();
       formData.append('title', data.title);
       formData.append('description', data.description || '');
@@ -527,32 +589,29 @@ function CreateIncidentModalContent({
 
       if (data.dedupKey) formData.append('dedupKey', data.dedupKey);
 
-      Object.entries(customFieldValues).forEach(([key, value]) => {
-        formData.append(`customField_${key}`, value);
+      customFields.forEach(field => {
+        const effectiveValue = (customFieldValues[field.id] ?? field.defaultValue ?? '').trim();
+        if (effectiveValue) {
+          formData.append(`customField_${field.id}`, effectiveValue);
+        }
       });
 
       React.startTransition(() => {
         formAction(formData);
       });
     },
-    [customFieldValues, formAction]
+    [customFieldValues, customFields, formAction]
   );
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
         event.preventDefault();
-        form.handleSubmit(onSubmit)();
+        form.handleSubmit(onSubmit, onInvalid)();
       }
     },
-    [form, onSubmit]
+    [form, onSubmit, onInvalid]
   );
-
-  const services = useMemo(() => contextData?.services || [], [contextData?.services]);
-  const users = useMemo(() => contextData?.users || [], [contextData?.users]);
-  const teams = useMemo(() => contextData?.teams || [], [contextData?.teams]);
-  const templates = useMemo(() => contextData?.templates || [], [contextData?.templates]);
-  const customFields = useMemo(() => contextData?.customFields || [], [contextData?.customFields]);
 
   const selectedService = useMemo(
     () => services.find(s => s.id === watchedServiceId),
@@ -703,7 +762,11 @@ function CreateIncidentModalContent({
       {/* Form Content */}
       {!loading && contextData?.canCreateIncident && (
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+          <form
+            noValidate
+            onSubmit={form.handleSubmit(onSubmit, onInvalid)}
+            className="flex min-h-0 flex-1 flex-col"
+          >
             <div className="flex-1 space-y-5 overflow-y-auto px-5 sm:px-6 py-5">
               {/* Revamped Incident Template Area: No Scroller, Clear Wrap & Search */}
               {templates.length > 0 && (
@@ -1103,9 +1166,12 @@ function CreateIncidentModalContent({
                                 type="button"
                                 variant="outline"
                                 role="combobox"
+                                aria-invalid={Boolean(form.formState.errors.serviceId)}
                                 className={cn(
                                   CONTROL_CLASS,
-                                  'w-full justify-between px-3 text-sm font-normal'
+                                  'w-full justify-between px-3 text-sm font-normal',
+                                  form.formState.errors.serviceId &&
+                                    'border-rose-500 bg-rose-500/5 text-rose-600 ring-1 ring-rose-500/30 focus-visible:ring-rose-500/30 dark:text-rose-400'
                                 )}
                               >
                                 {field.value ? (
@@ -1116,9 +1182,24 @@ function CreateIncidentModalContent({
                                     </span>
                                   </span>
                                 ) : (
-                                  <span className="text-muted-foreground flex items-center gap-1.5">
-                                    <Activity className="h-3.5 w-3.5 opacity-50" />
-                                    Select affected service...
+                                  <span
+                                    className={cn(
+                                      'flex items-center gap-1.5',
+                                      form.formState.errors.serviceId
+                                        ? 'text-rose-600 dark:text-rose-400 font-medium'
+                                        : 'text-muted-foreground'
+                                    )}
+                                  >
+                                    <Activity
+                                      className={cn(
+                                        'h-3.5 w-3.5',
+                                        form.formState.errors.serviceId
+                                          ? 'text-rose-500'
+                                          : 'opacity-50'
+                                      )}
+                                    />
+                                    Select affected service...{' '}
+                                    {form.formState.errors.serviceId ? '(Required)' : ''}
                                   </span>
                                 )}
                                 <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -1728,6 +1809,24 @@ function CreateIncidentModalContent({
                 </div>
               </details>
             </div>
+
+            {/* Validation Warning Summary if submitted with missing required fields */}
+            {Object.keys(form.formState.errors).length > 0 && (
+              <div
+                role="alert"
+                className="mx-5 sm:mx-6 mb-2 flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-medium text-rose-600 dark:text-rose-400 animate-in fade-in slide-in-from-bottom-2 duration-150"
+              >
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
+                <span>
+                  {form.formState.errors.serviceId && !form.formState.errors.title
+                    ? 'Please select an Affected Service above before creating the incident.'
+                    : form.formState.errors.title && !form.formState.errors.serviceId
+                      ? form.formState.errors.title.message ||
+                        'Please enter an Incident Title (minimum 5 characters).'
+                      : 'Please fill in all required fields (Incident Title and Affected Service) before creating the incident.'}
+                </span>
+              </div>
+            )}
 
             {/* Sticky Action Footer */}
             <div className="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-4 border-t border-border/80 bg-card/95 backdrop-blur-sm px-5 sm:px-6 py-3.5">
