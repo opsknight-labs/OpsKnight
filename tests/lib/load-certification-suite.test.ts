@@ -25,6 +25,7 @@ import {
   deriveCapacityFromScenarios,
   generateCertificationMarkdownReport,
   KIND_4NODE_CLUSTER_CONFIG,
+  parseCertificationSummary,
   runLoadCertificationOrchestrator,
   TOPOLOGY_MATRIX,
 } from '../load/helpers/topology';
@@ -41,6 +42,15 @@ describe('OpsKnight Load & Scalability Certification Suite', () => {
       process.env.OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS = originalAllowHosts;
     }
     resetProviderTelemetry();
+  });
+
+  it('reads both the historical array and versioned certification envelope', () => {
+    const result = { topologyId: 'test-topology', scenarios: [] };
+    expect(parseCertificationSummary([result])).toEqual([result]);
+    expect(parseCertificationSummary({ schemaVersion: 1, results: [result] })).toEqual([result]);
+    expect(() => parseCertificationSummary({ results: 'invalid' })).toThrow(
+      'expected a results array'
+    );
   });
 
   it('contains all required scenario, fixture, provider, and helper files under tests/load/', () => {

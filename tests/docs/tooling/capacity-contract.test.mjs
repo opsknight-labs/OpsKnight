@@ -19,6 +19,8 @@ const supportedTopologyIds = [
 ];
 
 test('capacity documentation remains evidence driven', () => {
+  assert.equal(artifact.schemaVersion, 1);
+  assert.equal(contract.source.artifactSchemaVersion, artifact.schemaVersion);
   assert.equal(contract.source.path, 'artifacts/load-certification/certification-summary.json');
   assert.equal(contract.source.sourceRevision, artifact.sourceRevision);
   assert.equal(contract.source.testHarnessRevision, artifact.testHarnessRevision);

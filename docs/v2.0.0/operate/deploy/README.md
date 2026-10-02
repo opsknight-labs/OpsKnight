@@ -18,6 +18,25 @@ verification:
 
 Start here when installing OpsKnight. Choose one packaging path and one runtime topology, then keep that choice consistent for installation, upgrades, troubleshooting, and recovery.
 
+## Start with the closest workload shape
+
+| Current planning shape | Starting architecture to evaluate |
+|---|---|
+| Small — about 40 users and 12 services | [Integrated Compose](./docker-compose/integrated) when one host and no HA are acceptable |
+| Medium — about 120 users and 32 services | [Split Compose](./docker-compose/split), or [Helm Split](./helm/) when Kubernetes or HA is required |
+| Large — about 400 users and 80 services | Helm/Kustomize Split with PgBouncer and external PostgreSQL |
+| Storm — about 1,000 users and 200 services | Multi-replica Split, PgBouncer, external HA PostgreSQL, and workload-specific certification |
+
+> These are starting architectures derived from current test-data shapes, not
+> certified user limits. User count alone cannot size OpsKnight: alert bursts,
+> notification fanout, simultaneous responders, SSE sessions, status-page
+> subscribers, provider quotas, availability requirements, and the PostgreSQL
+> connection budget can change the answer.
+
+Use the full [Deployment Planner](../capacity/choose-deployment) to compare all
+dimensions, then review the [historical benchmark results](../capacity/benchmark-results)
+without treating an observed peak as supported capacity.
+
 ## Follow the complete installation journey
 
 Every supported packaging path has the same control points. Do not skip ahead when a Pod or container becomes healthy:

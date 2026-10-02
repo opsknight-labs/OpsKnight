@@ -100,9 +100,23 @@ kubectl -n opsknight exec deploy/opsknight-web -- node scripts/create-bootstrap-
 Confirm the name first with `kubectl -n opsknight get deployment`; Helm release
 and `fullnameOverride` values can change it.
 
-**Docker Swarm:** run this on the node currently hosting a Web task. Replace
-`opsknight` if you used another stack name. Swarm injects the database URL as a
-secret file, so load it only into this one command:
+**Docker Swarm:** run the matching variant on the node currently hosting the
+application task. Replace `opsknight` if you used another stack name. Integrated
+Swarm names the service `opsknight-app`; Split Swarm names it `opsknight-web`.
+Swarm injects the database URL as a secret file, so load it only into this one
+command.
+
+Integrated Swarm:
+
+```sh
+APP_CONTAINER=$(docker ps --quiet \
+  --filter label=com.docker.swarm.service.name=opsknight_opsknight-app | head -n 1)
+test -n "$APP_CONTAINER"
+docker exec "$APP_CONTAINER" sh -c \
+  'export DATABASE_URL="$(tr -d "\r\n" < "$DATABASE_URL_FILE")"; node scripts/create-bootstrap-code.mjs'
+```
+
+Split Swarm:
 
 ```sh
 WEB_CONTAINER=$(docker ps --quiet \
@@ -112,9 +126,11 @@ docker exec "$WEB_CONTAINER" sh -c \
   'export DATABASE_URL="$(tr -d "\r\n" < "$DATABASE_URL_FILE")"; node scripts/create-bootstrap-code.mjs'
 ```
 
-If no container is returned, use `docker service ps opsknight_opsknight-web` to
-locate a running task and run the command on that node. Never copy a database
-secret to the host merely to issue the code.
+If no container is returned, use `docker service ps
+opsknight_opsknight-app` (Integrated) or `docker service ps
+opsknight_opsknight-web` (Split) to locate a running task and execute the
+matching command on that node. Never copy a database secret to the host merely
+to issue the code.
 
 Treat the printed value like a password. Only its SHA-256 digest is stored, it expires after 30 minutes, only one can be active, and successful administrator creation consumes it atomically. Do not run the bare Node command on an unconfigured host: it needs the production dependencies and database environment supplied by the deployment. Enter the administrator name and email, the verified Application URL, the bootstrap code, and a strong unique password. Select **Create administrator** once. A configured environment setup secret is accepted for compatibility but is longer-lived and not preferred.
 

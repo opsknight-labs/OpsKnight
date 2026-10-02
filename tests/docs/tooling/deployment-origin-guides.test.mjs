@@ -25,6 +25,9 @@ test('first-run setup warns before the irreversible host boundary', () => {
   assert.match(guide, /SETUP_SECRET.*BOOTSTRAP_SECRET/s);
   assert.match(guide, /15–64 Unicode characters/);
   assert.match(guide, /Settings → System → App URL/);
+  assert.match(guide, /opsknight_opsknight-app/, 'integrated Swarm bootstrap service must be documented');
+  assert.match(guide, /opsknight_opsknight-web/, 'split Swarm bootstrap service must be documented');
+  assert.match(guide, /DATABASE_URL_FILE/, 'Swarm bootstrap must load its database secret file');
 });
 
 test('every deployment path includes public setup and canonical-origin acceptance', () => {

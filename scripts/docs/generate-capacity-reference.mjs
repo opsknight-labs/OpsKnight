@@ -29,8 +29,8 @@ const planningProfiles = ['small', 'medium', 'large', 'storm'].map(profile => {
   return dimensions;
 });
 
-if (!artifact.generatedAt || !artifact.sourceRevision || !artifact.testHarnessRevision || !artifact.environment || !Array.isArray(artifact.results)) {
-  throw new Error('Capacity artifact must contain generatedAt, sourceRevision, testHarnessRevision, environment, and results.');
+if (artifact.schemaVersion !== 1 || !artifact.generatedAt || !artifact.sourceRevision || !artifact.testHarnessRevision || !artifact.environment || !Array.isArray(artifact.results)) {
+  throw new Error('Capacity artifact must use schemaVersion 1 and contain generatedAt, sourceRevision, testHarnessRevision, environment, and results.');
 }
 
 const supportedTopologies = [
@@ -97,6 +97,7 @@ const contract = {
   generatedAt: artifact.generatedAt,
   source: {
     path: 'artifacts/load-certification/certification-summary.json', pullRequest: 777,
+    artifactSchemaVersion: artifact.schemaVersion,
     artifactGeneratedAt: artifact.generatedAt, sourceRevision: artifact.sourceRevision,
     testHarnessRevision: artifact.testHarnessRevision, environment: artifact.environment,
   },
