@@ -66,6 +66,17 @@ jobs:
           npm run docs:v15-parity
           npm run docs:claims
           npm run docs:surface-parity
+      - name: Preserve regenerated documentation outputs
+        uses: actions/upload-artifact@v6
+        with:
+          name: docs-regenerated-${{ github.sha }}
+          path: |
+            generated/docs-discovery/current.json
+            generated/docs-contracts/current.json
+            generated/docs-reference/
+            generated/docs-certification/surface-parity-report.md
+          if-no-files-found: error
+          retention-days: 7
       - name: Reject generated and published-reference drift
         env:
           # Commit-bound provenance changes after both an ordinary artifact
