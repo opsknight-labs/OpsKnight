@@ -364,6 +364,15 @@ describe('deployment configuration invariants', () => {
     );
   });
 
+  it('validates the 2.0 license boundary from authoritative release artifacts', () => {
+    const workflow = read('.github/workflows/docker-image.yml');
+    expect(workflow).toContain("require('./package.json').license");
+    expect(workflow).toContain('LICENSE-TRANSITION.md');
+    expect(workflow).toContain('LICENSES/Apache-2.0.txt');
+    expect(workflow).toContain('OpsKnight 2.0.0 is the first stable release distributed under');
+    expect(workflow).not.toContain("grep -q 'AGPL-3.0-only' docs/v1.5/licensing.md");
+  });
+
   it('only accepts a new stable release tag matching package.json', () => {
     const script = path.join(root, 'scripts/validate-release-tag.cjs');
     const pkg = JSON.parse(read('package.json')) as { version: string };

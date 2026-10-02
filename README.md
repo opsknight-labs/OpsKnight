@@ -54,9 +54,13 @@ OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:2.0.0 \
   docker compose -f deploy/compose/docker-compose.yml pull
 OPSKNIGHT_IMAGE=ghcr.io/opsknight-labs/opsknight:2.0.0 \
   docker compose -f deploy/compose/docker-compose.yml up -d
+
+# Create the short-lived one-time code required by the setup form.
+docker compose -f deploy/compose/docker-compose.yml exec -T opsknight-app \
+  node scripts/create-bootstrap-code.mjs
 ```
 
-Open `http://localhost:3000/setup` and complete the first-administrator flow. Before exposing the service, set the public Application URL, replace all example database credentials, and store `NEXTAUTH_SECRET` and `ENCRYPTION_KEY` in your secret manager. Losing `ENCRYPTION_KEY` makes encrypted provider credentials unreadable.
+Open `http://localhost:3000/setup`, enter the printed one-time bootstrap code, and complete the first-administrator flow before the code expires. Before exposing the service, set the public Application URL, replace all example database credentials, and store `NEXTAUTH_SECRET` and `ENCRYPTION_KEY` in your secret manager. Losing `ENCRYPTION_KEY` makes encrypted provider credentials unreadable.
 
 For production, pin the tested multi-architecture image digest rather than a moving tag and follow the [production installation guide](https://opsknight.com/docs/latest/start/production-install/).
 
