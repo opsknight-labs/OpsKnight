@@ -215,7 +215,14 @@ export function buildFeatureGraph(discovery) {
   for (const route of discovery.uiRoutes) add('ui', route.route, uiClassification(route.route), ownerFor(route.route), [route.file], route);
   for (const model of discovery.database.models) add('model', model, 'INTERNAL_IMPLEMENTATION', ownerFor(model), [discovery.database.source]);
   for (const value of discovery.database.enums) add('enum', value, 'INTERNAL_IMPLEMENTATION', ownerFor(value), [discovery.database.source]);
-  for (const item of discovery.configuration) add('configuration', item.name, item.secret ? 'OPERATOR_FEATURE' : 'OPERATOR_FEATURE', ownerFor(item.name), item.sources, item);
+  for (const item of discovery.configuration) add(
+    'configuration',
+    item.name,
+    item.semanticClassification === 'INTERNAL_TOOLING' ? 'INTERNAL_IMPLEMENTATION' : 'OPERATOR_FEATURE',
+    ownerFor(item.name),
+    item.sources,
+    item
+  );
   for (const item of discovery.integrations) add('integration', item.provider, 'PUBLIC_FEATURE', 'integration', item.sources, item);
   for (const item of discovery.notificationProviders) add('notification-provider', item.id, 'ADMIN_FEATURE', 'notification', [item.source], item);
   for (const action of discovery.permissions.capabilities) add('permission', action, 'ADMIN_FEATURE', ownerFor(action), [discovery.permissions.source]);

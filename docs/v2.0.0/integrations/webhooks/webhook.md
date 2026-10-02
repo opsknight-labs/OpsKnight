@@ -59,14 +59,14 @@ The exact payload schema is defined by `src/app/api/integrations/webhook/route.t
 - Schema: `shared provider schema`
 - Body limit: 1048576 bytes (1 MiB)
 - Rate limit: 100 requests per 60 seconds, per integration
-
 ## Use the payload contract
 
 The adapter emits the lifecycle actions found in its current source:
 - `trigger`
 - `acknowledge`
 - `resolve`
-Correlation depends on the provider identity selected by the adapter.
+Correlation uses the normalized `EventPayload.dedup_key`; recovery must reuse
+that same key so the existing incident converges instead of creating another.
 
 Send a stable `dedup_key` for every update to the same source alert. A minimal trigger is:
 
@@ -89,7 +89,6 @@ Accepted trigger-like values include `triggered`, `fired`, `alert`, `critical`, 
 When signature verification runs, the shared handler attempts provider-specific delivery identity before claiming the inbound-delivery fence.
 Incident convergence still depends on the adapter correlation key. Failed
 deliveries are recorded for operational inspection without exposing secrets.
-
 ## Limits and testing
 
 Per-integration rate limiting protects the ingestion path. Send a representative
@@ -114,7 +113,6 @@ After the test alert, confirm all of the following:
 - `413` — Payload exceeds the one MiB body limit.
 - `429` — Per-integration request rate exceeded.
 - `503` — A matching delivery is already being processed.
-
 ## Troubleshooting
 
 1. Confirm the integration is enabled and belongs to the intended service.

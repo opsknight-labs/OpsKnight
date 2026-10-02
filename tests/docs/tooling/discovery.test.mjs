@@ -64,4 +64,15 @@ describe('configuration discovery', () => {
     assert.ok(variable?.scopes.includes('runtime'));
     assert.ok(variable?.scopes.includes('deployment'));
   });
+
+  it('excludes documentation harness variables from the product contract', () => {
+    const variables = inspectConfig();
+    assert.equal(variables.some(entry => entry.name.startsWith('DOCS_')), false);
+    assert.equal(variables.some(entry => entry.sources.some(source => source.startsWith('scripts/docs/'))), false);
+  });
+
+  it('classifies each discovered configuration by semantic scope', () => {
+    const allowed = new Set(['PRODUCT_RUNTIME', 'PRODUCT_DEPLOYMENT', 'BUILD_PUBLIC', 'INTERNAL_TOOLING']);
+    for (const variable of inspectConfig()) assert.ok(allowed.has(variable.semanticClassification), variable.name);
+  });
 });

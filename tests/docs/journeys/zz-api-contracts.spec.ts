@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { DOCS_API_KEY } from '../fixtures/constants';
+import discovery from '../../../generated/docs-discovery/current.json';
 
 test.describe.serial('supported public API contracts', () => {
   let incidentId: string;
@@ -106,5 +107,31 @@ test.describe.serial('supported public API contracts', () => {
       code: 'VALIDATION_FAILED',
       fields: [{ field: 'service_id', code: 'required' }],
     });
+  });
+
+  test('exercises every supported public API surface without a server failure', async ({ request }) => {
+    const contracts = discovery.featureGraph.nodes.filter(
+      node => node.kind === 'api' && node.classification === 'PUBLIC_API'
+    );
+    expect(contracts).toHaveLength(47);
+    const results: Array<{ route: string; method: string; status: number }> = [];
+    for (const contract of contracts) {
+      const route = contract.id
+        .replace(/^api:/, '')
+        .replaceAll('[id]', 'docs-certification-missing-id');
+      const methods = (contract.contract as { methods?: string[] }).methods ?? ['GET'];
+      const method = methods.includes('GET') ? 'GET' : methods[0];
+      const response = await request.fetch(route, {
+        method,
+        headers: method === 'GET' ? undefined : { 'Content-Type': 'application/json' },
+        data: method === 'GET' ? undefined : {},
+        failOnStatusCode: false,
+      });
+      results.push({ route, method, status: response.status() });
+      expect(response.status(), `${method} ${route}`).not.toBe(500);
+      expect(response.status(), `${method} ${route}`).toBeLessThan(600);
+      expect(response.status(), `${method} ${route}`).toBeGreaterThanOrEqual(200);
+    }
+    expect(results).toHaveLength(47);
   });
 });

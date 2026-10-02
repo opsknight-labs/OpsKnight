@@ -6,17 +6,14 @@ is coverage evidence, not reader-quality evidence.
 
 ## Reader-completeness states
 
-- `DISCOVERED` — the product surface exists in discovery.
 - `MAPPED` — a documentation page is associated with it.
-- `DRAFTED` — task-oriented content exists but has not passed the full reader contract.
 - `READER_COMPLETE` — the page contains the complete task journey and verification/reversal guidance.
-- `HUMAN_VERIFIED` — an unfamiliar reviewer completed the task using only the page and recorded evidence.
+- `SOURCE_VERIFIED` — machine-readable source and contract checks prove the documented behavior.
 - `RUNTIME_VERIFIED` — the task also passed against the immutable candidate image through a recorded journey.
 
-Only `READER_COMPLETE` or higher describes useful task documentation. Only
-`HUMAN_VERIFIED` and `RUNTIME_VERIFIED` qualify as release evidence. Source
-verification in `verification` is independent: it proves accuracy against code,
-not usability.
+Only `READER_COMPLETE` or higher describes useful task documentation. Release
+evidence is produced by source contracts and disposable runtime journeys rather
+than reviewer identity or manually entered timestamps.
 
 Example metadata:
 
@@ -27,9 +24,9 @@ reader:
   evidence: []
 ```
 
-For `HUMAN_VERIFIED`, add the reviewer, ISO time, full reviewed revision, and
-evidence paths. For `RUNTIME_VERIFIED`, also add an existing journey path. Never
-promote a page from a structural checker alone.
+For `SOURCE_VERIFIED`, add machine-readable evidence paths. For
+`RUNTIME_VERIFIED`, also add an existing journey path. Never promote a page from
+a structural checker alone.
 
 ## Page types
 

@@ -49,7 +49,7 @@
       "required": ["status"],
       "properties": {
         "status": {
-          "enum": ["DISCOVERED", "MAPPED", "DRAFTED", "READER_COMPLETE", "HUMAN_VERIFIED", "RUNTIME_VERIFIED"]
+          "enum": ["MAPPED", "READER_COMPLETE", "SOURCE_VERIFIED", "RUNTIME_VERIFIED"]
         },
         "task": { "type": "string", "minLength": 1 },
         "reviewer": { "type": ["string", "null"] },

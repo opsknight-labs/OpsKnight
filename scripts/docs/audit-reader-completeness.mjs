@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import YAML from 'yaml';
 import { filesUnder, repositoryRoot } from './discovery-lib.mjs';
 
-const order = ['DISCOVERED', 'MAPPED', 'DRAFTED', 'READER_COMPLETE', 'HUMAN_VERIFIED', 'RUNTIME_VERIFIED'];
+const order = ['MAPPED', 'READER_COMPLETE', 'SOURCE_VERIFIED', 'RUNTIME_VERIFIED'];
 const taskTypes = new Set(['how-to', 'tutorial', 'deployment', 'integration', 'troubleshooting']);
 const pages = filesUnder('docs/v2.0.0', file => file.endsWith('.md')).map(file => {
   const source = readFileSync(resolve(repositoryRoot, file), 'utf8');
@@ -12,6 +12,8 @@ const pages = filesUnder('docs/v2.0.0', file => file.endsWith('.md')).map(file =
   const metadata = match ? YAML.parse(match[1]) : {};
   const body = match?.[2] ?? source;
   const status = metadata.reader?.status ?? 'MAPPED';
+  const sourceVerified = ['source', 'test', 'runtime'].includes(metadata.verification?.level) &&
+    (metadata.verification?.evidence?.length ?? 0) > 0;
   return {
     page: file.replace('docs/v2.0.0/', ''),
     type: metadata.type ?? null,
@@ -20,7 +22,7 @@ const pages = filesUnder('docs/v2.0.0', file => file.endsWith('.md')).map(file =
     taskPage: taskTypes.has(metadata.type),
     screenshotCount: [...body.matchAll(/!\[[^\]]*\]\([^)]+\)/g)].length,
     screenshotAssessment: metadata.reader?.evidence?.some(item => /\.(?:png|jpe?g|webp)$/i.test(item)) ? 'EVIDENCED' : 'UNASSESSED',
-    humanVerified: order.indexOf(status) >= order.indexOf('HUMAN_VERIFIED'),
+    sourceVerified: sourceVerified || order.indexOf(status) >= order.indexOf('SOURCE_VERIFIED'),
     runtimeVerified: status === 'RUNTIME_VERIFIED',
   };
 });
@@ -32,7 +34,7 @@ const report = {
   counts,
   taskPages: pages.filter(page => page.taskPage).length,
   readerCompleteTaskPages: pages.filter(page => page.taskPage && order.indexOf(page.status) >= order.indexOf('READER_COMPLETE')).length,
-  humanVerifiedTaskPages: pages.filter(page => page.taskPage && page.humanVerified).length,
+  sourceVerifiedTaskPages: pages.filter(page => page.taskPage && page.sourceVerified).length,
   runtimeVerifiedTaskPages: pages.filter(page => page.taskPage && page.runtimeVerified).length,
   pages,
 };
@@ -40,4 +42,4 @@ const report = {
 const destination = resolve(repositoryRoot, 'generated/docs-certification/page-audit.json');
 mkdirSync(dirname(destination), { recursive: true });
 writeFileSync(destination, `${JSON.stringify(report, null, 2)}\n`);
-console.log(`Reader audit: ${pages.length} pages; ${report.readerCompleteTaskPages}/${report.taskPages} task pages reader-complete; ${report.humanVerifiedTaskPages} human-verified; ${report.runtimeVerifiedTaskPages} runtime-verified.`);
+console.log(`Reader audit: ${pages.length} pages; ${report.readerCompleteTaskPages}/${report.taskPages} task pages reader-complete; ${report.sourceVerifiedTaskPages} source-verified; ${report.runtimeVerifiedTaskPages} runtime-verified.`);

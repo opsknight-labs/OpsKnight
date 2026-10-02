@@ -7,22 +7,16 @@ reference validation, and deployment-example validation.
 Certification output is evidence about a specific revision, not a permanent
 product claim.
 
-## Human review sign-offs
+## Machine certification suites
 
-`reviewer-checklists.yaml` separates review instructions from completed review.
-Every area has an explicit `pending`, `passed`, or `failed` sign-off. A completed
-sign-off must name the reviewer, ISO review time, full source revision, and
-repository evidence paths. Do not populate these fields from an automated
-content check.
-
-Normal static certification reports pending reviews without pretending that
-they passed. Release certification runs the same contract with `--release` and
-fails unless every area has an evidence-backed `passed` sign-off.
+Release evidence comes from source-derived contracts, tooling tests, disposable
+runtime journeys, deployment validation, and the rendered-site crawl. Reviewer
+names and manually entered timestamps are not certification signals.
 
 ## v1.5 knowledge parity
 
-The generated topic inventory is not a parity claim. Each disposition must be a
-human-reviewed record tied to the current source revision and evidence. Static
-certification reports reviewed and pending totals. Release certification fails
-until all inventory topics have valid dispositions; bulk title matching or an
-automated destination guess does not qualify as manual review.
+The generated topic inventory remains a historical regression input, not a
+release checklist. Certification intersects exact legacy configuration names,
+routes, and providers with current implementation contracts. Every still-active
+contract must appear in current v2 documentation or generated references;
+removed historical headings require no manual disposition.

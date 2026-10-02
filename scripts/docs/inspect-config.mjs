@@ -4,7 +4,9 @@ export function inspectConfig() {
   const files = [
     ...filesUnder('src', file => /\.(?:ts|tsx)$/.test(file)),
     ...filesUnder('deploy', file => /\.(?:ya?ml|env|tpl)$/.test(file)),
-    ...filesUnder('scripts', file => /\.(?:cjs|mjs|js|ts|sh)$/.test(file)),
+    ...filesUnder('scripts', file =>
+      /\.(?:cjs|mjs|js|ts|sh)$/.test(file) && !file.includes('/scripts/docs/')
+    ),
     'next.config.ts',
     'env.example',
   ];
@@ -13,6 +15,10 @@ export function inspectConfig() {
     const source = readRepositoryFile(file);
     for (const match of source.matchAll(/(?:process\.env\.|process\.env\[['"]|\$\{|env:\s*|name:\s*)([A-Z][A-Z0-9_]{2,})(?:['"]\])?|^#?\s*([A-Z][A-Z0-9_]{2,})\s*=/gm)) {
       const name = match[1] ?? match[2];
+      // Documentation/test harness settings describe certification machinery,
+      // not the product operators deploy. Never promote them into public
+      // OpsKnight configuration contracts.
+      if (name.startsWith('DOCS_') || name.startsWith('PLAYWRIGHT_')) continue;
       const secret = /(?:SECRET|PASSWORD|TOKEN|PRIVATE|CREDENTIAL|ENCRYPTION_KEY|DATABASE_URL)/.test(name);
       const entry = variables.get(name) ?? {
         name,
@@ -50,6 +56,15 @@ export function inspectConfig() {
   return [...variables.values()]
     .map(entry => ({
       ...entry,
+      semanticClassification: entry.sources.every(source => source.startsWith('scripts/'))
+        ? 'INTERNAL_TOOLING'
+        : entry.scopes.includes('runtime')
+          ? 'PRODUCT_RUNTIME'
+          : entry.scopes.includes('deployment')
+            ? 'PRODUCT_DEPLOYMENT'
+            : entry.name.startsWith('NEXT_PUBLIC_')
+              ? 'BUILD_PUBLIC'
+              : 'INTERNAL_TOOLING',
       type: entry.allowedValues.length ? 'enum/string' : entry.defaults.some(value => /^(?:true|false)$/.test(value)) ? 'boolean' : 'string',
       sources: entry.sources.sort(),
       scopes: entry.scopes.sort(),

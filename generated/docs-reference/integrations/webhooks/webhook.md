@@ -63,7 +63,7 @@ The adapter emits the lifecycle actions found in its current source:
 - `trigger`
 - `acknowledge`
 - `resolve`
-Correlation depends on the provider identity selected by the adapter.
+Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
 
 ## Recovery and deduplication
 

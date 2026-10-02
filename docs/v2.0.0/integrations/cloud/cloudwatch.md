@@ -46,27 +46,28 @@ Do not use an email subscription or an arbitrary generic webhook payload. CloudW
 
 ## Authentication and request verification
 
-The endpoint requires `integrationId`. For SNS envelopes, OpsKnight validates the SNS schema, cryptographic signature and certificate URL, trusted AWS URL, and exact configured topic ARN before confirming a subscription or accepting a notification.
+The endpoint requires the integration identifier.
+Signature verification is **none** using the
+`cloudwatch` verification contract.
 The exact payload schema is defined by `src/app/api/integrations/cloudwatch/route.ts` and `src/lib/integrations/cloudwatch.ts`.
 
 - Method: `POST`
 - Integration identifier: query parameter
-- Integration key transports: none; SNS authenticity and topic binding protect SNS envelopes
+- Integration key transports: none; this route uses the authentication contract above
 - Schema: `shared provider schema`
 - Body limit: 1048576 bytes (1 MiB)
 - Rate limit: 100 requests per 60 seconds, per integration
-
 ## Event mapping and incident lifecycle
 
 The adapter emits the lifecycle actions found in its current source:
 - `trigger`
 - `resolve`
-Correlation depends on the provider identity selected by the adapter.
-
+Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
 ## Recovery and deduplication
 
-The deduplication key is `cloudwatch-<AWS account when present><region>-<alarm name>`. An `ALARM` or `INSUFFICIENT_DATA` message triggers/updates that incident; an `OK` message resolves the same key. Renaming an alarm changes its identity. Failed requests are recorded for operational inspection without exposing secrets.
-
+This route has no provider delivery-ID fence; incident convergence relies on the adapter deduplication key.
+Incident convergence still depends on the adapter correlation key. Failed
+deliveries are recorded for operational inspection without exposing secrets.
 ## Limits and testing
 
 Per-integration rate limiting protects the ingestion path. Send a representative
@@ -85,8 +86,13 @@ After the test alert, confirm all of the following:
 
 ## Error reference
 
-- This custom route does not expose the shared integration error contract.
-
+- `400` — Invalid request or payload validation failed.
+- `401` — Configured authentication or signature validation failed.
+- `403` — Integration is disabled.
+- `404` — Integration record was not found.
+- `413` — Payload exceeds the one MiB body limit.
+- `429` — Per-integration request rate exceeded.
+- `500` — Provider event processing failed.
 ## Troubleshooting
 
 1. Confirm the integration is enabled, belongs to the intended service, and stores the exact topic ARN.

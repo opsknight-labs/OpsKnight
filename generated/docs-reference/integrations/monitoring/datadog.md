@@ -62,7 +62,7 @@ The exact payload schema is defined by `src/app/api/integrations/datadog/route.t
 The adapter emits the lifecycle actions found in its current source:
 - `trigger`
 - `resolve`
-Correlation depends on the provider identity selected by the adapter.
+Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
 
 ## Recovery and deduplication
 

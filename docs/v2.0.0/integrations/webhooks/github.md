@@ -50,32 +50,29 @@ place them in logs or source control.
 
 ## Authentication and request verification
 
-The endpoint requires the integration identifier and validates the integration key using a timing-safe comparison.
+The endpoint requires the integration identifier.
 Signature verification is **conditional-when-secret-configured** using the
 `github` verification contract and headers `x-hub-signature-256`.
 The exact payload schema is defined by `src/app/api/integrations/github/route.ts` and `src/lib/integrations/github.ts`.
 
 - Method: `POST`
 - Integration identifier: query parameter
-- Integration key transports: no separate key transport is required by this custom route; `integrationId` selects the record and the configured webhook secret validates `X-Hub-Signature-256`
+- Integration key transports: none; this route uses the authentication contract above
 - Schema: `shared provider schema`
 - Body limit: 1048576 bytes (1 MiB)
 - Rate limit: 100 requests per 60 seconds, per integration
-
 ## Event mapping and incident lifecycle
 
 The adapter emits the lifecycle actions found in its current source:
 - `trigger`
 - `acknowledge`
 - `resolve`
-Workflow runs correlate by repository, workflow name/ID, and branch; check runs correlate by repository and check name/ID. Pending workflow/check states acknowledge, failure/cancel/timeout triggers, and completed success resolves. Deployment mapping follows the supported payload fields in the adapter.
-
+Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
 ## Recovery and deduplication
 
 When signature verification runs, delivery identity is read from `x-github-delivery` and protected by the inbound-delivery fence.
 Incident convergence still depends on the adapter correlation key. Failed
 deliveries are recorded for operational inspection without exposing secrets.
-
 ## Limits and testing
 
 Per-integration rate limiting protects the ingestion path. Send a representative
@@ -94,8 +91,13 @@ After the test alert, confirm all of the following:
 
 ## Error reference
 
-- This custom route does not expose the shared integration error contract.
-
+- `400` — Invalid request or payload validation failed.
+- `401` — Configured authentication or signature validation failed.
+- `403` — Integration is disabled.
+- `404` — Integration record was not found.
+- `413` — Payload exceeds the one MiB body limit.
+- `429` — Per-integration request rate exceeded.
+- `500` — Provider event processing failed.
 ## Troubleshooting
 
 1. Confirm the integration is enabled, belongs to the intended service, and the GitHub webhook is Active with the correct URL/content type/events.

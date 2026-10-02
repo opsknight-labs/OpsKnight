@@ -8,7 +8,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/appdynamics",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -27,14 +27,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/appdynamics.ts",
       "route": "src/app/api/integrations/appdynamics/route.ts",
       "sharedContracts": [
@@ -42,7 +50,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "azure",
@@ -58,7 +91,7 @@
         "resolve"
       ],
       "authentication": [
-        "integration-key"
+        "integration-identifier"
       ],
       "request": {
         "method": "POST",
@@ -72,11 +105,13 @@
         "integrationKey": []
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "none",
         "provider": "azure",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/azure.ts",
       "route": "src/app/api/integrations/azure/route.ts",
       "sharedContracts": [
@@ -84,7 +119,36 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Configured authentication or signature validation failed"
+        },
+        {
+          "status": 403,
+          "meaning": "Integration is disabled"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 500,
+          "meaning": "Provider event processing failed"
+        }
+      ]
     },
     {
       "id": "better-uptime",
@@ -93,7 +157,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/better-uptime",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -112,14 +176,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/better-uptime.ts",
       "route": "src/app/api/integrations/better-uptime/route.ts",
       "sharedContracts": [
@@ -127,7 +199,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "bitbucket",
@@ -136,7 +233,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/bitbucket",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -154,14 +251,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/bitbucket.ts",
       "route": "src/app/api/integrations/bitbucket/route.ts",
       "sharedContracts": [
@@ -169,7 +274,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "cloudwatch",
@@ -185,7 +315,7 @@
         "resolve"
       ],
       "authentication": [
-        "integration-key"
+        "integration-identifier"
       ],
       "request": {
         "method": "POST",
@@ -199,11 +329,13 @@
         "integrationKey": []
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "none",
         "provider": "cloudwatch",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/cloudwatch.ts",
       "route": "src/app/api/integrations/cloudwatch/route.ts",
       "sharedContracts": [
@@ -211,7 +343,36 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Configured authentication or signature validation failed"
+        },
+        {
+          "status": 403,
+          "meaning": "Integration is disabled"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 500,
+          "meaning": "Provider event processing failed"
+        }
+      ]
     },
     {
       "id": "datadog",
@@ -252,6 +413,8 @@
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/datadog.ts",
       "route": "src/app/api/integrations/datadog/route.ts",
       "sharedContracts": [
@@ -293,7 +456,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/dynatrace",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -312,14 +475,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/dynatrace.ts",
       "route": "src/app/api/integrations/dynatrace/route.ts",
       "sharedContracts": [
@@ -327,7 +498,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "elastic",
@@ -336,7 +532,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/elastic",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -355,14 +551,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/elastic.ts",
       "route": "src/app/api/integrations/elastic/route.ts",
       "sharedContracts": [
@@ -370,7 +574,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "github",
@@ -387,7 +616,7 @@
         "resolve"
       ],
       "authentication": [
-        "integration-key"
+        "conditional-signature-secret"
       ],
       "request": {
         "method": "POST",
@@ -410,6 +639,8 @@
       "deliveryIdentity": [
         "x-github-delivery"
       ],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/github.ts",
       "route": "src/app/api/integrations/github/route.ts",
       "sharedContracts": [
@@ -417,7 +648,36 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Configured authentication or signature validation failed"
+        },
+        {
+          "status": 403,
+          "meaning": "Integration is disabled"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 500,
+          "meaning": "Provider event processing failed"
+        }
+      ]
     },
     {
       "id": "gitlab",
@@ -426,7 +686,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/gitlab",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -445,14 +705,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "gitlab",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/gitlab.ts",
       "route": "src/app/api/integrations/gitlab/route.ts",
       "sharedContracts": [
@@ -460,7 +728,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "google-cloud-monitoring",
@@ -469,7 +762,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/google-cloud-monitoring",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 1,
       "acceptedActions": [
         "trigger",
@@ -488,14 +781,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/google-cloud-monitoring.ts",
       "route": "src/app/api/integrations/google-cloud-monitoring/route.ts",
       "sharedContracts": [
@@ -503,7 +804,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "grafana",
@@ -520,7 +846,7 @@
         "resolve"
       ],
       "authentication": [
-        "integration-key"
+        "conditional-signature-secret"
       ],
       "request": {
         "method": "POST",
@@ -544,6 +870,8 @@
         "x-request-id",
         "x-grafana-delivery"
       ],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/grafana.ts",
       "route": "src/app/api/integrations/grafana/route.ts",
       "sharedContracts": [
@@ -551,7 +879,36 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Configured authentication or signature validation failed"
+        },
+        {
+          "status": 403,
+          "meaning": "Integration is disabled"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 500,
+          "meaning": "Provider event processing failed"
+        }
+      ]
     },
     {
       "id": "honeycomb",
@@ -560,7 +917,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/honeycomb",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -579,14 +936,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/honeycomb.ts",
       "route": "src/app/api/integrations/honeycomb/route.ts",
       "sharedContracts": [
@@ -594,7 +959,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "icinga",
@@ -603,7 +993,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/icinga",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -622,14 +1012,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/icinga.ts",
       "route": "src/app/api/integrations/icinga/route.ts",
       "sharedContracts": [
@@ -637,7 +1035,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "manageengine",
@@ -646,7 +1069,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/manageengine",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -665,14 +1088,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/manageengine.ts",
       "route": "src/app/api/integrations/manageengine/route.ts",
       "sharedContracts": [
@@ -680,7 +1111,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "nagios",
@@ -689,7 +1145,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/nagios",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -708,14 +1164,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/nagios.ts",
       "route": "src/app/api/integrations/nagios/route.ts",
       "sharedContracts": [
@@ -723,7 +1187,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "newrelic",
@@ -740,7 +1229,7 @@
         "resolve"
       ],
       "authentication": [
-        "integration-key"
+        "integration-identifier"
       ],
       "request": {
         "method": "POST",
@@ -754,11 +1243,13 @@
         "integrationKey": []
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "none",
         "provider": "newrelic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/newrelic.ts",
       "route": "src/app/api/integrations/newrelic/route.ts",
       "sharedContracts": [
@@ -766,7 +1257,36 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Configured authentication or signature validation failed"
+        },
+        {
+          "status": 403,
+          "meaning": "Integration is disabled"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 500,
+          "meaning": "Provider event processing failed"
+        }
+      ]
     },
     {
       "id": "pagerduty",
@@ -782,7 +1302,9 @@
         "acknowledge",
         "resolve"
       ],
-      "authentication": [],
+      "authentication": [
+        "integration-key-or-routing-key"
+      ],
       "request": {
         "method": "POST",
         "schema": "shared provider schema",
@@ -792,14 +1314,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "x-routing-key",
+          "key query parameter",
+          "token query parameter",
+          "routing_key payload field"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "none",
         "provider": "pagerduty",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/pagerduty.ts",
       "route": "src/app/api/integrations/pagerduty/route.ts",
       "sharedContracts": [
@@ -807,7 +1337,36 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Configured authentication or signature validation failed"
+        },
+        {
+          "status": 403,
+          "meaning": "Integration is disabled"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 500,
+          "meaning": "Provider event processing failed"
+        }
+      ]
     },
     {
       "id": "pingdom",
@@ -816,7 +1375,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/pingdom",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -835,14 +1394,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/pingdom.ts",
       "route": "src/app/api/integrations/pingdom/route.ts",
       "sharedContracts": [
@@ -850,7 +1417,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "prometheus",
@@ -867,7 +1459,7 @@
         "resolve"
       ],
       "authentication": [
-        "integration-key"
+        "integration-identifier"
       ],
       "request": {
         "method": "POST",
@@ -881,11 +1473,13 @@
         "integrationKey": []
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "none",
         "provider": "prometheus",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/prometheus.ts",
       "route": "src/app/api/integrations/prometheus/route.ts",
       "sharedContracts": [
@@ -893,7 +1487,36 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Configured authentication or signature validation failed"
+        },
+        {
+          "status": 403,
+          "meaning": "Integration is disabled"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 500,
+          "meaning": "Provider event processing failed"
+        }
+      ]
     },
     {
       "id": "sentry",
@@ -910,7 +1533,7 @@
         "resolve"
       ],
       "authentication": [
-        "integration-key"
+        "conditional-signature-secret"
       ],
       "request": {
         "method": "POST",
@@ -931,6 +1554,8 @@
         ]
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/sentry.ts",
       "route": "src/app/api/integrations/sentry/route.ts",
       "sharedContracts": [
@@ -938,7 +1563,36 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Configured authentication or signature validation failed"
+        },
+        {
+          "status": 403,
+          "meaning": "Integration is disabled"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 500,
+          "meaning": "Provider event processing failed"
+        }
+      ]
     },
     {
       "id": "splunk-observability",
@@ -947,7 +1601,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/splunk-observability",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -966,14 +1620,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/splunk-observability.ts",
       "route": "src/app/api/integrations/splunk-observability/route.ts",
       "sharedContracts": [
@@ -981,7 +1643,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "splunk-oncall",
@@ -990,7 +1677,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/splunk-oncall",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -1009,14 +1696,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/splunk-oncall.ts",
       "route": "src/app/api/integrations/splunk-oncall/route.ts",
       "sharedContracts": [
@@ -1024,7 +1719,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "uptime-kuma",
@@ -1033,7 +1753,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/uptime-kuma",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -1051,14 +1771,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/uptime-kuma.ts",
       "route": "src/app/api/integrations/uptime-kuma/route.ts",
       "sharedContracts": [
@@ -1066,7 +1794,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "uptimerobot",
@@ -1075,7 +1828,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/uptimerobot",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -1094,14 +1847,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/uptimerobot.ts",
       "route": "src/app/api/integrations/uptimerobot/route.ts",
       "sharedContracts": [
@@ -1109,7 +1870,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "vercel",
@@ -1118,7 +1904,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/vercel",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -1137,14 +1923,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "vercel",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/vercel.ts",
       "route": "src/app/api/integrations/vercel/route.ts",
       "sharedContracts": [
@@ -1152,7 +1946,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     },
     {
       "id": "webhook",
@@ -1194,6 +2013,8 @@
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/webhook.ts",
       "route": "src/app/api/integrations/webhook/route.ts",
       "sharedContracts": [
@@ -1235,7 +2056,7 @@
       "direction": "inbound",
       "protocol": "webhook",
       "endpoint": "/api/integrations/zabbix",
-      "handler": "custom",
+      "handler": "shared",
       "tier": 2,
       "acceptedActions": [
         "trigger",
@@ -1254,14 +2075,22 @@
           "windowSeconds": 60
         },
         "integrationId": "query parameter",
-        "integrationKey": []
+        "integrationKey": [
+          "Authorization: Bearer",
+          "Authorization: Token token=",
+          "x-integration-key",
+          "x-api-key",
+          "integrationKey query parameter"
+        ]
       },
       "signatureVerification": {
-        "mode": "not-declared",
+        "mode": "conditional-when-secret-configured",
         "provider": "generic",
         "headers": []
       },
       "deliveryIdentity": [],
+      "correlation": "adapter EventPayload.dedup_key",
+      "recovery": "adapter emits resolve for its recovery state",
       "source": "src/lib/integrations/zabbix.ts",
       "route": "src/app/api/integrations/zabbix/route.ts",
       "sharedContracts": [
@@ -1269,7 +2098,32 @@
         "src/lib/integrations/request-security.ts",
         "src/lib/integrations/rate-limiter.ts"
       ],
-      "errors": []
+      "errors": [
+        {
+          "status": 400,
+          "meaning": "Invalid request or payload validation failed"
+        },
+        {
+          "status": 401,
+          "meaning": "Integration is disabled, mismatched, or unauthorized"
+        },
+        {
+          "status": 404,
+          "meaning": "Integration record was not found"
+        },
+        {
+          "status": 413,
+          "meaning": "Payload exceeds the one MiB body limit"
+        },
+        {
+          "status": 429,
+          "meaning": "Per-integration request rate exceeded"
+        },
+        {
+          "status": 503,
+          "meaning": "A matching delivery is already being processed"
+        }
+      ]
     }
   ]
 }

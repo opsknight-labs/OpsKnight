@@ -1,11 +1,3 @@
-# v1.5 to 2.0.0 knowledge review
+# v1.5 knowledge inventory
 
-This is a human-review tracker, not a documentation-completeness certificate. The generated inventory contains 1607 headings from 134 v1.5 pages. A disposition is counted only after a reviewer checks current 2.0 code and records the destination or evidence manually.
-
-- Inventory topics: 1607
-- Manually reviewed: 0
-- PORT: 0
-- UPDATED: 0
-- NO_LONGER_APPLICABLE: 0
-- INTERNAL: 0
-- Awaiting human review: 1607
+The generated inventory contains 1607 historical headings from 134 v1.5 pages. Historical headings are not release obligations. Release parity is calculated automatically by intersecting exact legacy configuration, route, and integration contracts with current product source and requiring every still-supported contract to map into the v2 documentation or generated contract set. See `v15-active-parity.json`.

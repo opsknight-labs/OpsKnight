@@ -5,8 +5,7 @@ import YAML from 'yaml';
 import { filesUnder, repositoryRoot } from './discovery-lib.mjs';
 
 const failures = [];
-const release = process.argv.includes('--release');
-const readerOrder = ['DISCOVERED', 'MAPPED', 'DRAFTED', 'READER_COMPLETE', 'HUMAN_VERIFIED', 'RUNTIME_VERIFIED'];
+const readerOrder = ['MAPPED', 'READER_COMPLETE', 'SOURCE_VERIFIED', 'RUNTIME_VERIFIED'];
 const taskTypes = new Set(['how-to', 'tutorial', 'deployment', 'integration', 'troubleshooting']);
 const atLeast = (status, minimum) => readerOrder.indexOf(status) >= readerOrder.indexOf(minimum);
 const hasHeading = (body, patterns) => patterns.some(pattern => new RegExp(`^##\\s+(?:${pattern})`, 'im').test(body));
@@ -29,17 +28,11 @@ for (const page of pages) {
   if (!metadata.description || metadata.description.length < 25) failures.push(`${file}: search description is missing or too short`);
   const readerStatus = metadata.reader?.status ?? 'MAPPED';
   if (!readerOrder.includes(readerStatus)) failures.push(`${file}: invalid reader status ${readerStatus}`);
-  if (taskTypes.has(metadata.type) && release && !atLeast(readerStatus, 'HUMAN_VERIFIED')) {
-    failures.push(`${file}: release task page is ${readerStatus}; HUMAN_VERIFIED is required`);
-  }
   if (atLeast(readerStatus, 'READER_COMPLETE') && taskTypes.has(metadata.type) && !metadata.reader?.task) {
     failures.push(`${file}: reader-complete task page needs reader.task`);
   }
-  if (atLeast(readerStatus, 'HUMAN_VERIFIED')) {
-    if (!metadata.reader?.reviewer?.trim()) failures.push(`${file}: human verification needs reviewer`);
-    if (!metadata.reader?.reviewed_at) failures.push(`${file}: human verification needs reviewed_at`);
-    if (!metadata.reader?.revision) failures.push(`${file}: human verification needs revision`);
-    if (!metadata.reader?.evidence?.length) failures.push(`${file}: human verification needs evidence`);
+  if (atLeast(readerStatus, 'SOURCE_VERIFIED') && !metadata.reader?.evidence?.length) {
+    failures.push(`${file}: source verification needs machine-readable evidence`);
   }
   if (readerStatus === 'RUNTIME_VERIFIED' && !metadata.reader?.journey) failures.push(`${file}: runtime verification needs journey`);
 

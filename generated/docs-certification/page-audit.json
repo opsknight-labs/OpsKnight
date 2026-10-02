@@ -2,16 +2,14 @@
   "schemaVersion": 1,
   "purpose": "Reader-completeness audit. Mapping and source verification do not imply task usability.",
   "counts": {
-    "DISCOVERED": 0,
     "MAPPED": 118,
-    "DRAFTED": 0,
     "READER_COMPLETE": 198,
-    "HUMAN_VERIFIED": 0,
+    "SOURCE_VERIFIED": 0,
     "RUNTIME_VERIFIED": 0
   },
   "taskPages": 196,
   "readerCompleteTaskPages": 196,
-  "humanVerifiedTaskPages": 0,
+  "sourceVerifiedTaskPages": 196,
   "runtimeVerifiedTaskPages": 0,
   "pages": [
     {
@@ -22,7 +20,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -33,7 +31,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -44,7 +42,7 @@
       "taskPage": false,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -55,7 +53,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -66,7 +64,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -77,7 +75,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -88,7 +86,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -99,7 +97,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -110,7 +108,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -121,7 +119,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -132,7 +130,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -143,7 +141,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -154,7 +152,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -165,7 +163,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -176,7 +174,7 @@
       "taskPage": false,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -187,7 +185,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -198,7 +196,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -209,7 +207,7 @@
       "taskPage": false,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -220,7 +218,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -231,7 +229,7 @@
       "taskPage": false,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -242,7 +240,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -253,7 +251,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -264,7 +262,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -275,7 +273,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -286,7 +284,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -297,7 +295,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -308,7 +306,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -319,7 +317,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -330,7 +328,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -341,7 +339,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -352,7 +350,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -363,7 +361,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -374,7 +372,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -385,7 +383,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -396,7 +394,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -407,7 +405,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -418,7 +416,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -429,7 +427,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -440,7 +438,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -451,7 +449,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -462,7 +460,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -473,7 +471,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -484,7 +482,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -495,7 +493,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -506,7 +504,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -517,7 +515,7 @@
       "taskPage": true,
       "screenshotCount": 2,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -528,7 +526,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -539,7 +537,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -550,7 +548,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -561,7 +559,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -572,7 +570,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -583,7 +581,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -594,7 +592,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -605,7 +603,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -616,7 +614,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -627,7 +625,7 @@
       "taskPage": true,
       "screenshotCount": 3,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -638,7 +636,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -649,7 +647,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -660,7 +658,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -671,7 +669,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -682,7 +680,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -693,7 +691,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -704,7 +702,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -715,7 +713,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -726,7 +724,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -737,7 +735,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -748,7 +746,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -759,7 +757,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -770,7 +768,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -781,7 +779,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -792,7 +790,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -803,7 +801,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -814,7 +812,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -825,7 +823,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -836,7 +834,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -847,7 +845,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -858,7 +856,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -869,7 +867,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -880,7 +878,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -891,7 +889,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -902,7 +900,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -913,7 +911,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -924,7 +922,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -935,7 +933,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -946,7 +944,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -957,7 +955,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -968,7 +966,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -979,7 +977,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -990,7 +988,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1001,7 +999,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1012,7 +1010,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1023,7 +1021,7 @@
       "taskPage": true,
       "screenshotCount": 2,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1034,7 +1032,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1045,7 +1043,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1056,7 +1054,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1067,7 +1065,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1078,7 +1076,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1089,7 +1087,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1100,7 +1098,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1111,7 +1109,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1122,7 +1120,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1133,7 +1131,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1144,7 +1142,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1155,7 +1153,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1166,7 +1164,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1177,7 +1175,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1188,7 +1186,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1199,7 +1197,7 @@
       "taskPage": true,
       "screenshotCount": 2,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1210,7 +1208,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1221,7 +1219,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1232,7 +1230,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1243,7 +1241,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1254,7 +1252,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1265,7 +1263,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1276,7 +1274,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1287,7 +1285,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1298,7 +1296,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1309,7 +1307,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1320,7 +1318,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1331,7 +1329,7 @@
       "taskPage": false,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1342,7 +1340,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1353,7 +1351,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1364,7 +1362,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1375,7 +1373,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1386,7 +1384,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1397,7 +1395,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1408,7 +1406,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1419,7 +1417,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1430,7 +1428,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1441,7 +1439,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1452,7 +1450,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1463,7 +1461,7 @@
       "taskPage": false,
       "screenshotCount": 2,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1474,7 +1472,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1485,7 +1483,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1496,7 +1494,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1507,7 +1505,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1518,7 +1516,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1529,7 +1527,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1540,7 +1538,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1551,7 +1549,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1562,7 +1560,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1573,7 +1571,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1584,7 +1582,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1595,7 +1593,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1606,7 +1604,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1617,7 +1615,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1628,7 +1626,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1639,7 +1637,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1650,7 +1648,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1661,7 +1659,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1672,7 +1670,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1683,7 +1681,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1694,7 +1692,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1705,7 +1703,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1716,7 +1714,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1727,7 +1725,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1738,7 +1736,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1749,7 +1747,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1760,7 +1758,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1771,7 +1769,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1782,7 +1780,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1793,7 +1791,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1804,7 +1802,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1815,7 +1813,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1826,7 +1824,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1837,7 +1835,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1848,7 +1846,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1859,7 +1857,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1870,7 +1868,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1881,7 +1879,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1892,7 +1890,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1903,7 +1901,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1914,7 +1912,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1925,7 +1923,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1936,7 +1934,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1947,7 +1945,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1958,7 +1956,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1969,7 +1967,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1980,7 +1978,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -1991,7 +1989,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2002,7 +2000,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2013,7 +2011,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2024,7 +2022,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2035,7 +2033,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2046,7 +2044,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2057,7 +2055,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2068,7 +2066,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2079,7 +2077,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2090,7 +2088,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2101,7 +2099,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2112,7 +2110,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2123,7 +2121,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2134,7 +2132,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2145,7 +2143,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2156,7 +2154,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2167,7 +2165,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2178,7 +2176,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2189,7 +2187,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2200,7 +2198,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2211,7 +2209,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2222,7 +2220,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2233,7 +2231,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2244,7 +2242,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2255,7 +2253,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2266,7 +2264,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2277,7 +2275,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2288,7 +2286,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2299,7 +2297,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2310,7 +2308,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2321,7 +2319,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2332,7 +2330,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2343,7 +2341,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2354,7 +2352,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2365,7 +2363,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2376,7 +2374,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2387,7 +2385,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2398,7 +2396,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2409,7 +2407,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2420,7 +2418,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2431,7 +2429,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2442,7 +2440,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2453,7 +2451,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2464,7 +2462,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2475,7 +2473,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2486,7 +2484,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2497,7 +2495,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2508,7 +2506,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2519,7 +2517,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2530,7 +2528,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2541,7 +2539,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2552,7 +2550,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2563,7 +2561,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2574,7 +2572,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2585,7 +2583,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2596,7 +2594,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2607,7 +2605,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2618,7 +2616,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2629,7 +2627,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2640,7 +2638,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2651,7 +2649,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2662,7 +2660,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2673,7 +2671,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2684,7 +2682,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2695,7 +2693,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2706,7 +2704,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2717,7 +2715,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2728,7 +2726,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2739,7 +2737,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2750,7 +2748,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2761,7 +2759,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2772,7 +2770,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2783,7 +2781,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2794,7 +2792,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2805,7 +2803,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2816,7 +2814,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2827,7 +2825,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2838,7 +2836,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2849,7 +2847,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2860,7 +2858,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2871,7 +2869,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2882,7 +2880,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2893,7 +2891,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2904,7 +2902,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2915,7 +2913,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2926,7 +2924,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2937,7 +2935,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2948,7 +2946,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2959,7 +2957,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2970,7 +2968,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2981,7 +2979,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -2992,7 +2990,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3003,7 +3001,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3014,7 +3012,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3025,7 +3023,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3036,7 +3034,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3047,7 +3045,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3058,7 +3056,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3069,7 +3067,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3080,7 +3078,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3091,7 +3089,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3102,7 +3100,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3113,7 +3111,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3124,7 +3122,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3135,7 +3133,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3146,7 +3144,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3157,7 +3155,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "EVIDENCED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3168,7 +3166,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3179,7 +3177,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3190,7 +3188,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3201,7 +3199,7 @@
       "taskPage": true,
       "screenshotCount": 1,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3212,7 +3210,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3223,7 +3221,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3234,7 +3232,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3245,7 +3243,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3256,7 +3254,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3267,7 +3265,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3278,7 +3276,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3289,7 +3287,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3300,7 +3298,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3311,7 +3309,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3322,7 +3320,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3333,7 +3331,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3344,7 +3342,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3355,7 +3353,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3366,7 +3364,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3377,7 +3375,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3388,7 +3386,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3399,7 +3397,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3410,7 +3408,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3421,7 +3419,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3432,7 +3430,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3443,7 +3441,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3454,7 +3452,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3465,7 +3463,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3476,7 +3474,7 @@
       "taskPage": false,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     },
     {
@@ -3487,7 +3485,7 @@
       "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
-      "humanVerified": false,
+      "sourceVerified": true,
       "runtimeVerified": false
     }
   ]

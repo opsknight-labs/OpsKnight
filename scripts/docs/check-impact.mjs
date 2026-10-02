@@ -16,6 +16,20 @@ const changed = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], {
   encoding: 'utf8',
 }).trim().split('\n').filter(Boolean);
 const inventory = YAML.parse(readFileSync(resolve(repositoryRoot, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
+const currentGraph = JSON.parse(readFileSync(resolve(repositoryRoot, 'generated/docs-contracts/current.json'), 'utf8'));
+let baseGraph = { contracts: [] };
+try {
+  baseGraph = JSON.parse(execFileSync('git', ['show', `${base}:generated/docs-contracts/current.json`], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  }));
+} catch {
+  // A branch introducing the contract graph treats every current node as new.
+}
+const baseNodes = new Map((baseGraph.contracts ?? []).map(node => [node.id, node]));
+const changedContracts = (currentGraph.contracts ?? []).filter(node =>
+  JSON.stringify(baseNodes.get(node.id) ?? null) !== JSON.stringify(node)
+);
 const rows = [];
 
 const matches = (file, source) => file === source || file.startsWith(`${source.replace(/\/$/, '')}/`);
@@ -29,21 +43,31 @@ for (const [id, capability] of Object.entries(inventory.capabilities ?? {})) {
     mappedDocs.includes(file)
   );
   const testChanges = changed.filter(file => (capability.tests ?? []).includes(file));
-  rows.push({ id, productChanges, documentationChanges, testChanges, covered: documentationChanges.length > 0 });
+  const contractChanges = changedContracts.filter(node =>
+    (node.sources ?? []).some(file => (capability.sources ?? []).some(source => matches(file, source)))
+  );
+  rows.push({
+    id,
+    productChanges,
+    contractChanges,
+    documentationChanges,
+    testChanges,
+    covered: contractChanges.length === 0 || documentationChanges.length > 0,
+  });
 }
 
 console.log('## Documentation impact');
 if (rows.length === 0) console.log('\nNo mapped product capability changed.');
 else {
-  console.log('\n| Capability | Product | Documentation | Tests |');
-  console.log('| --- | ---: | ---: | ---: |');
+  console.log('\n| Capability | Product files | Public contracts | Documentation | Tests |');
+  console.log('| --- | ---: | ---: | ---: | ---: |');
   for (const row of rows) {
-    console.log(`| ${row.id} | ${row.productChanges.length} | ${row.covered ? '✓' : '✗'} | ${row.testChanges.length || '—'} |`);
+    console.log(`| ${row.id} | ${row.productChanges.length} | ${row.contractChanges.length || 'unchanged'} | ${row.covered ? '✓' : '✗'} | ${row.testChanges.length || '—'} |`);
   }
 }
 
 const uncovered = rows.filter(row => !row.covered);
 if (strict && uncovered.length) {
-  console.error(`\nMissing documentation impact updates: ${uncovered.map(row => row.id).join(', ')}`);
+  console.error(`\nPublic contract changes without mapped documentation updates: ${uncovered.map(row => row.id).join(', ')}`);
   process.exit(1);
 }

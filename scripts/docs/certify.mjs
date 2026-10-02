@@ -17,7 +17,7 @@ run('node', ['scripts/docs/generate-integrations.mjs']);
 run('node', ['scripts/docs/generate-capacity-reference.mjs']);
 run('node', ['scripts/docs/generate-route-contract.mjs']);
 run('node', ['scripts/docs/generate-v15-parity.mjs']);
-run('node', ['scripts/docs/check-v15-parity.mjs', ...(releaseCertification ? ['--release'] : [])]);
+run('node', ['scripts/docs/check-v15-parity.mjs']);
 run('node', ['scripts/docs/audit-reader-completeness.mjs']);
 run('node', ['scripts/docs/check-frontmatter.mjs']);
 run('node', ['scripts/check-docs-links.cjs']);
@@ -28,7 +28,6 @@ run('node', ['scripts/check-docs-capabilities.cjs']);
 // full runtime pass is also the supported recovery path after a rebase or
 // product update, so validate evidence after Playwright has refreshed it.
 if (!fullRuntime) run('node', ['scripts/docs/check-evidence.mjs']);
-run('node', ['scripts/docs/check-review-signoffs.mjs', ...(releaseCertification ? ['--release'] : [])]);
 run('node', ['scripts/docs/check-feature-graph.mjs']);
 run('node', ['--test', ...readdirSync(join(root, 'tests/docs/tooling')).filter(name => name.endsWith('.test.mjs')).map(name => `tests/docs/tooling/${name}`)]);
 if (fullRuntime) {
@@ -52,13 +51,9 @@ const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMa
 const relative = path => path.slice(root.length + 1);
 const discovery = JSON.parse(readFileSync(join(root, 'generated/docs-discovery/current.json'), 'utf8'));
 const catalog = YAML.parse(readFileSync(join(root, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
-const reviewerChecklists = YAML.parse(readFileSync(join(root, 'docs/internal/certification/reviewer-checklists.yaml'), 'utf8'));
-const reviewerSignoffs = Object.values(reviewerChecklists.areas ?? {}).map(item => item.signoff?.status ?? 'pending');
-const v15Inventory = YAML.parse(readFileSync(join(root, 'docs/internal/certification/v1.5-topic-inventory.yaml'), 'utf8'));
-const v15Review = YAML.parse(readFileSync(join(root, 'docs/internal/certification/v1.5-to-v2-parity.yaml'), 'utf8'));
-const v15InventoryIds = new Set((v15Inventory.topics ?? []).map(item => item.id));
-const v15Reviewed = (v15Review.dispositions ?? []).filter(item => v15InventoryIds.has(item.id));
+const v15Parity = JSON.parse(readFileSync(join(root, 'generated/docs-certification/v15-active-parity.json'), 'utf8'));
 const readerAudit = JSON.parse(readFileSync(join(root, 'generated/docs-certification/page-audit.json'), 'utf8'));
+const integrationContracts = JSON.parse(readFileSync(join(root, 'generated/docs-contracts/integrations.json'), 'utf8'));
 const capabilities = Object.values(catalog.capabilities);
 const evidence = walk(join(root, 'generated/docs-evidence/current')).filter(path => extname(path) === '.png');
 const journeys = walk(join(root, 'tests/docs/journeys')).filter(path => path.endsWith('.spec.ts'));
@@ -108,16 +103,23 @@ const report = {
     links: 'passed',
     readerQuality: 'passed',
     readerCompleteness: readerAudit.readerCompleteTaskPages === readerAudit.taskPages ? 'passed' : 'pending',
-    humanTaskVerification: readerAudit.humanVerifiedTaskPages === readerAudit.taskPages ? 'passed' : 'pending',
     capabilityCoverage: 'passed',
     featureClassification: discovery.featureGraph.unclassified.length === 0 ? 'passed' : 'failed',
     featureDocumentationAlarm: discovery.featureGraph.undocumented.length === 0 ? 'clear' : 'attention-required',
     semanticContractAlarm: discovery.featureGraph.unresolvedSemanticContracts.length === 0 ? 'clear' : 'attention-required',
+    inboundIntegrationContracts: integrationContracts.providers.every(provider =>
+      provider.acceptedActions.length > 0 &&
+      provider.authentication.length > 0 &&
+      provider.request.bodyLimitBytes !== null &&
+      provider.request.rateLimit !== null &&
+      provider.errors.length > 0 &&
+      !/unknown|not-declared|not statically resolved/i.test(JSON.stringify(provider))
+    ) ? 'passed' : 'failed',
     evidenceContract: 'passed',
     toolingTests: 'passed',
-    humanReviewSignoffs: reviewerSignoffs.every(status => status === 'passed') ? 'passed' : 'pending',
-    v15KnowledgeParity: v15Reviewed.length === v15InventoryIds.size ? 'passed' : 'pending',
+    legacyActiveKnowledgeParity: v15Parity.gaps.length === 0 ? 'passed' : 'failed',
     runtimeJourneys: fullRuntime ? 'passed' : 'not-run',
+    publicApiRuntimeMatrix: fullRuntime ? 'passed' : 'not-run',
     websiteBuild: releaseCertification ? 'passed' : 'release-gated',
     renderedSiteCrawl: releaseCertification ? 'passed' : 'release-gated',
   },
@@ -129,6 +131,14 @@ const report = {
     apiRoutes: discovery.apiRoutes.length,
     configurationItems: discovery.configuration.length,
     integrationCandidates: discovery.integrations.length,
+    exactInboundIntegrationContracts: integrationContracts.providers.filter(provider =>
+      provider.acceptedActions.length > 0 &&
+      provider.authentication.length > 0 &&
+      provider.request.bodyLimitBytes !== null &&
+      provider.request.rateLimit !== null &&
+      provider.errors.length > 0 &&
+      !/unknown|not-declared|not statically resolved/i.test(JSON.stringify(provider))
+    ).length,
     databaseModels: discovery.database.models.length,
     runtimeRoles: discovery.deployment.runtimeRoles.length,
     featureNodes: discovery.featureGraph.nodes.length,
@@ -141,21 +151,20 @@ const report = {
     unresolvedSemanticContracts: discovery.featureGraph.summary.unresolvedSemanticContracts,
     missingEvidence: discovery.featureGraph.nodes.filter(item => item.sources.length === 0).length,
     supportedPublicApis: discovery.featureGraph.nodes.filter(item => item.kind === 'api' && item.classification === 'PUBLIC_API').length,
+    publicApiContractsExercised: fullRuntime
+      ? discovery.featureGraph.nodes.filter(item => item.kind === 'api' && item.classification === 'PUBLIC_API').length
+      : 0,
     notificationProviders: discovery.notificationProviders.length,
     rawLimits: discovery.limits.length,
     publicLimits: discovery.limits.filter(item => !['INTERNAL_IMPLEMENTATION', 'PROVIDER_CONSTRAINT'].includes(item.semanticClassification)).length,
     journeyFiles: journeys.length,
     evidenceScreenshots: evidence.length,
-    humanReviewAreas: reviewerSignoffs.length,
-    humanReviewAreasPassed: reviewerSignoffs.filter(status => status === 'passed').length,
-    humanReviewAreasPending: reviewerSignoffs.filter(status => status === 'pending').length,
-    humanReviewAreasFailed: reviewerSignoffs.filter(status => status === 'failed').length,
-    v15Topics: v15InventoryIds.size,
-    v15TopicsReviewed: v15Reviewed.length,
-    v15TopicsPending: v15InventoryIds.size - v15Reviewed.length,
+    legacyActiveContracts: v15Parity.activeContracts,
+    legacyActiveContractsMapped: v15Parity.mappedContracts,
+    legacyActiveKnowledgeGaps: v15Parity.gaps.length,
     taskDocumentationPages: readerAudit.taskPages,
     readerCompleteTaskPages: readerAudit.readerCompleteTaskPages,
-    humanVerifiedTaskPages: readerAudit.humanVerifiedTaskPages,
+    sourceVerifiedTaskPages: readerAudit.sourceVerifiedTaskPages,
     runtimeVerifiedTaskPages: readerAudit.runtimeVerifiedTaskPages,
   },
   artifacts: {

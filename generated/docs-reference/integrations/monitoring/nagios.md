@@ -18,7 +18,7 @@ verification:
 ## What it does
 
 The Nagios adapter accepts inbound webhook events at
-`/api/integrations/nagios`, validates them through its custom handler,
+`/api/integrations/nagios`, validates them through its shared handler,
 normalizes provider payloads, and submits lifecycle events to the configured
 service.
 
@@ -46,13 +46,13 @@ place them in logs or source control.
 ## Authentication and request verification
 
 The endpoint requires the integration identifier and validates the integration key using a timing-safe comparison.
-Signature verification is **not-declared** using the
+Signature verification is **conditional-when-secret-configured** using the
 `generic` verification contract.
 The exact payload schema is defined by `src/app/api/integrations/nagios/route.ts` and `src/lib/integrations/nagios.ts`.
 
 - Method: `POST`
 - Integration identifier: query parameter
-- Integration key transports: not statically resolved
+- Integration key transports: `Authorization: Bearer`, `Authorization: Token token=`, `x-integration-key`, `x-api-key`, `integrationKey query parameter`
 - Schema: `shared provider schema`
 - Body limit: 1048576 bytes (1 MiB)
 - Rate limit: 100 requests per 60 seconds, per integration
@@ -63,11 +63,11 @@ The adapter emits the lifecycle actions found in its current source:
 - `trigger`
 - `acknowledge`
 - `resolve`
-Correlation depends on the provider identity selected by the adapter.
+Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
 
 ## Recovery and deduplication
 
-This route does not declare a durable provider delivery identifier.
+When signature verification runs, the shared handler attempts provider-specific delivery identity before claiming the inbound-delivery fence.
 Incident convergence still depends on the adapter correlation key. Failed
 deliveries are recorded for operational inspection without exposing secrets.
 
@@ -89,7 +89,12 @@ After the test alert, confirm all of the following:
 
 ## Error reference
 
-- This custom route does not expose the shared integration error contract.
+- `400` — Invalid request or payload validation failed.
+- `401` — Integration is disabled, mismatched, or unauthorized.
+- `404` — Integration record was not found.
+- `413` — Payload exceeds the one MiB body limit.
+- `429` — Per-integration request rate exceeded.
+- `503` — A matching delivery is already being processed.
 
 ## Troubleshooting
 

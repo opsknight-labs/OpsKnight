@@ -25,7 +25,7 @@ service.
 ## Prerequisites
 
 - An OpsKnight service and enabled integration record.
-- The integration identifier and generated integration key.
+- The integration identifier.
 - Permission to configure webhooks in Prometheus Alertmanager.
 - A network path from the provider to the OpsKnight web runtime.
 
@@ -45,14 +45,14 @@ place them in logs or source control.
 
 ## Authentication and request verification
 
-The endpoint requires the integration identifier and validates the integration key using a timing-safe comparison.
-Signature verification is **not-declared** using the
+The endpoint requires the integration identifier.
+Signature verification is **none** using the
 `prometheus` verification contract.
 The exact payload schema is defined by `src/app/api/integrations/prometheus/route.ts` and `src/lib/integrations/prometheus.ts`.
 
 - Method: `POST`
 - Integration identifier: query parameter
-- Integration key transports: not statically resolved
+- Integration key transports: none; this route uses the authentication contract above
 - Schema: `shared provider schema`
 - Body limit: 1048576 bytes (1 MiB)
 - Rate limit: 100 requests per 60 seconds, per integration
@@ -63,11 +63,11 @@ The adapter emits the lifecycle actions found in its current source:
 - `trigger`
 - `acknowledge`
 - `resolve`
-Correlation depends on the provider identity selected by the adapter.
+Correlation contract: **adapter EventPayload.dedup_key**. Recovery contract: **adapter emits resolve for its recovery state**.
 
 ## Recovery and deduplication
 
-This route does not declare a durable provider delivery identifier.
+This route has no provider delivery-ID fence; incident convergence relies on the adapter deduplication key.
 Incident convergence still depends on the adapter correlation key. Failed
 deliveries are recorded for operational inspection without exposing secrets.
 
@@ -89,7 +89,13 @@ After the test alert, confirm all of the following:
 
 ## Error reference
 
-- This custom route does not expose the shared integration error contract.
+- `400` — Invalid request or payload validation failed.
+- `401` — Configured authentication or signature validation failed.
+- `403` — Integration is disabled.
+- `404` — Integration record was not found.
+- `413` — Payload exceeds the one MiB body limit.
+- `429` — Per-integration request rate exceeded.
+- `500` — Provider event processing failed.
 
 ## Troubleshooting
 

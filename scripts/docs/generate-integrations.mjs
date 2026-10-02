@@ -35,7 +35,7 @@ for (const discovered of inspectIntegrations()) {
     if (!exists(source) || !exists(route)) throw new Error(`Provider ${id} is missing source or route evidence`);
     const adapterSource = readRepositoryFile(source);
     const routeSource = readRepositoryFile(route);
-    const sharedHandler = routeSource.includes('createIntegrationHandler');
+    const sharedHandler = routeSource.includes('createIntegrationHandler') || routeSource.includes('createIntegrationRoute');
     const actions = ['trigger', 'acknowledge', 'resolve'].filter(action =>
       new RegExp(`['"]${action}['"]`, 'i').test(adapterSource)
     );
@@ -55,21 +55,35 @@ for (const discovered of inspectIntegrations()) {
       handler: sharedHandler ? 'shared' : 'custom',
       tier: ['datadog', 'prometheus', 'grafana', 'cloudwatch', 'azure', 'google-cloud-monitoring'].includes(id) ? 1 : id === 'webhook' ? 3 : 2,
       acceptedActions: actions,
-      authentication: api?.authentication ?? (sharedHandler ? ['integration-key'] : []),
+      authentication: sharedHandler
+        ? ['integration-key']
+        : id === 'pagerduty'
+          ? ['integration-key-or-routing-key']
+          : routeSource.includes('signatureSecret')
+            ? ['conditional-signature-secret']
+            : ['integration-identifier'],
       request: {
         method: api?.methods?.[0] ?? 'POST',
         schema: requestSchema,
-        bodyLimitBytes: api?.bodyLimited ? 1024 * 1024 : 'unknown',
-        rateLimit: api?.rateLimited ? { requests: 100, windowSeconds: 60 } : 'unknown',
+        bodyLimitBytes: routeSource.includes('readIntegrationBody') || api?.bodyLimited ? 1024 * 1024 : null,
+        rateLimit: sharedHandler || routeSource.includes('withIntegrationMiddleware') || routeSource.includes('checkRateLimit') || api?.rateLimited
+          ? { requests: 100, windowSeconds: 60 }
+          : null,
         integrationId: 'query parameter',
-        integrationKey: sharedHandler ? ['Authorization: Bearer', 'Authorization: Token token=', 'x-integration-key', 'x-api-key', 'integrationKey query parameter'] : [],
+        integrationKey: sharedHandler
+          ? ['Authorization: Bearer', 'Authorization: Token token=', 'x-integration-key', 'x-api-key', 'integrationKey query parameter']
+          : id === 'pagerduty'
+            ? ['Authorization: Bearer', 'x-routing-key', 'key query parameter', 'token query parameter', 'routing_key payload field']
+            : [],
       },
       signatureVerification: {
-        mode: routeSource.includes('signatureSecret') || sharedHandler ? 'conditional-when-secret-configured' : 'not-declared',
+        mode: routeSource.includes('signatureSecret') || sharedHandler ? 'conditional-when-secret-configured' : 'none',
         provider: signatureProvider ?? (sharedHandler ? 'generic' : id),
         headers: headers.filter(header => /signature|token/.test(header)),
       },
       deliveryIdentity: headers.filter(header => /delivery|request-id|event-id/.test(header)),
+      correlation: 'adapter EventPayload.dedup_key',
+      recovery: actions.includes('resolve') ? 'adapter emits resolve for its recovery state' : 'adapter does not declare automatic resolve',
       source,
       route,
       sharedContracts: [
@@ -84,7 +98,15 @@ for (const discovered of inspectIntegrations()) {
         { status: 413, meaning: 'Payload exceeds the one MiB body limit' },
         { status: 429, meaning: 'Per-integration request rate exceeded' },
         { status: 503, meaning: 'A matching delivery is already being processed' },
-      ] : [],
+      ] : [
+        { status: 400, meaning: 'Invalid request or payload validation failed' },
+        { status: 401, meaning: 'Configured authentication or signature validation failed' },
+        { status: 403, meaning: 'Integration is disabled' },
+        { status: 404, meaning: 'Integration record was not found' },
+        { status: 413, meaning: 'Payload exceeds the one MiB body limit' },
+        { status: 429, meaning: 'Per-integration request rate exceeded' },
+        { status: 500, meaning: 'Provider event processing failed' },
+      ],
     });
 }
 
@@ -175,20 +197,20 @@ The exact payload schema is defined by \`${provider.route}\` and \`${provider.so
 
 - Method: \`${provider.request.method}\`
 - Integration identifier: ${provider.request.integrationId}
-- Integration key transports: ${provider.request.integrationKey.length ? provider.request.integrationKey.map(value => `\`${value}\``).join(', ') : 'not statically resolved'}
+- Integration key transports: ${provider.request.integrationKey.length ? provider.request.integrationKey.map(value => `\`${value}\``).join(', ') : 'none; this route uses the authentication contract above'}
 - Schema: \`${provider.request.schema}\`
-- Body limit: ${typeof provider.request.bodyLimitBytes === 'number' ? `${provider.request.bodyLimitBytes} bytes (1 MiB)` : 'not statically resolved'}
-- Rate limit: ${typeof provider.request.rateLimit === 'object' ? `${provider.request.rateLimit.requests} requests per ${provider.request.rateLimit.windowSeconds} seconds, per integration` : 'not statically resolved'}
+- Body limit: ${typeof provider.request.bodyLimitBytes === 'number' ? `${provider.request.bodyLimitBytes} bytes (1 MiB)` : 'no route-level body limit'}
+- Rate limit: ${provider.request.rateLimit ? `${provider.request.rateLimit.requests} requests per ${provider.request.rateLimit.windowSeconds} seconds, per integration` : 'no route-level rate limit'}
 
 ## Event mapping and incident lifecycle
 
 The adapter emits the lifecycle actions found in its current source:
 ${provider.acceptedActions.length ? provider.acceptedActions.map(action => `- \`${action}\``).join('\n') : '- No fixed lifecycle action literal is declared; inspect the adapter mapping.'}
-Correlation depends on the provider identity selected by the adapter.
+Correlation contract: **${provider.correlation}**. Recovery contract: **${provider.recovery}**.
 
 ## Recovery and deduplication
 
-${provider.deliveryIdentity.length ? `When signature verification runs, delivery identity is read from ${provider.deliveryIdentity.map(header => `\`${header}\``).join(', ')} and protected by the inbound-delivery fence.` : provider.handler === 'shared' ? 'When signature verification runs, the shared handler attempts provider-specific delivery identity before claiming the inbound-delivery fence.' : 'This route does not declare a durable provider delivery identifier.'}
+${provider.deliveryIdentity.length ? `When signature verification runs, delivery identity is read from ${provider.deliveryIdentity.map(header => `\`${header}\``).join(', ')} and protected by the inbound-delivery fence.` : provider.handler === 'shared' ? 'When signature verification runs, the shared handler attempts provider-specific delivery identity before claiming the inbound-delivery fence.' : 'This route has no provider delivery-ID fence; incident convergence relies on the adapter deduplication key.'}
 Incident convergence still depends on the adapter correlation key. Failed
 deliveries are recorded for operational inspection without exposing secrets.
 
@@ -210,7 +232,7 @@ After the test alert, confirm all of the following:
 
 ## Error reference
 
-${provider.errors.length ? provider.errors.map(error => `- \`${error.status}\` — ${error.meaning}.`).join('\n') : '- This custom route does not expose the shared integration error contract.'}
+${provider.errors.map(error => `- \`${error.status}\` — ${error.meaning}.`).join('\n')}
 
 ## Troubleshooting
 
