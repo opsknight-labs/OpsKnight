@@ -574,6 +574,96 @@ self.addEventListener('push', event => {
   event.waitUntil(self.registration.showNotification(payload.title, options));
 });
 
+const PUSH_SUBSCRIPTION_API = '/api/user/push-subscription';
+
+const fetchWithDeadline = async (url, init = {}, timeoutMs = 15000) => {
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    return await fetch(url, {
+      credentials: 'include',
+      cache: 'no-store',
+      ...init,
+      signal: controller ? controller.signal : undefined,
+    });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
+const vapidKeyToBytes = value => {
+  const base64 = `${value}${'='.repeat((4 - (value.length % 4)) % 4)}`.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+};
+
+const currentApplicationServerKey = async oldSubscription => {
+  const previous = oldSubscription?.options?.applicationServerKey;
+  if (previous && previous.byteLength === 65) return previous;
+  const response = await fetchWithDeadline('/api/system/vapid-public-key');
+  if (!response.ok) throw new Error(`VAPID key unavailable: HTTP ${response.status}`);
+  const data = await response.json();
+  const key = vapidKeyToBytes(String(data.publicKey || data.key || '').trim());
+  if (key.length !== 65) throw new Error('VAPID key is invalid');
+  return key;
+};
+
+/**
+ * Browsers fire `pushsubscriptionchange` when the push service rotates or
+ * expires an endpoint (for example an FCM token refresh on Android Chrome).
+ * Re-subscribe when the browser has not already done so, save the new
+ * endpoint for the signed-in user, and retire the old one so paging keeps
+ * reaching this device without the responder opening the app.
+ */
+const recoverPushSubscription = async event => {
+  const oldSubscription = event.oldSubscription || null;
+  let subscription = event.newSubscription || (await self.registration.pushManager.getSubscription());
+  if (!subscription) {
+    subscription = await self.registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: await currentApplicationServerKey(oldSubscription),
+    });
+  }
+
+  const saved = await fetchWithDeadline(PUSH_SUBSCRIPTION_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(subscription.toJSON ? subscription.toJSON() : subscription),
+  });
+  if (!saved.ok) {
+    // Typically 401 after the session expired. The app re-enrolls this device
+    // on next open; tell any open window so it can show the Repair action.
+    await broadcast('PUSH_SUBSCRIPTION_CHANGE_FAILED', { status: saved.status, error: await responseError(saved) });
+    return;
+  }
+
+  if (oldSubscription?.endpoint && oldSubscription.endpoint !== subscription.endpoint) {
+    try {
+      await fetchWithDeadline(PUSH_SUBSCRIPTION_API, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: oldSubscription.endpoint }),
+      });
+    } catch {
+      // The server also prunes expired endpoints on 404/410 delivery results.
+    }
+  }
+  await broadcast('PUSH_SUBSCRIPTION_CHANGED');
+};
+
+self.addEventListener('pushsubscriptionchange', event => {
+  event.waitUntil(
+    recoverPushSubscription(event).catch(async error => {
+      console.warn('[Service Worker] Push subscription recovery failed', error);
+      await broadcast('PUSH_SUBSCRIPTION_CHANGE_FAILED', {
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+    })
+  );
+});
+
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   if (event.action === 'acknowledge') {
