@@ -6,6 +6,7 @@ import {
   inspectServiceWorkerHealth,
   isOpsKnightServiceWorker,
   preflightServiceWorkerAssets,
+  resetServiceWorkerDiagnostics,
   serviceWorkerPath,
 } from '@/lib/service-worker-runtime';
 import { ClientAppError } from '@/lib/client-error';
@@ -14,7 +15,19 @@ const mockFetch = vi.fn();
 
 describe('service-worker-runtime', () => {
   beforeEach(() => {
+    resetServiceWorkerDiagnostics();
     mockFetch.mockReset();
+    mockFetch.mockImplementation(async (url: string | URL | Request) => {
+      const urlStr = typeof url === 'string' ? url : url.toString();
+      const isCustom = urlStr.includes('custom');
+      return {
+        ok: true,
+        status: 200,
+        redirected: false,
+        url: `${window.location.origin}${isCustom ? '/custom-sw.js' : '/sw.js'}`,
+        headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
+      };
+    });
     vi.stubGlobal('fetch', mockFetch);
 
     Object.defineProperty(window, 'isSecureContext', {
@@ -225,6 +238,66 @@ describe('service-worker-runtime', () => {
       expect(result.swAssetStatus).toContain('200');
       expect(result.customSwAssetStatus).toContain('200');
     });
+
+    it('throws ClientAppError when /custom-sw.js rewrites to /sw.js', async () => {
+      mockFetch.mockImplementation(async (url: string | URL | Request) => {
+        const urlStr = typeof url === 'string' ? url : url.toString();
+        if (urlStr === '/sw.js') {
+          return {
+            ok: true,
+            status: 200,
+            redirected: false,
+            url: `${window.location.origin}/sw.js`,
+            headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          redirected: false,
+          url: `${window.location.origin}/sw.js`, // Invalid rewrite to /sw.js!
+          headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
+        };
+      });
+
+      await expect(preflightServiceWorkerAssets()).rejects.toThrow(
+        expect.objectContaining({
+          code: 'PUSH_SW_REGISTRATION_FAILED',
+          action:
+            'Service worker dependency resolved to the wrong URL. Check reverse proxy or host routing.',
+        })
+      );
+    });
+
+    it('throws ClientAppError when /custom-sw.js is cross-origin', async () => {
+      mockFetch.mockImplementation(async (url: string | URL | Request) => {
+        const urlStr = typeof url === 'string' ? url : url.toString();
+        if (urlStr === '/sw.js') {
+          return {
+            ok: true,
+            status: 200,
+            redirected: false,
+            url: `${window.location.origin}/sw.js`,
+            headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          redirected: false,
+          url: 'https://evil.attacker.com/custom-sw.js',
+          headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
+        };
+      });
+
+      await expect(preflightServiceWorkerAssets()).rejects.toThrow(
+        expect.objectContaining({
+          code: 'PUSH_SW_REGISTRATION_FAILED',
+          action:
+            'Service worker dependency resolved to the wrong URL. Check reverse proxy or host routing.',
+        })
+      );
+    });
   });
 
   describe('ensureHealthyServiceWorker lifecycle state machine', () => {
@@ -399,14 +472,6 @@ describe('service-worker-runtime', () => {
         if (stateChangeHandler) stateChangeHandler();
       }, 15);
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        redirected: false,
-        url: `${window.location.origin}/sw.js`,
-        headers: new Headers({ 'content-type': 'application/javascript' }),
-      });
-
       Object.defineProperty(navigator, 'serviceWorker', {
         value: {
           getRegistration: vi.fn().mockResolvedValue(null),
@@ -462,14 +527,6 @@ describe('service-worker-runtime', () => {
         if (stateChangeHandler) stateChangeHandler();
       }, 10);
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        redirected: false,
-        url: `${window.location.origin}/sw.js`,
-        headers: new Headers({ 'content-type': 'application/javascript' }),
-      });
-
       Object.defineProperty(navigator, 'serviceWorker', {
         value: {
           getRegistration: vi.fn().mockResolvedValue(null),
@@ -514,14 +571,6 @@ describe('service-worker-runtime', () => {
         worker.state = 'redundant';
         if (stateChangeHandler) stateChangeHandler();
       }, 10);
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        redirected: false,
-        url: `${window.location.origin}/sw.js`,
-        headers: new Headers({ 'content-type': 'application/javascript' }),
-      });
 
       Object.defineProperty(navigator, 'serviceWorker', {
         value: {
@@ -599,14 +648,6 @@ describe('service-worker-runtime', () => {
 
       const registerMock = vi.fn().mockResolvedValue(cleanRegistration);
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        redirected: false,
-        url: `${window.location.origin}/sw.js`,
-        headers: new Headers({ 'content-type': 'application/javascript' }),
-      });
-
       Object.defineProperty(navigator, 'serviceWorker', {
         value: {
           getRegistration: vi.fn().mockResolvedValue(foreignRegistration),
@@ -632,14 +673,6 @@ describe('service-worker-runtime', () => {
     it('performs at most one repair attempt without infinite loops', async () => {
       const registerMock = vi.fn().mockRejectedValue(new Error('Browser registration rejected'));
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        status: 200,
-        redirected: false,
-        url: `${window.location.origin}/sw.js`,
-        headers: new Headers({ 'content-type': 'application/javascript' }),
-      });
-
       Object.defineProperty(navigator, 'serviceWorker', {
         value: {
           getRegistration: vi.fn().mockResolvedValue(null),
@@ -658,6 +691,206 @@ describe('service-worker-runtime', () => {
 
       // Normal attempt: 1, Repair attempt: 1 -> total max 2 register calls, never an infinite loop
       expect(registerMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('awaits installation completion under preserve-active-client without unregistering', async () => {
+      let stateChangeHandler: (() => void) | null = null;
+      const unregisterMock = vi.fn().mockResolvedValue(true);
+      const installingWorker = {
+        scriptURL: `${window.location.origin}/sw.js`,
+        state: 'installing',
+        addEventListener: vi.fn((event: string, handler: () => void) => {
+          if (event === 'statechange') stateChangeHandler = handler;
+        }),
+        removeEventListener: vi.fn(),
+      };
+
+      const registration: Record<string, unknown> = {
+        scope: `${window.location.origin}/`,
+        active: null,
+        waiting: null,
+        installing: installingWorker,
+        pushManager: {},
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        unregister: unregisterMock,
+        update: vi.fn(),
+      };
+
+      setTimeout(() => {
+        installingWorker.state = 'activated';
+        registration.active = {
+          scriptURL: `${window.location.origin}/sw.js`,
+          state: 'activated',
+        };
+        if (stateChangeHandler) stateChangeHandler();
+      }, 15);
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(registration),
+          ready: Promise.resolve(registration),
+        },
+        configurable: true,
+      });
+
+      const ready = await ensureHealthyServiceWorker({
+        purpose: 'inspection',
+        activationPolicy: 'preserve-active-client',
+      });
+
+      // Crucial: unregister must NEVER be called on a healthy fresh installing worker!
+      expect(unregisterMock).not.toHaveBeenCalled();
+      expect(ready.active).toBeTruthy();
+    });
+
+    it('activates waiting worker when no active worker exists under preserve-active-client', async () => {
+      let stateChangeHandler: (() => void) | null = null;
+      const unregisterMock = vi.fn().mockResolvedValue(true);
+      const waitingPostMessage = vi.fn(() => {
+        setTimeout(() => {
+          registration.active = {
+            scriptURL: `${window.location.origin}/sw.js`,
+            state: 'activated',
+          };
+          if (stateChangeHandler) stateChangeHandler();
+        }, 10);
+      });
+
+      const waitingWorker = {
+        scriptURL: `${window.location.origin}/sw.js`,
+        state: 'installed',
+        postMessage: waitingPostMessage,
+        addEventListener: vi.fn((event: string, handler: () => void) => {
+          if (event === 'statechange') stateChangeHandler = handler;
+        }),
+        removeEventListener: vi.fn(),
+      };
+
+      const registration: Record<string, unknown> = {
+        scope: `${window.location.origin}/`,
+        active: null,
+        waiting: waitingWorker,
+        installing: null,
+        pushManager: {},
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        unregister: unregisterMock,
+      };
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(registration),
+          ready: Promise.resolve(registration),
+        },
+        configurable: true,
+      });
+
+      const ready = await ensureHealthyServiceWorker({
+        purpose: 'inspection',
+        activationPolicy: 'preserve-active-client',
+      });
+
+      // Crucial: must activate waiting worker because no active client exists, and never unregister
+      expect(waitingPostMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
+      expect(unregisterMock).not.toHaveBeenCalled();
+      expect(ready.active).toBeTruthy();
+    });
+
+    it('serializes concurrent ensureHealthyServiceWorker calls via lifecycle mutex without redundant registrations', async () => {
+      let registerCallCount = 0;
+      const cleanRegistration = {
+        scope: `${window.location.origin}/`,
+        active: { scriptURL: `${window.location.origin}/sw.js`, state: 'activated' },
+        waiting: null,
+        installing: null,
+      };
+
+      const registerMock = vi.fn().mockImplementation(async () => {
+        registerCallCount++;
+        // Simulate slight async delay
+        await new Promise(r => setTimeout(r, 20));
+        return cleanRegistration;
+      });
+
+      let currentRegistration: typeof cleanRegistration | null = null;
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockImplementation(async () => currentRegistration),
+          register: vi.fn().mockImplementation(async (...args) => {
+            const reg = await registerMock(...args);
+            currentRegistration = reg;
+            return reg;
+          }),
+          ready: Promise.resolve(cleanRegistration),
+        },
+        configurable: true,
+      });
+
+      // Push + coordinator + background-sync invoking lifecycle concurrently
+      const [res1, res2, res3] = await Promise.all([
+        ensureHealthyServiceWorker({
+          purpose: 'push-enrollment',
+          activationPolicy: 'recover-if-no-active',
+        }),
+        ensureHealthyServiceWorker({
+          purpose: 'inspection',
+          activationPolicy: 'preserve-active-client',
+        }),
+        ensureHealthyServiceWorker({
+          purpose: 'background-sync',
+          activationPolicy: 'preserve-active-client',
+        }),
+      ]);
+
+      expect(res1).toBe(cleanRegistration);
+      expect(res2).toBe(cleanRegistration);
+      expect(res3).toBe(cleanRegistration);
+      // Thanks to the lifecycle mutex, register is called only once for initial registration
+      expect(registerCallCount).toBe(1);
+    });
+
+    it('resets diagnostics at the start of each lifecycle operation', async () => {
+      // Run 1: force repair failure
+      const registerMock = vi.fn().mockRejectedValue(new Error('Browser registration rejected'));
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(null),
+          register: registerMock,
+          ready: new Promise(() => {}),
+        },
+        configurable: true,
+      });
+
+      await expect(ensureHealthyServiceWorker({ purpose: 'push-enrollment' })).rejects.toThrow();
+
+      let health = await inspectServiceWorkerHealth();
+      expect(health.repairAttempted).toBe(true);
+      expect(health.lastFailureCode).toBeTruthy();
+
+      // Run 2: healthy registration
+      const healthyReg = {
+        scope: `${window.location.origin}/`,
+        active: { scriptURL: `${window.location.origin}/sw.js`, state: 'activated' },
+        waiting: null,
+        installing: null,
+      };
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(healthyReg),
+          ready: Promise.resolve(healthyReg),
+        },
+        configurable: true,
+      });
+
+      await ensureHealthyServiceWorker({ purpose: 'inspection' });
+
+      health = await inspectServiceWorkerHealth();
+      // Diagnostics must be fresh and not report stale repair attempt from previous run
+      expect(health.repairAttempted).toBe(false);
+      expect(health.repairResult).toBeNull();
+      expect(health.lastFailureCode).toBeNull();
     });
   });
 

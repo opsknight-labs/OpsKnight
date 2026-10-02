@@ -195,12 +195,15 @@ describe('PushNotificationToggle', () => {
       configurable: true,
     });
 
-    mockFetch.mockResolvedValue({
-      ok: true,
-      status: 200,
-      redirected: false,
-      url: `${window.location.origin}/sw.js`,
-      headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
+    mockFetch.mockImplementation(async (url: string) => {
+      const isCustom = typeof url === 'string' && url.includes('custom');
+      return {
+        ok: true,
+        status: 200,
+        redirected: false,
+        url: `${window.location.origin}${isCustom ? '/custom-sw.js' : '/sw.js'}`,
+        headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
+      };
     });
 
     render(<PushNotificationToggle />);
@@ -1564,11 +1567,12 @@ describe('PushNotificationToggle', () => {
 
     mockFetch.mockImplementation(async (url: string) => {
       if (typeof url === 'string' && url.includes('sw.js')) {
+        const isCustom = url.includes('custom');
         return {
           ok: true,
           status: 200,
           redirected: false,
-          url: `${window.location.origin}/sw.js`,
+          url: `${window.location.origin}${isCustom ? '/custom-sw.js' : '/sw.js'}`,
           headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
         };
       }
@@ -1677,11 +1681,12 @@ describe('PushNotificationToggle', () => {
 
     mockFetch.mockImplementation(async (url: string) => {
       if (typeof url === 'string' && url.includes('sw.js')) {
+        const isCustom = url.includes('custom');
         return {
           ok: true,
           status: 200,
           redirected: false,
-          url: `${window.location.origin}/sw.js`,
+          url: `${window.location.origin}${isCustom ? '/custom-sw.js' : '/sw.js'}`,
           headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
         };
       }
@@ -1854,11 +1859,12 @@ describe('PushNotificationToggle', () => {
 
     mockFetch.mockImplementation(async (url: string) => {
       if (typeof url === 'string' && url.includes('sw.js')) {
+        const isCustom = url.includes('custom');
         return {
           ok: true,
           status: 200,
           redirected: false,
-          url: `${window.location.origin}/sw.js`,
+          url: `${window.location.origin}${isCustom ? '/custom-sw.js' : '/sw.js'}`,
           headers: new Headers({ 'content-type': 'application/javascript; charset=utf-8' }),
         };
       }
