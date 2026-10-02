@@ -17,11 +17,13 @@ const KEY_2 = '2222222222222222222222222222222222222222222222222222222222222222'
 
 describeIfRealDB('encryption migration integration (real PostgreSQL)', () => {
   const originalEnvKeys = process.env.ENCRYPTION_KEYS;
+  const originalEnvKey = process.env.ENCRYPTION_KEY;
   let testUser: { id: string };
 
   beforeEach(async () => {
     // Overlapping keyring: k2 is active, k1 is legacy/fallback
     process.env.ENCRYPTION_KEYS = `k2:${KEY_2},k1:${KEY_1}`;
+    delete process.env.ENCRYPTION_KEY;
     await resetDatabase();
 
     // Create admin user to satisfy NOT NULL constraints and foreign keys on config tables
@@ -37,6 +39,11 @@ describeIfRealDB('encryption migration integration (real PostgreSQL)', () => {
 
   afterAll(async () => {
     process.env.ENCRYPTION_KEYS = originalEnvKeys;
+    if (originalEnvKey !== undefined) {
+      process.env.ENCRYPTION_KEY = originalEnvKey;
+    } else {
+      delete process.env.ENCRYPTION_KEY;
+    }
     await testPrisma.$disconnect();
   });
 

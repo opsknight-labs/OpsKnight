@@ -305,11 +305,17 @@ export async function decryptWithKey(encryptedText: string, keyHex: string): Pro
     const dekDecipher = crypto.createDecipheriv(algorithm, masterKey, dekIv);
     let dekHex = dekDecipher.update(encryptedDek, 'hex', 'utf8');
     dekHex += dekDecipher.final('utf8');
+    if (!/^[0-9a-f]{64}$/i.test(dekHex)) {
+      throw new Error('Decrypted DEK is not a valid 32-byte hex key');
+    }
     const dek = Buffer.from(dekHex, 'hex');
 
     const payloadDecipher = crypto.createDecipheriv(algorithm, dek, payloadIv);
     let decrypted = payloadDecipher.update(encryptedPayload, 'hex', 'utf8');
     decrypted += payloadDecipher.final('utf8');
+    if (decrypted.includes('\uFFFD') || /[\x00-\x08\x0E-\x1F]/.test(decrypted)) {
+      throw new Error('Decryption produced invalid plaintext characters');
+    }
     return decrypted;
   }
 
@@ -323,6 +329,9 @@ export async function decryptWithKey(encryptedText: string, keyHex: string): Pro
   const decipher = crypto.createDecipheriv(algorithm, masterKey, iv);
   let decrypted = decipher.update(parts[1], 'hex', 'utf8');
   decrypted += decipher.final('utf8');
+  if (decrypted.includes('\uFFFD') || /[\x00-\x08\x0E-\x1F]/.test(decrypted)) {
+    throw new Error('Decryption produced invalid plaintext characters');
+  }
   return decrypted;
 }
 
