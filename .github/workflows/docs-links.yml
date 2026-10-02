@@ -98,10 +98,11 @@ jobs:
         run: npx prisma generate
       - run: npx playwright install --with-deps chromium
       - name: Build revision-bound OpsKnight image
-        run: docker build --build-arg BUILD_REVISION=${{ github.sha }} -t opsknight-docs-runtime:${{ github.sha }} .
+        run: |
+          docker build --build-arg BUILD_REVISION=${{ github.sha }} -t opsknight-docs-runtime:${{ github.sha }} .
+          echo "DOCS_OPSKNIGHT_IMAGE=$(docker image inspect --format '{{.Id}}' opsknight-docs-runtime:${{ github.sha }})" >> "$GITHUB_ENV"
       - name: Run full documentation certification
         env:
-          DOCS_OPSKNIGHT_IMAGE: opsknight-docs-runtime:${{ github.sha }}
           DOCS_IMAGE_PULL_POLICY: never
         run: npm run docs:certify
 
@@ -121,7 +122,9 @@ jobs:
         run: npx prisma generate
       - run: npx playwright install --with-deps chromium
       - name: Build revision-bound OpsKnight image
-        run: docker build --build-arg BUILD_REVISION=${{ github.sha }} -t opsknight-docs-release:${{ github.sha }} .
+        run: |
+          docker build --build-arg BUILD_REVISION=${{ github.sha }} -t opsknight-docs-release:${{ github.sha }} .
+          echo "DOCS_OPSKNIGHT_IMAGE=$(docker image inspect --format '{{.Id}}' opsknight-docs-release:${{ github.sha }})" >> "$GITHUB_ENV"
       - name: Checkout website renderer
         uses: actions/checkout@v7
         with:
@@ -144,7 +147,6 @@ jobs:
           exit 1
       - name: Enforce final 2.0.0 release evidence
         env:
-          DOCS_OPSKNIGHT_IMAGE: opsknight-docs-release:${{ github.sha }}
           DOCS_IMAGE_PULL_POLICY: never
           DOCS_EXPECTED_PRODUCT_REVISION: ${{ github.sha }}
           DOCS_WEBSITE_DIR: ${{ github.workspace }}/opsknight-website

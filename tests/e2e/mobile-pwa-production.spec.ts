@@ -82,29 +82,37 @@ test.describe('production PWA service-worker contract', () => {
     const registration = await page.evaluate(async () => {
       if (!('serviceWorker' in navigator)) return null;
 
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg?.scope) {
-        return {
-          scope: reg.scope,
-          scriptURL:
-            reg.active?.scriptURL ?? reg.waiting?.scriptURL ?? reg.installing?.scriptURL ?? null,
-        };
-      }
+      const getWorkerInfo = (r: ServiceWorkerRegistration | null | undefined) => {
+        if (!r?.scope) return null;
+        const scriptURL =
+          r.active?.scriptURL ??
+          r.waiting?.scriptURL ??
+          r.installing?.scriptURL ??
+          navigator.serviceWorker.controller?.scriptURL ??
+          null;
+        return scriptURL ? { scope: r.scope, scriptURL } : null;
+      };
+
+      const initialReg = await navigator.serviceWorker.getRegistration();
+      const initialInfo = getWorkerInfo(initialReg);
+      if (initialInfo) return initialInfo;
 
       const ready = await Promise.race([
         navigator.serviceWorker.ready,
         new Promise<null>(resolve => setTimeout(() => resolve(null), 25_000)),
       ]);
-      if (!ready) return null;
+      const readyInfo = getWorkerInfo(ready);
+      if (readyInfo) return readyInfo;
 
-      return {
-        scope: ready.scope,
-        scriptURL:
-          ready.active?.scriptURL ??
-          ready.waiting?.scriptURL ??
-          ready.installing?.scriptURL ??
-          null,
-      };
+      // Poll briefly for worker instance to attach if registration exists but worker hasn't attached yet
+      for (let i = 0; i < 50; i++) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        const current = await navigator.serviceWorker.getRegistration();
+        const info = getWorkerInfo(current);
+        if (info) return info;
+      }
+
+      return null;
     });
 
     expect(registration).not.toBeNull();

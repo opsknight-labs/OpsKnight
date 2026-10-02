@@ -5,6 +5,7 @@ const databaseUrl =
   'postgresql://opsknight_docs:opsknight_docs@127.0.0.1:15432/opsknight_docs?schema=public';
 process.env.DOCS_DATABASE_URL = databaseUrl;
 process.env.DATABASE_URL = databaseUrl;
+process.env.API_KEY_SECRET ||= 'docs-runtime-only-api-key-secret';
 process.env.DOCS_OPSKNIGHT_IMAGE ||= 'opsknight-docs-v2@sha256:c5a9bce0deaa5bc64747b064020d3f2a678aeabd4a7ee43f3ef1d005d7812701';
 const baseURL = process.env.DOCS_BASE_URL || 'http://localhost:13200';
 
