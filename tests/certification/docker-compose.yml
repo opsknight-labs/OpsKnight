@@ -1,3 +1,15 @@
+x-app-environment: &app-env
+  NODE_ENV: production
+  # checkov:skip=CKV_SECRET_4: Ephemeral local certification test database URI
+  DATABASE_URL: postgresql://opsknight:certification-only@db:5432/opsknight
+  DIRECT_DATABASE_URL: postgresql://opsknight:certification-only@db:5432/opsknight
+  NEXTAUTH_URL: http://proxy:3000
+  NEXT_PUBLIC_APP_URL: http://proxy:3000
+  NEXTAUTH_SECRET: certification-nextauth-secret-at-least-32-characters
+  API_KEY_SECRET: certification-independent-api-secret-at-least-32-characters
+  ENCRYPTION_KEY: 4e7d2b9c1a8f6e3d5c0b9a8f7e6d5c4b3a29180f7e6d5c4b3a2918f7e6d5c4b3
+  INTEGRATION_RATE_LIMIT: 'false'
+
 services:
   db:
     image: postgres:16-alpine
@@ -11,28 +23,29 @@ services:
       timeout: 2s
       retries: 30
     ports: ['127.0.0.1:55432:5432']
-  web:
+  migration:
     image: opsknight-certification:local
-    environment: &app-env
-      NODE_ENV: production
-      # checkov:skip=CKV_SECRET_4: Ephemeral local certification test database URI
-      DATABASE_URL: postgresql://opsknight:certification-only@db:5432/opsknight
-      NEXTAUTH_URL: http://proxy:3000
-      NEXT_PUBLIC_APP_URL: http://proxy:3000
-      NEXTAUTH_SECRET: certification-nextauth-secret-at-least-32-characters
-      API_KEY_SECRET: certification-independent-api-secret-at-least-32-characters
-      ENCRYPTION_KEY: 4e7d2b9c1a8f6e3d5c0b9a8f7e6d5c4b3a29180f7e6d5c4b3a2918f7e6d5c4b3
-      INTEGRATION_RATE_LIMIT: 'false'
-      OPSKNIGHT_PROCESS_ROLE: web
+    environment:
+      <<: *app-env
+      OPSKNIGHT_MIGRATION_ONLY: 'true'
     depends_on:
       db: { condition: service_healthy }
+  web:
+    image: opsknight-certification:local
+    environment:
+      <<: *app-env
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
+      OPSKNIGHT_PROCESS_ROLE: web
+    depends_on:
+      migration: { condition: service_completed_successfully }
   worker:
     image: opsknight-certification:local
     environment:
       <<: *app-env
+      OPSKNIGHT_SKIP_MIGRATIONS: 'true'
       OPSKNIGHT_PROCESS_ROLE: worker
     depends_on:
-      db: { condition: service_healthy }
+      migration: { condition: service_completed_successfully }
   proxy:
     image: nginx:1.27-alpine
     ports: ['127.0.0.1:3300:3000']

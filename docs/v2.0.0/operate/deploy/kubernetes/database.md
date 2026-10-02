@@ -34,7 +34,7 @@ Render manifests and check URL sources, Secret references, CA mounts, pool sizes
 
 ## Deploy and migrate
 
-Helm can create the pre-install/pre-upgrade migration Job. Kustomize requires the operator to run a one-shot migration Job before updating workloads. Require direct connectivity and completion:
+Helm creates a one-shot install Job and a blocking pre-upgrade hook. Kustomize requires the operator to run the maintained one-shot migration Job before updating workloads. Require direct connectivity and completion:
 
 ```sh
 kubectl -n opsknight wait --for=condition=complete job/<migration-job> --timeout=15m
@@ -77,4 +77,3 @@ Use [Backup and restore](../../data/backup-and-restore) for recovery. Endpoint m
 - [Configure NetworkPolicy](./network-policy)
 - [Install integrated runtime](./integrated)
 - [Install split runtime](./split)
-

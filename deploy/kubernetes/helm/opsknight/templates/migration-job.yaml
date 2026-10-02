@@ -2,15 +2,20 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "opsknight.fullname" . }}-migration
+  name: {{ include "opsknight.fullname" . }}-migration{{- if .Release.IsInstall }}-install{{- end }}
   labels:
     {{- include "opsknight.labels" . | nindent 4 }}
+  {{- if .Release.IsUpgrade }}
   annotations:
-    helm.sh/hook: pre-install,pre-upgrade
+    # On upgrade the existing database and Secret are available, so this hook
+    # blocks workload replacement until the schema/index owner succeeds.
+    helm.sh/hook: pre-upgrade
     helm.sh/hook-delete-policy: before-hook-creation
     helm.sh/hook-weight: "-1"
+  {{- end }}
 spec:
   backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
   template:
     metadata:
       labels:
@@ -27,7 +32,7 @@ spec:
           image: {{ include "opsknight.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           envFrom:
-            # Pre-install hooks run before chart resources exist; the Job needs only secrets.
+            # Optional because migration ownership only requires the direct URL.
             - configMapRef:
                 name: {{ include "opsknight.fullname" . }}-config
                 optional: true
@@ -35,21 +40,15 @@ spec:
             - sh
             - -c
             - |
+              set -eu
               echo "Starting schema migration Job..."
-              RUNTIME_DATABASE_URL=${DATABASE_URL:-}
               if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
                 export DATABASE_URL="$DIRECT_DATABASE_URL"
               fi
               node node_modules/prisma/build/index.js migrate deploy
-              if [ -f "scripts/create-status-platform-online-indexes.cjs" ]; then
-                node scripts/create-status-platform-online-indexes.cjs
-              fi
-              if [ -f "scripts/create-sla-scheduler-online-index.cjs" ]; then
-                node scripts/create-sla-scheduler-online-index.cjs
-              fi
-              if [ -f "scripts/create-voice-attempt-online-indexes.cjs" ]; then
-                node scripts/create-voice-attempt-online-indexes.cjs
-              fi
+              node scripts/create-status-platform-online-indexes.cjs
+              node scripts/create-sla-scheduler-online-index.cjs
+              node scripts/create-voice-attempt-online-indexes.cjs
               echo "Migration Job completed successfully."
           env:
             - name: DATABASE_URL

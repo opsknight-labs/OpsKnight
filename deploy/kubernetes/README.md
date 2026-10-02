@@ -48,7 +48,7 @@ helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \
 ### Directory Structure
 
 - `base/` — Shared Namespace, ConfigMap, Secret, ServiceAccount, bundled PostgreSQL StatefulSet & Service, application Service, Ingress, NetworkPolicy, and PodDisruptionBudget.
-- `profiles/integrated/` — Single `opsknight-app` Deployment and HPA layered over `../../base`.
+- `profiles/integrated/` — Single fixed-replica `opsknight-app` Deployment layered over `../../base`; `hpa.yaml` is an opt-in example.
 - `profiles/split/` — Dedicated `web`, `scheduler` (`maintenance` profile), `general-worker`, `critical-worker`, `bulk-worker`, and `status-projector` Deployments, per-role PDBs, and per-role egress NetworkPolicies.
 - `profiles/split-pgbouncer/` — Layers a two-replica `opsknight-pgbouncer` Deployment, Service, PDB, and NetworkPolicy on top of `../split`, routing `opsknight-web` through PgBouncer while keeping `DIRECT_DATABASE_URL` pointed directly at PostgreSQL.
 - `monitoring/servicemonitor.yaml` — Optional Prometheus Operator `ServiceMonitor`.
@@ -60,4 +60,23 @@ kubectl kustomize deploy/kubernetes/kustomize/base
 kubectl kustomize deploy/kubernetes/kustomize/profiles/integrated
 kubectl kustomize deploy/kubernetes/kustomize/profiles/split
 kubectl kustomize deploy/kubernetes/kustomize/profiles/split-pgbouncer
+```
+
+HPA is opt-in in every maintained profile. Add the relevant `hpa.yaml` only
+after metrics-server is available and maximum replicas have been included in
+the PostgreSQL/PgBouncer connection budget.
+
+### Run Migrations and Apply a Profile
+
+Pin `deploy/kubernetes/kustomize/migration-job.yaml` to the same immutable image
+as the runtime. Run that Job to completion before applying either profile; all
+checked-in long-running Deployments set `OPSKNIGHT_SKIP_MIGRATIONS=true`.
+
+```bash
+# First install only: create the namespace, Secret, and database resources.
+kubectl apply -k deploy/kubernetes/kustomize/base
+kubectl delete -f deploy/kubernetes/kustomize/migration-job.yaml --ignore-not-found
+kubectl apply -f deploy/kubernetes/kustomize/migration-job.yaml
+kubectl -n opsknight wait --for=condition=complete job/opsknight-migration --timeout=15m
+kubectl apply -k deploy/kubernetes/kustomize/profiles/integrated
 ```

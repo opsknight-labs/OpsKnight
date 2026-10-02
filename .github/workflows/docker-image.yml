@@ -168,6 +168,11 @@ jobs:
           grep -q 'startupProbe:' /tmp/opsknight-helm.yaml
           grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
 
+  integration-certification:
+    needs: validate-release-tag
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/integration-certification.yml
+
   release-documentation:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success'
@@ -302,10 +307,11 @@ jobs:
           retention-days: 365
 
   build:
-    needs: release-quality
+    needs: [release-quality, integration-certification]
     if: >-
       !cancelled() &&
-      (!startsWith(github.ref, 'refs/tags/v') || needs.release-quality.result == 'success')
+      (!startsWith(github.ref, 'refs/tags/v') ||
+        (needs.release-quality.result == 'success' && needs.integration-certification.result == 'success'))
     runs-on: ubuntu-22.04
     outputs:
       release_image_digest: ${{ steps.release_build.outputs.digest }}

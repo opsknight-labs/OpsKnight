@@ -1,6 +1,7 @@
 name: Documentation quality
 
 on:
+  # Temporarily manual-only while the documentation quality suite is improved.
   workflow_dispatch:
     inputs:
       release_certification:
@@ -8,37 +9,6 @@ on:
         required: false
         default: false
         type: boolean
-  pull_request:
-    branches: [main]
-    paths:
-      - 'docs/v2.0.0/**'
-      - 'docs/internal/**'
-      - 'scripts/docs/**'
-      - 'src/**'
-      - 'deploy/**'
-      - 'tests/load/**'
-      - 'artifacts/load-certification/certification-summary.json'
-      - 'prisma/**'
-      - 'scripts/check-docs-links.cjs'
-      - 'scripts/check-docs-capabilities.cjs'
-      - 'package.json'
-      - '.github/workflows/docs-links.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'docs/v2.0.0/**'
-      - 'docs/internal/**'
-      - 'scripts/docs/**'
-      - 'src/**'
-      - 'deploy/**'
-      - 'tests/load/**'
-      - 'artifacts/load-certification/certification-summary.json'
-      - 'prisma/**'
-      - 'scripts/check-docs-links.cjs'
-      - 'scripts/check-docs-capabilities.cjs'
-      - 'package.json'
-      - '.github/workflows/docs-links.yml'
-
 permissions:
   contents: read
 

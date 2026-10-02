@@ -153,7 +153,7 @@ Watch the hook and workloads in another terminal:
 kubectl -n opsknight get job,pod,deployment,statefulset -w
 ```
 
-The migration Job must complete with exit code zero. All selected workloads must become Ready. A failed hook means the release is not installable; do not bypass it.
+On first install, the chart creates an ordinary one-shot migration Job alongside the Secret and database resources. The shared runtime entrypoint blocks application processes until all migrations and required online indexes are ready, so schedulers and workers cannot start early. On upgrades, a `pre-upgrade` hook blocks workload replacement until migration succeeds. The Job must complete with exit code zero and all selected workloads must become Ready. A failed Job or hook means the release is not installable; do not bypass it.
 
 ## Verify the installation
 

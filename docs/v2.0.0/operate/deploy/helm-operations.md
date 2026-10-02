@@ -42,7 +42,7 @@ kubectl auth can-i create job -n opsknight
 - `image`: repository, tag/digest, pull policy, and pull Secrets. Digest takes precedence over tag.
 - `config`: public origins and common runtime settings.
 - `secrets`: preferably an existing Kubernetes Secret and its key mapping.
-- `migrations.job.enabled`: creates the pre-install/pre-upgrade hook Job and makes workloads skip in-process migration.
+- `migrations.job.enabled`: creates the one-shot install Job and blocking pre-upgrade hook. Workloads always skip in-process migration; disable the Job only when an external release process supplies the single owner.
 - `postgresql`: bundled PostgreSQL, storage, resources, credentials, or external TLS CA mounting.
 - `database`: direct application PostgreSQL URL, port, and aggregate connection ceiling.
 - `pgbouncer`: Web-only transaction pool in split mode.
@@ -337,15 +337,15 @@ helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \
   --atomic
 ```
 
-The pre-install migration hook must complete before workload resources become ready. With `--atomic`, a failed install is removed, but external database changes already committed by a migration are not reversed.
+On first install, the chart creates the migration Job as a normal resource so chart-created Secrets and bundled PostgreSQL can exist before it runs. Runtime Pods skip migrations, and the shared container entrypoint prevents every application process—including schedulers and workers—from starting until all migrations and required online indexes are ready. This same barrier protects Kustomize, Compose split, and Swarm runtimes. On upgrades, the migration owner is a `pre-upgrade` hook that must complete before workload replacement. With `--atomic`, a failed install is removed, but external database changes already committed by a migration are not reversed.
 
-The hook installs Prisma migrations plus the maintained status-platform and voice-attempt online indexes. It does **not** install the optional SLA scheduler index. `LEGACY` and `SHADOW` SLA scheduler modes do not require that index. Before enabling `INDEXED`, run the installer once against the direct database from the matching release image or trusted administration environment:
+The migration owner installs Prisma migrations plus the maintained status-platform, SLA-scheduler, and voice-attempt online indexes. `LEGACY` and `SHADOW` SLA scheduler modes do not require the optional SLA index, but the Job safely prepares it before `INDEXED` is selected. To re-run that installer independently from a matching release image or trusted administration environment:
 
 ```sh
 DATABASE_URL="$DIRECT_DATABASE_URL" npm run prisma:indexes:sla-scheduler
 ```
 
-A successful Helm migration hook therefore does not prove that the SLA scheduler index exists. Verify it separately as described in [Database migrations](../upgrades/database-migrations).
+A successful migration Job proves the installer completed; verify the index remains valid before selecting `INDEXED`, as described in [Database migrations](../upgrades/database-migrations).
 
 Verify:
 
@@ -361,7 +361,7 @@ The public readiness endpoint must return HTTP 200. In split mode, every selecte
 
 ## Inspect migration failures
 
-Helm hook Jobs may be deleted before the next hook run but remain available after the current failure:
+The initial install Job remains available until its TTL expires. Upgrade hook Jobs may be deleted before the next hook run but remain available after the current failure:
 
 ```sh
 kubectl get jobs,pods -n opsknight \

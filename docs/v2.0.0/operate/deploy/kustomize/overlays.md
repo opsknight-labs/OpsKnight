@@ -15,8 +15,8 @@ verification:
 
 ## Maintained profiles
 
-- `profiles/integrated`: shared base, integrated Deployment, and HPA.
-- `profiles/split`: six runtime Deployments, role PDBs/policies, Web Service, and Web HPA.
+- `profiles/integrated`: shared base and a fixed-replica integrated Deployment; `hpa.yaml` is opt-in.
+- `profiles/split`: six fixed-replica runtime Deployments, role PDBs/policies, and Web Service; `web-hpa.yaml` is opt-in.
 - `profiles/split-pgbouncer`: split plus PgBouncer resources and Web database patch.
 - `monitoring/servicemonitor.yaml`: optional Prometheus Operator resource, not automatically included.
 
@@ -40,4 +40,3 @@ Inspect images, resource inventory, Secrets, Services, ingress, StatefulSets, De
 
 - [Install with Kustomize](./install)
 - [GitOps lifecycle](./gitops)
-

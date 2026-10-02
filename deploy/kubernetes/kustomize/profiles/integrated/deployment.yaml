@@ -51,6 +51,8 @@ spec:
             - secretRef:
                 name: opsknight-secrets
           env:
+            - name: OPSKNIGHT_SKIP_MIGRATIONS
+              value: "true"
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

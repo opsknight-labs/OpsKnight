@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'crypto';
-import { InboundDeliveryStatus, Prisma } from '@prisma/client';
+import { InboundDeliveryStatus } from '@prisma/client';
 import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
+import { isPrismaErrorCode } from '@/lib/prisma-errors';
 
 export const MAX_INTEGRATION_BODY_BYTES = 1024 * 1024;
 const INBOUND_DELIVERY_LEASE_MS = 5 * 60 * 1000;
@@ -83,7 +84,9 @@ export async function claimInboundDelivery(
     });
     return { disposition: 'CLAIMED', ...created, leaseToken };
   } catch (error) {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+    // `instanceof` is unreliable when the standalone image bundles more than one
+    // Prisma runtime. The stable machine code is the cross-bundle contract.
+    if (!isPrismaErrorCode(error, 'P2002')) {
       throw error;
     }
   }
@@ -133,16 +136,22 @@ export async function completeInboundDelivery(
 ): Promise<void> {
   const completed = await prisma.inboundDelivery.updateMany({
     where: { id: claim.id, status: InboundDeliveryStatus.PROCESSING, leaseToken: claim.leaseToken },
-    data: { status: InboundDeliveryStatus.COMPLETED, completedAt: new Date(), leaseExpiresAt: null },
+    data: {
+      status: InboundDeliveryStatus.COMPLETED,
+      completedAt: new Date(),
+      leaseExpiresAt: null,
+    },
   });
-  if (completed.count === 0) throw new Error('Inbound delivery lease was superseded before completion');
+  if (completed.count === 0)
+    throw new Error('Inbound delivery lease was superseded before completion');
 }
 
 export async function failInboundDelivery(
   claim: Extract<InboundDeliveryClaim, { disposition: 'CLAIMED' }>,
   error: unknown
 ): Promise<void> {
-  const message = error instanceof Error ? error.message.slice(0, 2_000) : String(error).slice(0, 2_000);
+  const message =
+    error instanceof Error ? error.message.slice(0, 2_000) : String(error).slice(0, 2_000);
   await prisma.inboundDelivery.updateMany({
     where: { id: claim.id, status: InboundDeliveryStatus.PROCESSING, leaseToken: claim.leaseToken },
     data: { status: InboundDeliveryStatus.FAILED, leaseExpiresAt: null, lastError: message },
