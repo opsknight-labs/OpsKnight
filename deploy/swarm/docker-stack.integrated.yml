@@ -35,6 +35,7 @@ services:
       PORT: '3000'
       HOSTNAME: '0.0.0.0'
       NEXT_TELEMETRY_DISABLED: '1'
+      ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
       DATABASE_URL_FILE: /run/secrets/opsknight_database_url
       DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
       NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
