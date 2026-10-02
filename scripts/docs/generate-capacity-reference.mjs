@@ -29,8 +29,11 @@ const planningProfiles = ['small', 'medium', 'large', 'storm'].map(profile => {
   return dimensions;
 });
 
-if (artifact.schemaVersion !== 1 || !artifact.generatedAt || !artifact.sourceRevision || !artifact.testHarnessRevision || !artifact.environment || !Array.isArray(artifact.results)) {
-  throw new Error('Capacity artifact must use schemaVersion 1 and contain generatedAt, sourceRevision, testHarnessRevision, environment, and results.');
+if (![1, 2].includes(artifact.schemaVersion) || !artifact.generatedAt || !artifact.sourceRevision || !artifact.testHarnessRevision || !artifact.environment || !Array.isArray(artifact.results)) {
+  throw new Error('Capacity artifact must use schemaVersion 1 or 2 and contain generatedAt, sourceRevision, testHarnessRevision, environment, and results.');
+}
+if (artifact.schemaVersion === 2 && (!artifact.scaleProfile || !artifact.scaleDimensions)) {
+  throw new Error('Capacity artifact schemaVersion 2 requires scaleProfile and scaleDimensions.');
 }
 
 const supportedTopologies = [

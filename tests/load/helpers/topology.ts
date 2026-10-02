@@ -980,8 +980,7 @@ export interface TopologyCertificationResult {
   certified: boolean;
 }
 
-export interface LoadCertificationSummary {
-  schemaVersion: 1;
+interface LoadCertificationSummaryBase {
   generatedAt: string;
   sourceRevision: string;
   testHarnessRevision: string;
@@ -991,9 +990,17 @@ export interface LoadCertificationSummary {
     dockerEngine: string;
     kind: string;
   };
+  results: TopologyCertificationResult[];
+}
+
+export interface LoadCertificationSummaryV1 extends LoadCertificationSummaryBase {
+  schemaVersion: 1;
+}
+
+export interface LoadCertificationSummaryV2 extends LoadCertificationSummaryBase {
+  schemaVersion: 2;
   scaleProfile: ScaleProfileName;
   scaleDimensions: (typeof SCALE_PROFILES)[ScaleProfileName];
-  results: TopologyCertificationResult[];
 }
 
 function isTopologyResult(value: unknown): value is TopologyCertificationResult {
@@ -1005,13 +1012,35 @@ function isTopologyResult(value: unknown): value is TopologyCertificationResult 
   );
 }
 
-/** Accept the historical raw array once, but always write the versioned envelope. */
+/** Accept the legacy array and v1/v2 envelopes, but always write v2. */
 export function parseCertificationSummary(value: unknown): TopologyCertificationResult[] {
-  const results = Array.isArray(value)
-    ? value
-    : value && typeof value === 'object'
-      ? (value as { results?: unknown }).results
-      : undefined;
+  if (Array.isArray(value)) {
+    if (!value.every(isTopologyResult)) {
+      throw new Error('Invalid load-certification summary: expected a results array');
+    }
+    return value;
+  }
+  if (!value || typeof value !== 'object') {
+    throw new Error('Invalid load-certification summary: expected a results array');
+  }
+  const envelope = value as {
+    schemaVersion?: unknown;
+    scaleProfile?: unknown;
+    scaleDimensions?: unknown;
+    results?: unknown;
+  };
+  if (envelope.schemaVersion !== 1 && envelope.schemaVersion !== 2) {
+    throw new Error('Invalid load-certification summary: unsupported schemaVersion');
+  }
+  if (
+    envelope.schemaVersion === 2 &&
+    (!['small', 'medium', 'large', 'storm'].includes(String(envelope.scaleProfile)) ||
+      !envelope.scaleDimensions ||
+      typeof envelope.scaleDimensions !== 'object')
+  ) {
+    throw new Error('Invalid load-certification summary v2: scale profile and dimensions are required');
+  }
+  const results = envelope.results;
   if (!Array.isArray(results) || !results.every(isTopologyResult)) {
     throw new Error('Invalid load-certification summary: expected a results array');
   }
@@ -1033,7 +1062,7 @@ async function commandVersion(command: string, args: string[]): Promise<string> 
 async function buildCertificationSummary(
   results: TopologyCertificationResult[],
   scaleProfile: ScaleProfileName
-): Promise<LoadCertificationSummary> {
+): Promise<LoadCertificationSummaryV2> {
   const revision = (await commandVersion('git', ['rev-parse', 'HEAD'])).trim();
   const sourceRevision = process.env.OPSKNIGHT_LOAD_PRODUCT_REVISION || revision;
   const testHarnessRevision = process.env.OPSKNIGHT_LOAD_HARNESS_REVISION || revision;
@@ -1041,7 +1070,7 @@ async function buildCertificationSummary(
     throw new Error('Load certification requires full product and harness Git revisions');
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: new Date().toISOString(),
     sourceRevision,
     testHarnessRevision,

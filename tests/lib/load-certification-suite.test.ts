@@ -44,11 +44,25 @@ describe('OpsKnight Load & Scalability Certification Suite', () => {
     resetProviderTelemetry();
   });
 
-  it('reads both the historical array and versioned certification envelope', () => {
+  it('reads the historical array plus v1/v2 envelopes and validates v2 dimensions', () => {
     const result = { topologyId: 'test-topology', scenarios: [] };
     expect(parseCertificationSummary([result])).toEqual([result]);
     expect(parseCertificationSummary({ schemaVersion: 1, results: [result] })).toEqual([result]);
-    expect(() => parseCertificationSummary({ results: 'invalid' })).toThrow(
+    expect(
+      parseCertificationSummary({
+        schemaVersion: 2,
+        scaleProfile: 'small',
+        scaleDimensions: SCALE_PROFILES.small,
+        results: [result],
+      })
+    ).toEqual([result]);
+    expect(() => parseCertificationSummary({ schemaVersion: 2, results: [result] })).toThrow(
+      'scale profile and dimensions are required'
+    );
+    expect(() => parseCertificationSummary({ schemaVersion: 3, results: [result] })).toThrow(
+      'unsupported schemaVersion'
+    );
+    expect(() => parseCertificationSummary({ schemaVersion: 1, results: 'invalid' })).toThrow(
       'expected a results array'
     );
   });
