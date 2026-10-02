@@ -1698,4 +1698,99 @@ describe('PushNotificationToggle', () => {
     });
     expect(screen.getByRole('button', { name: /Retry/i })).toBeInTheDocument();
   });
+
+  it('sends SKIP_WAITING to waiting worker on iOS and completes activation', async () => {
+    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1'
+    );
+    vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('iPhone');
+    Object.defineProperty(navigator, 'standalone', {
+      value: true,
+      configurable: true,
+    });
+
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'default',
+        requestPermission: vi.fn().mockResolvedValue('granted'),
+      },
+      configurable: true,
+    });
+
+    const waitingWorkerPostMessage = vi.fn();
+    const waitingWorker = {
+      scriptURL: `${window.location.origin}/sw.js`,
+      state: 'installed',
+      postMessage: waitingWorkerPostMessage,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+
+    const subscribeMock = vi.fn().mockResolvedValue({
+      endpoint: 'https://push.apple.com/sub/ios-skip-waiting-test',
+      toJSON: () => ({ endpoint: 'https://push.apple.com/sub/ios-skip-waiting-test' }),
+      unsubscribe: vi.fn().mockResolvedValue(true),
+    });
+
+    const registration: Record<string, unknown> = {
+      scope: `${window.location.origin}/`,
+      active: null,
+      waiting: waitingWorker,
+      installing: null,
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(null),
+        subscribe: subscribeMock,
+      },
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+
+    // When SKIP_WAITING is received, transition to active
+    waitingWorkerPostMessage.mockImplementation((message: { type: string }) => {
+      if (message?.type === 'SKIP_WAITING') {
+        setTimeout(() => {
+          registration.active = { scriptURL: `${window.location.origin}/sw.js` };
+        }, 10);
+      }
+    });
+
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(registration),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: new Promise(() => {}),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/system/vapid-public-key')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ key: 'B' + 'A'.repeat(86) }),
+        };
+      }
+      if (typeof url === 'string' && url.includes('/api/user/push-subscription')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ success: true }),
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    render(<PushNotificationToggle />);
+    const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    fireEvent.click(enableButton);
+
+    await waitFor(() => {
+      expect(waitingWorkerPostMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Disable/i })).toBeInTheDocument();
+    });
+  });
 });
