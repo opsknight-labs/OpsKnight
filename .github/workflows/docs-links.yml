@@ -94,6 +94,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci --ignore-scripts --legacy-peer-deps
+      - name: Generate Prisma client required by source-level runtime tests
+        run: npx prisma generate
       - run: npx playwright install --with-deps chromium
       - name: Run full documentation certification
         run: npm run docs:certify
@@ -110,6 +112,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci --ignore-scripts --legacy-peer-deps
+      - name: Generate Prisma client required by source-level runtime tests
+        run: npx prisma generate
       - run: npx playwright install --with-deps chromium
       - name: Build revision-bound OpsKnight image
         run: docker build --build-arg BUILD_REVISION=${{ github.sha }} -t opsknight-docs-release:${{ github.sha }} .
