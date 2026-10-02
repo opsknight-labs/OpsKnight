@@ -6,13 +6,24 @@ const withPWA = require('@ducanh2912/next-pwa').default({
   dest: 'public',
   // Disable in dev to avoid caching issues; allow explicit override.
   disable: process.env.NODE_ENV === 'development' || process.env.DISABLE_PWA === 'true',
-  register: true,
-  // Never replace a running operational client underneath a responder. The
-  // MobilePwaCoordinator explicitly activates a waiting worker after consent.
-  skipWaiting: false,
+  // Registration is strictly owned by OpsKnight's service-worker-runtime
+  // (via ServiceWorkerBootstrap and user interactions) to prevent lifecycle races.
+  register: false,
+  // Exclude all public assets from precaching. Marketing images, screenshots,
+  // and icons must not stall SW install; static assets are cached on-demand.
+  publicExcludes: ['!**/*'],
   sw: 'sw.js',
   workboxOptions: {
+    // Never replace a running operational client underneath a responder. The
+    // MobilePwaCoordinator explicitly activates a waiting worker after consent.
+    skipWaiting: false,
+    clientsClaim: false,
     disableDevLogs: true,
+    cleanupOutdatedCaches: true,
+    // Exclude webpack build chunks from the precache manifest. Runtime caching
+    // with CacheFirst handles static assets on-demand without blocking SW install.
+    exclude: [/.*/],
+    manifestTransforms: [() => ({ manifest: [], warnings: [] })],
     additionalManifestEntries: [],
     importScripts: ['/custom-sw.js'],
     // Dynamic pages, RSC streams, and APIs are authoritative network data.
@@ -111,10 +122,7 @@ const nextConfig: NextConfig = {
         : false,
   },
   images: {
-    localPatterns: [
-      { pathname: '/logo.png' },
-      { pathname: '/api/avatar', search: '?**' },
-    ],
+    localPatterns: [{ pathname: '/logo.png' }, { pathname: '/api/avatar', search: '?**' }],
     remotePatterns: [
       {
         protocol: 'https',

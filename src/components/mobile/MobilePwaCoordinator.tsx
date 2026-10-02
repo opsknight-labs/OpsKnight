@@ -12,6 +12,7 @@ import {
 import { detectResponderSessionPolicy } from '@/lib/pwa-session-policy';
 import { logger } from '@/lib/logger';
 import { appRoutes } from '@/lib/app-routes';
+import { ensureHealthyServiceWorker } from '@/lib/service-worker-runtime';
 
 type QueueSummary = Record<OfflineQueueState, number>;
 
@@ -70,16 +71,15 @@ const EMPTY_QUEUE: QueueSummary = {
 
 async function readyServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return null;
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
   try {
-    return await Promise.race([
-      navigator.serviceWorker.ready,
-      new Promise<null>(resolve => {
-        timeoutId = setTimeout(() => resolve(null), SERVICE_WORKER_READY_TIMEOUT_MS);
-      }),
-    ]);
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
+    return await ensureHealthyServiceWorker({
+      purpose: 'inspection',
+      activationPolicy: 'preserve-active-client',
+      timeoutMs: SERVICE_WORKER_READY_TIMEOUT_MS,
+    });
+  } catch (error) {
+    logger.debug('mobile.serviceWorker.ready_fallback', { error });
+    return null;
   }
 }
 

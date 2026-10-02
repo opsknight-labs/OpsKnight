@@ -266,6 +266,7 @@ jobs:
           npx playwright test
           -c playwright.pwa.config.ts
           --project=pwa-production-chromium
+          --project=pwa-production-webkit
 
       - name: Upload Mobile Playwright report
         if: failure()

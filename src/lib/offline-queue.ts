@@ -1,6 +1,7 @@
 'use client';
 
 import { promiseWithTimeout } from '@/lib/client-timeout';
+import { ensureHealthyServiceWorker } from '@/lib/service-worker-runtime';
 import {
   deriveOfflineLaneKey,
   readMobilePrincipalContext,
@@ -205,11 +206,11 @@ async function registerBackgroundSyncBestEffort() {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 
   try {
-    const registration = await promiseWithTimeout(
-      navigator.serviceWorker.ready,
-      BACKGROUND_SYNC_TIMEOUT_MS,
-      'Service worker readiness timed out while registering Background Sync.'
-    );
+    const registration = await ensureHealthyServiceWorker({
+      purpose: 'background-sync',
+      activationPolicy: 'preserve-active-client',
+      timeoutMs: BACKGROUND_SYNC_TIMEOUT_MS,
+    });
     const syncRegistration = registration as ServiceWorkerRegistration & {
       sync?: { register(tag: string): Promise<void> };
     };
