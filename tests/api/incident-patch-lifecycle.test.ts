@@ -245,4 +245,41 @@ describe('PATCH /api/incidents/:id lifecycle adoption', () => {
     expect(res.status).toBe(403);
     expect(mocks.applyRestIncidentPatch).not.toHaveBeenCalled();
   });
+
+  it('routes PATCH status OPEN to applyRestIncidentPatch for a reopen transition', async () => {
+    const reopenedIncident = incident('OPEN');
+    mocks.applyRestIncidentPatch.mockResolvedValue({
+      incident: reopenedIncident,
+      lifecycle: {
+        incidentId: 'inc-1',
+        command: 'REOPEN',
+        source: 'REST_API',
+        previousStatus: 'RESOLVED',
+        status: 'OPEN',
+        changed: true,
+      },
+      urgencyChanged: false,
+      assigneeChanged: false,
+      changed: true,
+      idempotencyReplayed: false,
+    });
+
+    const req = await createMockRequest('PATCH', '/api/incidents/inc-1', {
+      status: 'OPEN',
+    });
+    const res = await PATCH(req, context);
+    const { status, data } = await parseResponse(res);
+
+    expect(status).toBe(200);
+    expect(data.incident.status).toBe('OPEN');
+    expect(mocks.applyRestIncidentPatch).toHaveBeenCalledWith({
+      incidentId: 'inc-1',
+      status: 'OPEN',
+      urgency: undefined,
+      assigneeId: undefined,
+      hasAssigneeUpdate: false,
+      actor: { id: 'user-1' },
+      idempotency: undefined,
+    });
+  });
 });

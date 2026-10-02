@@ -20,5 +20,5 @@ test('all task docs pass the implementation-backed product-surface guard', () =>
 
   const report = readFileSync('generated/docs-certification/surface-parity-report.md', 'utf8');
   assert.match(report, /Task-oriented pages scanned: 200/);
-  assert.match(report, /Unsupported surface claims remaining: 0/);
+  assert.match(report, /Forbidden surface-pattern violations remaining: 0/);
 });

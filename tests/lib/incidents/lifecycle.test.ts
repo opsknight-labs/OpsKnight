@@ -522,4 +522,40 @@ describe('incident lifecycle command engine', () => {
 
     expect(committed).toEqual([]);
   });
+
+  it('maps target status OPEN on a RESOLVED incident to command REOPEN with source REST_API', async () => {
+    const { applyIncidentLifecycleTargetStatus } = await import('@/lib/incidents/lifecycle');
+    tx.incident.findUnique.mockResolvedValue(
+      snapshot({
+        status: 'RESOLVED',
+        resolvedAt: NOW,
+      })
+    );
+
+    const result = await applyIncidentLifecycleTargetStatus(asTransactionClient(tx), {
+      incidentId: 'inc-resolved-api',
+      status: 'OPEN',
+      source: 'REST_API',
+      now: NOW,
+    });
+
+    expect(result).toMatchObject({
+      incidentId: 'inc-resolved-api',
+      command: 'REOPEN',
+      source: 'REST_API',
+      previousStatus: 'RESOLVED',
+      status: 'OPEN',
+      changed: true,
+    });
+    expect(tx.incident.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'inc-resolved-api' },
+        data: expect.objectContaining({
+          status: 'OPEN',
+          acknowledgedAt: null,
+          resolvedAt: null,
+        }),
+      })
+    );
+  });
 });

@@ -23,6 +23,8 @@ const forbiddenClaims = [
   { pattern: /(?:Web|Slack)[^\n]{0,100}(?:click|select|choose|press)[^\n]{0,60}\*\*Escalate\*\*/i, message: 'claims a Web/Slack manual Escalate control' },
   { pattern: /supported Slack or Microsoft Teams incident card/i, message: 'conflates Slack and Teams manual escalation support' },
   { pattern: /Resolve and reopen an incident/i, message: 'presents resolve and reopen as one user-facing task' },
+  { pattern: /(?:supply|enter)[^\n]{0,40}(?:meaningful summary|requested summary)[^\n]{0,40}(?:when prompted|prompt)/i, message: 'claims a Slack resolution summary prompt' },
+  { pattern: /(?:inbound events?|alert[^\n]{0,20}events?)[^\n]{0,40}(?:may reopen|can automatically reopen)[^\n]{0,40}recently resolved/i, message: 'claims generic inbound alerts/events reopen resolved incidents' },
 ];
 
 for (const path of docs) {
@@ -54,7 +56,7 @@ const report = `# Product surface parity report
 - Task-oriented pages scanned: ${taskPages.length}
 - Action-bearing lines inspected by the automated guard: ${actionableLines}
 - Explicit cross-surface contracts: ${(registry.contracts ?? []).length}
-- Unsupported surface claims remaining: ${failures.length}
+- Forbidden surface-pattern violations remaining: ${failures.length}
 
 ## Enforced high-risk contracts
 

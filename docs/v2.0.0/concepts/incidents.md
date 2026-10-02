@@ -186,11 +186,15 @@ Reopening does not erase earlier timeline, notifications, response history, or
 resolution evidence. Treat it as a new active generation of the same correlated
 incident.
 
-In 2.0, Web does not expose a manual Reopen action. Reopen is reached through
-correlation-driven ingestion for a matching recent incident or an authorized
-public API status update. Likewise, manual escalation is not a generic Web or
-Slack action: it is exposed only by capability-enabled Microsoft Teams cards.
-The Web incident page remains the authoritative place to verify both results.
+In 2.0, Web does not expose a manual Reopen action. If a new manual incident
+report is created with the same service and explicit deduplication key within
+the 30-minute reopen window, OpsKnight reopens the recently resolved incident.
+Normal monitoring and integration alert trigger ingestion does not reopen a
+resolved incident; it creates a new incident. An authorized API client may also
+set status to `OPEN` with `PATCH /api/incidents/{id}`. Likewise, manual
+escalation is not a generic Web or Slack action: it is exposed only by
+capability-enabled Microsoft Teams cards. The Web incident page remains the
+authoritative place to verify both results.
 
 ## Escalation generations prevent stale work
 

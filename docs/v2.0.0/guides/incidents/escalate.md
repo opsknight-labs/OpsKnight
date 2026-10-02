@@ -71,7 +71,7 @@ If a step has no eligible target, the planner can advance to the next tier. That
 
 ## Safe retry behavior
 
-Interactive providers and API clients should supply an idempotency context. A repeated request with the same principal and key reuses the recorded result; reusing that key for a different incident or actor is rejected.
+Microsoft Teams action execution carries an idempotency context internally. A repeated Teams intent reuses the durable operation result where applicable; reusing that key for a different incident or actor is rejected.
 
 If the UI times out, inspect the canonical incident timeline, audit log, and notification operations before retrying. Repeated clicks can make the response harder to interpret even though the underlying engine protects generation and delivery boundaries.
 

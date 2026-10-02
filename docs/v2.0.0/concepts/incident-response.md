@@ -75,7 +75,7 @@ A failed projection should be repaired from the canonical incident state. Do not
 
 Human resolution requires a meaningful note and any required custom fields. It records a terminal response event, completes escalation, and preserves timing history. Automated event resolution follows the ingestion contract and is not a substitute for human verification when an operator is closing the incident.
 
-Reopening returns a resolved incident to active response with a new escalation generation while retaining earlier response history. Web has no manual Reopen control in 2.0. Deduplicated inbound events may reopen a recently resolved matching incident, and an authorized API client may set status to `OPEN`; unrelated events should create a new record.
+Reopening returns a resolved incident to active response with a new escalation generation while retaining earlier response history. The Web incident page has no manual Reopen control in 2.0. If a new manual incident report is submitted for the same service with an explicit deduplication key within the 30-minute reopen window, OpsKnight reopens the resolved incident. Normal automated alert/monitoring ingestion does not reopen resolved incidents; it creates a new record. An authorized API client may also return a resolved incident to active response by setting its status to `OPEN`.
 
 ## Operating discipline
 

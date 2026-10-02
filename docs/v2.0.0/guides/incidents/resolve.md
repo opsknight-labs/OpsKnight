@@ -19,6 +19,7 @@ verification:
     - src/lib/incidents/operator-lifecycle.ts
     - tests/docs/journeys/incident-lifecycle.spec.ts
     - tests/api/incident-patch-lifecycle.test.ts
+    - tests/lib/incidents/rest-patch.test.ts
 ---
 
 # Resolve an incident
@@ -71,13 +72,13 @@ Do not repeatedly resolve because a provider card is stale. Verify canonical sta
 
 The 2.0 Web incident page has no manual **Reopen** action. Do not look for a button or describe a direct Web reopen procedure.
 
-When an inbound event with the same service and deduplication key arrives inside the 30-minute correlation window, OpsKnight can automatically reopen the recently resolved incident. An authorized API client can also set the incident status to `OPEN` with `PATCH /api/incidents/{id}`. Use a new incident when the event is unrelated, requires separate reporting, or must not share the original correlation identity.
+If a new manual incident report is created with the same service and explicit deduplication key within the 30-minute reopen window, OpsKnight reopens the recently resolved incident. Normal monitoring and integration alert trigger ingestion does not reopen a resolved incident; it creates a new incident. An authorized API client can also return a resolved incident to active response by setting its status to `OPEN` with `PATCH /api/incidents/{id}`.
 
 After a supported reopen, verify status is **Open**, a new escalation generation and next-escalation time are present, and the earlier resolution, timeline, and incident-lifetime SLA history remain intact. Add recurrence evidence through a supported timeline note/comment path.
 
 ## Undo or correct a resolution
 
-There is no Web undo button. If the same correlated condition has returned, use the supported ingestion or authorized API reopen paths above. If the resolution note is incomplete, preserve the original audit record and add corrective context to the timeline rather than rewriting history. Create a separate incident when the new event has a different operational identity.
+There is no Web undo button. If the same condition returned, use a manual creation report with the matching deduplication key within the 30-minute window or an authorized API status update to `OPEN`. If the resolution note is incomplete, preserve the original audit record and add corrective context to the timeline rather than rewriting history. Create a separate incident when the new event has a different operational identity.
 
 ## Troubleshooting
 
@@ -95,11 +96,11 @@ Confirm the incident is resolved and its escalation generation completed. Then i
 
 ### There is no Reopen button
 
-This is expected in 2.0. Use correlation-driven ingestion, an explicitly authorized public API client, or create a separate incident according to the event identity. Do not change state by editing a provider message.
+This is expected in 2.0. If manual recurrence reporting is needed, create a new manual incident specifying the original service and deduplication key within the 30-minute window, or use an authorized public API status update (`PATCH /api/incidents/{id}` with status `OPEN`). Do not change state by editing a provider message.
 
 ### The incident reopened automatically
 
-Compare the service, deduplication key, resolution time, and inbound event. The same identity inside the reopen window is expected to reuse recent context. Fix an overly broad upstream key rather than repeatedly closing the incident.
+Compare the service, deduplication key, resolution time, and recent manual creation report. A manual report for the same service and key within the 30-minute reopen window reopens recent context by design. Normal automated alert ingestion creates a new incident instead. Fix an overly broad key rather than repeatedly closing the incident.
 
 ## Next steps
 

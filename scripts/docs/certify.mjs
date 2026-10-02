@@ -114,7 +114,7 @@ const report = {
   documentationRevision,
   productSourceRevision: runtimeSourceRevision || documentationRevision,
   runtimeSourceRevision: runtimeSourceRevision || null,
-  runtimeImageDigest: runtimeInspection?.RepoDigests?.find(value => value.includes('@sha256:')) || null,
+  runtimeImageDigest: runtimeInspection?.RepoDigests?.find(value => value.includes('@sha256:')) || runtimeInspection?.Id || null,
   releaseState: documentationVersions.releasedVersions.includes('v2.0.0') ? 'released' : 'upcoming',
   apiProof: {
     smokeProbeScope: 'Every discovered PUBLIC_API route is requested and must not return a server error.',
@@ -198,7 +198,7 @@ const report = {
     ...(runtimeInspection ? {
       runtime: {
         requestedImage: runtimeImage,
-        digest: runtimeInspection.RepoDigests?.find(value => value.includes('@sha256:')),
+        digest: runtimeInspection.RepoDigests?.find(value => value.includes('@sha256:')) || runtimeInspection.Id,
         sourceRevision: runtimeInspection.Config?.Labels?.['org.opencontainers.image.revision'],
       },
     } : {}),

@@ -52,7 +52,7 @@ Use routine Slack/Teams destination cards for distributed awareness. Create a [w
 
 ## 5. Escalate from a supported Teams card when needed
 
-Escalate when the current response requires broader/faster attention and the next policy step is appropriate. In 2.0, manual escalation is available only from a capability-enabled Microsoft Teams Adaptive Card—not from the Web incident page or standard Slack actions. Outside Teams, assign or reassign the incident for immediate handoff. Inspect the current target/step before acting and do not repeatedly escalate after an ambiguous response.
+Escalate when the current response requires broader/faster attention and the next policy step is appropriate. In 2.0, manual escalation is available only from a capability-enabled Microsoft Teams Adaptive Card—the Web incident page has no manual **Escalate** control and standard Slack actions do not expose manual escalation. Outside Teams, assign or reassign the incident for immediate handoff. Inspect the current target/step before acting and do not repeatedly escalate after an ambiguous response.
 
 Follow [Escalate an incident](./escalate) and verify the timeline plus notification delivery.
 
@@ -64,7 +64,7 @@ During response, keep immediate operational steps in the timeline/coordination c
 
 Resolve only after service health/trigger condition is verified and the observation period has passed. Complete required custom fields, record impact/mitigation/resolution summary, assign remaining action items, and confirm active escalation should end.
 
-Follow [Resolve an incident](./resolve). If the condition later returns, use correlation-driven ingestion or an authorized public API update; the Web UI has no manual Reopen action.
+Follow [Resolve an incident](./resolve). If the condition later returns, report a new manual incident with the matching deduplication key within 30 minutes or use an authorized public API status update; the Web incident page has no direct manual Reopen action. Normal automated alert ingestion creates a new incident.
 
 ## Verify the completed response
 
