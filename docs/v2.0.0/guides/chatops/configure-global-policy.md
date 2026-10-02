@@ -32,6 +32,8 @@ Open **Settings → Integrations → ChatOps** as an administrator. Provider car
 7. For static/template bridge providers, enter a valid provider URL/template. Leave Teams/Jitsi empty when using their documented automatic behavior.
 8. Save changes and confirm the hero summary reflects triggers, prefix, bridge, and lifecycle.
 
+Interactive actions in Slack and Microsoft Teams destinations follow the central ChatOps action contract: actions are capability-gated, manual escalation is restricted to the OPEN/TRIGGERED phase, and Slack executes direct lifecycle mutations without web modal prompts.
+
 ## What OpsKnight does
 
 The global policy determines provider requests and defaults. Service-level overrides can narrow or replace behavior. A provider conflict or disconnected provider prevents successful provisioning rather than silently creating a different room. War-room operations remain auditable and tied to the incident.
