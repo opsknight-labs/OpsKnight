@@ -16645,16 +16645,27 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml",
+        "env.example",
         "src/middleware.ts"
       ],
       "contract": {
         "name": "APP_HOST_ALIASES",
         "sources": [
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/compose/docker-compose.yml",
+          "deploy/swarm/docker-stack.integrated.yml",
+          "deploy/swarm/docker-stack.yml",
+          "env.example",
           "src/middleware.ts"
         ],
         "required": false,
         "secret": false,
         "scopes": [
+          "deployment",
           "runtime"
         ],
         "defaults": [],
@@ -16666,7 +16677,7 @@
           "web or integrated runtime"
         ],
         "deploymentSupport": [
-          "runtime"
+          "manifest"
         ],
         "restartRequired": true,
         "deprecated": false,
@@ -16674,15 +16685,39 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
-        "guides": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
+        "guides": [
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
+          "operate/deploy/helm-operations.md",
+          "operate/deploy/kubernetes-operations.md",
+          "operate/deploy/kustomize-operations.md",
+          "operate/deploy/swarm-operations.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
         "reference": [
-          "reference/configuration/README.md"
+          "reference/configuration/README.md",
+          "reference/health.md"
         ],
         "troubleshooting": []
       },
       "documentationMapping": "capability-source",
-      "tests": [],
+      "tests": [
+        "tests/lib/deployment-config-unit.test.ts"
+      ],
       "runtimeEvidence": [],
       "introducedVersion": "unknown",
       "availability": "unknown",
@@ -16691,6 +16726,11 @@
           "id": "configuration:APP_HOST_ALIASES:classification",
           "text": "APP_HOST_ALIASES is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
+            "deploy/compose/docker-compose.split.yml",
+            "deploy/compose/docker-compose.yml",
+            "deploy/swarm/docker-stack.integrated.yml",
+            "deploy/swarm/docker-stack.yml",
+            "env.example",
             "src/middleware.ts"
           ],
           "verification": "source"
@@ -17832,14 +17872,12 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
-        "src/app/setup/actions.ts",
-        "src/app/setup/page.tsx"
+        "src/app/setup/actions.ts"
       ],
       "contract": {
         "name": "BOOTSTRAP_SECRET",
         "sources": [
-          "src/app/setup/actions.ts",
-          "src/app/setup/page.tsx"
+          "src/app/setup/actions.ts"
         ],
         "required": false,
         "secret": true,
@@ -17880,8 +17918,7 @@
           "id": "configuration:BOOTSTRAP_SECRET:classification",
           "text": "BOOTSTRAP_SECRET is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
-            "src/app/setup/actions.ts",
-            "src/app/setup/page.tsx"
+            "src/app/setup/actions.ts"
           ],
           "verification": "source"
         }
@@ -33911,19 +33948,32 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml",
+        "env.example",
         "src/middleware.ts"
       ],
       "contract": {
         "name": "REDIRECT_TO_CANONICAL_HOST",
         "sources": [
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/compose/docker-compose.yml",
+          "deploy/swarm/docker-stack.integrated.yml",
+          "deploy/swarm/docker-stack.yml",
+          "env.example",
           "src/middleware.ts"
         ],
         "required": false,
         "secret": false,
         "scopes": [
+          "deployment",
           "runtime"
         ],
-        "defaults": [],
+        "defaults": [
+          "true"
+        ],
         "allowedValues": [
           "false"
         ],
@@ -33934,7 +33984,7 @@
           "web or integrated runtime"
         ],
         "deploymentSupport": [
-          "runtime"
+          "manifest"
         ],
         "restartRequired": true,
         "deprecated": false,
@@ -33942,15 +33992,39 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
-        "guides": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
+        "guides": [
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
+          "operate/deploy/helm-operations.md",
+          "operate/deploy/kubernetes-operations.md",
+          "operate/deploy/kustomize-operations.md",
+          "operate/deploy/swarm-operations.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
         "reference": [
-          "reference/configuration/README.md"
+          "reference/configuration/README.md",
+          "reference/health.md"
         ],
         "troubleshooting": []
       },
       "documentationMapping": "capability-source",
-      "tests": [],
+      "tests": [
+        "tests/lib/deployment-config-unit.test.ts"
+      ],
       "runtimeEvidence": [],
       "introducedVersion": "unknown",
       "availability": "unknown",
@@ -33959,6 +34033,11 @@
           "id": "configuration:REDIRECT_TO_CANONICAL_HOST:classification",
           "text": "REDIRECT_TO_CANONICAL_HOST is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
+            "deploy/compose/docker-compose.split.yml",
+            "deploy/compose/docker-compose.yml",
+            "deploy/swarm/docker-stack.integrated.yml",
+            "deploy/swarm/docker-stack.yml",
+            "env.example",
             "src/middleware.ts"
           ],
           "verification": "source"
@@ -35243,18 +35322,31 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
-        "src/app/setup/actions.ts",
-        "src/app/setup/page.tsx"
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml",
+        "env.example",
+        "src/app/setup/actions.ts"
       ],
       "contract": {
         "name": "SETUP_SECRET",
         "sources": [
-          "src/app/setup/actions.ts",
-          "src/app/setup/page.tsx"
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/compose/docker-compose.yml",
+          "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+          "deploy/swarm/docker-stack.integrated.yml",
+          "deploy/swarm/docker-stack.yml",
+          "env.example",
+          "src/app/setup/actions.ts"
         ],
         "required": false,
         "secret": true,
         "scopes": [
+          "deployment",
           "runtime"
         ],
         "defaults": [],
@@ -35266,7 +35358,7 @@
           "web or integrated runtime"
         ],
         "deploymentSupport": [
-          "runtime"
+          "manifest"
         ],
         "restartRequired": true,
         "deprecated": false,
@@ -35274,15 +35366,39 @@
         "confidence": "incomplete"
       },
       "documentation": {
-        "concepts": [],
-        "guides": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
+        "guides": [
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
+          "operate/deploy/helm-operations.md",
+          "operate/deploy/kubernetes-operations.md",
+          "operate/deploy/kustomize-operations.md",
+          "operate/deploy/swarm-operations.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
         "reference": [
-          "reference/configuration/README.md"
+          "reference/configuration/README.md",
+          "reference/health.md"
         ],
         "troubleshooting": []
       },
       "documentationMapping": "capability-source",
-      "tests": [],
+      "tests": [
+        "tests/lib/deployment-config-unit.test.ts"
+      ],
       "runtimeEvidence": [],
       "introducedVersion": "unknown",
       "availability": "unknown",
@@ -35291,8 +35407,14 @@
           "id": "configuration:SETUP_SECRET:classification",
           "text": "SETUP_SECRET is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
-            "src/app/setup/actions.ts",
-            "src/app/setup/page.tsx"
+            "deploy/compose/docker-compose.split.yml",
+            "deploy/compose/docker-compose.yml",
+            "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+            "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+            "deploy/swarm/docker-stack.integrated.yml",
+            "deploy/swarm/docker-stack.yml",
+            "env.example",
+            "src/app/setup/actions.ts"
           ],
           "verification": "source"
         }
@@ -38504,21 +38626,34 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml",
+        "env.example",
         "src/lib/request-host.ts",
         "src/middleware.ts"
       ],
       "contract": {
         "name": "TRUST_PROXY_HEADERS",
         "sources": [
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/compose/docker-compose.yml",
+          "deploy/swarm/docker-stack.integrated.yml",
+          "deploy/swarm/docker-stack.yml",
+          "env.example",
           "src/lib/request-host.ts",
           "src/middleware.ts"
         ],
         "required": false,
         "secret": false,
         "scopes": [
+          "deployment",
           "runtime"
         ],
-        "defaults": [],
+        "defaults": [
+          "false"
+        ],
         "allowedValues": [
           "true"
         ],
@@ -38529,7 +38664,7 @@
           "web or integrated runtime"
         ],
         "deploymentSupport": [
-          "runtime"
+          "manifest"
         ],
         "restartRequired": true,
         "deprecated": false,
@@ -38537,15 +38672,39 @@
         "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
-        "guides": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
+        "guides": [
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
+          "operate/deploy/helm-operations.md",
+          "operate/deploy/kubernetes-operations.md",
+          "operate/deploy/kustomize-operations.md",
+          "operate/deploy/swarm-operations.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
         "reference": [
-          "reference/configuration/README.md"
+          "reference/configuration/README.md",
+          "reference/health.md"
         ],
         "troubleshooting": []
       },
       "documentationMapping": "capability-source",
-      "tests": [],
+      "tests": [
+        "tests/lib/deployment-config-unit.test.ts"
+      ],
       "runtimeEvidence": [],
       "introducedVersion": "unknown",
       "availability": "unknown",
@@ -38554,6 +38713,11 @@
           "id": "configuration:TRUST_PROXY_HEADERS:classification",
           "text": "TRUST_PROXY_HEADERS is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
+            "deploy/compose/docker-compose.split.yml",
+            "deploy/compose/docker-compose.yml",
+            "deploy/swarm/docker-stack.integrated.yml",
+            "deploy/swarm/docker-stack.yml",
+            "env.example",
             "src/lib/request-host.ts",
             "src/middleware.ts"
           ],
@@ -38582,12 +38746,20 @@
       "owner": "platform",
       "classification": "OPERATOR_FEATURE",
       "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml",
         "env.example",
         "src/lib/client-ip.ts"
       ],
       "contract": {
         "name": "TRUSTED_PROXY_HOPS",
         "sources": [
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/compose/docker-compose.yml",
+          "deploy/swarm/docker-stack.integrated.yml",
+          "deploy/swarm/docker-stack.yml",
           "env.example",
           "src/lib/client-ip.ts"
         ],
@@ -38597,7 +38769,9 @@
           "deployment",
           "runtime"
         ],
-        "defaults": [],
+        "defaults": [
+          "1"
+        ],
         "allowedValues": [],
         "semanticClassification": "PRODUCT_RUNTIME",
         "type": "string",
@@ -38611,18 +38785,42 @@
         "restartRequired": true,
         "deprecated": false,
         "replacement": null,
-        "confidence": "incomplete"
+        "confidence": "derived"
       },
       "documentation": {
-        "concepts": [],
-        "guides": [],
+        "concepts": [
+          "operate/deploy/README.md",
+          "operate/deploy/architecture/database-connections.md",
+          "operate/deploy/architecture/integrated-vs-split.md",
+          "operate/deploy/architecture/runtime-roles.md"
+        ],
+        "guides": [
+          "operate/deploy/docker-compose/external-postgres.md",
+          "operate/deploy/docker-compose/integrated.md",
+          "operate/deploy/docker-compose/pgbouncer.md",
+          "operate/deploy/docker-compose/prerequisites.md",
+          "operate/deploy/docker-compose/production-checklist.md",
+          "operate/deploy/docker-compose/reverse-proxy.md",
+          "operate/deploy/docker-compose/split.md",
+          "operate/deploy/docker-compose/troubleshooting.md",
+          "operate/deploy/docker-compose/upgrade.md",
+          "operate/deploy/helm-operations.md",
+          "operate/deploy/kubernetes-operations.md",
+          "operate/deploy/kustomize-operations.md",
+          "operate/deploy/swarm-operations.md",
+          "start/production-install.md",
+          "start/quickstart.md"
+        ],
         "reference": [
-          "reference/configuration/README.md"
+          "reference/configuration/README.md",
+          "reference/health.md"
         ],
         "troubleshooting": []
       },
       "documentationMapping": "capability-source",
-      "tests": [],
+      "tests": [
+        "tests/lib/deployment-config-unit.test.ts"
+      ],
       "runtimeEvidence": [],
       "introducedVersion": "unknown",
       "availability": "unknown",
@@ -38631,6 +38829,10 @@
           "id": "configuration:TRUSTED_PROXY_HOPS:classification",
           "text": "TRUSTED_PROXY_HOPS is classified as OPERATOR_FEATURE and owned by platform.",
           "evidence": [
+            "deploy/compose/docker-compose.split.yml",
+            "deploy/compose/docker-compose.yml",
+            "deploy/swarm/docker-stack.integrated.yml",
+            "deploy/swarm/docker-stack.yml",
             "env.example",
             "src/lib/client-ip.ts"
           ],

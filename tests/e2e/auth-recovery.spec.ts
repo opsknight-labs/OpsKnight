@@ -88,10 +88,20 @@ test.describe.serial('authentication browser contracts', () => {
     page,
   }) => {
     await resetBootstrapFixture();
+    const output = execFileSync('node', ['scripts/create-bootstrap-code.mjs'], {
+      env: { ...process.env, DATABASE_URL: databaseUrl },
+      encoding: 'utf8',
+    });
+    const bootstrapCode = output
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .find(line => /^[A-Za-z0-9_-]{32}$/.test(line));
+    expect(bootstrapCode).toBeTruthy();
 
     await page.goto('/setup');
     await page.getByLabel('Full name').fill('E2E Administrator');
     await page.getByLabel('Email address').fill('e2e-admin@example.com');
+    await page.getByLabel('Bootstrap code').fill(bootstrapCode!);
     await page.getByLabel('Administrator password').fill('Cobalt-orbit-library-492!');
     await page.getByLabel('Confirm password').fill('Cobalt-orbit-library-492!');
     await page.getByRole('button', { name: 'Create administrator' }).click();

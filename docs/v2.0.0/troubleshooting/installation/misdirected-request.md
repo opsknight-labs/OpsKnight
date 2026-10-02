@@ -22,7 +22,7 @@ HTTP 421 means the request reached OpsKnight, but its application host was not a
 
 Record the browser URL, proxy/ingress host rule, direct `Host`, and—when proxy trust is enabled—the final `X-Forwarded-Host` and `X-Forwarded-Proto`. Inspect sanitized proxy and application logs; never log cookies, authorization headers, or secrets.
 
-If `TRUST_PROXY_HEADERS=false`, OpsKnight ignores forwarded host/protocol for authoritative routing. If it is `true`, the trusted proxy must overwrite those headers with the public values.
+If `TRUST_PROXY_HEADERS=false`, OpsKnight ignores forwarded host/protocol for authoritative routing. If it is `true`, the trusted edge must overwrite `X-Forwarded-Host` and `X-Forwarded-Proto` with one authoritative public value; do not preserve client-supplied chains. Internally, host selection uses the right-most forwarded host while protocol selection uses the first forwarded protocol.
 
 ## 2. Compare every configured origin
 
@@ -65,4 +65,3 @@ The intended public HTTPS host serves readiness, login, and the application; red
 - [Application URL and host routing](../../operate/deploy/application-url-and-host-routing)
 - [Reverse-proxy contract](../../operate/deploy/reverse-proxy-contract)
 - [Initial setup](../../start/initial-setup)
-

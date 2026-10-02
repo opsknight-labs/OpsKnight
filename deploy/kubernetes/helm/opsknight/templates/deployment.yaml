@@ -72,6 +72,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" . }}
                   key: {{ .Values.secrets.keys.encryptionKey }}
+            - name: SETUP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.setupSecret }}
+                  optional: true
             {{- if .Values.metrics.scrapeTokenSecret.existingSecret }}
             - name: PROMETHEUS_SCRAPE_TOKEN
               valueFrom:

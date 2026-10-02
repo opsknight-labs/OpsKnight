@@ -11,6 +11,17 @@ const releaseCertification = process.argv.includes('--release');
 const externalRuntime = process.argv.includes('--external-runtime');
 const composeArgs = ['compose', '--project-name', 'opsknight-docs-v2-capture', '-f', 'tests/docs/environment/compose.yaml'];
 
+if (releaseCertification) {
+  const relevantStatus = execFileSync(
+    'git',
+    ['status', '--porcelain', '--', 'docs', 'deploy', 'src', 'scripts/docs', 'tests/docs', 'generated'],
+    { cwd: root, encoding: 'utf8' }
+  ).trim();
+  if (relevantStatus) {
+    throw new Error('Release certification requires a clean documentation, product, deployment, test, and generated-artifact tree.');
+  }
+}
+
 run('node', ['scripts/docs/discover-capabilities.mjs', '--output', 'generated/docs-discovery/current.json']);
 run('node', ['scripts/docs/generate-reference.mjs']);
 run('node', ['scripts/docs/generate-integrations.mjs']);

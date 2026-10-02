@@ -27,7 +27,7 @@ You need:
 - an empty OpsKnight database with migrations complete;
 - public DNS, TLS, proxy or ingress, and readiness working;
 - `NEXTAUTH_URL` and normally `NEXT_PUBLIC_APP_URL` set to the same public origin;
-- the value of `SETUP_SECRET`, or the legacy `BOOTSTRAP_SECRET`, when the operator configured either one;
+- a 30-minute one-time bootstrap code generated after migration with `node scripts/create-bootstrap-code.mjs`; a configured `SETUP_SECRET` or legacy `BOOTSTRAP_SECRET` remains a compatibility alternative;
 - a unique password of 15–64 Unicode characters and no more than 72 UTF-8 bytes. Default, common, or account-identifying passwords are rejected.
 
 Only a database with no users can be initialized. Once any user exists, `/setup` redirects to `/login`. Concurrent attempts are serialized so they cannot create multiple first administrators.
@@ -44,7 +44,7 @@ Before initialization, OpsKnight deliberately permits `/setup` on the incoming h
 
 ## 2. Verify the detected Application URL
 
-OpsKnight initially derives the field from the authoritative incoming request. With `TRUST_PROXY_HEADERS=true`, that means the final `X-Forwarded-Host` and `X-Forwarded-Proto`; otherwise it uses the direct `Host` and request protocol. Environment values are fallbacks only when an origin cannot be derived.
+OpsKnight initially derives the field from the authoritative incoming request. With `TRUST_PROXY_HEADERS=true`, host selection uses the right-most `X-Forwarded-Host` and protocol selection uses the first `X-Forwarded-Proto`; the trusted edge should overwrite both with one authoritative public value. Otherwise OpsKnight uses the direct `Host` and request protocol. Environment values are fallbacks only when an origin cannot be derived.
 
 The value must be an absolute HTTP or HTTPS origin. Use HTTPS in production and omit paths and a trailing slash.
 
@@ -60,7 +60,13 @@ If the field is wrong, stop. Correct proxy forwarding and `TRUST_PROXY_HEADERS`,
 
 ## 3. Create the administrator
 
-Enter the administrator name and email, the verified Application URL, and a strong unique password. Enter the setup secret only when the field is shown. Select **Create administrator** once.
+Generate the capability from an administrative shell connected to the same database:
+
+```sh
+node scripts/create-bootstrap-code.mjs
+```
+
+Treat the printed value like a password. Only its SHA-256 digest is stored, it expires after 30 minutes, only one can be active, and successful administrator creation consumes it atomically. Enter the administrator name and email, the verified Application URL, the bootstrap code, and a strong unique password. Select **Create administrator** once. A configured environment setup secret is accepted for compatibility but is longer-lived and not preferred.
 
 OpsKnight creates one `ACTIVE` user with the `ADMIN` role, stores the Application URL in `SystemSettings.appUrl`, and records bootstrap audit events. The browser then moves to sign-in.
 
@@ -77,7 +83,7 @@ Also confirm an unrelated hostname returns `421`, while readiness and login succ
 ## If setup fails
 
 - **Setup unavailable:** inspect database connectivity, migration state, and the request ID shown on the page.
-- **Invalid setup secret:** compare the entered value with `SETUP_SECRET` or `BOOTSTRAP_SECRET`; do not log either value.
+- **Invalid or expired bootstrap code:** issue a code if none exists, or wait for the current live code to expire before issuing another. Do not log the code. For the compatibility path, compare the entered value with `SETUP_SECRET` or `BOOTSTRAP_SECRET`.
 - **Password rejected:** use a longer unique passphrase that is not a default or identity value and remains within the byte limit.
 - **Redirect to `/login`:** at least one user already exists. Use the normal administrator recovery process rather than trying to rerun bootstrap.
 - **421 after creation:** follow [Recover from Misdirected Request](../troubleshooting/installation/misdirected-request).
@@ -87,4 +93,3 @@ Also confirm an unrelated hostname returns `421`, while readiness and login succ
 - [Understand Application URL and host routing](../operate/deploy/application-url-and-host-routing)
 - [Create the first service](./create-first-service)
 - [Complete production acceptance](../operate/deploy/)
-

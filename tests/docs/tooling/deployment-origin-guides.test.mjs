@@ -57,3 +57,41 @@ test('proxy guides do not claim trusted proxy hops controls host routing', () =>
     assert.match(page, /client.IP|client address|client-IP|X-Forwarded-For/i);
   }
 });
+
+test('every maintained deployment package delivers the documented public-origin controls', () => {
+  const variables = [
+    'TRUST_PROXY_HEADERS',
+    'TRUSTED_PROXY_HOPS',
+    'APP_HOST_ALIASES',
+    'REDIRECT_TO_CANONICAL_HOST',
+    'SETUP_SECRET',
+  ];
+  const artifacts = {
+    composeIntegrated: read('deploy/compose/docker-compose.yml'),
+    composeSplit: read('deploy/compose/docker-compose.split.yml').split('  opsknight-web:')[1],
+    swarmIntegrated: read('deploy/swarm/docker-stack.integrated.yml'),
+    swarmSplit: read('deploy/swarm/docker-stack.yml').split('  opsknight-web:')[1],
+    helmValues: read('deploy/kubernetes/helm/opsknight/values.yaml'),
+    helmConfig: read('deploy/kubernetes/helm/opsknight/templates/configmap.yaml'),
+    helmSecret: read('deploy/kubernetes/helm/opsknight/templates/secret.yaml'),
+    helmIntegrated: read('deploy/kubernetes/helm/opsknight/templates/deployment.yaml'),
+    helmSplit: read('deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml'),
+    kustomizeConfig: read('deploy/kubernetes/kustomize/base/configmap.yaml'),
+    kustomizeSecret: read('deploy/kubernetes/kustomize/base/secret.yaml'),
+  };
+
+  for (const name of ['composeIntegrated', 'composeSplit', 'swarmIntegrated', 'swarmSplit']) {
+    for (const variable of variables) {
+      assert.match(artifacts[name], new RegExp(`\\b${variable}\\b`), `${name} must deliver ${variable}`);
+    }
+  }
+  for (const variable of variables.slice(0, 4)) {
+    assert.match(artifacts.helmConfig, new RegExp(variable));
+    assert.match(artifacts.kustomizeConfig, new RegExp(variable));
+  }
+  assert.match(artifacts.helmValues, /setupSecret: SETUP_SECRET/);
+  assert.match(artifacts.helmSecret, /setupSecret/);
+  assert.match(artifacts.helmIntegrated, /name: SETUP_SECRET/);
+  assert.match(artifacts.helmSplit, /name: SETUP_SECRET/);
+  assert.match(artifacts.kustomizeSecret, /SETUP_SECRET/);
+});

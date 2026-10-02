@@ -51,13 +51,13 @@ This means a saved `https://new.example.com` with stale `NEXTAUTH_URL=https://ol
 
 ## Add exact temporary or alternate hosts
 
-Set comma-separated exact hosts with `APP_HOST_ALIASES`, including a port when applicable:
+Set comma-separated exact hostnames with `APP_HOST_ALIASES`:
 
 ```dotenv
-APP_HOST_ALIASES=old.example.com,admin.example.net:8443
+APP_HOST_ALIASES=old.example.com,admin.example.net
 ```
 
-Aliases expand accepted hosts; they do not change the canonical URL used in generated links or authentication. OpsKnight gives the canonical apex and its `www` counterpart special handling, but arbitrary subdomains do not inherit trust. For example, trusting `app.example.com` does not automatically trust `www.app.example.com`.
+Aliases expand accepted hostnames; ports are normalized away and are not an alias security boundary. The public Application URL still retains a real non-standard public port. Aliases do not change the canonical URL used in generated links or authentication. OpsKnight gives the canonical apex and its `www` counterpart special handling, but arbitrary subdomains do not inherit trust. For example, trusting `app.example.com` does not automatically trust `www.app.example.com`.
 
 `REDIRECT_TO_CANONICAL_HOST=false` disables canonical-host redirects where supported. It does not authorize unrelated hosts and does not turn aliases into canonical origins.
 
@@ -88,10 +88,10 @@ For `old.example.com` → `new.example.com`:
 
 ```sh
 curl --fail --show-error 'https://opsknight.example.com/api/health?mode=readiness'
-curl --include --header 'Host: unrelated.example.net' 'https://<load-balancer-address>/'
+curl --include --header 'Host: unrelated.example.net' 'http://127.0.0.1:3000/login'
 ```
 
-The first request must succeed. The second must return 421 when it reaches OpsKnight without a status-page domain match. Also verify login stays on the public hostname, an actual notification link uses it, OIDC reports the expected callback, a signed webhook succeeds, and incident updates stream without refresh.
+The first request must succeed. The second is the Compose/upstream check and must return 421. For Kubernetes, port-forward the application Service to a local port or run a controlled in-cluster request with the invalid `Host`; expect 421 from OpsKnight. Separately verify that the external ingress/load balancer does not route arbitrary hostnames—its own 404 is valid but does not prove the application firewall. Also verify login stays on the public hostname, an actual notification link uses it, OIDC reports the expected callback, a signed webhook succeeds, and incident updates stream without refresh.
 
 ## Verify the result
 

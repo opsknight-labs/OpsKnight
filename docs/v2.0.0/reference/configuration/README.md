@@ -212,6 +212,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: not displayed
 - Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `src/lib/api-keys.ts`
 
+## `APP_HOST_ALIASES`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: none discovered
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `src/middleware.ts`
+
 ## `APP_PORT`
 
 - Type: string
@@ -1192,6 +1206,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: `opsknight`
 - Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml`, `deploy/kubernetes/kustomize/base/postgres-statefulset.yaml`, `deploy/swarm/docker-stack.db.yml`, `env.example`
 
+## `REDIRECT_TO_CANONICAL_HOST`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `false`
+- Secret: no
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: `true`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `src/middleware.ts`
+
 ## `RUNTIME_DATABASE_URL`
 
 - Type: string
@@ -1205,6 +1233,20 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: not displayed
 - Sources: `deploy/kubernetes/helm/opsknight/templates/migration-job.yaml`
+
+## `SETUP_SECRET`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `src/app/setup/actions.ts`
 
 ## `SWARM_NETWORK_NAME`
 
@@ -1342,9 +1384,9 @@ Sets the polling interval while the general queue is idle.
 - Deployment support: manifest
 - Apply behavior: restart required
 - Deprecated: no
-- Extraction confidence: incomplete
-- Static default: none discovered
-- Sources: `env.example`, `src/lib/client-ip.ts`
+- Extraction confidence: derived
+- Static default: `1`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `src/lib/client-ip.ts`
 
 ## `WEB_DATABASE_URL`
 

@@ -33,20 +33,6 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `scripts/sync-docs-to-website.sh`
 
-## `APP_HOST_ALIASES`
-
-- Type: string
-- Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
-- Secret: no
-- Runtime roles: web or integrated runtime
-- Deployment support: runtime
-- Apply behavior: restart required
-- Deprecated: no
-- Extraction confidence: incomplete
-- Static default: none discovered
-- Sources: `src/middleware.ts`
-
 ## `APP_VERSION`
 
 - Type: string
@@ -157,7 +143,7 @@ template. They are inventory, not a normal production configuration contract.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `src/app/setup/actions.ts`, `src/app/setup/page.tsx`
+- Sources: `src/app/setup/actions.ts`
 
 ## `BUILD_DIR`
 
@@ -1895,20 +1881,6 @@ template. They are inventory, not a normal production configuration contract.
 - Static default: none discovered
 - Sources: `src/components/status-page/v3/IncidentsV3.tsx`
 
-## `REDIRECT_TO_CANONICAL_HOST`
-
-- Type: enum/string
-- Required: conditional or optional; inspect cited source
-- Allowed values: `false`
-- Secret: no
-- Runtime roles: web or integrated runtime
-- Deployment support: runtime
-- Apply behavior: restart required
-- Deprecated: no
-- Extraction confidence: derived
-- Static default: none discovered
-- Sources: `src/middleware.ts`
-
 ## `RENDER_GIT_COMMIT`
 
 - Type: string
@@ -2146,20 +2118,6 @@ template. They are inventory, not a normal production configuration contract.
 - Extraction confidence: incomplete
 - Static default: not displayed
 - Sources: `src/lib/auth.ts`
-
-## `SETUP_SECRET`
-
-- Type: string
-- Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
-- Secret: yes
-- Runtime roles: web or integrated runtime
-- Deployment support: runtime
-- Apply behavior: restart required
-- Deprecated: no
-- Extraction confidence: incomplete
-- Static default: not displayed
-- Sources: `src/app/setup/actions.ts`, `src/app/setup/page.tsx`
 
 ## `SINGLE_COMPOSE_URL`
 

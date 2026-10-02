@@ -77,6 +77,9 @@ data:
   NEXTAUTH_URL: https://opsknight.example.com
   NEXT_PUBLIC_APP_URL: https://opsknight.example.com
   TRUST_PROXY_HEADERS: "true"
+  TRUSTED_PROXY_HOPS: "1"
+  APP_HOST_ALIASES: ""
+  REDIRECT_TO_CANONICAL_HOST: "true"
 ```
 
 Patch ingress to match your cluster:
