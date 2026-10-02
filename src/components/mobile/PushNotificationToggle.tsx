@@ -115,9 +115,15 @@ function serviceWorkerPath(worker: ServiceWorker | null | undefined): string | n
 
 function hasOpsKnightServiceWorker(registration: ServiceWorkerRegistration | undefined | null) {
   if (!registration) return false;
-  return [registration.active, registration.waiting, registration.installing].some(
-    worker => serviceWorkerPath(worker) === '/sw.js'
-  );
+  const isMatchingScope =
+    typeof registration.scope === 'string' &&
+    new URL(registration.scope, window.location.origin).pathname === '/';
+  const hasMatchingWorker = [
+    registration.active,
+    registration.waiting,
+    registration.installing,
+  ].some(worker => serviceWorkerPath(worker) === '/sw.js');
+  return isMatchingScope || hasMatchingWorker;
 }
 
 function serviceWorkerAssetError(action: string, diagnostics: Record<string, unknown>): never {
@@ -258,9 +264,21 @@ async function waitForRegistrationActive(
       }
     }, timeoutMs);
 
+    const triggerSkipWaiting = (worker: ServiceWorker | null | undefined) => {
+      try {
+        if (worker && typeof worker.postMessage === 'function') {
+          worker.postMessage({ type: 'SKIP_WAITING' });
+        }
+      } catch {
+        // Ignore failures to postMessage to worker
+      }
+    };
+
     const onStateChange = () => {
       if (registration.active || trackedWorker?.state === 'activated') {
         done();
+      } else if (trackedWorker?.state === 'installed' && !registration.active) {
+        triggerSkipWaiting(trackedWorker);
       } else if (trackedWorker?.state === 'redundant') {
         fail(new Error('The service worker installation failed and became redundant.'));
       }
@@ -297,9 +315,15 @@ async function waitForRegistrationActive(
       registration.addEventListener('updatefound', onUpdateFound);
     }
 
+    if (registration.waiting) {
+      triggerSkipWaiting(registration.waiting);
+    }
+
     pollInterval = setInterval(() => {
       if (registration.active) {
         done();
+      } else if (registration.waiting) {
+        triggerSkipWaiting(registration.waiting);
       }
     }, 50);
   });
