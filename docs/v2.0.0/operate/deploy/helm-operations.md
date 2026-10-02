@@ -66,13 +66,14 @@ kubectl -n opsknight create secret generic opsknight-runtime \
   --from-literal=DIRECT_DATABASE_URL="$DIRECT_DATABASE_URL" \
   --from-literal=WEB_DATABASE_URL="$WEB_DATABASE_URL" \
   --from-literal=NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
+  --from-literal=API_KEY_SECRET="$API_KEY_SECRET" \
   --from-literal=ENCRYPTION_KEY="$ENCRYPTION_KEY" \
   --from-literal=POSTGRES_USER="$POSTGRES_USER" \
   --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-For integrated mode, `WEB_DATABASE_URL` may equal `DATABASE_URL`. Generate `NEXTAUTH_SECRET` with `openssl rand -base64 32` and `ENCRYPTION_KEY` with `openssl rand -hex 32`. Preserve both across upgrades and restores. The chart-generated Secret stores values in the Helm release and ships placeholder defaults, so do not use it for production.
+For integrated mode, `WEB_DATABASE_URL` may equal `DATABASE_URL`. Generate `NEXTAUTH_SECRET` and the independent `API_KEY_SECRET` with separate `openssl rand -base64 32` invocations and `ENCRYPTION_KEY` with `openssl rand -hex 32`. Preserve all three across upgrades and restores. During encryption-key rotation, add the optional `ENCRYPTION_KEYS` key to the same Secret using the documented `id:64-hex-key` keyring format. The chart-generated Secret stores values in the Helm release and ships placeholder defaults, so do not use it for production.
 
 ## Minimal production values: integrated mode
 
