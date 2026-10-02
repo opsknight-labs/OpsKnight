@@ -19,8 +19,21 @@ function isValidHexKey(value: string): boolean {
   return /^[0-9a-f]{64}$/i.test(value);
 }
 
-function isWeakKey(value: string): boolean {
-  return /^0{64}$/i.test(value) || /^([0-9a-f])\1{63}$/i.test(value);
+const KNOWN_WEAK_ENCRYPTION_KEYS = new Set([
+  '0000000000000000000000000000000000000000000000000000000000000000',
+  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+]);
+
+export function isWeakKey(value: string): boolean {
+  if (process.env.ALLOW_INSECURE_SECRETS === 'true' || process.env.ALLOW_INSECURE_SECRETS === '1') {
+    return false;
+  }
+  const normalized = value.toLowerCase();
+  if (KNOWN_WEAK_ENCRYPTION_KEYS.has(normalized)) {
+    return true;
+  }
+  return /^0{64}$/.test(normalized) || /^([0-9a-f])\1{63}$/.test(normalized);
 }
 
 type EncryptionKeyEntry = { id: string; key: string };
@@ -53,16 +66,23 @@ function getEncryptionKeyring(): EncryptionKeyEntry[] {
 
   const legacyKey = process.env.ENCRYPTION_KEY?.trim();
   if (legacyKey) {
-    if (
-      !isValidHexKey(legacyKey) ||
-      (process.env.NODE_ENV === 'production' && isWeakKey(legacyKey))
-    ) {
-      logger.error(
-        '[Encryption] ENCRYPTION_KEY is invalid or uses a known weak value. Encryption disabled.'
-      );
+    if (!isValidHexKey(legacyKey)) {
+      logger.error('[Encryption] ENCRYPTION_KEY is not a valid 64-character hex key.');
       return [];
     }
-    if (!entries.some(entry => entry.key === legacyKey)) {
+
+    const weakLegacyKey = process.env.NODE_ENV === 'production' && isWeakKey(legacyKey);
+    if (weakLegacyKey) {
+      if (entries.length === 0) {
+        logger.error(
+          '[Encryption] ENCRYPTION_KEY is a known weak value and no valid ENCRYPTION_KEYS keyring is available.'
+        );
+        return [];
+      }
+      logger.warn(
+        '[Encryption] Ignoring weak legacy ENCRYPTION_KEY because a valid ENCRYPTION_KEYS keyring is configured.'
+      );
+    } else if (!entries.some(entry => entry.key === legacyKey)) {
       const legacyId = entries.some(entry => entry.id === 'k1') ? 'legacy' : 'k1';
       entries.push({ id: legacyId, key: legacyKey });
     }

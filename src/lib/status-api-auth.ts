@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { hashLegacyScryptToken, hashTokenV2 } from '@/lib/api-keys';
+import { hashLegacyScryptTokenCandidates, hashTokenV2 } from '@/lib/api-keys';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
 
@@ -71,25 +71,25 @@ export async function authorizeStatusApiRequest(
       select: { id: true },
     });
 
-    // Lazy migration: Try V1 hash if V2 not found
+    // Lazy migration: preserve 1.x tokens that were salted with NEXTAUTH_SECRET.
     if (!tokenRecord) {
-      const v1Hash = await hashLegacyScryptToken(token);
-      tokenRecord = await prisma.statusPageApiToken.findFirst({
-        where: {
-          statusPageId,
-          tokenHash: v1Hash,
-          revokedAt: null,
-        },
-        select: { id: true },
-      });
+      for (const legacyHash of await hashLegacyScryptTokenCandidates(token)) {
+        tokenRecord = await prisma.statusPageApiToken.findFirst({
+          where: {
+            statusPageId,
+            tokenHash: legacyHash,
+            revokedAt: null,
+          },
+          select: { id: true },
+        });
+        if (tokenRecord) break;
+      }
 
       if (tokenRecord) {
-        // Migrate to secure V2 hash
         await prisma.statusPageApiToken.update({
           where: { id: tokenRecord.id },
-          data: { tokenHash: hashTokenV2(token) }, // Update to V2 hash
+          data: { tokenHash },
         });
-        tokenHash = hashTokenV2(token);
       }
     }
   }

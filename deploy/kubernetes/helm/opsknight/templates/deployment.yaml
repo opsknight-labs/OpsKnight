@@ -67,11 +67,24 @@ spec:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" . }}
                   key: {{ .Values.secrets.keys.nextauthSecret }}
+            - name: API_KEY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.apiKeySecret }}
             - name: ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" . }}
                   key: {{ .Values.secrets.keys.encryptionKey }}
+            {{- if or .Values.secrets.encryptionKeys .Values.secrets.existingSecret }}
+            - name: ENCRYPTION_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.encryptionKeys }}
+                  optional: true
+            {{- end }}
             - name: SETUP_SECRET
               valueFrom:
                 secretKeyRef:

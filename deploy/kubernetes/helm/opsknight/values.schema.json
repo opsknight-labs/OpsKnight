@@ -23,7 +23,8 @@
         "port": { "type": ["string", "integer"] },
         "hostname": { "type": "string" },
         "nextTelemetryDisabled": { "type": ["string", "boolean"] },
-        "notificationControlPlanePersonal": { "type": ["string", "boolean"] }
+        "notificationControlPlanePersonal": { "type": ["string", "boolean"] },
+        "allowInsecureSecrets": { "type": ["string", "boolean"] }
       }
     },
     "web": { "$ref": "#/definitions/webRole" },

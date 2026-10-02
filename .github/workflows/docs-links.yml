@@ -40,7 +40,7 @@ on:
       - '.github/workflows/docs-links.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   check:
@@ -66,6 +66,46 @@ jobs:
           npm run docs:v15-parity
           npm run docs:claims
           npm run docs:surface-parity
+      - name: Preserve regenerated documentation outputs
+        uses: actions/upload-artifact@v6
+        with:
+          name: docs-regenerated-${{ github.sha }}
+          path: |
+            generated/docs-discovery/current.json
+            generated/docs-contracts/current.json
+            generated/docs-reference/
+            generated/docs-certification/surface-parity-report.md
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish regenerated outputs for the 2.0 pre-tag branch
+        if: github.event_name == 'pull_request' && github.head_ref == 'feat/2.0.0-pretag-hardening'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp generated/docs-reference/reference/api/README.md docs/v2.0.0/reference/api/README.md
+          cp generated/docs-reference/reference/configuration/README.md docs/v2.0.0/reference/configuration/README.md
+          cp generated/docs-reference/reference/configuration/internal.md docs/v2.0.0/reference/configuration/internal.md
+          cp generated/docs-reference/reference/features.md docs/v2.0.0/reference/features.md
+          cp generated/docs-reference/reference/limits.md docs/v2.0.0/reference/limits.md
+          cp generated/docs-reference/reference/permissions.md docs/v2.0.0/reference/permissions.md
+          git add generated/docs-discovery/current.json \
+            generated/docs-contracts/current.json \
+            generated/docs-reference \
+            generated/docs-certification/surface-parity-report.md \
+            docs/v2.0.0/reference/api/README.md \
+            docs/v2.0.0/reference/configuration/README.md \
+            docs/v2.0.0/reference/configuration/internal.md \
+            docs/v2.0.0/reference/features.md \
+            docs/v2.0.0/reference/limits.md \
+            docs/v2.0.0/reference/permissions.md
+          if git diff --cached --quiet; then
+            echo 'Generated documentation is already current.'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'docs: publish regenerated 2.0 release references'
+            git push origin "HEAD:${GITHUB_HEAD_REF}"
+          fi
       - name: Reject generated and published-reference drift
         env:
           # Commit-bound provenance changes after both an ordinary artifact

@@ -57,6 +57,34 @@ describe('deployment configuration invariants', () => {
     );
   });
 
+  it('keeps production secret and encryption-keyring contracts aligned across packages', () => {
+    const compose = read('deploy/compose/docker-compose.yml');
+    const composeSplit = read('deploy/compose/docker-compose.split.yml');
+    const helmValues = read('deploy/kubernetes/helm/opsknight/values.yaml');
+    const helmDeployment = read('deploy/kubernetes/helm/opsknight/templates/deployment.yaml');
+    const helmSplit = read('deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml');
+    const kustomizeSecret = read('deploy/kubernetes/kustomize/base/secret.yaml');
+    const swarmIntegrated = read('deploy/swarm/docker-stack.integrated.yml');
+    const swarmSplit = read('deploy/swarm/docker-stack.yml');
+
+    for (const artifact of [compose, composeSplit, helmValues, kustomizeSecret]) {
+      expect(artifact).toContain('API_KEY_SECRET');
+      expect(artifact).toContain('ENCRYPTION_KEYS');
+    }
+    for (const artifact of [helmDeployment, helmSplit]) {
+      expect(artifact).toContain('name: API_KEY_SECRET');
+      expect(artifact).toContain('name: ENCRYPTION_KEYS');
+    }
+    for (const artifact of [swarmIntegrated, swarmSplit]) {
+      expect(artifact).toContain('API_KEY_SECRET_FILE: /run/secrets/opsknight_api_key_secret');
+      expect(artifact).toContain('ENCRYPTION_KEYS_FILE: /run/secrets/opsknight_encryption_keys');
+    }
+
+    const entrypoint = read('docker-entrypoint.sh');
+    expect(entrypoint).toContain('load_secret_file "API_KEY_SECRET_FILE" "API_KEY_SECRET"');
+    expect(entrypoint).toContain('load_secret_file "ENCRYPTION_KEYS_FILE" "ENCRYPTION_KEYS"');
+  });
+
   it('fails Helm rendering when ServiceMonitor authentication is missing', () => {
     const serviceMonitor = read('deploy/kubernetes/helm/opsknight/templates/servicemonitor.yaml');
     expect(serviceMonitor).toContain(

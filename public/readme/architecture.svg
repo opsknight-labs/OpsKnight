@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 720" role="img" aria-labelledby="title desc">
+  <title id="title">OpsKnight integrated and split runtime architecture</title>
+  <desc id="desc">Integrated mode runs web and background work together. Split mode separates web, scheduler, worker lanes, and status projection while sharing PostgreSQL.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#020617" flood-opacity=".35"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 10 5 0 10Z" fill="#64748b"/>
+    </marker>
+    <style>
+      .heading{font:700 28px Inter,ui-sans-serif,system-ui;fill:#f8fafc}.sub{font:500 16px Inter,ui-sans-serif,system-ui;fill:#94a3b8}.label{font:650 17px Inter,ui-sans-serif,system-ui;fill:#e2e8f0}.small{font:500 14px Inter,ui-sans-serif,system-ui;fill:#94a3b8}.box{fill:#172033;stroke:#334155;stroke-width:2}.accent{fill:#3b101c;stroke:#fb7185;stroke-width:2}.data{fill:#0f2b2a;stroke:#34d399;stroke-width:2}.provider{fill:#172554;stroke:#60a5fa;stroke-width:2}.line{fill:none;stroke:#64748b;stroke-width:2.5;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1600" height="720" rx="28" fill="url(#bg)"/>
+  <text x="70" y="76" class="heading">Integrated runtime</text>
+  <text x="70" y="106" class="sub">Simple installation · one shared application failure domain</text>
+  <g filter="url(#shadow)">
+    <rect x="70" y="158" width="220" height="84" rx="16" class="box"/>
+    <text x="180" y="193" text-anchor="middle" class="label">Users + alert sources</text>
+    <text x="180" y="220" text-anchor="middle" class="small">UI · API · webhooks</text>
+    <rect x="382" y="142" width="310" height="116" rx="18" class="accent"/>
+    <text x="537" y="187" text-anchor="middle" class="label">Integrated OpsKnight</text>
+    <text x="537" y="215" text-anchor="middle" class="small">Web · scheduler · all workers</text>
+    <rect x="784" y="158" width="210" height="84" rx="16" class="data"/>
+    <text x="889" y="208" text-anchor="middle" class="label">PostgreSQL</text>
+    <rect x="1082" y="136" width="420" height="128" rx="18" class="provider"/>
+    <text x="1292" y="183" text-anchor="middle" class="label">Delivery + collaboration</text>
+    <text x="1292" y="213" text-anchor="middle" class="small">Email · Push · SMS · voice · Slack · Teams</text>
+    <text x="1292" y="238" text-anchor="middle" class="small">Public status page</text>
+  </g>
+  <path d="M290 200H382" class="line"/><path d="M692 200H784" class="line"/><path d="M994 200H1082" class="line"/>
+
+  <line x1="70" y1="322" x2="1530" y2="322" stroke="#334155"/>
+  <text x="70" y="382" class="heading">Split runtime</text>
+  <text x="70" y="412" class="sub">Independent scaling and failure isolation · one immutable image, role-specific ownership</text>
+  <g filter="url(#shadow)">
+    <rect x="70" y="478" width="194" height="86" rx="16" class="box"/>
+    <text x="167" y="514" text-anchor="middle" class="label">Ingress</text>
+    <text x="167" y="541" text-anchor="middle" class="small">Users + integrations</text>
+    <rect x="334" y="478" width="186" height="86" rx="16" class="accent"/>
+    <text x="427" y="514" text-anchor="middle" class="label">Web</text>
+    <text x="427" y="541" text-anchor="middle" class="small">Only ingress role</text>
+    <rect x="588" y="478" width="186" height="86" rx="16" class="box"/>
+    <text x="681" y="514" text-anchor="middle" class="label">PgBouncer</text>
+    <text x="681" y="541" text-anchor="middle" class="small">Web only · optional</text>
+    <rect x="842" y="478" width="210" height="86" rx="16" class="data"/>
+    <text x="947" y="529" text-anchor="middle" class="label">PostgreSQL</text>
+    <rect x="1130" y="448" width="400" height="146" rx="18" class="provider"/>
+    <text x="1330" y="490" text-anchor="middle" class="label">Role-isolated processing</text>
+    <text x="1330" y="521" text-anchor="middle" class="small">Scheduler · General · Critical · Bulk</text>
+    <text x="1330" y="549" text-anchor="middle" class="small">Status Projector · migration owner</text>
+    <text x="1330" y="576" text-anchor="middle" class="small">Providers + public status projection</text>
+  </g>
+  <path d="M264 521H334" class="line"/><path d="M520 521H588" class="line"/><path d="M774 521H842" class="line"/><path d="M1052 521H1130" class="line"/>
+  <text x="70" y="664" class="small">Critical paging is isolated from bulk delivery pressure. Scheduler and worker roles connect directly to PostgreSQL.</text>
+</svg>

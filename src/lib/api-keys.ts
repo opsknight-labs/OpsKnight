@@ -41,10 +41,35 @@ export function hashTokenV2(token: string) {
 
 const scryptAsync = promisify(scrypt);
 
-/** Compute hashes written by releases that used synchronous scrypt. */
-export async function hashLegacyScryptToken(token: string): Promise<string> {
-  const derived = (await scryptAsync(token, getDefaultSecret(), 32)) as Buffer;
+function getLegacyScryptSecrets(): string[] {
+  const configured = [
+    process.env.API_KEY_SECRET?.trim(),
+    process.env.NEXTAUTH_SECRET?.trim(),
+  ].filter((value): value is string => Boolean(value));
+
+  if (configured.length === 0) configured.push(getNextAuthSecretSync());
+  return [...new Set(configured)];
+}
+
+async function hashLegacyScryptTokenWithSecret(token: string, secret: string): Promise<string> {
+  const derived = (await scryptAsync(token, secret, 32)) as Buffer;
   return derived.toString('hex');
+}
+
+/**
+ * Compute every legacy scrypt hash that can exist across a 1.x -> 2.0 upgrade.
+ * 1.x installations without API_KEY_SECRET used NEXTAUTH_SECRET as the salt.
+ */
+export async function hashLegacyScryptTokenCandidates(token: string): Promise<string[]> {
+  return Promise.all(
+    getLegacyScryptSecrets().map(secret => hashLegacyScryptTokenWithSecret(token, secret))
+  );
+}
+
+/** Compute the primary legacy scrypt hash for compatibility callers. */
+export async function hashLegacyScryptToken(token: string): Promise<string> {
+  const [hash] = await hashLegacyScryptTokenCandidates(token);
+  return hash;
 }
 
 export const hashToken = hashTokenV2;

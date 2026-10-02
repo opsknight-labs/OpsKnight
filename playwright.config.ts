@@ -60,7 +60,8 @@ export default defineConfig({
     env: {
       DATABASE_URL: databaseUrl,
       NEXTAUTH_SECRET: 'opsknight-e2e-nextauth-secret-change-me',
-      ENCRYPTION_KEY: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      API_KEY_SECRET: 'opsknight-e2e-api-key-secret-independent-32chars',
+      ENCRYPTION_KEY: '68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba',
       NEXTAUTH_COOKIE_SECURE: 'false',
       TRUST_PROXY_HEADERS: process.env.TRUST_PROXY_HEADERS || 'false',
       PORT: '3100',

@@ -70,6 +70,9 @@ Apply migrations using the same mechanism planned for production. Verify sign-in
 6. Confirm no unfinished migration exists in `_prisma_migrations`.
 7. Validate runtime/database connection capacity for rollout overlap.
 8. Confirm old images, old configuration, backup, keys, and restore commands are immediately available.
+9. For a 1.x to 2.0 upgrade, preserve the existing `NEXTAUTH_SECRET` and configure a separate `API_KEY_SECRET` before starting 2.0.
+
+For 1.x installations that previously omitted `API_KEY_SECRET`, existing API keys and status-page API tokens were scrypt-hashed with `NEXTAUTH_SECRET`. 2.0 checks both the new API-key secret and the retained authentication secret during legacy lookup, then lazily rewrites a matched record to the current HMAC hash. Keep `NEXTAUTH_SECRET` stable through this migration window; rotating it at the same time can strand credentials that have not yet been used or recreated.
 
 ## Apply schema changes once
 

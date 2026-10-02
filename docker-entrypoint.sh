@@ -24,7 +24,9 @@ load_secret_file "DATABASE_URL_FILE" "DATABASE_URL"
 load_secret_file "DIRECT_DATABASE_URL_FILE" "DIRECT_DATABASE_URL"
 load_secret_file "WEB_DATABASE_URL_FILE" "WEB_DATABASE_URL"
 load_secret_file "NEXTAUTH_SECRET_FILE" "NEXTAUTH_SECRET"
+load_secret_file "API_KEY_SECRET_FILE" "API_KEY_SECRET"
 load_secret_file "ENCRYPTION_KEY_FILE" "ENCRYPTION_KEY"
+load_secret_file "ENCRYPTION_KEYS_FILE" "ENCRYPTION_KEYS"
 load_secret_file "PROMETHEUS_SCRAPE_TOKEN_FILE" "PROMETHEUS_SCRAPE_TOKEN"
 
 # If PgBouncer is enabled and raw credentials are provided without an encoded WEB_DATABASE_URL,
