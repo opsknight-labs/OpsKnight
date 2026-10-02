@@ -40,7 +40,7 @@ spec:
             readOnlyRootFilesystem: true
             runAsNonRoot: true
             runAsUser: 1001
-          image: ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix
+          image: ghcr.io/opsknight-labs/opsknight:2.0.0
           imagePullPolicy: Always
           ports:
             - containerPort: 3000

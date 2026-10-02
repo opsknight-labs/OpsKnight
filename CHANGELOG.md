@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+No changes yet.
+
+## [2.0.0] - 2026-10-02
+
+OpsKnight 2.0 is a major release of the self-hosted incident-response platform. It introduces a scalable runtime architecture, a durable notification pipeline, expanded identity and ChatOps controls, production deployment options, and a fully rebuilt source-verified documentation set.
+
+### New headline capabilities
+
+- **Split production runtime:** Web, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector can scale independently. The integrated runtime remains supported.
+- **Notification delivery control plane:** Durable logical intents, provider attempts, traffic classes, admission/defer behavior, retry and terminal states, callback reconciliation, provider capacity controls, and an administrator Operations view. Delivery evidence distinguishes deferred, retrying, accepted, delivered, permanent-failure, and superseded work.
+- **Microsoft Teams ChatOps:** Entra application and Azure Bot integration, Teams app packaging and tenant installation, service-to-channel destinations, Adaptive Cards, interactive incident actions, identity linking, war rooms, participant synchronization, and meeting collaboration. A service can target up to three Teams destinations.
+- **Twilio voice paging:** `VOICE` is a triggered-incident paging channel with responder acknowledgement input, signed callbacks, and reconciliation of uncertain provider outcomes. Acknowledge and resolve lifecycle updates do not initiate additional voice calls.
+- **Incident response policy engine:** Versioned classification, incident SLA, and support-hours policies at workspace and service scope, with immutable published versions, preview, history, diff, restore, and API access.
+- **SCIM 2.0 provisioning:** Users, Groups, discovery endpoints, provisioning/deprovisioning, team membership, PATCH operations, and in-product bearer-token generation, rotation, and revocation.
+- **Auditor access and sessions:** A read-oriented `AUDITOR` role, centralized resource authorization, OIDC claim mapping, and a canonical signed-in-session registry with browser, OS, device, authentication type, activity, expiry, and revoke controls.
+- **Privacy and compliance operations:** Privacy/DSAR request processing, export and erasure evidence, retention holds, controlled encryption migrations, technical control evaluation, framework mappings, evidence ledgers, drift monitoring, and verifiable evidence-package exports. Framework mapping does not confer external certification.
+- **Docker Swarm:** Integrated and split stacks, Raft secrets, direct-database migration lifecycle, health checks, topology switching, and rollback tooling.
+- **Deployment planning and load certification:** Workload shapes and multi-topology load/correctness tests cover ingestion, incident lifecycle, escalation, notification fanout, realtime delivery, status fanout, and recovery.
+- **ManageEngine ingestion:** A new native inbound parser joins the existing integration catalog. The release certifies 28 current inbound contracts in total; it does not add 28 new integrations.
+
+### Major rebuilds of existing capabilities
+
+- **Incident response:** Centralized lifecycle commands, durable side effects, persistent idempotency, stale-worker fencing, a global create modal, templates, stronger validation, rebuilt incident detail, action items, and interactive 5-Whys postmortems.
+- **Schedules and escalation:** Redesigned schedule setup/detail, DST-safe rotations, overrides and handoff behavior, user/team/schedule escalation targets, priority/urgency/support-hours conditions, durable recovery, and stale-work protection.
+- **Slack and Jira:** More reliable Slack war rooms, identity and capability controls, up to three Slack destinations per service, provider-neutral collaboration, and stronger bidirectional Jira lifecycle reconciliation.
+- **Quiet Hours:** Personal timezone-aware suppression for low-urgency notifications; medium- and high-urgency operational paging bypasses Quiet Hours.
+- **Status Page V3:** One supported status page with themes, announcements, subscriber verification/unsubscribe, API tokens, webhooks, privacy controls, uptime history/export, rebuild-safe snapshots, and hardened routing. Multiple status pages are not a supported 2.0 capability.
+- **Dashboards and reports:** Templates, configurable widgets, persisted layout, private/team/organization visibility, filtered share links, PDF export, live refresh, and fullscreen NOC/TV presentation mode.
+- **Responder-grade mobile PWA:** Rebuilt mobile navigation and operational workflows, per-device push registration and reconciliation, repair flows, offline/cached-state boundaries, update handling, and hardened fresh-install iOS Web Push recovery. This is an installable PWA, not a native App Store application.
+- **OIDC and SSO policy:** Entra, Google, Okta, Auth0, and generic provider flows with PKCE/nonce, JIT provisioning, explicit account linking, claim-to-role mapping, provider lifecycle hardening, maximum lifetime, update interval, idle timeout, and reauthentication controls.
+- **Application bootstrap and routing:** Short-lived first-admin bootstrap capability, UI-managed Application URL, canonical-host enforcement, reverse-proxy awareness, and explicit HTTP 421 protection.
+- **Health and operations:** Expanded Health Center diagnostics, Prometheus metrics, system logs, backup/restore, worker/readiness visibility, and PgBouncer-aware connection ownership.
+
+### Explicit 2.0 boundaries
+
+- Service Objectives/SLO UI is deferred; its route redirects and it is not advertised as a released feature.
+- OpsKnight 2.0 supports one status page, not multiple status pages.
+- Postmortem analysis is user-driven; the release does not claim AI correlation or AI-generated postmortems.
+- OpsKnight remains self-hosted and does not introduce a hosted OpsKnight Cloud service.
+- Mobile delivery is an installable PWA, not native iOS or Android store applications.
+- Voice is triggered-incident paging, not a call on every later incident state change.
+- The 28 inbound integration contracts are the current total contract set, not 28 newly added integrations.
+- **Documentation:** The 2.0 task-oriented documentation is backed by implementation discovery, semantic contracts, runtime evidence, API smoke tests, legacy-knowledge mapping, and rendered-site validation.
+- **License:** OpsKnight 2.0.0 is the first stable release distributed under `AGPL-3.0-only`. OpsKnight 1.4.0 and earlier retain their historical licenses.
+
+### Upgrade from 1.4
+
+This is a major-version migration. Before upgrading:
+
+1. Back up PostgreSQL and prove that the backup restores.
+2. Preserve `ENCRYPTION_KEY` and `NEXTAUTH_SECRET`; do not generate replacements.
+3. Configure the externally reachable Application URL before testing redirects, webhooks, OIDC, ChatOps, or push.
+4. Run schema migrations through a direct PostgreSQL connection, not PgBouncer.
+5. Choose integrated or split topology and validate the database connection budget.
+6. Re-test inbound integrations and every configured delivery provider.
+7. Record the rollback boundary and complete rollback before accepting incompatible 2.0 writes.
+
+Read [Migrate from v1](docs/v2.0.0/start/migrate-from-v1.md), [database migrations](docs/v2.0.0/operate/upgrades/database-migrations.md), and [rollback](docs/v2.0.0/operate/upgrades/rollback.md) before the maintenance window.
+
 ### Added & Enhanced
 
 - **Webhook Ingestion Reliability & Auto-Recovery**:

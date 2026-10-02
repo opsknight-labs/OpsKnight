@@ -1,12 +1,12 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-02T09:48:13.892Z",
-  "sourceRevision": "abcfc7312d8a5f404a4f8c29724e8ecda794aa84",
-  "documentationRevision": "abcfc7312d8a5f404a4f8c29724e8ecda794aa84",
-  "productSourceRevision": "abcfc7312d8a5f404a4f8c29724e8ecda794aa84",
+  "generatedAt": "2026-10-02T10:34:17.399Z",
+  "sourceRevision": "84837f841249b97435e127bd3dd1b73af5f73f4f",
+  "documentationRevision": "84837f841249b97435e127bd3dd1b73af5f73f4f",
+  "productSourceRevision": "84837f841249b97435e127bd3dd1b73af5f73f4f",
   "runtimeSourceRevision": null,
   "runtimeImageDigest": null,
-  "releaseState": "upcoming",
+  "releaseState": "released",
   "apiProof": {
     "smokeProbeScope": "Every discovered PUBLIC_API route is requested and must not return a server error.",
     "deepContractGroups": [

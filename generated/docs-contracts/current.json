@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "abcfc7312d8a5f404a4f8c29724e8ecda794aa84",
+  "sourceRevision": "84837f841249b97435e127bd3dd1b73af5f73f4f",
   "contracts": [
     {
       "id": "api:/api/events",
@@ -27547,8 +27547,7 @@
           "operation"
         ],
         "defaults": [
-          "ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix",
-          "ghcr.io/opsknight-labs/opsknight:latest",
+          "ghcr.io/opsknight-labs/opsknight:2.0.0",
           "opsknight-local:test"
         ],
         "allowedValues": [],

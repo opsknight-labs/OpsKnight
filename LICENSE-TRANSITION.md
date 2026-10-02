@@ -1,14 +1,14 @@
 # OpsKnight License Transition
 
-OpsKnight's current development line is intended to be distributed under the **GNU Affero General Public License version 3 only (`AGPL-3.0-only`)** beginning with the first release that explicitly ships this license. The complete AGPL terms are in [`LICENSE`](LICENSE).
+**OpsKnight 2.0.0 is the first stable release distributed under the GNU Affero General Public License version 3 only (`AGPL-3.0-only`).** The complete AGPL terms are in [`LICENSE`](LICENSE).
 
 ## Release boundary
 
-This change is **not retroactive**. OpsKnight `v1.x` releases and any other release, tag, commit, container image, chart, or source archive that was distributed under Apache License 2.0 keep the rights and conditions that accompanied that artifact.
+This change is **not retroactive**. OpsKnight 1.4.0 and earlier releases—and any tag, commit, container image, chart, or source archive distributed under Apache License 2.0—retain the rights and conditions that accompanied that artifact.
 
 In particular, a released `v1.4.0` or `v1.4.0-hotfix` artifact does not become AGPL merely because the `main` development branch later adopts AGPL.
 
-The first AGPL release should use a new version boundary and its release notes, source archive, container metadata, package metadata, documentation, and website must all identify `AGPL-3.0-only` consistently.
+The 2.0.0 release boundary, source archive, container metadata, package metadata, documentation, and release notes identify `AGPL-3.0-only` consistently. Historical 1.x artifacts remain historical Apache-2.0 distributions.
 
 ## Material received under Apache-2.0
 
@@ -48,8 +48,8 @@ New contributions are accepted under the contribution terms in [`CONTRIBUTING.md
 
 If the project expects to **dual-license the same community code** in the future (for example, AGPL Community plus a proprietary commercial license), it should adopt an explicit contributor agreement or other rights model before relying on that ability for third-party contributions. A CLA is a separate governance decision and should not be implied by this transition.
 
-## Pre-merge rights review
+## Release rights review
 
-Before this transition is merged and released, the maintainers should review contribution provenance and confirm that the project has the rights needed for the intended distribution while continuing to satisfy the conditions of licenses under which existing material was received. Contributor consent may or may not be necessary depending on the provenance and applicable grants; this document does not make that legal determination.
+The maintainers must preserve the contribution-provenance review for the 2.0.0 release and confirm that the project has the rights needed for the intended distribution while continuing to satisfy the conditions of licenses under which existing material was received. Contributor consent may or may not be necessary depending on the provenance and applicable grants; this document does not make that legal determination.
 
 This document is explanatory only and is not legal advice. If it conflicts with an applicable license, the applicable license controls.

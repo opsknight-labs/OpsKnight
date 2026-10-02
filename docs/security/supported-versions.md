@@ -1,9 +1,9 @@
 # Supported versions and end of life
 
-The existing project policy provides security updates for the **latest major version**. The checked-in package currently identifies the 1.x major line. Operators should install the latest stable patch in that supported major; versioned documentation and development branches are not support commitments.
+The project provides security updates for the **latest major version**. OpsKnight 2.0 is the current supported major. Operators should install the latest stable 2.x patch; versioned documentation and development branches are not support commitments.
 
-- Current major (1.x): security maintenance targets the latest stable release in this line.
-- Earlier major/pre-1.0 releases: unsupported under the existing policy; upgrade to the supported line.
+- Current major (2.x): security maintenance targets the latest stable release in this line.
+- OpsKnight 1.x and earlier releases: historical and unsupported unless a specific advisory or separate written agreement explicitly says otherwise; upgrade to 2.x.
 - Older minors or patches in the supported major: upgrade is the normal remediation. No separate per-minor backport promise is established.
 - Prereleases and source snapshots: development artifacts, without a stable-release support commitment.
 

@@ -30,20 +30,17 @@ AUTO_LABEL_DATABASE_NODE="${AUTO_LABEL_DATABASE_NODE:-false}"
 CONVERGENCE_TIMEOUT_SEC="${CONVERGENCE_TIMEOUT_SEC:-180}"
 DB_READY_TIMEOUT_SEC="${DB_READY_TIMEOUT_SEC:-60}"
 
-# Fail-closed image validation: prevent split mode from running the incompatible latest release tag (v1.4.0)
+# Split deployments make the chosen runtime explicit; integrated deployments
+# default to the stable 2.0 tag. Production should pin the verified digest.
 if [ "${SWARM_RUNTIME_MODE}" = "split" ]; then
-  if [ -z "${OPSKNIGHT_IMAGE:-}" ] || [ "${OPSKNIGHT_IMAGE}" = "ghcr.io/opsknight-labs/opsknight:latest" ] || [ "${OPSKNIGHT_IMAGE}" = "opsknight:latest" ]; then
-    echo "❌ [FATAL] SWARM_RUNTIME_MODE=split requires an explicit OPSKNIGHT_IMAGE tag or immutable digest built with split-runtime support." >&2
-    echo "   The default 'latest' image tag points to the v1.4.0 release which predates split-runtime process roles." >&2
-    echo "   Starting split runtime with 'latest' will fail because the image does not recognize role entrypoints." >&2
-    echo "   Please supply a compatible image tag or digest, e.g.:" >&2
+  if [ -z "${OPSKNIGHT_IMAGE:-}" ]; then
+    echo "❌ [FATAL] SWARM_RUNTIME_MODE=split requires an explicit OPSKNIGHT_IMAGE tag or immutable digest." >&2
+    echo "   Supply 2.0.0 or, preferably, the verified release digest:" >&2
     echo "     export OPSKNIGHT_IMAGE=\"ghcr.io/opsknight-labs/opsknight@sha256:<digest>\"" >&2
-    echo "   Or switch to integrated mode if deploying historical monolithic releases:" >&2
-    echo "     export SWARM_RUNTIME_MODE=integrated" >&2
     exit 1
   fi
 else
-  OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:latest}"
+  OPSKNIGHT_IMAGE="${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:2.0.0}"
 fi
 
 if [ "${ENVIRONMENT}" = "production" ] && [ "${ALLOW_INSECURE_SECRETS}" != "true" ]; then

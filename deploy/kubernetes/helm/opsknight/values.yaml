@@ -11,7 +11,7 @@ replicaCount: 2
 image:
   repository: ghcr.io/opsknight-labs/opsknight
   pullPolicy: IfNotPresent
-  # Defaults to Chart.appVersion (the patched v1.4 runtime); override with a tested tag/digest.
+  # Defaults to Chart.appVersion (the stable 2.0 runtime); production should use a tested digest.
   tag: ''
   # When set, digest takes precedence over tag and renders repository@digest.
   digest: ''

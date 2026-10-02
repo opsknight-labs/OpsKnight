@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-02T15:17:15+05:30",
-  "sourceRevision": "abcfc7312d8a5f404a4f8c29724e8ecda794aa84",
+  "generatedAt": "2026-10-02T16:04:01+05:30",
+  "sourceRevision": "84837f841249b97435e127bd3dd1b73af5f73f4f",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -18822,8 +18822,7 @@
         "operation"
       ],
       "defaults": [
-        "ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix",
-        "ghcr.io/opsknight-labs/opsknight:latest",
+        "ghcr.io/opsknight-labs/opsknight:2.0.0",
         "opsknight-local:test"
       ],
       "allowedValues": [],
@@ -90689,8 +90688,7 @@
             "operation"
           ],
           "defaults": [
-            "ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix",
-            "ghcr.io/opsknight-labs/opsknight:latest",
+            "ghcr.io/opsknight-labs/opsknight:2.0.0",
             "opsknight-local:test"
           ],
           "allowedValues": [],

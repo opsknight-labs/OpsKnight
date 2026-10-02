@@ -70,7 +70,9 @@ jobs:
           test -f TRADEMARKS.md
           test -f LICENSES/Apache-2.0.txt
           grep -q 'GNU AFFERO GENERAL PUBLIC LICENSE' LICENSE
-          grep -q 'AGPL-3.0-only' docs/v1.5/licensing.md
+          grep -q 'OpsKnight 2.0.0 is the first stable release distributed under.*AGPL-3.0-only' LICENSE-TRANSITION.md
+          grep -q 'License-AGPL--3.0--only' README.md
+          grep -q 'OpsKnight 1.4.0 and earlier' LICENSE-TRANSITION.md
 
       - name: Clean-install and migration contract
         run: |

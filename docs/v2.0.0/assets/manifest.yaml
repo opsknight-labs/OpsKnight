@@ -3,6 +3,10 @@ source: generated/docs-evidence/current
 approvedSourceRevision: a379a492bfb02552899967c3dc8b67b970d56957
 runtimeImage: localhost:15000/opsknight-docs-v2@sha256:0ac0900f61f3a8d8f8c3b160661620261319ceb561882f1da5bfb4a985268107
 runtimeSourceRevision: a379a492bfb02552899967c3dc8b67b970d56957
+acceptedSquashMerges:
+  - sourceRevision: a379a492bfb02552899967c3dc8b67b970d56957
+    mergedRevision: 3c6111a65c053588bb819bcc6c3581b15c0949f5
+    reason: GitHub squash merge of the certified docs/2.0.0-rebuild history in PR #828.
 assets:
   action-items.png:
     evidence: response/action-items.png
