@@ -108,20 +108,21 @@ describe('StatusPageAnnouncementManager Component', () => {
 
     // Open composer modal
     fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
+    const dialog = await screen.findByRole('dialog');
 
-    const add1hBtn = screen.getByRole('button', { name: '+1h' });
+    const add1hBtn = within(dialog).getByRole('button', { name: '+1h' });
     fireEvent.click(add1hBtn);
 
     // Duration should calculate and show window
     await waitFor(() => {
-      expect(screen.getByText(/Duration:/i).textContent).toContain('1h');
+      expect(within(dialog).getByText('1h')).toBeInTheDocument();
     });
 
-    const add2hBtn = screen.getByRole('button', { name: '+2h' });
+    const add2hBtn = within(dialog).getByRole('button', { name: '+2h' });
     fireEvent.click(add2hBtn);
 
     await waitFor(() => {
-      expect(screen.getByText(/Duration:/i).textContent).toContain('2h');
+      expect(within(dialog).getByText('2h')).toBeInTheDocument();
     });
   });
 
