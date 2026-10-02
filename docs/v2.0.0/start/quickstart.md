@@ -84,7 +84,7 @@ OpsKnight creates exactly one first user as an active Admin. Once any user exist
 
 Sign in and:
 
-1. Open **Settings → Health Center** and confirm runtime and database health.
+1. Open **Settings → System → Health** (or **System Health Center**) and confirm runtime and database health.
 2. [Create your first service](./create-first-service).
 3. [Configure on-call](./configure-on-call).
 4. Complete the [first incident journey](./first-incident).

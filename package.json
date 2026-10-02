@@ -73,6 +73,7 @@
     "docs:routes": "node scripts/docs/generate-route-contract.mjs",
     "docs:v15-parity": "node scripts/docs/generate-v15-parity.mjs",
     "docs:claims": "node scripts/docs/check-dangerous-claims.mjs",
+    "docs:surface-parity": "node scripts/docs/check-surface-parity.mjs",
     "docs:frontmatter": "node scripts/docs/check-frontmatter.mjs",
     "docs:evidence": "node scripts/docs/check-evidence.mjs",
     "docs:features": "node scripts/docs/check-feature-graph.mjs",

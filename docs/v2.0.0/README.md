@@ -1,6 +1,6 @@
 ---
 title: OpsKnight 2.0.0 documentation
-description: Documentation workspace for the upcoming OpsKnight 2.0.0 release.
+description: Documentation for the released OpsKnight 2.0.0 product.
 type: concept
 product_area: documentation
 audience:
@@ -14,9 +14,9 @@ verification:
 
 # OpsKnight 2.0.0 documentation
 
-This is the documentation workspace for the upcoming **OpsKnight 2.0.0**
-release. It is not published by the release-gated documentation sync until
-`v2.0.0` is added to `releasedVersions` in `docs/versions.json`.
+This is the documentation for the released **OpsKnight 2.0.0** product.
+`v2.0.0` is the current release and is listed in `releasedVersions` in
+`docs/versions.json`, so the release-gated documentation sync publishes it.
 
 The 2.0.0 documentation is rebuilt from current product evidence. Historical
 documentation can help locate a topic, but it is never authoritative.

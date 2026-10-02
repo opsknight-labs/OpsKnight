@@ -17,11 +17,11 @@ Create a dedicated SMTP credential with permission to send only from the OpsKnig
 
 ## Open the feature
 
-In OpsKnight, open **Settings → Notifications → Providers → SMTP**.
+In OpsKnight, open **Settings → Notifications** (`/settings/notifications`) and locate **SMTP** under Email Providers.
 
 ## Configure OpsKnight
 
-1. Open **Settings → Notifications → Providers** and choose **SMTP**.
+1. Open **Settings → Notifications** and locate the **SMTP** configuration card.
 2. Enter **Host**, **Port**, **Username**, **Password**, and **From email**.
 3. Enable secure transport when the relay expects implicit TLS. For STARTTLS, use the relay's documented port and policy.
 4. Save, enable SMTP, and send a provider test to a controlled mailbox.

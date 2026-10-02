@@ -65,8 +65,14 @@ jobs:
           npm run docs:routes
           npm run docs:v15-parity
           npm run docs:claims
+          npm run docs:surface-parity
       - name: Reject generated and published-reference drift
-        run: git diff --exit-code -- generated/docs-discovery/current.json generated/docs-contracts/current.json generated/docs-contracts/capacity.json generated/docs-contracts/routes.json generated/docs-contracts/integrations.json generated/docs-reference generated/docs-certification/v15-parity-report.md docs/internal/certification/v1.5-topic-inventory.yaml docs/v2.0.0/integrations/catalog.yaml docs/v2.0.0/reference/features.md docs/v2.0.0/reference/configuration/README.md docs/v2.0.0/reference/api/README.md
+        env:
+          # Commit-bound provenance changes after both an ordinary artifact
+          # commit and a squash merge. Compare generated semantics strictly and
+          # validate revision provenance separately in certification evidence.
+          DOCS_ALLOW_REVISION_ONLY_DRIFT: 'true'
+        run: node scripts/docs/check-generated-drift.mjs
       - name: Validate 2.0.0 documentation contracts
         run: npm run docs:certify:static
       - name: Preserve revision-bound static certificate
@@ -131,8 +137,6 @@ jobs:
           repository: opsknight-labs/OpsKnight-website
           path: opsknight-website
       - name: Build the rendered documentation site from this revision
-        env:
-          DOCS_SYNC_INCLUDE_UPCOMING: 'true'
         run: |
           ./scripts/sync-docs-to-website.sh ./opsknight-website
           npm ci --ignore-scripts --prefix ./opsknight-website

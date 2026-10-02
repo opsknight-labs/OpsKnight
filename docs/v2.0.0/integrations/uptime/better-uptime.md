@@ -37,11 +37,13 @@ service.
 3. Copy the webhook URL and integration key shown by OpsKnight.
 4. In Better Stack, open **Uptime → Integrations → Exporting data**. Under
    **Outgoing webhooks**, select **Configure**, then add an **Incident webhook**.
-5. Paste the complete OpsKnight URL. Select new/started, acknowledged, resolved,
-   and reopened incident events as needed. If you customize the request body,
+5. Paste the complete OpsKnight URL. Select new/started, acknowledged, and
+   resolved incident events as needed. If you customize the request body,
    preserve incident ID, name, cause, status, severity, and URL.
-6. Save the webhook, then fail and restore a non-production monitor. Verify the
-   deliveries use the same incident ID and update one OpsKnight incident.
+6. Save the webhook, then fail and restore a non-production monitor. Verify that
+   trigger and resolve deliveries use the same incident ID and converge on one
+   OpsKnight incident. Reopened events map to trigger and create a new incident
+   if the prior incident is already resolved.
 
 Provider console labels can change independently of OpsKnight. Use the webhook
 or notification configuration area in the provider rather than copying a URL
@@ -101,7 +103,7 @@ After the test alert, confirm all of the following:
 
 1. Confirm the integration is enabled and belongs to the intended service.
 2. Verify the integration ID in the URL and rotate any key that may have been exposed.
-3. Inspect **Settings → Integrations → Failures** for validation or signature errors.
+3. Inspect the webhook HTTP response body and system logs for validation or signature errors.
 4. Check for `413` before changing payload templates and `429` before retrying rapidly.
 5. Confirm the provider sends a state supported by the event mapping above.
 6. Preserve the provider delivery identifier and timestamp when escalating.

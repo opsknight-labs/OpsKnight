@@ -10,9 +10,9 @@ reader:
   status: READER_COMPLETE
   task: Acknowledge and resolve an OpsKnight incident from Slack.
 verification:
-  level: source
+  level: test
   verified_at: 2026-09-29
-  evidence: [src/app/api/slack/actions/route.ts, src/lib/chatops/]
+  evidence: [src/app/api/slack/actions/route.ts, src/lib/chatops/, tests/api/slack-actions-lifecycle.test.ts]
 ---
 
 # Acknowledge and resolve incidents from Slack
@@ -27,14 +27,14 @@ Open the incident's Slack message in a routine destination or war room. Use the 
 
 ## Configure the action
 
-For acknowledgement, confirm the incident is open/triggered and you intend to stop or alter active escalation according to the incident policy. For resolution, confirm the incident is actually mitigated and supply a meaningful summary when prompted.
+For acknowledgement, confirm the incident is open/triggered and you intend to stop or alter active escalation according to the incident policy. For resolution, confirm the incident is actually mitigated. Slack currently performs the lifecycle transition directly; it does not prompt for the Web resolution-note form. Verify the resolution and timeline in OpsKnight afterward.
 
 ## Complete the action
 
 1. Select **Acknowledge** or **Resolve** on the incident message.
 2. Complete identity linking if prompted, then retry once.
-3. For resolution, enter the requested summary.
-4. Wait for the card/message update instead of clicking repeatedly.
+3. Wait for the card/message update instead of clicking repeatedly.
+4. Verify the resolution and timeline in OpsKnight afterward.
 
 ## What OpsKnight does
 
@@ -48,7 +48,7 @@ Open the OpsKnight incident and confirm status, actor attribution, timeline entr
 
 ## Change or undo the action
 
-Acknowledgement and resolution are lifecycle events, not editable Slack text. Use the supported OpsKnight incident transition or reopen/follow-up workflow where available; do not manually edit the message to imply a different state.
+Acknowledgement and resolution are lifecycle events, not editable Slack text. Standard Slack actions do not expose manual Escalate or Reopen in 2.0. If a condition returns, submit a new manual report with the matching deduplication key within 30 minutes or use an authorized API status update; do not manually edit the message to imply a different state.
 
 ## Troubleshooting
 
@@ -62,4 +62,3 @@ Acknowledgement and resolution are lifecycle events, not editable Slack text. Us
 
 - [Use Slack commands](./commands)
 - [Operate war rooms](./war-rooms)
-

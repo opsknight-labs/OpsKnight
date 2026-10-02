@@ -312,4 +312,55 @@ describe('REST incident patch transaction', () => {
       })
     ).rejects.toMatchObject({ code: 'INCIDENT_REQUIRED_FIELDS_MISSING', status: 422 });
   });
+
+  it('reopens a resolved incident when PATCH status is OPEN', async () => {
+    tx.incident.findUnique
+      .mockResolvedValueOnce({
+        id: 'inc-resolved',
+        status: 'RESOLVED',
+        urgency: 'HIGH',
+        assigneeId: null,
+      })
+      .mockResolvedValueOnce({
+        id: 'inc-resolved',
+        status: 'OPEN',
+        urgency: 'HIGH',
+        assigneeId: null,
+      });
+    mocks.applyIncidentLifecycleTargetStatus.mockResolvedValue({
+      incidentId: 'inc-resolved',
+      command: 'REOPEN',
+      source: 'REST_API',
+      previousStatus: 'RESOLVED',
+      status: 'OPEN',
+      changed: true,
+    });
+
+    const result = await applyRestIncidentPatch({
+      incidentId: 'inc-resolved',
+      status: 'OPEN',
+      hasAssigneeUpdate: false,
+      actor: { id: 'api-user' },
+    });
+
+    expect(mocks.applyIncidentLifecycleTargetStatus).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({
+        incidentId: 'inc-resolved',
+        status: 'OPEN',
+        source: 'REST_API',
+        actor: { id: 'api-user' },
+      })
+    );
+    expect(result).toMatchObject({
+      changed: true,
+      lifecycle: {
+        command: 'REOPEN',
+        source: 'REST_API',
+        previousStatus: 'RESOLVED',
+        status: 'OPEN',
+        changed: true,
+      },
+    });
+  });
 });

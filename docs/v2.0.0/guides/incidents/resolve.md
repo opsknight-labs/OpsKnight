@@ -1,25 +1,28 @@
 ---
-title: Resolve and reopen an incident
+title: Resolve an incident
 order: 7
-description: Close active response with an auditable resolution record, or safely reopen work that returns.
+description: Close active response with an auditable resolution record and understand how correlated recurrence reopens work.
 type: how-to
 product_area: incidents
 audience: [responder, administrator]
 reader:
   status: READER_COMPLETE
-  task: Resolve an incident with evidence or reopen it safely.
+  task: Resolve an incident with evidence and handle a later recurrence through supported ingestion or API paths.
   evidence: [docs/v2.0.0/assets/incident-acknowledged.png, docs/v2.0.0/assets/incident-timeline.png]
 verification:
-  level: source
+  level: test
   verified_at: 2026-09-29
   evidence:
     - src/components/incident/ResolveIncidentModal.tsx
     - src/components/incident/detail/actions.ts
     - src/lib/incidents/lifecycle.ts
     - src/lib/incidents/operator-lifecycle.ts
+    - tests/docs/journeys/incident-lifecycle.spec.ts
+    - tests/api/incident-patch-lifecycle.test.ts
+    - tests/lib/incidents/rest-patch.test.ts
 ---
 
-# Resolve and reopen an incident
+# Resolve an incident
 
 ![Incident response controls before resolution](/docs/v2.0.0/assets/incident-acknowledged.png)
 
@@ -65,19 +68,17 @@ Confirm:
 
 Do not repeatedly resolve because a provider card is stale. Verify canonical state, then diagnose the projection.
 
-## Undo resolution by reopening
+## When the condition returns
 
-Reopen when the same operational event returns and the existing context remains the right response record. Create a new incident when the event is unrelated, requires separate reporting, or should not share the original deduplication identity.
+The 2.0 Web incident page has no manual **Reopen** action. Do not look for a button or describe a direct Web reopen procedure.
 
-1. Open the resolved incident.
-2. Review the previous resolution note and confirm the condition has genuinely returned.
-3. Select **Reopen**.
-4. Add context to the timeline describing the new symptom and evidence.
-5. Verify status returns to **Open**.
-6. Verify a new escalation generation starts at the applicable first step and receives a new next-escalation time.
-7. Confirm the prior resolution and SLA history are still present.
+If a new manual incident report is created with the same service and explicit deduplication key within the 30-minute reopen window, OpsKnight reopens the recently resolved incident. Normal monitoring and integration alert trigger ingestion does not reopen a resolved incident; it creates a new incident. An authorized API client can also return a resolved incident to active response by setting its status to `OPEN` with `PATCH /api/incidents/{id}`.
 
-Reopening clears the terminal resolution state for active response but does not erase the historical resolution event. Automated ingestion may also reopen a recently resolved incident when the same service and deduplication key recur inside the 30-minute reopen window.
+After a supported reopen, verify status is **Open**, a new escalation generation and next-escalation time are present, and the earlier resolution, timeline, and incident-lifetime SLA history remain intact. Add recurrence evidence through a supported timeline note/comment path.
+
+## Undo or correct a resolution
+
+There is no Web undo button. If the same condition returned, use a manual creation report with the matching deduplication key within the 30-minute window or an authorized API status update to `OPEN`. If the resolution note is incomplete, preserve the original audit record and add corrective context to the timeline rather than rewriting history. Create a separate incident when the new event has a different operational identity.
 
 ## Troubleshooting
 
@@ -93,13 +94,13 @@ Refresh and read the new state. Another responder may already have resolved, sno
 
 Confirm the incident is resolved and its escalation generation completed. Then inspect queued jobs and delivery operations for stale or already-dispatched work. A notification that was handed to a provider before resolution cannot always be recalled.
 
-### Reopen is unavailable
+### There is no Reopen button
 
-Only a resolved incident can be reopened. Confirm access and refresh the page. For a different operational event, create a new incident instead.
+This is expected in 2.0. If manual recurrence reporting is needed, create a new manual incident specifying the original service and deduplication key within the 30-minute window, or use an authorized public API status update (`PATCH /api/incidents/{id}` with status `OPEN`). Do not change state by editing a provider message.
 
 ### The incident reopened automatically
 
-Compare the service, deduplication key, resolution time, and inbound event. The same identity inside the reopen window is expected to reuse recent context. Fix an overly broad upstream key rather than repeatedly closing the incident.
+Compare the service, deduplication key, resolution time, and recent manual creation report. A manual report for the same service and key within the 30-minute reopen window reopens recent context by design. Normal automated alert ingestion creates a new incident instead. Fix an overly broad key rather than repeatedly closing the incident.
 
 ## Next steps
 

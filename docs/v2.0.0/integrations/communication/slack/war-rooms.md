@@ -23,7 +23,7 @@ active incident.
 
 ## Open the feature
 
-Open **Incidents → select incident → Collaboration → Create war room**. A war room is incident-scoped, not a routine service destination.
+Open **Incidents → select incident** and locate the **Create war room** launcher in the incident command bar. A war room is incident-scoped, not a routine service destination.
 
 ## Configure the room
 
@@ -31,8 +31,8 @@ Confirm the Slack provider/workspace, intended public or private channel behavio
 
 ## Complete the action
 
-1. Open the incident collaboration controls.
-2. Select the Slack provider and create the war room.
+1. Select **Create war room** in the incident command bar.
+2. Confirm Slack as the provider in the dialog and create the war room.
 3. Confirm the context and intended participants appear.
 4. Close the room from OpsKnight when coordination is complete.
 

@@ -38,6 +38,7 @@ run('node', ['scripts/docs/check-frontmatter.mjs']);
 run('node', ['scripts/check-docs-links.cjs']);
 run('node', ['scripts/docs/check-reader-quality.mjs', ...(releaseCertification ? ['--release'] : [])]);
 run('node', ['scripts/docs/check-dangerous-claims.mjs']);
+run('node', ['scripts/docs/check-surface-parity.mjs']);
 run('node', ['scripts/check-docs-capabilities.cjs']);
 // Static certification must reject stale committed evidence immediately. A
 // full runtime pass is also the supported recovery path after a rebase or
@@ -113,7 +114,7 @@ const report = {
   documentationRevision,
   productSourceRevision: runtimeSourceRevision || documentationRevision,
   runtimeSourceRevision: runtimeSourceRevision || null,
-  runtimeImageDigest: runtimeInspection?.RepoDigests?.find(value => value.includes('@sha256:')) || null,
+  runtimeImageDigest: runtimeInspection?.RepoDigests?.find(value => value.includes('@sha256:')) || runtimeInspection?.Id || null,
   releaseState: documentationVersions.releasedVersions.includes('v2.0.0') ? 'released' : 'upcoming',
   apiProof: {
     smokeProbeScope: 'Every discovered PUBLIC_API route is requested and must not return a server error.',
@@ -197,7 +198,7 @@ const report = {
     ...(runtimeInspection ? {
       runtime: {
         requestedImage: runtimeImage,
-        digest: runtimeInspection.RepoDigests?.find(value => value.includes('@sha256:')),
+        digest: runtimeInspection.RepoDigests?.find(value => value.includes('@sha256:')) || runtimeInspection.Id,
         sourceRevision: runtimeInspection.Config?.Labels?.['org.opencontainers.image.revision'],
       },
     } : {}),

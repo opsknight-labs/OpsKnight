@@ -13,7 +13,7 @@ verification:
   level: source
   verified_at: 2026-09-29
   evidence:
-    - src/components/AssigneePicker.tsx
+    - src/components/incident/AssigneeSection.tsx
     - src/app/(app)/incidents/actions.ts
     - src/lib/incidents/engagement.ts
 ---

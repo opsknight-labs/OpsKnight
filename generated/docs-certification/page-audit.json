@@ -675,7 +675,7 @@
     {
       "page": "guides/incidents/escalate.md",
       "type": "how-to",
-      "userTask": "Escalate an open incident and verify the next policy action.",
+      "userTask": "Escalate an open incident from a supported Microsoft Teams card and verify the next policy action.",
       "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 1,
@@ -708,7 +708,7 @@
     {
       "page": "guides/incidents/resolve.md",
       "type": "how-to",
-      "userTask": "Resolve an incident with evidence or reopen it safely.",
+      "userTask": "Resolve an incident with evidence and handle a later recurrence through supported ingestion or API paths.",
       "status": "READER_COMPLETE",
       "taskPage": true,
       "screenshotCount": 1,

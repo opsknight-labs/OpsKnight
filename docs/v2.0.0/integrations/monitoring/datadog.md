@@ -122,7 +122,7 @@ After the test alert, confirm all of the following:
 
 1. Confirm the OpsKnight integration and Datadog webhook are enabled and that the monitor message mentions the correct `@webhook-<name>`.
 2. Verify the complete URL, integration ID, hidden key/header, JSON encoding, and payload variable spelling.
-3. Inspect **Settings → Integrations → Failures** and Datadog webhook/monitor notification history.
+3. Inspect the webhook HTTP response body, system logs, and Datadog webhook/monitor notification history.
 4. If alerts create incidents but OK does not resolve them, compare the alert/recovery correlation fields and `$ALERT_STATUS` value received.
 5. Check for `413`, `429`, and 5xx. Datadog retries webhook delivery for its documented internal errors or 5xx responses; do not create a second webhook to force retry.
 6. Preserve monitor ID, alert-cycle/aggregation key, state, webhook name, timestamp, and provider delivery evidence when escalating.

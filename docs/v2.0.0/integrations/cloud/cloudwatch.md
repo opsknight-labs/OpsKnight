@@ -97,7 +97,7 @@ After the test alert, confirm all of the following:
 
 1. Confirm the integration is enabled, belongs to the intended service, and stores the exact topic ARN.
 2. In SNS, confirm the HTTPS subscription is **Confirmed**, not `PendingConfirmation`, and its endpoint contains the correct integration ID.
-3. Inspect **Settings → Integrations → Failures** for schema, topic-binding, certificate URL, or SNS signature errors.
+3. Inspect the webhook HTTP response body and system logs for schema, topic-binding, certificate URL, or SNS signature errors.
 4. Check SNS delivery status/logging and CloudWatch alarm action configuration in the same region.
 5. Check for `413` or `429` before retrying rapidly.
 6. Preserve SNS message ID, topic ARN, alarm/state, region, and timestamp when escalating; never expose credentials.

@@ -59,7 +59,7 @@ export type ChatOpsActionMeta = {
  *
  * Phase policy (P1-8):
  *  TRIGGERED    → ACK / Assign / Escalate / Note / Priority / Snooze
- *  ACKNOWLEDGED → Resolve / Assign / Escalate / Note / Priority / Snooze
+ *  ACKNOWLEDGED → Resolve / Assign / Note / Priority / Snooze
  *  RESOLVED     → (none)
  *  REFRESH + VIEW_RESPONDERS → 'all' (non-terminal)
  */
@@ -89,7 +89,7 @@ export const CHATOPS_ACTIONS: Record<ChatOpsActionKind, ChatOpsActionMeta> = {
   ESCALATE: {
     kind: 'ESCALATE',
     capability: 'canEscalate',
-    phases: ['TRIGGERED', 'ACKNOWLEDGED'],
+    phases: ['TRIGGERED'],
     mutates: true,
     title: 'Escalate',
   },

@@ -23,7 +23,7 @@ Sign in to OpsKnight as the active responder whose Teams identity is being linke
 
 ## Open the feature
 
-Select an incident action in Teams and follow the identity-link prompt, or open **Settings → ChatOps identity** in OpsKnight.
+Select an incident action in Teams and follow the identity-link prompt, or open **Settings → Profile & Preferences** (`/settings/profile`) and locate **Connected ChatOps Accounts**.
 
 ## Configure the identity
 

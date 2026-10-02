@@ -17,7 +17,7 @@ Use a Resend account with a verified sending domain and permission to create a r
 
 ## Open the feature
 
-In OpsKnight, open **Settings → Notifications → Providers → Resend**.
+In OpsKnight, open **Settings → Notifications** (`/settings/notifications`) and locate **Resend** under Email Providers.
 
 ## Configure Resend
 

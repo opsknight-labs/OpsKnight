@@ -126,7 +126,7 @@ incident state still decide whether an action is allowed.
 
 1. Trigger a synthetic incident on the configured service.
 2. Confirm exactly one message reaches every mapped channel.
-3. Acknowledge, assign/escalate where applicable, add a safe note, and resolve.
+3. Acknowledge, assign where applicable, add a safe note, and resolve. Standard Slack actions do not expose manual escalation in 2.0.
 4. Confirm existing Slack messages update and the OpsKnight timeline records the
    correct actor and transitions.
 5. If enabled, create a war room and verify channel creation, topic, responders,

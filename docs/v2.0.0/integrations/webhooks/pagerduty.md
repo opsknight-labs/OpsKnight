@@ -122,7 +122,7 @@ After the test alert, confirm all of the following:
 1. Confirm the integration is enabled and belongs to the intended service.
 2. Verify the integration ID in the URL and the OpsKnight key in
    `routing_key`; rotate any key that may have been exposed.
-3. Inspect **Settings → Integrations → Failures** for validation or signature errors.
+3. Inspect the webhook HTTP response body and system logs for validation or signature errors.
 4. Check for `413` before changing payload templates and `429` before retrying rapidly.
 5. Confirm the sender uses Events API v2 fields, not PagerDuty webhook
    subscription fields such as an `event` envelope.

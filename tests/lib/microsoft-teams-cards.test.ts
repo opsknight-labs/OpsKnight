@@ -220,4 +220,51 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
     expect(joinAction).toBeDefined();
     expect(joinAction?.url).toBe('https://teams.microsoft.com/l/meetup-join/gen2-meeting');
   });
+
+  it('renders Escalate only for OPEN/TRIGGERED phase, omitting it for ACKNOWLEDGED and RESOLVED', () => {
+    const openCard = buildMicrosoftTeamsIncidentCard(
+      { incident: incident({ status: 'OPEN' }), eventType: 'triggered' },
+      {
+        interactive: {
+          destinationId: 'dest-1',
+          messageGeneration: 1,
+          capabilities: { canEscalate: true, canAcknowledge: true },
+        },
+      }
+    );
+    const openActions = (openCard.actions as Array<{ title: string }>) || [];
+    expect(openActions.some(action => action.title === 'Escalate')).toBe(true);
+
+    const ackCard = buildMicrosoftTeamsIncidentCard(
+      {
+        incident: incident({ status: 'ACKNOWLEDGED', acknowledgedAt: new Date() }),
+        eventType: 'acknowledged',
+      },
+      {
+        interactive: {
+          destinationId: 'dest-1',
+          messageGeneration: 2,
+          capabilities: { canEscalate: true, canResolve: true },
+        },
+      }
+    );
+    const ackActions = (ackCard.actions as Array<{ title: string }>) || [];
+    expect(ackActions.some(action => action.title === 'Escalate')).toBe(false);
+
+    const resCard = buildMicrosoftTeamsIncidentCard(
+      {
+        incident: incident({ status: 'RESOLVED', resolvedAt: new Date() }),
+        eventType: 'resolved',
+      },
+      {
+        interactive: {
+          destinationId: 'dest-1',
+          messageGeneration: 3,
+          capabilities: { canEscalate: true },
+        },
+      }
+    );
+    const resActions = (resCard.actions as Array<{ title: string }>) || [];
+    expect(resActions.some(action => action.title === 'Escalate')).toBe(false);
+  });
 });

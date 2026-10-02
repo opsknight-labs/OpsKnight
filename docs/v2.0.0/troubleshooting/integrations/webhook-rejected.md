@@ -36,8 +36,8 @@ contract. Then trace one delivery in this order:
 
 1. Confirm the provider sent the exact OpsKnight URL and did not follow a stale
    integration after key rotation.
-2. Match the request time and provider delivery ID to the integration failure
-   record under **Settings → Integrations → Failures**.
+2. Match the request time and provider delivery ID to the delivery log in
+   the sending platform and OpsKnight system logs.
 3. For a signature error, compare raw request bytes, timestamp units, signing
    secret revision, and signature header. Do not pretty-print JSON first.
 4. For a schema error, compare the rejected field path with a current provider
