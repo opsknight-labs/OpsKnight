@@ -18,11 +18,11 @@ verification:
 
 ## Prerequisites
 
-Provide an ingress controller, DNS, trusted TLS certificate workflow, and known proxy chain. Read the common [Kubernetes ingress contract](../kubernetes/ingress).
+Provide an ingress controller, DNS, trusted TLS certificate workflow, and known proxy chain. Read the common [Kubernetes ingress guide](../kubernetes/ingress) and [reverse-proxy contract](../reverse-proxy-contract).
 
 ## Prepare the configuration
 
-Set chart public URLs to the exact HTTPS origin. Enable ingress and configure class, host, path, TLS Secret, certificate annotations, SSL redirect, disabled SSE buffering, suitable timeouts, and bounded request size. Configure trusted proxy hops and NetworkPolicy ingress namespace labels.
+Set chart public URLs to the exact HTTPS origin. Enable ingress and configure class, host, path, TLS Secret, certificate annotations, SSL redirect, disabled SSE buffering, suitable timeouts, and bounded request size. Configure `TRUST_PROXY_HEADERS` for trusted host/protocol forwarding and `TRUSTED_PROXY_HOPS` separately for client-IP resolution. Configure NetworkPolicy ingress namespace labels.
 
 ## Deploy ingress
 
@@ -40,7 +40,7 @@ Monitor certificate expiry, TLS/upstream errors, SSE disconnects, callback failu
 
 **404/503:** inspect ingress class/rules, Service/endpoints, and readiness.
 
-**Wrong redirect:** correct chart public URLs, forwarded host/protocol, and trusted hops; roll Web/application.
+**Wrong redirect:** correct chart public URLs, forwarded host/protocol, and `TRUST_PROXY_HEADERS`; roll Web/application.
 
 **SSE or webhook fails:** correct buffering/timeouts or preserve signed raw body/headers and documented size limits.
 
@@ -52,4 +52,3 @@ Validate new hostname and every callback before retiring the old route. Keep HTT
 
 - [Install with Helm](./install)
 - [Kubernetes production checklist](../kubernetes/production-checklist)
-

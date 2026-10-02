@@ -59,7 +59,7 @@ curl --fail --show-error \
   'http://127.0.0.1:3000/api/health?mode=readiness'
 ```
 
-Expected result is a successful HTTP response. Then access the same endpoint through the public HTTPS hostname. Open `https://opsknight.example.com/setup`, create the first administrator, and follow [Quickstart](../../../start/quickstart) to create a service and test incident.
+Expected result is a successful HTTP response. Then access the same endpoint through the public HTTPS hostname. Open `https://opsknight.example.com/setup`, verify that the detected Application URL is the same public HTTPS origin, and follow [Initial setup](../../../start/initial-setup). Sign in through that hostname, confirm **Settings → System → App URL**, then create a service and test incident.
 
 Verify that an incident can be created, acknowledged, and resolved and that a configured notification is delivered. A ready HTTP process alone is not production acceptance.
 
@@ -97,4 +97,3 @@ To move to split mode, take a verified backup, stop integrated ownership complet
 - [Configure the reverse proxy](./reverse-proxy)
 - [Complete production acceptance](./production-checklist)
 - [Upgrade Compose](./upgrade)
-

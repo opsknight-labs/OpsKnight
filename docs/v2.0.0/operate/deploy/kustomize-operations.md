@@ -131,7 +131,8 @@ metadata:
 data:
   NEXTAUTH_URL: https://opsknight.example.com
   NEXT_PUBLIC_APP_URL: https://opsknight.example.com
-  TRUSTED_PROXY_HOPS: "1"
+  TRUST_PROXY_HEADERS: "true"
+  TRUSTED_PROXY_HOPS: "1" # client-IP recovery only
 ```
 
 Both origins must be the exact public HTTPS origin. Adjust trusted proxy hops only to match known ingress/load-balancer hops.

@@ -31,11 +31,13 @@ Record cluster/stack, image digest, runtime mode, database/pool class, service r
 3. Require direct one-shot migration success and exclusive runtime ownership.
 4. Confirm every service converges and role/queue signals advance.
 5. Verify private database/pool networking and TLS public proxy/SSE/webhooks.
-6. Verify database connections, backup, and isolated restore with matching secrets.
-7. Run alert, notification, acknowledgement, escalation/assignment where configured, resolution, and status projection.
-8. Drain/restart one application worker and confirm recovery within objective.
-9. Confirm dashboards/alerts with the operational on-call.
-10. Record evidence and explicit go/no-go.
+6. Confirm DNS host = TLS/load-balancer host = `NEXTAUTH_URL` = normally `NEXT_PUBLIC_APP_URL` = saved Application URL; no task or internal host appears in redirects or generated links.
+7. Confirm `/setup` was completed through public HTTPS, login and provider callbacks remain on that hostname, and an unrelated host returns 421.
+8. Verify database connections, backup, and isolated restore with matching secrets.
+9. Run alert, notification, acknowledgement, escalation/assignment where configured, resolution, and status projection.
+10. Drain/restart one application worker and confirm recovery within objective.
+11. Confirm dashboards/alerts with the operational on-call.
+12. Record evidence and explicit go/no-go.
 
 ## Verify acceptance
 
@@ -56,5 +58,5 @@ Stop new traffic where safe and invoke [Upgrade and rollback](./upgrade) or data
 ## Next steps
 
 - [Health and metrics](../../reliability/health-and-metrics)
+- [Application URL and host routing](../application-url-and-host-routing)
 - [Backup and restore](../../data/backup-and-restore)
-

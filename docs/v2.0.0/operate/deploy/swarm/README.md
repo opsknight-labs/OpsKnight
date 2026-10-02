@@ -20,8 +20,8 @@ Use Swarm when it is already your production scheduler and OpsKnight must run ac
 1. Complete [Swarm prerequisites](./prerequisites).
 2. Choose integrated/split and bundled/external database in [topology and database](./topology-and-database).
 3. Follow the script-driven [installation](./install).
-4. Complete the [production checklist](./production-checklist).
-5. Use [upgrade and rollback](./upgrade) and [troubleshooting](./troubleshooting).
+4. Complete public HTTPS [initial setup](../../../start/initial-setup) and verify [Application URL and host routing](../application-url-and-host-routing).
+5. Complete the [production checklist](./production-checklist).
+6. Use [upgrade and rollback](./upgrade) and [troubleshooting](./troubleshooting).
 
 Use external HA PostgreSQL, an external TLS load balancer, durable backups, and at least three managers for a production HA objective.
-

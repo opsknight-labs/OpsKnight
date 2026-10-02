@@ -470,6 +470,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -708,6 +709,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -19124,6 +19126,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -19242,6 +19245,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -19359,6 +19363,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -19850,6 +19855,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -25584,6 +25590,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -27237,6 +27244,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -29076,6 +29084,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -29185,6 +29194,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -29292,6 +29302,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -29399,6 +29410,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -29510,6 +29522,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -29619,6 +29632,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -29726,6 +29740,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -29833,6 +29848,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -29944,6 +29960,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30053,6 +30070,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30160,6 +30178,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30267,6 +30286,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30358,6 +30378,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30473,6 +30494,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30582,6 +30604,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30689,6 +30712,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -30796,6 +30820,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -34332,6 +34357,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -37641,6 +37667,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -37748,6 +37775,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -37855,6 +37883,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -38358,6 +38387,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -39134,6 +39164,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -39397,6 +39428,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -45114,6 +45146,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -45180,6 +45213,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -45246,6 +45280,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -45312,6 +45347,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -45378,6 +45414,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -45494,6 +45531,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -45629,6 +45667,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -45746,6 +45785,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -45856,6 +45896,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -45966,6 +46007,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -46076,6 +46118,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -46212,6 +46255,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -46363,6 +46407,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -46479,6 +46524,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -46598,6 +46644,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -46742,6 +46789,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -46873,6 +46921,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]
@@ -48860,6 +48909,7 @@
           "operate/deploy/kubernetes/troubleshooting.md",
           "operate/deploy/kustomize/troubleshooting.md",
           "operate/deploy/swarm/troubleshooting.md",
+          "troubleshooting/installation/misdirected-request.md",
           "troubleshooting/installation/startup-fails.md",
           "troubleshooting/kubernetes/pods-not-ready.md"
         ]

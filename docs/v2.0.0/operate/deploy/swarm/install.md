@@ -48,7 +48,7 @@ docker stack ps <stack-name> --no-trunc
 ./deploy/swarm/scripts/health-check.sh
 ```
 
-Require desired replicas, no recurring task failures, migration exit zero, exclusive topology ownership, and readiness through the external HTTPS load balancer. Open `/setup`, create administrator/service, and run a synthetic incident through notification, acknowledgement, resolution, and status projection.
+Require desired replicas, no recurring task failures, migration exit zero, exclusive topology ownership, and readiness through the external HTTPS load balancer. Confirm load-balancer host, TLS certificate, `NEXTAUTH_URL`, and `NEXT_PUBLIC_APP_URL` are the same public origin. Open public HTTPS `/setup`, verify that exact Application URL, and complete [Initial setup](../../../start/initial-setup). Sign in through the same hostname, confirm **Settings → System → App URL**, verify an unrelated host returns 421, then run a synthetic incident through notification, acknowledgement, resolution, and status projection.
 
 ## Operate it in production
 
@@ -71,5 +71,6 @@ Use [Upgrade and rollback](./upgrade). Before `docker stack rm`, take a verified
 ## Next steps
 
 - [Production checklist](./production-checklist)
+- [Application URL and host routing](../application-url-and-host-routing)
+- [Reverse-proxy contract](../reverse-proxy-contract)
 - [Swarm troubleshooting](./troubleshooting)
-

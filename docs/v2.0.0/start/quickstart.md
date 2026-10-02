@@ -62,7 +62,9 @@ docker compose -f deploy/compose/docker-compose.yml logs --tail=200 opsknight-db
 
 ## 3. Create the first administrator
 
-Open `http://localhost:3000/setup`. Enter your display name, administrator email, application URL, and a strong unique password. Enter the setup secret only if the operator configured `SETUP_SECRET` or `BOOTSTRAP_SECRET`, then select **Create administrator**.
+Open `http://localhost:3000/setup`. Verify the Application URL before selecting **Create administrator**. For a production hostname, follow the complete [initial setup](./initial-setup) guide; a wrong value can make normal access return HTTP 421.
+
+Enter your display name, administrator email, application URL, and a strong unique password. Enter the setup secret only if the operator configured `SETUP_SECRET` or `BOOTSTRAP_SECRET`, then select **Create administrator**.
 
 OpsKnight creates exactly one first user as an active Admin. Once any user exists, `/setup` redirects to `/login`. For a trusted-host alternative, use the [command-line reference](../reference/cli); do not put passwords in shell history.
 

@@ -22,7 +22,7 @@ Helm is the packaged Kubernetes path. The chart supports integrated or split run
 3. Follow the complete [installation](./install).
 4. Choose [integrated](./integrated) or [split](./split).
 5. Add [external PostgreSQL](./external-postgres), [PgBouncer](./pgbouncer), and [ingress](./ingress) when required.
-6. Use [upgrade](./upgrade) and [troubleshooting](./troubleshooting) for lifecycle operations.
+6. Complete public HTTPS [initial setup](../../../start/initial-setup) and verify [Application URL and host routing](../application-url-and-host-routing).
+7. Complete the [production checklist](../kubernetes/production-checklist), then use [upgrade](./upgrade) and [troubleshooting](./troubleshooting) for lifecycle operations.
 
 Do not use chart placeholder secrets or mutable images in production.
-

@@ -161,10 +161,12 @@ The migration Job must complete with exit code zero. All selected workloads must
 2. The migration Job completed successfully.
 3. Every selected Pod is Ready and integrated/split ownership is exclusive.
 4. Public readiness returns success.
-5. Open `/setup` and create the first administrator.
-6. Create a service, on-call/escalation configuration, and a test incident.
-7. Verify notification, acknowledgement, resolution, and status projection.
-8. Complete the [Kubernetes production checklist](../kubernetes/production-checklist).
+5. Confirm Ingress host, TLS host, `config.nextauthUrl`, and `config.nextPublicAppUrl` are the same public HTTPS origin.
+6. Open `https://opsknight.example.com/setup`, verify that **Application URL** is `https://opsknight.example.com`, and complete [Initial setup](../../../start/initial-setup).
+7. Sign in through the same hostname and confirm **Settings → System → App URL**.
+8. Create a service, on-call/escalation configuration, and a test incident.
+9. Verify notification, acknowledgement, resolution, status projection, generated-link host, and rejection of an unrelated host.
+10. Complete the [Kubernetes production checklist](../kubernetes/production-checklist).
 
 ## Operate it in production
 
@@ -187,5 +189,6 @@ Use [Helm upgrade](./upgrade) for changes. Before uninstalling, take a verified 
 ## Next steps
 
 - [Configure ingress](./ingress)
+- [Application URL and host routing](../application-url-and-host-routing)
 - [Production checklist](../kubernetes/production-checklist)
 - [Upgrade Helm](./upgrade)

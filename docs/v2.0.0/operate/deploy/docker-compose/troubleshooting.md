@@ -82,7 +82,7 @@ curl --fail --show-error \
 
 ## Authentication redirects to localhost or HTTP
 
-**Check:** `NEXTAUTH_URL`, `NEXT_PUBLIC_APP_URL`, forwarded `Host`/protocol, and `TRUSTED_PROXY_HOPS`.
+**Check:** `NEXTAUTH_URL`, `NEXT_PUBLIC_APP_URL`, saved Application URL, forwarded `Host`/protocol, and `TRUST_PROXY_HEADERS`. `TRUSTED_PROXY_HOPS` affects client-IP recovery only. For HTTP 421, use [Misdirected Request recovery](../../../troubleshooting/installation/misdirected-request).
 
 **Recovery:** correct the origin and proxy chain, then recreate Web/application.
 
@@ -110,4 +110,3 @@ curl --fail --show-error \
 - [System logs](../../reliability/system-logs)
 - [Backup and restore](../../data/backup-and-restore)
 - [Migration failure](../../../troubleshooting/upgrades/migration-fails)
-

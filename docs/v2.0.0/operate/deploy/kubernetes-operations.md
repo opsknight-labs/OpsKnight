@@ -152,7 +152,7 @@ Test from a disposable pod subject to equivalent NetworkPolicy before rollout. C
 
 Only Web should receive user traffic in split mode. The supplied `opsknight-service` is a ClusterIP on port 80 targeting application port 3000. Point ingress or a load balancer at that Service.
 
-Set `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` to the exact public HTTPS origin. Configure `TRUSTED_PROXY_HOPS` for the known proxy chain. Preserve `Host`, `X-Forwarded-Proto`, client-address headers, webhook signature headers, and request bodies.
+Set `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` to the exact public HTTPS origin. Use `TRUST_PROXY_HEADERS=true` for host/protocol only behind a restricted trusted ingress, and configure `TRUSTED_PROXY_HOPS` separately for client-IP recovery. Preserve public host/protocol, client-address headers, webhook signature headers, and request bodies according to the [reverse-proxy contract](./reverse-proxy-contract).
 
 For NGINX Ingress, replace the example host and TLS Secret. The checked-in ingress forces SSL, permits a 10 MiB proxy body, and uses 60-second proxy timeouts. Validate those values against the documented webhook limits and server-sent event behavior. Disable response buffering for realtime streams and choose an idle timeout that does not terminate healthy SSE connections.
 

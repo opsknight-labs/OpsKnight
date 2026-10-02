@@ -18,6 +18,23 @@ verification:
 
 Start here when installing OpsKnight. Choose one packaging path and one runtime topology, then keep that choice consistent for installation, upgrades, troubleshooting, and recovery.
 
+## Follow the complete installation journey
+
+Every supported packaging path has the same control points. Do not skip ahead when a Pod or container becomes healthy:
+
+1. Choose the package and integrated or split topology.
+2. Provision PostgreSQL, calculate connections, and establish backup/restore ownership.
+3. Generate and protect stable secrets; pin the tested image digest.
+4. Create public DNS and TLS, then align the ingress/proxy host, `NEXTAUTH_URL`, and `NEXT_PUBLIC_APP_URL`.
+5. Implement the [reverse-proxy contract](./reverse-proxy-contract).
+6. Run migration once through a direct database connection, then deploy workloads.
+7. Require readiness through the public HTTPS origin.
+8. Open public `/setup`, verify the detected Application URL, and [create the first administrator](../../start/initial-setup).
+9. Sign in through the same hostname and confirm **Settings → System → App URL**.
+10. Run domain, authentication, webhook, realtime, incident, notification, backup, and restore acceptance tests.
+
+Read [Application URL and host routing](./application-url-and-host-routing) before exposing any production installation. A wrong canonical host can cause HTTP 421 after bootstrap.
+
 ## Choose how to run OpsKnight
 
 | Requirement | Recommended path |
@@ -55,20 +72,23 @@ Do not declare an installation ready because its process or Pod is running. Befo
 2. Back up stable secrets independently from the database.
 3. Complete database migration with exactly one owner.
 4. Verify readiness through the public HTTPS origin.
-5. Verify every selected runtime role and its heartbeat or queue progress.
-6. Trigger a synthetic alert and complete acknowledgement and resolution.
-7. Verify at least one real notification provider and any configured ChatOps destination.
-8. Test a logical backup and isolated restore.
-9. Record the deployment files, values, overlays, image digest, database endpoint class, and rollback decision.
+5. Complete `/setup` through that origin and verify the saved Application URL.
+6. Verify every selected runtime role and its heartbeat or queue progress.
+7. Trigger a synthetic alert and complete acknowledgement and resolution.
+8. Verify at least one real notification provider and any configured ChatOps destination.
+9. Test a logical backup and isolated restore.
+10. Record the deployment files, values, overlays, image digest, database endpoint class, and rollback decision.
 
 The packaging-specific production checklist gives exact commands and expected results.
 
 ## Related guides
 
 - [Runtime roles](./architecture/runtime-roles)
+- [Application URL and host routing](./application-url-and-host-routing)
+- [Reverse-proxy contract](./reverse-proxy-contract)
+- [Initial setup](../../start/initial-setup)
 - [Production sizing](../capacity/sizing)
 - [Health and metrics](../reliability/health-and-metrics)
 - [Backup and restore](../data/backup-and-restore)
 - [Upgrade](../upgrades/upgrade)
 - [Rollback](../upgrades/rollback)
-

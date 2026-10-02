@@ -3,13 +3,13 @@
   "purpose": "Reader-completeness audit. Mapping and source verification do not imply task usability.",
   "counts": {
     "MAPPED": 118,
-    "READER_COMPLETE": 198,
+    "READER_COMPLETE": 202,
     "SOURCE_VERIFIED": 0,
     "RUNTIME_VERIFIED": 0
   },
-  "taskPages": 196,
-  "readerCompleteTaskPages": 196,
-  "sourceVerifiedTaskPages": 196,
+  "taskPages": 200,
+  "readerCompleteTaskPages": 200,
+  "sourceVerifiedTaskPages": 200,
   "runtimeVerifiedTaskPages": 0,
   "pages": [
     {
@@ -2158,6 +2158,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "operate/deploy/application-url-and-host-routing.md",
+      "type": "deployment",
+      "userTask": "Configure and migrate OpsKnight's public origin safely.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
       "page": "operate/deploy/architecture/README.md",
       "type": "concept",
       "userTask": null,
@@ -2675,6 +2686,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "operate/deploy/reverse-proxy-contract.md",
+      "type": "deployment",
+      "userTask": "Publish OpsKnight through a trusted reverse proxy without breaking security or application behavior.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
       "page": "operate/deploy/split-runtime.md",
       "type": "concept",
       "userTask": null,
@@ -3170,6 +3192,17 @@
       "runtimeVerified": false
     },
     {
+      "page": "start/initial-setup.md",
+      "type": "tutorial",
+      "userTask": "Complete a new OpsKnight installation without locking out the public hostname.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
       "page": "start/migrate-from-v1.md",
       "type": "how-to",
       "userTask": "Migrate a production-shaped OpsKnight 1.x installation to 2.0 safely.",
@@ -3296,6 +3329,17 @@
       "userTask": null,
       "status": "MAPPED",
       "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "troubleshooting/installation/misdirected-request.md",
+      "type": "troubleshooting",
+      "userTask": "Restore access after OpsKnight rejects the requested application host.",
+      "status": "READER_COMPLETE",
+      "taskPage": true,
       "screenshotCount": 0,
       "screenshotAssessment": "UNASSESSED",
       "sourceVerified": true,

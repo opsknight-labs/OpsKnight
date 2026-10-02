@@ -33,6 +33,7 @@ run('node', ['--test', ...readdirSync(join(root, 'tests/docs/tooling')).filter(n
 if (fullRuntime) {
   if (!externalRuntime) run('docker', [...composeArgs, 'down', '--volumes', '--remove-orphans']);
   try {
+    run('npx', ['vitest', 'run', '-c', 'vitest.unit.config.ts', 'tests/security/app-host-routing.test.ts']);
     execFileSync('npx', ['playwright', 'test', '-c', 'playwright.docs.config.ts'], {
       cwd: root,
       stdio: 'inherit',

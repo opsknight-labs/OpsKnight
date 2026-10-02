@@ -32,8 +32,11 @@ Set both origins to the exact external HTTPS origin, without a trailing internal
 ```dotenv
 NEXTAUTH_URL=https://opsknight.example.com
 NEXT_PUBLIC_APP_URL=https://opsknight.example.com
+TRUST_PROXY_HEADERS=true
 TRUSTED_PROXY_HOPS=<known-proxy-hop-count>
 ```
+
+Enable `TRUST_PROXY_HEADERS` only when direct application-port access is blocked and the trusted proxy overwrites public host/protocol headers. `TRUSTED_PROXY_HOPS` selects the client address from `X-Forwarded-For`; it does not control host or protocol trust. Apply the full [reverse-proxy contract](../reverse-proxy-contract).
 
 Configure the proxy to:
 
@@ -68,7 +71,9 @@ Monitor certificate expiry, TLS errors, upstream latency/errors, realtime discon
 
 ## Troubleshooting
 
-**Redirect points to localhost or HTTP:** correct both public URL variables, forwarded `Host`/protocol, and trusted-hop count; recreate Web/application.
+**Redirect points to localhost or HTTP:** correct both public URL variables, forwarded `Host`/protocol, and `TRUST_PROXY_HEADERS`; recreate Web/application.
+
+**421 Misdirected Request:** compare the requested host with the saved Application URL, environment origins, and exact aliases, then use the [421 recovery guide](../../../troubleshooting/installation/misdirected-request).
 
 **Incident updates require refresh:** disable buffering and extend the SSE idle timeout. Confirm intermediate load balancers apply the same policy.
 
@@ -85,6 +90,7 @@ Keep the old route and certificate available during a hostname migration. Add th
 ## Next steps
 
 - [Complete production acceptance](./production-checklist)
+- [Complete initial setup](../../../start/initial-setup)
+- [Application URL and host routing](../application-url-and-host-routing)
 - [Configure OIDC](../../../guides/identity/configure-oidc)
 - [Inspect health and metrics](../../reliability/health-and-metrics)
-

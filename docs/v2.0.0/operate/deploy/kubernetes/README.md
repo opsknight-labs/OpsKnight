@@ -22,7 +22,7 @@ OpsKnight provides two maintained Kubernetes packaging paths: [Helm](../helm/) f
 3. Choose [integrated](./integrated) or [split](./split) runtime.
 4. Configure [ingress and TLS](./ingress) and [NetworkPolicy](./network-policy).
 5. Install with [Helm](../helm/) or [Kustomize](../kustomize/).
-6. Complete the [production checklist](./production-checklist).
+6. Complete public HTTPS [initial setup](../../../start/initial-setup), verify [Application URL and host routing](../application-url-and-host-routing), and sign in through the same hostname.
+7. Complete the [production checklist](./production-checklist).
 
 Use [Kubernetes troubleshooting](./troubleshooting) for Pod, migration, readiness, database, policy, URL, and queue failures.
-

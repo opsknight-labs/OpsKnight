@@ -21,8 +21,9 @@ Use Kustomize when the platform team owns manifests, environment overlays, and G
 2. Complete the [installation](./install).
 3. Choose [integrated](./integrated) or [split](./split).
 4. Add [external PostgreSQL](./external-postgres) when required.
-5. Adopt the [GitOps lifecycle](./gitops).
-6. Use [troubleshooting](./troubleshooting) for render, migration, sync, and rollout failures.
+5. Complete public HTTPS [initial setup](../../../start/initial-setup) and verify [Application URL and host routing](../application-url-and-host-routing).
+6. Complete the [Kubernetes production checklist](../kubernetes/production-checklist).
+7. Adopt the [GitOps lifecycle](./gitops).
+8. Use [troubleshooting](./troubleshooting) for render, migration, sync, and rollout failures.
 
 The maintained Kustomize profiles do not include a migration Job. The operator or GitOps controller must enforce one-shot migration completion before workload rollout.
-

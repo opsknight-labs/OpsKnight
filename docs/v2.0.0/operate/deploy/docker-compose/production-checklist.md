@@ -33,17 +33,19 @@ Record the application and database image digests, Compose file order, configura
 1. Confirm no image uses `latest` and every role resolves to the approved digest.
 2. Confirm placeholder secrets are absent and stable secrets are backed up outside the host.
 3. Confirm public TLS, forwarded headers, request limits, webhook signatures, and realtime streams.
-4. Confirm exactly one runtime ownership model is active.
-5. Confirm migration used a direct database path and completed successfully.
-6. Confirm PostgreSQL is not publicly exposed and connection use stays inside budget.
-7. Confirm persistent storage alerts and logical backup schedules.
-8. Restore the latest backup into an isolated database and complete post-restore checks.
-9. Confirm readiness plus every role's heartbeat, queue, and error signals.
-10. Trigger an alert into a test service.
-11. Verify incident creation, routing, notification delivery, acknowledgement, assignment/escalation where configured, resolution, and status projection.
-12. Restart one non-database application role and confirm recovery without duplicate ownership or lost work.
-13. Review dashboards and alerts with the on-call operator.
-14. Record pass/fail evidence and an explicit go/no-go decision.
+4. Confirm DNS host = TLS host = proxy host = `NEXTAUTH_URL` = normally `NEXT_PUBLIC_APP_URL` = saved Application URL; no internal host appears in redirects or generated links.
+5. Confirm `/setup` was completed through public HTTPS, login remains on that hostname, provider callbacks use it, and an unrelated host returns 421.
+6. Confirm exactly one runtime ownership model is active.
+7. Confirm migration used a direct database path and completed successfully.
+8. Confirm PostgreSQL is not publicly exposed and connection use stays inside budget.
+9. Confirm persistent storage alerts and logical backup schedules.
+10. Restore the latest backup into an isolated database and complete post-restore checks.
+11. Confirm readiness plus every role's heartbeat, queue, and error signals.
+12. Trigger an alert into a test service.
+13. Verify incident creation, routing, notification delivery, acknowledgement, assignment/escalation where configured, resolution, and status projection.
+14. Restart one non-database application role and confirm recovery without duplicate ownership or lost work.
+15. Review dashboards and alerts with the on-call operator.
+16. Record pass/fail evidence and an explicit go/no-go decision.
 
 ## Verify acceptance
 
@@ -68,6 +70,6 @@ If acceptance fails after traffic was enabled, stop new alert/user traffic where
 ## Next steps
 
 - [Operate health and metrics](../../reliability/health-and-metrics)
+- [Application URL and host routing](../application-url-and-host-routing)
 - [Back up and restore](../../data/backup-and-restore)
 - [Upgrade Compose](./upgrade)
-

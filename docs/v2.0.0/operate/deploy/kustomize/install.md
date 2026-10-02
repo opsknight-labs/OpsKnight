@@ -76,6 +76,7 @@ metadata:
 data:
   NEXTAUTH_URL: https://opsknight.example.com
   NEXT_PUBLIC_APP_URL: https://opsknight.example.com
+  TRUST_PROXY_HEADERS: "true"
 ```
 
 Patch ingress to match your cluster:
@@ -210,7 +211,13 @@ Delete an earlier completed Job before reusing the same name for a later release
 
 ## Verify the installation
 
-Confirm only the chosen topology, all selected Pods Ready, public readiness, current role heartbeats/queues, and expected ingress/policy. Open `/setup`, create the administrator and service, then run a synthetic incident through notification, acknowledgement, resolution, and status projection.
+Confirm only the chosen topology, all selected Pods Ready, public readiness, current role heartbeats/queues, and expected ingress/policy. Then:
+
+1. Open `https://opsknight.example.com/setup` through the public Ingress.
+2. Verify **Application URL** is exactly `https://opsknight.example.com`; do not accept a Service name, internal IP, or port-forward origin.
+3. Complete [Initial setup](../../../start/initial-setup), sign in through the same host, and confirm **Settings → System → App URL**.
+4. Verify the canonical host works, an unrelated host returns 421, and generated links use the public origin.
+5. Run a synthetic incident through notification, acknowledgement, resolution, and status projection.
 
 ## Operate it in production
 
@@ -233,4 +240,6 @@ Use reviewed overlay revisions and explicit migration/rollback procedures. Befor
 ## Next steps
 
 - [GitOps lifecycle](./gitops)
+- [Application URL and host routing](../application-url-and-host-routing)
+- [Reverse-proxy contract](../reverse-proxy-contract)
 - [Kustomize troubleshooting](./troubleshooting)

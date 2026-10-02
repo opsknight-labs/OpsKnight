@@ -84,7 +84,7 @@ curl --fail --show-error \
   'http://127.0.0.1:3000/api/health?mode=readiness'
 ```
 
-Open `/setup` only after readiness succeeds, then complete [Quickstart](../../../start/quickstart).
+Open public HTTPS `/setup` only after readiness succeeds. Verify the Application URL matches the proxy, TLS, `NEXTAUTH_URL`, and `NEXT_PUBLIC_APP_URL`, then complete [Initial setup](../../../start/initial-setup). Sign in through the same hostname and confirm **Settings → System → App URL**.
 
 ## Operate and scale it in production
 
@@ -117,4 +117,3 @@ To return to integrated mode, take a backup, stop every split owner, remove spli
 - [Add external PostgreSQL](./external-postgres)
 - [Add PgBouncer](./pgbouncer)
 - [Complete production acceptance](./production-checklist)
-

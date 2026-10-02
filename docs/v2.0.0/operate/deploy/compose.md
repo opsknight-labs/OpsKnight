@@ -97,7 +97,7 @@ curl --fail --show-error \
   'http://127.0.0.1:3000/api/health?mode=readiness'
 ```
 
-Then open `/setup` to create the first administrator. See [Quickstart](../../start/quickstart) for the first-user workflow.
+Publish and verify the public HTTPS origin before bootstrap. Then open `https://opsknight.example.com/setup`, verify that **Application URL** is exactly `https://opsknight.example.com`, and follow [Initial setup](../../start/initial-setup). Sign in through the same hostname and confirm **Settings → System → App URL**.
 
 ## Integrated installation with external PostgreSQL
 
@@ -206,9 +206,11 @@ Add `docker-compose.pgbouncer-ca.yml` last. Direct Prisma connections must inclu
 
 ## Reverse proxy and TLS
 
-Terminate HTTPS at a trusted proxy and forward to `127.0.0.1:${APP_PORT}`. Preserve `Host`, `X-Forwarded-Proto`, and client-address forwarding according to `TRUSTED_PROXY_HOPS`. Set both public URL variables to the exact external origin, without an internal hostname.
+Terminate HTTPS at a trusted proxy and forward to `127.0.0.1:${APP_PORT}`. Preserve the public host/protocol according to the [reverse-proxy contract](./reverse-proxy-contract). Use `TRUST_PROXY_HEADERS=true` only behind a restricted trusted proxy; set `TRUSTED_PROXY_HOPS` separately for client-IP recovery. Set both public URL variables to the exact external origin, without an internal hostname.
 
 Do not buffer or prematurely time out server-sent event responses. Allow webhook request bodies up to the documented integration limit and preserve provider signature headers byte-for-byte. Test sign-in callbacks, live incident updates, inbound webhooks, and status-page access through the public hostname—not only through localhost.
+
+Before accepting the deployment, confirm DNS host = TLS host = proxy host = `NEXTAUTH_URL` = normally `NEXT_PUBLIC_APP_URL` = saved Application URL. See [Application URL and host routing](./application-url-and-host-routing).
 
 ## Routine operations
 

@@ -22,7 +22,7 @@ Install an approved ingress controller, create DNS, and obtain a trusted TLS cer
 
 ## Prepare public routing
 
-Set `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` to the exact public HTTPS origin. Configure the known `TRUSTED_PROXY_HOPS`. Point ingress to the OpsKnight Service on its HTTP port.
+Set `NEXTAUTH_URL` and `NEXT_PUBLIC_APP_URL` to the exact public HTTPS origin. Set `TRUST_PROXY_HEADERS=true` only when the ingress is the restricted trusted path and overwrites the forwarded host/protocol. Configure `TRUSTED_PROXY_HOPS` separately for the known `X-Forwarded-For` chain. Point ingress to the OpsKnight Service on its HTTP port and apply the shared [reverse-proxy contract](../reverse-proxy-contract).
 
 Preserve host/protocol/client forwarding, signed webhook headers, and raw bodies. Set the documented body limit, disable buffering for server-sent events, and choose an idle timeout that preserves healthy streams.
 
@@ -54,6 +54,8 @@ Redirect HTTP to HTTPS, monitor certificate expiry and upstream errors, restrict
 
 **Redirect to localhost/HTTP:** correct both public URLs and forwarded protocol/host handling, then restart Web/application.
 
+**421 Misdirected Request:** compare ingress host, saved Application URL, public URL variables, proxy trust, and aliases using the [recovery guide](../../../troubleshooting/installation/misdirected-request).
+
 **Realtime updates stop:** disable buffering and extend timeouts at every load-balancer/ingress hop.
 
 **Webhook signature fails:** preserve the raw signed request and required headers; check body transformations and size limits.
@@ -65,5 +67,6 @@ During hostname migration, validate the new origin and every provider callback b
 ## Next steps
 
 - [Configure NetworkPolicy](./network-policy)
+- [Complete initial setup](../../../start/initial-setup)
+- [Application URL and host routing](../application-url-and-host-routing)
 - [Production checklist](./production-checklist)
-

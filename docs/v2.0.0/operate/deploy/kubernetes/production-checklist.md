@@ -32,13 +32,15 @@ Record cluster/namespace, package revision, values/overlay revision, image diges
 4. Confirm exactly one integrated or split ownership model.
 5. Confirm all selected Deployments, probes, PDBs, and spread rules match the availability plan.
 6. Verify public TLS/readiness, forwarded headers, realtime streams, and signed webhooks.
-7. Verify allowed NetworkPolicy paths and an intended denied path.
-8. Confirm database TLS, connection headroom, backup, and an isolated restore.
-9. Verify role heartbeats, queue age/throughput, provider metrics, and status projection.
-10. Run a synthetic alert through notification, acknowledgement, escalation/assignment where configured, resolution, and status projection.
-11. Evict or restart one application Pod and confirm continued or timely restored service.
-12. Review dashboards and alerts with the operational on-call.
-13. Record evidence and make an explicit go/no-go decision.
+7. Confirm DNS host = certificate host = Ingress host = `NEXTAUTH_URL` = normally `NEXT_PUBLIC_APP_URL` = saved Application URL; no internal Service host appears in redirects or links.
+8. Confirm `/setup` was completed through public HTTPS, login and provider callbacks remain on that hostname, and an unrelated host returns 421.
+9. Verify allowed NetworkPolicy paths and an intended denied path.
+10. Confirm database TLS, connection headroom, backup, and an isolated restore.
+11. Verify role heartbeats, queue age/throughput, provider metrics, and status projection.
+12. Run a synthetic alert through notification, acknowledgement, escalation/assignment where configured, resolution, and status projection.
+13. Evict or restart one application Pod and confirm continued or timely restored service.
+14. Review dashboards and alerts with the operational on-call.
+15. Record evidence and make an explicit go/no-go decision.
 
 ## Verify acceptance
 
@@ -59,5 +61,5 @@ If acceptance fails after traffic begins, stop new traffic where safe, preserve 
 ## Next steps
 
 - [Health and metrics](../../reliability/health-and-metrics)
+- [Application URL and host routing](../application-url-and-host-routing)
 - [Upgrade](../../upgrades/upgrade)
-

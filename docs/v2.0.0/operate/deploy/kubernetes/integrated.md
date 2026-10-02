@@ -39,7 +39,7 @@ Stop on migration failure. Do not increase replicas during an uncertain rollout.
 
 ## Verify the deployment
 
-Require readiness through the Service and public ingress. Confirm only integrated ownership exists. Create, acknowledge, and resolve a synthetic incident; verify notification and status projection. Restart one application Pod and confirm recovery without duplicate work.
+Require readiness through the Service and public ingress. Confirm only integrated ownership exists. On a new database, open public HTTPS `/setup`, verify its Application URL matches Ingress, TLS, `NEXTAUTH_URL`, and `NEXT_PUBLIC_APP_URL`, then follow [Initial setup](../../../start/initial-setup). Sign in through the same host and confirm **Settings → System → App URL**. Create, acknowledge, and resolve a synthetic incident; verify notification and status projection. Restart one application Pod and confirm recovery without duplicate work.
 
 ## Operate it in production
 
@@ -61,4 +61,3 @@ For a split migration, back up, quiesce/stop integrated ownership, run the split
 
 - [Production checklist](./production-checklist)
 - [Upgrade](../../upgrades/upgrade)
-

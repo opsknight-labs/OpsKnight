@@ -38,7 +38,7 @@ Wait for each role's rollout. Do not accept partial success as a healthy split d
 
 ## Verify every role
 
-Confirm Web readiness, scheduler heartbeat/lag, every worker lane's progress, status projection, and absence of integrated ownership. Run a synthetic incident through ingestion, critical notification, acknowledgement, resolution, and status projection. Verify aggregate database connections remain under budget.
+Confirm Web readiness, scheduler heartbeat/lag, every worker lane's progress, status projection, and absence of integrated ownership. On a new database, open public HTTPS `/setup`, verify its Application URL matches Ingress, TLS, `NEXTAUTH_URL`, and `NEXT_PUBLIC_APP_URL`, then follow [Initial setup](../../../start/initial-setup). Sign in through the same host and confirm **Settings → System → App URL**. Run a synthetic incident through ingestion, critical notification, acknowledgement, resolution, and status projection. Verify aggregate database connections remain under budget.
 
 ## Operate and scale in production
 
@@ -62,4 +62,3 @@ To change roles, preserve one ownership model and roll one role at a time where 
 
 - [Production checklist](./production-checklist)
 - [Scaling signals](../../capacity/scaling-signals)
-
