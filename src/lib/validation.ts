@@ -29,9 +29,9 @@ export const optionalUrlValidator = z
   .nullable();
 
 export const IncidentCreateSchema = z.object({
-  title: z.string().trim().min(1).max(500),
+  title: z.string().trim().min(1, 'Title is required').max(500),
   description: z.string().trim().max(10000).optional().nullable(),
-  serviceId: z.string().min(1),
+  serviceId: z.string().min(1, 'Please select an affected service'),
   urgency: z.enum(['LOW', 'MEDIUM', 'HIGH']),
   priority: z.string().trim().max(20).optional().nullable(),
 });

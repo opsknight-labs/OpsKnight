@@ -14,6 +14,18 @@ const mockCloseCreateIncident = vi.fn();
 let mockIsOpen = true;
 let mockOpenOptions: { serviceId?: string; templateId?: string } | null = null;
 
+const mockToastWarning = vi.fn();
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
+
+vi.mock('@/lib/toast', () => ({
+  notify: {
+    warning: (...args: unknown[]) => mockToastWarning(...args),
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+  },
+}));
+
 vi.mock('@/contexts/IncidentCreationModalContext', () => ({
   useCreateIncidentModal: () => ({
     isOpen: mockIsOpen,
@@ -269,6 +281,144 @@ describe('CreateIncidentModal', () => {
     await waitFor(() => {
       expect(screen.getByText('No escalation policy attached')).toBeInTheDocument();
       expect(screen.getByText(/Assign an escalation policy to/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows warning popup and highlights missing service when clicking Create Incident without selecting a service', async () => {
+    render(<CreateIncidentModal />);
+
+    await screen.findByText('Declare Incident');
+
+    const titleInput = screen.getByPlaceholderText(/Primary database connection pool exhausted/i);
+    fireEvent.change(titleInput, { target: { value: 'Database Outage in US-East' } });
+
+    const submitBtn = screen.getByRole('button', { name: /^create incident$/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockToastWarning).toHaveBeenCalledWith(
+        'Please select an affected service.',
+        expect.objectContaining({
+          description: expect.stringContaining('affected service is required'),
+        })
+      );
+      expect(
+        screen.getByText('Please select an Affected Service above before creating the incident.')
+      ).toBeInTheDocument();
+    });
+
+    const serviceCombo = screen.getByRole('combobox', { name: /Affected Service/i });
+    expect(serviceCombo.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('shows warning popup when clicking Create Incident with empty title and empty service', async () => {
+    render(<CreateIncidentModal />);
+
+    await screen.findByText('Declare Incident');
+
+    const submitBtn = screen.getByRole('button', { name: /^create incident$/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockToastWarning).toHaveBeenCalledWith(
+        'Please fill in all required fields.',
+        expect.objectContaining({
+          description: expect.stringContaining('Required fields missing'),
+        })
+      );
+      expect(
+        screen.getByText(
+          'Please fill in all required fields (Incident Title and Affected Service) before creating the incident.'
+        )
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('shows warning popup when submitting via Cmd+Enter with missing service', async () => {
+    render(<CreateIncidentModal />);
+
+    const titleInput = await screen.findByPlaceholderText(
+      /Primary database connection pool exhausted/i
+    );
+    fireEvent.change(titleInput, { target: { value: 'Payment Gateway Connectivity Drop' } });
+
+    fireEvent.keyDown(titleInput, { key: 'Enter', metaKey: true });
+
+    await waitFor(() => {
+      expect(mockToastWarning).toHaveBeenCalledWith(
+        'Please select an affected service.',
+        expect.anything()
+      );
+    });
+  });
+
+  it('honors custom-field defaultValue during required validation and submits successfully', async () => {
+    mockOpenOptions = { serviceId: 'srv-checkout' };
+    mockGetIncidentCreationContext.mockResolvedValueOnce({
+      ...mockContextData,
+      customFields: [
+        {
+          id: 'cf-env',
+          name: 'Environment',
+          key: 'env',
+          type: 'TEXT',
+          required: true,
+          defaultValue: 'Production',
+        },
+      ],
+    });
+
+    render(<CreateIncidentModal />);
+
+    const titleInput = await screen.findByPlaceholderText(
+      /Primary database connection pool exhausted/i
+    );
+    fireEvent.change(titleInput, { target: { value: 'Production Incident' } });
+
+    const submitBtn = screen.getByRole('button', { name: /^create incident$/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockCreateIncident).toHaveBeenCalled();
+      const formData = mockCreateIncident.mock.calls[0][0] as FormData;
+      expect(formData.get('customField_cf-env')).toBe('Production');
+    });
+  });
+
+  it('shows warning popup when a required custom field has no defaultValue and is not filled', async () => {
+    mockOpenOptions = { serviceId: 'srv-checkout' };
+    mockGetIncidentCreationContext.mockResolvedValueOnce({
+      ...mockContextData,
+      customFields: [
+        {
+          id: 'cf-root-cause',
+          name: 'Root Cause Hypothesis',
+          key: 'root_cause',
+          type: 'TEXT',
+          required: true,
+          defaultValue: null,
+        },
+      ],
+    });
+
+    render(<CreateIncidentModal />);
+
+    const titleInput = await screen.findByPlaceholderText(
+      /Primary database connection pool exhausted/i
+    );
+    fireEvent.change(titleInput, { target: { value: 'Production Incident' } });
+
+    const submitBtn = screen.getByRole('button', { name: /^create incident$/i });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockToastWarning).toHaveBeenCalledWith(
+        'Required field missing: Root Cause Hypothesis',
+        expect.objectContaining({
+          description: expect.stringContaining('required custom fields'),
+        })
+      );
+      expect(mockCreateIncident).not.toHaveBeenCalled();
     });
   });
 });

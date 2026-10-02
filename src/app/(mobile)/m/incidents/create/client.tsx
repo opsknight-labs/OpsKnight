@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronDown, LayoutTemplate, WifiOff } from 'lucide-react';
+import { AlertCircle, ChevronDown, LayoutTemplate, WifiOff } from 'lucide-react';
 import MobileButton from '@/components/mobile/MobileButton';
 import { cn } from '@/lib/utils';
 import { notify as toast } from '@/lib/toast';
@@ -208,18 +208,37 @@ export default function MobileCreateIncidentClient({
 
   const submit = async () => {
     setError('');
+    if (!title.trim() && !selectedServiceId) {
+      const msg = 'Please enter a title and select an affected service.';
+      setError(msg);
+      toast.warning('Required fields missing', {
+        description: msg,
+      });
+      return;
+    }
     if (!title.trim()) {
-      setError('Title is required.');
+      const msg = 'Title is required.';
+      setError(msg);
+      toast.warning('Incident title required', {
+        description: 'Please enter an incident title before creating the incident.',
+      });
       return;
     }
     if (!selectedServiceId) {
-      setError('Select a service before creating the incident.');
+      const msg = 'Select an affected service before creating the incident.';
+      setError(msg);
+      toast.warning('Affected service required', {
+        description: 'Please select an affected service before creating the incident.',
+      });
       return;
     }
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      setError(
-        'Offline. Your encrypted draft is saved on this device; incident creation is not queued until you reconnect.'
-      );
+      const msg =
+        'Offline. Your encrypted draft is saved on this device; incident creation is not queued until you reconnect.';
+      setError(msg);
+      toast.warning('Offline', {
+        description: msg,
+      });
       return;
     }
 
@@ -273,10 +292,16 @@ export default function MobileCreateIncidentClient({
         setError(
           'The request timed out before confirmation. Retry safely: OpsKnight will reuse the same request ID and will not create a duplicate.'
         );
+        toast.error('Request timed out', {
+          description: 'The request timed out before confirmation. You can safely retry.',
+        });
       } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
         setError(
           'Connection was lost. Your encrypted draft is saved; reconnect and press Create incident again.'
         );
+        toast.warning('Connection lost', {
+          description: 'Your encrypted draft is saved; reconnect and press Create incident again.',
+        });
       } else {
         const userFacing = toUserFacingError(
           submitError,
@@ -287,6 +312,9 @@ export default function MobileCreateIncidentClient({
             ? `${userFacing.title}. ${userFacing.description}`
             : userFacing.title
         );
+        toast.error(userFacing.title, {
+          description: userFacing.description || 'Please check your inputs and try again.',
+        });
       }
     } finally {
       setLoading(false);
@@ -300,6 +328,7 @@ export default function MobileCreateIncidentClient({
 
   return (
     <form
+      noValidate
       className="space-y-5"
       onSubmit={event => {
         event.preventDefault();
@@ -382,10 +411,17 @@ export default function MobileCreateIncidentClient({
           <input
             id="incident-title"
             required
+            aria-invalid={Boolean(!title.trim() && error)}
             value={title}
-            onChange={event => setTitle(event.target.value)}
+            onChange={event => {
+              setTitle(event.target.value);
+              if (error) setError('');
+            }}
             placeholder="e.g. API Gateway High Latency"
-            className={CONTROL}
+            className={cn(
+              CONTROL,
+              !title.trim() && error && 'border-destructive ring-1 ring-destructive/40'
+            )}
             maxLength={500}
           />
         </div>
@@ -411,9 +447,17 @@ export default function MobileCreateIncidentClient({
             <select
               id="incident-service"
               required
+              aria-invalid={Boolean(!selectedServiceId && error)}
               value={selectedServiceId}
-              onChange={event => handleServiceChange(event.target.value)}
-              className={cn(CONTROL, 'appearance-none pr-10')}
+              onChange={event => {
+                handleServiceChange(event.target.value);
+                if (error) setError('');
+              }}
+              className={cn(
+                CONTROL,
+                'appearance-none pr-10',
+                !selectedServiceId && error && 'border-destructive ring-1 ring-destructive/40'
+              )}
             >
               <option value="" disabled>
                 Select a service
@@ -532,10 +576,11 @@ export default function MobileCreateIncidentClient({
 
       {error ? (
         <div
-          className="rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2.5 text-xs font-medium text-destructive"
+          className="flex items-center gap-2 rounded-xl border border-destructive/25 bg-destructive/10 px-3.5 py-2.5 text-xs font-medium text-destructive"
           role="alert"
         >
-          {error}
+          <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+          <span>{error}</span>
         </div>
       ) : null}
 
