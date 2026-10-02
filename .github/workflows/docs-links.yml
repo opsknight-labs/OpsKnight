@@ -51,7 +51,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts --legacy-peer-deps
       - name: Test documentation tooling
         run: npm run docs:test
       - name: Regenerate documentation artifacts
@@ -89,7 +89,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: npx playwright install --with-deps chromium
       - name: Run full documentation certification
         run: npm run docs:certify
@@ -108,7 +108,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci --ignore-scripts
+      - run: npm ci --ignore-scripts --legacy-peer-deps
       - run: npx playwright install --with-deps chromium
       - name: Build revision-bound OpsKnight image
         run: docker build --build-arg BUILD_REVISION=${{ github.sha }} -t opsknight-docs-release:${{ github.sha }} .
