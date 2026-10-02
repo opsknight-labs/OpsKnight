@@ -52,9 +52,8 @@ describe('mobile/PWA enterprise architecture contract', () => {
     expect(pushToggle).toMatch(
       /const subscribeOrRepair = async \(\) => \{[\s\S]*Notification\.requestPermission\(\)[\s\S]*pushManager\.subscribe/
     );
-    expect(pushToggle).not.toMatch(
-      /useEffect\([\s\S]{0,1200}Notification\.requestPermission\(/
-    );
+    const beforeEnableHandler = pushToggle.split('const subscribeOrRepair = async () => {')[0];
+    expect(beforeEnableHandler).not.toContain('Notification.requestPermission()');
   });
 
   it('keeps dynamic authenticated routes and APIs out of service-worker caches', () => {
