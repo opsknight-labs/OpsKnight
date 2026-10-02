@@ -49,18 +49,19 @@ export async function captureEvidence(
   }
   const sourceRevision = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   const requestedImage = process.env.DOCS_OPSKNIGHT_IMAGE;
-  if (!requestedImage?.includes('@sha256:')) {
+  if (!requestedImage || (!requestedImage.includes('@sha256:') && !/^sha256:[0-9a-f]{64}$/.test(requestedImage))) {
     throw new Error('DOCS_OPSKNIGHT_IMAGE must be an immutable digest reference');
   }
   const imageInspection = JSON.parse(execFileSync(
     'docker',
     ['image', 'inspect', requestedImage],
     { encoding: 'utf8' }
-  ))[0] as { RepoDigests?: string[]; Config?: { Labels?: Record<string, string> } };
+  ))[0] as { Id?: string; RepoDigests?: string[]; Config?: { Labels?: Record<string, string> } };
   const runtimeSourceRevision = imageInspection.Config?.Labels?.['org.opencontainers.image.revision'];
-  const runtimeDigest = imageInspection.RepoDigests?.find(value => value.includes('@sha256:'));
+  const runtimeDigest = imageInspection.RepoDigests?.find(value => value.includes('@sha256:'))
+    ?? imageInspection.Id;
   if (!runtimeSourceRevision || !runtimeDigest) {
-    throw new Error('Runtime image must expose an OCI source revision and repository digest');
+    throw new Error('Runtime image must expose an OCI source revision and immutable content digest');
   }
   if (!/^[0-9a-f]{40}$/.test(runtimeSourceRevision)) {
     throw new Error('Runtime image OCI revision must be a full 40-character Git SHA');
