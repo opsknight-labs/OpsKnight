@@ -876,6 +876,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
       - name: Download tag release certification evidence
         uses: actions/download-artifact@v4
         with:
