@@ -15,11 +15,13 @@ export const KNOWN_PLACEHOLDER_NEXTAUTH_SECRETS = new Set([
   'change_this_in_production_min_32_chars',
   'change_this_in_production',
   'dev-secret-key-for-development-only',
+  'changeme_to_a_secure_random_string',
 ]);
 
 export const KNOWN_PLACEHOLDER_API_KEY_SECRETS = new Set([
   ...KNOWN_PLACEHOLDER_NEXTAUTH_SECRETS,
   'change_this_to_a_separate_random_api_key_secret_in_production',
+  'changeme_to_a_different_secure_random_string',
 ]);
 
 export const KNOWN_PLACEHOLDER_POSTGRES_PASSWORDS = new Set([
