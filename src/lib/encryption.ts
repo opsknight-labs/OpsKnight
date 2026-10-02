@@ -66,16 +66,23 @@ function getEncryptionKeyring(): EncryptionKeyEntry[] {
 
   const legacyKey = process.env.ENCRYPTION_KEY?.trim();
   if (legacyKey) {
-    if (
-      !isValidHexKey(legacyKey) ||
-      (process.env.NODE_ENV === 'production' && isWeakKey(legacyKey))
-    ) {
-      logger.error(
-        '[Encryption] ENCRYPTION_KEY is invalid or uses a known weak value. Encryption disabled.'
-      );
+    if (!isValidHexKey(legacyKey)) {
+      logger.error('[Encryption] ENCRYPTION_KEY is not a valid 64-character hex key.');
       return [];
     }
-    if (!entries.some(entry => entry.key === legacyKey)) {
+
+    const weakLegacyKey = process.env.NODE_ENV === 'production' && isWeakKey(legacyKey);
+    if (weakLegacyKey) {
+      if (entries.length === 0) {
+        logger.error(
+          '[Encryption] ENCRYPTION_KEY is a known weak value and no valid ENCRYPTION_KEYS keyring is available.'
+        );
+        return [];
+      }
+      logger.warn(
+        '[Encryption] Ignoring weak legacy ENCRYPTION_KEY because a valid ENCRYPTION_KEYS keyring is configured.'
+      );
+    } else if (!entries.some(entry => entry.key === legacyKey)) {
       const legacyId = entries.some(entry => entry.id === 'k1') ? 'legacy' : 'k1';
       entries.push({ id: legacyId, key: legacyKey });
     }
