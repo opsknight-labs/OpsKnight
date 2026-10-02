@@ -49,6 +49,121 @@ else
   STRICT_SECRETS="${STRICT_SECRETS:-false}"
 fi
 
+is_default_encryption_key() {
+  local key="$1"
+  [ "${key}" = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" ] ||
+    [ "${key}" = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08" ]
+}
+
+validate_encryption_keys_format() {
+  local keyring="$1"
+  local seen_ids=","
+  local entry key_id key_material
+  local -a entries
+  IFS=',' read -r -a entries <<< "${keyring}"
+  for entry in "${entries[@]}"; do
+    if ! [[ "${entry}" =~ ^[A-Za-z0-9._-]{1,64}:[0-9A-Fa-f]{64}$ ]]; then
+      echo "❌ [FATAL] ENCRYPTION_KEYS entries must use id:64-hex-key syntax." >&2
+      return 1
+    fi
+    key_id="${entry%%:*}"
+    key_material="${entry#*:}"
+    if [[ "${seen_ids}" == *",${key_id},"* ]]; then
+      echo "❌ [FATAL] ENCRYPTION_KEYS contains duplicate key id '${key_id}'." >&2
+      return 1
+    fi
+    seen_ids="${seen_ids}${key_id},"
+    if [ "${STRICT_SECRETS}" = "true" ] && is_default_encryption_key "${key_material}"; then
+      echo "❌ [FATAL] STRICT_SECRETS enforced: ENCRYPTION_KEYS contains a known default placeholder key." >&2
+      return 1
+    fi
+  done
+}
+
+validate_runtime_secrets() {
+  if [ "${STRICT_SECRETS}" != "true" ]; then
+    return 0
+  fi
+
+  if [ -z "${NEXTAUTH_SECRET:-}" ] || [ "${NEXTAUTH_SECRET}" = "opsknight_super_secret_jwt_and_session_signing_key_change_in_production_min32chars" ] || [ "${NEXTAUTH_SECRET}" = "change_this_to_a_random_secret_in_production" ] || [ "${NEXTAUTH_SECRET}" = "changeme_to_a_secure_random_string" ] || [ "${#NEXTAUTH_SECRET}" -lt 32 ]; then
+    echo "❌ [FATAL] STRICT_SECRETS enforced: NEXTAUTH_SECRET is empty, too short, or using a known default placeholder." >&2
+    echo "   Provide a secure secret with: export NEXTAUTH_SECRET='...'" >&2
+    exit 1
+  fi
+  if [ -z "${API_KEY_SECRET:-}" ] || [ "${API_KEY_SECRET}" = "change_this_to_a_separate_random_api_key_secret_in_production" ] || [ "${API_KEY_SECRET}" = "changeme_to_a_different_secure_random_string" ] || [ "${API_KEY_SECRET}" = "${NEXTAUTH_SECRET}" ] || [ "${#API_KEY_SECRET}" -lt 32 ]; then
+    echo "❌ [FATAL] STRICT_SECRETS enforced: API_KEY_SECRET must be a separate non-placeholder secret with at least 32 characters." >&2
+    echo "   Provide an independent secret with: export API_KEY_SECRET='...'" >&2
+    exit 1
+  fi
+  if [ -z "${ENCRYPTION_KEY:-}" ] && [ -z "${ENCRYPTION_KEYS:-}" ]; then
+    echo "❌ [FATAL] STRICT_SECRETS enforced: ENCRYPTION_KEY or ENCRYPTION_KEYS must be set." >&2
+    echo "   Provide a 64-hex-char encryption key with: export ENCRYPTION_KEY='...'" >&2
+    exit 1
+  fi
+  if [ -n "${ENCRYPTION_KEY:-}" ] && is_default_encryption_key "${ENCRYPTION_KEY}"; then
+    echo "❌ [FATAL] STRICT_SECRETS enforced: ENCRYPTION_KEY is using known default placeholder." >&2
+    echo "   Provide a 64-hex-char encryption key with: export ENCRYPTION_KEY='...'" >&2
+    exit 1
+  fi
+  if [ -n "${ENCRYPTION_KEY:-}" ] && ! [[ "${ENCRYPTION_KEY}" =~ ^[0-9A-Fa-f]{64}$ ]]; then
+    echo "❌ [FATAL] STRICT_SECRETS enforced: ENCRYPTION_KEY must be a 64-character hex key." >&2
+    exit 1
+  fi
+  if [ -n "${ENCRYPTION_KEYS:-}" ]; then
+    validate_encryption_keys_format "${ENCRYPTION_KEYS}"
+  fi
+  if [ "${USE_EXTERNAL_DB}" = "true" ]; then
+    if [ -z "${DB_PASS:-}" ] || [ "${DB_PASS}" = "opsknight_secure_password_change_me" ]; then
+      echo "❌ [FATAL] STRICT_SECRETS enforced: External database password cannot be empty or use known default placeholder." >&2
+      exit 1
+    fi
+  else
+    if [ "${DB_PASS:-}" = "opsknight_secure_password_change_me" ]; then
+      echo "❌ [FATAL] STRICT_SECRETS enforced: POSTGRES_PASSWORD must be changed from the default placeholder." >&2
+      exit 1
+    fi
+  fi
+}
+
+prepare_runtime_secrets() {
+  NEXTAUTH_SECRET="${NEXTAUTH_SECRET:-opsknight_super_secret_jwt_and_session_signing_key_change_in_production_min32chars}"
+  API_KEY_SECRET="${API_KEY_SECRET:-change_this_to_a_separate_random_api_key_secret_in_production}"
+
+  if [ -n "${ENCRYPTION_KEYS:-}" ]; then
+    validate_encryption_keys_format "${ENCRYPTION_KEYS}"
+  fi
+
+  # Preserve the historical k1 identifier for existing v3:k1:* ciphertext.
+  # For keyring-only deployments, mirror the active key material into the legacy
+  # secret mount so the declarative stack does not inject a weak placeholder or a
+  # second logical encryption key.
+  if [ -z "${ENCRYPTION_KEYS:-}" ]; then
+    ENCRYPTION_KEY="${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
+    ENCRYPTION_KEYS="k1:${ENCRYPTION_KEY}"
+  elif [ -z "${ENCRYPTION_KEY:-}" ]; then
+    FIRST_KEY_ENTRY="${ENCRYPTION_KEYS%%,*}"
+    FIRST_KEY_MATERIAL="${FIRST_KEY_ENTRY#*:}"
+    ENCRYPTION_KEY="${FIRST_KEY_MATERIAL}"
+  fi
+  export NEXTAUTH_SECRET
+  export API_KEY_SECRET
+  export ENCRYPTION_KEY
+  export ENCRYPTION_KEYS
+  export ALLOW_INSECURE_SECRETS
+}
+
+if [ "${OPSKNIGHT_DEPLOY_PREPARE_SECRETS_ONLY:-false}" = "true" ]; then
+  DB_PASS="${POSTGRES_PASSWORD:-opsknight_secure_password_change_me}"
+  validate_runtime_secrets
+  prepare_runtime_secrets
+  printf 'NEXTAUTH_SECRET=%s\n' "${NEXTAUTH_SECRET}"
+  printf 'API_KEY_SECRET=%s\n' "${API_KEY_SECRET}"
+  printf 'ENCRYPTION_KEY=%s\n' "${ENCRYPTION_KEY}"
+  printf 'ENCRYPTION_KEYS=%s\n' "${ENCRYPTION_KEYS}"
+  printf 'ALLOW_INSECURE_SECRETS=%s\n' "${ALLOW_INSECURE_SECRETS}"
+  exit 0
+fi
+
 # Concurrency lock to serialize deployments targeting the same stack on this host
 DEPLOY_LOCK_DIR="/tmp/opsknight_deploy_${STACK_NAME}.lock"
 if ! mkdir "${DEPLOY_LOCK_DIR}" 2>/dev/null; then
@@ -295,34 +410,8 @@ export POSTGRES_USER="${DB_USER}"
 export POSTGRES_PASSWORD="${DB_PASS}"
 export PGBOUNCER_DB_USER="${DB_USER}"
 
-# Fail-closed production secrets check
-if [ "${STRICT_SECRETS}" = "true" ]; then
-  if [ -z "${NEXTAUTH_SECRET:-}" ] || [ "${NEXTAUTH_SECRET}" = "opsknight_super_secret_jwt_and_session_signing_key_change_in_production_min32chars" ]; then
-    echo "❌ [FATAL] STRICT_SECRETS enforced: NEXTAUTH_SECRET is empty or using known default placeholder." >&2
-    echo "   Provide a secure secret with: export NEXTAUTH_SECRET='...'" >&2
-    exit 1
-  fi
-  if [ -z "${ENCRYPTION_KEY:-}" ] || [ "${ENCRYPTION_KEY}" = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" ]; then
-    echo "❌ [FATAL] STRICT_SECRETS enforced: ENCRYPTION_KEY is empty or using known default placeholder." >&2
-    echo "   Provide a 64-hex-char encryption key with: export ENCRYPTION_KEY='...'" >&2
-    exit 1
-  fi
-  if [ "${USE_EXTERNAL_DB}" = "true" ]; then
-    if [ -z "${DB_PASS}" ] || [ "${DB_PASS}" = "opsknight_secure_password_change_me" ]; then
-      echo "❌ [FATAL] STRICT_SECRETS enforced: External database password cannot be empty or use known default placeholder." >&2
-      exit 1
-    fi
-  else
-    if [ "${DB_PASS}" = "opsknight_secure_password_change_me" ]; then
-      echo "❌ [FATAL] STRICT_SECRETS enforced: POSTGRES_PASSWORD must be changed from the default placeholder." >&2
-      exit 1
-    fi
-  fi
-fi
-
-# Fallback values for development / evaluation
-NEXTAUTH_SECRET="${NEXTAUTH_SECRET:-opsknight_super_secret_jwt_and_session_signing_key_change_in_production_min32chars}"
-ENCRYPTION_KEY="${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
+validate_runtime_secrets
+prepare_runtime_secrets
 
 # Portable hash helper for Linux/macOS Swarm managers
 hash_string() {
@@ -374,7 +463,9 @@ create_versioned_secret() {
 create_versioned_secret "database_url" "${OPSKNIGHT_DATABASE_URL}" "OPSKNIGHT_DATABASE_URL_SECRET"
 create_versioned_secret "direct_database_url" "${DIRECT_DATABASE_URL}" "OPSKNIGHT_DIRECT_DATABASE_URL_SECRET"
 create_versioned_secret "nextauth_secret" "${NEXTAUTH_SECRET}" "OPSKNIGHT_NEXTAUTH_SECRET_SECRET"
+create_versioned_secret "api_key_secret" "${API_KEY_SECRET}" "OPSKNIGHT_API_KEY_SECRET_SECRET"
 create_versioned_secret "encryption_key" "${ENCRYPTION_KEY}" "OPSKNIGHT_ENCRYPTION_KEY_SECRET"
+create_versioned_secret "encryption_keys" "${ENCRYPTION_KEYS}" "OPSKNIGHT_ENCRYPTION_KEYS_SECRET"
 
 if [ "${ENABLE_PGBOUNCER}" = "true" ]; then
   create_versioned_secret "pgbouncer_userlist" "${PGBOUNCER_USERLIST_CONTENT}" "OPSKNIGHT_PGBOUNCER_USERLIST_SECRET"
@@ -483,7 +574,9 @@ export SWARM_STACK_NAME="${STACK_NAME}"
 export OPSKNIGHT_DIRECT_DATABASE_URL_SECRET
 export OPSKNIGHT_DATABASE_URL_SECRET
 export OPSKNIGHT_NEXTAUTH_SECRET_SECRET
+export OPSKNIGHT_API_KEY_SECRET_SECRET
 export OPSKNIGHT_ENCRYPTION_KEY_SECRET
+export OPSKNIGHT_ENCRYPTION_KEYS_SECRET
 export OPSKNIGHT_CUSTOM_CA_SECRET
 unset DIRECT_DATABASE_URL OPSKNIGHT_DATABASE_URL
 "${SCRIPT_DIR}/migrate.sh"
@@ -543,7 +636,9 @@ CURRENT_RUN_SECRETS=(
   "${OPSKNIGHT_DATABASE_URL_SECRET:-}"
   "${OPSKNIGHT_DIRECT_DATABASE_URL_SECRET:-}"
   "${OPSKNIGHT_NEXTAUTH_SECRET_SECRET:-}"
+  "${OPSKNIGHT_API_KEY_SECRET_SECRET:-}"
   "${OPSKNIGHT_ENCRYPTION_KEY_SECRET:-}"
+  "${OPSKNIGHT_ENCRYPTION_KEYS_SECRET:-}"
   "${OPSKNIGHT_PGBOUNCER_USERLIST_SECRET:-}"
   "${OPSKNIGHT_PGBOUNCER_DB_PASSWORD_SECRET:-}"
   "${OPSKNIGHT_WEB_DATABASE_URL_SECRET:-}"

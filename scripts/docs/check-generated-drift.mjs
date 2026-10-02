@@ -41,9 +41,25 @@ function withoutRevisionMetadata(value) {
   return copy;
 }
 
+// Generated Markdown frontmatter records the commit date of the last source
+// change. It is commit-bound provenance (it moves with every source commit and
+// squash merge), exactly like sourceRevision/generatedAt in the JSON artifacts.
+const COMMIT_BOUND_MARKDOWN_LINE = /^\s*verified_at: \d{4}-\d{2}-\d{2}\s*$/;
+
+export function withoutCommitBoundMarkdown(content) {
+  return content
+    .split('\n')
+    .filter(line => !COMMIT_BOUND_MARKDOWN_LINE.test(line))
+    .join('\n');
+}
+
 export function revisionOnlyDrift(path) {
+  const current = readFileSync(resolve(repositoryRoot, path), 'utf8');
+  if (path.endsWith('.md')) {
+    return withoutCommitBoundMarkdown(committed(path)) === withoutCommitBoundMarkdown(current);
+  }
   const before = withoutRevisionMetadata(JSON.parse(committed(path)));
-  const after = withoutRevisionMetadata(JSON.parse(readFileSync(resolve(repositoryRoot, path), 'utf8')));
+  const after = withoutRevisionMetadata(JSON.parse(current));
   return JSON.stringify(before) === JSON.stringify(after);
 }
 
@@ -54,7 +70,9 @@ export function checkGeneratedDrift({ allowRevisionOnly = true } = {}) {
   }).trim().split('\n').filter(Boolean);
 
   const rejected = changed.filter(path => !(
-    allowRevisionOnly && revisionBoundJson.has(path) && revisionOnlyDrift(path)
+    allowRevisionOnly &&
+    (revisionBoundJson.has(path) || path.endsWith('.md')) &&
+    revisionOnlyDrift(path)
   ));
 
   if (rejected.length > 0) {

@@ -51,6 +51,20 @@ jobs:
           bash -n deploy/swarm/scripts/*.sh
           echo "All scripts passed syntax validation."
 
+      - name: Validate YAML Parses
+        run: |
+          ruby -e 'require "yaml"; ARGV.each { |f| YAML.load_file(f); puts "Parsed #{f}" }' \
+            .github/workflows/swarm-validation.yml \
+            deploy/swarm/docker-stack.db.yml \
+            deploy/swarm/docker-stack.integrated.yml \
+            deploy/swarm/docker-stack.yml \
+            deploy/swarm/docker-stack.pgbouncer.yml \
+            deploy/swarm/docker-stack.external-db.yml \
+            deploy/swarm/docker-stack.external-db.integrated.yml \
+            deploy/swarm/docker-stack.ca.split.yml \
+            deploy/swarm/docker-stack.ca.integrated.yml \
+            deploy/swarm/docker-stack.pgbouncer-ca.yml
+
       - name: Validate Bundled DB Stack Config
         run: |
           cd deploy/swarm
@@ -171,13 +185,192 @@ jobs:
         run: |
           docker build -t opsknight-pgbouncer:local deploy/images/pgbouncer
 
-      - name: Deploy Core Split Swarm Stack
+      - name: Generate Production Swarm Secret Matrix
         run: |
-          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
-          export ALLOW_INSECURE_SECRETS="true"
-          export ENVIRONMENT="development"
-          export SWARM_RESOLVE_IMAGE_NEVER="true"
+          mkdir -p .swarm-ci
+          NEXTAUTH_SECRET="$(openssl rand -base64 48)"
+          API_KEY_SECRET="$(openssl rand -base64 48)"
+          while [ "${API_KEY_SECRET}" = "${NEXTAUTH_SECRET}" ]; do
+            API_KEY_SECRET="$(openssl rand -base64 48)"
+          done
+          {
+            printf 'export NEXTAUTH_SECRET=%q\n' "${NEXTAUTH_SECRET}"
+            printf 'export API_KEY_SECRET=%q\n' "${API_KEY_SECRET}"
+            printf 'export POSTGRES_PASSWORD=%q\n' "$(openssl rand -base64 36)"
+            printf 'export ROTATED_NEXTAUTH_SECRET=%q\n' "$(openssl rand -base64 48)"
+            printf 'export SWARM_OLD_ENCRYPTION_KEY=%q\n' "$(openssl rand -hex 32)"
+            printf 'export SWARM_NEW_ENCRYPTION_KEY=%q\n' "$(openssl rand -hex 32)"
+          } > .swarm-ci/secrets.env
+
+      - name: Create Swarm Validation Helpers
+        run: |
+          cat > .swarm-ci/swarm-validation-helpers.sh <<'BASH'
+          set -euo pipefail
+
+          load_swarm_ci_secrets() {
+            # shellcheck source=/dev/null
+            . ./.swarm-ci/secrets.env
+            export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
+            export SWARM_RESOLVE_IMAGE_NEVER="true"
+            export ENVIRONMENT="production"
+            unset ALLOW_INSECURE_SECRETS || true
+          }
+
+          use_keyring_only() {
+            unset ENCRYPTION_KEY || true
+            export ENCRYPTION_KEYS="k1:${SWARM_OLD_ENCRYPTION_KEY}"
+          }
+
+          use_legacy_single_key() {
+            export ENCRYPTION_KEY="${SWARM_OLD_ENCRYPTION_KEY}"
+            unset ENCRYPTION_KEYS || true
+          }
+
+          use_rotated_keyring() {
+            export ENCRYPTION_KEY="${SWARM_OLD_ENCRYPTION_KEY}"
+            export ENCRYPTION_KEYS="k2:${SWARM_NEW_ENCRYPTION_KEY},k1:${SWARM_OLD_ENCRYPTION_KEY}"
+          }
+
+          swarm_services_for_mode() {
+            if [ "${1:-split}" = "integrated" ]; then
+              printf '%s\n' opsknight_opsknight-app
+            else
+              printf '%s\n' \
+                opsknight_opsknight-web \
+                opsknight_opsknight-scheduler \
+                opsknight_opsknight-general-worker \
+                opsknight_opsknight-critical-worker \
+                opsknight_opsknight-bulk-worker \
+                opsknight_opsknight-status-projector
+            fi
+          }
+
+          service_env_value() {
+            local service="$1"
+            local key="$2"
+            docker service inspect "${service}" --format '{{json .Spec.TaskTemplate.ContainerSpec.Env}}' |
+              node -e 'const fs=require("fs"); const env=JSON.parse(fs.readFileSync(0,"utf8")); const key=process.argv[1]; const row=env.find(v => v === key || v.startsWith(`${key}=`)); if (!row) process.exit(2); console.log(row.includes("=") ? row.slice(key.length + 1) : "");' "${key}"
+          }
+
+          assert_service_env_equals() {
+            local service="$1"
+            local key="$2"
+            local expected="$3"
+            local actual
+            actual="$(service_env_value "${service}" "${key}")"
+            if [ "${actual}" != "${expected}" ]; then
+              echo "❌ ${service} expected ${key}=${expected}, got '${actual}'" >&2
+              exit 1
+            fi
+          }
+
+          container_for_service() {
+            local service="$1"
+            local container_id
+            container_id="$(docker ps --filter "label=com.docker.swarm.service.name=${service}" --format '{{.ID}}' | head -n 1)"
+            if [ -z "${container_id}" ]; then
+              echo "❌ No running container found for ${service}" >&2
+              exit 1
+            fi
+            printf '%s\n' "${container_id}"
+          }
+
+          assert_secret_file_equals() {
+            local service="$1"
+            local path="$2"
+            local expected="$3"
+            local container_id actual
+            container_id="$(container_for_service "${service}")"
+            actual="$(docker exec "${container_id}" sh -c "cat '${path}'")"
+            if [ "${actual}" != "${expected}" ]; then
+              echo "❌ ${service} secret ${path} did not match expected value" >&2
+              exit 1
+            fi
+          }
+
+          assert_runtime_secret_delivery() {
+            local mode="${1:-split}"
+            local service
+            while read -r service; do
+              [ -z "${service}" ] && continue
+              assert_service_env_equals "${service}" "API_KEY_SECRET_FILE" "/run/secrets/opsknight_api_key_secret"
+              assert_service_env_equals "${service}" "ENCRYPTION_KEY_FILE" "/run/secrets/opsknight_encryption_key"
+              assert_service_env_equals "${service}" "ENCRYPTION_KEYS_FILE" "/run/secrets/opsknight_encryption_keys"
+              assert_secret_file_equals "${service}" "/run/secrets/opsknight_api_key_secret" "${API_KEY_SECRET}"
+            done < <(swarm_services_for_mode "${mode}")
+          }
+
+          assert_allow_insecure_propagated() {
+            local service
+            while read -r service; do
+              [ -z "${service}" ] && continue
+              assert_service_env_equals "${service}" "ALLOW_INSECURE_SECRETS" "true"
+            done < <(swarm_services_for_mode split)
+          }
+
+          assert_split_keyring_secret() {
+            local expected="$1"
+            local service
+            while read -r service; do
+              [ -z "${service}" ] && continue
+              assert_service_env_equals "${service}" "ENCRYPTION_KEYS_FILE" "/run/secrets/opsknight_encryption_keys"
+              assert_secret_file_equals "${service}" "/run/secrets/opsknight_encryption_keys" "${expected}"
+            done < <(swarm_services_for_mode split)
+          }
+
+          secret_name_for_target() {
+            local service="$1"
+            local target="$2"
+            docker service inspect "${service}" --format '{{json .Spec.TaskTemplate.ContainerSpec.Secrets}}' |
+              node -e 'const fs=require("fs"); const secrets=JSON.parse(fs.readFileSync(0,"utf8")); const target=process.argv[1]; const match=secrets.find(s => s.File && s.File.Name === target); if (!match) process.exit(2); console.log(match.SecretName);' "${target}"
+          }
+
+          assert_migration_api_secret_delivery() {
+            local probe="opsknight_migration_api_secret_probe"
+            local api_secret
+            api_secret="$(secret_name_for_target opsknight_opsknight-web /run/secrets/opsknight_api_key_secret)"
+            docker service rm "${probe}" >/dev/null 2>&1 || true
+            docker service create \
+              --name "${probe}" \
+              --network opsknight_network \
+              --no-resolve-image \
+              --restart-condition none \
+              --secret "source=${api_secret},target=/run/secrets/opsknight_api_key_secret" \
+              --env API_KEY_SECRET_FILE=/run/secrets/opsknight_api_key_secret \
+              --entrypoint sh \
+              "${OPSKNIGHT_IMAGE}" \
+              -c 'test -s "$API_KEY_SECRET_FILE" && test "$(wc -c < "$API_KEY_SECRET_FILE")" -ge 32' >/dev/null
+            assert_service_env_equals "${probe}" "API_KEY_SECRET_FILE" "/run/secrets/opsknight_api_key_secret"
+            for _ in $(seq 1 60); do
+              state="$(docker service ps "${probe}" --no-trunc --format '{{.CurrentState}}' 2>/dev/null | head -n 1 || true)"
+              if echo "${state}" | grep -qiE '^Complete|Shutdown \(0\)'; then
+                docker service rm "${probe}" >/dev/null 2>&1 || true
+                return 0
+              fi
+              if echo "${state}" | grep -qiE '^Failed|^Rejected|\([1-9][0-9]*\)'; then
+                docker service logs "${probe}" || true
+                docker service rm "${probe}" >/dev/null 2>&1 || true
+                echo "❌ Migration API secret probe failed: ${state}" >&2
+                exit 1
+              fi
+              sleep 1
+            done
+            docker service logs "${probe}" || true
+            docker service rm "${probe}" >/dev/null 2>&1 || true
+            echo "❌ Migration API secret probe timed out" >&2
+            exit 1
+          }
+          BASH
+
+      - name: Deploy Core Split Swarm Stack with Keyring-Only Production Secrets
+        run: |
+          . ./.swarm-ci/swarm-validation-helpers.sh
+          load_swarm_ci_secrets
+          use_keyring_only
           ./deploy/swarm/scripts/deploy.sh
+          ./deploy/swarm/scripts/health-check.sh
+          assert_runtime_secret_delivery split
+          assert_migration_api_secret_delivery
 
       - name: Test Horizontal Dynamic Scaling
         run: |
@@ -186,22 +379,42 @@ jobs:
           sleep 10
           ./deploy/swarm/scripts/health-check.sh
 
-      - name: Test Secret Rotation with Zero Downtime
+      - name: Test Legacy Single-Key Upgrade Produces k1 Keyring
         run: |
-          echo "Rotating secret with new version..."
-          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
-          export ALLOW_INSECURE_SECRETS="true"
-          export ENVIRONMENT="development"
-          export NEXTAUTH_SECRET="rotated_secret_value_for_testing_123456789"
+          echo "Deploying with legacy ENCRYPTION_KEY only and asserting k1 keyring synthesis..."
+          . ./.swarm-ci/swarm-validation-helpers.sh
+          load_swarm_ci_secrets
+          use_legacy_single_key
+          ./deploy/swarm/scripts/deploy.sh
+          ./deploy/swarm/scripts/health-check.sh
+          assert_split_keyring_secret "k1:${SWARM_OLD_ENCRYPTION_KEY}"
+
+      - name: Test Encryption Keyring Rotation with Zero Downtime
+        run: |
+          echo "Rotating encryption to k2:new,k1:old..."
+          . ./.swarm-ci/swarm-validation-helpers.sh
+          load_swarm_ci_secrets
+          use_rotated_keyring
+          ./deploy/swarm/scripts/deploy.sh
+          ./deploy/swarm/scripts/health-check.sh
+          assert_split_keyring_secret "k2:${SWARM_NEW_ENCRYPTION_KEY},k1:${SWARM_OLD_ENCRYPTION_KEY}"
+
+      - name: Test Session Secret Rotation with Zero Downtime
+        run: |
+          echo "Rotating session secret with new production-valid value..."
+          . ./.swarm-ci/swarm-validation-helpers.sh
+          load_swarm_ci_secrets
+          use_rotated_keyring
+          export NEXTAUTH_SECRET="${ROTATED_NEXTAUTH_SECRET}"
           ./deploy/swarm/scripts/deploy.sh
           ./deploy/swarm/scripts/health-check.sh
 
       - name: Test Runtime Mode Switching (Split -> Integrated with Prune)
         run: |
           echo "Switching runtime from split to integrated mode..."
-          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
-          export ALLOW_INSECURE_SECRETS="true"
-          export ENVIRONMENT="development"
+          . ./.swarm-ci/swarm-validation-helpers.sh
+          load_swarm_ci_secrets
+          use_rotated_keyring
           export SWARM_RUNTIME_MODE="integrated"
           ./deploy/swarm/scripts/deploy.sh
 
@@ -210,6 +423,7 @@ jobs:
             exit 1
           fi
           docker service inspect opsknight_opsknight-app >/dev/null 2>&1
+          assert_runtime_secret_delivery integrated
           echo "✅ Successfully transitioned to integrated mode; split services pruned."
 
       - name: Test Topology-Aware Rollback on Integrated App
@@ -220,9 +434,9 @@ jobs:
       - name: Test Runtime Mode Switching (Integrated -> Split with Prune)
         run: |
           echo "Switching runtime back from integrated to split mode..."
-          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
-          export ALLOW_INSECURE_SECRETS="true"
-          export ENVIRONMENT="development"
+          . ./.swarm-ci/swarm-validation-helpers.sh
+          load_swarm_ci_secrets
+          use_rotated_keyring
           export SWARM_RUNTIME_MODE="split"
           ./deploy/swarm/scripts/deploy.sh
 
@@ -233,18 +447,31 @@ jobs:
           docker service inspect opsknight_opsknight-web >/dev/null 2>&1
           echo "✅ Successfully transitioned back to split mode; integrated service pruned."
 
+      - name: Test ALLOW_INSECURE_SECRETS Propagation Escape Hatch
+        run: |
+          echo "Deploying one deliberate insecure-secret escape-hatch scenario..."
+          . ./.swarm-ci/swarm-validation-helpers.sh
+          load_swarm_ci_secrets
+          use_rotated_keyring
+          export SWARM_RUNTIME_MODE="split"
+          export ENVIRONMENT="development"
+          export ALLOW_INSECURE_SECRETS="true"
+          ./deploy/swarm/scripts/deploy.sh
+          ./deploy/swarm/scripts/health-check.sh
+          assert_allow_insecure_propagated
+
       - name: Test Split Swarm with PgBouncer and Custom CA
         run: |
           echo "Deploying Swarm with PgBouncer and Custom CA..."
-          openssl req -x509 -newkey rsa:2048 -nodes -keyout /tmp/ca.key -out /tmp/ca.crt -days 1 -subj "/CN=test-ca"
-          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
+          mkdir -p .swarm-ci
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout .swarm-ci/ca.key -out .swarm-ci/ca.crt -days 1 -subj "/CN=test-ca"
+          . ./.swarm-ci/swarm-validation-helpers.sh
+          load_swarm_ci_secrets
+          use_rotated_keyring
           export OPSKNIGHT_PGBOUNCER_IMAGE="opsknight-pgbouncer:local"
-          export ALLOW_INSECURE_SECRETS="true"
-          export ENVIRONMENT="development"
           export SWARM_RUNTIME_MODE="split"
           export ENABLE_PGBOUNCER="true"
-          export PGBOUNCER_TLS_CA_CERT="/tmp/ca.crt"
-          export SWARM_RESOLVE_IMAGE_NEVER="true"
+          export PGBOUNCER_TLS_CA_CERT=".swarm-ci/ca.crt"
           ./deploy/swarm/scripts/deploy.sh
           ./deploy/swarm/scripts/health-check.sh
           echo "✅ Swarm with PgBouncer and Custom CA deployed and healthy."
@@ -252,12 +479,11 @@ jobs:
       - name: Test Integrated Runtime with Custom CA
         run: |
           echo "Deploying Integrated Runtime with Custom CA..."
-          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
-          export ALLOW_INSECURE_SECRETS="true"
-          export ENVIRONMENT="development"
+          . ./.swarm-ci/swarm-validation-helpers.sh
+          load_swarm_ci_secrets
+          use_rotated_keyring
           export SWARM_RUNTIME_MODE="integrated"
-          export PGBOUNCER_TLS_CA_CERT="/tmp/ca.crt"
-          export SWARM_RESOLVE_IMAGE_NEVER="true"
+          export PGBOUNCER_TLS_CA_CERT=".swarm-ci/ca.crt"
           ./deploy/swarm/scripts/deploy.sh
           ./deploy/swarm/scripts/health-check.sh
           echo "✅ Integrated Swarm with Custom CA deployed and healthy."
@@ -268,23 +494,23 @@ jobs:
           docker network inspect opsknight_network >/dev/null 2>&1 || \
             docker network create --driver overlay --attachable opsknight_network
 
-          mkdir -p /tmp/swarm-tls
-          openssl req -new -x509 -days 1 -nodes -out /tmp/swarm-tls/ca.crt \
-            -keyout /tmp/swarm-tls/ca.key -subj "/CN=swarm-ca" 2>/dev/null
-          openssl req -new -nodes -out /tmp/swarm-tls/server.csr \
-            -keyout /tmp/swarm-tls/server.key -subj "/CN=swarm-ext-postgres" 2>/dev/null
-          openssl x509 -req -in /tmp/swarm-tls/server.csr -days 1 \
-            -CA /tmp/swarm-tls/ca.crt -CAkey /tmp/swarm-tls/ca.key -CAcreateserial \
-            -out /tmp/swarm-tls/server.crt 2>/dev/null
-          docker run --rm -v /tmp/swarm-tls:/tls:rw alpine sh -c "chown 70:70 /tls/server.key /tls/server.crt && chmod 600 /tls/server.key && chmod 644 /tls/server.crt"
-          chmod 644 /tmp/swarm-tls/ca.crt
+          mkdir -p .swarm-ci/swarm-tls
+          openssl req -new -x509 -days 1 -nodes -out .swarm-ci/swarm-tls/ca.crt \
+            -keyout .swarm-ci/swarm-tls/ca.key -subj "/CN=swarm-ca" 2>/dev/null
+          openssl req -new -nodes -out .swarm-ci/swarm-tls/server.csr \
+            -keyout .swarm-ci/swarm-tls/server.key -subj "/CN=swarm-ext-postgres" 2>/dev/null
+          openssl x509 -req -in .swarm-ci/swarm-tls/server.csr -days 1 \
+            -CA .swarm-ci/swarm-tls/ca.crt -CAkey .swarm-ci/swarm-tls/ca.key -CAcreateserial \
+            -out .swarm-ci/swarm-tls/server.crt 2>/dev/null
+          docker run --rm -v "${PWD}/.swarm-ci/swarm-tls:/tls:rw" alpine sh -c "chown 70:70 /tls/server.key /tls/server.crt && chmod 600 /tls/server.key && chmod 644 /tls/server.crt"
+          chmod 644 .swarm-ci/swarm-tls/ca.crt
 
           docker rm -f swarm-ext-postgres 2>/dev/null || true
           docker run -d \
             --name swarm-ext-postgres \
             --network opsknight_network \
-            -v /tmp/swarm-tls/server.crt:/var/lib/postgresql/server.crt:ro \
-            -v /tmp/swarm-tls/server.key:/var/lib/postgresql/server.key:ro \
+            -v "${PWD}/.swarm-ci/swarm-tls/server.crt:/var/lib/postgresql/server.crt:ro" \
+            -v "${PWD}/.swarm-ci/swarm-tls/server.key:/var/lib/postgresql/server.key:ro" \
             -e POSTGRES_USER=ext_swarm_user \
             -e POSTGRES_PASSWORD=ext_swarm_secret_password_123 \
             -e POSTGRES_DB=ext_swarm_db \
@@ -292,10 +518,8 @@ jobs:
             -c ssl=on \
             -c ssl_cert_file=/var/lib/postgresql/server.crt \
             -c ssl_key_file=/var/lib/postgresql/server.key
-
           cleanup_ext_db() {
             docker rm -f swarm-ext-postgres 2>/dev/null || true
-            rm -rf /tmp/swarm-tls 2>/dev/null || true
           }
           trap cleanup_ext_db EXIT
 
@@ -308,7 +532,9 @@ jobs:
           done
 
           echo "Deploying Swarm split stack with external TLS DB + PgBouncer verify-full..."
-          export OPSKNIGHT_IMAGE="opsknight-local:swarm-ci"
+          . ./.swarm-ci/swarm-validation-helpers.sh
+          load_swarm_ci_secrets
+          use_rotated_keyring
           export OPSKNIGHT_PGBOUNCER_IMAGE="opsknight-pgbouncer:local"
           export SWARM_RUNTIME_MODE="split"
           export ENABLE_PGBOUNCER="true"
@@ -319,10 +545,7 @@ jobs:
           export EXTERNAL_DB_PASSWORD="ext_swarm_secret_password_123"
           export EXTERNAL_DB_NAME="ext_swarm_db"
           export EXTERNAL_DB_SSLMODE="verify-full"
-          export PGBOUNCER_TLS_CA_CERT="/tmp/swarm-tls/ca.crt"
-          export SWARM_RESOLVE_IMAGE_NEVER="true"
-          export ALLOW_INSECURE_SECRETS="true"
-          export ENVIRONMENT="development"
+          export PGBOUNCER_TLS_CA_CERT=".swarm-ci/swarm-tls/ca.crt"
 
           ./deploy/swarm/scripts/deploy.sh
           ./deploy/swarm/scripts/health-check.sh

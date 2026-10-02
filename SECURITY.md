@@ -33,11 +33,11 @@ Security updates target the latest major version. See [supported versions and EO
 - Use a supported release and track [security advisories](https://github.com/opsknight-labs/OpsKnight/security/advisories).
 - Terminate HTTPS at a trusted ingress; restrict database and administrative network access.
 - Configure strong `NEXTAUTH_SECRET` and encryption keys outside source control, stored separately from database backups.
-- New protected secret writes use authenticated AES-256-GCM envelopes. Legacy CBC reads remain supported. API keys are hashed; general incident text is not field-encrypted. See [encryption and key overlap](docs/v1.5/security/encryption.md). Never remove an old key until all dependent ciphertext and required backups can be recovered.
-- Configure OIDC and enforce MFA at the identity provider. OpsKnight has no native server-verified second factor. SCIM supports Users, not Groups; deprovisioning is not full personal-data erasure.
+- New protected secret writes use authenticated AES-256-GCM envelopes. Legacy CBC reads remain supported. API keys are hashed; general incident text is not field-encrypted. See [security hardening and key rotation](docs/v2.0.0/operate/security/hardening.md). Never remove an old key until all dependent ciphertext and required backups can be recovered.
+- Configure OIDC and enforce MFA at the identity provider. OpsKnight has no native server-verified second factor. SCIM supports Users and Groups; deprovisioning is not full personal-data erasure. See [SCIM provisioning](docs/v2.0.0/guides/identity/configure-scim.md).
 - Apply least privilege and review administrator and responder access.
 - Session cookies are HttpOnly, use SameSite=Lax, and are Secure for HTTPS deployments. JWT sessions use token-version revocation and configured lifetime limits. Verify effective behavior in your deployment.
-- Configure backups, protected storage, retention and restoration drills using the [backup procedure](docs/v1.5/deployment/backup-restore.md). Retain matching encryption keys and deployment configuration.
+- Configure backups, protected storage, retention and restoration drills using the [backup and restore procedure](docs/v2.0.0/operate/data/backup-and-restore.md). Retain matching encryption keys and deployment configuration.
 - Review audit records and preserve required evidence externally. Database audit rows are subject to access and retention controls; they are not immutable/WORM storage.
 - Review third-party integrations, notification recipients and data transfers. Set retention according to your processing needs and applicable requirements.
 

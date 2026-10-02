@@ -22,7 +22,22 @@ env:
   IMAGE_NAME_RELEASE: ghcr.io/${{ github.repository_owner }}/opsknight
 
 jobs:
+  validate-release-tag:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout release metadata
+        uses: actions/checkout@v7
+
+      - name: Validate release tag ordering
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LATEST_RELEASE_TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>/dev/null || true)"
+          LATEST_RELEASE_TAG="$LATEST_RELEASE_TAG" node scripts/validate-release-tag.cjs "$GITHUB_REF_NAME"
+
   release-quality:
+    needs: validate-release-tag
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     services:
@@ -87,7 +102,9 @@ jobs:
           npm run docs:capabilities
           npx vitest run -c vitest.unit.config.ts \
             tests/unit/migration-recovery.test.ts \
-            tests/lib/deployment-config-unit.test.ts
+            tests/lib/deployment-config-unit.test.ts \
+            tests/lib/api-keys.test.ts \
+            tests/unit/env-validation.test.ts
 
       - name: Event, escalation, and notification contract
         env:
@@ -103,7 +120,7 @@ jobs:
         run: |
           set -euo pipefail
           CURRENT_TAG="${GITHUB_REF_NAME}"
-          PREVIOUS_TAG="$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -Fvx "$CURRENT_TAG" | head -n 1 || true)"
+          PREVIOUS_TAG="$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -Fvx "$CURRENT_TAG" | head -n 1 || true)"
           if [ -z "$PREVIOUS_TAG" ]; then
             echo 'No previous stable tag exists; upgrade gate is not applicable.'
             exit 0
@@ -151,12 +168,147 @@ jobs:
           grep -q 'startupProbe:' /tmp/opsknight-helm.yaml
           grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
 
+  release-documentation:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout release revision
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install release dependencies
+        env:
+          HUSKY: '0'
+        run: npm ci --ignore-scripts --legacy-peer-deps
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Install documentation browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Log in to GHCR for certified release image
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull and pin certified release image
+        env:
+          RELEASE_IMAGE_DIGEST: ${{ needs.build.outputs.release_image_digest }}
+        run: |
+          test -n "$RELEASE_IMAGE_DIGEST"
+          echo "DOCS_OPSKNIGHT_IMAGE=${IMAGE_NAME_RELEASE}@${RELEASE_IMAGE_DIGEST}" >> "$GITHUB_ENV"
+          docker pull "${IMAGE_NAME_RELEASE}@${RELEASE_IMAGE_DIGEST}"
+
+      - name: Checkout website renderer
+        uses: actions/checkout@v7
+        with:
+          repository: opsknight-labs/OpsKnight-website
+          path: opsknight-website
+
+      - name: Build rendered documentation site
+        run: |
+          ./scripts/sync-docs-to-website.sh ./opsknight-website
+          npm ci --ignore-scripts --prefix ./opsknight-website
+          npm run build --prefix ./opsknight-website
+          python3 -m http.server 15000 --directory ./opsknight-website/out > /tmp/opsknight-docs-site.log 2>&1 &
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:15000/docs/v2.0.0/ >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/opsknight-docs-site.log
+          exit 1
+
+      - name: Enforce exact release documentation evidence
+        env:
+          DOCS_EXPECTED_PRODUCT_REVISION: ${{ github.sha }}
+          DOCS_WEBSITE_DIR: ${{ github.workspace }}/opsknight-website
+          DOCS_SITE_BASE_URL: http://127.0.0.1:15000
+          RELEASE_IMAGE_DIGEST: ${{ needs.build.outputs.release_image_digest }}
+        run: npm run docs:certify:release
+
+      - name: Assemble tag release certification summary
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          PRODUCT_SHA: ${{ github.sha }}
+          RELEASE_IMAGE_DIGEST: ${{ needs.build.outputs.release_image_digest }}
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const root = process.cwd();
+          const tag = process.env.RELEASE_TAG;
+          const reportPath = path.join(root, 'generated/docs-certification/current.json');
+          const renderedPath = path.join(root, 'generated/docs-certification/rendered-site.json');
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+          const renderedSite = fs.existsSync(renderedPath)
+            ? JSON.parse(fs.readFileSync(renderedPath, 'utf8'))
+            : {};
+
+          if (report.productSourceRevision !== process.env.PRODUCT_SHA) {
+            throw new Error(`Certification product SHA ${report.productSourceRevision} does not match ${process.env.PRODUCT_SHA}`);
+          }
+          if (!report.runtimeImageDigest || !report.runtimeImageDigest.includes(process.env.RELEASE_IMAGE_DIGEST)) {
+            throw new Error(`Certification runtime digest ${report.runtimeImageDigest ?? 'missing'} does not include ${process.env.RELEASE_IMAGE_DIGEST}`);
+          }
+
+          const summary = {
+            tag,
+            productSha: report.productSourceRevision,
+            releaseImageIndexDigest: process.env.RELEASE_IMAGE_DIGEST,
+            runtimeImageDigest: `${process.env.IMAGE_NAME_RELEASE}@${process.env.RELEASE_IMAGE_DIGEST}`,
+            renderedWebsiteRevision: renderedSite.sourceRevision ?? null,
+            docsSourceRevision: report.documentationRevision,
+            apiJourneyResults: {
+              status: report.checks.publicApiSmokeMatrix,
+              proof: report.apiProof,
+              publicApisSmokeProbed: report.counts.publicApisSmokeProbed,
+              publicApiDeepContractGroups: report.counts.publicApiDeepContractGroups,
+            },
+            runtimeJourneyResults: {
+              status: report.checks.runtimeJourneys,
+              journeyFiles: report.counts.journeyFiles,
+              evidenceScreenshots: report.counts.evidenceScreenshots,
+            },
+            sourceReport: 'generated/docs-certification/current.json',
+            renderedSiteReport: fs.existsSync(renderedPath) ? 'generated/docs-certification/rendered-site.json' : null,
+          };
+
+          const output = path.join(root, 'generated/docs-certification', `release-certification-${tag}.json`);
+          fs.writeFileSync(output, `${JSON.stringify(summary, null, 2)}\n`);
+          NODE
+
+      - name: Preserve tag release certification evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-certification-${{ github.ref_name }}
+          path: |
+            generated/docs-certification/current.json
+            generated/docs-certification/rendered-site.json
+            generated/docs-certification/release-certification-${{ github.ref_name }}.json
+            generated/docs-evidence/current/
+          if-no-files-found: error
+          retention-days: 365
+
   build:
     needs: release-quality
     if: >-
-      always() &&
-      (needs.release-quality.result == 'success' || needs.release-quality.result == 'skipped')
+      !cancelled() &&
+      (!startsWith(github.ref, 'refs/tags/v') || needs.release-quality.result == 'success')
     runs-on: ubuntu-22.04
+    outputs:
+      release_image_digest: ${{ steps.release_build.outputs.digest }}
     services:
       postgres:
         image: postgres:16
@@ -190,14 +342,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Validate stable release tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          LATEST_RELEASE_TAG="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name 2>/dev/null || true)"
-          LATEST_RELEASE_TAG="$LATEST_RELEASE_TAG" node scripts/validate-release-tag.cjs "$GITHUB_REF_NAME"
-
       - name: Docker metadata (test channel - PR)
         if: github.event_name == 'pull_request'
         id: meta_test_pr
@@ -217,18 +361,14 @@ jobs:
             type=raw,value=latest
             type=sha,format=short,prefix=sha-
 
-      - name: Docker metadata (release channel - version tag)
+      - name: Docker metadata (release staging - version tag)
         if: startsWith(github.ref, 'refs/tags/v')
         id: meta_release_tag
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_NAME_RELEASE }}
           tags: |
-            type=raw,value=latest
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,format=short,prefix=sha-
+            type=raw,value=rc-${{ github.sha }}
 
       - name: Build (PR validation - no push)
         if: github.event_name == 'pull_request'
@@ -287,11 +427,17 @@ jobs:
           echo "Verifying live Docker Compose split runtime with image: $IMAGE"
 
           COMPOSE_PROJECT="ci-split-${GITHUB_SHA:0:8}"
+          CI_POSTGRES_PASSWORD="$(openssl rand -hex 24)"
           export OPSKNIGHT_IMAGE="$IMAGE"
           export OPSKNIGHT_PULL_POLICY="if_not_present"
           export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
           export APP_PORT=33000
           export POSTGRES_PORT=35432
+          export POSTGRES_PASSWORD="$CI_POSTGRES_PASSWORD"
+          export NEXTAUTH_SECRET="$(openssl rand -base64 48)"
+          export API_KEY_SECRET="$(openssl rand -base64 48)"
+          export ENCRYPTION_KEY="$(openssl rand -hex 32)"
+          export ENCRYPTION_KEYS="ci:$(openssl rand -hex 32)"
 
           docker pull postgres:15-alpine
           docker build -t opsknight-pgbouncer:1.26.0 deploy/images/pgbouncer
@@ -369,18 +515,23 @@ jobs:
           COMPOSE_PROJECT="ci-ext-${GITHUB_SHA:0:8}"
           EXT_DB_CONTAINER="ci-ext-postgres-${GITHUB_SHA:0:8}"
           EXT_NETWORK="ci-ext-net-${GITHUB_SHA:0:8}"
+          EXT_DB_PASSWORD="$(openssl rand -hex 24)"
 
           export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
           export OPSKNIGHT_IMAGE="$IMAGE"
           export PGBOUNCER_IMAGE="opsknight-pgbouncer:1.26.0"
           export OPSKNIGHT_PULL_POLICY="if_not_present"
           export APP_PORT=33001
-          export OPSKNIGHT_DATABASE_URL="postgresql://ext_opsknight_user:ext_strong_secret_password@${EXT_DB_CONTAINER}:5432/ext_opsknight_db?sslmode=verify-full&sslrootcert=/etc/ssl/certs/custom-ca.crt"
+          export NEXTAUTH_SECRET="$(openssl rand -base64 48)"
+          export API_KEY_SECRET="$(openssl rand -base64 48)"
+          export ENCRYPTION_KEY="$(openssl rand -hex 32)"
+          export ENCRYPTION_KEYS="ci:$(openssl rand -hex 32)"
+          export OPSKNIGHT_DATABASE_URL="postgresql://ext_opsknight_user:${EXT_DB_PASSWORD}@${EXT_DB_CONTAINER}:5432/ext_opsknight_db?sslmode=verify-full&sslrootcert=/etc/ssl/certs/custom-ca.crt"
           export PGBOUNCER_DB_HOST="$EXT_DB_CONTAINER"
           export PGBOUNCER_DB_PORT="5432"
           export PGBOUNCER_DB_NAME="ext_opsknight_db"
           export PGBOUNCER_DB_USER="ext_opsknight_user"
-          export PGBOUNCER_DB_PASSWORD="ext_strong_secret_password"
+          export PGBOUNCER_DB_PASSWORD="$EXT_DB_PASSWORD"
           export PGBOUNCER_SERVER_TLS_SSLMODE="verify-full"
           export PGBOUNCER_TLS_CA_CERT="/tmp/ci-tls/ca.crt"
           export PGBOUNCER_SERVER_TLS_CA_FILE="/etc/ssl/certs/custom-ca.crt"
@@ -406,7 +557,7 @@ jobs:
             -v /tmp/ci-tls/server.crt:/var/lib/postgresql/server.crt:ro \
             -v /tmp/ci-tls/server.key:/var/lib/postgresql/server.key:ro \
             -e POSTGRES_USER=ext_opsknight_user \
-            -e POSTGRES_PASSWORD=ext_strong_secret_password \
+            -e POSTGRES_PASSWORD="$EXT_DB_PASSWORD" \
             -e POSTGRES_DB=ext_opsknight_db \
             postgres:16-alpine \
             -c ssl=on \
@@ -514,6 +665,7 @@ jobs:
 
       - name: Build + push (release channel - version tag)
         if: startsWith(github.ref, 'refs/tags/v')
+        id: release_build
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -549,18 +701,248 @@ jobs:
           provenance: false
           sbom: false
 
+  sbom-provenance:
+    needs: [build, release-documentation]
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.build.result == 'success' &&
+      needs.release-documentation.result == 'success'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify release image digest with embedded SBOM and provenance
+        env:
+          RELEASE_IMAGE_DIGEST: ${{ needs.build.outputs.release_image_digest }}
+        run: |
+          test -n "$RELEASE_IMAGE_DIGEST"
+          node <<'NODE'
+          const { execFileSync } = require('node:child_process');
+          const ref = `${process.env.IMAGE_NAME_RELEASE}@${process.env.RELEASE_IMAGE_DIGEST}`;
+          execFileSync('docker', ['buildx', 'imagetools', 'inspect', ref], { stdio: 'inherit' });
+          const inspectJson = (name, format) => {
+            const raw = execFileSync(
+              'docker',
+              ['buildx', 'imagetools', 'inspect', ref, '--format', format],
+              { encoding: 'utf8' }
+            ).trim();
+            if (!raw || raw === 'null' || raw === '{}' || raw === '[]') {
+              throw new Error(`${name} is missing from the release image index`);
+            }
+            return JSON.parse(raw);
+          };
+          const assertPresent = (name, raw) => {
+            if (raw === null || (Array.isArray(raw) && raw.length === 0) || (typeof raw === 'object' && Object.keys(raw).length === 0)) {
+              throw new Error(`${name} is missing from the release image index`);
+            }
+            return raw;
+          };
+          const sbom = assertPresent('SBOM', inspectJson('SBOM', '{{ json .SBOM }}'));
+          const provenance = assertPresent('Provenance', inspectJson('Provenance', '{{ json .Provenance }}'));
+          const hasPlatform = (value, platform) => {
+            const text = JSON.stringify(value);
+            const [os, arch] = platform.split('/');
+            return text.includes(platform) || (text.includes(`"os":"${os}"`) && text.includes(`"architecture":"${arch}"`));
+          };
+          for (const platform of ['linux/amd64', 'linux/arm64']) {
+            if (!hasPlatform(sbom, platform)) throw new Error(`SBOM missing for ${platform}`);
+            if (!hasPlatform(provenance, platform)) throw new Error(`Provenance missing for ${platform}`);
+          }
+          NODE
+
+  pgbouncer-image:
+    needs: sbom-provenance
+    if: startsWith(github.ref, 'refs/tags/v') && needs.sbom-provenance.result == 'success'
+    runs-on: ubuntu-22.04
+    outputs:
+      pgbouncer_image_digest: ${{ steps.pgbouncer_build.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve PgBouncer release tags
+        id: pgbouncer_tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo 'tags<<EOF'
+            if [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/opsknight-pgbouncer:1.26.0"
+              echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/opsknight-pgbouncer:latest"
+            else
+              echo "ghcr.io/${GITHUB_REPOSITORY_OWNER}/opsknight-pgbouncer:sha-${GITHUB_SHA}"
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build + push PgBouncer (release channel - version tag)
-        if: startsWith(github.ref, 'refs/tags/v')
+        id: pgbouncer_build
         uses: docker/build-push-action@v7
         with:
           context: deploy/images/pgbouncer
           file: deploy/images/pgbouncer/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:1.26.0
-            ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:latest
+          tags: ${{ steps.pgbouncer_tags.outputs.tags }}
           cache-from: type=gha,scope=opsknight-pgbouncer-release
           cache-to: type=gha,scope=opsknight-pgbouncer-release,mode=max
           provenance: mode=max
           sbom: true
+
+  promote-release-tags:
+    needs: [build, pgbouncer-image]
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.build.result == 'success' &&
+      needs.pgbouncer-image.result == 'success'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (promoted release tags)
+        id: promote_meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME_RELEASE }}
+          tags: |
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref_name, '-') }}
+            type=semver,pattern={{major}},enable=${{ !contains(github.ref_name, '-') }}
+
+      - name: Promote certified digest to release tags
+        env:
+          RELEASE_IMAGE_DIGEST: ${{ needs.build.outputs.release_image_digest }}
+          PROMOTED_TAGS: ${{ steps.promote_meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          source_ref="${IMAGE_NAME_RELEASE}@${RELEASE_IMAGE_DIGEST}"
+          test -n "$RELEASE_IMAGE_DIGEST"
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker buildx imagetools create -t "$tag" "$source_ref"
+            promoted_digest="$(docker buildx imagetools inspect "$tag" | awk '/^Digest:/ {print $2; exit}')"
+            test "$promoted_digest" = "$RELEASE_IMAGE_DIGEST"
+          done <<EOF
+          $PROMOTED_TAGS
+          EOF
+
+  publish-github-release:
+    needs: [build, sbom-provenance, pgbouncer-image, promote-release-tags, release-documentation]
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.build.result == 'success' &&
+      needs.sbom-provenance.result == 'success' &&
+      needs.pgbouncer-image.result == 'success' &&
+      needs.promote-release-tags.result == 'success' &&
+      needs.release-documentation.result == 'success'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download tag release certification evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: release-certification-${{ github.ref_name }}
+          path: release-certification
+
+      - name: Publish GitHub Release after release artifacts succeed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_IMAGE_DIGEST: ${{ needs.build.outputs.release_image_digest }}
+          PGBOUNCER_IMAGE_DIGEST: ${{ needs.pgbouncer-image.outputs.pgbouncer_image_digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          title="OpsKnight ${tag#v}"
+          prerelease=false
+          make_latest=false
+          if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            make_latest=true
+          else
+            prerelease=true
+          fi
+
+          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq .id 2>/dev/null || true)"
+          if [ -n "$release_id" ]; then
+            echo "GitHub Release ${tag} already exists; refreshing latest/prerelease flags and certification evidence."
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+              -f name="$title" \
+              -F prerelease="$prerelease" \
+              -f make_latest="$make_latest" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
+              -f tag_name="$tag" \
+              -f target_commitish="${GITHUB_SHA}" \
+              -f name="$title" \
+              -F generate_release_notes=true \
+              -F prerelease="$prerelease" \
+              -f make_latest="$make_latest" >/dev/null
+          fi
+
+          summary_asset="$(find release-certification -name "release-certification-${tag}.json" -print -quit)"
+          test -n "$summary_asset"
+          SUMMARY_ASSET="$summary_asset" node <<'NODE'
+          const fs = require('node:fs');
+          const summary = JSON.parse(fs.readFileSync(process.env.SUMMARY_ASSET, 'utf8'));
+          summary.releaseImageIndexDigest = process.env.RELEASE_IMAGE_DIGEST;
+          summary.pgbouncerImageDigest = process.env.PGBOUNCER_IMAGE_DIGEST;
+          fs.writeFileSync(process.env.SUMMARY_ASSET, `${JSON.stringify(summary, null, 2)}\n`);
+          NODE
+          gh release upload "$tag" "$summary_asset" --clobber
+
+          release_body="$(gh release view "$tag" --json body --jq .body)"
+          release_body="$(RELEASE_BODY="$release_body" node <<'NODE'
+          const marker = '<!-- opsknight-release-certification -->';
+          const section = `${marker}
+          ## Release certification
+          - Release image index digest: \`${process.env.RELEASE_IMAGE_DIGEST}\`
+          - PgBouncer image digest: \`${process.env.PGBOUNCER_IMAGE_DIGEST}\`
+          `;
+          const body = process.env.RELEASE_BODY || '';
+          const withoutOld = body.includes(marker) ? body.slice(0, body.indexOf(marker)).trimEnd() : body.trimEnd();
+          process.stdout.write(`${withoutOld}${withoutOld ? '\n\n' : ''}${section}\n`);
+          NODE
+          )"
+          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq .id)"
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" -f body="$release_body" >/dev/null
+
+          if [ "$make_latest" = true ]; then
+            latest_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name)"
+            test "$latest_tag" = "$tag"
+          else
+            release_prerelease="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq .prerelease)"
+            test "$release_prerelease" = true
+          fi

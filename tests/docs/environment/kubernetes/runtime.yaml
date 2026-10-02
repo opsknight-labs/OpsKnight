@@ -9,6 +9,8 @@ stringData:
   database-url: "postgresql://opsknight_docs:opsknight_docs@postgres:5432/opsknight_docs?schema=public"
   # checkov:skip=CKV_SECRET_6: Ephemeral documentation-only secret.
   nextauth-secret: docs-kubernetes-runtime-only-nextauth-secret
+  # checkov:skip=CKV_SECRET_6: Ephemeral documentation-only secret.
+  api-key-secret: docs-kubernetes-runtime-only-api-key-signing-secret
   # checkov:skip=CKV_SECRET_6: Ephemeral documentation-only encryption key.
   encryption-key: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
 ---
@@ -123,6 +125,8 @@ spec:
               valueFrom: { secretKeyRef: { name: docs-runtime, key: database-url } }
             - name: NEXTAUTH_SECRET
               valueFrom: { secretKeyRef: { name: docs-runtime, key: nextauth-secret } }
+            - name: API_KEY_SECRET
+              valueFrom: { secretKeyRef: { name: docs-runtime, key: api-key-secret } }
             - name: ENCRYPTION_KEY
               valueFrom: { secretKeyRef: { name: docs-runtime, key: encryption-key } }
           ports: [{ name: http, containerPort: 3000 }]

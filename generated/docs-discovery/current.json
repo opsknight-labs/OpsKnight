@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-02T21:21:46+05:30",
-  "sourceRevision": "4ff3f67bc6b2aad559f653f35851b043789cb244",
+  "generatedAt": "2026-10-03T00:07:26+05:30",
+  "sourceRevision": "87c5f950e49a383fd0eb02003b5029f04acd223b",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -12778,6 +12778,7 @@
         "src/lib/auth.ts",
         "src/lib/avatar.ts",
         "src/lib/client-ip.ts",
+        "src/lib/encryption.ts",
         "src/lib/env-validation.ts",
         "src/lib/local-auth-policy.ts",
         "src/lib/logger.ts",
@@ -14599,6 +14600,42 @@
   ],
   "configuration": [
     {
+      "name": "ALLOW_INSECURE_SECRETS",
+      "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml",
+        "env.example",
+        "src/lib/encryption.ts",
+        "src/lib/env-validation.ts"
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment",
+        "runtime"
+      ],
+      "defaults": [],
+      "allowedValues": [
+        "1",
+        "true"
+      ],
+      "semanticClassification": "PRODUCT_RUNTIME",
+      "type": "enum/string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "web or integrated runtime"
+      ],
+      "deploymentSupport": [
+        "manifest"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "derived"
+    },
+    {
       "name": "ALLOWED_VERSIONS",
       "sources": [
         "scripts/sync-docs-to-website.sh"
@@ -14629,7 +14666,12 @@
       "sources": [
         "deploy/compose/docker-compose.split.yml",
         "deploy/compose/docker-compose.yml",
-        "src/lib/api-keys.ts"
+        "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+        "env.example",
+        "src/lib/api-keys.ts",
+        "src/lib/env-validation.ts"
       ],
       "required": false,
       "secret": true,
@@ -15896,6 +15938,7 @@
         "scripts/test-db.js",
         "src/app/(app)/settings/system/page.tsx",
         "src/components/DatabaseOffline.tsx",
+        "src/lib/env-validation.ts",
         "src/lib/prisma-datasource.ts"
       ],
       "required": false,
@@ -15983,16 +16026,18 @@
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml",
         "deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml",
-        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+        "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+        "src/lib/env-validation.ts"
       ],
       "required": false,
       "secret": true,
       "scopes": [
-        "deployment"
+        "deployment",
+        "runtime"
       ],
       "defaults": [],
       "allowedValues": [],
-      "semanticClassification": "PRODUCT_DEPLOYMENT",
+      "semanticClassification": "PRODUCT_RUNTIME",
       "type": "string",
       "requiredWhen": "conditional or optional; inspect cited source",
       "runtimeRoles": [
@@ -16174,11 +16219,13 @@
         "deploy/compose/docker-compose.split.yml",
         "deploy/compose/docker-compose.yml",
         "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "env.example",
         "src/app/(app)/settings/system/page.tsx",
         "src/lib/__tests__/encryption.test.ts",
         "src/lib/admin-health.ts",
+        "src/lib/api-keys.ts",
         "src/lib/encryption.ts",
         "src/lib/env-validation.ts"
       ],
@@ -16207,6 +16254,11 @@
     {
       "name": "ENCRYPTION_KEYS",
       "sources": [
+        "deploy/compose/docker-compose.split.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "env.example",
         "src/app/(app)/settings/system/page.tsx",
         "src/lib/admin-health.ts",
@@ -18248,9 +18300,12 @@
         "deploy/compose/docker-compose.split.yml",
         "deploy/compose/docker-compose.yml",
         "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "env.example",
         "src/app/(app)/settings/system/page.tsx",
+        "src/lib/api-keys.ts",
+        "src/lib/env-validation.ts",
         "src/lib/secret-manager.ts",
         "src/lib/user-notification-endpoints.ts",
         "src/lib/voice/token.ts"
@@ -18390,6 +18445,58 @@
       "deprecated": false,
       "replacement": null,
       "confidence": "derived"
+    },
+    {
+      "name": "NON_GATING_DETAIL",
+      "sources": [
+        "scripts/ci/sanitize-security-junit.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
+      "name": "NON_GATING_MESSAGE",
+      "sources": [
+        "scripts/ci/sanitize-security-junit.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
     },
     {
       "name": "NONCE_COOKIE_NAME",
@@ -18641,6 +18748,33 @@
       "confidence": "derived"
     },
     {
+      "name": "OPSKNIGHT_API_KEY_SECRET_SECRET",
+      "sources": [
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml"
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "PRODUCT_DEPLOYMENT",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "web or integrated runtime"
+      ],
+      "deploymentSupport": [
+        "manifest"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
       "name": "OPSKNIGHT_CUSTOM_CA_SECRET",
       "sources": [
         "deploy/swarm/docker-stack.ca.integrated.yml",
@@ -18780,6 +18914,33 @@
     },
     {
       "name": "OPSKNIGHT_ENCRYPTION_KEY_SECRET",
+      "sources": [
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml"
+      ],
+      "required": false,
+      "secret": true,
+      "scopes": [
+        "deployment"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "PRODUCT_DEPLOYMENT",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "web or integrated runtime"
+      ],
+      "deploymentSupport": [
+        "manifest"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
+      "name": "OPSKNIGHT_ENCRYPTION_KEYS_SECRET",
       "sources": [
         "deploy/swarm/docker-stack.integrated.yml",
         "deploy/swarm/docker-stack.yml"
@@ -20552,16 +20713,18 @@
         "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
         "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml",
         "deploy/swarm/docker-stack.db.yml",
-        "env.example"
+        "env.example",
+        "src/lib/env-validation.ts"
       ],
       "required": false,
       "secret": true,
       "scopes": [
-        "deployment"
+        "deployment",
+        "runtime"
       ],
       "defaults": [],
       "allowedValues": [],
-      "semanticClassification": "PRODUCT_DEPLOYMENT",
+      "semanticClassification": "PRODUCT_RUNTIME",
       "type": "string",
       "requiredWhen": "conditional or optional; inspect cited source",
       "runtimeRoles": [
@@ -60121,6 +60284,7 @@
           "src/lib/auth.ts",
           "src/lib/avatar.ts",
           "src/lib/client-ip.ts",
+          "src/lib/encryption.ts",
           "src/lib/env-validation.ts",
           "src/lib/local-auth-policy.ts",
           "src/lib/logger.ts",
@@ -60168,6 +60332,7 @@
             "src/lib/auth.ts",
             "src/lib/avatar.ts",
             "src/lib/client-ip.ts",
+            "src/lib/encryption.ts",
             "src/lib/env-validation.ts",
             "src/lib/local-auth-policy.ts",
             "src/lib/logger.ts",
@@ -60284,6 +60449,7 @@
               "src/lib/auth.ts",
               "src/lib/avatar.ts",
               "src/lib/client-ip.ts",
+              "src/lib/encryption.ts",
               "src/lib/env-validation.ts",
               "src/lib/local-auth-policy.ts",
               "src/lib/logger.ts",
@@ -60333,6 +60499,7 @@
               "src/lib/auth.ts",
               "src/lib/avatar.ts",
               "src/lib/client-ip.ts",
+              "src/lib/encryption.ts",
               "src/lib/env-validation.ts",
               "src/lib/local-auth-policy.ts",
               "src/lib/logger.ts",
@@ -78166,6 +78333,125 @@
         ]
       },
       {
+        "id": "configuration:ALLOW_INSECURE_SECRETS",
+        "kind": "configuration",
+        "name": "ALLOW_INSECURE_SECRETS",
+        "owner": "platform",
+        "classification": "OPERATOR_FEATURE",
+        "sources": [
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/compose/docker-compose.yml",
+          "deploy/swarm/docker-stack.integrated.yml",
+          "deploy/swarm/docker-stack.yml",
+          "env.example",
+          "src/lib/encryption.ts",
+          "src/lib/env-validation.ts"
+        ],
+        "contract": {
+          "name": "ALLOW_INSECURE_SECRETS",
+          "sources": [
+            "deploy/compose/docker-compose.split.yml",
+            "deploy/compose/docker-compose.yml",
+            "deploy/swarm/docker-stack.integrated.yml",
+            "deploy/swarm/docker-stack.yml",
+            "env.example",
+            "src/lib/encryption.ts",
+            "src/lib/env-validation.ts"
+          ],
+          "required": false,
+          "secret": true,
+          "scopes": [
+            "deployment",
+            "runtime"
+          ],
+          "defaults": [],
+          "allowedValues": [
+            "1",
+            "true"
+          ],
+          "semanticClassification": "PRODUCT_RUNTIME",
+          "type": "enum/string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "web or integrated runtime"
+          ],
+          "deploymentSupport": [
+            "manifest"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "derived"
+        },
+        "documentation": {
+          "concepts": [
+            "operate/deploy/README.md",
+            "operate/deploy/architecture/database-connections.md",
+            "operate/deploy/architecture/integrated-vs-split.md",
+            "operate/deploy/architecture/runtime-roles.md"
+          ],
+          "guides": [
+            "operate/deploy/docker-compose/external-postgres.md",
+            "operate/deploy/docker-compose/integrated.md",
+            "operate/deploy/docker-compose/pgbouncer.md",
+            "operate/deploy/docker-compose/prerequisites.md",
+            "operate/deploy/docker-compose/production-checklist.md",
+            "operate/deploy/docker-compose/reverse-proxy.md",
+            "operate/deploy/docker-compose/split.md",
+            "operate/deploy/docker-compose/troubleshooting.md",
+            "operate/deploy/docker-compose/upgrade.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
+            "start/production-install.md",
+            "start/quickstart.md"
+          ],
+          "reference": [
+            "reference/configuration/README.md",
+            "reference/health.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [
+          "tests/lib/deployment-config-unit.test.ts"
+        ],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:ALLOW_INSECURE_SECRETS:classification",
+            "text": "ALLOW_INSECURE_SECRETS is classified as OPERATOR_FEATURE and owned by platform.",
+            "evidence": [
+              "deploy/compose/docker-compose.split.yml",
+              "deploy/compose/docker-compose.yml",
+              "deploy/swarm/docker-stack.integrated.yml",
+              "deploy/swarm/docker-stack.yml",
+              "env.example",
+              "src/lib/encryption.ts",
+              "src/lib/env-validation.ts"
+            ],
+            "verification": "source"
+          }
+        ],
+        "relatedFeatures": [
+          "api:/api/status/[slug]/history",
+          "api:/api/status/[slug]",
+          "api:/api/status/[slug]/rss",
+          "api:/api/status/[slug]/subscribe",
+          "api:/api/status/history",
+          "api:/api/status",
+          "api:/api/status/rss",
+          "api:/api/status/subscribe",
+          "api:/api/status/subscriptions/unsubscribe",
+          "api:/api/status/subscriptions/verify",
+          "ui:/action-items",
+          "ui:/audit"
+        ]
+      },
+      {
         "id": "configuration:ALLOWED_VERSIONS",
         "kind": "configuration",
         "name": "ALLOWED_VERSIONS",
@@ -78233,14 +78519,24 @@
         "sources": [
           "deploy/compose/docker-compose.split.yml",
           "deploy/compose/docker-compose.yml",
-          "src/lib/api-keys.ts"
+          "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+          "env.example",
+          "src/lib/api-keys.ts",
+          "src/lib/env-validation.ts"
         ],
         "contract": {
           "name": "API_KEY_SECRET",
           "sources": [
             "deploy/compose/docker-compose.split.yml",
             "deploy/compose/docker-compose.yml",
-            "src/lib/api-keys.ts"
+            "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+            "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
+            "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+            "env.example",
+            "src/lib/api-keys.ts",
+            "src/lib/env-validation.ts"
           ],
           "required": false,
           "secret": true,
@@ -78308,7 +78604,12 @@
             "evidence": [
               "deploy/compose/docker-compose.split.yml",
               "deploy/compose/docker-compose.yml",
-              "src/lib/api-keys.ts"
+              "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+              "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
+              "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
+              "env.example",
+              "src/lib/api-keys.ts",
+              "src/lib/env-validation.ts"
             ],
             "verification": "source"
           }
@@ -81946,6 +82247,7 @@
           "scripts/test-db.js",
           "src/app/(app)/settings/system/page.tsx",
           "src/components/DatabaseOffline.tsx",
+          "src/lib/env-validation.ts",
           "src/lib/prisma-datasource.ts"
         ],
         "contract": {
@@ -81966,6 +82268,7 @@
             "scripts/test-db.js",
             "src/app/(app)/settings/system/page.tsx",
             "src/components/DatabaseOffline.tsx",
+            "src/lib/env-validation.ts",
             "src/lib/prisma-datasource.ts"
           ],
           "required": false,
@@ -82048,6 +82351,7 @@
               "scripts/test-db.js",
               "src/app/(app)/settings/system/page.tsx",
               "src/components/DatabaseOffline.tsx",
+              "src/lib/env-validation.ts",
               "src/lib/prisma-datasource.ts"
             ],
             "verification": "source"
@@ -82228,7 +82532,8 @@
           "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
           "deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml",
           "deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml",
-          "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+          "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+          "src/lib/env-validation.ts"
         ],
         "contract": {
           "name": "DIRECT_DATABASE_URL",
@@ -82240,16 +82545,18 @@
             "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
             "deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml",
             "deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml",
-            "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+            "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+            "src/lib/env-validation.ts"
           ],
           "required": false,
           "secret": true,
           "scopes": [
-            "deployment"
+            "deployment",
+            "runtime"
           ],
           "defaults": [],
           "allowedValues": [],
-          "semanticClassification": "PRODUCT_DEPLOYMENT",
+          "semanticClassification": "PRODUCT_RUNTIME",
           "type": "string",
           "requiredWhen": "conditional or optional; inspect cited source",
           "runtimeRoles": [
@@ -82312,7 +82619,8 @@
               "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
               "deploy/kubernetes/kustomize/profiles/integrated/deployment.yaml",
               "deploy/kubernetes/kustomize/profiles/split-pgbouncer/web-database-patch.yaml",
-              "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml"
+              "deploy/kubernetes/kustomize/profiles/split/runtime-deployments.yaml",
+              "src/lib/env-validation.ts"
             ],
             "verification": "source"
           }
@@ -82756,11 +83064,13 @@
           "deploy/compose/docker-compose.split.yml",
           "deploy/compose/docker-compose.yml",
           "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
           "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
           "env.example",
           "src/app/(app)/settings/system/page.tsx",
           "src/lib/__tests__/encryption.test.ts",
           "src/lib/admin-health.ts",
+          "src/lib/api-keys.ts",
           "src/lib/encryption.ts",
           "src/lib/env-validation.ts"
         ],
@@ -82770,11 +83080,13 @@
             "deploy/compose/docker-compose.split.yml",
             "deploy/compose/docker-compose.yml",
             "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+            "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
             "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
             "env.example",
             "src/app/(app)/settings/system/page.tsx",
             "src/lib/__tests__/encryption.test.ts",
             "src/lib/admin-health.ts",
+            "src/lib/api-keys.ts",
             "src/lib/encryption.ts",
             "src/lib/env-validation.ts"
           ],
@@ -82845,11 +83157,13 @@
               "deploy/compose/docker-compose.split.yml",
               "deploy/compose/docker-compose.yml",
               "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+              "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
               "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
               "env.example",
               "src/app/(app)/settings/system/page.tsx",
               "src/lib/__tests__/encryption.test.ts",
               "src/lib/admin-health.ts",
+              "src/lib/api-keys.ts",
               "src/lib/encryption.ts",
               "src/lib/env-validation.ts"
             ],
@@ -82878,6 +83192,11 @@
         "owner": "platform",
         "classification": "OPERATOR_FEATURE",
         "sources": [
+          "deploy/compose/docker-compose.split.yml",
+          "deploy/compose/docker-compose.yml",
+          "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
           "env.example",
           "src/app/(app)/settings/system/page.tsx",
           "src/lib/admin-health.ts",
@@ -82887,6 +83206,11 @@
         "contract": {
           "name": "ENCRYPTION_KEYS",
           "sources": [
+            "deploy/compose/docker-compose.split.yml",
+            "deploy/compose/docker-compose.yml",
+            "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+            "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
+            "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
             "env.example",
             "src/app/(app)/settings/system/page.tsx",
             "src/lib/admin-health.ts",
@@ -82916,15 +83240,39 @@
           "confidence": "incomplete"
         },
         "documentation": {
-          "concepts": [],
-          "guides": [],
+          "concepts": [
+            "operate/deploy/README.md",
+            "operate/deploy/architecture/database-connections.md",
+            "operate/deploy/architecture/integrated-vs-split.md",
+            "operate/deploy/architecture/runtime-roles.md"
+          ],
+          "guides": [
+            "operate/deploy/docker-compose/external-postgres.md",
+            "operate/deploy/docker-compose/integrated.md",
+            "operate/deploy/docker-compose/pgbouncer.md",
+            "operate/deploy/docker-compose/prerequisites.md",
+            "operate/deploy/docker-compose/production-checklist.md",
+            "operate/deploy/docker-compose/reverse-proxy.md",
+            "operate/deploy/docker-compose/split.md",
+            "operate/deploy/docker-compose/troubleshooting.md",
+            "operate/deploy/docker-compose/upgrade.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
+            "start/production-install.md",
+            "start/quickstart.md"
+          ],
           "reference": [
-            "reference/configuration/README.md"
+            "reference/configuration/README.md",
+            "reference/health.md"
           ],
           "troubleshooting": []
         },
         "documentationMapping": "capability-source",
-        "tests": [],
+        "tests": [
+          "tests/lib/deployment-config-unit.test.ts"
+        ],
         "runtimeEvidence": [],
         "introducedVersion": "unknown",
         "availability": "unknown",
@@ -82933,6 +83281,11 @@
             "id": "configuration:ENCRYPTION_KEYS:classification",
             "text": "ENCRYPTION_KEYS is classified as OPERATOR_FEATURE and owned by platform.",
             "evidence": [
+              "deploy/compose/docker-compose.split.yml",
+              "deploy/compose/docker-compose.yml",
+              "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+              "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
+              "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
               "env.example",
               "src/app/(app)/settings/system/page.tsx",
               "src/lib/admin-health.ts",
@@ -88834,9 +89187,12 @@
           "deploy/compose/docker-compose.split.yml",
           "deploy/compose/docker-compose.yml",
           "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
           "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
           "env.example",
           "src/app/(app)/settings/system/page.tsx",
+          "src/lib/api-keys.ts",
+          "src/lib/env-validation.ts",
           "src/lib/secret-manager.ts",
           "src/lib/user-notification-endpoints.ts",
           "src/lib/voice/token.ts"
@@ -88847,9 +89203,12 @@
             "deploy/compose/docker-compose.split.yml",
             "deploy/compose/docker-compose.yml",
             "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+            "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
             "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
             "env.example",
             "src/app/(app)/settings/system/page.tsx",
+            "src/lib/api-keys.ts",
+            "src/lib/env-validation.ts",
             "src/lib/secret-manager.ts",
             "src/lib/user-notification-endpoints.ts",
             "src/lib/voice/token.ts"
@@ -88923,9 +89282,12 @@
               "deploy/compose/docker-compose.split.yml",
               "deploy/compose/docker-compose.yml",
               "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+              "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
               "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
               "env.example",
               "src/app/(app)/settings/system/page.tsx",
+              "src/lib/api-keys.ts",
+              "src/lib/env-validation.ts",
               "src/lib/secret-manager.ts",
               "src/lib/user-notification-endpoints.ts",
               "src/lib/voice/token.ts"
@@ -89338,6 +89700,124 @@
           "api:/api/status/subscriptions/verify",
           "ui:/action-items",
           "ui:/audit"
+        ]
+      },
+      {
+        "id": "configuration:NON_GATING_DETAIL",
+        "kind": "configuration",
+        "name": "NON_GATING_DETAIL",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/ci/sanitize-security-junit.cjs"
+        ],
+        "contract": {
+          "name": "NON_GATING_DETAIL",
+          "sources": [
+            "scripts/ci/sanitize-security-junit.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:NON_GATING_DETAIL:classification",
+            "text": "NON_GATING_DETAIL is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/ci/sanitize-security-junit.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
+        "id": "configuration:NON_GATING_MESSAGE",
+        "kind": "configuration",
+        "name": "NON_GATING_MESSAGE",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/ci/sanitize-security-junit.cjs"
+        ],
+        "contract": {
+          "name": "NON_GATING_MESSAGE",
+          "sources": [
+            "scripts/ci/sanitize-security-junit.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:NON_GATING_MESSAGE:classification",
+            "text": "NON_GATING_MESSAGE is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/ci/sanitize-security-junit.cjs"
+            ],
+            "verification": "source"
+          }
         ]
       },
       {
@@ -90064,6 +90544,106 @@
         ]
       },
       {
+        "id": "configuration:OPSKNIGHT_API_KEY_SECRET_SECRET",
+        "kind": "configuration",
+        "name": "OPSKNIGHT_API_KEY_SECRET_SECRET",
+        "owner": "platform",
+        "classification": "OPERATOR_FEATURE",
+        "sources": [
+          "deploy/swarm/docker-stack.integrated.yml",
+          "deploy/swarm/docker-stack.yml"
+        ],
+        "contract": {
+          "name": "OPSKNIGHT_API_KEY_SECRET_SECRET",
+          "sources": [
+            "deploy/swarm/docker-stack.integrated.yml",
+            "deploy/swarm/docker-stack.yml"
+          ],
+          "required": false,
+          "secret": true,
+          "scopes": [
+            "deployment"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "PRODUCT_DEPLOYMENT",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "web or integrated runtime"
+          ],
+          "deploymentSupport": [
+            "manifest"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [
+            "operate/deploy/README.md",
+            "operate/deploy/architecture/database-connections.md",
+            "operate/deploy/architecture/integrated-vs-split.md",
+            "operate/deploy/architecture/runtime-roles.md"
+          ],
+          "guides": [
+            "operate/deploy/docker-compose/external-postgres.md",
+            "operate/deploy/docker-compose/integrated.md",
+            "operate/deploy/docker-compose/pgbouncer.md",
+            "operate/deploy/docker-compose/prerequisites.md",
+            "operate/deploy/docker-compose/production-checklist.md",
+            "operate/deploy/docker-compose/reverse-proxy.md",
+            "operate/deploy/docker-compose/split.md",
+            "operate/deploy/docker-compose/troubleshooting.md",
+            "operate/deploy/docker-compose/upgrade.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
+            "start/production-install.md",
+            "start/quickstart.md"
+          ],
+          "reference": [
+            "reference/configuration/README.md",
+            "reference/health.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [
+          "tests/lib/deployment-config-unit.test.ts"
+        ],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:OPSKNIGHT_API_KEY_SECRET_SECRET:classification",
+            "text": "OPSKNIGHT_API_KEY_SECRET_SECRET is classified as OPERATOR_FEATURE and owned by platform.",
+            "evidence": [
+              "deploy/swarm/docker-stack.integrated.yml",
+              "deploy/swarm/docker-stack.yml"
+            ],
+            "verification": "source"
+          }
+        ],
+        "relatedFeatures": [
+          "api:/api/status/[slug]/history",
+          "api:/api/status/[slug]",
+          "api:/api/status/[slug]/rss",
+          "api:/api/status/[slug]/subscribe",
+          "api:/api/status/history",
+          "api:/api/status",
+          "api:/api/status/rss",
+          "api:/api/status/subscribe",
+          "api:/api/status/subscriptions/unsubscribe",
+          "api:/api/status/subscriptions/verify",
+          "ui:/action-items",
+          "ui:/audit"
+        ]
+      },
+      {
         "id": "configuration:OPSKNIGHT_CUSTOM_CA_SECRET",
         "kind": "configuration",
         "name": "OPSKNIGHT_CUSTOM_CA_SECRET",
@@ -90635,6 +91215,106 @@
           {
             "id": "configuration:OPSKNIGHT_ENCRYPTION_KEY_SECRET:classification",
             "text": "OPSKNIGHT_ENCRYPTION_KEY_SECRET is classified as OPERATOR_FEATURE and owned by platform.",
+            "evidence": [
+              "deploy/swarm/docker-stack.integrated.yml",
+              "deploy/swarm/docker-stack.yml"
+            ],
+            "verification": "source"
+          }
+        ],
+        "relatedFeatures": [
+          "api:/api/status/[slug]/history",
+          "api:/api/status/[slug]",
+          "api:/api/status/[slug]/rss",
+          "api:/api/status/[slug]/subscribe",
+          "api:/api/status/history",
+          "api:/api/status",
+          "api:/api/status/rss",
+          "api:/api/status/subscribe",
+          "api:/api/status/subscriptions/unsubscribe",
+          "api:/api/status/subscriptions/verify",
+          "ui:/action-items",
+          "ui:/audit"
+        ]
+      },
+      {
+        "id": "configuration:OPSKNIGHT_ENCRYPTION_KEYS_SECRET",
+        "kind": "configuration",
+        "name": "OPSKNIGHT_ENCRYPTION_KEYS_SECRET",
+        "owner": "platform",
+        "classification": "OPERATOR_FEATURE",
+        "sources": [
+          "deploy/swarm/docker-stack.integrated.yml",
+          "deploy/swarm/docker-stack.yml"
+        ],
+        "contract": {
+          "name": "OPSKNIGHT_ENCRYPTION_KEYS_SECRET",
+          "sources": [
+            "deploy/swarm/docker-stack.integrated.yml",
+            "deploy/swarm/docker-stack.yml"
+          ],
+          "required": false,
+          "secret": true,
+          "scopes": [
+            "deployment"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "PRODUCT_DEPLOYMENT",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "web or integrated runtime"
+          ],
+          "deploymentSupport": [
+            "manifest"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [
+            "operate/deploy/README.md",
+            "operate/deploy/architecture/database-connections.md",
+            "operate/deploy/architecture/integrated-vs-split.md",
+            "operate/deploy/architecture/runtime-roles.md"
+          ],
+          "guides": [
+            "operate/deploy/docker-compose/external-postgres.md",
+            "operate/deploy/docker-compose/integrated.md",
+            "operate/deploy/docker-compose/pgbouncer.md",
+            "operate/deploy/docker-compose/prerequisites.md",
+            "operate/deploy/docker-compose/production-checklist.md",
+            "operate/deploy/docker-compose/reverse-proxy.md",
+            "operate/deploy/docker-compose/split.md",
+            "operate/deploy/docker-compose/troubleshooting.md",
+            "operate/deploy/docker-compose/upgrade.md",
+            "operate/deploy/helm-operations.md",
+            "operate/deploy/kubernetes-operations.md",
+            "operate/deploy/kustomize-operations.md",
+            "operate/deploy/swarm-operations.md",
+            "start/production-install.md",
+            "start/quickstart.md"
+          ],
+          "reference": [
+            "reference/configuration/README.md",
+            "reference/health.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [
+          "tests/lib/deployment-config-unit.test.ts"
+        ],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:OPSKNIGHT_ENCRYPTION_KEYS_SECRET:classification",
+            "text": "OPSKNIGHT_ENCRYPTION_KEYS_SECRET is classified as OPERATOR_FEATURE and owned by platform.",
             "evidence": [
               "deploy/swarm/docker-stack.integrated.yml",
               "deploy/swarm/docker-stack.yml"
@@ -96605,7 +97285,8 @@
           "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
           "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml",
           "deploy/swarm/docker-stack.db.yml",
-          "env.example"
+          "env.example",
+          "src/lib/env-validation.ts"
         ],
         "contract": {
           "name": "POSTGRES_PASSWORD",
@@ -96616,16 +97297,18 @@
             "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
             "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml",
             "deploy/swarm/docker-stack.db.yml",
-            "env.example"
+            "env.example",
+            "src/lib/env-validation.ts"
           ],
           "required": false,
           "secret": true,
           "scopes": [
-            "deployment"
+            "deployment",
+            "runtime"
           ],
           "defaults": [],
           "allowedValues": [],
-          "semanticClassification": "PRODUCT_DEPLOYMENT",
+          "semanticClassification": "PRODUCT_RUNTIME",
           "type": "string",
           "requiredWhen": "conditional or optional; inspect cited source",
           "runtimeRoles": [
@@ -96689,7 +97372,8 @@
               "deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml",
               "deploy/kubernetes/kustomize/base/postgres-statefulset.yaml",
               "deploy/swarm/docker-stack.db.yml",
-              "env.example"
+              "env.example",
+              "src/lib/env-validation.ts"
             ],
             "verification": "source"
           }
@@ -125014,11 +125698,11 @@
       }
     ],
     "summary": {
-      "total": 1163,
-      "claims": 1620,
+      "total": 1168,
+      "claims": 1625,
       "unsupportedClaims": 0,
-      "supported": 582,
-      "documentedSupported": 582,
+      "supported": 585,
+      "documentedSupported": 585,
       "undocumentedSupported": 0,
       "unresolvedSemanticContracts": 0,
       "uiRoutesWithoutExplicitDocumentation": 0,
@@ -125026,7 +125710,7 @@
         "api": 227,
         "api-scope": 7,
         "authorization-action": 9,
-        "configuration": 305,
+        "configuration": 310,
         "deployment-topology": 4,
         "enum": 73,
         "integration": 28,
@@ -125040,8 +125724,8 @@
       },
       "byClassification": {
         "ADMIN_FEATURE": 83,
-        "INTERNAL_IMPLEMENTATION": 581,
-        "OPERATOR_FEATURE": 288,
+        "INTERNAL_IMPLEMENTATION": 583,
+        "OPERATOR_FEATURE": 291,
         "PUBLIC_API": 54,
         "PUBLIC_FEATURE": 157
       },

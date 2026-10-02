@@ -135,11 +135,25 @@ spec:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" $root }}
                   key: {{ $root.Values.secrets.keys.nextauthSecret }}
+            - name: API_KEY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" $root }}
+                  key: {{ $root.Values.secrets.keys.apiKeySecret }}
             - name: ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" $root }}
                   key: {{ $root.Values.secrets.keys.encryptionKey }}
+                  optional: true
+            {{- if or $root.Values.secrets.encryptionKeys $root.Values.secrets.existingSecret }}
+            - name: ENCRYPTION_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" $root }}
+                  key: {{ $root.Values.secrets.keys.encryptionKeys }}
+                  optional: true
+            {{- end }}
             {{- if $root.Values.metrics.scrapeTokenSecret.existingSecret }}
             - name: PROMETHEUS_SCRAPE_TOKEN
               valueFrom:

@@ -36,10 +36,13 @@ services:
       PORT: '3000'
       HOSTNAME: '0.0.0.0'
       NEXT_TELEMETRY_DISABLED: '1'
+      ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
       DATABASE_URL_FILE: /run/secrets/opsknight_database_url
       DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
       NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
+      API_KEY_SECRET_FILE: /run/secrets/opsknight_api_key_secret
       ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
+      ENCRYPTION_KEYS_FILE: /run/secrets/opsknight_encryption_keys
     secrets:
       - source: opsknight_database_url
         target: /run/secrets/opsknight_database_url
@@ -47,8 +50,12 @@ services:
         target: /run/secrets/opsknight_direct_database_url
       - source: opsknight_nextauth_secret
         target: /run/secrets/opsknight_nextauth_secret
+      - source: opsknight_api_key_secret
+        target: /run/secrets/opsknight_api_key_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
+      - source: opsknight_encryption_keys
+        target: /run/secrets/opsknight_encryption_keys
     cap_drop:
       - ALL
     healthcheck:
@@ -105,10 +112,13 @@ services:
       PORT: '3000'
       HOSTNAME: '0.0.0.0'
       NEXT_TELEMETRY_DISABLED: '1'
+      ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
       DATABASE_URL_FILE: /run/secrets/opsknight_database_url
       DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
       NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
+      API_KEY_SECRET_FILE: /run/secrets/opsknight_api_key_secret
       ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
+      ENCRYPTION_KEYS_FILE: /run/secrets/opsknight_encryption_keys
     secrets:
       - source: opsknight_database_url
         target: /run/secrets/opsknight_database_url
@@ -116,8 +126,12 @@ services:
         target: /run/secrets/opsknight_direct_database_url
       - source: opsknight_nextauth_secret
         target: /run/secrets/opsknight_nextauth_secret
+      - source: opsknight_api_key_secret
+        target: /run/secrets/opsknight_api_key_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
+      - source: opsknight_encryption_keys
+        target: /run/secrets/opsknight_encryption_keys
     cap_drop:
       - ALL
     healthcheck:
@@ -173,10 +187,13 @@ services:
       PORT: '3000'
       HOSTNAME: '0.0.0.0'
       NEXT_TELEMETRY_DISABLED: '1'
+      ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
       DATABASE_URL_FILE: /run/secrets/opsknight_database_url
       DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
       NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
+      API_KEY_SECRET_FILE: /run/secrets/opsknight_api_key_secret
       ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
+      ENCRYPTION_KEYS_FILE: /run/secrets/opsknight_encryption_keys
     secrets:
       - source: opsknight_database_url
         target: /run/secrets/opsknight_database_url
@@ -184,8 +201,12 @@ services:
         target: /run/secrets/opsknight_direct_database_url
       - source: opsknight_nextauth_secret
         target: /run/secrets/opsknight_nextauth_secret
+      - source: opsknight_api_key_secret
+        target: /run/secrets/opsknight_api_key_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
+      - source: opsknight_encryption_keys
+        target: /run/secrets/opsknight_encryption_keys
     cap_drop:
       - ALL
     healthcheck:
@@ -241,10 +262,13 @@ services:
       PORT: '3000'
       HOSTNAME: '0.0.0.0'
       NEXT_TELEMETRY_DISABLED: '1'
+      ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
       DATABASE_URL_FILE: /run/secrets/opsknight_database_url
       DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
       NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
+      API_KEY_SECRET_FILE: /run/secrets/opsknight_api_key_secret
       ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
+      ENCRYPTION_KEYS_FILE: /run/secrets/opsknight_encryption_keys
     secrets:
       - source: opsknight_database_url
         target: /run/secrets/opsknight_database_url
@@ -252,8 +276,12 @@ services:
         target: /run/secrets/opsknight_direct_database_url
       - source: opsknight_nextauth_secret
         target: /run/secrets/opsknight_nextauth_secret
+      - source: opsknight_api_key_secret
+        target: /run/secrets/opsknight_api_key_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
+      - source: opsknight_encryption_keys
+        target: /run/secrets/opsknight_encryption_keys
     cap_drop:
       - ALL
     healthcheck:
@@ -309,10 +337,13 @@ services:
       PORT: '3000'
       HOSTNAME: '0.0.0.0'
       NEXT_TELEMETRY_DISABLED: '1'
+      ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
       DATABASE_URL_FILE: /run/secrets/opsknight_database_url
       DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
       NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
+      API_KEY_SECRET_FILE: /run/secrets/opsknight_api_key_secret
       ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
+      ENCRYPTION_KEYS_FILE: /run/secrets/opsknight_encryption_keys
     secrets:
       - source: opsknight_database_url
         target: /run/secrets/opsknight_database_url
@@ -320,8 +351,12 @@ services:
         target: /run/secrets/opsknight_direct_database_url
       - source: opsknight_nextauth_secret
         target: /run/secrets/opsknight_nextauth_secret
+      - source: opsknight_api_key_secret
+        target: /run/secrets/opsknight_api_key_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
+      - source: opsknight_encryption_keys
+        target: /run/secrets/opsknight_encryption_keys
     cap_drop:
       - ALL
     healthcheck:
@@ -377,10 +412,13 @@ services:
       PORT: '3000'
       HOSTNAME: '0.0.0.0'
       NEXT_TELEMETRY_DISABLED: '1'
+      ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
       DATABASE_URL_FILE: /run/secrets/opsknight_database_url
       DIRECT_DATABASE_URL_FILE: /run/secrets/opsknight_direct_database_url
       NEXTAUTH_SECRET_FILE: /run/secrets/opsknight_nextauth_secret
+      API_KEY_SECRET_FILE: /run/secrets/opsknight_api_key_secret
       ENCRYPTION_KEY_FILE: /run/secrets/opsknight_encryption_key
+      ENCRYPTION_KEYS_FILE: /run/secrets/opsknight_encryption_keys
     secrets:
       - source: opsknight_database_url
         target: /run/secrets/opsknight_database_url
@@ -388,8 +426,12 @@ services:
         target: /run/secrets/opsknight_direct_database_url
       - source: opsknight_nextauth_secret
         target: /run/secrets/opsknight_nextauth_secret
+      - source: opsknight_api_key_secret
+        target: /run/secrets/opsknight_api_key_secret
       - source: opsknight_encryption_key
         target: /run/secrets/opsknight_encryption_key
+      - source: opsknight_encryption_keys
+        target: /run/secrets/opsknight_encryption_keys
     cap_drop:
       - ALL
     healthcheck:
@@ -451,6 +493,12 @@ secrets:
   opsknight_nextauth_secret:
     external: true
     name: ${OPSKNIGHT_NEXTAUTH_SECRET_SECRET:-opsknight_nextauth_secret}
+  opsknight_api_key_secret:
+    external: true
+    name: ${OPSKNIGHT_API_KEY_SECRET_SECRET:-opsknight_api_key_secret}
   opsknight_encryption_key:
     external: true
     name: ${OPSKNIGHT_ENCRYPTION_KEY_SECRET:-opsknight_encryption_key}
+  opsknight_encryption_keys:
+    external: true
+    name: ${OPSKNIGHT_ENCRYPTION_KEYS_SECRET:-opsknight_encryption_keys}

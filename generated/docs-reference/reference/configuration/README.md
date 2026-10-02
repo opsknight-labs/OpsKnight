@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-02
+  verified_at: 2026-10-03
   evidence:
     - src/
     - deploy/
@@ -198,6 +198,20 @@ Sets the polling interval while the general queue is idle.
 
 ## Supported production inventory
 
+## `ALLOW_INSECURE_SECRETS`
+
+- Type: enum/string
+- Required: conditional or optional; inspect cited source
+- Allowed values: `1`, `true`
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: derived
+- Static default: not displayed
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `env.example`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`
+
 ## `API_KEY_SECRET`
 
 - Type: string
@@ -210,7 +224,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `src/lib/api-keys.ts`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/migration-job.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `env.example`, `src/lib/api-keys.ts`, `src/lib/env-validation.ts`
 
 ## `APP_HOST_ALIASES`
 
@@ -434,7 +448,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `env.example`, `src/app/(app)/settings/system/page.tsx`, `src/lib/admin-health.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/deployment.yaml`, `deploy/kubernetes/helm/opsknight/templates/migration-job.yaml`, `deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml`, `env.example`, `src/app/(app)/settings/system/page.tsx`, `src/lib/admin-health.ts`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`
 
 ## `EXTERNAL_DB_HOST`
 
@@ -534,6 +548,20 @@ Sets the polling interval while the general queue is idle.
 - Static default: `true`
 - Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`
 
+## `OPSKNIGHT_API_KEY_SECRET_SECRET`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`
+
 ## `OPSKNIGHT_CUSTOM_CA_SECRET`
 
 - Type: string
@@ -591,6 +619,20 @@ Sets the polling interval while the general queue is idle.
 - Sources: `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`
 
 ## `OPSKNIGHT_ENCRYPTION_KEY_SECRET`
+
+- Type: string
+- Required: conditional or optional; inspect cited source
+- Allowed values: not statically complete
+- Secret: yes
+- Runtime roles: web or integrated runtime
+- Deployment support: manifest
+- Apply behavior: restart required
+- Deprecated: no
+- Extraction confidence: incomplete
+- Static default: not displayed
+- Sources: `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`
+
+## `OPSKNIGHT_ENCRYPTION_KEYS_SECRET`
 
 - Type: string
 - Required: conditional or optional; inspect cited source
@@ -1176,7 +1218,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: incomplete
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml`, `deploy/kubernetes/kustomize/base/postgres-statefulset.yaml`, `deploy/swarm/docker-stack.db.yml`, `env.example`
+- Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/kubernetes/helm/opsknight/templates/postgres-statefulset.yaml`, `deploy/kubernetes/kustomize/base/postgres-statefulset.yaml`, `deploy/swarm/docker-stack.db.yml`, `env.example`, `src/lib/env-validation.ts`
 
 ## `POSTGRES_PORT`
 

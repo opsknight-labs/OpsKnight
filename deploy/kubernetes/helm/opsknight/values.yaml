@@ -208,7 +208,12 @@ statusProjector:
 
 secrets:
   # Use a pre-created Secret instead of rendering secret values into the Helm release.
-  # External Secrets/CSI operators should keep the required keys synchronized.
+  # External Secrets/CSI operators should keep the required keys synchronized:
+  # DATABASE_URL, DIRECT_DATABASE_URL, WEB_DATABASE_URL, NEXTAUTH_SECRET,
+  # API_KEY_SECRET, ENCRYPTION_KEY and/or ENCRYPTION_KEYS, and SETUP_SECRET.
+  # For key rotation, keep historical key IDs stable (for example
+  # ENCRYPTION_KEYS=k2:<new-64-hex>,k1:<old-64-hex>); do not rename an
+  # existing legacy ENCRYPTION_KEY's key material to a "legacy:" key ID.
   existingSecret: ''
   keys:
     databaseUrl: DATABASE_URL
@@ -217,12 +222,20 @@ secrets:
     directDatabaseUrl: DIRECT_DATABASE_URL
     webDatabaseUrl: WEB_DATABASE_URL
     nextauthSecret: NEXTAUTH_SECRET
+    apiKeySecret: API_KEY_SECRET
     encryptionKey: ENCRYPTION_KEY
+    encryptionKeys: ENCRYPTION_KEYS
     setupSecret: SETUP_SECRET
     postgresUser: POSTGRES_USER
     postgresPassword: POSTGRES_PASSWORD
   nextauthSecret: 'change_this_to_a_random_secret_in_production'
+  apiKeySecret: 'change_this_to_a_separate_random_api_key_secret_in_production'
+  # Legacy single-key deployments map this value to key ID "k1" at runtime.
+  # Leave empty when using only secrets.encryptionKeys or an existingSecret.
   encryptionKey: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
+  # Rotation keyring; first entry is active and all entries decrypt.
+  # Example: k2:<new-64-hex>,k1:<previous-64-hex>
+  encryptionKeys: ''
   # Legacy persistent bootstrap secret. Prefer the 30-minute one-time bootstrap code.
   setupSecret: ''
 
@@ -255,6 +268,7 @@ config:
   hostname: '0.0.0.0'
   nextTelemetryDisabled: '1'
   notificationControlPlanePersonal: 'true'
+  allowInsecureSecrets: 'false'
 
 # Full DATABASE_URL override. Prefer this for managed PostgreSQL, TLS parameters,
 # PgBouncer, or credentials containing characters that require URI encoding.

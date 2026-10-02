@@ -23,7 +23,8 @@
         "port": { "type": ["string", "integer"] },
         "hostname": { "type": "string" },
         "nextTelemetryDisabled": { "type": ["string", "boolean"] },
-        "notificationControlPlanePersonal": { "type": ["string", "boolean"] }
+        "notificationControlPlanePersonal": { "type": ["string", "boolean"] },
+        "allowInsecureSecrets": { "type": ["string", "boolean"] }
       }
     },
     "web": { "$ref": "#/definitions/webRole" },
@@ -99,6 +100,54 @@
           }
         }
       }
+    },
+    "secrets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["existingSecret", "keys", "nextauthSecret", "apiKeySecret", "encryptionKey", "encryptionKeys", "setupSecret"],
+      "properties": {
+        "existingSecret": { "type": "string" },
+        "keys": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["databaseUrl", "directDatabaseUrl", "webDatabaseUrl", "nextauthSecret", "apiKeySecret", "encryptionKey", "encryptionKeys", "setupSecret", "postgresUser", "postgresPassword"],
+          "properties": {
+            "databaseUrl": { "type": "string", "minLength": 1 },
+            "directDatabaseUrl": { "type": "string", "minLength": 1 },
+            "webDatabaseUrl": { "type": "string", "minLength": 1 },
+            "nextauthSecret": { "type": "string", "minLength": 1 },
+            "apiKeySecret": { "type": "string", "minLength": 1 },
+            "encryptionKey": { "type": "string", "minLength": 1 },
+            "encryptionKeys": { "type": "string", "minLength": 1 },
+            "setupSecret": { "type": "string", "minLength": 1 },
+            "postgresUser": { "type": "string", "minLength": 1 },
+            "postgresPassword": { "type": "string", "minLength": 1 }
+          }
+        },
+        "nextauthSecret": { "type": "string" },
+        "apiKeySecret": { "type": "string" },
+        "encryptionKey": { "type": "string", "pattern": "^$|^[0-9A-Fa-f]{64}$" },
+        "encryptionKeys": {
+          "type": "string",
+          "pattern": "^$|^[A-Za-z0-9._-]{1,64}:[0-9A-Fa-f]{64}(,[A-Za-z0-9._-]{1,64}:[0-9A-Fa-f]{64})*$"
+        },
+        "setupSecret": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "existingSecret": { "const": "" } } },
+          "then": {
+            "properties": {
+              "nextauthSecret": { "minLength": 32 },
+              "apiKeySecret": { "minLength": 32 }
+            },
+            "anyOf": [
+              { "properties": { "encryptionKey": { "minLength": 64 } } },
+              { "properties": { "encryptionKeys": { "minLength": 66 } } }
+            ]
+          }
+        }
+      ]
     }
   },
   "allOf": [

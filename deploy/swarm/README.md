@@ -90,7 +90,9 @@ OpsKnight natively supports Docker Swarm Raft-encrypted secrets via the `*_FILE`
 | `<stack>_database_url_<hash>` | `/run/secrets/opsknight_database_url` | `DATABASE_URL_FILE` |
 | `<stack>_direct_database_url_<hash>` | `/run/secrets/opsknight_direct_database_url` | `DIRECT_DATABASE_URL_FILE` |
 | `<stack>_nextauth_secret_<hash>` | `/run/secrets/opsknight_nextauth_secret` | `NEXTAUTH_SECRET_FILE` |
+| `<stack>_api_key_secret_<hash>` | `/run/secrets/opsknight_api_key_secret` | `API_KEY_SECRET_FILE` |
 | `<stack>_encryption_key_<hash>` | `/run/secrets/opsknight_encryption_key` | `ENCRYPTION_KEY_FILE` |
+| `<stack>_encryption_keys_<hash>` | `/run/secrets/opsknight_encryption_keys` | `ENCRYPTION_KEYS_FILE` |
 | `<stack>_web_database_url_<hash>` | `/run/secrets/opsknight_web_database_url` | `WEB_DATABASE_URL_FILE` |
 | `<stack>_pgbouncer_userlist_<hash>` | `/run/secrets/pgbouncer_userlist` | `PGBOUNCER_AUTH_FILE` |
 
@@ -99,6 +101,8 @@ OpsKnight natively supports Docker Swarm Raft-encrypted secrets via the `*_FILE`
 
 ### Fail-Closed Security Posture
 In production (`ENVIRONMENT=production`, default), `deploy.sh` enforces `STRICT_SECRETS=true` and immediately aborts if placeholder passwords or default encryption keys are detected. For local development or quick testing, explicitly pass `ALLOW_INSECURE_SECRETS=true`.
+
+Provide `ENCRYPTION_KEYS` as `id:64-hex-key` entries for rotation (for example `k2:<new-64-hex>,k1:<old-64-hex>`). When only `ENCRYPTION_KEY` is supplied, `deploy.sh` publishes the same key as a one-entry `k1:` keyring so every Swarm role receives the versioned keyring contract without changing the historical key ID used by existing `v3:k1:*` ciphertext.
 
 ---
 

@@ -10,7 +10,7 @@ Status: Partial. Responsibility: operator.
 
 Policy provides configurable incident, alert, log and metrics retention.
 
-Evidence: [src/lib/retention-policy.ts](../../../src/lib/retention-policy.ts), [src/lib/cron-scheduler.ts](../../../src/lib/cron-scheduler.ts), [docs/v1.5/administration/data-retention.md](../../../docs/v1.5/administration/data-retention.md).
+Evidence: [src/lib/retention-policy.ts](../../../src/lib/retention-policy.ts), [src/lib/cron-scheduler.ts](../../../src/lib/cron-scheduler.ts), [docs/v2.0.0/operate/data/maintenance-and-retention.md](../../../docs/v2.0.0/operate/data/maintenance-and-retention.md).
 
 Remaining: Coverage is not a subject-erasure engine or a legal-hold system. Domain-specific choices remain operator responsibilities.
 

@@ -41,7 +41,22 @@ jobs:
           DATABASE_URL: postgresql://opsknight:certification-only@localhost:55432/opsknight
       - name: Seed retry-storm integration
         run: |
-          encrypted_secret=$(node -e "const c=require('node:crypto');const key=Buffer.from('9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08','hex');const iv=c.randomBytes(16);const x=c.createCipheriv('aes-256-cbc',key,iv);process.stdout.write(iv.toString('hex')+':'+x.update('certification-signing-secret','utf8','hex')+x.final('hex'))")
+          certification_key=$(node <<'NODE'
+          const fs = require('node:fs');
+          const compose = fs.readFileSync('tests/certification/docker-compose.yml', 'utf8');
+          const match = /^\s*ENCRYPTION_KEY:\s*['"]?([0-9a-fA-F]{64})['"]?\s*$/m.exec(compose);
+          if (!match) throw new Error('Unable to find certification ENCRYPTION_KEY in compose file');
+          process.stdout.write(match[1]);
+          NODE
+          )
+          encrypted_secret=$(CERTIFICATION_ENCRYPTION_KEY="$certification_key" node <<'NODE'
+          const c = require('node:crypto');
+          const key = Buffer.from(process.env.CERTIFICATION_ENCRYPTION_KEY, 'hex');
+          const iv = c.randomBytes(16);
+          const x = c.createCipheriv('aes-256-cbc', key, iv);
+          process.stdout.write(`${iv.toString('hex')}:${x.update('certification-signing-secret', 'utf8', 'hex')}${x.final('hex')}`);
+          NODE
+          )
           docker compose -f tests/certification/docker-compose.yml exec -T db psql -U opsknight -d opsknight -v ON_ERROR_STOP=1 -v signature_secret="$encrypted_secret" <<'SQL'
           INSERT INTO "Service" (id, name, status, "createdAt", "updatedAt")
           VALUES ('cert-service', 'Certification Service', 'OPERATIONAL', now(), now())

@@ -1,5 +1,6 @@
+import { scryptSync } from 'crypto';
 import { describe, it, expect } from 'vitest';
-import { generateApiKey, hashToken } from '@/lib/api-keys';
+import { generateApiKey, hashLegacyScryptTokenCandidates, hashToken } from '@/lib/api-keys';
 
 describe('API Keys Utilities', () => {
   describe('generateApiKey', () => {
@@ -37,6 +38,44 @@ describe('API Keys Utilities', () => {
       const expectedHash = hashToken(result.token);
 
       expect(result.tokenHash).toBe(expectedHash);
+    });
+  });
+
+  describe('1.x upgrade compatibility', () => {
+    it('tries both API_KEY_SECRET and retained NEXTAUTH_SECRET for legacy scrypt hashes', async () => {
+      const previousApiKeySecret = process.env.API_KEY_SECRET;
+      const previousNextAuthSecret = process.env.NEXTAUTH_SECRET;
+      const previousEncryptionKey = process.env.ENCRYPTION_KEY;
+      const token = `ok_${'A'.repeat(43)}`;
+      const newSecret = 'new-independent-api-key-secret-for-2.0-tests';
+      const oldNextAuthSecret = 'retained-1.x-nextauth-secret-for-upgrade-tests';
+
+      process.env.API_KEY_SECRET = newSecret;
+      process.env.NEXTAUTH_SECRET = oldNextAuthSecret;
+      delete process.env.ENCRYPTION_KEY;
+
+      try {
+        const candidates = await hashLegacyScryptTokenCandidates(token);
+        expect(candidates).toEqual([
+          scryptSync(token, newSecret, 32).toString('hex'),
+          scryptSync(token, oldNextAuthSecret, 32).toString('hex'),
+          scryptSync(token, 'change_this_to_a_random_secret_in_production', 32).toString('hex'),
+          scryptSync(token, 'changeme_to_a_secure_random_string', 32).toString('hex'),
+        ]);
+      } finally {
+        if (previousApiKeySecret === undefined) delete process.env.API_KEY_SECRET;
+        else process.env.API_KEY_SECRET = previousApiKeySecret;
+        if (previousNextAuthSecret === undefined) delete process.env.NEXTAUTH_SECRET;
+        else process.env.NEXTAUTH_SECRET = previousNextAuthSecret;
+        if (previousEncryptionKey !== undefined) process.env.ENCRYPTION_KEY = previousEncryptionKey;
+      }
+    });
+
+    it('skips the scrypt KDF for tokens that 1.x could not have issued', async () => {
+      await expect(hashLegacyScryptTokenCandidates('ok_live_' + 'A'.repeat(43))).resolves.toEqual(
+        []
+      );
+      await expect(hashLegacyScryptTokenCandidates('not-a-token')).resolves.toEqual([]);
     });
   });
 

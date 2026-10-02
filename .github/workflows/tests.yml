@@ -58,8 +58,9 @@ jobs:
     env:
       NEXTAUTH_URL: http://127.0.0.1:3100
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
-      NEXTAUTH_SECRET: opsknight-e2e-nextauth-secret-change-me
-      ENCRYPTION_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      NEXTAUTH_SECRET: opsknight-e2e-session-signing-secret-7c41d9e2b8
+      API_KEY_SECRET: opsknight-e2e-api-key-secret-independent-32chars
+      ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -97,7 +98,7 @@ jobs:
     env:
       NODE_ENV: test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/opsknight_test?schema=public
-      ENCRYPTION_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -224,8 +225,9 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/opsknight_e2e?schema=public
       NEXTAUTH_URL: http://127.0.0.1:3100
       NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
-      NEXTAUTH_SECRET: opsknight-e2e-nextauth-secret-change-me
-      ENCRYPTION_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      NEXTAUTH_SECRET: opsknight-e2e-session-signing-secret-7c41d9e2b8
+      API_KEY_SECRET: opsknight-e2e-api-key-secret-independent-32chars
+      ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
       AUTH_TRUST_HOST: 'true'
       HUSKY: '0'
       PLAYWRIGHT_PRODUCTION_SERVER: 'true'
