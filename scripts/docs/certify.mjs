@@ -110,6 +110,10 @@ const report = {
   runtimeSourceRevision: runtimeSourceRevision || null,
   runtimeImageDigest: runtimeInspection?.RepoDigests?.find(value => value.includes('@sha256:')) || null,
   releaseState: 'upcoming',
+  apiProof: {
+    smokeProbeScope: 'Every discovered PUBLIC_API route is requested and must not return a server error.',
+    deepContractGroups: ['authentication-and-error-envelope', 'incidents-crud-and-idempotency', 'events-validation'],
+  },
   checks: {
     frontmatter: 'passed',
     links: 'passed',
@@ -131,7 +135,7 @@ const report = {
     toolingTests: 'passed',
     legacyActiveKnowledgeParity: v15Parity.gaps.length === 0 ? 'passed' : 'failed',
     runtimeJourneys: fullRuntime ? 'passed' : 'not-run',
-    publicApiRuntimeMatrix: fullRuntime ? 'passed' : 'not-run',
+    publicApiSmokeMatrix: fullRuntime ? 'passed' : 'not-run',
     websiteBuild: releaseCertification ? 'passed' : 'release-gated',
     renderedSiteCrawl: releaseCertification ? 'passed' : 'release-gated',
   },
@@ -163,9 +167,10 @@ const report = {
     unresolvedSemanticContracts: discovery.featureGraph.summary.unresolvedSemanticContracts,
     missingEvidence: discovery.featureGraph.nodes.filter(item => item.sources.length === 0).length,
     supportedPublicApis: discovery.featureGraph.nodes.filter(item => item.kind === 'api' && item.classification === 'PUBLIC_API').length,
-    publicApiContractsExercised: fullRuntime
+    publicApisSmokeProbed: fullRuntime
       ? discovery.featureGraph.nodes.filter(item => item.kind === 'api' && item.classification === 'PUBLIC_API').length
       : 0,
+    publicApiDeepContractGroups: fullRuntime ? 3 : 0,
     notificationProviders: discovery.notificationProviders.length,
     rawLimits: discovery.limits.length,
     publicLimits: discovery.limits.filter(item => !['INTERNAL_IMPLEMENTATION', 'PROVIDER_CONSTRAINT'].includes(item.semanticClassification)).length,

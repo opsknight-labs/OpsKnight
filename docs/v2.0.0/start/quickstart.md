@@ -64,7 +64,19 @@ docker compose -f deploy/compose/docker-compose.yml logs --tail=200 opsknight-db
 
 Open `http://localhost:3000/setup`. Verify the Application URL before selecting **Create administrator**. For a production hostname, follow the complete [initial setup](./initial-setup) guide; a wrong value can make normal access return HTTP 421.
 
-Generate a one-time bootstrap code with `node scripts/create-bootstrap-code.mjs`, then enter it with your display name, administrator email, application URL, and a strong unique password. A configured `SETUP_SECRET` or `BOOTSTRAP_SECRET` remains a compatibility alternative. Select **Create administrator**.
+Generate a one-time bootstrap code inside the configured application container:
+
+```sh
+docker compose -f deploy/compose/docker-compose.yml exec -T opsknight-app \
+  node scripts/create-bootstrap-code.mjs
+```
+
+Do not run the Node command directly on the Docker host: the host quickstart
+does not install application dependencies or configure its database connection.
+Enter the printed code with your display name, administrator email, Application
+URL, and a strong unique password. A configured `SETUP_SECRET` or
+`BOOTSTRAP_SECRET` remains a compatibility alternative. Select **Create
+administrator**.
 
 OpsKnight creates exactly one first user as an active Admin. Once any user exists, `/setup` redirects to `/login`. For a trusted-host alternative, use the [command-line reference](../reference/cli); do not put passwords in shell history.
 

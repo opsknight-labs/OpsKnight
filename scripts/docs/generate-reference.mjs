@@ -177,6 +177,17 @@ Supported general-purpose contracts are documented separately:
 - [Incidents API](./incidents)
 - [Responses and errors](./errors)
 
+## Runtime proof scope
+
+The documentation runtime journey smoke-probes every route classified as a
+supported public API and rejects server failures. A smoke probe is reachability
+and failure-envelope evidence, not a complete behavioral contract test. Deeper
+runtime assertions currently cover three groups: authentication/error-envelope
+behavior, incident list/create/read/update plus idempotent replay, and Events
+API validation. Certification therefore reports these separately as **public
+APIs smoke-probed** and **deep contract groups**; it does not claim that every
+public route has a full success/authorization/validation/concurrency matrix.
+
 ${routeSections}
 `;
 

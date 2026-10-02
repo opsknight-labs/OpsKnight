@@ -22,9 +22,11 @@ Sign in from a trusted device and preserve a break-glass access path.
 ## Open the feature
 
 Open **Settings -> Security** and find **Signed-in Sessions**. Each row is an
-authentication session, not merely a device profile. Review browser/device,
-network/location information when available, created time, last activity, and
-whether the row represents the current session.
+authentication session, not merely a device profile. Review the browser,
+operating system, device type, authentication kind (**Standard**, **Trusted
+PWA**, or **Enterprise SSO**), creation time, last activity, expiry, opaque
+display ID, and whether the row is the current session. OpsKnight does not show
+an IP address, network, or inferred location in this view.
 
 ## Configure revocation
 

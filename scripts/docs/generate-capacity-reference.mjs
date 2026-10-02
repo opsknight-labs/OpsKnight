@@ -9,6 +9,25 @@ const contractPath = resolve(root, 'generated/docs-contracts/capacity.json');
 // benchmark page is reviewed and edited as ordinary Markdown.
 const pagePath = resolve(root, 'generated/docs-reference/capacity/benchmark-results.md');
 const artifact = JSON.parse(readFileSync(input, 'utf8'));
+const scaleProfilePath = resolve(root, 'tests/load/fixtures/users/index.ts');
+const scaleProfileSource = readFileSync(scaleProfilePath, 'utf8');
+
+const dimensionNames = [
+  'teams', 'users', 'services', 'integrationsPerService', 'schedules',
+  'escalationPolicies', 'baselineIncidents', 'statusPageSubscribers',
+  'sseSessions', 'apiKeys',
+];
+const planningProfiles = ['small', 'medium', 'large', 'storm'].map(profile => {
+  const block = scaleProfileSource.match(new RegExp(`\\n\\s*${profile}:\\s*\\{([\\s\\S]*?)\\n\\s*\\},`))?.[1];
+  if (!block) throw new Error(`Unable to resolve ${profile} from ${scaleProfilePath}`);
+  const dimensions = { profile };
+  for (const name of dimensionNames) {
+    const raw = block.match(new RegExp(`\\b${name}:\\s*([0-9_]+)`))?.[1];
+    if (!raw) throw new Error(`Unable to resolve ${profile}.${name} from ${scaleProfilePath}`);
+    dimensions[name] = Number(raw.replaceAll('_', ''));
+  }
+  return dimensions;
+});
 
 if (!artifact.generatedAt || !artifact.sourceRevision || !artifact.testHarnessRevision || !artifact.environment || !Array.isArray(artifact.results)) {
   throw new Error('Capacity artifact must contain generatedAt, sourceRevision, testHarnessRevision, environment, and results.');
@@ -81,6 +100,8 @@ const contract = {
     artifactGeneratedAt: artifact.generatedAt, sourceRevision: artifact.sourceRevision,
     testHarnessRevision: artifact.testHarnessRevision, environment: artifact.environment,
   },
+  planningProfilesSource: 'tests/load/fixtures/users/index.ts',
+  planningProfiles,
   statusDefinitions: {
     CERTIFIED: 'All required scenarios, thresholds, and correctness invariants passed for the stated profile.',
     MEASURED: 'Measurements exist, but the record does not declare a certification result.',
@@ -98,6 +119,14 @@ const testedRecords = records.filter(item => item.startedAt || item.completedAt)
 const testStart = testedRecords.map(item => item.startedAt).filter(Boolean).sort()[0] || 'unknown';
 const testEnd = testedRecords.map(item => item.completedAt).filter(Boolean).sort().at(-1) || 'unknown';
 const testedLevels = [...new Set(records.flatMap(item => item.testedLoadLevels))].join(', ') || 'unknown';
+const profileRows = planningProfiles.map(item => `| ${item.profile[0].toUpperCase()}${item.profile.slice(1)} | ${item.users} | ${item.services} | ${item.integrationsPerService} | ${item.sseSessions.toLocaleString('en-US')} | ${item.statusPageSubscribers.toLocaleString('en-US')} |`).join('\n');
+const observedPeakIds = [
+  'phase6_compose_split_pgbouncer',
+  'phase6_swarm_ha_split_pgbouncer',
+  'phase6_helm_split_pgbouncer',
+  'phase6_kustomize_split_pgbouncer',
+];
+const observedPeakRows = records.filter(item => observedPeakIds.includes(item.topologyId)).map(item => `| ${item.topologyName.replace('Phase 6: ', '')} | ${item.measuredPeakRps === null ? '—' : item.measuredPeakRps.toFixed(1)} | **${item.status}** |`).join('\n');
 const page = `---
 title: Capacity benchmark results
 description: Evidence-derived load measurements and certification status for supported deployment topologies.
@@ -121,6 +150,26 @@ measurements from one test profile, not universal production guarantees.
 > correctness invariants passed, but no topology passed the complete suite.
 > OpsKnight therefore publishes no certified alert, notification, user, SSE,
 > or status-fanout envelope from this run.
+
+## Current planning fixture shapes
+
+These dimensions are generated from the current load-fixture source. They are
+useful workload shapes for planning and pre-production tests; they are not the
+historical PR #777 input and are not certified capacity limits.
+
+| Profile | Users | Services | Integrations/service | SSE sessions | Status subscribers |
+|---|---:|---:|---:|---:|---:|
+${profileRows}
+
+## Selected observed peaks
+
+These are the highest measured scenario rates in the historical artifact. A
+peak is an observation, not a supported-rate statement; every listed topology
+failed the complete certification contract.
+
+| Topology | Observed peak RPS | Certification |
+|---|---:|---|
+${observedPeakRows}
 
 ## Certification summary
 

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { DOCS_API_KEY } from '../fixtures/constants';
 import discovery from '../../../generated/docs-discovery/current.json';
 
-test.describe.serial('supported public API contracts', () => {
+test.describe.serial('public API smoke matrix and focused contracts', () => {
   let incidentId: string;
   let serviceId: string;
   test('rejects missing credentials with the stable error envelope', async ({ request }) => {
@@ -109,7 +109,7 @@ test.describe.serial('supported public API contracts', () => {
     });
   });
 
-  test('exercises every supported public API surface without a server failure', async ({ request }) => {
+  test('smoke-probes every supported public API surface without a server failure', async ({ request }) => {
     const contracts = discovery.featureGraph.nodes.filter(
       node => node.kind === 'api' && node.classification === 'PUBLIC_API'
     );

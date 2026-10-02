@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_certification:
-        description: Enforce human review, task verification, and v1.5 parity release gates
+        description: Enforce automated reader, feature, legacy-parity, runtime, and rendered-site release gates
         required: false
         default: false
         type: boolean

@@ -60,15 +60,15 @@ sequenceDiagram
   participant Source as Alert source
   participant Web as Web/API
   participant DB as PostgreSQL
-  participant Scheduler as Scheduler
+  participant Scheduler as Maintenance scheduler
   participant Critical as Critical worker
   participant General as General worker
   participant Bulk as Bulk worker
   participant Provider as Paging/ChatOps provider
   Source->>Web: Authenticated event
   Web->>DB: Classify, create/deduplicate incident, enqueue durable work
-  Scheduler->>DB: Claim due escalation/SLA transitions
-  Critical->>DB: Claim escalation and critical-notification work
+  Critical->>DB: Claim due escalation, recovery, and critical-notification work
+  Scheduler->>DB: Run SLA checks, cleanup, reconciliation, and handoff maintenance
   General->>DB: Claim normal operational work
   Bulk->>DB: Claim public-incident, bulk-notification, and status fan-out work
   Critical->>Provider: Send latency-sensitive responder page/card
@@ -91,6 +91,11 @@ flowchart TB
 
 Lane isolation protects critical work from bulk pressure; it does not remove
 shared PostgreSQL or provider limits.
+
+The Split maintenance scheduler does not execute escalations. The Critical
+Worker owns escalation execution and recovery. The scheduler owns periodic SLA
+breach checks, queue maintenance, cleanup/reconciliation, and shift/handoff
+maintenance. In Integrated mode the single process owns both sets of work.
 
 ## Status projection and PWA flow
 

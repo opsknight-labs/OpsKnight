@@ -70,10 +70,17 @@ OpsKnight's `/api/events` endpoint enforces a rate limit of **120 requests per 6
 | **`L9`** | `L9_breaking_point_ramp` | 500–1000 | 1000 | 1000 | Breaking-point step ramp |
 
 ### Scale Profiles (`--scale=<small|medium|large|storm>`)
-- `small`: 8 teams, 50 users, 16 services, 500 status-page subscribers, 200 baseline incidents.
-- `medium`: 24 teams, 250 users, 60 services, 2,500 status-page subscribers, 1,000 baseline incidents.
-- `large`: 50 teams, 1,000 users, 150 services, 10,000 status-page subscribers, 5,000 baseline incidents.
-- `storm`: 100 teams, 2,500 users, 320 services, 25,000 status-page subscribers, 10,000 baseline incidents.
+
+These values mirror `fixtures/users/index.ts`. They describe current test-data
+shapes, not certified deployment capacities and not necessarily the profile
+used by a historical artifact.
+
+| Profile | Teams | Users | Services | Integrations/service | Schedules | Escalation policies | Baseline incidents | SSE sessions | Status subscribers | API keys |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `small` | 4 | 40 | 12 | 2 | 8 | 8 | 24 | 100 | 1,000 | 12 |
+| `medium` | 8 | 120 | 32 | 4 | 16 | 16 | 100 | 500 | 10,000 | 32 |
+| `large` | 12 | 400 | 80 | 5 | 32 | 32 | 300 | 2,500 | 100,000 | 64 |
+| `storm` | 20 | 1,000 | 200 | 5 | 50 | 50 | 500 | 5,000 | 100,000 | 100 |
 
 ---
 

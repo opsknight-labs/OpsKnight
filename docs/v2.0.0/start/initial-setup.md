@@ -60,13 +60,63 @@ If the field is wrong, stop. Correct proxy forwarding and `TRUST_PROXY_HEADERS`,
 
 ## 3. Create the administrator
 
-Generate the capability from an administrative shell connected to the same database:
+Generate the capability inside a running OpsKnight container or pod already
+configured for the same database. Choose the command for your topology.
+
+**Integrated Compose:**
 
 ```sh
-node scripts/create-bootstrap-code.mjs
+docker compose -f deploy/compose/docker-compose.yml exec -T opsknight-app \
+  node scripts/create-bootstrap-code.mjs
 ```
 
-Treat the printed value like a password. Only its SHA-256 digest is stored, it expires after 30 minutes, only one can be active, and successful administrator creation consumes it atomically. Enter the administrator name and email, the verified Application URL, the bootstrap code, and a strong unique password. Select **Create administrator** once. A configured environment setup secret is accepted for compatibility but is longer-lived and not preferred.
+**Split Compose** (include the same override files used to start the stack):
+
+```sh
+docker compose -f deploy/compose/docker-compose.yml \
+  -f deploy/compose/docker-compose.split.yml exec -T opsknight-web \
+  node scripts/create-bootstrap-code.mjs
+```
+
+**Kustomize integrated or split:**
+
+```sh
+kubectl -n opsknight exec deploy/opsknight-app -- node scripts/create-bootstrap-code.mjs
+# Split profile:
+kubectl -n opsknight exec deploy/opsknight-web -- node scripts/create-bootstrap-code.mjs
+```
+
+**Helm:** find the Web deployment name emitted for your release, then execute
+the same image-contained script. A release named `opsknight` normally uses the
+following names:
+
+```sh
+# Integrated runtime
+kubectl -n opsknight exec deploy/opsknight -- node scripts/create-bootstrap-code.mjs
+# Split runtime
+kubectl -n opsknight exec deploy/opsknight-web -- node scripts/create-bootstrap-code.mjs
+```
+
+Confirm the name first with `kubectl -n opsknight get deployment`; Helm release
+and `fullnameOverride` values can change it.
+
+**Docker Swarm:** run this on the node currently hosting a Web task. Replace
+`opsknight` if you used another stack name. Swarm injects the database URL as a
+secret file, so load it only into this one command:
+
+```sh
+WEB_CONTAINER=$(docker ps --quiet \
+  --filter label=com.docker.swarm.service.name=opsknight_opsknight-web | head -n 1)
+test -n "$WEB_CONTAINER"
+docker exec "$WEB_CONTAINER" sh -c \
+  'export DATABASE_URL="$(tr -d "\r\n" < "$DATABASE_URL_FILE")"; node scripts/create-bootstrap-code.mjs'
+```
+
+If no container is returned, use `docker service ps opsknight_opsknight-web` to
+locate a running task and run the command on that node. Never copy a database
+secret to the host merely to issue the code.
+
+Treat the printed value like a password. Only its SHA-256 digest is stored, it expires after 30 minutes, only one can be active, and successful administrator creation consumes it atomically. Do not run the bare Node command on an unconfigured host: it needs the production dependencies and database environment supplied by the deployment. Enter the administrator name and email, the verified Application URL, the bootstrap code, and a strong unique password. Select **Create administrator** once. A configured environment setup secret is accepted for compatibility but is longer-lived and not preferred.
 
 OpsKnight creates one `ACTIVE` user with the `ADMIN` role, stores the Application URL in `SystemSettings.appUrl`, and records bootstrap audit events. The browser then moves to sign-in.
 

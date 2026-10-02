@@ -36,3 +36,21 @@ test('capacity documentation remains evidence driven', () => {
     else assert.equal(topology.certifiedCapacity, null);
   }
 });
+
+test('deployment planning profiles are generated from current fixture source', () => {
+  assert.equal(contract.planningProfilesSource, 'tests/load/fixtures/users/index.ts');
+  assert.deepEqual(contract.planningProfiles, [
+    { profile: 'small', teams: 4, users: 40, services: 12, integrationsPerService: 2, schedules: 8, escalationPolicies: 8, baselineIncidents: 24, statusPageSubscribers: 1000, sseSessions: 100, apiKeys: 12 },
+    { profile: 'medium', teams: 8, users: 120, services: 32, integrationsPerService: 4, schedules: 16, escalationPolicies: 16, baselineIncidents: 100, statusPageSubscribers: 10000, sseSessions: 500, apiKeys: 32 },
+    { profile: 'large', teams: 12, users: 400, services: 80, integrationsPerService: 5, schedules: 32, escalationPolicies: 32, baselineIncidents: 300, statusPageSubscribers: 100000, sseSessions: 2500, apiKeys: 64 },
+    { profile: 'storm', teams: 20, users: 1000, services: 200, integrationsPerService: 5, schedules: 50, escalationPolicies: 50, baselineIncidents: 500, statusPageSubscribers: 100000, sseSessions: 5000, apiKeys: 100 },
+  ]);
+
+  const planner = readFileSync('docs/v2.0.0/operate/capacity/choose-deployment.md', 'utf8');
+  const loadReadme = readFileSync('tests/load/README.md', 'utf8');
+  for (const profile of contract.planningProfiles) {
+    const name = `${profile.profile[0].toUpperCase()}${profile.profile.slice(1)}`;
+    assert.match(planner, new RegExp(`\\| ${name} \\| ${profile.users.toLocaleString('en-US')} \\| ${profile.services}`));
+    assert.ok(loadReadme.includes(`| \`${profile.profile}\` | ${profile.teams.toLocaleString('en-US')} | ${profile.users.toLocaleString('en-US')} | ${profile.services}`));
+  }
+});

@@ -34,11 +34,13 @@ Open `/m`, sign in, then open **More**. Use the install and push-notification ca
 
 1. Select the browser's **Install app** action, or use its add-to-home-screen menu when no prompt appears.
 2. Launch the installed app and sign in again if the browser uses a separate installed-app session.
-3. Wait for the card to finish **Preparing**. OpsKnight prepares its service
-   worker and provider key before enabling the action.
-4. Select **Enable** and approve the browser/OS prompt. Keep this one action
+3. Select **Enable** and approve the browser/OS prompt. Keep this one action
    directly initiated by your click; this is required by Safari/iOS/macOS and
    other browsers with strict user-gesture rules.
+4. After permission is granted, wait while the card shows **Preparing**.
+   OpsKnight now prepares its service worker and provider key. On iPhone and
+   iPad this preparation intentionally happens after the native permission
+   prompt, not before you select **Enable**.
 5. Keep the device online while OpsKnight creates the browser subscription,
    saves it to the signed-in account, and verifies registration.
 6. Confirm the status reads **On**, then select **Send test Push**.
@@ -63,7 +65,7 @@ rejected.
 
 | Status | Meaning | Action |
 | --- | --- | --- |
-| **Preparing** | Service worker and provider preflight is running | Wait; do not repeatedly tap |
+| **Preparing** | Permission was granted and service-worker/provider preparation is running | Wait; do not repeatedly tap or close the installed app |
 | **Install required** | iOS/iPadOS is not running the installed Home Screen app | Install from Safari and reopen it |
 | **Blocked** | Browser or OS permission is denied | Re-enable notifications in site/OS settings |
 | **Sign-in required** | The server cannot associate this device with a user | Sign in, then return to the card |

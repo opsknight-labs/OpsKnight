@@ -22,6 +22,32 @@ measurements from one test profile, not universal production guarantees.
 > OpsKnight therefore publishes no certified alert, notification, user, SSE,
 > or status-fanout envelope from this run.
 
+## Current planning fixture shapes
+
+These dimensions are generated from the current load-fixture source. They are
+useful workload shapes for planning and pre-production tests; they are not the
+historical PR #777 input and are not certified capacity limits.
+
+| Profile | Users | Services | Integrations/service | SSE sessions | Status subscribers |
+|---|---:|---:|---:|---:|---:|
+| Small | 40 | 12 | 2 | 100 | 1,000 |
+| Medium | 120 | 32 | 4 | 500 | 10,000 |
+| Large | 400 | 80 | 5 | 2,500 | 100,000 |
+| Storm | 1000 | 200 | 5 | 5,000 | 100,000 |
+
+## Selected observed peaks
+
+These are the highest measured scenario rates in the historical artifact. A
+peak is an observation, not a supported-rate statement; every listed topology
+failed the complete certification contract.
+
+| Topology | Observed peak RPS | Certification |
+|---|---:|---|
+| Phase 6 Mega: Compose Split Runtime + PgBouncer | 230.5 | **NOT CERTIFIED** |
+| Phase 6 Mega: Docker Swarm HA Split + PgBouncer | 104.6 | **NOT CERTIFIED** |
+| Phase 6 Mega: Kind Helm Split + PgBouncer | 95.5 | **NOT CERTIFIED** |
+| Phase 6 Mega: Kind Kustomize Split + PgBouncer | 66.1 | **NOT CERTIFIED** |
+
 ## Certification summary
 
 | Topology | Load levels | Scenarios passing | Invariants | Capacity status |

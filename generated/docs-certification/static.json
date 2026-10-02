@@ -1,12 +1,20 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-02T05:19:23.397Z",
-  "sourceRevision": "3c5bbb0438a28af661869dc7213cec3dc4c0ebc3",
-  "documentationRevision": "3c5bbb0438a28af661869dc7213cec3dc4c0ebc3",
-  "productSourceRevision": "3c5bbb0438a28af661869dc7213cec3dc4c0ebc3",
+  "generatedAt": "2026-10-02T05:53:06.331Z",
+  "sourceRevision": "2dba54764d17a74735069acfef860c0ecc4711cd",
+  "documentationRevision": "2dba54764d17a74735069acfef860c0ecc4711cd",
+  "productSourceRevision": "2dba54764d17a74735069acfef860c0ecc4711cd",
   "runtimeSourceRevision": null,
   "runtimeImageDigest": null,
   "releaseState": "upcoming",
+  "apiProof": {
+    "smokeProbeScope": "Every discovered PUBLIC_API route is requested and must not return a server error.",
+    "deepContractGroups": [
+      "authentication-and-error-envelope",
+      "incidents-crud-and-idempotency",
+      "events-validation"
+    ]
+  },
   "checks": {
     "frontmatter": "passed",
     "links": "passed",
@@ -21,7 +29,7 @@
     "toolingTests": "passed",
     "legacyActiveKnowledgeParity": "passed",
     "runtimeJourneys": "not-run",
-    "publicApiRuntimeMatrix": "not-run",
+    "publicApiSmokeMatrix": "not-run",
     "websiteBuild": "release-gated",
     "renderedSiteCrawl": "release-gated"
   },
@@ -46,7 +54,8 @@
     "unresolvedSemanticContracts": 0,
     "missingEvidence": 0,
     "supportedPublicApis": 47,
-    "publicApiContractsExercised": 0,
+    "publicApisSmokeProbed": 0,
+    "publicApiDeepContractGroups": 0,
     "notificationProviders": 9,
     "rawLimits": 228,
     "publicLimits": 51,

@@ -14,6 +14,61 @@
       "kind": "v0.31.0"
     }
   },
+  "planningProfilesSource": "tests/load/fixtures/users/index.ts",
+  "planningProfiles": [
+    {
+      "profile": "small",
+      "teams": 4,
+      "users": 40,
+      "services": 12,
+      "integrationsPerService": 2,
+      "schedules": 8,
+      "escalationPolicies": 8,
+      "baselineIncidents": 24,
+      "statusPageSubscribers": 1000,
+      "sseSessions": 100,
+      "apiKeys": 12
+    },
+    {
+      "profile": "medium",
+      "teams": 8,
+      "users": 120,
+      "services": 32,
+      "integrationsPerService": 4,
+      "schedules": 16,
+      "escalationPolicies": 16,
+      "baselineIncidents": 100,
+      "statusPageSubscribers": 10000,
+      "sseSessions": 500,
+      "apiKeys": 32
+    },
+    {
+      "profile": "large",
+      "teams": 12,
+      "users": 400,
+      "services": 80,
+      "integrationsPerService": 5,
+      "schedules": 32,
+      "escalationPolicies": 32,
+      "baselineIncidents": 300,
+      "statusPageSubscribers": 100000,
+      "sseSessions": 2500,
+      "apiKeys": 64
+    },
+    {
+      "profile": "storm",
+      "teams": 20,
+      "users": 1000,
+      "services": 200,
+      "integrationsPerService": 5,
+      "schedules": 50,
+      "escalationPolicies": 50,
+      "baselineIncidents": 500,
+      "statusPageSubscribers": 100000,
+      "sseSessions": 5000,
+      "apiKeys": 100
+    }
+  ],
   "statusDefinitions": {
     "CERTIFIED": "All required scenarios, thresholds, and correctness invariants passed for the stated profile.",
     "MEASURED": "Measurements exist, but the record does not declare a certification result.",
