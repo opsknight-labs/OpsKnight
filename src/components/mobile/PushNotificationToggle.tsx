@@ -2,15 +2,30 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, BellOff, CircleAlert, Send, Wrench } from 'lucide-react';
+import {
+  Bell,
+  BellOff,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  CircleAlert,
+  Copy,
+  Send,
+  Wrench,
+} from 'lucide-react';
 import MobileSettingCard from '@/components/mobile/MobileSettingCard';
 import { Button } from '@/components/ui/shadcn/button';
 import { ClientAppError, errorFromResponse, toClientAppError } from '@/lib/client-error';
 import { toUserFacingError } from '@/lib/user-facing-error';
 import { logger } from '@/lib/logger';
 import { haptics } from '@/lib/haptics';
-import { ClientTimeoutError, fetchWithTimeout, promiseWithTimeout } from '@/lib/client-timeout';
+import { fetchWithTimeout, promiseWithTimeout } from '@/lib/client-timeout';
 import { appRoutes } from '@/lib/app-routes';
+import {
+  ensureHealthyServiceWorker,
+  inspectServiceWorkerHealth,
+  type ServiceWorkerHealth,
+} from '@/lib/service-worker-runtime';
 
 export type PushState =
   | 'UNSUPPORTED'
@@ -89,246 +104,6 @@ type PreparedPush = {
   applicationServerKey: Uint8Array | null;
 };
 
-type ServiceWorkerPreparationStage = 'SW_LOOKUP' | 'SW_ASSET' | 'SW_REGISTER' | 'SW_READY';
-
-function serviceWorkerFailureAction(stage: ServiceWorkerPreparationStage) {
-  switch (stage) {
-    case 'SW_LOOKUP':
-      return 'Service worker registration could not be checked. Retry.';
-    case 'SW_ASSET':
-      return 'Service worker file could not be validated. Retry.';
-    case 'SW_REGISTER':
-      return 'Browser rejected service worker registration. Check /sw.js, HTTPS, and site permissions.';
-    case 'SW_READY':
-      return 'Service worker did not become ready. Retry.';
-  }
-}
-
-function serviceWorkerPath(worker: ServiceWorker | null | undefined): string | null {
-  if (!worker?.scriptURL) return null;
-  try {
-    return new URL(worker.scriptURL, window.location.origin).pathname;
-  } catch {
-    return null;
-  }
-}
-
-function hasOpsKnightServiceWorker(registration: ServiceWorkerRegistration | undefined | null) {
-  if (!registration) return false;
-  const isMatchingScope =
-    typeof registration.scope === 'string' &&
-    new URL(registration.scope, window.location.origin).pathname === '/';
-  const hasMatchingWorker = [
-    registration.active,
-    registration.waiting,
-    registration.installing,
-  ].some(worker => serviceWorkerPath(worker) === '/sw.js');
-  return isMatchingScope || hasMatchingWorker;
-}
-
-function serviceWorkerAssetError(action: string, diagnostics: Record<string, unknown>): never {
-  logger.warn('push.service_worker_asset_preflight_failed', {
-    component: 'PushNotificationToggle',
-    ...diagnostics,
-  });
-  throw new ClientAppError({
-    code: 'PUSH_SW_REGISTRATION_FAILED',
-    error: 'Push notifications could not validate the service worker file.',
-    action,
-    retryable: true,
-  });
-}
-
-async function preflightServiceWorkerAsset() {
-  let response: Response;
-  try {
-    response = await fetchWithTimeout(
-      '/sw.js',
-      {
-        cache: 'no-store',
-        redirect: 'follow',
-        headers: { 'Cache-Control': 'no-cache' },
-      },
-      REQUEST_TIMEOUT_MS
-    );
-  } catch (error) {
-    logger.warn('push.service_worker_asset_preflight_failed', {
-      component: 'PushNotificationToggle',
-      reason: 'FETCH_FAILED',
-      browserException: error instanceof Error ? error.name : typeof error,
-    });
-    throw new ClientAppError({
-      code: 'PUSH_SW_REGISTRATION_FAILED',
-      error: 'Push notifications could not reach the service worker file.',
-      action: 'Service worker file could not be reached. Check the deployment and retry.',
-      retryable: true,
-    });
-  }
-
-  const expectedUrl = new URL('/sw.js', window.location.origin);
-  const responseUrl = new URL(response.url || expectedUrl.toString(), window.location.origin);
-  const contentType = response.headers.get('content-type')?.toLowerCase() || '';
-
-  if (response.redirected) {
-    serviceWorkerAssetError(
-      responseUrl.origin !== window.location.origin
-        ? 'Service worker redirected to another origin. Check reverse proxy or host routing.'
-        : 'Service worker endpoint redirected. Serve /sw.js directly without redirects.',
-      {
-        reason: 'REDIRECTED',
-        status: response.status,
-        responseOrigin: responseUrl.origin,
-      }
-    );
-  }
-
-  if (responseUrl.origin !== window.location.origin || responseUrl.pathname !== '/sw.js') {
-    serviceWorkerAssetError(
-      'Service worker resolved to the wrong URL. Check reverse proxy or host routing.',
-      {
-        reason: 'WRONG_URL',
-        status: response.status,
-        responseOrigin: responseUrl.origin,
-        responsePath: responseUrl.pathname,
-      }
-    );
-  }
-
-  if (response.status !== 200) {
-    serviceWorkerAssetError(
-      response.status === 404
-        ? 'Service worker file is missing from this deployment.'
-        : `Service worker endpoint returned HTTP ${response.status}. Check the deployment.`,
-      {
-        reason: response.status === 404 ? 'NOT_FOUND' : 'HTTP_STATUS',
-        status: response.status,
-      }
-    );
-  }
-
-  if (!/(?:javascript|ecmascript)/i.test(contentType)) {
-    serviceWorkerAssetError(
-      contentType.includes('text/html')
-        ? 'Service worker returned HTML instead of JavaScript. Check reverse proxy or host routing.'
-        : 'Service worker returned an invalid content type. Serve /sw.js as JavaScript.',
-      {
-        reason: contentType.includes('text/html') ? 'HTML_RESPONSE' : 'INVALID_MIME',
-        status: response.status,
-        contentType: contentType || 'missing',
-      }
-    );
-  }
-}
-
-async function waitForRegistrationActive(
-  registration: ServiceWorkerRegistration,
-  timeoutMs: number
-): Promise<ServiceWorkerRegistration> {
-  if (registration.active) return registration;
-
-  return new Promise<ServiceWorkerRegistration>((resolve, reject) => {
-    let settled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let pollInterval: ReturnType<typeof setInterval> | null = null;
-    let trackedWorker: ServiceWorker | null = null;
-
-    const cleanup = () => {
-      settled = true;
-      if (timer) clearTimeout(timer);
-      if (pollInterval) clearInterval(pollInterval);
-      if (trackedWorker && typeof trackedWorker.removeEventListener === 'function') {
-        trackedWorker.removeEventListener('statechange', onStateChange);
-      }
-      if (typeof registration.removeEventListener === 'function') {
-        registration.removeEventListener('updatefound', onUpdateFound);
-      }
-    };
-
-    const done = () => {
-      if (settled) return;
-      cleanup();
-      resolve(registration);
-    };
-
-    const fail = (err: Error) => {
-      if (settled) return;
-      cleanup();
-      reject(err);
-    };
-
-    timer = setTimeout(() => {
-      if (registration.active) {
-        done();
-      } else {
-        fail(new ClientTimeoutError('The service worker did not become ready.'));
-      }
-    }, timeoutMs);
-
-    const triggerSkipWaiting = (worker: ServiceWorker | null | undefined) => {
-      try {
-        if (worker && typeof worker.postMessage === 'function') {
-          worker.postMessage({ type: 'SKIP_WAITING' });
-        }
-      } catch {
-        // Ignore failures to postMessage to worker
-      }
-    };
-
-    const onStateChange = () => {
-      if (registration.active || trackedWorker?.state === 'activated') {
-        done();
-      } else if (trackedWorker?.state === 'installed' && !registration.active) {
-        triggerSkipWaiting(trackedWorker);
-      } else if (trackedWorker?.state === 'redundant') {
-        fail(new Error('The service worker installation failed and became redundant.'));
-      }
-    };
-
-    const onUpdateFound = () => {
-      const installing = registration.installing;
-      if (installing) {
-        if (trackedWorker && typeof trackedWorker.removeEventListener === 'function') {
-          trackedWorker.removeEventListener('statechange', onStateChange);
-        }
-        trackedWorker = installing;
-        if (typeof trackedWorker.addEventListener === 'function') {
-          trackedWorker.addEventListener('statechange', onStateChange);
-        }
-      }
-    };
-
-    trackedWorker = registration.installing || registration.waiting;
-    if (trackedWorker) {
-      if (trackedWorker.state === 'activated' || registration.active) {
-        done();
-        return;
-      }
-      if (trackedWorker.state === 'redundant') {
-        fail(new Error('The service worker installation failed and became redundant.'));
-        return;
-      }
-      if (typeof trackedWorker.addEventListener === 'function') {
-        trackedWorker.addEventListener('statechange', onStateChange);
-      }
-    }
-    if (typeof registration.addEventListener === 'function') {
-      registration.addEventListener('updatefound', onUpdateFound);
-    }
-
-    if (registration.waiting) {
-      triggerSkipWaiting(registration.waiting);
-    }
-
-    pollInterval = setInterval(() => {
-      if (registration.active) {
-        done();
-      } else if (registration.waiting) {
-        triggerSkipWaiting(registration.waiting);
-      }
-    }, 50);
-  });
-}
-
 export default function PushNotificationToggle() {
   const router = useRouter();
   const [pushState, setPushState] = useState<PushState>('PERMISSION_REQUIRED');
@@ -343,99 +118,44 @@ export default function PushNotificationToggle() {
   const preparedPushRef = useRef<PreparedPush | null>(null);
   const reconciliationGenerationRef = useRef(0);
 
-  const ensureServiceWorker = useCallback(async () => {
-    let stage: ServiceWorkerPreparationStage = 'SW_LOOKUP';
-    try {
-      if (!('serviceWorker' in navigator)) {
-        throw new ClientAppError({
-          code: 'PUSH_SW_REGISTRATION_FAILED',
-          error: 'Service workers are not supported by this browser.',
-          action: 'Use a browser that supports Web Push notifications.',
-          retryable: false,
-        });
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [diagnosticsHealth, setDiagnosticsHealth] = useState<ServiceWorkerHealth | null>(null);
+  const [diagnosticsCopied, setDiagnosticsCopied] = useState(false);
+
+  const toggleDiagnostics = async () => {
+    const next = !showDiagnostics;
+    setShowDiagnostics(next);
+    if (next) {
+      try {
+        const health = await inspectServiceWorkerHealth();
+        setDiagnosticsHealth(health);
+      } catch {
+        // Best effort
       }
-      if (!window.isSecureContext && window.location.hostname !== 'localhost') {
-        throw new ClientAppError({
-          code: 'PUSH_SW_REGISTRATION_FAILED',
-          error: 'Push notifications require HTTPS.',
-          action: 'Open OpsKnight over HTTPS and try again.',
-          retryable: false,
-        });
-      }
-
-      let registration = await promiseWithTimeout(
-        navigator.serviceWorker.getRegistration(),
-        SERVICE_WORKER_READY_TIMEOUT_MS,
-        'Service worker lookup timed out.'
-      );
-
-      // A valid active, waiting, or installing OpsKnight worker is enough to
-      // continue the normal lifecycle. In particular, a waiting update should
-      // not cause Push preflight to re-register /sw.js on iOS.
-      if (!hasOpsKnightServiceWorker(registration)) {
-        stage = 'SW_ASSET';
-        await preflightServiceWorkerAsset();
-
-        stage = 'SW_REGISTER';
-        registration = await promiseWithTimeout(
-          navigator.serviceWorker.register('/sw.js', { scope: '/' }),
-          SERVICE_WORKER_READY_TIMEOUT_MS,
-          'Service worker registration timed out.'
-        );
-      }
-
-      stage = 'SW_READY';
-      // In iOS WebKit / Safari, navigator.serviceWorker.ready never resolves
-      // when the document is not controlled by the service worker.
-      // Awaiting navigator.serviceWorker.ready on iOS causes an unconditional hang
-      // and timeout, especially on fresh PWA installation when the service worker
-      // was just registered in this page session.
-      // Instead, we wait for registration.active (or statechange to activated)
-      // and use the registration's pushManager directly.
-      let readyRegistration: ServiceWorkerRegistration | null = null;
-      if (detectPlatform() === 'ios') {
-        if (registration) {
-          readyRegistration = await waitForRegistrationActive(
-            registration,
-            SERVICE_WORKER_READY_TIMEOUT_MS
-          );
-        } else {
-          readyRegistration = await promiseWithTimeout(
-            navigator.serviceWorker.ready,
-            SERVICE_WORKER_READY_TIMEOUT_MS,
-            'The service worker did not become ready.'
-          );
-        }
-      } else {
-        readyRegistration = await promiseWithTimeout(
-          navigator.serviceWorker.ready,
-          SERVICE_WORKER_READY_TIMEOUT_MS,
-          'The service worker did not become ready.'
-        );
-      }
-
-      if (!readyRegistration?.pushManager) {
-        throw new Error('Ready service worker registration does not expose PushManager.');
-      }
-
-      return readyRegistration;
-    } catch (error) {
-      if (error instanceof ClientAppError) throw error;
-
-      logger.warn('push.service_worker_prepare_failed', {
-        component: 'PushNotificationToggle',
-        stage,
-        browserException: error instanceof Error ? error.name : typeof error,
-        browserMessage: error instanceof Error ? error.message : 'Unknown service worker failure',
-      });
-
-      throw new ClientAppError({
-        code: 'PUSH_SW_REGISTRATION_FAILED',
-        error: 'Push notifications could not prepare the service worker on this device.',
-        action: serviceWorkerFailureAction(stage),
-        retryable: true,
-      });
     }
+  };
+
+  const copyDiagnostics = async () => {
+    if (!diagnosticsHealth) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(diagnosticsHealth, null, 2));
+      setDiagnosticsCopied(true);
+      setTimeout(() => setDiagnosticsCopied(false), 2_000);
+    } catch {
+      // Best effort
+    }
+  };
+
+  const ensureServiceWorker = useCallback(async () => {
+    const registration = await ensureHealthyServiceWorker({
+      purpose: 'push-enrollment',
+      activationPolicy: 'recover-if-no-active',
+      timeoutMs: SERVICE_WORKER_READY_TIMEOUT_MS,
+    });
+    if (!registration?.pushManager) {
+      throw new Error('Ready service worker registration does not expose PushManager.');
+    }
+    return registration;
   }, []);
 
   const preparePush = useCallback(async (): Promise<PreparedPush> => {
@@ -1032,6 +752,98 @@ export default function PushNotificationToggle() {
         >
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>{error}</span>
+        </div>
+      ) : null}
+
+      {error || pushState === 'ERROR' || pushState === 'REPAIR_REQUIRED' ? (
+        <div className="mt-2 text-xs">
+          <button
+            type="button"
+            onClick={() => void toggleDiagnostics()}
+            className="flex items-center gap-1 text-muted-foreground hover:text-foreground text-[11px] font-medium transition-colors"
+            aria-expanded={showDiagnostics}
+          >
+            {showDiagnostics ? (
+              <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            <span>Diagnostics</span>
+          </button>
+          {showDiagnostics ? (
+            <div className="mt-2 rounded-md border border-border bg-muted/40 p-2.5 space-y-2 text-[11px] text-muted-foreground font-mono">
+              <div className="flex items-center justify-between font-sans">
+                <span className="font-semibold text-foreground">Service Worker Health</span>
+                <button
+                  type="button"
+                  onClick={() => void copyDiagnostics()}
+                  className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+                >
+                  {diagnosticsCopied ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>Copy diagnostics</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <div className="space-y-1">
+                <div>
+                  <span className="text-foreground">Platform:</span>{' '}
+                  {diagnosticsHealth?.platform ?? platform}
+                </div>
+                <div>
+                  <span className="text-foreground">Standalone:</span>{' '}
+                  {diagnosticsHealth?.standalone ? 'Yes' : 'No'}
+                </div>
+                <div>
+                  <span className="text-foreground">Classification:</span>{' '}
+                  {diagnosticsHealth?.classification ?? 'unknown'}
+                </div>
+                <div>
+                  <span className="text-foreground">Scope:</span>{' '}
+                  {diagnosticsHealth?.scope ?? 'none'}
+                </div>
+                <div>
+                  <span className="text-foreground">Active Worker:</span>{' '}
+                  {diagnosticsHealth?.activeWorker
+                    ? `${diagnosticsHealth.activeWorker.scriptURL} (${diagnosticsHealth.activeWorker.state})`
+                    : 'none'}
+                </div>
+                <div>
+                  <span className="text-foreground">Waiting Worker:</span>{' '}
+                  {diagnosticsHealth?.waitingWorker
+                    ? `${diagnosticsHealth.waitingWorker.scriptURL} (${diagnosticsHealth.waitingWorker.state})`
+                    : 'none'}
+                </div>
+                <div>
+                  <span className="text-foreground">Installing Worker:</span>{' '}
+                  {diagnosticsHealth?.installingWorker
+                    ? `${diagnosticsHealth.installingWorker.scriptURL} (${diagnosticsHealth.installingWorker.state})`
+                    : 'none'}
+                </div>
+                <div>
+                  <span className="text-foreground">Asset /sw.js:</span>{' '}
+                  {diagnosticsHealth?.swAssetStatus ?? 'not checked'}
+                </div>
+                <div>
+                  <span className="text-foreground">Asset /custom-sw.js:</span>{' '}
+                  {diagnosticsHealth?.customSwAssetStatus ?? 'not checked'}
+                </div>
+                {diagnosticsHealth?.lastFailureCode ? (
+                  <div>
+                    <span className="text-foreground">Failure:</span>{' '}
+                    {diagnosticsHealth.lastFailureCode}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
