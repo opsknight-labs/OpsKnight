@@ -12,11 +12,12 @@ const withPWA = require('@ducanh2912/next-pwa').default({
   // Exclude all public assets from precaching. Marketing images, screenshots,
   // and icons must not stall SW install; static assets are cached on-demand.
   publicExcludes: ['!**/*'],
-  // Never replace a running operational client underneath a responder. The
-  // MobilePwaCoordinator explicitly activates a waiting worker after consent.
-  skipWaiting: false,
   sw: 'sw.js',
   workboxOptions: {
+    // Never replace a running operational client underneath a responder. The
+    // MobilePwaCoordinator explicitly activates a waiting worker after consent.
+    skipWaiting: false,
+    clientsClaim: false,
     disableDevLogs: true,
     cleanupOutdatedCaches: true,
     // Exclude webpack build chunks from the precache manifest. Runtime caching

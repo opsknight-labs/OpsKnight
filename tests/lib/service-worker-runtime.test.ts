@@ -1130,6 +1130,48 @@ describe('service-worker-runtime', () => {
       const health = await inspectServiceWorkerHealth();
       expect(health.lastFailureCode).toBe('SW_REGISTRATION_TIMEOUT');
     });
+
+    it('halts recovery and never attempts unregister or register when update times out', async () => {
+      const updateMock = vi.fn().mockReturnValue(new Promise(() => {}));
+      const unregisterMock = vi.fn();
+      const registerMock = vi.fn();
+
+      const suspectRegistration: Record<string, unknown> = {
+        scope: `${window.location.origin}/`,
+        active: null,
+        waiting: null,
+        installing: null,
+        update: updateMock,
+        unregister: unregisterMock,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      };
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(suspectRegistration),
+          register: registerMock,
+          ready: new Promise(() => {}),
+        },
+        configurable: true,
+      });
+
+      await expect(
+        ensureHealthyServiceWorker({
+          purpose: 'push-enrollment',
+          activationPolicy: 'recover-if-no-active',
+          timeoutMs: 50,
+        })
+      ).rejects.toThrow(ClientAppError);
+
+      expect(updateMock).toHaveBeenCalledTimes(1);
+      // Crucial: unregister and register must NEVER be called after update timeout!
+      expect(unregisterMock).not.toHaveBeenCalled();
+      expect(registerMock).not.toHaveBeenCalled();
+
+      const health = await inspectServiceWorkerHealth();
+      expect(health.lastFailureCode).toBe('SW_UPDATE_TIMEOUT');
+    });
   });
 
   describe('ensureWorkerAttached', () => {

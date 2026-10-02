@@ -28,6 +28,7 @@ export type ServiceWorkerFailureReasonCode =
   | 'SW_ASSET_INVALID'
   | 'SW_IMPORT_FAILED'
   | 'SW_ACTIVATION_TIMEOUT'
+  | 'SW_UPDATE_TIMEOUT'
   | 'SW_UNREGISTER_TIMEOUT'
   | 'SW_REGISTRATION_TIMEOUT'
   | 'SW_WRONG_SCOPE'
@@ -687,6 +688,11 @@ async function repairServiceWorkerRegistration(
           op: 'update',
           timeoutMs: updateTimeoutMs,
         });
+        // STOP: timing out an update means WebKit job queue is still processing it.
+        // Halting recovery immediately to prevent stacking unregister() on top of a pending update job.
+        throw new ClientTimeoutError(
+          'Service worker update timed out during repair. Halting recovery to prevent duplicate jobs.'
+        );
       } else {
         logger.warn('service_worker.lifecycle.repair_update_attempt_failed', {
           error: updateError,
@@ -869,28 +875,32 @@ function handleTerminalFailure(
   const elapsedMs = Date.now() - startTime;
   const isRedundant = failureError instanceof Error && failureError.message.includes('redundant');
   const isTimeout = failureError instanceof ClientTimeoutError;
+  const isUpdateTimeout = isTimeout && failureError.message.includes('update timed out');
   const isUnregisterTimeout =
     isTimeout && failureError.message.includes('unregistration timed out');
   const isRegisterTimeout = isTimeout && failureError.message.includes('registration timed out');
   const isStuckInstall =
     isTimeout &&
+    !isUpdateTimeout &&
     !isUnregisterTimeout &&
     !isRegisterTimeout &&
     (failureError.message.includes('stuck') ||
       registration?.installing != null ||
       classification === 'INSTALLING');
 
-  const reasonCode: ServiceWorkerFailureReasonCode = isUnregisterTimeout
-    ? 'SW_UNREGISTER_TIMEOUT'
-    : isRegisterTimeout
-      ? 'SW_REGISTRATION_TIMEOUT'
-      : isStuckInstall
-        ? 'SW_INSTALL_STUCK'
-        : isTimeout
-          ? 'SW_ACTIVATION_TIMEOUT'
-          : isRedundant
-            ? 'SW_REDUNDANT'
-            : 'SW_REPAIR_FAILED';
+  const reasonCode: ServiceWorkerFailureReasonCode = isUpdateTimeout
+    ? 'SW_UPDATE_TIMEOUT'
+    : isUnregisterTimeout
+      ? 'SW_UNREGISTER_TIMEOUT'
+      : isRegisterTimeout
+        ? 'SW_REGISTRATION_TIMEOUT'
+        : isStuckInstall
+          ? 'SW_INSTALL_STUCK'
+          : isTimeout
+            ? 'SW_ACTIVATION_TIMEOUT'
+            : isRedundant
+              ? 'SW_REDUNDANT'
+              : 'SW_REPAIR_FAILED';
 
   lastKnownFailureCode = reasonCode;
   lastKnownFailureMessage =
@@ -924,11 +934,13 @@ function handleTerminalFailure(
       ? 'The service worker installation failed and became redundant.'
       : isStuckInstall
         ? 'The service worker was stuck installing and could not activate.'
-        : isUnregisterTimeout
-          ? 'The service worker could not be unregistered cleanly.'
-          : isRegisterTimeout
-            ? 'The service worker registration timed out.'
-            : 'Push setup could not activate the background service.',
+        : isUpdateTimeout
+          ? 'The service worker update timed out.'
+          : isUnregisterTimeout
+            ? 'The service worker could not be unregistered cleanly.'
+            : isRegisterTimeout
+              ? 'The service worker registration timed out.'
+              : 'Push setup could not activate the background service.',
     action: isRedundant
       ? 'Service worker installation failed before activation. Retry.'
       : 'Service worker did not become ready. Retry.',
