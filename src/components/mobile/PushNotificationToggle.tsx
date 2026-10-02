@@ -314,7 +314,7 @@ export default function PushNotificationToggle() {
   const [testMessage, setTestMessage] = useState('');
   const [isStandalone, setIsStandalone] = useState(false);
   const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
-  const [preparing, setPreparing] = useState(true);
+  const [preparing, setPreparing] = useState(false);
   const [preflightReady, setPreflightReady] = useState(false);
   const preparedPushRef = useRef<PreparedPush | null>(null);
   const reconciliationGenerationRef = useRef(0);
@@ -530,6 +530,18 @@ export default function PushNotificationToggle() {
       return;
     }
 
+    // Do not perform service-worker or network preparation while permission is
+    // still undecided. iOS requires requestPermission() to run directly from
+    // the Enable tap, and background preparation can leave the control stuck
+    // in a disabled "Preparing" state before that tap can happen.
+    if (Notification.permission === 'default') {
+      preparedPushRef.current = null;
+      setPreflightReady(false);
+      setPreparing(false);
+      setPushState('PERMISSION_REQUIRED');
+      return;
+    }
+
     setPreparing(true);
     setPreflightReady(false);
     try {
@@ -538,12 +550,6 @@ export default function PushNotificationToggle() {
 
       preparedPushRef.current = prepared;
       setPreflightReady(true);
-
-      if (Notification.permission === 'default') {
-        setPreparing(false);
-        setPushState('PERMISSION_REQUIRED');
-        return;
-      }
 
       if (!prepared.subscription) {
         setPreparing(false);
@@ -630,14 +636,14 @@ export default function PushNotificationToggle() {
   const subscribeOrRepair = async () => {
     if (loading) return;
 
+    // Capture the permission promise synchronously in the click handler. This
+    // must happen before service-worker lookup, VAPID fetches, or any await so
+    // iOS and Android retain the browser's user-activation gesture.
+    const permissionRequest =
+      Notification.permission === 'default' ? Notification.requestPermission() : null;
+
     // User actions are authoritative over any in-flight background reconciliation.
     reconciliationGenerationRef.current += 1;
-    const prepared = preparedPushRef.current;
-    if (!preflightReady || !prepared) {
-      setPushState('ERROR');
-      setError('Push is not ready yet. Retry preparation and then enable Push.');
-      return;
-    }
 
     setLoading(true);
     setError('');
@@ -646,13 +652,9 @@ export default function PushNotificationToggle() {
     let stage: PushStage = 'INIT';
     try {
       let permission = Notification.permission;
-      if (permission === 'default') {
-        // Invoke the native permission request synchronously from the explicit
-        // Enable gesture. This is the reliable iOS Home Screen PWA ceremony:
-        // all SW/VAPID preparation is already complete, so no network or
-        // service-worker work sits between the user tap and this request.
+      if (permissionRequest) {
         stage = 'REQUEST_PERMISSION';
-        permission = await Notification.requestPermission();
+        permission = await permissionRequest;
       }
 
       if (permission === 'denied') {
@@ -666,6 +668,9 @@ export default function PushNotificationToggle() {
         return;
       }
 
+      const prepared = preparedPushRef.current ?? (await preparePush());
+      preparedPushRef.current = prepared;
+      setPreflightReady(true);
       let subscription = prepared.subscription;
 
       if (!subscription) {
@@ -683,10 +688,9 @@ export default function PushNotificationToggle() {
           applicationServerKey: prepared.applicationServerKey as unknown as BufferSource,
         };
 
-        // All asynchronous SW/VAPID preparation is complete before Enable is
-        // available. With permission already granted, subscribe remains a
-        // direct gesture-path call; after a native permission prompt, no
-        // additional setup work runs before subscription creation.
+        // Permission has been granted before enrollment begins. Keeping the
+        // service-worker and VAPID work after the native prompt prevents setup
+        // failures from blocking the prompt itself.
         stage = 'CREATE_SUBSCRIPTION';
         const subscriptionPromise = prepared.registration.pushManager.subscribe(subscribeOptions);
         subscription = await promiseWithTimeout(
