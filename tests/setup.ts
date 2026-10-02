@@ -12,6 +12,7 @@ afterEach(() => {
   if (typeof document !== 'undefined') {
     cleanup();
   }
+  vi.useRealTimers();
 });
 
 // Preserve raw src for assertions — next/image otherwise absolutizes in jsdom.

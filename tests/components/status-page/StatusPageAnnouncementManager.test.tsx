@@ -139,34 +139,48 @@ describe('StatusPageAnnouncementManager Component', () => {
     );
   });
 
-  it('detects and displays time validation error when end time is earlier than start time', () => {
+  it('detects and displays time validation error when end time is earlier than start time', async () => {
     renderManager();
 
     // Open composer modal
     fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
+    const dialog = await screen.findByRole('dialog');
 
-    const titleInput = screen.getByPlaceholderText(/Scheduled Database Maintenance Window/i);
-    const messageInput = screen.getByPlaceholderText(/Describe the scope/i);
+    const titleInput = within(dialog).getByPlaceholderText(/Scheduled Database Maintenance Window/i);
+    const messageInput = within(dialog).getByPlaceholderText(/Describe the scope/i);
 
     fireEvent.change(titleInput, { target: { value: 'Test Window' } });
     fireEvent.change(messageInput, { target: { value: 'Test Message' } });
 
-    // Set start date to 2026-09-20 and end date to 2026-09-19
-    const dateInputs = screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+    // Explicitly set deterministic start date and daytime
+    const dateInputs = within(dialog).getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
     fireEvent.change(dateInputs[0], { target: { value: '2026-09-20' } });
+    const timeInputs = within(dialog).getAllByDisplayValue(/\d{2}:\d{2}/);
+    if (timeInputs.length > 0) {
+      fireEvent.change(timeInputs[0], { target: { value: '10:00' } });
+    }
 
-    // Add end date earlier
-    const add1hBtn = screen.getByRole('button', { name: '+1h' });
+    // Add end date
+    const add1hBtn = within(dialog).getByRole('button', { name: '+1h' });
     fireEvent.click(add1hBtn);
 
-    const allDateInputs = screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+    await waitFor(() => {
+      const allDateInputs = within(dialog).getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+      expect(allDateInputs.length).toBeGreaterThanOrEqual(2);
+    });
+
+    const allDateInputs = within(dialog).getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
     // Change end date to 2026-09-18
     fireEvent.change(allDateInputs[1], { target: { value: '2026-09-18' } });
 
-    expect(screen.getByText(/End date and time must be after start date and time/i)).toBeDefined();
+    await waitFor(() => {
+      expect(
+        within(dialog).getByText(/End date and time must be after start date and time/i)
+      ).toBeInTheDocument();
+    });
 
     // Submit button should be disabled
-    const submitBtn = screen.getByRole('button', { name: /Add Announcement/i });
+    const submitBtn = within(dialog).getByRole('button', { name: /Add Announcement/i });
     expect(submitBtn.hasAttribute('disabled')).toBe(true);
   });
 
@@ -329,26 +343,33 @@ describe('StatusPageAnnouncementManager Component', () => {
 
     // Open composer modal
     fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
+    const dialog = await screen.findByRole('dialog');
 
-    const titleInput = screen.getByPlaceholderText(/Scheduled Database Maintenance Window/i);
-    const messageInput = screen.getByPlaceholderText(/Describe the scope/i);
+    const titleInput = within(dialog).getByPlaceholderText(/Scheduled Database Maintenance Window/i);
+    const messageInput = within(dialog).getByPlaceholderText(/Describe the scope/i);
 
     fireEvent.change(titleInput, { target: { value: 'Resolved Database Incident' } });
     fireEvent.change(messageInput, { target: { value: 'Post-mortem retrospective announcement' } });
 
-    // Set past dates
-    const dateInputs = screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+    // Explicitly set deterministic start date and daytime
+    const dateInputs = within(dialog).getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
     fireEvent.change(dateInputs[0], { target: { value: '2020-01-01' } });
+    const timeInputs = within(dialog).getAllByDisplayValue(/\d{2}:\d{2}/);
+    if (timeInputs.length > 0) {
+      fireEvent.change(timeInputs[0], { target: { value: '10:00' } });
+    }
 
     // Quick window +1h sets end date
-    const add1hBtn = screen.getByRole('button', { name: '+1h' });
+    const add1hBtn = within(dialog).getByRole('button', { name: '+1h' });
     fireEvent.click(add1hBtn);
 
     // Notice preview should show concluded notice
-    expect(screen.getByText(/Concluded historical notice/i)).toBeDefined();
+    await waitFor(() => {
+      expect(within(dialog).getByText(/Concluded historical notice/i)).toBeInTheDocument();
+    });
 
     // Submit button should NOT be disabled
-    const submitBtn = screen.getByRole('button', { name: /Add Announcement/i });
+    const submitBtn = within(dialog).getByRole('button', { name: /Add Announcement/i });
     expect(submitBtn.hasAttribute('disabled')).toBe(false);
     fireEvent.click(submitBtn);
 

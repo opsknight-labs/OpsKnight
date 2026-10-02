@@ -11,7 +11,7 @@ No per-seat pricing. Your incident data stays in your own database.</p>
 
 <p>
   <a href="https://github.com/opsknight-labs/OpsKnight/releases/tag/v2.0.0"><img src="https://img.shields.io/badge/release-v2.0.0-e11d48?style=for-the-badge" alt="Release v2.0.0"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-111827?style=for-the-badge" alt="License AGPL-3.0-only"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0--only-111827?style=for-the-badge" alt="License AGPL-3.0-only"></a>
   <a href="https://github.com/opsknight-labs/OpsKnight/pkgs/container/opsknight"><img src="https://img.shields.io/badge/ghcr.io-amd64%20%7C%20arm64-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Multi-architecture container on GHCR"></a>
   <a href="https://opsknight.com/docs/latest/"><img src="https://img.shields.io/badge/docs-opsknight.com-2563eb?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation"></a>
 </p>

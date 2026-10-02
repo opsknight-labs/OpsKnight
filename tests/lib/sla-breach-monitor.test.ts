@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   checkSLABreaches,
   formatBreachWarning,
@@ -54,6 +54,10 @@ describe('sla-breach-monitor', () => {
     vi.useFakeTimers();
     const { default: prisma } = await import('@/lib/prisma');
     vi.mocked(prisma.incidentEvent.findMany).mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('checkSLABreaches', () => {
