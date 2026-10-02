@@ -47,6 +47,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 20
@@ -85,6 +87,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 20
@@ -99,11 +103,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Checkout website renderer
-        uses: actions/checkout@v7
         with:
-          repository: opsknight-labs/OpsKnight-website
-          path: opsknight-website
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 20
@@ -112,6 +113,11 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Build revision-bound OpsKnight image
         run: docker build --build-arg BUILD_REVISION=${{ github.sha }} -t opsknight-docs-release:${{ github.sha }} .
+      - name: Checkout website renderer
+        uses: actions/checkout@v7
+        with:
+          repository: opsknight-labs/OpsKnight-website
+          path: opsknight-website
       - name: Build the rendered documentation site from this revision
         run: |
           ./scripts/sync-docs-to-website.sh ./opsknight-website

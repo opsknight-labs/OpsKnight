@@ -2,9 +2,6 @@
 # application development or integration-test Compose projects.
 name: opsknight-docs-v2-capture
 
-include:
-  - ../../../deploy/compose/docker-compose.yml
-
 services:
   opsknight-db:
     ports: !override
@@ -13,6 +10,8 @@ services:
       POSTGRES_USER: opsknight_docs
       POSTGRES_PASSWORD: opsknight_docs
       POSTGRES_DB: opsknight_docs
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U opsknight_docs -d opsknight_docs']
     volumes: !override
       - docs_postgres_data:/var/lib/postgresql/data
 

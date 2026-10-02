@@ -15,7 +15,7 @@ import { inspectLimits } from './inspect-limits.mjs';
 import { buildFeatureGraph } from './build-feature-graph.mjs';
 import { repositoryRoot } from './discovery-lib.mjs';
 
-const sourceRevision = process.env.GITHUB_SHA ?? execFileSync(
+const sourceRevision = execFileSync(
   'git',
   ['log', '-1', '--format=%H', '--', 'src', 'prisma', 'deploy', 'package.json'],
   { cwd: repositoryRoot, encoding: 'utf8' }

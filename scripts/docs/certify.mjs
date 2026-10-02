@@ -9,7 +9,11 @@ const run = (file, args) => execFileSync(file, args, { cwd: root, stdio: 'inheri
 const fullRuntime = !process.argv.includes('--static');
 const releaseCertification = process.argv.includes('--release');
 const externalRuntime = process.argv.includes('--external-runtime');
-const composeArgs = ['compose', '--project-name', 'opsknight-docs-v2-capture', '-f', 'tests/docs/environment/compose.yaml'];
+const composeArgs = [
+  'compose', '--project-name', 'opsknight-docs-v2-capture',
+  '-f', 'deploy/compose/docker-compose.yml',
+  '-f', 'tests/docs/environment/compose.yaml',
+];
 
 if (releaseCertification) {
   const relevantStatus = execFileSync(
