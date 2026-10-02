@@ -366,17 +366,19 @@ describe('deployment configuration invariants', () => {
 
   it('only accepts a new stable release tag matching package.json', () => {
     const script = path.join(root, 'scripts/validate-release-tag.cjs');
-    const valid = spawnSync(process.execPath, [script, 'v1.4.0'], {
+    const pkg = JSON.parse(read('package.json')) as { version: string };
+    const releaseTag = `v${pkg.version}`;
+    const valid = spawnSync(process.execPath, [script, releaseTag], {
       cwd: root,
-      env: { ...process.env, LATEST_RELEASE_TAG: 'v1.3.1' },
+      env: { ...process.env, LATEST_RELEASE_TAG: 'v1.4.0' },
       encoding: 'utf8',
     });
     expect(valid.status).toBe(0);
 
     for (const [tag, latest] of [
-      ['v1.4.0-beta.1', 'v1.3.1'],
-      ['v1.3.1', 'v1.3.0'],
-      ['v1.4.0', 'v1.4.0'],
+      [`${releaseTag}-beta.1`, 'v1.4.0'],
+      ['v1.4.0', 'v1.3.1'],
+      [releaseTag, releaseTag],
     ]) {
       const invalid = spawnSync(process.execPath, [script, tag], {
         cwd: root,

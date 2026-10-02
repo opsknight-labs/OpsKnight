@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+No changes yet.
+
+## [2.0.0] - 2026-10-02
+
+OpsKnight 2.0 is a major release of the self-hosted incident-response platform. It introduces a scalable runtime architecture, a durable notification pipeline, expanded identity and ChatOps controls, production deployment options, and a fully rebuilt source-verified documentation set.
+
+### Release highlights
+
+- **Architecture and operations:** Integrated and split runtime roles, PostgreSQL-backed queues and leases, Health Center diagnostics, Prometheus metrics, system logs, backup/restore, and capacity planning.
+- **Incident response:** A complete incident lifecycle with ownership, timelines, notes, action items, templates, custom fields, postmortems, priorities, urgency, and service SLA targets.
+- **On-call and escalation:** Schedule layers, overrides, escalation steps, recovery behavior, and acknowledgement/resolution breach handling.
+- **Notifications and paging:** Durable routed delivery through email, web push, SMS, WhatsApp, and Twilio voice, with provider health, retries, fallback, and delivery inspection.
+- **ChatOps and integrations:** Interactive Slack and Microsoft Teams incident actions and war rooms, Jira synchronization, status pages, and 28 certified inbound integration contracts.
+- **Identity and security:** OIDC, SCIM, RBAC, API keys, session/device management, encrypted provider credentials, audit evidence, privacy controls, and hardened webhook verification.
+- **Analytics and mobile:** Reports, service reliability and SLA analytics, an installable mobile PWA, push controls, and accessibility improvements.
+- **Deployment:** Supported Compose, Swarm, Helm, and Kustomize workflows for integrated and split topologies, external PostgreSQL, and optional PgBouncer.
+- **Documentation:** A 2.0 task-oriented documentation system backed by implementation discovery, semantic contracts, runtime evidence, API smoke tests, legacy-knowledge mapping, and rendered-site validation.
+- **License:** OpsKnight 2.0.0 is the first stable release distributed under `AGPL-3.0-only`. OpsKnight 1.4.0 and earlier retain their historical licenses.
+
+### Upgrade from 1.4
+
+This is a major-version migration. Before upgrading:
+
+1. Back up PostgreSQL and prove that the backup restores.
+2. Preserve `ENCRYPTION_KEY` and `NEXTAUTH_SECRET`; do not generate replacements.
+3. Configure the externally reachable Application URL before testing redirects, webhooks, OIDC, ChatOps, or push.
+4. Run schema migrations through a direct PostgreSQL connection, not PgBouncer.
+5. Choose integrated or split topology and validate the database connection budget.
+6. Re-test inbound integrations and every configured delivery provider.
+7. Record the rollback boundary and complete rollback before accepting incompatible 2.0 writes.
+
+Read [Migrate from v1](docs/v2.0.0/start/migrate-from-v1.md), [database migrations](docs/v2.0.0/operate/upgrades/database-migrations.md), and [rollback](docs/v2.0.0/operate/upgrades/rollback.md) before the maintenance window.
+
 ### Added & Enhanced
 
 - **Webhook Ingestion Reliability & Auto-Recovery**:

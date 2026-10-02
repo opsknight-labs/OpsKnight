@@ -24,9 +24,9 @@ services:
       - opsknight-network
 
   opsknight-app:
-    # Main-branch Compose defaults to the patched, immutable v1.4 hotfix runtime.
+    # The release Compose stack defaults to the stable 2.0 runtime.
     # Override OPSKNIGHT_IMAGE only with a tested tag or digest.
-    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:1.4.0-hotfix}
+    image: ${OPSKNIGHT_IMAGE:-ghcr.io/opsknight-labs/opsknight:2.0.0}
     pull_policy: ${OPSKNIGHT_PULL_POLICY:-always}
     restart: unless-stopped
     ports:

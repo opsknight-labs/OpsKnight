@@ -9,13 +9,34 @@ import { exists, filesUnder, readRepositoryFile, repositoryRoot } from './discov
 const inventory = YAML.parse(readFileSync(resolve(repositoryRoot, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
 const failures = [];
 const assetManifest = YAML.parse(readRepositoryFile('docs/v2.0.0/assets/manifest.yaml'));
+const acceptedSquashMerges = new Map(
+  (assetManifest.acceptedSquashMerges ?? []).map(record => [record.sourceRevision, record.mergedRevision])
+);
+for (const record of assetManifest.acceptedSquashMerges ?? []) {
+  if (!/^[0-9a-f]{40}$/.test(record.sourceRevision ?? '')) failures.push('reader assets: squash source revision is invalid');
+  if (!/^[0-9a-f]{40}$/.test(record.mergedRevision ?? '')) failures.push('reader assets: squash merge revision is invalid');
+  if (!record.reason) failures.push('reader assets: squash merge acceptance is missing a reason');
+}
+
+function revisionIsAccepted(revision) {
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', revision, 'HEAD'], { cwd: repositoryRoot });
+    return true;
+  } catch {
+    const mergedRevision = acceptedSquashMerges.get(revision);
+    if (!mergedRevision) return false;
+    try {
+      execFileSync('git', ['merge-base', '--is-ancestor', mergedRevision, 'HEAD'], { cwd: repositoryRoot });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 if (!assetManifest.runtimeImage?.includes('@sha256:')) failures.push('reader assets: runtime image is not immutable');
 for (const revisionField of ['approvedSourceRevision', 'runtimeSourceRevision']) {
-  try {
-    execFileSync('git', ['merge-base', '--is-ancestor', assetManifest[revisionField], 'HEAD'], { cwd: repositoryRoot });
-  } catch {
-    failures.push(`reader assets: ${revisionField} is not an ancestor of HEAD`);
-  }
+  if (!revisionIsAccepted(assetManifest[revisionField])) failures.push(`reader assets: ${revisionField} is not in the accepted HEAD lineage`);
 }
 for (const [asset, record] of Object.entries(assetManifest.assets ?? {})) {
   const publicFile = `docs/v2.0.0/assets/${asset}`;
@@ -62,11 +83,7 @@ if (exists('generated/docs-evidence')) {
       for (const field of ['requestedImage', 'digest', 'sourceRevision']) if (!metadata.runtime[field]) failures.push(`${file}: missing runtime.${field}`);
       if (!metadata.runtime.requestedImage?.includes('@sha256:')) failures.push(`${file}: runtime image is not immutable`);
       if (!metadata.runtime.digest?.includes('@sha256:')) failures.push(`${file}: runtime digest is not immutable`);
-      try {
-        execFileSync('git', ['merge-base', '--is-ancestor', metadata.runtime.sourceRevision, 'HEAD'], { cwd: repositoryRoot });
-      } catch {
-        failures.push(`${file}: runtime source revision is not an ancestor of HEAD`);
-      }
+      if (!revisionIsAccepted(metadata.runtime.sourceRevision)) failures.push(`${file}: runtime source revision is not in the accepted HEAD lineage`);
     }
   }
 }

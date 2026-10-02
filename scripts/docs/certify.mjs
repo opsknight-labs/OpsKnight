@@ -70,6 +70,7 @@ const catalog = YAML.parse(readFileSync(join(root, 'docs/v2.0.0/capabilities.yam
 const v15Parity = JSON.parse(readFileSync(join(root, 'generated/docs-certification/v15-active-parity.json'), 'utf8'));
 const readerAudit = JSON.parse(readFileSync(join(root, 'generated/docs-certification/page-audit.json'), 'utf8'));
 const integrationContracts = JSON.parse(readFileSync(join(root, 'generated/docs-contracts/integrations.json'), 'utf8'));
+const documentationVersions = JSON.parse(readFileSync(join(root, 'docs/versions.json'), 'utf8'));
 const capabilities = Object.values(catalog.capabilities);
 const evidence = walk(join(root, 'generated/docs-evidence/current')).filter(path => extname(path) === '.png');
 const journeys = walk(join(root, 'tests/docs/journeys')).filter(path => path.endsWith('.spec.ts'));
@@ -113,7 +114,7 @@ const report = {
   productSourceRevision: runtimeSourceRevision || documentationRevision,
   runtimeSourceRevision: runtimeSourceRevision || null,
   runtimeImageDigest: runtimeInspection?.RepoDigests?.find(value => value.includes('@sha256:')) || null,
-  releaseState: 'upcoming',
+  releaseState: documentationVersions.releasedVersions.includes('v2.0.0') ? 'released' : 'upcoming',
   apiProof: {
     smokeProbeScope: 'Every discovered PUBLIC_API route is requested and must not return a server error.',
     deepContractGroups: ['authentication-and-error-envelope', 'incidents-crud-and-idempotency', 'events-validation'],
