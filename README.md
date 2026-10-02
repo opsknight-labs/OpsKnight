@@ -19,15 +19,22 @@ _Detect, route, respond, communicate, and learn on infrastructure you control._
 
 ## What ships in 2.0
 
-OpsKnight 2.0 provides the full incident-response loop:
+OpsKnight 2.0 is a major architecture and operations release:
 
-- incident intake, lifecycle, ownership, timelines, action items, postmortems, templates, and custom fields;
-- on-call schedules, temporary overrides, escalation policies, urgency, priority, and service-level acknowledgement and resolution targets;
-- a durable notification pipeline for email, web push, SMS, WhatsApp, and Twilio voice paging;
-- interactive Slack and Microsoft Teams ChatOps, Jira synchronization, status pages, and 28 certified inbound integration contracts;
-- OIDC, SCIM, RBAC, API keys, session/device management, audit logs, retention, privacy, and compliance exports;
-- analytics, reports, SLA tracking, a mobile PWA, backup and restore, metrics, logs, and the administrator Health Center;
-- integrated or split runtime deployments using Docker Compose, Docker Swarm, Helm, or Kustomize, with external PostgreSQL and optional PgBouncer patterns.
+- **Split-runtime, HA-ready deployment:** run Web, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector independently, or retain the integrated runtime. Compose, Swarm, Helm, and Kustomize cover supported integrated and split patterns with external PostgreSQL and optional PgBouncer.
+- **Notification delivery control plane:** durable logical intents, traffic lanes, provider attempts, retry and terminal states, callback reconciliation, capacity admission, and administrator delivery evidence across email, web push, SMS, WhatsApp, and Twilio voice paging.
+- **Interactive Microsoft Teams ChatOps:** Entra/Azure Bot setup, Teams app packaging, Adaptive Cards, incident actions, responder identity linking, war rooms, participant synchronization, and meeting collaboration. Slack ChatOps and Jira synchronization are also substantially hardened.
+- **Incident response policy engine:** workspace- and service-scoped classification, SLA, and support-hours policies with immutable published versions, preview, history, diff, restore, and API access.
+- **Identity and access:** SCIM 2.0 Users and Groups provisioning, stronger OIDC provider flows and claim mapping, the read-oriented `AUDITOR` role, API keys, and signed-in session/device inspection with individual or global revocation.
+- **Security, privacy, and compliance operations:** privacy-request workflows, retention holds, encryption migration controls, technical control evaluation, framework mapping, evidence ledgers, drift monitoring, and verifiable evidence-package exports. These tools support audits; they do not confer SOC 2, ISO, or other certification.
+- **Responder-grade mobile PWA:** rebuilt mobile navigation and response workflows, per-device push state, repair flows, offline boundaries, update handling, and hardened iOS PWA lifecycle behavior.
+- **Status Page V3:** one supported status page with themes, announcements, subscriber verification, API tokens, webhooks, privacy controls, uptime history/export, and hardened public routing.
+- **Custom dashboards and NOC wallboards:** templates, configurable widgets and layout, visibility controls, filtered share links, PDF export, live refresh, and fullscreen presentation mode.
+- **Benchmark-driven deployment planning:** Small, Medium, Large, and Storm workload shapes plus load/correctness certification guide topology and capacity decisions.
+
+The core response experience is also rebuilt around a centralized incident lifecycle, stronger schedules and escalation recovery, manual incident creation, templates, action items, 5-Whys postmortems, critical-incident awareness, personal Quiet Hours for low-urgency notifications, and multi-destination Slack/Teams routing. Medium- and high-urgency operational paging bypasses Quiet Hours.
+
+OpsKnight 2.0 certifies **28 current inbound integration contracts**; this is the total supported contract set, not 28 additions since 1.4. ManageEngine is the new native inbound parser, while the existing monitoring integrations receive stronger authentication, recovery, deduplication, and error contracts.
 
 The certified feature, API, configuration, integration, and operational contracts live in the [2.0 documentation](https://opsknight.com/docs/latest/). Treat those docs as the source of truth for supported behavior.
 

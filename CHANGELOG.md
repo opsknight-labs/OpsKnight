@@ -13,17 +13,43 @@ No changes yet.
 
 OpsKnight 2.0 is a major release of the self-hosted incident-response platform. It introduces a scalable runtime architecture, a durable notification pipeline, expanded identity and ChatOps controls, production deployment options, and a fully rebuilt source-verified documentation set.
 
-### Release highlights
+### New headline capabilities
 
-- **Architecture and operations:** Integrated and split runtime roles, PostgreSQL-backed queues and leases, Health Center diagnostics, Prometheus metrics, system logs, backup/restore, and capacity planning.
-- **Incident response:** A complete incident lifecycle with ownership, timelines, notes, action items, templates, custom fields, postmortems, priorities, urgency, and service SLA targets.
-- **On-call and escalation:** Schedule layers, overrides, escalation steps, recovery behavior, and acknowledgement/resolution breach handling.
-- **Notifications and paging:** Durable routed delivery through email, web push, SMS, WhatsApp, and Twilio voice, with provider health, retries, fallback, and delivery inspection.
-- **ChatOps and integrations:** Interactive Slack and Microsoft Teams incident actions and war rooms, Jira synchronization, status pages, and 28 certified inbound integration contracts.
-- **Identity and security:** OIDC, SCIM, RBAC, API keys, session/device management, encrypted provider credentials, audit evidence, privacy controls, and hardened webhook verification.
-- **Analytics and mobile:** Reports, service reliability and SLA analytics, an installable mobile PWA, push controls, and accessibility improvements.
-- **Deployment:** Supported Compose, Swarm, Helm, and Kustomize workflows for integrated and split topologies, external PostgreSQL, and optional PgBouncer.
-- **Documentation:** A 2.0 task-oriented documentation system backed by implementation discovery, semantic contracts, runtime evidence, API smoke tests, legacy-knowledge mapping, and rendered-site validation.
+- **Split production runtime:** Web, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector can scale independently. The integrated runtime remains supported.
+- **Notification delivery control plane:** Durable logical intents, provider attempts, traffic classes, admission/defer behavior, retry and terminal states, callback reconciliation, provider capacity controls, and an administrator Operations view. Delivery evidence distinguishes deferred, retrying, accepted, delivered, permanent-failure, and superseded work.
+- **Microsoft Teams ChatOps:** Entra application and Azure Bot integration, Teams app packaging and tenant installation, service-to-channel destinations, Adaptive Cards, interactive incident actions, identity linking, war rooms, participant synchronization, and meeting collaboration. A service can target up to three Teams destinations.
+- **Twilio voice paging:** `VOICE` is a triggered-incident paging channel with responder acknowledgement input, signed callbacks, and reconciliation of uncertain provider outcomes. Acknowledge and resolve lifecycle updates do not initiate additional voice calls.
+- **Incident response policy engine:** Versioned classification, incident SLA, and support-hours policies at workspace and service scope, with immutable published versions, preview, history, diff, restore, and API access.
+- **SCIM 2.0 provisioning:** Users, Groups, discovery endpoints, provisioning/deprovisioning, team membership, PATCH operations, and in-product bearer-token generation, rotation, and revocation.
+- **Auditor access and sessions:** A read-oriented `AUDITOR` role, centralized resource authorization, OIDC claim mapping, and a canonical signed-in-session registry with browser, OS, device, authentication type, activity, expiry, and revoke controls.
+- **Privacy and compliance operations:** Privacy/DSAR request processing, export and erasure evidence, retention holds, controlled encryption migrations, technical control evaluation, framework mappings, evidence ledgers, drift monitoring, and verifiable evidence-package exports. Framework mapping does not confer external certification.
+- **Docker Swarm:** Integrated and split stacks, Raft secrets, direct-database migration lifecycle, health checks, topology switching, and rollback tooling.
+- **Deployment planning and load certification:** Workload shapes and multi-topology load/correctness tests cover ingestion, incident lifecycle, escalation, notification fanout, realtime delivery, status fanout, and recovery.
+- **ManageEngine ingestion:** A new native inbound parser joins the existing integration catalog. The release certifies 28 current inbound contracts in total; it does not add 28 new integrations.
+
+### Major rebuilds of existing capabilities
+
+- **Incident response:** Centralized lifecycle commands, durable side effects, persistent idempotency, stale-worker fencing, a global create modal, templates, stronger validation, rebuilt incident detail, action items, and interactive 5-Whys postmortems.
+- **Schedules and escalation:** Redesigned schedule setup/detail, DST-safe rotations, overrides and handoff behavior, user/team/schedule escalation targets, priority/urgency/support-hours conditions, durable recovery, and stale-work protection.
+- **Slack and Jira:** More reliable Slack war rooms, identity and capability controls, up to three Slack destinations per service, provider-neutral collaboration, and stronger bidirectional Jira lifecycle reconciliation.
+- **Quiet Hours:** Personal timezone-aware suppression for low-urgency notifications; medium- and high-urgency operational paging bypasses Quiet Hours.
+- **Status Page V3:** One supported status page with themes, announcements, subscriber verification/unsubscribe, API tokens, webhooks, privacy controls, uptime history/export, rebuild-safe snapshots, and hardened routing. Multiple status pages are not a supported 2.0 capability.
+- **Dashboards and reports:** Templates, configurable widgets, persisted layout, private/team/organization visibility, filtered share links, PDF export, live refresh, and fullscreen NOC/TV presentation mode.
+- **Responder-grade mobile PWA:** Rebuilt mobile navigation and operational workflows, per-device push registration and reconciliation, repair flows, offline/cached-state boundaries, update handling, and hardened fresh-install iOS Web Push recovery. This is an installable PWA, not a native App Store application.
+- **OIDC and SSO policy:** Entra, Google, Okta, Auth0, and generic provider flows with PKCE/nonce, JIT provisioning, explicit account linking, claim-to-role mapping, provider lifecycle hardening, maximum lifetime, update interval, idle timeout, and reauthentication controls.
+- **Application bootstrap and routing:** Short-lived first-admin bootstrap capability, UI-managed Application URL, canonical-host enforcement, reverse-proxy awareness, and explicit HTTP 421 protection.
+- **Health and operations:** Expanded Health Center diagnostics, Prometheus metrics, system logs, backup/restore, worker/readiness visibility, and PgBouncer-aware connection ownership.
+
+### Explicit 2.0 boundaries
+
+- Service Objectives/SLO UI is deferred; its route redirects and it is not advertised as a released feature.
+- OpsKnight 2.0 supports one status page, not multiple status pages.
+- Postmortem analysis is user-driven; the release does not claim AI correlation or AI-generated postmortems.
+- OpsKnight remains self-hosted and does not introduce a hosted OpsKnight Cloud service.
+- Mobile delivery is an installable PWA, not native iOS or Android store applications.
+- Voice is triggered-incident paging, not a call on every later incident state change.
+- The 28 inbound integration contracts are the current total contract set, not 28 newly added integrations.
+- **Documentation:** The 2.0 task-oriented documentation is backed by implementation discovery, semantic contracts, runtime evidence, API smoke tests, legacy-knowledge mapping, and rendered-site validation.
 - **License:** OpsKnight 2.0.0 is the first stable release distributed under `AGPL-3.0-only`. OpsKnight 1.4.0 and earlier retain their historical licenses.
 
 ### Upgrade from 1.4
