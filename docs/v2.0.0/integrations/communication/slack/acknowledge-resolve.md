@@ -10,9 +10,9 @@ reader:
   status: READER_COMPLETE
   task: Acknowledge and resolve an OpsKnight incident from Slack.
 verification:
-  level: source
+  level: test
   verified_at: 2026-09-29
-  evidence: [src/app/api/slack/actions/route.ts, src/lib/chatops/]
+  evidence: [src/app/api/slack/actions/route.ts, src/lib/chatops/, tests/api/slack-actions-lifecycle.test.ts]
 ---
 
 # Acknowledge and resolve incidents from Slack
@@ -48,7 +48,7 @@ Open the OpsKnight incident and confirm status, actor attribution, timeline entr
 
 ## Change or undo the action
 
-Acknowledgement and resolution are lifecycle events, not editable Slack text. Use the supported OpsKnight incident transition or reopen/follow-up workflow where available; do not manually edit the message to imply a different state.
+Acknowledgement and resolution are lifecycle events, not editable Slack text. Standard Slack actions do not expose manual Escalate or Reopen in 2.0. Reopen occurs through supported correlation or an authorized API update; do not manually edit the message to imply a different state.
 
 ## Troubleshooting
 
@@ -62,4 +62,3 @@ Acknowledgement and resolution are lifecycle events, not editable Slack text. Us
 
 - [Use Slack commands](./commands)
 - [Operate war rooms](./war-rooms)
-

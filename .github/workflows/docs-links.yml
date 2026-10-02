@@ -65,6 +65,7 @@ jobs:
           npm run docs:routes
           npm run docs:v15-parity
           npm run docs:claims
+          npm run docs:surface-parity
       - name: Reject generated and published-reference drift
         env:
           # Commit-bound provenance changes after both an ordinary artifact

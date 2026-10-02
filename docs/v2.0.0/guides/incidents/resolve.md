@@ -10,13 +10,15 @@ reader:
   task: Resolve an incident with evidence and handle a later recurrence through supported ingestion or API paths.
   evidence: [docs/v2.0.0/assets/incident-acknowledged.png, docs/v2.0.0/assets/incident-timeline.png]
 verification:
-  level: source
+  level: test
   verified_at: 2026-09-29
   evidence:
     - src/components/incident/ResolveIncidentModal.tsx
     - src/components/incident/detail/actions.ts
     - src/lib/incidents/lifecycle.ts
     - src/lib/incidents/operator-lifecycle.ts
+    - tests/docs/journeys/incident-lifecycle.spec.ts
+    - tests/api/incident-patch-lifecycle.test.ts
 ---
 
 # Resolve an incident

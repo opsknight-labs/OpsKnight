@@ -262,7 +262,7 @@ For a synthetic incident, verify this sequence:
 6. Unsnooze; confirm a new escalation generation and scheduled step.
 7. Resolve with required fields and a useful note.
 8. Confirm provider/status/Jira projections separately.
-9. Reopen; confirm old history remains and a new active generation begins.
+9. Trigger a supported correlation/API reopen; confirm old history remains and a new active generation begins.
 10. Resolve again and confirm first-ack history was not rewritten.
 
 ## Troubleshooting

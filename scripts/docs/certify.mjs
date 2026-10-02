@@ -38,6 +38,7 @@ run('node', ['scripts/docs/check-frontmatter.mjs']);
 run('node', ['scripts/check-docs-links.cjs']);
 run('node', ['scripts/docs/check-reader-quality.mjs', ...(releaseCertification ? ['--release'] : [])]);
 run('node', ['scripts/docs/check-dangerous-claims.mjs']);
+run('node', ['scripts/docs/check-surface-parity.mjs']);
 run('node', ['scripts/check-docs-capabilities.cjs']);
 // Static certification must reject stale committed evidence immediately. A
 // full runtime pass is also the supported recovery path after a rebase or

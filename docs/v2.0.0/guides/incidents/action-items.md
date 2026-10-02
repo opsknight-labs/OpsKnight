@@ -136,4 +136,4 @@ Check integration health in **Settings**, credentials, project permissions, and 
 - [Postmortem workflow](../../concepts/postmortem-workflow.md)
 - [Connect Jira](../../integrations/issue-tracking/jira/connect.md)
 - [Jira troubleshooting](../../integrations/issue-tracking/jira/troubleshooting.md)
-- [Resolve and reopen an incident](resolve.md)
+- [Resolve an incident](resolve.md)

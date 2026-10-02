@@ -9,9 +9,9 @@ reader:
   status: READER_COMPLETE
   task: Perform and verify an incident action from a Teams Adaptive Card.
 verification:
-  level: source
+  level: test
   verified_at: 2026-09-28
-  evidence: [src/app/api/microsoft-teams/messages/route.ts, src/lib/microsoft-teams/auth.ts]
+  evidence: [src/app/api/microsoft-teams/messages/route.ts, src/lib/microsoft-teams/auth.ts, tests/lib/microsoft-teams-actions.test.ts, tests/lib/microsoft-teams-cards.test.ts]
 ---
 
 # Use Microsoft Teams incident actions

@@ -17,6 +17,8 @@ export const generatedPaths = [
   'generated/docs-contracts/integrations.json',
   'generated/docs-reference',
   'generated/docs-certification/v15-parity-report.md',
+  'generated/docs-certification/surface-parity-report.md',
+  'docs/internal/product-surface-contracts.yaml',
   'docs/internal/certification/v1.5-topic-inventory.yaml',
   'docs/v2.0.0/integrations/catalog.yaml',
   'docs/v2.0.0/reference/features.md',

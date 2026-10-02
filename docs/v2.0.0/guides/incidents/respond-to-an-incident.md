@@ -52,7 +52,7 @@ Use routine Slack/Teams destination cards for distributed awareness. Create a [w
 
 ## 5. Escalate from a supported Teams card when needed
 
-Escalate when the current response requires broader/faster attention and the next policy step is appropriate. In 2.0, manual escalation is available only from a capability-enabled Microsoft Teams Adaptive Card—not from the Web incident page or standard Slack actions. Inspect the current target/step before acting and do not repeatedly escalate after an ambiguous response.
+Escalate when the current response requires broader/faster attention and the next policy step is appropriate. In 2.0, manual escalation is available only from a capability-enabled Microsoft Teams Adaptive Card—not from the Web incident page or standard Slack actions. Outside Teams, assign or reassign the incident for immediate handoff. Inspect the current target/step before acting and do not repeatedly escalate after an ambiguous response.
 
 Follow [Escalate an incident](./escalate) and verify the timeline plus notification delivery.
 

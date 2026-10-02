@@ -10,7 +10,7 @@ reader:
   task: Escalate an open incident from a supported Microsoft Teams card and verify the next policy action.
   evidence: [docs/v2.0.0/assets/incident-detail.png]
 verification:
-  level: source
+  level: test
   verified_at: 2026-09-29
   evidence:
     - src/lib/escalation/authorization.ts
@@ -18,6 +18,8 @@ verification:
     - src/lib/escalation/planner.ts
     - src/lib/microsoft-teams/cards.ts
     - src/lib/microsoft-teams/invoke.ts
+    - tests/lib/microsoft-teams-invoke.test.ts
+    - tests/lib/microsoft-teams-cards.test.ts
 ---
 
 # Escalate an incident
@@ -94,6 +96,8 @@ Inspect the policy step and target-resolution result. Common causes are an empty
 ### The card still shows the old step
 
 Use the incident page as the source of truth. Teams cards are asynchronous projections and may lag a successful escalation.
+
+For an immediate manual handoff outside Teams, assign or reassign the incident to the intended user or team and verify the resulting assignee notification. Assignment changes ownership; it does not execute the next escalation-policy step.
 
 ### All steps are exhausted
 

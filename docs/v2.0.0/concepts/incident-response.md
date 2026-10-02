@@ -41,7 +41,7 @@ Either can happen first. During handoff, keep the acknowledgement history and ch
 
 Escalation work belongs to a generation of the incident. Lifecycle transitions increment or complete that generation so a delayed worker cannot page targets from stale state.
 
-- Open incidents can execute scheduled or authorized manual escalation.
+- Open incidents execute scheduled policy escalation automatically. Capability-enabled Microsoft Teams cards can request manual escalation; Web and standard Slack do not expose that action in 2.0.
 - Acknowledgement completes active escalation work.
 - Snooze and suppression pause response paging for their respective operational reasons.
 - Unsnooze, unsuppress, unacknowledge, and reopen create a current generation with a new schedule.
@@ -75,7 +75,7 @@ A failed projection should be repaired from the canonical incident state. Do not
 
 Human resolution requires a meaningful note and any required custom fields. It records a terminal response event, completes escalation, and preserves timing history. Automated event resolution follows the ingestion contract and is not a substitute for human verification when an operator is closing the incident.
 
-Reopening returns a resolved incident to active response with a new escalation generation while retaining earlier response history. Deduplicated inbound events may reopen a recently resolved matching incident; unrelated events should create a new record.
+Reopening returns a resolved incident to active response with a new escalation generation while retaining earlier response history. Web has no manual Reopen control in 2.0. Deduplicated inbound events may reopen a recently resolved matching incident, and an authorized API client may set status to `OPEN`; unrelated events should create a new record.
 
 ## Operating discipline
 
@@ -96,5 +96,5 @@ During a live response:
 - [Acknowledge an incident](../guides/incidents/acknowledge.md)
 - [Assign an incident](../guides/incidents/assign.md)
 - [Escalate an incident](../guides/incidents/escalate.md)
-- [Resolve and reopen an incident](../guides/incidents/resolve.md)
+- [Resolve an incident](../guides/incidents/resolve.md)
 - [Incident lifecycle](incidents.md)

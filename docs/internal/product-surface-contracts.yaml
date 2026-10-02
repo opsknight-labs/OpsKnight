@@ -1,0 +1,67 @@
+schemaVersion: 1
+release: 2.0.0
+contracts:
+  - id: incident.escalate
+    description: Advance an open incident's current escalation-policy step immediately.
+    surfaces:
+      web: NOT_SUPPORTED
+      mobile: NOT_SUPPORTED
+      slack: NOT_SUPPORTED
+      teams: PARTIAL
+      api: NOT_SUPPORTED
+      automatic: SUPPORTED
+    conditions:
+      teams: The current Adaptive Card must expose the capability-gated Escalate action.
+      automatic: The escalation worker advances configured policy steps while the incident remains eligible.
+    evidence:
+      - src/lib/microsoft-teams/cards.ts
+      - src/lib/microsoft-teams/invoke.ts
+      - src/lib/escalation/worker.ts
+      - src/components/incident/detail/actions.ts
+      - src/lib/chatops/slack-action-map.ts
+    documentation:
+      - docs/v2.0.0/guides/incidents/escalate.md
+      - docs/v2.0.0/guides/incidents/respond-to-an-incident.md
+      - docs/v2.0.0/concepts/incidents.md
+      - docs/v2.0.0/concepts/incident-response.md
+      - docs/v2.0.0/integrations/communication/slack/acknowledge-resolve.md
+      - docs/v2.0.0/integrations/communication/microsoft-teams/incident-actions.md
+  - id: incident.reopen
+    description: Return a resolved incident to OPEN while preserving historical response evidence.
+    surfaces:
+      web: NOT_SUPPORTED
+      mobile: NOT_SUPPORTED
+      slack: NOT_SUPPORTED
+      teams: NOT_SUPPORTED
+      api: API_ONLY
+      automatic: AUTOMATIC_ONLY
+    conditions:
+      api: An authorized client uses PATCH /api/incidents/{id} with status OPEN.
+      automatic: A matching service and deduplication key recur inside the supported correlation window.
+    evidence:
+      - src/app/api/incidents/[id]/route.ts
+      - src/lib/incidents/operator-lifecycle.ts
+      - src/lib/incidents/creation.ts
+      - src/components/incident/detail/actions.ts
+    documentation:
+      - docs/v2.0.0/guides/incidents/resolve.md
+      - docs/v2.0.0/guides/incidents/respond-to-an-incident.md
+      - docs/v2.0.0/concepts/incidents.md
+      - docs/v2.0.0/concepts/incident-response.md
+      - docs/v2.0.0/integrations/communication/slack/acknowledge-resolve.md
+  - id: incident.assign
+    description: Change immediate response ownership without advancing an escalation policy.
+    surfaces:
+      web: SUPPORTED
+      mobile: SUPPORTED
+      slack: PARTIAL
+      teams: PARTIAL
+      api: SUPPORTED
+      automatic: SUPPORTED
+    evidence:
+      - src/components/incident/detail/actions.ts
+      - src/app/api/incidents/[id]/route.ts
+      - src/lib/incidents/engagement.ts
+    documentation:
+      - docs/v2.0.0/guides/incidents/assign.md
+      - docs/v2.0.0/guides/incidents/escalate.md
