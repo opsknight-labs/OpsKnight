@@ -13,15 +13,15 @@ import { validateEncryptionKeyConfiguration } from '@/lib/encryption-key-validat
 export type HealthLevel = 'healthy' | 'degraded' | 'unhealthy' | 'unknown' | 'informational';
 export type HealthCategory = 'database' | 'workers' | 'alerting' | 'security' | 'platform';
 
-/** Published 2.0 operator guides used by Health Center remediation actions. */
+/** Stable documentation channel using the current operator-guide structure. */
 export const ADMIN_HEALTH_GUIDES = {
-  monitoring: 'https://opsknight.com/docs/v2.0.0/operate/reliability/health-and-metrics/',
-  scalability: 'https://opsknight.com/docs/v2.0.0/operate/capacity/scaling-signals/',
-  migrations: 'https://opsknight.com/docs/v2.0.0/operate/upgrades/database-migrations/',
-  maintenance: 'https://opsknight.com/docs/v2.0.0/operate/data/maintenance-and-retention/',
-  sla: 'https://opsknight.com/docs/v2.0.0/guides/incidents/configure-incident-sla/',
-  encryption: 'https://opsknight.com/docs/v2.0.0/operate/security/hardening/',
-  upgrades: 'https://opsknight.com/docs/v2.0.0/operate/upgrades/upgrade/',
+  monitoring: 'https://opsknight.com/docs/latest/operate/reliability/health-and-metrics/',
+  scalability: 'https://opsknight.com/docs/latest/operate/capacity/scaling-signals/',
+  migrations: 'https://opsknight.com/docs/latest/operate/upgrades/database-migrations/',
+  maintenance: 'https://opsknight.com/docs/latest/operate/data/maintenance-and-retention/',
+  sla: 'https://opsknight.com/docs/latest/guides/incidents/configure-incident-sla/',
+  encryption: 'https://opsknight.com/docs/latest/operate/security/hardening/',
+  upgrades: 'https://opsknight.com/docs/latest/operate/upgrades/upgrade/',
 } as const;
 
 export type CheckTelemetry = {

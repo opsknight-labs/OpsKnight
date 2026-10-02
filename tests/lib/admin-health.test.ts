@@ -23,15 +23,15 @@ describe('health duration labels', () => {
 });
 
 describe('admin health guide links', () => {
-  it('uses the published 2.0 documentation structure', () => {
+  it('uses the stable latest channel with the current documentation structure', () => {
     expect(ADMIN_HEALTH_GUIDES).toEqual({
-      monitoring: 'https://opsknight.com/docs/v2.0.0/operate/reliability/health-and-metrics/',
-      scalability: 'https://opsknight.com/docs/v2.0.0/operate/capacity/scaling-signals/',
-      migrations: 'https://opsknight.com/docs/v2.0.0/operate/upgrades/database-migrations/',
-      maintenance: 'https://opsknight.com/docs/v2.0.0/operate/data/maintenance-and-retention/',
-      sla: 'https://opsknight.com/docs/v2.0.0/guides/incidents/configure-incident-sla/',
-      encryption: 'https://opsknight.com/docs/v2.0.0/operate/security/hardening/',
-      upgrades: 'https://opsknight.com/docs/v2.0.0/operate/upgrades/upgrade/',
+      monitoring: 'https://opsknight.com/docs/latest/operate/reliability/health-and-metrics/',
+      scalability: 'https://opsknight.com/docs/latest/operate/capacity/scaling-signals/',
+      migrations: 'https://opsknight.com/docs/latest/operate/upgrades/database-migrations/',
+      maintenance: 'https://opsknight.com/docs/latest/operate/data/maintenance-and-retention/',
+      sla: 'https://opsknight.com/docs/latest/guides/incidents/configure-incident-sla/',
+      encryption: 'https://opsknight.com/docs/latest/operate/security/hardening/',
+      upgrades: 'https://opsknight.com/docs/latest/operate/upgrades/upgrade/',
     });
   });
 });
