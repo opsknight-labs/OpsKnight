@@ -74,6 +74,9 @@ describe('PushNotificationToggle', () => {
     });
 
     render(<PushNotificationToggle />);
+    const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    expect(mockFetch).not.toHaveBeenCalled();
+    fireEvent.click(enableButton);
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(
@@ -111,6 +114,9 @@ describe('PushNotificationToggle', () => {
     });
 
     render(<PushNotificationToggle />);
+    const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    expect(mockFetch).not.toHaveBeenCalled();
+    fireEvent.click(enableButton);
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(
@@ -148,6 +154,9 @@ describe('PushNotificationToggle', () => {
     });
 
     render(<PushNotificationToggle />);
+    const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    expect(mockFetch).not.toHaveBeenCalled();
+    fireEvent.click(enableButton);
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(
@@ -198,15 +207,20 @@ describe('PushNotificationToggle', () => {
 
     const enableButton = await screen.findByRole('button', { name: /Enable/i });
     await waitFor(() => expect(enableButton).not.toBeDisabled());
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(register).not.toHaveBeenCalled();
+    fireEvent.click(enableButton);
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      '/sw.js',
-      expect.objectContaining({
-        cache: 'no-store',
-        redirect: 'follow',
-      })
-    );
-    expect(register).toHaveBeenCalledWith('/sw.js', { scope: '/' });
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/sw.js',
+        expect.objectContaining({
+          cache: 'no-store',
+          redirect: 'follow',
+        })
+      );
+      expect(register).toHaveBeenCalledWith('/sw.js', { scope: '/' });
+    });
   });
 
   it('shows a stage-aware message when the service worker never becomes ready', async () => {
@@ -373,7 +387,11 @@ describe('PushNotificationToggle', () => {
 
     expect(register).not.toHaveBeenCalled();
     expect(existingGetSubscription).not.toHaveBeenCalled();
-    expect(readyGetSubscription).toHaveBeenCalledTimes(1);
+    expect(readyGetSubscription).not.toHaveBeenCalled();
+
+    fireEvent.click(enableButton);
+
+    await waitFor(() => expect(readyGetSubscription).toHaveBeenCalledTimes(1));
   });
 
   it('reconciles subscription state and sends a test push', async () => {
@@ -616,7 +634,7 @@ describe('PushNotificationToggle', () => {
     expect(subscribe).toHaveBeenCalledTimes(1);
   });
 
-  it('requests native iOS permission from Enable before subscribing with no setup fetch', async () => {
+  it('requests native iOS permission from Enable before starting setup', async () => {
     vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
       'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15'
     );
@@ -693,7 +711,7 @@ describe('PushNotificationToggle', () => {
     fireEvent.click(enableButton);
 
     // The native permission request must be invoked synchronously from the
-    // user gesture. SW/VAPID setup was completed before the button enabled.
+    // user gesture. SW/VAPID setup starts only after permission resolves.
     expect(requestPermission).toHaveBeenCalledTimes(1);
     expect(mockFetch.mock.calls.length).toBe(fetchCallsBeforeClick);
     await waitFor(() => expect(subscribe).toHaveBeenCalledTimes(1));
@@ -777,8 +795,8 @@ describe('PushNotificationToggle', () => {
       render(<PushNotificationToggle />);
 
       await act(async () => {
-        // Flush preparation promises without waitFor: waitFor itself uses
-        // timers and can deadlock while fake timers are active.
+        // Flush mount effects without waitFor: waitFor itself uses timers and
+        // can deadlock while fake timers are active.
         for (let i = 0; i < 12; i += 1) await Promise.resolve();
       });
 
@@ -1336,7 +1354,7 @@ describe('PushNotificationToggle', () => {
       render(<PushNotificationToggle />);
 
       await act(async () => {
-        // Flush preflight promises without waitFor: waitFor itself uses timers and
+        // Flush mount effects without waitFor: waitFor itself uses timers and
         // would deadlock while fake timers are active.
         for (let i = 0; i < 12; i += 1) await Promise.resolve();
       });
@@ -1573,7 +1591,7 @@ describe('PushNotificationToggle', () => {
 
     render(<PushNotificationToggle />);
 
-    // Must resolve preflight and display Enable button promptly without timing out
+    // The initial state must display Enable promptly without waiting for setup.
     const enableButton = await screen.findByRole('button', { name: /Enable/i });
     await waitFor(() => {
       expect(enableButton).not.toBeDisabled();
@@ -1611,7 +1629,7 @@ describe('PushNotificationToggle', () => {
     Object.defineProperty(window, 'Notification', {
       value: {
         permission: 'default',
-        requestPermission: vi.fn(),
+        requestPermission: vi.fn().mockResolvedValue('granted'),
       },
       configurable: true,
     });
@@ -1671,6 +1689,7 @@ describe('PushNotificationToggle', () => {
     });
 
     render(<PushNotificationToggle />);
+    fireEvent.click(await screen.findByRole('button', { name: /Enable/i }));
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(
