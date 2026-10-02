@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-02T11:44:29+05:30",
-  "sourceRevision": "bed412b7641f1552424008c2d08c38bea6b97f51",
+  "generatedAt": "2026-10-02T14:39:40+05:30",
+  "sourceRevision": "10b5038b9816c6ece1aab42aff39d9f292317948",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -24565,7 +24565,7 @@
       "value": 8000,
       "expression": "8_000",
       "source": "src/components/mobile/MobilePwaCoordinator.tsx",
-      "references": 8,
+      "references": 4,
       "semanticClassification": "INTERNAL_IMPLEMENTATION"
     },
     {
@@ -24610,7 +24610,7 @@
       "value": 12000,
       "expression": "12_000",
       "source": "src/components/mobile/PushNotificationToggle.tsx",
-      "references": 12,
+      "references": 11,
       "semanticClassification": "SECURITY_OR_PUBLIC_BOUND"
     },
     {
@@ -24619,7 +24619,7 @@
       "value": 25000,
       "expression": "25_000",
       "source": "src/components/mobile/PushNotificationToggle.tsx",
-      "references": 8,
+      "references": 4,
       "semanticClassification": "PROVIDER_CONSTRAINT"
     },
     {
@@ -25944,6 +25944,24 @@
       "source": "src/lib/retention/resource-lock.ts",
       "references": 2,
       "semanticClassification": "SECURITY_OR_PUBLIC_BOUND"
+    },
+    {
+      "id": "src/lib/service-worker-runtime.ts:BOUNDED_UPDATE_TIMEOUT_MS",
+      "name": "BOUNDED_UPDATE_TIMEOUT_MS",
+      "value": 6000,
+      "expression": "6_000",
+      "source": "src/lib/service-worker-runtime.ts",
+      "references": 3,
+      "semanticClassification": "INTERNAL_IMPLEMENTATION"
+    },
+    {
+      "id": "src/lib/service-worker-runtime.ts:DEFAULT_TIMEOUT_MS",
+      "name": "DEFAULT_TIMEOUT_MS",
+      "value": 15000,
+      "expression": "15_000",
+      "source": "src/lib/service-worker-runtime.ts",
+      "references": 2,
+      "semanticClassification": "INTERNAL_IMPLEMENTATION"
     },
     {
       "id": "src/lib/session-registry.ts:MAX_POSSIBLE_TOKEN_LIFETIME_MS",
@@ -114004,7 +114022,7 @@
           "value": 8000,
           "expression": "8_000",
           "source": "src/components/mobile/MobilePwaCoordinator.tsx",
-          "references": 8,
+          "references": 4,
           "semanticClassification": "INTERNAL_IMPLEMENTATION"
         },
         "documentation": {
@@ -114254,7 +114272,7 @@
           "value": 12000,
           "expression": "12_000",
           "source": "src/components/mobile/PushNotificationToggle.tsx",
-          "references": 12,
+          "references": 11,
           "semanticClassification": "SECURITY_OR_PUBLIC_BOUND"
         },
         "documentation": {
@@ -114320,7 +114338,7 @@
           "value": 25000,
           "expression": "25_000",
           "source": "src/components/mobile/PushNotificationToggle.tsx",
-          "references": 8,
+          "references": 4,
           "semanticClassification": "PROVIDER_CONSTRAINT"
         },
         "documentation": {
@@ -122952,6 +122970,124 @@
         ]
       },
       {
+        "id": "limit:src/lib/service-worker-runtime.ts:BOUNDED_UPDATE_TIMEOUT_MS",
+        "kind": "limit",
+        "name": "src/lib/service-worker-runtime.ts:BOUNDED_UPDATE_TIMEOUT_MS",
+        "owner": "deployment",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "src/lib/service-worker-runtime.ts"
+        ],
+        "contract": {
+          "id": "src/lib/service-worker-runtime.ts:BOUNDED_UPDATE_TIMEOUT_MS",
+          "name": "BOUNDED_UPDATE_TIMEOUT_MS",
+          "value": 6000,
+          "expression": "6_000",
+          "source": "src/lib/service-worker-runtime.ts",
+          "references": 3,
+          "semanticClassification": "INTERNAL_IMPLEMENTATION"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/limits.md"
+          ],
+          "troubleshooting": [
+            "operate/deploy/docker-compose/troubleshooting.md",
+            "operate/deploy/helm/troubleshooting.md",
+            "operate/deploy/kubernetes/troubleshooting.md",
+            "operate/deploy/kustomize/troubleshooting.md",
+            "operate/deploy/swarm/troubleshooting.md",
+            "troubleshooting/installation/misdirected-request.md",
+            "troubleshooting/installation/startup-fails.md",
+            "troubleshooting/kubernetes/pods-not-ready.md"
+          ]
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "limit:src/lib/service-worker-runtime.ts:BOUNDED_UPDATE_TIMEOUT_MS:classification",
+            "text": "src/lib/service-worker-runtime.ts:BOUNDED_UPDATE_TIMEOUT_MS is classified as INTERNAL_IMPLEMENTATION and owned by deployment.",
+            "evidence": [
+              "src/lib/service-worker-runtime.ts"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "limit:src/lib/service-worker-runtime.ts:BOUNDED_UPDATE_TIMEOUT_MS:value",
+            "text": "BOUNDED_UPDATE_TIMEOUT_MS has the discovered numeric value 6000.",
+            "evidence": [
+              "src/lib/service-worker-runtime.ts"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
+        "id": "limit:src/lib/service-worker-runtime.ts:DEFAULT_TIMEOUT_MS",
+        "kind": "limit",
+        "name": "src/lib/service-worker-runtime.ts:DEFAULT_TIMEOUT_MS",
+        "owner": "deployment",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "src/lib/service-worker-runtime.ts"
+        ],
+        "contract": {
+          "id": "src/lib/service-worker-runtime.ts:DEFAULT_TIMEOUT_MS",
+          "name": "DEFAULT_TIMEOUT_MS",
+          "value": 15000,
+          "expression": "15_000",
+          "source": "src/lib/service-worker-runtime.ts",
+          "references": 2,
+          "semanticClassification": "INTERNAL_IMPLEMENTATION"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/limits.md"
+          ],
+          "troubleshooting": [
+            "operate/deploy/docker-compose/troubleshooting.md",
+            "operate/deploy/helm/troubleshooting.md",
+            "operate/deploy/kubernetes/troubleshooting.md",
+            "operate/deploy/kustomize/troubleshooting.md",
+            "operate/deploy/swarm/troubleshooting.md",
+            "troubleshooting/installation/misdirected-request.md",
+            "troubleshooting/installation/startup-fails.md",
+            "troubleshooting/kubernetes/pods-not-ready.md"
+          ]
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "limit:src/lib/service-worker-runtime.ts:DEFAULT_TIMEOUT_MS:classification",
+            "text": "src/lib/service-worker-runtime.ts:DEFAULT_TIMEOUT_MS is classified as INTERNAL_IMPLEMENTATION and owned by deployment.",
+            "evidence": [
+              "src/lib/service-worker-runtime.ts"
+            ],
+            "verification": "source"
+          },
+          {
+            "id": "limit:src/lib/service-worker-runtime.ts:DEFAULT_TIMEOUT_MS:value",
+            "text": "DEFAULT_TIMEOUT_MS has the discovered numeric value 15000.",
+            "evidence": [
+              "src/lib/service-worker-runtime.ts"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
         "id": "limit:src/lib/session-registry.ts:MAX_POSSIBLE_TOKEN_LIFETIME_MS",
         "kind": "limit",
         "name": "src/lib/session-registry.ts:MAX_POSSIBLE_TOKEN_LIFETIME_MS",
@@ -124880,8 +125016,8 @@
       }
     ],
     "summary": {
-      "total": 1161,
-      "claims": 1616,
+      "total": 1163,
+      "claims": 1620,
       "unsupportedClaims": 0,
       "supported": 582,
       "documentedSupported": 582,
@@ -124896,7 +125032,7 @@
         "deployment-topology": 4,
         "enum": 73,
         "integration": 28,
-        "limit": 228,
+        "limit": 230,
         "model": 120,
         "notification-provider": 9,
         "permission": 37,
@@ -124906,7 +125042,7 @@
       },
       "byClassification": {
         "ADMIN_FEATURE": 83,
-        "INTERNAL_IMPLEMENTATION": 579,
+        "INTERNAL_IMPLEMENTATION": 581,
         "OPERATOR_FEATURE": 288,
         "PUBLIC_API": 54,
         "PUBLIC_FEATURE": 157

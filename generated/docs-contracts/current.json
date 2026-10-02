@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "bed412b7641f1552424008c2d08c38bea6b97f51",
+  "sourceRevision": "10b5038b9816c6ece1aab42aff39d9f292317948",
   "contracts": [
     {
       "id": "api:/api/events",
@@ -48525,7 +48525,7 @@
         "value": 12000,
         "expression": "12_000",
         "source": "src/components/mobile/PushNotificationToggle.tsx",
-        "references": 12,
+        "references": 11,
         "semanticClassification": "SECURITY_OR_PUBLIC_BOUND"
       },
       "documentation": {
