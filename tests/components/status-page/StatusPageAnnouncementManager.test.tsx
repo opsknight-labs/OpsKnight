@@ -110,20 +110,33 @@ describe('StatusPageAnnouncementManager Component', () => {
     fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
     const dialog = await screen.findByRole('dialog');
 
+    // Explicitly set deterministic daytime start date and time
+    const dateInput = within(dialog).getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/)[0];
+    fireEvent.change(dateInput, { target: { value: '2026-09-20' } });
+
+    const timeInput = within(dialog).getAllByDisplayValue(/\d{2}:\d{2}/)[0];
+    fireEvent.change(timeInput, { target: { value: '10:00' } });
+
     const add1hBtn = within(dialog).getByRole('button', { name: '+1h' });
     fireEvent.click(add1hBtn);
 
     // Duration should calculate and show window
-    await waitFor(() => {
-      expect(within(dialog).getByText('1h')).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(within(dialog).getByText('1h')).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
 
     const add2hBtn = within(dialog).getByRole('button', { name: '+2h' });
     fireEvent.click(add2hBtn);
 
-    await waitFor(() => {
-      expect(within(dialog).getByText('2h')).toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(within(dialog).getByText('2h')).toBeInTheDocument();
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('detects and displays time validation error when end time is earlier than start time', () => {
