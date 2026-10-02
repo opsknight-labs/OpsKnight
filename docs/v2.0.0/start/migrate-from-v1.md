@@ -29,6 +29,8 @@ Record the 1.x image digest, PostgreSQL version, deployment topology, replica co
 
 2.0 introduces explicit runtime roles, expanded configuration and authorization contracts, durable delivery/control-plane behavior, and additional database/index requirements. Existing data is upgraded in place by ordered Prisma migrations; there is no assumed down migration. A rollback after incompatible writes can require restoring the pre-upgrade database.
 
+2.0 also requires an independent `API_KEY_SECRET`. Keep the existing `NEXTAUTH_SECRET` unchanged during the upgrade and generate a new independent API-key secret when the 1.x installation did not already have one. API keys and status-page API tokens created by 1.x without `API_KEY_SECRET` remain valid: 2.0 checks the retained `NEXTAUTH_SECRET` legacy scrypt hash and rewrites the stored hash under the new `API_KEY_SECRET` after a successful request. Do not rotate `NEXTAUTH_SECRET` in the same window until legacy API consumers have authenticated at least once or their keys have been deliberately recreated.
+
 ## Configure the rehearsal
 
 1. Restore the production backup into an isolated environment.
@@ -63,6 +65,8 @@ Before incompatible 2.0 writes, restore the previous image and configuration onl
 **Stored integrations cannot decrypt:** restore the original `ENCRYPTION_KEY`; rotating it blindly cannot recover existing ciphertext.
 
 **Login redirects to the old host:** set both public application URL values to the externally reachable HTTPS origin and restart every web replica.
+
+**Existing API keys return 401 after upgrade:** verify the original `NEXTAUTH_SECRET` was preserved and the new `API_KEY_SECRET` is present and independent. Restoring the retained 1.x `NEXTAUTH_SECRET` lets the lazy compatibility path recognize and migrate legacy hashes; do not regenerate it as a troubleshooting shortcut.
 
 **Notifications would reach real responders during rehearsal:** disable providers or replace destinations before sending any synthetic incident.
 
