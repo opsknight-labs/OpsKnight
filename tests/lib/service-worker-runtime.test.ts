@@ -628,6 +628,118 @@ describe('service-worker-runtime', () => {
       expect(ready.active).toBeTruthy();
     });
 
+    it('repairs stale registration when update() transitions to INSTALLING worker without unregistering', async () => {
+      let stateChangeHandler: (() => void) | null = null;
+      const unregisterMock = vi.fn().mockResolvedValue(true);
+      const installingWorker = {
+        scriptURL: `${window.location.origin}/sw.js`,
+        state: 'installing',
+        addEventListener: vi.fn((event: string, handler: () => void) => {
+          if (event === 'statechange') stateChangeHandler = handler;
+        }),
+        removeEventListener: vi.fn(),
+      };
+
+      const staleRegistration: Record<string, unknown> = {
+        scope: `${window.location.origin}/`,
+        active: null,
+        waiting: null,
+        installing: null,
+        pushManager: {},
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        unregister: unregisterMock,
+        update: vi.fn(async () => {
+          staleRegistration.installing = installingWorker;
+          setTimeout(() => {
+            installingWorker.state = 'activated';
+            staleRegistration.active = {
+              scriptURL: `${window.location.origin}/sw.js`,
+              state: 'activated',
+            };
+            if (stateChangeHandler) stateChangeHandler();
+          }, 15);
+        }),
+      };
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(staleRegistration),
+          register: vi.fn(),
+          ready: Promise.resolve(staleRegistration),
+        },
+        configurable: true,
+      });
+
+      const ready = await ensureHealthyServiceWorker({
+        purpose: 'inspection',
+        activationPolicy: 'preserve-active-client',
+      });
+
+      expect(staleRegistration.update).toHaveBeenCalledTimes(1);
+      // Crucial: unregister must NOT be called when update() results in an installing worker!
+      expect(unregisterMock).not.toHaveBeenCalled();
+      expect(ready.active).toBeTruthy();
+    });
+
+    it('repairs stale registration when update() transitions to WAITING worker under preserve-active-client', async () => {
+      let stateChangeHandler: (() => void) | null = null;
+      const unregisterMock = vi.fn().mockResolvedValue(true);
+      const waitingPostMessage = vi.fn(() => {
+        setTimeout(() => {
+          staleRegistration.active = {
+            scriptURL: `${window.location.origin}/sw.js`,
+            state: 'activated',
+          };
+          if (stateChangeHandler) stateChangeHandler();
+        }, 10);
+      });
+
+      const waitingWorker = {
+        scriptURL: `${window.location.origin}/sw.js`,
+        state: 'installed',
+        postMessage: waitingPostMessage,
+        addEventListener: vi.fn((event: string, handler: () => void) => {
+          if (event === 'statechange') stateChangeHandler = handler;
+        }),
+        removeEventListener: vi.fn(),
+      };
+
+      const staleRegistration: Record<string, unknown> = {
+        scope: `${window.location.origin}/`,
+        active: null,
+        waiting: null,
+        installing: null,
+        pushManager: {},
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        unregister: unregisterMock,
+        update: vi.fn(async () => {
+          staleRegistration.waiting = waitingWorker;
+        }),
+      };
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(staleRegistration),
+          register: vi.fn(),
+          ready: Promise.resolve(staleRegistration),
+        },
+        configurable: true,
+      });
+
+      const ready = await ensureHealthyServiceWorker({
+        purpose: 'inspection',
+        activationPolicy: 'preserve-active-client',
+      });
+
+      expect(staleRegistration.update).toHaveBeenCalledTimes(1);
+      expect(waitingPostMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
+      // Crucial: unregister must NOT be called when update() finds a waiting worker!
+      expect(unregisterMock).not.toHaveBeenCalled();
+      expect(ready.active).toBeTruthy();
+    });
+
     it('automatically unregisters wrong worker under / and cleanly re-registers /sw.js', async () => {
       const unregisterMock = vi.fn().mockResolvedValue(true);
       const foreignRegistration = {

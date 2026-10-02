@@ -529,18 +529,51 @@ async function repairServiceWorkerRegistration(
           'Service worker update timed out during repair.'
         );
         const updatedClassification = classifyServiceWorkerRegistration(suspectRegistration);
-        if (
-          updatedClassification === 'HEALTHY_ACTIVE' ||
-          (activationPolicy === 'recover-if-no-active' && updatedClassification === 'WAITING')
-        ) {
-          const ready = await waitForRegistrationActive(
-            suspectRegistration,
-            timeoutMs,
-            activationPolicy
-          );
+
+        // A. HEALTHY_ACTIVE: update completed and active worker is healthy
+        if (updatedClassification === 'HEALTHY_ACTIVE' && suspectRegistration.active) {
           lastRepairResult = 'repaired_via_update';
           logger.info('service_worker.lifecycle.repaired_via_update');
-          return ready;
+          return suspectRegistration;
+        }
+
+        // B. WAITING: update found a new worker that is now waiting (with no active worker)
+        if (updatedClassification === 'WAITING' && suspectRegistration.waiting) {
+          try {
+            sendSkipWaiting(suspectRegistration.waiting);
+            const ready = await waitForRegistrationActive(
+              suspectRegistration,
+              timeoutMs,
+              activationPolicy
+            );
+            lastRepairResult = 'repaired_via_update';
+            logger.info('service_worker.lifecycle.repaired_via_update');
+            return ready;
+          } catch (waitErr) {
+            logger.warn('service_worker.lifecycle.repair_waiting_activation_failed', {
+              error: waitErr,
+            });
+            // Fall through to unregister & clean register
+          }
+        }
+
+        // C. INSTALLING: update triggered an active installation (with no active worker)
+        if (updatedClassification === 'INSTALLING') {
+          try {
+            const ready = await waitForRegistrationActive(
+              suspectRegistration,
+              timeoutMs,
+              activationPolicy
+            );
+            lastRepairResult = 'repaired_via_update';
+            logger.info('service_worker.lifecycle.repaired_via_update');
+            return ready;
+          } catch (installErr) {
+            logger.warn('service_worker.lifecycle.repair_installing_activation_failed', {
+              error: installErr,
+            });
+            // Fall through to unregister & clean register
+          }
         }
       }
     } catch (updateError) {
