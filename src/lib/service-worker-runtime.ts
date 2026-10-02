@@ -21,12 +21,15 @@ export type ServiceWorkerFailureReasonCode =
   | 'SW_NO_REGISTRATION'
   | 'SW_STALE_REGISTRATION'
   | 'SW_INSTALLING'
+  | 'SW_INSTALL_STUCK'
   | 'SW_WAITING'
   | 'SW_REDUNDANT'
   | 'SW_ASSET_MISSING'
   | 'SW_ASSET_INVALID'
   | 'SW_IMPORT_FAILED'
   | 'SW_ACTIVATION_TIMEOUT'
+  | 'SW_UNREGISTER_TIMEOUT'
+  | 'SW_REGISTRATION_TIMEOUT'
   | 'SW_WRONG_SCOPE'
   | 'SW_WRONG_SCRIPT'
   | 'SW_REPAIR_FAILED';
@@ -71,7 +74,7 @@ export type EnsureServiceWorkerOptions = {
 };
 
 const DEFAULT_TIMEOUT_MS = 15_000;
-const BOUNDED_UPDATE_TIMEOUT_MS = 4_000;
+const BOUNDED_UPDATE_TIMEOUT_MS = 6_000;
 
 export class AsyncMutex {
   private queue: Promise<void> = Promise.resolve();
@@ -385,6 +388,61 @@ export function sendSkipWaiting(worker: ServiceWorker | null | undefined): void 
 }
 
 /**
+ * Awaits a worker being attached to a registration on browsers (like WebKit)
+ * where navigator.serviceWorker.register() resolves before the initial worker
+ * property is populated on the registration object.
+ */
+export async function ensureWorkerAttached(
+  registration: ServiceWorkerRegistration,
+  timeoutMs = 1_000
+): Promise<ServiceWorkerRegistration> {
+  if (registration.active || registration.waiting || registration.installing) {
+    return registration;
+  }
+
+  return new Promise<ServiceWorkerRegistration>(resolve => {
+    let resolved = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+    const cleanup = () => {
+      resolved = true;
+      if (timer) clearTimeout(timer);
+      if (pollInterval) clearInterval(pollInterval);
+      if (typeof registration.removeEventListener === 'function') {
+        registration.removeEventListener('updatefound', onUpdate);
+      }
+    };
+
+    const done = () => {
+      if (resolved) return;
+      cleanup();
+      resolve(registration);
+    };
+
+    const onUpdate = () => {
+      if (registration.installing || registration.waiting || registration.active) {
+        done();
+      }
+    };
+
+    if (typeof registration.addEventListener === 'function') {
+      registration.addEventListener('updatefound', onUpdate);
+    }
+
+    pollInterval = setInterval(() => {
+      if (registration.installing || registration.waiting || registration.active) {
+        done();
+      }
+    }, 25);
+
+    timer = setTimeout(() => {
+      done();
+    }, timeoutMs);
+  });
+}
+
+/**
  * Awaits a registration becoming active with explicit activation policy.
  * - If activationPolicy is 'recover-if-no-active', sends SKIP_WAITING to waiting worker
  *   only when registration.active is not present.
@@ -394,9 +452,16 @@ export function sendSkipWaiting(worker: ServiceWorker | null | undefined): void 
 export async function waitForRegistrationActive(
   registration: ServiceWorkerRegistration,
   timeoutMs: number,
-  _activationPolicy: ActivationPolicy = 'recover-if-no-active'
+  activationPolicy: ActivationPolicy = 'recover-if-no-active'
 ): Promise<ServiceWorkerRegistration> {
   if (registration.active) return registration;
+
+  const startTime = Date.now();
+  logger.info('service_worker.activation_started', {
+    scope: registration.scope,
+    timeoutMs,
+    activationPolicy,
+  });
 
   return new Promise<ServiceWorkerRegistration>((resolve, reject) => {
     let settled = false;
@@ -419,6 +484,10 @@ export async function waitForRegistrationActive(
     const done = () => {
       if (settled) return;
       cleanup();
+      logger.info('service_worker.activation_state_change', {
+        state: 'activated',
+        elapsedMs: Date.now() - startTime,
+      });
       resolve(registration);
     };
 
@@ -432,7 +501,13 @@ export async function waitForRegistrationActive(
       if (registration.active) {
         done();
       } else {
-        fail(new ClientTimeoutError('The service worker did not become ready.'));
+        const isStuck = Boolean(registration.installing);
+        const err = new ClientTimeoutError(
+          isStuck
+            ? 'Service worker installation is stuck.'
+            : 'The service worker did not become ready.'
+        );
+        fail(err);
       }
     }, timeoutMs);
 
@@ -443,11 +518,18 @@ export async function waitForRegistrationActive(
     };
 
     const onStateChange = () => {
-      if (registration.active || trackedWorker?.state === 'activated') {
+      const state = trackedWorker?.state;
+      if (state) {
+        logger.info('service_worker.activation_state_change', {
+          state,
+          elapsedMs: Date.now() - startTime,
+        });
+      }
+      if (registration.active || state === 'activated') {
         done();
-      } else if (trackedWorker?.state === 'installed' && !registration.active) {
+      } else if (state === 'installed' && !registration.active) {
         maybeTriggerSkipWaiting(trackedWorker);
-      } else if (trackedWorker?.state === 'redundant') {
+      } else if (state === 'redundant') {
         fail(new Error('The service worker installation failed and became redundant.'));
       }
     };
@@ -500,16 +582,23 @@ export async function waitForRegistrationActive(
 
 /**
  * Attempts a bounded repair on a suspect registration:
- * 1. Calls registration.update() with bounded timeout (3-4s).
- * 2. If registration remains without an active/waiting worker, unregisters it cleanly.
+ * 1. Calls registration.update() ONLY if active worker exists and it was not stuck installing.
+ * 2. Unregisters suspect registration ONCE. If unregister times out, STOPS to avoid stacking jobs.
  * 3. Preflights assets (/sw.js and /custom-sw.js).
  * 4. Calls navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).
+ *    If registration times out, STOPS. Never re-calls register() after timeout.
  * 5. Awaits activation.
  */
 async function repairServiceWorkerRegistration(
   suspectRegistration: ServiceWorkerRegistration | null,
   timeoutMs: number,
-  activationPolicy: ActivationPolicy
+  activationPolicy: ActivationPolicy,
+  repairReason:
+    | 'STUCK_INSTALLING'
+    | 'WAITING_FAILED'
+    | 'REDUNDANT'
+    | 'STALE'
+    | 'WRONG_WORKER' = 'STALE'
 ): Promise<ServiceWorkerRegistration> {
   lastRepairAttempted = true;
   lastRepairResult = 'in_progress';
@@ -517,17 +606,33 @@ async function repairServiceWorkerRegistration(
   logger.info('service_worker.lifecycle.repair_started', {
     suspectScope: suspectRegistration?.scope,
     activationPolicy,
+    repairReason,
   });
 
-  // Step 1: Attempt update() if registration exists
-  if (suspectRegistration) {
+  // Step 1: Attempt update() UNLESS the worker was stuck installing or redundant
+  const canAttemptUpdate =
+    suspectRegistration &&
+    typeof suspectRegistration.update === 'function' &&
+    repairReason !== 'STUCK_INSTALLING' &&
+    repairReason !== 'REDUNDANT' &&
+    repairReason !== 'WAITING_FAILED';
+
+  if (canAttemptUpdate && suspectRegistration) {
+    const updateTimeoutMs = Math.min(timeoutMs, BOUNDED_UPDATE_TIMEOUT_MS);
     try {
       if (typeof suspectRegistration.update === 'function') {
+        logger.info('service_worker.op_started', { op: 'update' });
+        const updateStart = Date.now();
         await promiseWithTimeout(
           suspectRegistration.update(),
-          BOUNDED_UPDATE_TIMEOUT_MS,
+          updateTimeoutMs,
           'Service worker update timed out during repair.'
         );
+        logger.info('service_worker.op_completed', {
+          op: 'update',
+          durationMs: Date.now() - updateStart,
+        });
+
         const updatedClassification = classifyServiceWorkerRegistration(suspectRegistration);
 
         // A. HEALTHY_ACTIVE: update completed and active worker is healthy
@@ -577,19 +682,52 @@ async function repairServiceWorkerRegistration(
         }
       }
     } catch (updateError) {
-      logger.warn('service_worker.lifecycle.repair_update_attempt_failed', { error: updateError });
+      if (updateError instanceof ClientTimeoutError) {
+        logger.warn('service_worker.op_timeout', {
+          op: 'update',
+          timeoutMs: updateTimeoutMs,
+        });
+      } else {
+        logger.warn('service_worker.lifecycle.repair_update_attempt_failed', {
+          error: updateError,
+        });
+      }
     }
+  }
 
-    // Step 2: Unregister suspect registration
+  // Step 2: Unregister suspect registration ONCE
+  if (suspectRegistration) {
+    const unregTimeoutMs = Math.min(timeoutMs, BOUNDED_UPDATE_TIMEOUT_MS);
     try {
       if (typeof suspectRegistration.unregister === 'function') {
-        await promiseWithTimeout(
+        logger.info('service_worker.op_started', { op: 'unregister' });
+        const unregStart = Date.now();
+        const unregResult = await promiseWithTimeout(
           suspectRegistration.unregister(),
-          BOUNDED_UPDATE_TIMEOUT_MS,
+          unregTimeoutMs,
           'Service worker unregistration timed out.'
         );
+        logger.info('service_worker.op_completed', {
+          op: 'unregister',
+          success: unregResult,
+          durationMs: Date.now() - unregStart,
+        });
+        if (!unregResult) {
+          logger.warn('service_worker.lifecycle.repair_unregister_returned_false');
+        }
       }
     } catch (unregError) {
+      if (unregError instanceof ClientTimeoutError) {
+        logger.warn('service_worker.op_timeout', {
+          op: 'unregister',
+          timeoutMs: unregTimeoutMs,
+        });
+        // STOP: timing out an unregister means WebKit job queue is still processing it.
+        // Never stack register() on top of an unregister timeout!
+        throw new ClientTimeoutError(
+          'Service worker unregistration timed out. Halting recovery to prevent duplicate jobs.'
+        );
+      }
       logger.warn('service_worker.lifecycle.repair_unregister_failed', { error: unregError });
     }
   }
@@ -598,16 +736,32 @@ async function repairServiceWorkerRegistration(
   await preflightServiceWorkerAssets();
 
   // Step 4: Fresh registration with updateViaCache: 'none'
-  const newRegistration = await promiseWithTimeout(
-    navigator.serviceWorker.register('/sw.js', {
-      scope: '/',
-      updateViaCache: 'none',
-    }),
-    timeoutMs,
-    'Fresh service worker registration timed out.'
-  );
+  logger.info('service_worker.op_started', { op: 'register' });
+  const freshRegStart = Date.now();
+  let newRegistration: ServiceWorkerRegistration;
+  try {
+    newRegistration = await promiseWithTimeout(
+      navigator.serviceWorker.register('/sw.js', {
+        scope: '/',
+        updateViaCache: 'none',
+      }),
+      timeoutMs,
+      'Fresh service worker registration timed out.'
+    );
+    logger.info('service_worker.op_completed', {
+      op: 'register',
+      durationMs: Date.now() - freshRegStart,
+    });
+  } catch (freshRegErr) {
+    if (freshRegErr instanceof ClientTimeoutError) {
+      logger.warn('service_worker.op_timeout', { op: 'register', timeoutMs });
+    }
+    // STOP: never register again after a timeout
+    throw freshRegErr;
+  }
 
   // Step 5: Await activation using recover-if-no-active (the fresh registration has no active client to preserve)
+  await ensureWorkerAttached(newRegistration, 1000);
   const activeRegistration = await waitForRegistrationActive(
     newRegistration,
     timeoutMs,
@@ -699,6 +853,89 @@ export async function inspectServiceWorkerHealth(): Promise<ServiceWorkerHealth>
   };
 }
 
+function handleTerminalFailure(
+  failureError: unknown,
+  registration: ServiceWorkerRegistration | null,
+  classification: ServiceWorkerStateClassification,
+  startTime: number,
+  purpose: string
+): never {
+  if (failureError instanceof ClientAppError) {
+    lastKnownFailureCode = 'SW_ASSET_INVALID';
+    lastKnownFailureMessage = failureError.message;
+    throw failureError;
+  }
+
+  const elapsedMs = Date.now() - startTime;
+  const isRedundant = failureError instanceof Error && failureError.message.includes('redundant');
+  const isTimeout = failureError instanceof ClientTimeoutError;
+  const isUnregisterTimeout =
+    isTimeout && failureError.message.includes('unregistration timed out');
+  const isRegisterTimeout = isTimeout && failureError.message.includes('registration timed out');
+  const isStuckInstall =
+    isTimeout &&
+    !isUnregisterTimeout &&
+    !isRegisterTimeout &&
+    (failureError.message.includes('stuck') ||
+      registration?.installing != null ||
+      classification === 'INSTALLING');
+
+  const reasonCode: ServiceWorkerFailureReasonCode = isUnregisterTimeout
+    ? 'SW_UNREGISTER_TIMEOUT'
+    : isRegisterTimeout
+      ? 'SW_REGISTRATION_TIMEOUT'
+      : isStuckInstall
+        ? 'SW_INSTALL_STUCK'
+        : isTimeout
+          ? 'SW_ACTIVATION_TIMEOUT'
+          : isRedundant
+            ? 'SW_REDUNDANT'
+            : 'SW_REPAIR_FAILED';
+
+  lastKnownFailureCode = reasonCode;
+  lastKnownFailureMessage =
+    failureError instanceof Error ? failureError.message : String(failureError);
+  lastRepairResult = reasonCode;
+
+  logger.error('service_worker.lifecycle.repair_terminal_failure', {
+    purpose,
+    reasonCode,
+    classification,
+    elapsedMs,
+    scope: registration?.scope ?? null,
+    controller: typeof navigator !== 'undefined' && Boolean(navigator.serviceWorker?.controller),
+    active: registration?.active
+      ? { script: registration.active.scriptURL, state: registration.active.state }
+      : null,
+    waiting: registration?.waiting
+      ? { script: registration.waiting.scriptURL, state: registration.waiting.state }
+      : null,
+    installing: registration?.installing
+      ? { script: registration.installing.scriptURL, state: registration.installing.state }
+      : null,
+    repairPhase: lastRepairResult ?? 'initial',
+    platform: detectPlatform(),
+    error: failureError instanceof Error ? failureError.message : String(failureError),
+  });
+
+  throw new ClientAppError({
+    code: 'PUSH_SW_REGISTRATION_FAILED',
+    error: isRedundant
+      ? 'The service worker installation failed and became redundant.'
+      : isStuckInstall
+        ? 'The service worker was stuck installing and could not activate.'
+        : isUnregisterTimeout
+          ? 'The service worker could not be unregistered cleanly.'
+          : isRegisterTimeout
+            ? 'The service worker registration timed out.'
+            : 'Push setup could not activate the background service.',
+    action: isRedundant
+      ? 'Service worker installation failed before activation. Retry.'
+      : 'Service worker did not become ready. Retry.',
+    retryable: true,
+  });
+}
+
 /**
  * The single authority for discovering, validating, updating, repairing,
  * and converging the OpsKnight service worker into a healthy state.
@@ -742,6 +979,7 @@ export async function ensureHealthyServiceWorker(
 
   return lifecycleMutex.runExclusive(async () => {
     resetServiceWorkerDiagnostics();
+    const startTime = Date.now();
 
     // 1. Discover current registration
     let registration: ServiceWorkerRegistration | null = null;
@@ -770,13 +1008,24 @@ export async function ensureHealthyServiceWorker(
     if (classification === 'MISSING') {
       await preflightServiceWorkerAssets();
       try {
+        logger.info('service_worker.op_started', { op: 'register' });
+        const regStart = Date.now();
         registration = await promiseWithTimeout(
           navigator.serviceWorker.register('/sw.js', { scope: '/' }),
           timeoutMs,
           'Service worker registration timed out.'
         );
+        logger.info('service_worker.op_completed', {
+          op: 'register',
+          durationMs: Date.now() - regStart,
+        });
+        await ensureWorkerAttached(registration, 1000);
         classification = classifyServiceWorkerRegistration(registration);
       } catch (registerError) {
+        if (registerError instanceof ClientTimeoutError) {
+          logger.warn('service_worker.op_timeout', { op: 'register', timeoutMs });
+          handleTerminalFailure(registerError, registration, classification, startTime, purpose);
+        }
         logger.warn('service_worker.lifecycle.initial_register_failed', { error: registerError });
         // Fall through to repair attempt
       }
@@ -826,58 +1075,35 @@ export async function ensureHealthyServiceWorker(
       try {
         return await waitForRegistrationActive(registration, timeoutMs, activationPolicy);
       } catch (installErr) {
-        logger.warn('service_worker.lifecycle.installing_activation_failed', { error: installErr });
+        logger.warn('service_worker.lifecycle.installing_activation_failed', {
+          error: installErr,
+          elapsedMs: Date.now() - startTime,
+        });
         // Fall through to repair
       }
     }
 
     // 7. Repair path: execute exactly ONCE
     try {
+      const repairReason =
+        classification === 'INSTALLING'
+          ? 'STUCK_INSTALLING'
+          : classification === 'REDUNDANT'
+            ? 'REDUNDANT'
+            : classification === 'WAITING'
+              ? 'WAITING_FAILED'
+              : classification === 'WRONG_WORKER'
+                ? 'WRONG_WORKER'
+                : 'STALE';
       const repaired = await repairServiceWorkerRegistration(
         registration,
         timeoutMs,
-        activationPolicy
+        activationPolicy,
+        repairReason
       );
       return repaired;
     } catch (repairError) {
-      if (repairError instanceof ClientAppError) {
-        lastKnownFailureCode = 'SW_ASSET_INVALID';
-        lastKnownFailureMessage = repairError.message;
-        throw repairError;
-      }
-
-      const isRedundant = repairError instanceof Error && repairError.message.includes('redundant');
-      const isTimeout = repairError instanceof ClientTimeoutError;
-
-      const reasonCode: ServiceWorkerFailureReasonCode = isTimeout
-        ? 'SW_ACTIVATION_TIMEOUT'
-        : isRedundant
-          ? 'SW_REDUNDANT'
-          : 'SW_REPAIR_FAILED';
-
-      lastKnownFailureCode = reasonCode;
-      lastKnownFailureMessage =
-        repairError instanceof Error ? repairError.message : String(repairError);
-      lastRepairResult = reasonCode;
-
-      logger.error('service_worker.lifecycle.repair_terminal_failure', {
-        purpose,
-        reasonCode,
-        error: repairError,
-      });
-
-      throw new ClientAppError({
-        code: 'PUSH_SW_REGISTRATION_FAILED',
-        error: isRedundant
-          ? 'The service worker installation failed and became redundant.'
-          : 'Push setup could not activate the background service.',
-        action: isRedundant
-          ? 'Service worker installation failed before activation. Retry.'
-          : isTimeout
-            ? 'Service worker did not become ready. Retry.'
-            : 'Service worker did not become ready. Retry.',
-        retryable: true,
-      });
+      handleTerminalFailure(repairError, registration, classification, startTime, purpose);
     }
   });
 }

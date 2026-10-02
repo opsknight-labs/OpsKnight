@@ -4,6 +4,7 @@ import '@/styles/index.css';
 import './layers.css';
 import { Providers } from './providers';
 import VersionCheck from '@/components/VersionCheck';
+import ServiceWorkerBootstrap from '@/components/pwa/ServiceWorkerBootstrap';
 
 const manrope = Manrope({
   variable: '--font-manrope',
@@ -63,6 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <Providers>
           <VersionCheck />
+          <ServiceWorkerBootstrap />
           {children}
         </Providers>
       </body>
