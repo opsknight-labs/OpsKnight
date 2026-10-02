@@ -63,6 +63,7 @@ kubectl create namespace opsknight --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl -n opsknight create secret generic opsknight-runtime \
   --from-literal=DATABASE_URL="$DIRECT_DATABASE_URL" \
+  --from-literal=DIRECT_DATABASE_URL="$DIRECT_DATABASE_URL" \
   --from-literal=WEB_DATABASE_URL="$WEB_DATABASE_URL" \
   --from-literal=NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
   --from-literal=ENCRYPTION_KEY="$ENCRYPTION_KEY" \
@@ -242,7 +243,7 @@ networkPolicy:
     - 10.40.0.0/24
 ```
 
-When `secrets.existingSecret` is set, the Secret's `DATABASE_URL` is authoritative. Keep `database.port` and `postgresql.port` aligned with NetworkPolicy rendering. Ensure the database role can connect, create/alter required schema objects during migration, and read/write application tables.
+When `secrets.existingSecret` is set, the Secret's `DATABASE_URL` is authoritative. Add `DIRECT_DATABASE_URL` when the application connects through a transaction pool or proxy; the migration Job falls back to `DATABASE_URL` when that optional key is absent. Keep `database.port` and `postgresql.port` aligned with NetworkPolicy rendering. Ensure the direct database role can connect, create/alter required schema objects during migration, and read/write application tables.
 
 ## External PostgreSQL with private CA
 

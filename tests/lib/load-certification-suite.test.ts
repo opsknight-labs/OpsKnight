@@ -21,6 +21,7 @@ import {
 } from '../load/fixtures/users';
 import { parsePrometheusText } from '../load/helpers/metrics';
 import {
+  assertCertificationSummaryMergeCompatible,
   captureQueueSnapshot,
   deriveCapacityFromScenarios,
   generateCertificationMarkdownReport,
@@ -65,6 +66,32 @@ describe('OpsKnight Load & Scalability Certification Suite', () => {
     expect(() => parseCertificationSummary({ schemaVersion: 1, results: 'invalid' })).toThrow(
       'expected a results array'
     );
+  });
+
+  it('merges partial certification evidence only when revision and scale provenance match', () => {
+    const provenance = {
+      sourceRevision: 'a'.repeat(40),
+      testHarnessRevision: 'b'.repeat(40),
+      scaleProfile: 'small' as const,
+      scaleDimensions: SCALE_PROFILES.small,
+    };
+    const summary = {
+      schemaVersion: 2,
+      generatedAt: new Date().toISOString(),
+      environment: { cpu: 'test', memory: 'test', dockerEngine: 'test', kind: 'test' },
+      results: [],
+      ...provenance,
+    };
+    expect(() => assertCertificationSummaryMergeCompatible(summary, provenance)).not.toThrow();
+    expect(() =>
+      assertCertificationSummaryMergeCompatible(summary, {
+        ...provenance,
+        sourceRevision: 'c'.repeat(40),
+      })
+    ).toThrow('different revision or scale profile');
+    expect(() =>
+      assertCertificationSummaryMergeCompatible({ schemaVersion: 1, results: [] }, provenance)
+    ).toThrow('pre-v2 summary');
   });
 
   it('contains all required scenario, fixture, provider, and helper files under tests/load/', () => {

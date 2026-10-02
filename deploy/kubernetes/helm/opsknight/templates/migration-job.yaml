@@ -57,6 +57,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" . }}
                   key: {{ .Values.secrets.keys.directDatabaseUrl }}
+                  optional: true
           resources:
             requests:
               cpu: 100m

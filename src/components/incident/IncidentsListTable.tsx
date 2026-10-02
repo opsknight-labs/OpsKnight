@@ -269,9 +269,8 @@ function matchesRealtimeFilter(
   )
     return false;
   if (
-    (filterName === 'all_open' || filterName === 'critical_focus' || filterName === 'all') &&
+    (filterName === 'all_open' || filterName === 'critical_focus') &&
     filter.status === undefined &&
-    filterName === 'all_open' &&
     !['OPEN', 'ACKNOWLEDGED'].includes(status)
   )
     return false;

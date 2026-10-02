@@ -1047,6 +1047,38 @@ export function parseCertificationSummary(value: unknown): TopologyCertification
   return results;
 }
 
+export function assertCertificationSummaryMergeCompatible(
+  value: unknown,
+  expected: Pick<
+    LoadCertificationSummaryV2,
+    'sourceRevision' | 'testHarnessRevision' | 'scaleProfile' | 'scaleDimensions'
+  >
+): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(
+      'Cannot merge partial load-certification evidence without v2 revision and scale provenance'
+    );
+  }
+  const envelope = value as Partial<LoadCertificationSummaryV2>;
+  if (envelope.schemaVersion !== 2) {
+    throw new Error(
+      'Cannot merge partial load-certification evidence from a pre-v2 summary'
+    );
+  }
+  const sameDimensions =
+    JSON.stringify(envelope.scaleDimensions) === JSON.stringify(expected.scaleDimensions);
+  if (
+    envelope.sourceRevision !== expected.sourceRevision ||
+    envelope.testHarnessRevision !== expected.testHarnessRevision ||
+    envelope.scaleProfile !== expected.scaleProfile ||
+    !sameDimensions
+  ) {
+    throw new Error(
+      'Cannot merge partial load-certification evidence from a different revision or scale profile'
+    );
+  }
+}
+
 async function commandVersion(command: string, args: string[]): Promise<string> {
   try {
     const { stdout, stderr } = await execFileAsync(command, args, {
@@ -2072,9 +2104,15 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
     const summaryFile = path.join(artifactsRoot, 'certification-summary.json');
     try {
       const existingRaw = await fs.readFile(summaryFile, 'utf8');
-      const existing = parseCertificationSummary(JSON.parse(existingRaw));
+      const existingValue = JSON.parse(existingRaw);
+      const existing = parseCertificationSummary(existingValue);
       const newIds = new Set(results.map(r => r.topologyId));
-      mergedResults = [...existing.filter(e => !newIds.has(e.topologyId)), ...results];
+      const retainedResults = existing.filter(e => !newIds.has(e.topologyId));
+      if (retainedResults.length > 0) {
+        const currentProvenance = await buildCertificationSummary(results, opts.scale);
+        assertCertificationSummaryMergeCompatible(existingValue, currentProvenance);
+      }
+      mergedResults = [...retainedResults, ...results];
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw new Error(
