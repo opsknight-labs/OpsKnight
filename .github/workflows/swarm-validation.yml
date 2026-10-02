@@ -331,6 +331,7 @@ jobs:
             api_secret="$(secret_name_for_target opsknight_opsknight-web /run/secrets/opsknight_api_key_secret)"
             docker service rm "${probe}" >/dev/null 2>&1 || true
             docker service create \
+              --detach \
               --name "${probe}" \
               --network opsknight_network \
               --no-resolve-image \

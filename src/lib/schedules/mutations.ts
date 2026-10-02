@@ -31,6 +31,28 @@ function overrideConflictError(details: Record<string, unknown>) {
   });
 }
 
+function isScheduleConflictError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === 'P2002' || error.code === 'P2034';
+  }
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = String((error as { code: unknown }).code);
+    if (code === 'P2002' || code === 'P2034' || code === '40001' || code === '40P01') {
+      return true;
+    }
+  }
+  if (error instanceof Error) {
+    const msg = error.message;
+    return (
+      msg.includes('write conflict') ||
+      msg.includes('deadlock') ||
+      msg.includes('could not serialize') ||
+      msg.includes('Transaction failed after')
+    );
+  }
+  return false;
+}
+
 async function requireActiveResponder(
   tx: TransactionClient,
   userId: string,
@@ -138,7 +160,7 @@ export async function addScheduleLayerUser(layerId: string, userId: string) {
       };
     });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (isScheduleConflictError(error)) {
       throw new AppError({
         code: 'SCHEDULE_LAYER_USER_DUPLICATE',
         userMessage: 'This responder is already assigned to this schedule.',
@@ -356,7 +378,7 @@ export async function createScheduleOverrideMutation(input: CreateScheduleOverri
       });
     });
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (isScheduleConflictError(error)) {
       throw overrideConflictError({
         scheduleId: input.scheduleId,
         userId: input.userId,
