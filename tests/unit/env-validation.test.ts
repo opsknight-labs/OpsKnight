@@ -139,6 +139,24 @@ describe('validateProductionEnv', () => {
     expect(() => validateProductionEnv()).not.toThrow();
   });
 
+  it('accepts a valid keyring when a deployment manifest also injects an unused weak legacy key', () => {
+    Object.assign(process.env, validProductionEnv, {
+      ENCRYPTION_KEY: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+      ENCRYPTION_KEYS:
+        'k2:68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba,k1:a1b2c3d4e5f60718293a4b5c6d7e8f901a2b3c4d5e6f708192a3b4c5d6e7f8a9',
+    });
+
+    expect(() => validateProductionEnv()).not.toThrow();
+  });
+
+  it('rejects malformed ENCRYPTION_KEYS even when ENCRYPTION_KEY is present', () => {
+    Object.assign(process.env, validProductionEnv, {
+      ENCRYPTION_KEYS: 'not-a-valid-keyring',
+    });
+
+    expect(() => validateProductionEnv()).toThrow(/ENCRYPTION_KEYS is invalid/);
+  });
+
   it('rejects default PostgreSQL password placeholder in DATABASE_URL', () => {
     Object.assign(process.env, validProductionEnv, {
       DATABASE_URL:
