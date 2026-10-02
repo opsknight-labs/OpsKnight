@@ -66,7 +66,12 @@ jobs:
           npm run docs:v15-parity
           npm run docs:claims
       - name: Reject generated and published-reference drift
-        run: git diff --exit-code -- generated/docs-discovery/current.json generated/docs-contracts/current.json generated/docs-contracts/capacity.json generated/docs-contracts/routes.json generated/docs-contracts/integrations.json generated/docs-reference generated/docs-certification/v15-parity-report.md docs/internal/certification/v1.5-topic-inventory.yaml docs/v2.0.0/integrations/catalog.yaml docs/v2.0.0/reference/features.md docs/v2.0.0/reference/configuration/README.md docs/v2.0.0/reference/api/README.md
+        env:
+          # A squash merge changes the commit-bound provenance fields even when
+          # the generated product contract is byte-for-byte equivalent. Keep PR
+          # checks exact, but do not fail main for that metadata-only transition.
+          DOCS_ALLOW_REVISION_ONLY_DRIFT: ${{ github.event_name == 'push' && 'true' || 'false' }}
+        run: node scripts/docs/check-generated-drift.mjs
       - name: Validate 2.0.0 documentation contracts
         run: npm run docs:certify:static
       - name: Preserve revision-bound static certificate
