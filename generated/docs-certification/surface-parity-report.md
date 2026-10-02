@@ -3,7 +3,7 @@
 - Release: 2.0.0
 - Documentation pages scanned: 320
 - Task-oriented pages scanned: 200
-- Action-bearing lines inspected by the automated guard: 2352
+- Action-bearing lines inspected by the automated guard: 2354
 - Explicit cross-surface contracts: 3
 - Forbidden surface-pattern violations remaining: 0
 

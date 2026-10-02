@@ -75,7 +75,7 @@ Create a replacement OpsKnight integration, update the Azure webhook receiver, t
 
 **Azure cannot reach the endpoint:** confirm public DNS, HTTPS trust, port 443, and proxy routing. Do not expose an internal database or worker service.
 
-**Azure reports 400:** enable the common alert schema and inspect **Settings → Integrations → Failures** for payload validation details.
+**Azure reports 400:** enable the common alert schema and inspect the webhook HTTP response body and system logs for payload validation details.
 
 **Azure reports 401/403:** copy the current complete URL again. A missing, truncated, or rotated integration key is rejected.
 

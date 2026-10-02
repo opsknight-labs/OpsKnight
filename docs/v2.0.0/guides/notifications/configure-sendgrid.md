@@ -17,7 +17,7 @@ Use a SendGrid account with an authenticated domain or verified sender and permi
 
 ## Open the feature
 
-In OpsKnight, open **Settings → Notifications → Providers → SendGrid**.
+In OpsKnight, open **Settings → Notifications** (`/settings/notifications`) and locate **SendGrid** under Email Providers.
 
 ## Configure SendGrid
 

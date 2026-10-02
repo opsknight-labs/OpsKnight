@@ -49,7 +49,7 @@ Open **Incidents** and select the new incident. Confirm:
 - the escalation policy started;
 - the current responder received the expected personal notification.
 
-If no incident appears, open **Settings → Integrations → Failures**. A `400` indicates invalid input, `401` a disabled or mismatched integration/key, `404` an unknown integration, `413` an oversized body, `429` rate limiting, and `503` an equivalent delivery already in progress.
+If no incident appears, inspect the HTTP response returned by the endpoint or check system logs and **Settings → System → Health**. A `400` indicates invalid input, `401` a disabled or mismatched integration/key, `404` an unknown integration, `413` an oversized body, `429` rate limiting, and `503` an equivalent delivery already in progress.
 
 ## 4. Test correlation and recovery
 

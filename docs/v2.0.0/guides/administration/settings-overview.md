@@ -57,11 +57,11 @@ opening it.
 
 ### Integrations and ChatOps
 
-- **Integrations:** inbound alert-source catalog and service connections.
 - **Slack Workspace / Microsoft Teams:** tenant/workspace connection and ChatOps
   transport configuration.
-- **ChatOps Policy:** global automatic war-room/provider behavior.
-- **Jira:** connection, webhook, and issue synchronization.
+- **ChatOps War-Rooms:** global automatic war-room/provider behavior.
+- **Jira Issue Tracking:** connection, webhook, and issue synchronization.
+- *(Inbound monitoring and alert-source integrations are configured per-service under **Services → [Service] → Integrations**.)*
 
 ### Notifications
 
@@ -72,7 +72,7 @@ opening it.
 
 ### System and reliability
 
-- **Health Center:** runtime dependencies and actionable health state.
+- **System Health Center:** runtime dependencies and actionable health state.
 - **System:** deployment-backed system configuration and provider settings.
 - **System Logs:** searchable runtime log records available to the operator role.
 

@@ -17,11 +17,11 @@ Serve OpsKnight over its final HTTPS origin. Generate a VAPID key pair and choos
 
 ## Open the feature
 
-In OpsKnight, open **Settings → Notifications → Providers → Web Push**.
+In OpsKnight, open **Settings → Notifications** (`/settings/notifications`) and locate **Web Push**.
 
 ## Configure Web Push
 
-1. Open **Settings → Notifications → Providers → Web Push**.
+1. Open **Settings → Notifications** and locate the **Web Push** configuration card.
 2. Enter the VAPID public key, private key, and subject; save and enable the provider.
 3. In a supported browser, install or open the PWA, allow notifications, and register the device.
 4. Send a controlled test while the device is online and again while the PWA is in the background.

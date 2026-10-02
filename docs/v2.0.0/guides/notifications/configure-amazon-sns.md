@@ -17,14 +17,14 @@ Choose the AWS account and region, confirm SMS availability for destination coun
 
 ## Open the feature
 
-In OpsKnight, open **Settings → Notifications → Providers → AWS SNS**.
+In OpsKnight, open **Settings → Notifications** (`/settings/notifications`) and locate **AWS SNS** under SMS Providers.
 
 ## Configure Amazon SNS
 
 1. Choose the AWS region used for SMS and confirm that the account can send to the destination countries.
 2. Configure the required origination identity, spending quota, and sandbox/production status in AWS.
 3. Create a dedicated IAM principal with only the SNS SMS permissions OpsKnight needs.
-4. In OpsKnight, open **Settings → Notifications → Providers → AWS SNS** and enter the region, access-key ID, and secret access key.
+4. In OpsKnight, open **Settings → Notifications** and locate **AWS SNS**. Enter the region, access-key ID, and secret access key.
 5. Add a controlled recipient phone number to the test user, save, enable the provider, and run the provider test.
 
 ## What OpsKnight does

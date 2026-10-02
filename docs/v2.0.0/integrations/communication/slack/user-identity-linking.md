@@ -22,7 +22,7 @@ Sign in to OpsKnight as the responder whose Slack account you are linking.
 
 ## Open the feature
 
-Select an incident action in Slack and follow the identity-link prompt, or open **Settings → ChatOps identity** in OpsKnight.
+Select an incident action in Slack and follow the identity-link prompt, or open **Settings → Profile & Preferences** (`/settings/profile`) and locate **Connected ChatOps Accounts**.
 
 ## Configure the identity
 

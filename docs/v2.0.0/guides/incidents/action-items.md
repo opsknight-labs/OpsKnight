@@ -33,7 +33,7 @@ If the item will use Jira, the workspace Jira connection must be healthy and the
 
 ## Open the feature
 
-Open the parent incident or postmortem and its **Action items** section. Use **Action Items** in the main navigation to work across incidents.
+Open the parent incident's **Postmortem** tab (or the related postmortem) to view and edit its action items, or select **Action Items** in the main navigation to manage work across all incidents.
 
 ## Configure an effective action item
 

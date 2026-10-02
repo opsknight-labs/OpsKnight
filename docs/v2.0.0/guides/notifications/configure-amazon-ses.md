@@ -17,14 +17,14 @@ Choose the AWS account and region, obtain permission to manage SES identities an
 
 ## Open the feature
 
-In OpsKnight, open **Settings → Notifications → Providers → Amazon SES**.
+In OpsKnight, open **Settings → Notifications** (`/settings/notifications`) and locate **Amazon SES** under Email Providers.
 
 ## Configure Amazon SES
 
 1. In the target AWS region, verify the sending domain or email identity and complete DKIM setup.
 2. If the account is in the SES sandbox, verify test recipients or request production access.
 3. Create a dedicated IAM principal allowed to send through the chosen identity and region. Record its access-key ID and secret access key.
-4. In OpsKnight, open **Settings → Notifications → Providers → Amazon SES**. Enter the region, credentials, and verified from-address; save and enable it.
+4. In OpsKnight, open **Settings → Notifications** and locate **Amazon SES**. Enter the region, credentials, and verified from-address; save and enable it.
 5. Send a controlled test, confirm the SES message ID and delivery event, and then test the real escalation route.
 
 ## What OpsKnight does

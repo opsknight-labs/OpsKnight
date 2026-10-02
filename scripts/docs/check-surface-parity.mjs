@@ -25,6 +25,11 @@ const forbiddenClaims = [
   { pattern: /Resolve and reopen an incident/i, message: 'presents resolve and reopen as one user-facing task' },
   { pattern: /(?:supply|enter)[^\n]{0,40}(?:meaningful summary|requested summary)[^\n]{0,40}(?:when prompted|prompt)/i, message: 'claims a Slack resolution summary prompt' },
   { pattern: /(?:inbound events?|alert[^\n]{0,20}events?)[^\n]{0,40}(?:may reopen|can automatically reopen)[^\n]{0,40}recently resolved/i, message: 'claims generic inbound alerts/events reopen resolved incidents' },
+  { pattern: /Settings\s*(?:→|->)\s*Integrations\s*(?:→|->)\s*Failures/i, message: 'claims non-existent Settings → Integrations → Failures route' },
+  { pattern: /Settings\s*(?:→|->)\s*ChatOps identity/i, message: 'claims non-existent Settings → ChatOps identity route' },
+  { pattern: /Settings\s*(?:→|->)\s*Notifications\s*(?:→|->)\s*Providers\s*(?:→|->)/i, message: 'claims non-existent nested Settings → Notifications → Providers subroutes' },
+  { pattern: /Settings\s*(?:→|->)\s*Health Center/i, message: 'claims non-existent Settings → Health Center (should be Settings → System → Health)' },
+  { pattern: /Collaboration\s*(?:→|->)\s*Create war room/i, message: 'claims non-existent Collaboration menu for war rooms' },
 ];
 
 for (const path of docs) {

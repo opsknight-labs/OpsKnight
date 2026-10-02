@@ -105,7 +105,7 @@ After the test alert, confirm all of the following:
 3. For `401`, confirm the same secret exists on both sides and the proxy preserves the raw body and `X-Hub-Signature-256`; rotate any exposed/mismatched secret.
 4. For a successful ping but no incident, generate a supported workflow/check/deployment payload; ping is only connectivity evidence.
 5. For failure creating one incident and success not resolving it, compare repository, workflow/check name, and branch used in the dedup key.
-6. Inspect **Settings → Integrations → Failures** and check `413`, `429`, or `503` before redelivery. Preserve the GitHub delivery ID/timestamp when escalating.
+6. Inspect the webhook HTTP response body and system logs, and check `413`, `429`, or `503` before redelivery. Preserve the GitHub delivery ID/timestamp when escalating.
 
 ## Related pages
 

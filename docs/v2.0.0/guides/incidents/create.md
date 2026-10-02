@@ -23,7 +23,7 @@ verification:
 
 ![Manual incident creation form in the production interface](/docs/v2.0.0/assets/incident-create.png)
 
-Create an incident manually when a person identifies an operational problem before an integration does, or when you need a controlled exercise. For monitoring alerts, prefer the service integration so OpsKnight can deduplicate, reopen, and resolve incidents from the source automatically.
+Create an incident manually when a person identifies an operational problem before an integration does, or when you need a controlled exercise. For monitoring alerts, prefer the service integration so OpsKnight can deduplicate active events and resolve incidents from the source automatically. Reopening a recently resolved incident is supported for matching manual reports within the 30-minute deduplication window; recurring automated alerts open a new incident.
 
 ## Before you begin
 
