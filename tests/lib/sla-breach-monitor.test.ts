@@ -56,6 +56,10 @@ describe('sla-breach-monitor', () => {
     vi.mocked(prisma.incidentEvent.findMany).mockResolvedValue([]);
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   describe('checkSLABreaches', () => {
     it('returns empty warnings when no active incidents', async () => {
       const { default: prisma } = await import('@/lib/prisma');
