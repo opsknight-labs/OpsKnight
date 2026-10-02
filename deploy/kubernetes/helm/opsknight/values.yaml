@@ -239,11 +239,13 @@ secrets:
   # Legacy persistent bootstrap secret. Prefer the 30-minute one-time bootstrap code.
   setupSecret: ''
 
-# Pre-deploy migration Job. When enabled, migrations run once via a Helm
-# pre-install/pre-upgrade hook Job rather than inside each application pod.
+# Migration owner. The initial install uses a one-shot Job; upgrades use a
+# pre-upgrade hook. Keep this enabled for every multi-replica deployment.
+# Disable it only when an external release process supplies the one-shot owner;
+# chart-managed runtime Pods always skip in-process migrations.
 migrations:
   job:
-    enabled: false
+    enabled: true
 
 networkPolicy:
   enabled: false

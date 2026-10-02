@@ -26,4 +26,4 @@ Use Kustomize when the platform team owns manifests, environment overlays, and G
 7. Adopt the [GitOps lifecycle](./gitops).
 8. Use [troubleshooting](./troubleshooting) for render, migration, sync, and rollout failures.
 
-The maintained Kustomize profiles do not include a migration Job. The operator or GitOps controller must enforce one-shot migration completion before workload rollout.
+The runtime profiles intentionally do not continuously reconcile a Job. Use the maintained `deploy/kubernetes/kustomize/migration-job.yaml` as the one-shot migration owner, and require its completion before workload rollout.

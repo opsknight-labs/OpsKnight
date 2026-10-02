@@ -21,7 +21,7 @@ The chart validates values against `values.schema.json`. Render and schema valid
 - `image`: repository, tag/digest, pull policy, and pull Secrets. Digest takes precedence.
 - `config`: public origins and common runtime settings.
 - `secrets`: use an existing production Secret and explicit key mapping.
-- `migrations.job.enabled`: creates the pre-install/pre-upgrade migration hook.
+- `migrations.job.enabled`: creates the one-shot install Job and blocking pre-upgrade hook. Disable it only when an external release process supplies that owner; runtime Pods still skip in-process migration.
 - `postgresql`: bundled database, storage, resources, credentials, and CA mounting.
 - `database`: application endpoint and aggregate connection ceiling.
 - `pgbouncer`: Web-only transaction pooling in split mode.
@@ -51,4 +51,3 @@ Inspect images, Secret references, migration ownership, database paths, Services
 - [Install with Helm](./install)
 - [Integrated values](./integrated)
 - [Split values](./split)
-

@@ -1,5 +1,6 @@
 name: Integration control-plane certification
 on:
+  workflow_call:
   push:
     branches:
       - main
@@ -12,6 +13,24 @@ on:
       - 'tests/certification/**'
       - 'scripts/load/integration-control-plane.js'
       - '.github/workflows/integration-certification.yml'
+      - 'deploy/kubernetes/helm/opsknight/**'
+      - 'deploy/kubernetes/kustomize/**'
+      - 'docker-entrypoint.sh'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/lib/integrations/**'
+      - 'src/lib/chatops/**'
+      - 'src/lib/external-operations.ts'
+      - 'src/app/api/integrations/**'
+      - 'src/app/api/slack/**'
+      - 'tests/certification/**'
+      - 'scripts/load/integration-control-plane.js'
+      - '.github/workflows/integration-certification.yml'
+      - 'deploy/kubernetes/helm/opsknight/**'
+      - 'deploy/kubernetes/kustomize/**'
+      - 'docker-entrypoint.sh'
   workflow_dispatch:
   schedule:
     - cron: '17 2 * * 1'
@@ -32,13 +51,20 @@ jobs:
         env: { HUSKY: '0' }
       - run: npm run prisma:validate && npx prisma generate && npx tsc --noEmit --incremental false
       - run: docker build -t opsknight-certification:local .
-      - name: Start three web and three worker replicas
+      - name: Run one migration owner, then start three web and three worker replicas
         run: docker compose -f tests/certification/docker-compose.yml up -d --scale web=3 --scale worker=3 --wait
-      - name: Multi-replica and database-backed resilience suite
-        run: npm run test:ci:db
+      - name: Isolate database-backed concurrency proof from active runtimes
+        run: docker compose -f tests/certification/docker-compose.yml stop web worker
+      - name: Database-backed concurrency invariants
+        run: >-
+          npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1
+          tests/integration/incident-meeting-concurrency.test.ts
+          tests/integration/incident-creation-concurrency.test.ts
         env:
           VITEST_USE_REAL_DB: '1'
           DATABASE_URL: postgresql://opsknight:certification-only@localhost:55432/opsknight
+      - name: Restore three web and three worker replicas
+        run: docker compose -f tests/certification/docker-compose.yml up -d --scale web=3 --scale worker=3 --wait
       - name: Seed retry-storm integration
         run: |
           certification_key=$(node <<'NODE'

@@ -74,6 +74,11 @@ fi
 
 if [ "${OPSKNIGHT_SKIP_MIGRATIONS:-}" = "true" ] || [ "${SKIP_MIGRATIONS:-}" = "true" ]; then
     echo "⏭️  Skipping in-pod migrations (OPSKNIGHT_SKIP_MIGRATIONS=true)"
+    echo "⏳ Waiting for the migration owner to finish..."
+    if ! node scripts/wait-for-database-ready.cjs; then
+        echo "❌ Database schema/index readiness gate failed. Refusing to start application processes."
+        exit 1
+    fi
     if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
         export DATABASE_URL="${WEB_DATABASE_URL:-$RUNTIME_DATABASE_URL}"
     fi

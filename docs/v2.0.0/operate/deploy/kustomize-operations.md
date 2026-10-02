@@ -31,7 +31,7 @@ Prepare `kubectl` with Kustomize support, namespace access, an immutable OpsKnig
 
 ## Maintained profiles
 
-- `profiles/integrated`: the shared base plus one integrated Deployment and HPA.
+- `profiles/integrated`: the shared base plus one fixed-replica integrated Deployment; the HPA manifest is opt-in.
 - `profiles/split`: Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Status Projector, role PDBs, Web Service/HPA, and role-specific NetworkPolicies.
 - `profiles/split-pgbouncer`: split plus two PgBouncer replicas, Service, PDB, NetworkPolicy, auth/config resources, and a Web patch that uses `WEB_DATABASE_URL` while preserving `DIRECT_DATABASE_URL`.
 - `monitoring/servicemonitor.yaml`: optional Prometheus Operator resource; it is not included automatically.
@@ -215,23 +215,24 @@ spec:
             limits: { cpu: "2", memory: 2Gi }
 ```
 
-The integrated profile includes an HPA from 2–10 replicas; split includes a Web HPA from 2–12. Remove or patch the HPA when GitOps owns a fixed replica count. Scale workers from lane backlog and database/provider capacity, not Web CPU.
+Both profiles use fixed replicas by default. Optional examples provide an integrated HPA from 2–10 replicas and a split Web HPA from 2–12; add one only when metrics-server is available and maximum scale fits the database/provider budget. Never let HPA and GitOps own the same replica field. Scale workers from lane backlog and database/provider capacity, not Web CPU.
 
 Review topology-spread constraints and PDBs against actual node count. `DoNotSchedule` keeps replicas spread but leaves pods Pending when the cluster lacks eligible nodes.
 
 ## Migration ownership
 
-The maintained Kustomize profiles do **not** include a migration Job. Run exactly one one-shot Job from the target image against `DIRECT_DATABASE_URL` before applying new workload Deployments. A production Job command must run Prisma deploy plus the maintained status-platform and voice-attempt index installers, matching [Database migrations](../upgrades/database-migrations).
+The maintained runtime profiles do **not** continuously reconcile a migration Job. Pin `deploy/kubernetes/kustomize/migration-job.yaml` to the target image and run exactly one instance against `DIRECT_DATABASE_URL` before applying new workload Deployments. The Job uses the packaged migration-only entrypoint, which runs Prisma deploy plus the maintained online-index installers, matching [Database migrations](../upgrades/database-migrations).
 
 ```sh
-kubectl apply -f migration-job.yaml
+kubectl delete -f deploy/kubernetes/kustomize/migration-job.yaml --ignore-not-found
+kubectl apply -f deploy/kubernetes/kustomize/migration-job.yaml
 kubectl -n opsknight wait --for=condition=complete job/opsknight-migration --timeout=15m
 kubectl -n opsknight logs job/opsknight-migration
 ```
 
 Do not add that Job to the same continuously reconciled overlay as Deployments unless your GitOps controller guarantees ordering and one-shot semantics. Delete/recreate it deliberately per release or use the controller's supported sync-wave/hook mechanism.
 
-The normal Job does not install the optional SLA scheduler index. Before switching SLA Scheduler to `INDEXED`, run `DATABASE_URL="$DIRECT_DATABASE_URL" npm run prisma:indexes:sla-scheduler` from the matching image/trusted environment and verify completion.
+The maintained Job installs the optional SLA scheduler index along with the other online indexes. Before switching SLA Scheduler to `INDEXED`, verify that index remains valid; the installer can also be rerun independently with `DATABASE_URL="$DIRECT_DATABASE_URL" npm run prisma:indexes:sla-scheduler` from the matching image or a trusted environment.
 
 ## Add Prometheus Operator discovery
 

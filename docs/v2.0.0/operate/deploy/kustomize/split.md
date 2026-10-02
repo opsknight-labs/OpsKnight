@@ -22,7 +22,7 @@ Read [Runtime roles](../architecture/runtime-roles), calculate all role resource
 
 ## Prepare the configuration
 
-Reference `profiles/split` or `profiles/split-pgbouncer`. Patch role replicas/resources, pools, probes, graceful termination, PDBs, NetworkPolicies, and Web HPA. Direct ingress only to Web. Remove integrated ownership and placeholder secrets.
+Reference `profiles/split` or `profiles/split-pgbouncer`. Patch role replicas/resources, pools, probes, graceful termination, PDBs, and NetworkPolicies. Add the opt-in Web HPA only after validating metrics and connection capacity. Direct ingress only to Web. Remove integrated ownership and placeholder secrets.
 
 For PgBouncer, replace placeholder auth/config for the selected database. Web uses `WEB_DATABASE_URL`; migration and other roles use direct URLs. Never migrate through port `6432`.
 
@@ -54,4 +54,3 @@ Promote one reviewed overlay revision. To return to integrated, stop split owner
 
 - [External PostgreSQL](./external-postgres)
 - [GitOps lifecycle](./gitops)
-

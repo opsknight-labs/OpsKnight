@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import prisma from './prisma';
 
 export const TRANSACTION_MAX_ATTEMPTS = Number(
-  process.env.OPSKNIGHT_TX_MAX_ATTEMPTS ?? 3
+  process.env.OPSKNIGHT_TX_MAX_ATTEMPTS ?? 5
 );
 export const TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD = Number(
   process.env.OPSKNIGHT_TX_MAX_ATTEMPTS_HIGH_LOAD ?? 5
@@ -16,7 +16,7 @@ const TRANSACTION_MAX_WAIT_MS = Number(
 );
 
 // Exponential backoff delays for retries (ms)
-const RETRY_DELAYS = [10, 25, 50, 100, 200];
+const RETRY_DELAYS = [20, 50, 100, 200, 400];
 
 function isRetryableTransactionError(error: unknown): boolean {
   const code =

@@ -116,9 +116,9 @@ Private registries require an image pull Secret referenced through the selected 
 
 Exactly one migration owner must finish before application pods receive traffic.
 
-The Helm chart creates a `pre-install,pre-upgrade` migration Job when `migrations.job.enabled` is true. It uses the direct database endpoint and runs Prisma migrations plus maintained online-index installers. A failed hook blocks the release.
+The Helm chart creates a one-shot install Job and a blocking `pre-upgrade` hook when `migrations.job.enabled` is true. It uses the direct database endpoint and runs Prisma migrations plus maintained online-index installers. A failed Job or hook blocks the release.
 
-The Kustomize profiles do not currently include a migration Job. Before applying a new application revision, the operator must run a one-shot Job using the same image and `DIRECT_DATABASE_URL`, wait for success, and only then update Deployments. Do not assume the checked-in split profile creates a migration owner. Follow [Database migrations](../upgrades/database-migrations) for the exact image-specific command and required online indexes.
+The Kustomize profiles keep migration ordering outside the continuously reconciled runtime overlays. Before applying a new application revision, pin and run the maintained `deploy/kubernetes/kustomize/migration-job.yaml` with the same image and `DIRECT_DATABASE_URL`, wait for success, and only then update Deployments. The checked-in runtime Deployments set `OPSKNIGHT_SKIP_MIGRATIONS=true`. Follow [Database migrations](../upgrades/database-migrations) for the required ordering and online indexes.
 
 Verify a Job with:
 

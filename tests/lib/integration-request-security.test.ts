@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Prisma } from '@prisma/client';
 
 const inboundDelivery = vi.hoisted(() => ({
   create: vi.fn(),
@@ -14,12 +13,6 @@ import {
   completeInboundDelivery,
   failInboundDelivery,
 } from '@/lib/integrations/request-security';
-
-const uniqueConflict = () =>
-  new Prisma.PrismaClientKnownRequestError('unique', {
-    code: 'P2002',
-    clientVersion: '5.22.0',
-  });
 
 describe('inbound delivery inbox', () => {
   beforeEach(() => {
@@ -45,7 +38,9 @@ describe('inbound delivery inbox', () => {
   });
 
   it('returns completed without executing a duplicate delivery', async () => {
-    inboundDelivery.create.mockRejectedValueOnce(uniqueConflict());
+    // A standalone build may throw this from a different Prisma runtime, so it
+    // must be recognized structurally rather than with `instanceof`.
+    inboundDelivery.create.mockRejectedValueOnce({ code: 'P2002', meta: {} });
     inboundDelivery.findUnique.mockResolvedValueOnce({
       id: 'delivery-1',
       status: 'COMPLETED',

@@ -81,7 +81,7 @@ Use the actual web service name from your Compose file. A zero exit code and the
 
 ### Helm
 
-The chart enables a pre-install/pre-upgrade migration Job when `migrations.job.enabled` is true. It uses the chart image and direct database secret, runs Prisma against `DIRECT_DATABASE_URL`, then installs the status-platform, SLA-scheduler, and voice-attempt indexes.
+The chart enables a one-shot install Job and a blocking `pre-upgrade` migration hook when `migrations.job.enabled` is true. It uses the chart image and direct database secret, runs Prisma against `DIRECT_DATABASE_URL`, then installs the status-platform, SLA-scheduler, and voice-attempt indexes.
 
 ```bash
 helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \

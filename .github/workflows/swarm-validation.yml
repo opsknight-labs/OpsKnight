@@ -280,10 +280,33 @@ jobs:
             local path="$2"
             local expected="$3"
             local container_id actual
+            local timeout=60
+            local elapsed=0
+            while [ "${elapsed}" -lt "${timeout}" ]; do
+              local all_match=1
+              local containers
+              containers="$(docker ps --filter "label=com.docker.swarm.service.name=${service}" --format '{{.ID}}')"
+              if [ -n "${containers}" ]; then
+                for container_id in ${containers}; do
+                  actual="$(docker exec "${container_id}" sh -c "cat '${path}'" 2>/dev/null || true)"
+                  if [ "${actual}" != "${expected}" ]; then
+                    all_match=0
+                    break
+                  fi
+                done
+                if [ "${all_match}" -eq 1 ]; then
+                  return 0
+                fi
+              else
+                all_match=0
+              fi
+              sleep 2
+              elapsed=$((elapsed + 2))
+            done
             container_id="$(container_for_service "${service}")"
-            actual="$(docker exec "${container_id}" sh -c "cat '${path}'")"
+            actual="$(docker exec "${container_id}" sh -c "cat '${path}'" 2>/dev/null || true)"
             if [ "${actual}" != "${expected}" ]; then
-              echo "❌ ${service} secret ${path} did not match expected value" >&2
+              echo "❌ ${service} secret ${path} did not match expected value (expected '${expected}', got '${actual}')" >&2
               exit 1
             fi
           }
@@ -331,6 +354,7 @@ jobs:
             api_secret="$(secret_name_for_target opsknight_opsknight-web /run/secrets/opsknight_api_key_secret)"
             docker service rm "${probe}" >/dev/null 2>&1 || true
             docker service create \
+              --detach \
               --name "${probe}" \
               --network opsknight_network \
               --no-resolve-image \

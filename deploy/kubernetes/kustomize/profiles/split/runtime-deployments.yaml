@@ -24,6 +24,7 @@ spec:
           ports: [{ name: http, containerPort: 3000 }]
           envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
           env:
+            - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
             - { name: OPSKNIGHT_PROCESS_ROLE, value: web }
             - { name: DATABASE_POOL_SIZE_WEB, value: '10' }
             - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
@@ -61,6 +62,7 @@ spec:
           ports: [{ name: http, containerPort: 3000 }]
           envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
           env:
+            - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
             - { name: OPSKNIGHT_PROCESS_ROLE, value: scheduler }
             - { name: OPSKNIGHT_SCHEDULER_PROFILE, value: maintenance }
             - { name: DATABASE_POOL_SIZE_SCHEDULER, value: '3' }
@@ -99,6 +101,7 @@ spec:
           ports: [{ name: http, containerPort: 3000 }]
           envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
           env:
+            - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
             - { name: OPSKNIGHT_PROCESS_ROLE, value: general-worker }
             - { name: DATABASE_POOL_SIZE_GENERAL_WORKER, value: '15' }
             - { name: OPSKNIGHT_WORKER_BATCH_SIZE, value: '100' }
@@ -140,6 +143,7 @@ spec:
           ports: [{ name: http, containerPort: 3000 }]
           envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
           env:
+            - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
             - { name: OPSKNIGHT_PROCESS_ROLE, value: critical-worker }
             - { name: DATABASE_POOL_SIZE_CRITICAL_WORKER, value: '15' }
             - { name: OPSKNIGHT_WORKER_BATCH_SIZE, value: '50' }
@@ -181,6 +185,7 @@ spec:
           ports: [{ name: http, containerPort: 3000 }]
           envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
           env:
+            - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
             - { name: OPSKNIGHT_PROCESS_ROLE, value: bulk-worker }
             - { name: DATABASE_POOL_SIZE_BULK_WORKER, value: '10' }
             - { name: OPSKNIGHT_WORKER_BATCH_SIZE, value: '100' }
@@ -222,6 +227,7 @@ spec:
           ports: [{ name: http, containerPort: 3000 }]
           envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
           env:
+            - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
             - { name: OPSKNIGHT_PROCESS_ROLE, value: status-projector }
             - { name: DATABASE_POOL_SIZE_STATUS_PROJECTOR, value: '3' }
             - { name: OPSKNIGHT_WORKER_BATCH_SIZE, value: '100' }

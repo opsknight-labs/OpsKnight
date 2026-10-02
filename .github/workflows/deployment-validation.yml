@@ -114,6 +114,11 @@ jobs:
             --namespace opsknight \
             --set migrations.job.enabled=true \
             > /tmp/opsknight-helm-migration-job.yaml
+          helm template opsknight deploy/kubernetes/helm/opsknight \
+            --namespace opsknight \
+            --is-upgrade \
+            --set migrations.job.enabled=true \
+            > /tmp/opsknight-helm-migration-upgrade-job.yaml
           if helm template opsknight deploy/kubernetes/helm/opsknight --set runtime.mode=invalid >/dev/null 2>&1; then
             echo 'invalid runtime.mode unexpectedly rendered'
             exit 1
@@ -224,8 +229,12 @@ jobs:
           grep -q '/usr/bin/pg_isready' /tmp/opsknight-helm-split-pgbouncer.yaml
           grep -q '/usr/bin/pg_isready' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'kind: Job' /tmp/opsknight-helm-migration-job.yaml
-          grep -q 'name: opsknight-migration' /tmp/opsknight-helm-migration-job.yaml
-          grep -Eq '("helm\.sh/hook"|helm\.sh/hook): pre-install,pre-upgrade' /tmp/opsknight-helm-migration-job.yaml
+          grep -q 'name: opsknight-migration-install' /tmp/opsknight-helm-migration-job.yaml
+          ! grep -q 'helm.sh/hook:' /tmp/opsknight-helm-migration-job.yaml
+          grep -q 'set -eu' /tmp/opsknight-helm-migration-job.yaml
+          grep -q 'kind: Job' /tmp/opsknight-helm-migration-upgrade-job.yaml
+          grep -q 'name: opsknight-migration' /tmp/opsknight-helm-migration-upgrade-job.yaml
+          grep -Eq '("helm\.sh/hook"|helm\.sh/hook): pre-upgrade' /tmp/opsknight-helm-migration-upgrade-job.yaml
           grep -q 'name: DIRECT_DATABASE_URL' /tmp/opsknight-helm-split-pgbouncer.yaml
           grep -q 'name: DIRECT_DATABASE_URL' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'key: WEB_DATABASE_URL' /tmp/opsknight-kustomize-split-pgbouncer.yaml
