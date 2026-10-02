@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   classifyServiceWorkerRegistration,
   ensureHealthyServiceWorker,
+  ensureWorkerAttached,
   inspectServiceWorkerHealth,
   isOpsKnightServiceWorker,
   preflightServiceWorkerAssets,
@@ -1003,6 +1004,239 @@ describe('service-worker-runtime', () => {
       expect(health.repairAttempted).toBe(false);
       expect(health.repairResult).toBeNull();
       expect(health.lastFailureCode).toBeNull();
+    });
+
+    it('skips update() and goes straight to unregister when worker is stuck in installing', async () => {
+      const updateMock = vi.fn().mockResolvedValue(undefined);
+      const unregisterMock = vi.fn().mockResolvedValue(true);
+      const cleanRegistration = {
+        scope: `${window.location.origin}/`,
+        active: { scriptURL: `${window.location.origin}/sw.js`, state: 'activated' },
+        waiting: null,
+        installing: null,
+      };
+
+      const stuckWorker = {
+        scriptURL: `${window.location.origin}/sw.js`,
+        state: 'installing',
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      };
+
+      const stuckRegistration: Record<string, unknown> = {
+        scope: `${window.location.origin}/`,
+        active: null,
+        waiting: null,
+        installing: stuckWorker,
+        update: updateMock,
+        unregister: unregisterMock,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      };
+
+      const registerMock = vi.fn().mockResolvedValue(cleanRegistration);
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(stuckRegistration),
+          register: registerMock,
+          ready: Promise.resolve(cleanRegistration),
+        },
+        configurable: true,
+      });
+
+      const ready = await ensureHealthyServiceWorker({
+        purpose: 'push-enrollment',
+        activationPolicy: 'recover-if-no-active',
+        timeoutMs: 50,
+      });
+
+      // Crucial: update() must NOT be called on a stuck installing worker
+      expect(updateMock).not.toHaveBeenCalled();
+      // Crucial: unregister() must be called to purge the stuck install job
+      expect(unregisterMock).toHaveBeenCalledTimes(1);
+      // Fresh registration must proceed
+      expect(registerMock).toHaveBeenCalledWith('/sw.js', { scope: '/', updateViaCache: 'none' });
+      expect(ready).toBe(cleanRegistration);
+    });
+
+    it('halts recovery and never attempts register when unregister times out', async () => {
+      const unregisterMock = vi.fn().mockReturnValue(new Promise(() => {}));
+      const registerMock = vi.fn();
+
+      const staleRegistration: Record<string, unknown> = {
+        scope: `${window.location.origin}/`,
+        active: null,
+        waiting: null,
+        installing: null,
+        update: vi.fn().mockRejectedValue(new Error('Update failed')),
+        unregister: unregisterMock,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      };
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(staleRegistration),
+          register: registerMock,
+          ready: new Promise(() => {}),
+        },
+        configurable: true,
+      });
+
+      await expect(
+        ensureHealthyServiceWorker({
+          purpose: 'push-enrollment',
+          activationPolicy: 'recover-if-no-active',
+          timeoutMs: 50,
+        })
+      ).rejects.toThrow(ClientAppError);
+
+      expect(unregisterMock).toHaveBeenCalledTimes(1);
+      // Crucial: register must NEVER be called after unregister timeout!
+      expect(registerMock).not.toHaveBeenCalled();
+
+      const health = await inspectServiceWorkerHealth();
+      expect(health.lastFailureCode).toBe('SW_UNREGISTER_TIMEOUT');
+    });
+
+    it('halts recovery and never attempts duplicate register when fresh registration times out', async () => {
+      let registerCallCount = 0;
+      const registerMock = vi.fn().mockImplementation(() => {
+        registerCallCount++;
+        return new Promise(() => {});
+      });
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(null),
+          register: registerMock,
+          ready: new Promise(() => {}),
+        },
+        configurable: true,
+      });
+
+      await expect(
+        ensureHealthyServiceWorker({
+          purpose: 'push-enrollment',
+          activationPolicy: 'recover-if-no-active',
+          timeoutMs: 50,
+        })
+      ).rejects.toThrow(ClientAppError);
+
+      // Called only once in Step 3, never re-attempted in repair after timeout
+      expect(registerCallCount).toBe(1);
+
+      const health = await inspectServiceWorkerHealth();
+      expect(health.lastFailureCode).toBe('SW_REGISTRATION_TIMEOUT');
+    });
+
+    it('halts recovery and never attempts unregister or register when update times out', async () => {
+      const updateMock = vi.fn().mockReturnValue(new Promise(() => {}));
+      const unregisterMock = vi.fn();
+      const registerMock = vi.fn();
+
+      const suspectRegistration: Record<string, unknown> = {
+        scope: `${window.location.origin}/`,
+        active: null,
+        waiting: null,
+        installing: null,
+        update: updateMock,
+        unregister: unregisterMock,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      };
+
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(suspectRegistration),
+          register: registerMock,
+          ready: new Promise(() => {}),
+        },
+        configurable: true,
+      });
+
+      await expect(
+        ensureHealthyServiceWorker({
+          purpose: 'push-enrollment',
+          activationPolicy: 'recover-if-no-active',
+          timeoutMs: 50,
+        })
+      ).rejects.toThrow(ClientAppError);
+
+      expect(updateMock).toHaveBeenCalledTimes(1);
+      // Crucial: unregister and register must NEVER be called after update timeout!
+      expect(unregisterMock).not.toHaveBeenCalled();
+      expect(registerMock).not.toHaveBeenCalled();
+
+      const health = await inspectServiceWorkerHealth();
+      expect(health.lastFailureCode).toBe('SW_UPDATE_TIMEOUT');
+    });
+  });
+
+  describe('ensureWorkerAttached', () => {
+    it('returns immediately if active worker is already present', async () => {
+      const reg = {
+        scope: `${window.location.origin}/`,
+        active: { scriptURL: `${window.location.origin}/sw.js`, state: 'activated' },
+        waiting: null,
+        installing: null,
+      } as unknown as ServiceWorkerRegistration;
+
+      const result = await ensureWorkerAttached(reg, 100);
+      expect(result).toBe(reg);
+    });
+
+    it('returns immediately if installing worker is already present', async () => {
+      const reg = {
+        scope: `${window.location.origin}/`,
+        active: null,
+        waiting: null,
+        installing: { scriptURL: `${window.location.origin}/sw.js`, state: 'installing' },
+      } as unknown as ServiceWorkerRegistration;
+
+      const result = await ensureWorkerAttached(reg, 100);
+      expect(result).toBe(reg);
+    });
+
+    it('resolves as soon as updatefound fires and worker becomes attached', async () => {
+      let updatefoundHandler: (() => void) | null = null;
+      const reg: Record<string, unknown> = {
+        scope: `${window.location.origin}/`,
+        active: null,
+        waiting: null,
+        installing: null,
+        addEventListener: vi.fn((event: string, handler: () => void) => {
+          if (event === 'updatefound') updatefoundHandler = handler;
+        }),
+        removeEventListener: vi.fn(),
+      };
+
+      const promise = ensureWorkerAttached(reg as unknown as ServiceWorkerRegistration, 500);
+
+      // Simulate browser attaching worker and firing updatefound
+      reg.installing = { scriptURL: `${window.location.origin}/sw.js`, state: 'installing' };
+      if (typeof updatefoundHandler === 'function') {
+        (updatefoundHandler as () => void)();
+      }
+
+      const result = await promise;
+      expect(result).toBe(reg);
+      expect(reg.removeEventListener).toHaveBeenCalledWith('updatefound', expect.any(Function));
+    });
+
+    it('falls back gracefully after timeout if no worker ever attaches', async () => {
+      const reg = {
+        scope: `${window.location.origin}/`,
+        active: null,
+        waiting: null,
+        installing: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      } as unknown as ServiceWorkerRegistration;
+
+      const result = await ensureWorkerAttached(reg, 20);
+      expect(result).toBe(reg);
     });
   });
 
