@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-02T23:04:26+05:30",
-  "sourceRevision": "2578953e1e13ef2d6c0934e78d218091baa61b34",
+  "generatedAt": "2026-10-03T00:07:26+05:30",
+  "sourceRevision": "87c5f950e49a383fd0eb02003b5029f04acd223b",
   "uiRoutes": [
     {
       "route": "/action-items",
@@ -14604,6 +14604,8 @@
       "sources": [
         "deploy/compose/docker-compose.split.yml",
         "deploy/compose/docker-compose.yml",
+        "deploy/swarm/docker-stack.integrated.yml",
+        "deploy/swarm/docker-stack.yml",
         "src/lib/encryption.ts",
         "src/lib/env-validation.ts"
       ],
@@ -18296,6 +18298,7 @@
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "env.example",
         "src/app/(app)/settings/system/page.tsx",
+        "src/lib/api-keys.ts",
         "src/lib/env-validation.ts",
         "src/lib/secret-manager.ts",
         "src/lib/user-notification-endpoints.ts",
@@ -78280,6 +78283,8 @@
         "sources": [
           "deploy/compose/docker-compose.split.yml",
           "deploy/compose/docker-compose.yml",
+          "deploy/swarm/docker-stack.integrated.yml",
+          "deploy/swarm/docker-stack.yml",
           "src/lib/encryption.ts",
           "src/lib/env-validation.ts"
         ],
@@ -78288,6 +78293,8 @@
           "sources": [
             "deploy/compose/docker-compose.split.yml",
             "deploy/compose/docker-compose.yml",
+            "deploy/swarm/docker-stack.integrated.yml",
+            "deploy/swarm/docker-stack.yml",
             "src/lib/encryption.ts",
             "src/lib/env-validation.ts"
           ],
@@ -78360,6 +78367,8 @@
             "evidence": [
               "deploy/compose/docker-compose.split.yml",
               "deploy/compose/docker-compose.yml",
+              "deploy/swarm/docker-stack.integrated.yml",
+              "deploy/swarm/docker-stack.yml",
               "src/lib/encryption.ts",
               "src/lib/env-validation.ts"
             ],
@@ -89108,6 +89117,7 @@
           "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
           "env.example",
           "src/app/(app)/settings/system/page.tsx",
+          "src/lib/api-keys.ts",
           "src/lib/env-validation.ts",
           "src/lib/secret-manager.ts",
           "src/lib/user-notification-endpoints.ts",
@@ -89122,6 +89132,7 @@
             "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
             "env.example",
             "src/app/(app)/settings/system/page.tsx",
+            "src/lib/api-keys.ts",
             "src/lib/env-validation.ts",
             "src/lib/secret-manager.ts",
             "src/lib/user-notification-endpoints.ts",
@@ -89199,6 +89210,7 @@
               "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
               "env.example",
               "src/app/(app)/settings/system/page.tsx",
+              "src/lib/api-keys.ts",
               "src/lib/env-validation.ts",
               "src/lib/secret-manager.ts",
               "src/lib/user-notification-endpoints.ts",

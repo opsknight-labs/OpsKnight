@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-02
+  verified_at: 2026-10-03
   evidence:
     - src/
     - deploy/
@@ -210,7 +210,7 @@ Sets the polling interval while the general queue is idle.
 - Deprecated: no
 - Extraction confidence: derived
 - Static default: not displayed
-- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`
+- Sources: `deploy/compose/docker-compose.split.yml`, `deploy/compose/docker-compose.yml`, `deploy/swarm/docker-stack.integrated.yml`, `deploy/swarm/docker-stack.yml`, `src/lib/encryption.ts`, `src/lib/env-validation.ts`
 
 ## `API_KEY_SECRET`
 

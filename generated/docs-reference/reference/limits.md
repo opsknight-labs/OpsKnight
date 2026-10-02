@@ -6,7 +6,7 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-02
+  verified_at: 2026-10-03
   evidence:
     - generated/docs-discovery/current.json
     - src/
