@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { hashLegacyScryptToken, hashTokenV2 } from '@/lib/api-keys';
+import { hashLegacyScryptTokenCandidates, hashTokenV2 } from '@/lib/api-keys';
 
 function extractApiKey(req: NextRequest) {
   const header = req.headers.get('authorization') || '';
@@ -28,15 +28,17 @@ export async function authenticateApiKey(req: NextRequest) {
     where: { tokenHash: v2Hash, ...activeFilter },
   });
 
-  // Lazy migration: Check legacy hash if V2 not found
+  // Lazy migration: try every legacy 1.x scrypt salt. Installations that did
+  // not define API_KEY_SECRET used NEXTAUTH_SECRET.
   if (!apiKey) {
-    const v1Hash = await hashLegacyScryptToken(token);
-    apiKey = await prisma.apiKey.findFirst({
-      where: { tokenHash: v1Hash, ...activeFilter },
-    });
+    for (const legacyHash of await hashLegacyScryptTokenCandidates(token)) {
+      apiKey = await prisma.apiKey.findFirst({
+        where: { tokenHash: legacyHash, ...activeFilter },
+      });
+      if (apiKey) break;
+    }
 
     if (apiKey) {
-      // Found with legacy hash - migrate to secure HMAC hash immediately
       await prisma.apiKey.update({
         where: { id: apiKey.id },
         data: {
