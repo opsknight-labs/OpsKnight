@@ -1,6 +1,6 @@
 import { PrismaClient, type Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { createHmac } from 'node:crypto';
+import { hashTokenV2 } from '../../../src/lib/api-keys';
 import { DOCS_ADMIN, DOCS_API_KEY, DOCS_FIXTURES, DOCS_RESPONDER, DOCS_VIEWER } from '../fixtures/constants';
 
 export default async function globalSetup() {
@@ -49,10 +49,7 @@ export default async function globalSetup() {
       update: { ...person, status: 'ACTIVE', passwordHash: fixturePasswordHash, timeZone: 'America/New_York', emailNotificationsEnabled: true },
       create: { ...person, status: 'ACTIVE', passwordHash: fixturePasswordHash, timeZone: 'America/New_York', emailNotificationsEnabled: true },
     })));
-    const apiKeySecret = process.env.API_KEY_SECRET || 'docs-runtime-only-api-key-secret';
-    const tokenHash = createHmac('sha256', apiKeySecret)
-      .update(`opsknight:api-key:v2:${DOCS_API_KEY}`)
-      .digest('hex');
+    const tokenHash = hashTokenV2(DOCS_API_KEY);
     await prisma.apiKey.upsert({
       where: { id: 'docs-api-contract-key' },
       update: { tokenHash, userId: admin.id, revokedAt: null, expiresAt: null },
