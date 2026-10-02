@@ -1,44 +1,167 @@
 <div align="center">
 
 <a href="https://opsknight.com/">
-  <img src="public/readme/hero.webp" alt="OpsKnight incident detail with analytics and on-call schedule views" width="100%">
+  <img src="public/readme/hero.webp" alt="OpsKnight Command Center on desktop with the responder PWA in light and dark mode" width="100%">
 </a>
 
-# OpsKnight
+<h3>Open-source incident management and on-call — on infrastructure you control.</h3>
 
-**Open-source incident management and on-call operations.**<br>
-Detect, route, respond, communicate, and learn on infrastructure you control.
+<p>Detect, route, page, respond, communicate and learn in one self-hosted platform.<br>
+No per-seat pricing. Your incident data stays in your own database.</p>
 
-[**Documentation**](https://opsknight.com/docs/latest/) · [**Quick start**](#quick-start) · [**What's new in 2.0**](CHANGELOG.md) · [**Sponsor**](https://github.com/sponsors/dushyant-rahangdale)
+<p>
+  <a href="https://github.com/opsknight-labs/OpsKnight/releases/tag/v2.0.0"><img src="https://img.shields.io/badge/release-v2.0.0-e11d48?style=for-the-badge" alt="Release v2.0.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-111827?style=for-the-badge" alt="License AGPL-3.0-only"></a>
+  <a href="https://github.com/opsknight-labs/OpsKnight/pkgs/container/opsknight"><img src="https://img.shields.io/badge/ghcr.io-amd64%20%7C%20arm64-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Multi-architecture container on GHCR"></a>
+  <a href="https://opsknight.com/docs/latest/"><img src="https://img.shields.io/badge/docs-opsknight.com-2563eb?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation"></a>
+</p>
+<p>
+  <a href="https://github.com/opsknight-labs/OpsKnight/actions/workflows/tests.yml"><img src="https://github.com/opsknight-labs/OpsKnight/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+  <a href="https://github.com/opsknight-labs/OpsKnight/actions/workflows/security.yml"><img src="https://github.com/opsknight-labs/OpsKnight/actions/workflows/security.yml/badge.svg" alt="Security"></a>
+  <a href="https://github.com/sponsors/dushyant-rahangdale"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?style=flat&logo=githubsponsors&logoColor=white" alt="Sponsor"></a>
+</p>
 
-[![Release](https://img.shields.io/badge/Release-v2.0.0-success?style=flat)](https://github.com/opsknight-labs/OpsKnight/releases/tag/v2.0.0)
-[![License](https://img.shields.io/badge/License-AGPL--3.0--only-111827?style=flat)](LICENSE)
-[![Container](https://img.shields.io/badge/Container-ghcr.io-2496ED?style=flat&logo=docker&logoColor=white)](https://github.com/opsknight-labs/OpsKnight/pkgs/container/opsknight)
-[![Tests](https://github.com/opsknight-labs/OpsKnight/actions/workflows/tests.yml/badge.svg)](https://github.com/opsknight-labs/OpsKnight/actions/workflows/tests.yml)
-[![Security](https://github.com/opsknight-labs/OpsKnight/actions/workflows/security.yml/badge.svg)](https://github.com/opsknight-labs/OpsKnight/actions/workflows/security.yml)
+**[Website](https://opsknight.com/)** &nbsp;·&nbsp; **[Documentation](https://opsknight.com/docs/latest/)** &nbsp;·&nbsp; **[Quick start](#-quick-start)** &nbsp;·&nbsp; **[What's new in 2.0](#-whats-new-in-20)** &nbsp;·&nbsp; **[Product tour](#-product-tour)** &nbsp;·&nbsp; **[Sponsor](https://github.com/sponsors/dushyant-rahangdale)**
 
 </div>
 
-## What is OpsKnight?
+---
 
-OpsKnight connects the complete incident loop: alert ingestion, routing, paging, coordinated response, customer communication, operational analysis, and post-incident learning. It is built for SRE, platform, and operations teams that want their incident data and response infrastructure under their own control.
+## ✨ What's new in 2.0
 
-Run a straightforward integrated installation or separate Web, Scheduler, worker lanes, and status projection for production scale and failure isolation. OpsKnight keeps the operating model visible: durable work, delivery evidence, audit history, health signals, and documented deployment contracts.
+<table>
+<tr>
+<td width="50%" valign="top">
 
-## Core capabilities
+**🧱 Split production runtime**<br>
+Web, Scheduler, General / Critical / Bulk Workers and Status Projector scale and fail independently. The integrated runtime stays supported.
 
-- **Incident response** — Centralize triage, ownership, timelines, notes, action items, postmortems, and SLA-aware incident lifecycles.
-- **On-call and escalation** — Build schedules, rotation layers, overrides, escalation policies, service ownership, and handoffs across time zones.
-- **Notifications and paging** — Route durable email, Web Push, SMS, WhatsApp, and voice delivery with retries, outcomes, and administrator evidence.
-- **ChatOps and integrations** — Ingest alerts from monitoring, cloud, uptime, CI/CD, and webhook systems; coordinate through Slack, Microsoft Teams, and Jira.
-- **Status and reliability analytics** — Publish service status, measure response performance, create reports and dashboards, and operate NOC wallboards.
-- **Identity, security, and operations** — Use OIDC, SCIM Users and Groups, role-based access, API keys, audit evidence, privacy workflows, and health tooling.
+**📣 Notification control plane**<br>
+Durable delivery intents, retries, provider capacity and per-attempt evidence for email, Web Push, SMS, WhatsApp and voice.
 
-<div align="center">
-  <img src="docs/v2.0.0/assets/analytics-overview.png" alt="OpsKnight analytics overview showing incident response and SLA performance" width="100%">
-</div>
+**📞 Twilio voice paging**<br>
+Triggered incidents can call responders, who acknowledge from the keypad.
 
-## Quick start
+</td>
+<td width="50%" valign="top">
+
+**💬 Microsoft Teams ChatOps**<br>
+Adaptive Cards, interactive incident actions, war rooms and meetings — alongside reworked Slack war rooms and Jira sync.
+
+**🛡️ Identity and governance**<br>
+SCIM 2.0 Users and Groups, OIDC claim-to-role mapping, an Auditor role, session registry and privacy/DSAR workflows.
+
+**🐳 Docker Swarm and load-certified topologies**<br>
+Integrated and split stacks for Compose, Swarm, Helm and Kustomize, sized from certified workload shapes.
+
+</td>
+</tr>
+</table>
+
+<p align="center"><a href="CHANGELOG.md">Read the full 2.0 changelog →</a></p>
+
+---
+
+## 🧭 Product tour
+
+### Command Center — the whole incident picture at a glance
+
+<p align="center">
+  <img src="public/readme/command-center.webp" alt="Annotated OpsKnight Command Center: global incident banner, live counts, Ops Pulse triage, real-time alerts, workload signals and SLA alerts" width="100%">
+</p>
+
+### Incident response — everything a responder needs on one screen
+
+<p align="center">
+  <img src="public/readme/incident-response.webp" alt="Annotated OpsKnight incident detail: ownership, context, timeline and postmortem, response-health SLA timers, one-click lifecycle and stakeholder subscriptions" width="100%">
+</p>
+
+### Plan, route and measure
+
+<p align="center">
+  <img src="public/readme/platform.webp" alt="OpsKnight analytics with SLA insights, an on-call schedule with live coverage, and an escalation policy" width="100%">
+</p>
+
+### 📱 Mobile responder PWA — light and dark, iOS and Android
+
+<p align="center">
+  <img src="public/readme/mobile.webp" alt="OpsKnight mobile PWA on iPhone: responder home and incident triage in light mode, push notifications on the lock screen, incident response and on-call in dark mode" width="100%">
+</p>
+
+Install OpsKnight from the browser to get a mobile-first workspace for incidents, on-call, escalation policies, services, teams, status, analytics and postmortems. Push registration is per device, the app follows the system light or dark theme, and offline actions stay authorization-bound when they replay. [Set up the mobile PWA →](https://opsknight.com/docs/latest/guides/mobile/)
+
+---
+
+## 🧩 Everything in the incident loop
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 🚨 Respond
+Triage, ownership, timelines, notes, action items, templates and interactive 5-Whys postmortems, with SLA-aware lifecycles and durable side effects.
+
+</td>
+<td width="33%" valign="top">
+
+### 📅 On-call and escalation
+Schedules with rotation layers and overrides, DST-safe handoffs, and escalation policies that target users, teams and schedules.
+
+</td>
+<td width="33%" valign="top">
+
+### 📣 Notify and page
+Email, Web Push, SMS, WhatsApp and voice through a durable delivery pipeline with retries, outcomes and administrator evidence.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 💬 ChatOps
+Slack and Microsoft Teams war rooms with interactive incident actions, plus bidirectional Jira lifecycle sync.
+
+</td>
+<td valign="top">
+
+### 📊 Status and analytics
+A themed public status page with subscribers, analytics for MTTA / MTTR / SLA, configurable dashboards, PDF reports and NOC/TV mode.
+
+</td>
+<td valign="top">
+
+### 🔐 Identity and operations
+OIDC SSO, SCIM 2.0, role-based access, API keys, audit evidence, privacy workflows, Health Center, Prometheus metrics and backups.
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🔌 Integrations
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white" alt="Prometheus">
+  <img src="https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white" alt="Grafana">
+  <img src="https://img.shields.io/badge/Datadog-632CA6?style=for-the-badge&logo=datadog&logoColor=white" alt="Datadog">
+  <img src="https://img.shields.io/badge/Sentry-362D59?style=for-the-badge&logo=sentry&logoColor=white" alt="Sentry">
+  <img src="https://img.shields.io/badge/AWS_CloudWatch-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white" alt="AWS CloudWatch">
+  <img src="https://img.shields.io/badge/Azure_Monitor-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white" alt="Azure Monitor">
+  <br>
+  <img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub">
+  <img src="https://img.shields.io/badge/GitLab-FC6D26?style=for-the-badge&logo=gitlab&logoColor=white" alt="GitLab">
+  <img src="https://img.shields.io/badge/Slack-4A154B?style=for-the-badge&logo=slack&logoColor=white" alt="Slack">
+  <img src="https://img.shields.io/badge/Microsoft_Teams-6264A7?style=for-the-badge&logo=microsoftteams&logoColor=white" alt="Microsoft Teams">
+  <img src="https://img.shields.io/badge/Jira-0052CC?style=for-the-badge&logo=jira&logoColor=white" alt="Jira">
+  <img src="https://img.shields.io/badge/Webhooks-111827?style=for-the-badge&logo=webhooks&logoColor=white" alt="Generic webhooks">
+</p>
+
+Monitoring, cloud, uptime, CI/CD, ChatOps, ticketing, notification and identity providers each have a documented contract for authentication, lifecycle actions and recovery. [Browse the certified integration catalog →](https://opsknight.com/docs/latest/integrations/)
+
+---
+
+## 🚀 Quick start
 
 Prerequisites: Git, Docker with Docker Compose, and `openssl`.
 
@@ -63,77 +186,94 @@ docker compose -f deploy/compose/docker-compose.yml exec -T opsknight-app \
 
 Open `http://localhost:3000/setup`, enter the short-lived bootstrap code, and create the first administrator.
 
-Before exposing OpsKnight, configure its public URL, replace the example database password, and store `NEXTAUTH_SECRET`, `API_KEY_SECRET`, and the encryption key outside source control. These values must remain stable across restarts, upgrades, and restores. Losing the encryption key makes stored provider credentials unreadable.
+> [!IMPORTANT]
+> Before exposing OpsKnight, configure its public URL and keep `NEXTAUTH_SECRET`, `API_KEY_SECRET` and the encryption key outside source control. They must stay stable across restarts, upgrades and restores — losing the encryption key makes stored provider credentials unreadable. Production startup rejects placeholder and reused secrets.
 
-[Production installation →](https://opsknight.com/docs/latest/start/production-install/)
+[Production installation →](https://opsknight.com/docs/latest/start/production-install/) &nbsp;·&nbsp; [Upgrading from 1.x →](https://opsknight.com/docs/latest/start/migrate-from-v1/)
 
-## Deployment
+---
 
-- **Docker Compose** — Integrated or split runtime on a single host. [Open the Compose guide →](https://opsknight.com/docs/latest/operate/deploy/docker-compose/)
-- **Docker Swarm** — Integrated or split runtime across Swarm nodes. [Open the Swarm guide →](https://opsknight.com/docs/latest/operate/deploy/swarm/)
-- **Helm** — Schema-validated deployment for production Kubernetes. [Open the Helm guide →](https://opsknight.com/docs/latest/operate/deploy/helm/)
-- **Kustomize** — GitOps-friendly Kubernetes bases and overlays. [Open the Kustomize guide →](https://opsknight.com/docs/latest/operate/deploy/kustomize/)
+## 🏗️ Deploy anywhere
 
-PostgreSQL 14 or later is required. For production, pin the tested multi-architecture image digest, calculate the database connection budget, and complete the selected topology's acceptance checklist.
+| | Topology | Best for | Guide |
+| :-- | :-- | :-- | :-- |
+| <img src="https://img.shields.io/badge/-Compose-2496ED?style=flat&logo=docker&logoColor=white" alt=""> | Integrated or split, single host | Evaluation and small teams | [Docker Compose →](https://opsknight.com/docs/latest/operate/deploy/docker-compose/) |
+| <img src="https://img.shields.io/badge/-Swarm-2496ED?style=flat&logo=docker&logoColor=white" alt=""> | Integrated or split across nodes | Multi-node Docker estates | [Docker Swarm →](https://opsknight.com/docs/latest/operate/deploy/swarm/) |
+| <img src="https://img.shields.io/badge/-Helm-0F1689?style=flat&logo=helm&logoColor=white" alt=""> | Schema-validated chart | Production Kubernetes | [Helm →](https://opsknight.com/docs/latest/operate/deploy/helm/) |
+| <img src="https://img.shields.io/badge/-Kustomize-326CE5?style=flat&logo=kubernetes&logoColor=white" alt=""> | Bases and overlays | GitOps with Argo CD or Flux | [Kustomize →](https://opsknight.com/docs/latest/operate/deploy/kustomize/) |
 
-[Choose a deployment topology →](https://opsknight.com/docs/latest/operate/deploy/) · [Plan capacity →](https://opsknight.com/docs/latest/operate/capacity/choose-deployment/)
+PostgreSQL 14 or later is required. For production, pin the tested multi-architecture image digest, size the database connection budget and complete the topology's acceptance checklist. [Choose a topology →](https://opsknight.com/docs/latest/operate/deploy/) · [Plan capacity →](https://opsknight.com/docs/latest/operate/capacity/choose-deployment/)
 
-## Integrations
+### Architecture
 
-Connect monitoring, cloud, uptime, CI/CD, ChatOps, ticketing, notification, identity, and generic webhook systems. Provider-specific documentation records authentication, lifecycle actions, and recovery behavior rather than assuming every integration has the same contract.
-
-Common connections include Prometheus, Grafana, Datadog, Sentry, CloudWatch, Azure, GitHub, GitLab, Slack, Microsoft Teams, Jira, and generic webhooks.
-
-[View the certified integration catalog →](https://opsknight.com/docs/latest/integrations/)
-
-## Mobile operations
-
-OpsKnight includes an installable responder PWA for iOS and Android. A mobile-first workspace covers incident response, on-call schedules, escalation policies, services, teams, users, status, analytics, notifications, and postmortems. Push registration is per device, and offline actions remain authorization-bound when replayed.
-
-<div align="center">
-  <img src="public/readme/mobile.webp" alt="OpsKnight mobile PWA showing on-call schedules, incident response, and analytics" width="100%">
-</div>
-
-[Install and operate the mobile PWA →](https://opsknight.com/docs/latest/guides/mobile/)
-
-## Architecture
-
-Integrated mode runs Web and background responsibilities together for simpler installations. Split mode gives Web, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector explicit ownership so they can scale and fail independently. Both modes use PostgreSQL for durable state and work coordination.
-
-<div align="center">
+<p align="center">
   <img src="public/readme/architecture.svg" alt="OpsKnight integrated and split runtime architecture" width="100%">
+</p>
+
+Integrated mode runs Web and background work in one process. Split mode gives Web, Scheduler, General Worker, Critical Worker, Bulk Worker and Status Projector explicit ownership so they scale and fail independently. Both use PostgreSQL for durable state and work coordination; only Web receives ingress. [Read the architecture guide →](https://opsknight.com/docs/latest/operate/deploy/architecture/)
+
+---
+
+## 🤔 Why OpsKnight?
+
+| | **OpsKnight** | Typical per-seat SaaS |
+| :-- | :-- | :-- |
+| **Where it runs** | Your infrastructure | Vendor cloud |
+| **Incident data** | Stays in your PostgreSQL | Stored by the vendor |
+| **Pricing** | No seat meter, no software fee | Per-user plans |
+| **Source** | Open under AGPL-3.0-only | Closed |
+| **Operations** | Documented runtime, health and delivery evidence | Opaque |
+
+OpsKnight is an independent project and is not affiliated with PagerDuty, Opsgenie or other vendors.
+
+---
+
+## 🔒 Security
+
+Encrypted provider credentials with key rotation, independent session and API-key signing secrets, fail-closed inbound verification, role-based authorization, session revocation, OIDC, SCIM, audit evidence and CI security scanning. Compliance tooling helps operators implement and evidence controls; it does not itself confer certification.
+
+[Security policy](SECURITY.md) &nbsp;·&nbsp; [Production hardening](https://opsknight.com/docs/latest/operate/security/hardening/) &nbsp;·&nbsp; [Report a vulnerability privately](https://github.com/opsknight-labs/OpsKnight/security/advisories/new)
+
+---
+
+## 📚 Documentation
+
+The versioned 2.0 documentation is the source of truth for product behavior, configuration, deployment, integrations and operations.
+
+| [**Get started**](https://opsknight.com/docs/latest/start/) | [**Guides**](https://opsknight.com/docs/latest/guides/) | [**Operate**](https://opsknight.com/docs/latest/operate/) | [**API reference**](https://opsknight.com/docs/latest/reference/api/) | [**Troubleshooting**](https://opsknight.com/docs/latest/troubleshooting/) |
+| :-: | :-: | :-: | :-: | :-: |
+| Install and first incident | Day-to-day workflows | Deploy, scale, upgrade | REST API and keys | Diagnose and recover |
+
+---
+
+## 🤝 Community
+
+Bug reports, focused feature requests, documentation fixes and code contributions are welcome.
+
+<p align="center">
+  <a href="https://github.com/opsknight-labs/OpsKnight/discussions"><img src="https://img.shields.io/badge/GitHub-Discussions-24292e?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Discussions"></a>
+  <a href="https://github.com/opsknight-labs/OpsKnight/issues"><img src="https://img.shields.io/badge/Issues-Report_a_bug-d73a49?style=for-the-badge&logo=github&logoColor=white" alt="Report a bug"></a>
+  <a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-Welcome-22c55e?style=for-the-badge&logo=git&logoColor=white" alt="Contributing guide"></a>
+  <a href="ROADMAP.md"><img src="https://img.shields.io/badge/Roadmap-View-6366f1?style=for-the-badge&logo=target&logoColor=white" alt="Roadmap"></a>
+</p>
+
+### 💖 Sustain OpsKnight
+
+OpsKnight is independently maintained. Sponsorship funds open-source development, release infrastructure, security maintenance and documentation.
+
+<p align="center">
+  <a href="https://github.com/sponsors/dushyant-rahangdale"><img src="https://img.shields.io/badge/Sponsor_OpsKnight-GitHub_Sponsors-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor OpsKnight on GitHub Sponsors"></a>
+</p>
+
+---
+
+## 📄 License
+
+OpsKnight 2.0 is distributed under [`AGPL-3.0-only`](LICENSE). OpsKnight 1.4.0 and earlier remain available under the licenses they were published with; see [LICENSE-TRANSITION.md](LICENSE-TRANSITION.md).
+
+<div align="center">
+<br>
+<a href="https://opsknight.com/"><img src="public/logo.png" alt="OpsKnight" width="56"></a>
+<br>
+<sub>Built for the people who answer the page.</sub>
 </div>
-
-Only Web receives ingress in split mode. Migrations and background roles connect directly to PostgreSQL; Web may use the supported PgBouncer transaction-pooling pattern. Do not run integrated and split ownership against the same database.
-
-[Read the architecture guide →](https://opsknight.com/docs/latest/operate/deploy/architecture/)
-
-## Security
-
-OpsKnight supports encrypted provider credentials, independent session and API-key signing secrets, fail-closed inbound verification, role-based authorization, session revocation, OIDC, SCIM, audit evidence, and CI security scanning. Production startup rejects known placeholder secrets unless an explicit evaluation-only override is set.
-
-Security and compliance tooling helps operators implement and evidence controls; it does not itself confer certification or compliance.
-
-[Security policy](SECURITY.md) · [Production hardening](https://opsknight.com/docs/latest/operate/security/hardening/) · [Report a vulnerability privately](https://github.com/opsknight-labs/OpsKnight/security/advisories/new)
-
-## Documentation
-
-The versioned 2.0 documentation is the source of truth for supported product behavior, configuration, deployment, integrations, and operating procedures. The README intentionally contains only stable product claims and a short installation path.
-
-[Get started](https://opsknight.com/docs/latest/start/) · [Guides](https://opsknight.com/docs/latest/guides/) · [Operations](https://opsknight.com/docs/latest/operate/) · [API reference](https://opsknight.com/docs/latest/reference/api/) · [Troubleshooting](https://opsknight.com/docs/latest/troubleshooting/)
-
-## Community and contributing
-
-Bug reports, focused feature requests, documentation improvements, and code contributions are welcome.
-
-[Discussions](https://github.com/opsknight-labs/OpsKnight/discussions) · [Issues](https://github.com/opsknight-labs/OpsKnight/issues) · [Contributing guide](CONTRIBUTING.md) · [Roadmap](ROADMAP.md)
-
-## Sustain OpsKnight
-
-Sponsorship helps fund ongoing open-source development, release infrastructure, security maintenance, and documentation.
-
-[Sponsor OpsKnight →](https://github.com/sponsors/dushyant-rahangdale)
-
-## License
-
-OpsKnight 2.0 is distributed under [`AGPL-3.0-only`](LICENSE). OpsKnight 1.4.0 and earlier remain available under the licenses under which they were published; see [LICENSE-TRANSITION.md](LICENSE-TRANSITION.md).

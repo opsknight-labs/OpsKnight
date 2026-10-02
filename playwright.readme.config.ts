@@ -40,20 +40,25 @@ export default defineConfig({
       dependencies: ['readme-auth'],
       use: {
         ...devices['Desktop Chrome'],
-        viewport: { width: 1440, height: 900 },
+        viewport: { width: 1600, height: 1000 },
+        deviceScaleFactor: 2,
         storageState: 'test-results/readme-auth.json',
       },
     },
-    {
-      name: 'readme-mobile',
+    ...(['light', 'dark'] as const).map(colorScheme => ({
+      name: `readme-mobile-${colorScheme}`,
       testMatch: /mobile\.capture\.spec\.ts/,
       dependencies: ['readme-auth'],
       use: {
         ...devices['iPhone 15 Pro'],
-        browserName: 'webkit',
+        browserName: 'webkit' as const,
+        colorScheme,
+        // iPhone 15 Pro is 393x852 pt; the composed device frame draws the
+        // 54 pt iOS status bar above the captured web content.
+        viewport: { width: 393, height: 798 },
         storageState: 'test-results/readme-auth.json',
       },
-    },
+    })),
   ],
   webServer:
     process.env.DOCS_EXTERNAL_RUNTIME === 'true'

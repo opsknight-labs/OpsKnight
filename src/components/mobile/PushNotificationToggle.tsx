@@ -369,11 +369,26 @@ export default function PushNotificationToggle() {
     void checkSupportAndState();
     const installed = () => void checkSupportAndState();
     const online = () => void checkSupportAndState();
+    // The service worker re-enrolls rotated endpoints in the background; refresh
+    // the displayed state so a failed save surfaces the Repair action.
+    const workerMessage = (event: MessageEvent) => {
+      const type = event.data?.type;
+      if (type === 'PUSH_SUBSCRIPTION_CHANGED' || type === 'PUSH_SUBSCRIPTION_CHANGE_FAILED') {
+        void checkSupportAndState();
+      }
+    };
+    const serviceWorker =
+      typeof navigator !== 'undefined' &&
+      typeof navigator.serviceWorker?.addEventListener === 'function'
+        ? navigator.serviceWorker
+        : undefined;
     window.addEventListener('appinstalled', installed);
     window.addEventListener('online', online);
+    serviceWorker?.addEventListener('message', workerMessage);
     return () => {
       window.removeEventListener('appinstalled', installed);
       window.removeEventListener('online', online);
+      serviceWorker?.removeEventListener('message', workerMessage);
     };
   }, [checkSupportAndState]);
 
