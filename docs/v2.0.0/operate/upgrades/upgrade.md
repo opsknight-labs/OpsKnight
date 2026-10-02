@@ -17,6 +17,8 @@ verification:
     - docker-entrypoint.sh
     - deploy/swarm/scripts/deploy.sh
     - deploy/kubernetes/helm/opsknight/templates/migration-job.yaml
+    - src/lib/api-keys.ts
+    - src/lib/env-validation.ts
 ---
 
 # Upgrade OpsKnight
@@ -70,9 +72,12 @@ Apply migrations using the same mechanism planned for production. Verify sign-in
 6. Confirm no unfinished migration exists in `_prisma_migrations`.
 7. Validate runtime/database connection capacity for rollout overlap.
 8. Confirm old images, old configuration, backup, keys, and restore commands are immediately available.
-9. For a 1.x to 2.0 upgrade, preserve the existing `NEXTAUTH_SECRET` and configure a separate `API_KEY_SECRET` before starting 2.0.
+9. For a 1.x to 2.0 upgrade, preserve the existing `NEXTAUTH_SECRET` and configure a separate `API_KEY_SECRET` of at least 32 characters before starting 2.0. Production startup rejects a missing, placeholder, or reused value.
+10. Preserve the existing `ENCRYPTION_KEY`, or the complete `ENCRYPTION_KEYS` keyring with unchanged key IDs, and deliver it to every web, worker, scheduler, and migration role.
 
-For 1.x installations that previously omitted `API_KEY_SECRET`, existing API keys and status-page API tokens were scrypt-hashed with `NEXTAUTH_SECRET`. 2.0 checks both the new API-key secret and the retained authentication secret during legacy lookup, then lazily rewrites a matched record to the current HMAC hash. Keep `NEXTAUTH_SECRET` stable through this migration window; rotating it at the same time can strand credentials that have not yet been used or recreated.
+Existing 1.x API keys and status-page API tokens keep working without operator action. 1.x stored scrypt hashes salted with `API_KEY_SECRET`, otherwise `NEXTAUTH_SECRET`, otherwise a secret derived from `ENCRYPTION_KEY`. 2.0 checks each retained value, plus the shipped 1.x `NEXTAUTH_SECRET` placeholders, during legacy lookup, then rewrites a matched record to the current HMAC hash under `API_KEY_SECRET`. Keep `NEXTAUTH_SECRET` stable through this migration window; rotating it at the same time can strand credentials that have not yet been used or recreated.
+
+Do not combine the upgrade with an encryption-key rotation. After the upgrade is accepted, move from `ENCRYPTION_KEY` to `ENCRYPTION_KEYS=k2:<new>,k1:<existing>` as described in [Migrate from OpsKnight 1.x](../../start/migrate-from-v1.md#move-from-encryption_key-to-an-encryption_keys-keyring). If you roll back the image without restoring the database, API keys already migrated to the 2.0 hash and `v3:` ciphertext written by 2.0 are not readable by 1.x; see [Roll back an upgrade](rollback.md).
 
 ## Apply schema changes once
 

@@ -102,7 +102,7 @@ OpsKnight natively supports Docker Swarm Raft-encrypted secrets via the `*_FILE`
 ### Fail-Closed Security Posture
 In production (`ENVIRONMENT=production`, default), `deploy.sh` enforces `STRICT_SECRETS=true` and immediately aborts if placeholder passwords or default encryption keys are detected. For local development or quick testing, explicitly pass `ALLOW_INSECURE_SECRETS=true`.
 
-Provide `ENCRYPTION_KEYS` as `id:64-hex-key` entries for rotation. When only `ENCRYPTION_KEY` is supplied, `deploy.sh` publishes the same key as a one-entry `legacy:` keyring so every Swarm role receives the versioned keyring contract without changing the effective encryption key.
+Provide `ENCRYPTION_KEYS` as `id:64-hex-key` entries for rotation (for example `k2:<new-64-hex>,k1:<old-64-hex>`). When only `ENCRYPTION_KEY` is supplied, `deploy.sh` publishes the same key as a one-entry `k1:` keyring so every Swarm role receives the versioned keyring contract without changing the historical key ID used by existing `v3:k1:*` ciphertext.
 
 ---
 

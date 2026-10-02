@@ -51,7 +51,9 @@ SECRET_ARGS=()
 DIRECT_DB_SECRET="${OPSKNIGHT_DIRECT_DATABASE_URL_SECRET:-${STACK_NAME}_direct_database_url}"
 DB_SECRET="${OPSKNIGHT_DATABASE_URL_SECRET:-${STACK_NAME}_database_url}"
 NEXTAUTH_SECRET_NAME="${OPSKNIGHT_NEXTAUTH_SECRET_SECRET:-${STACK_NAME}_nextauth_secret}"
+API_KEY_SECRET_NAME="${OPSKNIGHT_API_KEY_SECRET_SECRET:-${STACK_NAME}_api_key_secret}"
 ENCRYPTION_SECRET_NAME="${OPSKNIGHT_ENCRYPTION_KEY_SECRET:-${STACK_NAME}_encryption_key}"
+ENCRYPTION_KEYS_SECRET_NAME="${OPSKNIGHT_ENCRYPTION_KEYS_SECRET:-${STACK_NAME}_encryption_keys}"
 
 attach_secret_if_exists() {
   local sec_name="$1"
@@ -69,6 +71,7 @@ ENV_ARGS=(
   --env OPSKNIGHT_MIGRATION_ONLY=true
   --env NEXTAUTH_URL="${NEXTAUTH_URL:-http://localhost:3000}"
   --env NEXT_PUBLIC_APP_URL="${NEXT_PUBLIC_APP_URL:-http://localhost:3000}"
+  --env ALLOW_INSECURE_SECRETS="${ALLOW_INSECURE_SECRETS:-false}"
 )
 
 # Prioritize versioned Swarm secrets to avoid exposing database credentials in container environment
@@ -98,12 +101,28 @@ elif [ -n "${NEXTAUTH_SECRET:-}" ]; then
   ENV_ARGS+=(--env NEXTAUTH_SECRET="${NEXTAUTH_SECRET}")
 fi
 
+if attach_secret_if_exists "${API_KEY_SECRET_NAME}" "/run/secrets/opsknight_api_key_secret"; then
+  ENV_ARGS+=(--env API_KEY_SECRET_FILE=/run/secrets/opsknight_api_key_secret)
+elif attach_secret_if_exists "opsknight_api_key_secret" "/run/secrets/opsknight_api_key_secret"; then
+  ENV_ARGS+=(--env API_KEY_SECRET_FILE=/run/secrets/opsknight_api_key_secret)
+elif [ -n "${API_KEY_SECRET:-}" ]; then
+  ENV_ARGS+=(--env API_KEY_SECRET="${API_KEY_SECRET}")
+fi
+
 if attach_secret_if_exists "${ENCRYPTION_SECRET_NAME}" "/run/secrets/opsknight_encryption_key"; then
   ENV_ARGS+=(--env ENCRYPTION_KEY_FILE=/run/secrets/opsknight_encryption_key)
 elif attach_secret_if_exists "opsknight_encryption_key" "/run/secrets/opsknight_encryption_key"; then
   ENV_ARGS+=(--env ENCRYPTION_KEY_FILE=/run/secrets/opsknight_encryption_key)
 elif [ -n "${ENCRYPTION_KEY:-}" ]; then
   ENV_ARGS+=(--env ENCRYPTION_KEY="${ENCRYPTION_KEY}")
+fi
+
+if attach_secret_if_exists "${ENCRYPTION_KEYS_SECRET_NAME}" "/run/secrets/opsknight_encryption_keys"; then
+  ENV_ARGS+=(--env ENCRYPTION_KEYS_FILE=/run/secrets/opsknight_encryption_keys)
+elif attach_secret_if_exists "opsknight_encryption_keys" "/run/secrets/opsknight_encryption_keys"; then
+  ENV_ARGS+=(--env ENCRYPTION_KEYS_FILE=/run/secrets/opsknight_encryption_keys)
+elif [ -n "${ENCRYPTION_KEYS:-}" ]; then
+  ENV_ARGS+=(--env ENCRYPTION_KEYS="${ENCRYPTION_KEYS}")
 fi
 
 # Attach custom CA certificate if present

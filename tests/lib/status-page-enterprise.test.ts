@@ -29,7 +29,7 @@ vi.mock('@/lib/prisma', () => ({
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: mocks.rateLimit }));
 vi.mock('@/lib/api-keys', () => ({
   hashTokenV2: () => 'v2-hash',
-  hashLegacyScryptToken: async () => 'v1-hash',
+  hashLegacyTokenCandidates: async () => ['v1-hash'],
 }));
 
 import { resolveStatusPage, statusPageSlugMatches } from '@/lib/status-page-resolver';

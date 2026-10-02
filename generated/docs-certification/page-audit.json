@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "purpose": "Reader-completeness audit. Mapping and source verification do not imply task usability.",
   "counts": {
-    "MAPPED": 118,
+    "MAPPED": 119,
     "READER_COMPLETE": 202,
     "SOURCE_VERIFIED": 0,
     "RUNTIME_VERIFIED": 0
@@ -3017,6 +3017,17 @@
     },
     {
       "page": "reference/configuration/README.md",
+      "type": "reference",
+      "userTask": null,
+      "status": "MAPPED",
+      "taskPage": false,
+      "screenshotCount": 0,
+      "screenshotAssessment": "UNASSESSED",
+      "sourceVerified": true,
+      "runtimeVerified": false
+    },
+    {
+      "page": "reference/configuration/internal.md",
       "type": "reference",
       "userTask": null,
       "status": "MAPPED",

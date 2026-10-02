@@ -47,18 +47,24 @@ function getEncryptionKeyring(): EncryptionKeyEntry[] {
       const separator = rawEntry.indexOf(':');
       const id = rawEntry.slice(0, separator).trim();
       const key = rawEntry.slice(separator + 1).trim();
-      if (
-        separator <= 0 ||
-        !/^[A-Za-z0-9._-]{1,64}$/.test(id) ||
-        !isValidHexKey(key) ||
-        (process.env.NODE_ENV === 'production' && isWeakKey(key))
-      ) {
-        logger.error('[Encryption] ENCRYPTION_KEYS contains an invalid or weak key entry.');
+      if (separator <= 0 || !/^[A-Za-z0-9._-]{1,64}$/.test(id) || !isValidHexKey(key)) {
+        logger.error('[Encryption] ENCRYPTION_KEYS contains an invalid key entry.');
         return [];
       }
       if (entries.some(entry => entry.id === id)) {
         logger.error('[Encryption] ENCRYPTION_KEYS contains a duplicate key ID.');
         return [];
+      }
+      if (process.env.NODE_ENV === 'production' && isWeakKey(key)) {
+        if (entries.length === 0) {
+          logger.error('[Encryption] The active ENCRYPTION_KEYS entry is a known weak key.');
+          return [];
+        }
+        // Historical data written with a publicly known key (for example the
+        // 1.x Compose default) stays readable so it can be re-encrypted.
+        logger.warn(
+          `[Encryption] ENCRYPTION_KEYS entry "${id}" is a known weak key and is used only to decrypt existing data. Re-encrypt and remove it.`
+        );
       }
       entries.push({ id, key });
     }
@@ -67,8 +73,14 @@ function getEncryptionKeyring(): EncryptionKeyEntry[] {
   const legacyKey = process.env.ENCRYPTION_KEY?.trim();
   if (legacyKey) {
     if (!isValidHexKey(legacyKey)) {
-      logger.error('[Encryption] ENCRYPTION_KEY is not a valid 64-character hex key.');
-      return [];
+      if (entries.length === 0) {
+        logger.error('[Encryption] ENCRYPTION_KEY is not a valid 64-character hex key.');
+        return [];
+      }
+      logger.warn(
+        '[Encryption] Ignoring invalid legacy ENCRYPTION_KEY because a valid ENCRYPTION_KEYS keyring is configured.'
+      );
+      return entries;
     }
 
     const weakLegacyKey = process.env.NODE_ENV === 'production' && isWeakKey(legacyKey);
@@ -80,9 +92,10 @@ function getEncryptionKeyring(): EncryptionKeyEntry[] {
         return [];
       }
       logger.warn(
-        '[Encryption] Ignoring weak legacy ENCRYPTION_KEY because a valid ENCRYPTION_KEYS keyring is configured.'
+        '[Encryption] ENCRYPTION_KEY is a known weak key; ENCRYPTION_KEYS stays authoritative and the legacy key is used only to decrypt existing data. Re-encrypt and remove it.'
       );
-    } else if (!entries.some(entry => entry.key === legacyKey)) {
+    }
+    if (!entries.some(entry => entry.key === legacyKey)) {
       const legacyId = entries.some(entry => entry.id === 'k1') ? 'legacy' : 'k1';
       entries.push({ id: legacyId, key: legacyKey });
     }
@@ -373,8 +386,21 @@ export async function decrypt(encryptedText: string): Promise<string> {
     if (encryptedText.startsWith('v3:')) {
       const keyId = encryptedText.split(':', 3)[1];
       const matchingKey = keyring.find(entry => entry.id === keyId);
-      if (!matchingKey) throw new Error(`Encryption key ID is unavailable: ${keyId}`);
-      return await decryptWithKey(encryptedText, matchingKey.key);
+      // The AAD binds the ciphertext's own key ID, not the keyring entry ID, so
+      // historical key material that an operator re-labelled (for example
+      // `k1` -> `legacy`) still authenticates; GCM rejects every wrong key.
+      const ordered = matchingKey
+        ? [matchingKey, ...keyring.filter(entry => entry !== matchingKey)]
+        : keyring;
+      let lastV3Error: unknown;
+      for (const entry of ordered) {
+        try {
+          return await decryptWithKey(encryptedText, entry.key);
+        } catch (error) {
+          lastV3Error = error;
+        }
+      }
+      throw lastV3Error || new Error(`Encryption key ID is unavailable: ${keyId}`);
     }
 
     let lastLegacyError: unknown;

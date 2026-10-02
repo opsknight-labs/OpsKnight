@@ -76,7 +76,11 @@ jobs:
           const errorLevel = (r) => (r.level || '').toLowerCase() === 'error';
           const failures = results.filter(errorLevel).length;
           const cases = results.map((result) => {
-            const rule = escapeXml(result.ruleId || 'eslint');
+            const location = result.locations?.[0]?.physicalLocation;
+            const where = location?.artifactLocation?.uri
+              ? ` (${location.artifactLocation.uri}:${location.region?.startLine ?? 0})`
+              : '';
+            const rule = escapeXml(`${result.ruleId || 'eslint'}${where}`);
             const message = escapeXml(result.message?.text || 'ESLint finding');
             const isFail = errorLevel(result);
             return isFail
@@ -342,6 +346,9 @@ jobs:
     needs: [sast, sca, iac, secrets, dast]
     if: always()
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
       - name: Download all reports
         uses: actions/download-artifact@v4
         with:
@@ -359,6 +366,9 @@ jobs:
             echo '<?xml version="1.0"?><testsuites><testsuite name="security" tests="0"/></testsuites>' > combined-reports/fallback.xml
           fi
         continue-on-error: true
+
+      - name: Mark advisory findings as skipped (original finding text retained)
+        run: node scripts/ci/sanitize-security-junit.cjs combined-reports/*.xml
 
       - name: Publish Security Results
         uses: EnricoMi/publish-unit-test-result-action@v2

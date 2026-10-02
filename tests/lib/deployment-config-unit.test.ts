@@ -1,13 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
+import YAML from 'yaml';
 import { calculateRuntimeCapacity } from '../../src/lib/runtime-capacity';
 
 /* eslint-disable security/detect-non-literal-fs-filename, security/detect-non-literal-regexp -- Deployment contract tests inspect a fixed repository-local file set. */
 
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
+const require = createRequire(import.meta.url);
 
 describe('deployment configuration invariants', () => {
   it('keeps packaged deployment versions aligned with the application version', () => {
@@ -357,6 +360,13 @@ describe('deployment configuration invariants', () => {
 
   it('keeps main builds fast and publishes multi-arch tagged releases with attestations', () => {
     const workflow = read('.github/workflows/docker-image.yml');
+    const workflowConfig = YAML.parse(workflow) as {
+      jobs: Record<string, { needs?: string | string[]; if?: string }>;
+    };
+    const needsFor = (job: string) => {
+      const needs = workflowConfig.jobs[job].needs;
+      return Array.isArray(needs) ? needs : needs ? [needs] : [];
+    };
     const mainBuild = workflow.slice(
       workflow.indexOf('- name: Build + push (test channel - main)'),
       workflow.indexOf('- name: Build + push (release channel - version tag)')
@@ -374,13 +384,57 @@ describe('deployment configuration invariants', () => {
     expect(releaseBuild).toContain('provenance: mode=max');
     expect(releaseBuild).toContain('sbom: true');
     expect(workflow).toContain('scripts/validate-release-tag.cjs');
+    expect(workflow).toContain('make_latest="$make_latest"');
+    expect(workflow).toContain('releases/latest" --jq .tag_name');
     expect(workflow).toContain('release-quality:');
-    expect(workflow).toContain('needs: release-quality');
+    expect(needsFor('release-quality')).toEqual(['validate-release-tag']);
+    expect(needsFor('build')).toEqual(['release-quality']);
+    expect(needsFor('release-documentation')).toEqual(['build']);
+    expect(needsFor('sbom-provenance')).toEqual(
+      expect.arrayContaining(['build', 'release-documentation'])
+    );
+    expect(needsFor('pgbouncer-image')).toEqual(['sbom-provenance']);
+    expect(needsFor('promote-release-tags')).toEqual(
+      expect.arrayContaining(['build', 'pgbouncer-image'])
+    );
+    expect(needsFor('publish-github-release')).toEqual(
+      expect.arrayContaining([
+        'build',
+        'sbom-provenance',
+        'pgbouncer-image',
+        'promote-release-tags',
+        'release-documentation',
+      ])
+    );
+    expect(workflowConfig.jobs.build.if).toContain(
+      "needs.release-quality.result == 'success'"
+    );
+    expect(workflowConfig.jobs.build.if).not.toContain('always()');
+    expect(workflowConfig.jobs['publish-github-release'].if).toContain(
+      "needs.promote-release-tags.result == 'success'"
+    );
+    expect(workflowConfig.jobs['publish-github-release'].if).not.toContain('always()');
+    expect(workflow).toContain('type=raw,value=rc-${{ github.sha }}');
+    expect(workflow).toContain('docker pull "${IMAGE_NAME_RELEASE}@${RELEASE_IMAGE_DIGEST}"');
+    expect(workflow).toContain("['buildx', 'imagetools', 'inspect', ref, '--format', format]");
+    expect(workflow).toContain("inspectJson('SBOM', '{{ json .SBOM }}')");
+    expect(workflow).toContain("inspectJson('Provenance', '{{ json .Provenance }}')");
+    expect(workflow).toContain('docker buildx imagetools create -t "$tag" "$source_ref"');
+    expect(workflow).toContain('test "$promoted_digest" = "$RELEASE_IMAGE_DIGEST"');
+    expect(workflow).toContain('release-certification-${{ github.ref_name }}');
+    expect(workflow).toContain('releaseImageIndexDigest: process.env.RELEASE_IMAGE_DIGEST');
+    expect(workflow).toContain('pgbouncerImageDigest');
     expect(workflow).toContain('Upgrade from previous stable release');
     expect(workflow).toContain('Backup and restore contract');
     expect(workflow).toContain('docker exec "$POSTGRES_CONTAINER" pg_dump');
     expect(workflow).toContain('POSTGRES_CONTAINER="${{ job.services.postgres.id }}"');
     expect(workflow).toContain('Event, escalation, and notification contract');
+    expect(workflow).not.toContain('ALLOW_INSECURE_SECRETS');
+    expect(workflow).toContain('export NEXTAUTH_SECRET="$(openssl rand -base64 48)"');
+    expect(workflow).toContain('export API_KEY_SECRET="$(openssl rand -base64 48)"');
+    expect(workflow).toContain('export ENCRYPTION_KEY="$(openssl rand -hex 32)"');
+    expect(workflow).toContain('export ENCRYPTION_KEYS="ci:$(openssl rand -hex 32)"');
+    expect(workflow).toContain('EXT_DB_PASSWORD="$(openssl rand -hex 24)"');
   });
 
   it('keeps documentation capability coverage in CI and the release gate', () => {
@@ -401,7 +455,49 @@ describe('deployment configuration invariants', () => {
     expect(workflow).not.toContain("grep -q 'AGPL-3.0-only' docs/v1.5/licensing.md");
   });
 
-  it('only accepts a new stable release tag matching package.json', () => {
+  it('reports non-gating security scan findings as skipped in the PR summary', () => {
+    const { sanitizeSecurityJunitContent } = require(
+      path.join(root, 'scripts/ci/sanitize-security-junit.cjs')
+    ) as {
+      sanitizeSecurityJunitContent: (xml: string) => { content: string; converted: number };
+    };
+    const securityWorkflow = read('.github/workflows/security.yml');
+    const junit = [
+      '<?xml version="1.0"?>',
+      '<testsuites tests="1" failures="1">',
+      '  <testsuite name="Checkov" tests="1" failures="1">',
+      '    <testcase name="CKV_NON_GATING" classname="checkov">',
+      '      <failure message="policy finding">details</failure>',
+      '    </testcase>',
+      '  </testsuite>',
+      '</testsuites>',
+    ].join('\n');
+
+    const sanitized = sanitizeSecurityJunitContent(junit);
+
+    expect(securityWorkflow).toContain('scripts/ci/sanitize-security-junit.cjs');
+    expect(sanitized.converted).toBe(1);
+    expect(sanitized.content).toContain('failures="0"');
+    expect(sanitized.content).toContain('errors="0"');
+    expect(sanitized.content).toContain('skipped="1"');
+    expect(sanitized.content).toContain(
+      '<skipped message="Advisory (non-gating) security finding: policy finding">'
+    );
+    expect(sanitized.content).not.toContain('<failure');
+  });
+
+  it('keeps integration certification seeded secrets encrypted with the compose key', () => {
+    const workflow = read('.github/workflows/integration-certification.yml');
+    const compose = read('tests/certification/docker-compose.yml');
+
+    expect(compose).toMatch(/ENCRYPTION_KEY:\s*[0-9a-f]{64}/);
+    expect(compose).not.toContain('ALLOW_INSECURE_SECRETS');
+    expect(workflow).toContain("fs.readFileSync('tests/certification/docker-compose.yml', 'utf8')");
+    expect(workflow).toContain('CERTIFICATION_ENCRYPTION_KEY');
+    expect(workflow).not.toContain('9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08');
+  });
+
+  it('accepts matching release tags while keeping only stable tags latest-eligible', () => {
     const script = path.join(root, 'scripts/validate-release-tag.cjs');
     const pkg = JSON.parse(read('package.json')) as { version: string };
     const releaseTag = `v${pkg.version}`;
@@ -412,8 +508,16 @@ describe('deployment configuration invariants', () => {
     });
     expect(valid.status).toBe(0);
 
+    const validPrerelease = spawnSync(process.execPath, [script, `${releaseTag}-rc.1`], {
+      cwd: root,
+      env: { ...process.env, LATEST_RELEASE_TAG: 'v1.4.0' },
+      encoding: 'utf8',
+    });
+    expect(validPrerelease.status).toBe(0);
+    expect(read('.github/workflows/docker-image.yml')).toContain('prerelease=true');
+    expect(read('.github/workflows/docker-image.yml')).toContain('make_latest=false');
+
     for (const [tag, latest] of [
-      [`${releaseTag}-beta.1`, 'v1.4.0'],
       ['v1.4.0', 'v1.3.1'],
       [releaseTag, releaseTag],
     ]) {

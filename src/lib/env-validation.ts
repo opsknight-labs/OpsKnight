@@ -175,23 +175,32 @@ export function validateProductionEnv(): void {
       );
     }
 
-    if (legacyKey && isWeakKey(legacyKey) && parsedKeyring.length === 0) {
+    if (legacyKey && !/^[0-9a-f]{64}$/i.test(legacyKey) && parsedKeyring.length === 0) {
+      insecureSecrets.push(
+        'ENCRYPTION_KEY must be a 64-character hex key (generate one with `openssl rand -hex 32`).'
+      );
+    } else if (legacyKey && isWeakKey(legacyKey) && parsedKeyring.length === 0) {
       insecureSecrets.push(
         'ENCRYPTION_KEY is a known weak or default placeholder. Provide a unique 64-character hex key.'
       );
     }
 
     if (keyring) {
-      for (const rawEntry of keyring.split(',')) {
+      keyring.split(',').forEach((rawEntry, index) => {
         const sep = rawEntry.indexOf(':');
         const key = sep > 0 ? rawEntry.slice(sep + 1).trim() : rawEntry.trim();
-        if (isWeakKey(key)) {
-          const keyId = sep > 0 ? rawEntry.slice(0, sep).trim() : 'entry';
+        if (!isWeakKey(key)) return;
+        const keyId = sep > 0 ? rawEntry.slice(0, sep).trim() : 'entry';
+        if (index === 0) {
           insecureSecrets.push(
             `ENCRYPTION_KEYS contains a known weak or default placeholder key for "${keyId}".`
           );
+        } else {
+          logger.warn(
+            `⚠️  ENCRYPTION_KEYS entry "${keyId}" is a known weak key retained only to decrypt existing data. Re-encrypt stored secrets and remove it.`
+          );
         }
-      }
+      });
     }
 
     // 3. PostgreSQL password placeholder check
@@ -233,6 +242,21 @@ export function validateProductionEnv(): void {
 
       throw new Error(errorMessage);
     }
+  }
+
+  // Malformed key material is a configuration error, not an insecure-secret
+  // exception, so ALLOW_INSECURE_SECRETS never lets the runtime start without keys.
+  if (getEncryptionKeyringEntries().length === 0) {
+    throw new Error(
+      [
+        '❌ PRODUCTION CONFIGURATION ERROR',
+        '',
+        'No usable encryption key is configured.',
+        '  • ENCRYPTION_KEY must be a 64-character hex key (`openssl rand -hex 32`).',
+        '  • ENCRYPTION_KEYS must be comma-separated `id:64-hex-key` entries with unique IDs, active key first.',
+        '',
+      ].join('\n')
+    );
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;

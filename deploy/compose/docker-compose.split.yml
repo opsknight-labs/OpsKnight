@@ -24,7 +24,7 @@ services:
       SETUP_SECRET: ${SETUP_SECRET:-}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
       API_KEY_SECRET: ${API_KEY_SECRET:-change_this_to_a_separate_random_api_key_secret_in_production}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       ENCRYPTION_KEYS: ${ENCRYPTION_KEYS:-}
       ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
     depends_on:
@@ -60,7 +60,7 @@ services:
       SETUP_SECRET: ${SETUP_SECRET:-}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
       API_KEY_SECRET: ${API_KEY_SECRET:-change_this_to_a_separate_random_api_key_secret_in_production}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       ENCRYPTION_KEYS: ${ENCRYPTION_KEYS:-}
       ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
       NOTIFICATION_CONTROL_PLANE_PERSONAL: ${NOTIFICATION_CONTROL_PLANE_PERSONAL:-true}
@@ -104,7 +104,7 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
       API_KEY_SECRET: ${API_KEY_SECRET:-change_this_to_a_separate_random_api_key_secret_in_production}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       ENCRYPTION_KEYS: ${ENCRYPTION_KEYS:-}
       ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
       PORT: '3000'
@@ -149,7 +149,7 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
       API_KEY_SECRET: ${API_KEY_SECRET:-change_this_to_a_separate_random_api_key_secret_in_production}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       ENCRYPTION_KEYS: ${ENCRYPTION_KEYS:-}
       ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
       PORT: '3000'
@@ -194,7 +194,7 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
       API_KEY_SECRET: ${API_KEY_SECRET:-change_this_to_a_separate_random_api_key_secret_in_production}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       ENCRYPTION_KEYS: ${ENCRYPTION_KEYS:-}
       ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
       PORT: '3000'
@@ -239,7 +239,7 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
       API_KEY_SECRET: ${API_KEY_SECRET:-change_this_to_a_separate_random_api_key_secret_in_production}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       ENCRYPTION_KEYS: ${ENCRYPTION_KEYS:-}
       ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
       PORT: '3000'
@@ -284,7 +284,7 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
       API_KEY_SECRET: ${API_KEY_SECRET:-change_this_to_a_separate_random_api_key_secret_in_production}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       ENCRYPTION_KEYS: ${ENCRYPTION_KEYS:-}
       ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
       PORT: '3000'

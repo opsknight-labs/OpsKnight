@@ -14606,6 +14606,7 @@
         "deploy/compose/docker-compose.yml",
         "deploy/swarm/docker-stack.integrated.yml",
         "deploy/swarm/docker-stack.yml",
+        "env.example",
         "src/lib/encryption.ts",
         "src/lib/env-validation.ts"
       ],
@@ -14666,6 +14667,7 @@
         "deploy/compose/docker-compose.split.yml",
         "deploy/compose/docker-compose.yml",
         "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "env.example",
         "src/lib/api-keys.ts",
@@ -16217,11 +16219,13 @@
         "deploy/compose/docker-compose.split.yml",
         "deploy/compose/docker-compose.yml",
         "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "env.example",
         "src/app/(app)/settings/system/page.tsx",
         "src/lib/__tests__/encryption.test.ts",
         "src/lib/admin-health.ts",
+        "src/lib/api-keys.ts",
         "src/lib/encryption.ts",
         "src/lib/env-validation.ts"
       ],
@@ -16253,6 +16257,7 @@
         "deploy/compose/docker-compose.split.yml",
         "deploy/compose/docker-compose.yml",
         "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "env.example",
         "src/app/(app)/settings/system/page.tsx",
@@ -18295,6 +18300,7 @@
         "deploy/compose/docker-compose.split.yml",
         "deploy/compose/docker-compose.yml",
         "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+        "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
         "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
         "env.example",
         "src/app/(app)/settings/system/page.tsx",
@@ -18439,6 +18445,58 @@
       "deprecated": false,
       "replacement": null,
       "confidence": "derived"
+    },
+    {
+      "name": "NON_GATING_DETAIL",
+      "sources": [
+        "scripts/ci/sanitize-security-junit.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
+    },
+    {
+      "name": "NON_GATING_MESSAGE",
+      "sources": [
+        "scripts/ci/sanitize-security-junit.cjs"
+      ],
+      "required": false,
+      "secret": false,
+      "scopes": [
+        "operation"
+      ],
+      "defaults": [],
+      "allowedValues": [],
+      "semanticClassification": "INTERNAL_TOOLING",
+      "type": "string",
+      "requiredWhen": "conditional or optional; inspect cited source",
+      "runtimeRoles": [
+        "operator command or startup script"
+      ],
+      "deploymentSupport": [
+        "operation"
+      ],
+      "restartRequired": true,
+      "deprecated": false,
+      "replacement": null,
+      "confidence": "incomplete"
     },
     {
       "name": "NONCE_COOKIE_NAME",
@@ -78285,6 +78343,7 @@
           "deploy/compose/docker-compose.yml",
           "deploy/swarm/docker-stack.integrated.yml",
           "deploy/swarm/docker-stack.yml",
+          "env.example",
           "src/lib/encryption.ts",
           "src/lib/env-validation.ts"
         ],
@@ -78295,6 +78354,7 @@
             "deploy/compose/docker-compose.yml",
             "deploy/swarm/docker-stack.integrated.yml",
             "deploy/swarm/docker-stack.yml",
+            "env.example",
             "src/lib/encryption.ts",
             "src/lib/env-validation.ts"
           ],
@@ -78369,6 +78429,7 @@
               "deploy/compose/docker-compose.yml",
               "deploy/swarm/docker-stack.integrated.yml",
               "deploy/swarm/docker-stack.yml",
+              "env.example",
               "src/lib/encryption.ts",
               "src/lib/env-validation.ts"
             ],
@@ -78459,6 +78520,7 @@
           "deploy/compose/docker-compose.split.yml",
           "deploy/compose/docker-compose.yml",
           "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
           "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
           "env.example",
           "src/lib/api-keys.ts",
@@ -78470,6 +78532,7 @@
             "deploy/compose/docker-compose.split.yml",
             "deploy/compose/docker-compose.yml",
             "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+            "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
             "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
             "env.example",
             "src/lib/api-keys.ts",
@@ -78542,6 +78605,7 @@
               "deploy/compose/docker-compose.split.yml",
               "deploy/compose/docker-compose.yml",
               "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+              "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
               "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
               "env.example",
               "src/lib/api-keys.ts",
@@ -83000,11 +83064,13 @@
           "deploy/compose/docker-compose.split.yml",
           "deploy/compose/docker-compose.yml",
           "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
           "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
           "env.example",
           "src/app/(app)/settings/system/page.tsx",
           "src/lib/__tests__/encryption.test.ts",
           "src/lib/admin-health.ts",
+          "src/lib/api-keys.ts",
           "src/lib/encryption.ts",
           "src/lib/env-validation.ts"
         ],
@@ -83014,11 +83080,13 @@
             "deploy/compose/docker-compose.split.yml",
             "deploy/compose/docker-compose.yml",
             "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+            "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
             "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
             "env.example",
             "src/app/(app)/settings/system/page.tsx",
             "src/lib/__tests__/encryption.test.ts",
             "src/lib/admin-health.ts",
+            "src/lib/api-keys.ts",
             "src/lib/encryption.ts",
             "src/lib/env-validation.ts"
           ],
@@ -83089,11 +83157,13 @@
               "deploy/compose/docker-compose.split.yml",
               "deploy/compose/docker-compose.yml",
               "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+              "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
               "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
               "env.example",
               "src/app/(app)/settings/system/page.tsx",
               "src/lib/__tests__/encryption.test.ts",
               "src/lib/admin-health.ts",
+              "src/lib/api-keys.ts",
               "src/lib/encryption.ts",
               "src/lib/env-validation.ts"
             ],
@@ -83125,6 +83195,7 @@
           "deploy/compose/docker-compose.split.yml",
           "deploy/compose/docker-compose.yml",
           "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
           "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
           "env.example",
           "src/app/(app)/settings/system/page.tsx",
@@ -83138,6 +83209,7 @@
             "deploy/compose/docker-compose.split.yml",
             "deploy/compose/docker-compose.yml",
             "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+            "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
             "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
             "env.example",
             "src/app/(app)/settings/system/page.tsx",
@@ -83212,6 +83284,7 @@
               "deploy/compose/docker-compose.split.yml",
               "deploy/compose/docker-compose.yml",
               "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+              "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
               "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
               "env.example",
               "src/app/(app)/settings/system/page.tsx",
@@ -89114,6 +89187,7 @@
           "deploy/compose/docker-compose.split.yml",
           "deploy/compose/docker-compose.yml",
           "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+          "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
           "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
           "env.example",
           "src/app/(app)/settings/system/page.tsx",
@@ -89129,6 +89203,7 @@
             "deploy/compose/docker-compose.split.yml",
             "deploy/compose/docker-compose.yml",
             "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+            "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
             "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
             "env.example",
             "src/app/(app)/settings/system/page.tsx",
@@ -89207,6 +89282,7 @@
               "deploy/compose/docker-compose.split.yml",
               "deploy/compose/docker-compose.yml",
               "deploy/kubernetes/helm/opsknight/templates/deployment.yaml",
+              "deploy/kubernetes/helm/opsknight/templates/migration-job.yaml",
               "deploy/kubernetes/helm/opsknight/templates/split-deployments.yaml",
               "env.example",
               "src/app/(app)/settings/system/page.tsx",
@@ -89624,6 +89700,124 @@
           "api:/api/status/subscriptions/verify",
           "ui:/action-items",
           "ui:/audit"
+        ]
+      },
+      {
+        "id": "configuration:NON_GATING_DETAIL",
+        "kind": "configuration",
+        "name": "NON_GATING_DETAIL",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/ci/sanitize-security-junit.cjs"
+        ],
+        "contract": {
+          "name": "NON_GATING_DETAIL",
+          "sources": [
+            "scripts/ci/sanitize-security-junit.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:NON_GATING_DETAIL:classification",
+            "text": "NON_GATING_DETAIL is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/ci/sanitize-security-junit.cjs"
+            ],
+            "verification": "source"
+          }
+        ]
+      },
+      {
+        "id": "configuration:NON_GATING_MESSAGE",
+        "kind": "configuration",
+        "name": "NON_GATING_MESSAGE",
+        "owner": "platform",
+        "classification": "INTERNAL_IMPLEMENTATION",
+        "sources": [
+          "scripts/ci/sanitize-security-junit.cjs"
+        ],
+        "contract": {
+          "name": "NON_GATING_MESSAGE",
+          "sources": [
+            "scripts/ci/sanitize-security-junit.cjs"
+          ],
+          "required": false,
+          "secret": false,
+          "scopes": [
+            "operation"
+          ],
+          "defaults": [],
+          "allowedValues": [],
+          "semanticClassification": "INTERNAL_TOOLING",
+          "type": "string",
+          "requiredWhen": "conditional or optional; inspect cited source",
+          "runtimeRoles": [
+            "operator command or startup script"
+          ],
+          "deploymentSupport": [
+            "operation"
+          ],
+          "restartRequired": true,
+          "deprecated": false,
+          "replacement": null,
+          "confidence": "incomplete"
+        },
+        "documentation": {
+          "concepts": [],
+          "guides": [],
+          "reference": [
+            "reference/configuration/README.md"
+          ],
+          "troubleshooting": []
+        },
+        "documentationMapping": "capability-source",
+        "tests": [],
+        "runtimeEvidence": [],
+        "introducedVersion": "unknown",
+        "availability": "unknown",
+        "claims": [
+          {
+            "id": "configuration:NON_GATING_MESSAGE:classification",
+            "text": "NON_GATING_MESSAGE is classified as INTERNAL_IMPLEMENTATION and owned by platform.",
+            "evidence": [
+              "scripts/ci/sanitize-security-junit.cjs"
+            ],
+            "verification": "source"
+          }
         ]
       },
       {
@@ -125504,8 +125698,8 @@
       }
     ],
     "summary": {
-      "total": 1166,
-      "claims": 1623,
+      "total": 1168,
+      "claims": 1625,
       "unsupportedClaims": 0,
       "supported": 585,
       "documentedSupported": 585,
@@ -125516,7 +125710,7 @@
         "api": 227,
         "api-scope": 7,
         "authorization-action": 9,
-        "configuration": 308,
+        "configuration": 310,
         "deployment-topology": 4,
         "enum": 73,
         "integration": 28,
@@ -125530,7 +125724,7 @@
       },
       "byClassification": {
         "ADMIN_FEATURE": 83,
-        "INTERNAL_IMPLEMENTATION": 581,
+        "INTERNAL_IMPLEMENTATION": 583,
         "OPERATOR_FEATURE": 291,
         "PUBLIC_API": 54,
         "PUBLIC_FEATURE": 157

@@ -26,6 +26,11 @@ spec:
         - name: migrate
           image: {{ include "opsknight.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            # Pre-install hooks run before chart resources exist; the Job needs only secrets.
+            - configMapRef:
+                name: {{ include "opsknight.fullname" . }}-config
+                optional: true
           command:
             - sh
             - -c
@@ -58,6 +63,30 @@ spec:
                   name: {{ include "opsknight.secretName" . }}
                   key: {{ .Values.secrets.keys.directDatabaseUrl }}
                   optional: true
+            - name: NEXTAUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.nextauthSecret }}
+            - name: API_KEY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.apiKeySecret }}
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.encryptionKey }}
+                  optional: true
+            {{- if or .Values.secrets.encryptionKeys .Values.secrets.existingSecret }}
+            - name: ENCRYPTION_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" . }}
+                  key: {{ .Values.secrets.keys.encryptionKeys }}
+                  optional: true
+            {{- end }}
           resources:
             requests:
               cpu: 100m

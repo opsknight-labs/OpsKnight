@@ -59,7 +59,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       DATABASE_URL: databaseUrl,
-      NEXTAUTH_SECRET: 'opsknight-e2e-nextauth-secret-change-me',
+      NEXTAUTH_SECRET: 'opsknight-e2e-session-signing-secret-7c41d9e2b8',
       API_KEY_SECRET: 'opsknight-e2e-api-key-secret-independent-32chars',
       ENCRYPTION_KEY: '68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba',
       NEXTAUTH_COOKIE_SECURE: 'false',

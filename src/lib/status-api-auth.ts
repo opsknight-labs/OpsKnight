@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { hashLegacyScryptTokenCandidates, hashTokenV2 } from '@/lib/api-keys';
+import { hashLegacyTokenCandidates, hashTokenV2 } from '@/lib/api-keys';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
 
@@ -71,18 +71,19 @@ export async function authorizeStatusApiRequest(
       select: { id: true },
     });
 
-    // Lazy migration: preserve 1.x tokens that were salted with NEXTAUTH_SECRET.
+    // Lazy migration: preserve 1.x scrypt tokens and 2.0 HMACs signed with
+    // NEXTAUTH_SECRET before an independent API_KEY_SECRET was configured.
     if (!tokenRecord) {
-      for (const legacyHash of await hashLegacyScryptTokenCandidates(token)) {
+      const legacyHashes = await hashLegacyTokenCandidates(token);
+      if (legacyHashes.length > 0) {
         tokenRecord = await prisma.statusPageApiToken.findFirst({
           where: {
             statusPageId,
-            tokenHash: legacyHash,
+            tokenHash: { in: legacyHashes },
             revokedAt: null,
           },
           select: { id: true },
         });
-        if (tokenRecord) break;
       }
 
       if (tokenRecord) {

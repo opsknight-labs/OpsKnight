@@ -40,7 +40,7 @@ Status: Partial. Responsibility: maintainer.
 
 New protected secrets use AES-256-GCM v3 envelopes. Legacy CBC remains readable.
 
-Evidence: [src/lib/encryption.ts](../../../src/lib/encryption.ts), [docs/v1.5/security/encryption.md](../../../docs/v1.5/security/encryption.md).
+Evidence: [src/lib/encryption.ts](../../../src/lib/encryption.ts), [docs/v2.0.0/operate/security/hardening.md](../../../docs/v2.0.0/operate/security/hardening.md).
 
 Remaining: Legacy ciphertext and plaintext compatibility paths remain; no complete migration claim. Operators retain all keys needed to recover stored data.
 

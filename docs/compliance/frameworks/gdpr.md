@@ -20,7 +20,7 @@ Status: Partial. Responsibility: maintainer.
 
 New protected secrets use AES-256-GCM v3 envelopes. Legacy CBC remains readable.
 
-Evidence: [src/lib/encryption.ts](../../../src/lib/encryption.ts), [docs/v1.5/security/encryption.md](../../../docs/v1.5/security/encryption.md).
+Evidence: [src/lib/encryption.ts](../../../src/lib/encryption.ts), [docs/v2.0.0/operate/security/hardening.md](../../../docs/v2.0.0/operate/security/hardening.md).
 
 Remaining: Legacy ciphertext and plaintext compatibility paths remain; no complete migration claim. Operators retain all keys needed to recover stored data.
 
@@ -30,7 +30,7 @@ Status: Implemented. Responsibility: operator.
 
 Documented database and key recovery set, storage protection and RPO/RTO planning.
 
-Evidence: [docs/v1.5/deployment/backup-restore.md](../../../docs/v1.5/deployment/backup-restore.md).
+Evidence: [docs/v2.0.0/operate/data/backup-and-restore.md](../../../docs/v2.0.0/operate/data/backup-and-restore.md).
 
 Remaining: Each operator must provide actual encrypted backups, access controls and retention evidence.
 
@@ -50,7 +50,7 @@ Status: Partial. Responsibility: operator.
 
 Policy provides configurable incident, alert, log and metrics retention.
 
-Evidence: [src/lib/retention-policy.ts](../../../src/lib/retention-policy.ts), [src/lib/cron-scheduler.ts](../../../src/lib/cron-scheduler.ts), [docs/v1.5/administration/data-retention.md](../../../docs/v1.5/administration/data-retention.md).
+Evidence: [src/lib/retention-policy.ts](../../../src/lib/retention-policy.ts), [src/lib/cron-scheduler.ts](../../../src/lib/cron-scheduler.ts), [docs/v2.0.0/operate/data/maintenance-and-retention.md](../../../docs/v2.0.0/operate/data/maintenance-and-retention.md).
 
 Remaining: Coverage is not a subject-erasure engine or a legal-hold system. Domain-specific choices remain operator responsibilities.
 
