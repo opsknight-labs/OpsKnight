@@ -20,7 +20,14 @@ export default defineConfig({
     globals: true,
     testTimeout: 20000,
     setupFiles: ['./tests/setup.ts'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/.claude/**', '**/.next/**'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.claude/**',
+      '**/.next/**',
+      'tests/e2e/**',
+      'tests/docs/journeys/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],

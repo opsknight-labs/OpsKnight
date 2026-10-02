@@ -14,6 +14,7 @@ export default mergeConfig(baseConfig, defineConfig({
                     exclude: [
                         'tests/integration/**',
                         'tests/e2e/**',
+                        'tests/docs/journeys/**',
                         'node_modules/**',
                         'dist/**',
                         '.next/**',
@@ -35,7 +36,14 @@ export default mergeConfig(baseConfig, defineConfig({
                         'tests/hooks/**/*.{test,spec}.ts',
                         'tests/lib/auth-cache-purge.test.ts',
                     ],
-                    exclude: ['tests/integration/**', 'tests/e2e/**', 'node_modules/**', 'dist/**', '.next/**'],
+                    exclude: [
+                        'tests/integration/**',
+                        'tests/e2e/**',
+                        'tests/docs/journeys/**',
+                        'node_modules/**',
+                        'dist/**',
+                        '.next/**',
+                    ],
                     setupFiles: ['./tests/setup.ts'],
                 },
             },
