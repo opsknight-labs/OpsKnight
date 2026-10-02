@@ -9,7 +9,7 @@ reader: { status: READER_COMPLETE, task: Install and verify OpsKnight mobile pus
 verification:
   level: source
   verified_at: 2026-10-01
-  evidence: ["src/components/mobile/PwaInstallCard.tsx", "src/components/mobile/PushNotificationToggle.tsx", "src/components/mobile/MobilePwaCoordinator.tsx", "src/app/api/system/vapid-public-key/route.ts", "src/app/api/user/push-subscription/status/route.ts", "src/lib/notification-providers.ts", "public/custom-sw.js", "tests/e2e/mobile-pwa-production.spec.ts"]
+  evidence: ["src/components/mobile/PwaInstallCard.tsx", "src/components/mobile/PushNotificationToggle.tsx", "src/components/mobile/MobilePwaCoordinator.tsx", "src/lib/service-worker-runtime.ts", "src/app/api/system/vapid-public-key/route.ts", "src/app/api/user/push-subscription/status/route.ts", "src/lib/notification-providers.ts", "public/custom-sw.js", "tests/e2e/mobile-pwa-production.spec.ts"]
 ---
 
 # Install the mobile PWA and enable push

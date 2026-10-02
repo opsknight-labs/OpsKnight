@@ -97,7 +97,12 @@ jobs:
       - name: Generate Prisma client required by source-level runtime tests
         run: npx prisma generate
       - run: npx playwright install --with-deps chromium
+      - name: Build revision-bound OpsKnight image
+        run: docker build --build-arg BUILD_REVISION=${{ github.sha }} -t opsknight-docs-runtime:${{ github.sha }} .
       - name: Run full documentation certification
+        env:
+          DOCS_OPSKNIGHT_IMAGE: opsknight-docs-runtime:${{ github.sha }}
+          DOCS_IMAGE_PULL_POLICY: never
         run: npm run docs:certify
 
   release-certification:
