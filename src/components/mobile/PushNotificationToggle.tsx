@@ -9,7 +9,7 @@ import { ClientAppError, errorFromResponse, toClientAppError } from '@/lib/clien
 import { toUserFacingError } from '@/lib/user-facing-error';
 import { logger } from '@/lib/logger';
 import { haptics } from '@/lib/haptics';
-import { fetchWithTimeout, promiseWithTimeout } from '@/lib/client-timeout';
+import { ClientTimeoutError, fetchWithTimeout, promiseWithTimeout } from '@/lib/client-timeout';
 import { appRoutes } from '@/lib/app-routes';
 
 export type PushState =
@@ -214,6 +214,97 @@ async function preflightServiceWorkerAsset() {
   }
 }
 
+async function waitForRegistrationActive(
+  registration: ServiceWorkerRegistration,
+  timeoutMs: number
+): Promise<ServiceWorkerRegistration> {
+  if (registration.active) return registration;
+
+  return new Promise<ServiceWorkerRegistration>((resolve, reject) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let trackedWorker: ServiceWorker | null = null;
+
+    const cleanup = () => {
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (pollInterval) clearInterval(pollInterval);
+      if (trackedWorker && typeof trackedWorker.removeEventListener === 'function') {
+        trackedWorker.removeEventListener('statechange', onStateChange);
+      }
+      if (typeof registration.removeEventListener === 'function') {
+        registration.removeEventListener('updatefound', onUpdateFound);
+      }
+    };
+
+    const done = () => {
+      if (settled) return;
+      cleanup();
+      resolve(registration);
+    };
+
+    const fail = (err: Error) => {
+      if (settled) return;
+      cleanup();
+      reject(err);
+    };
+
+    timer = setTimeout(() => {
+      if (registration.active) {
+        done();
+      } else {
+        fail(new ClientTimeoutError('The service worker did not become ready.'));
+      }
+    }, timeoutMs);
+
+    const onStateChange = () => {
+      if (registration.active || trackedWorker?.state === 'activated') {
+        done();
+      } else if (trackedWorker?.state === 'redundant') {
+        fail(new Error('The service worker installation failed and became redundant.'));
+      }
+    };
+
+    const onUpdateFound = () => {
+      const installing = registration.installing;
+      if (installing) {
+        if (trackedWorker && typeof trackedWorker.removeEventListener === 'function') {
+          trackedWorker.removeEventListener('statechange', onStateChange);
+        }
+        trackedWorker = installing;
+        if (typeof trackedWorker.addEventListener === 'function') {
+          trackedWorker.addEventListener('statechange', onStateChange);
+        }
+      }
+    };
+
+    trackedWorker = registration.installing || registration.waiting;
+    if (trackedWorker) {
+      if (trackedWorker.state === 'activated' || registration.active) {
+        done();
+        return;
+      }
+      if (trackedWorker.state === 'redundant') {
+        fail(new Error('The service worker installation failed and became redundant.'));
+        return;
+      }
+      if (typeof trackedWorker.addEventListener === 'function') {
+        trackedWorker.addEventListener('statechange', onStateChange);
+      }
+    }
+    if (typeof registration.addEventListener === 'function') {
+      registration.addEventListener('updatefound', onUpdateFound);
+    }
+
+    pollInterval = setInterval(() => {
+      if (registration.active) {
+        done();
+      }
+    }, 50);
+  });
+}
+
 export default function PushNotificationToggle() {
   const router = useRouter();
   const [pushState, setPushState] = useState<PushState>('PERMISSION_REQUIRED');
@@ -271,13 +362,26 @@ export default function PushNotificationToggle() {
 
       stage = 'SW_READY';
       // In iOS WebKit / Safari, navigator.serviceWorker.ready never resolves
-      // when the document is not controlled by the service worker, even when an
-      // active worker with PushManager is present. Reusing the active registration
-      // directly avoids hanging indefinitely, even when an update is waiting
-      // (without activating or disturbing the waiting update).
+      // when the document is not controlled by the service worker.
+      // Awaiting navigator.serviceWorker.ready on iOS causes an unconditional hang
+      // and timeout, especially on fresh PWA installation when the service worker
+      // was just registered in this page session.
+      // Instead, we wait for registration.active (or statechange to activated)
+      // and use the registration's pushManager directly.
       let readyRegistration: ServiceWorkerRegistration | null = null;
-      if (detectPlatform() === 'ios' && registration?.active && registration.pushManager) {
-        readyRegistration = registration;
+      if (detectPlatform() === 'ios') {
+        if (registration) {
+          readyRegistration = await waitForRegistrationActive(
+            registration,
+            SERVICE_WORKER_READY_TIMEOUT_MS
+          );
+        } else {
+          readyRegistration = await promiseWithTimeout(
+            navigator.serviceWorker.ready,
+            SERVICE_WORKER_READY_TIMEOUT_MS,
+            'The service worker did not become ready.'
+          );
+        }
       } else {
         readyRegistration = await promiseWithTimeout(
           navigator.serviceWorker.ready,
