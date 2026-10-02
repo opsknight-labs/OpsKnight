@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import type { ScaleProfileName } from '../fixtures/users';
+import { SCALE_PROFILES, type ScaleProfileName } from '../fixtures/users';
 import { startProviderEmulatorSuite } from '../providers/server';
 import { runLoadCleanup } from './cleanup';
 import { startContinuousTelemetryCollector, TelemetrySample } from './metrics';
@@ -977,6 +978,144 @@ export interface TopologyCertificationResult {
   peakActivePgConnections: number;
   peakOldestPendingJobAgeMs: number;
   certified: boolean;
+}
+
+interface LoadCertificationSummaryBase {
+  generatedAt: string;
+  sourceRevision: string;
+  testHarnessRevision: string;
+  environment: {
+    cpu: string;
+    memory: string;
+    dockerEngine: string;
+    kind: string;
+  };
+  results: TopologyCertificationResult[];
+}
+
+export interface LoadCertificationSummaryV1 extends LoadCertificationSummaryBase {
+  schemaVersion: 1;
+}
+
+export interface LoadCertificationSummaryV2 extends LoadCertificationSummaryBase {
+  schemaVersion: 2;
+  scaleProfile: ScaleProfileName;
+  scaleDimensions: (typeof SCALE_PROFILES)[ScaleProfileName];
+}
+
+function isTopologyResult(value: unknown): value is TopologyCertificationResult {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      typeof (value as TopologyCertificationResult).topologyId === 'string' &&
+      Array.isArray((value as TopologyCertificationResult).scenarios)
+  );
+}
+
+/** Accept the legacy array and v1/v2 envelopes, but always write v2. */
+export function parseCertificationSummary(value: unknown): TopologyCertificationResult[] {
+  if (Array.isArray(value)) {
+    if (!value.every(isTopologyResult)) {
+      throw new Error('Invalid load-certification summary: expected a results array');
+    }
+    return value;
+  }
+  if (!value || typeof value !== 'object') {
+    throw new Error('Invalid load-certification summary: expected a results array');
+  }
+  const envelope = value as {
+    schemaVersion?: unknown;
+    scaleProfile?: unknown;
+    scaleDimensions?: unknown;
+    results?: unknown;
+  };
+  if (envelope.schemaVersion !== 1 && envelope.schemaVersion !== 2) {
+    throw new Error('Invalid load-certification summary: unsupported schemaVersion');
+  }
+  if (
+    envelope.schemaVersion === 2 &&
+    (!['small', 'medium', 'large', 'storm'].includes(String(envelope.scaleProfile)) ||
+      !envelope.scaleDimensions ||
+      typeof envelope.scaleDimensions !== 'object')
+  ) {
+    throw new Error('Invalid load-certification summary v2: scale profile and dimensions are required');
+  }
+  const results = envelope.results;
+  if (!Array.isArray(results) || !results.every(isTopologyResult)) {
+    throw new Error('Invalid load-certification summary: expected a results array');
+  }
+  return results;
+}
+
+export function assertCertificationSummaryMergeCompatible(
+  value: unknown,
+  expected: Pick<
+    LoadCertificationSummaryV2,
+    'sourceRevision' | 'testHarnessRevision' | 'scaleProfile' | 'scaleDimensions'
+  >
+): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(
+      'Cannot merge partial load-certification evidence without v2 revision and scale provenance'
+    );
+  }
+  const envelope = value as Partial<LoadCertificationSummaryV2>;
+  if (envelope.schemaVersion !== 2) {
+    throw new Error(
+      'Cannot merge partial load-certification evidence from a pre-v2 summary'
+    );
+  }
+  const sameDimensions =
+    JSON.stringify(envelope.scaleDimensions) === JSON.stringify(expected.scaleDimensions);
+  if (
+    envelope.sourceRevision !== expected.sourceRevision ||
+    envelope.testHarnessRevision !== expected.testHarnessRevision ||
+    envelope.scaleProfile !== expected.scaleProfile ||
+    !sameDimensions
+  ) {
+    throw new Error(
+      'Cannot merge partial load-certification evidence from a different revision or scale profile'
+    );
+  }
+}
+
+async function commandVersion(command: string, args: string[]): Promise<string> {
+  try {
+    const { stdout, stderr } = await execFileAsync(command, args, {
+      cwd: process.cwd(),
+      env: getAugmentedEnv(),
+    });
+    return `${stdout}${stderr}`.trim().split('\n')[0] || 'unknown';
+  } catch {
+    return 'not-installed';
+  }
+}
+
+async function buildCertificationSummary(
+  results: TopologyCertificationResult[],
+  scaleProfile: ScaleProfileName
+): Promise<LoadCertificationSummaryV2> {
+  const revision = (await commandVersion('git', ['rev-parse', 'HEAD'])).trim();
+  const sourceRevision = process.env.OPSKNIGHT_LOAD_PRODUCT_REVISION || revision;
+  const testHarnessRevision = process.env.OPSKNIGHT_LOAD_HARNESS_REVISION || revision;
+  if (!/^[0-9a-f]{40}$/.test(sourceRevision) || !/^[0-9a-f]{40}$/.test(testHarnessRevision)) {
+    throw new Error('Load certification requires full product and harness Git revisions');
+  }
+  return {
+    schemaVersion: 2,
+    generatedAt: new Date().toISOString(),
+    sourceRevision,
+    testHarnessRevision,
+    environment: {
+      cpu: `${os.cpus().length}-core`,
+      memory: `${Math.round(os.totalmem() / 1024 ** 3)} GB`,
+      dockerEngine: await commandVersion('docker', ['version', '--format', '{{.Server.Version}}']),
+      kind: await commandVersion('kind', ['version']),
+    },
+    scaleProfile,
+    scaleDimensions: SCALE_PROFILES[scaleProfile],
+    results,
+  };
 }
 
 function getAugmentedEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
@@ -1965,11 +2104,22 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
     const summaryFile = path.join(artifactsRoot, 'certification-summary.json');
     try {
       const existingRaw = await fs.readFile(summaryFile, 'utf8');
-      const existing: TopologyCertificationResult[] = JSON.parse(existingRaw);
+      const existingValue = JSON.parse(existingRaw);
+      const existing = parseCertificationSummary(existingValue);
       const newIds = new Set(results.map(r => r.topologyId));
-      mergedResults = [...existing.filter(e => !newIds.has(e.topologyId)), ...results];
-    } catch {
-      // Direct results fallback
+      const retainedResults = existing.filter(e => !newIds.has(e.topologyId));
+      if (retainedResults.length > 0) {
+        const currentProvenance = await buildCertificationSummary(results, opts.scale);
+        assertCertificationSummaryMergeCompatible(existingValue, currentProvenance);
+      }
+      mergedResults = [...retainedResults, ...results];
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw new Error(
+          `Cannot merge load-certification evidence from ${summaryFile}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+      // A first run has no prior summary to merge.
     }
 
     const reportMd = generateCertificationMarkdownReport(mergedResults);
@@ -1977,9 +2127,10 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
     const docsBenchmarksDir = path.join(process.cwd(), 'docs', 'benchmarks');
     await fs.mkdir(docsBenchmarksDir, { recursive: true });
     await fs.writeFile(path.join(docsBenchmarksDir, 'load-certification.md'), reportMd, 'utf8');
+    const summary = await buildCertificationSummary(mergedResults, opts.scale);
     await fs.writeFile(
       path.join(artifactsRoot, 'certification-summary.json'),
-      JSON.stringify(mergedResults, null, 2),
+      JSON.stringify(summary, null, 2),
       'utf8'
     );
 

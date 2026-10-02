@@ -1,0 +1,103 @@
+---
+title: Capacity benchmark results
+description: Evidence-derived load measurements and certification status for supported deployment topologies.
+type: reference
+product_area: deployment
+audience: [operator, administrator]
+keywords: [capacity benchmark, load test, certified capacity, alerts per second, deployment sizing]
+verification:
+  level: source
+  verified_at: 2026-09-28
+  evidence: [artifacts/load-certification/certification-summary.json, generated/docs-contracts/capacity.json]
+---
+
+# Capacity benchmark results
+
+These results are generated from the PR #777 certification artifact. They are
+measurements from one test profile, not universal production guarantees.
+
+> **Capacity status:** Every tested topology in this artifact is **NOT CERTIFIED**.
+> Two supported variants were **NOT TESTED**. Some individual scenarios or
+> correctness invariants passed, but no topology passed the complete suite.
+> OpsKnight therefore publishes no certified alert, notification, user, SSE,
+> or status-fanout envelope from this run.
+
+## Current planning fixture shapes
+
+These dimensions are generated from the current load-fixture source. They are
+useful workload shapes for planning and pre-production tests; they are not the
+historical PR #777 input and are not certified capacity limits.
+
+| Profile | Users | Services | Integrations/service | SSE sessions | Status subscribers |
+|---|---:|---:|---:|---:|---:|
+| Small | 40 | 12 | 2 | 100 | 1,000 |
+| Medium | 120 | 32 | 4 | 500 | 10,000 |
+| Large | 400 | 80 | 5 | 2,500 | 100,000 |
+| Storm | 1000 | 200 | 5 | 5,000 | 100,000 |
+
+## Selected observed peaks
+
+These are the highest measured scenario rates in the historical artifact. A
+peak is an observation, not a supported-rate statement; every listed topology
+failed the complete certification contract.
+
+| Topology | Observed peak RPS | Certification |
+|---|---:|---|
+| Phase 6 Mega: Compose Split Runtime + PgBouncer | 230.5 | **NOT CERTIFIED** |
+| Phase 6 Mega: Docker Swarm HA Split + PgBouncer | 104.6 | **NOT CERTIFIED** |
+| Phase 6 Mega: Kind Helm Split + PgBouncer | 95.5 | **NOT CERTIFIED** |
+| Phase 6 Mega: Kind Kustomize Split + PgBouncer | 66.1 | **NOT CERTIFIED** |
+
+## Certification summary
+
+| Topology | Load levels | Scenarios passing | Invariants | Capacity status |
+|---|---:|---:|---:|---|
+| `compose_integrated_bundled_db` | L0 | 2/6 | Failed | **NOT CERTIFIED** |
+| `compose_integrated_external_db` | — | — | — | **NOT TESTED** |
+| `compose_split_bundled_db` | L0 | 0/7 | Failed | **NOT CERTIFIED** |
+| `compose_split_pgbouncer` | L0 | 1/8 | Failed | **NOT CERTIFIED** |
+| `compose_split_pgbouncer_external_db_ca` | — | — | — | **NOT TESTED** |
+| `swarm_single_node_split` | L0 | 2/7 | Failed | **NOT CERTIFIED** |
+| `swarm_ha_split` | L0 | 4/8 | Failed | **NOT CERTIFIED** |
+| `kind_helm_split_pgbouncer` | L0 | 0/8 | Passed | **NOT CERTIFIED** |
+| `kind_kustomize_split_pgbouncer` | L0 | 0/8 | Passed | **NOT CERTIFIED** |
+| `phase6_compose_integrated` | L0 | 0/10 | Failed | **NOT CERTIFIED** |
+| `phase6_compose_split` | L0 | 0/11 | Failed | **NOT CERTIFIED** |
+| `phase6_compose_split_pgbouncer` | L1, L2, L3, L4, L5, L6, L7, L8, L9 | 0/99 | Failed | **NOT CERTIFIED** |
+| `phase6_swarm_integrated` | L0 | 0/8 | Failed | **NOT CERTIFIED** |
+| `phase6_swarm_split` | L0 | 0/9 | Failed | **NOT CERTIFIED** |
+| `phase6_swarm_split_pgbouncer` | L0 | 0/10 | Failed | **NOT CERTIFIED** |
+| `phase6_swarm_ha_split_pgbouncer` | L1, L2, L3, L4, L5, L6, L7, L8, L9 | 0/99 | Failed | **NOT CERTIFIED** |
+| `phase6_helm_integrated` | L0 | 0/6 | Failed | **NOT CERTIFIED** |
+| `phase6_helm_split` | L0 | 0/7 | Failed | **NOT CERTIFIED** |
+| `phase6_helm_split_pgbouncer` | L1, L2, L3, L4, L5, L6, L7, L8, L9 | 0/99 | Passed | **NOT CERTIFIED** |
+| `phase6_kustomize_integrated` | L0 | 0/6 | Failed | **NOT CERTIFIED** |
+| `phase6_kustomize_split` | L0 | 0/7 | Failed | **NOT CERTIFIED** |
+| `phase6_kustomize_split_pgbouncer` | L1, L9 | 0/20 | Failed | **NOT CERTIFIED** |
+
+## Provenance
+
+- Artifact: `artifacts/load-certification/certification-summary.json`
+- Pull request: #777
+- Artifact generated: 2026-09-28T12:20:49.770Z
+- Product source revision tested: `52d6a3c5c791e7ad9ad21cd76f11cbdf11d3176f`
+- Test harness revision recorded: `e2cd6e28092f544eea2342ebe455cac680fd157b`
+- Test window: 2026-09-27T16:33:18.158Z through 2026-09-29T18:27:12.781Z
+- Host profile: 10-core CPU, 16 GB RAM; Docker Engine 28.x; Kind v0.31.0
+- Tested level: L0, L1, L2, L3, L4, L5, L6, L7, L8, L9
+- Database and runtime profiles: recorded in the source certification report and
+  topology definitions; do not transpose these measurements to a different pool,
+  replica, host, or provider configuration.
+
+> The benchmark artifact was produced from product revision
+> `52d6a3c5c791e7ad9ad21cd76f11cbdf11d3176f`. The harness was later revised at
+> `e2cd6e28092f544eea2342ebe455cac680fd157b`, and the benchmark was not rerun after that
+> harness change. The results remain historical evidence, not a certification of
+> the later harness revision.
+
+## How to use these results
+
+Use the failures to choose what to observe and scale, not as sizing promises.
+See [Scaling signals](./scaling-signals/) and [Certification methodology](./certification-methodology/).
+Numeric production guidance will be published only after a topology reaches
+**CERTIFIED** status.

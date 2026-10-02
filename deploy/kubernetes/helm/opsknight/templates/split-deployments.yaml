@@ -92,6 +92,12 @@ spec:
             - configMapRef:
                 name: {{ include "opsknight.fullname" $root }}-config
           env:
+            - name: SETUP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opsknight.secretName" $root }}
+                  key: {{ $root.Values.secrets.keys.setupSecret }}
+                  optional: true
             {{- if $root.Values.migrations.job.enabled }}
             - name: OPSKNIGHT_SKIP_MIGRATIONS
               value: "true"
@@ -123,7 +129,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "opsknight.secretName" $root }}
-                  key: {{ $root.Values.secrets.keys.databaseUrl }}
+                  key: {{ $root.Values.secrets.keys.directDatabaseUrl }}
             - name: NEXTAUTH_SECRET
               valueFrom:
                 secretKeyRef:

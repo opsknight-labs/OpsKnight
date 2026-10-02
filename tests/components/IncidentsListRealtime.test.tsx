@@ -114,6 +114,35 @@ describe('IncidentsListTable realtime projection', () => {
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
+  it('removes resolved incidents from critical focus during realtime updates', () => {
+    const criticalIncident: IncidentListItem = {
+      ...existing,
+      urgency: 'HIGH',
+      priority: 'P1',
+    };
+    const { rerender } = render(
+      <IncidentsListTable
+        incidents={[criticalIncident]}
+        users={[]}
+        canManageIncidents={false}
+        readOnly
+        realtimeFilter={{ filter: 'critical_focus' }}
+      />
+    );
+    mocks.realtime.recentIncidents = [{ ...criticalIncident, status: 'RESOLVED' }];
+    rerender(
+      <IncidentsListTable
+        incidents={[criticalIncident]}
+        users={[]}
+        canManageIncidents={false}
+        readOnly
+        realtimeFilter={{ filter: 'critical_focus' }}
+      />
+    );
+    expect(screen.queryByText(criticalIncident.title)).toBeNull();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
+
   it('preserves chronological ordering and places newer incidents ahead of older ones', () => {
     const olderSeptember: IncidentListItem = {
       ...existing,

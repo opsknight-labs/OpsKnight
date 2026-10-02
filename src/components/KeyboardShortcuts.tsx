@@ -6,42 +6,13 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import Link from 'next/link';
+import {
+  KEYBOARD_SHORTCUTS,
+  type KeyboardShortcutCategory,
+  type KeyboardShortcutDefinition,
+} from '@/lib/keyboard-shortcuts';
 
-type Shortcut = {
-  keys: string[];
-  description: string;
-  category: 'Incident Triage' | 'Navigation' | 'Actions';
-};
-
-const SHORTCUTS: Shortcut[] = [
-  // Incident Triage
-  { keys: ['J'], description: 'Next incident in list', category: 'Incident Triage' },
-  { keys: ['K'], description: 'Previous incident in list', category: 'Incident Triage' },
-  { keys: ['X'], description: 'Select / deselect incident', category: 'Incident Triage' },
-  { keys: ['A'], description: 'Acknowledge focused incident', category: 'Incident Triage' },
-  { keys: ['R'], description: 'Resolve focused incident (with note)', category: 'Incident Triage' },
-  { keys: ['/'], description: 'Focus search bar', category: 'Incident Triage' },
-
-  // Navigation
-  { keys: ['G', 'D'], description: 'Go to Dashboard', category: 'Navigation' },
-  { keys: ['G', 'I'], description: 'Go to Incidents', category: 'Navigation' },
-  { keys: ['G', 'S'], description: 'Go to Services', category: 'Navigation' },
-  { keys: ['G', 'T'], description: 'Go to Teams', category: 'Navigation' },
-  { keys: ['G', 'U'], description: 'Go to Users', category: 'Navigation' },
-  { keys: ['G', 'C'], description: 'Go to Schedules', category: 'Navigation' },
-  { keys: ['G', 'P'], description: 'Go to Policies', category: 'Navigation' },
-  { keys: ['G', 'A'], description: 'Go to Analytics', category: 'Navigation' },
-
-  // Actions
-  { keys: ['⌘', 'K'], description: 'Open command search', category: 'Actions' },
-  { keys: ['⌘', 'N'], description: 'Create new incident', category: 'Actions' },
-  { keys: ['⌘', 'R'], description: 'Refresh view data', category: 'Actions' },
-  { keys: ['⌘', 'E'], description: 'Export CSV report', category: 'Actions' },
-  { keys: ['?'], description: 'Toggle keyboard shortcuts', category: 'Actions' },
-  { keys: ['Esc'], description: 'Close modal or overlay', category: 'Actions' },
-];
-
-const CATEGORIES: ('All' | Shortcut['category'])[] = [
+const CATEGORIES: ('All' | KeyboardShortcutCategory)[] = [
   'All',
   'Incident Triage',
   'Navigation',
@@ -56,7 +27,7 @@ export default function KeyboardShortcuts({
   onClose: () => void;
 }) {
   const modalRef = useRef<HTMLDivElement>(null);
-  const [filterCategory, setFilterCategory] = useState<'All' | Shortcut['category']>('All');
+  const [filterCategory, setFilterCategory] = useState<'All' | KeyboardShortcutCategory>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
@@ -116,7 +87,7 @@ export default function KeyboardShortcuts({
   }, [isOpen, onClose]);
 
   const filteredShortcuts = useMemo(() => {
-    return SHORTCUTS.filter(shortcut => {
+    return KEYBOARD_SHORTCUTS.filter(shortcut => {
       const matchesCategory = filterCategory === 'All' || shortcut.category === filterCategory;
       if (!matchesCategory) return false;
 
@@ -139,7 +110,7 @@ export default function KeyboardShortcuts({
         acc[shortcut.category].push(shortcut);
         return acc;
       },
-      {} as Record<string, Shortcut[]>
+      {} as Record<string, KeyboardShortcutDefinition[]>
     );
   }, [filteredShortcuts]);
 
@@ -173,7 +144,7 @@ export default function KeyboardShortcuts({
                   Keyboard Shortcuts
                 </h2>
                 <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
-                  {SHORTCUTS.length} keys
+                  {KEYBOARD_SHORTCUTS.length} shortcuts
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">

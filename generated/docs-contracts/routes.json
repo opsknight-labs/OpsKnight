@@ -1,0 +1,1810 @@
+{
+  "schemaVersion": 2,
+  "routes": [
+    {
+      "route": "/action-items",
+      "file": "src/app/(app)/action-items/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/incidents/action-items.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/analytics",
+      "file": "src/app/(app)/analytics/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/analytics.md"
+        ],
+        "guides": [
+          "guides/analytics/use-analytics.md"
+        ],
+        "reference": [
+          "reference/metrics.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/audit",
+      "file": "src/app/(app)/audit/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/administration/audit-logs.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/events",
+      "file": "src/app/(app)/events/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/administration/review-event-logs.md"
+        ],
+        "reference": [
+          "reference/api/events.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/events/test",
+      "file": "src/app/(app)/events/test/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/integrations/send-test-event.md"
+        ],
+        "reference": [
+          "reference/api/events.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/help",
+      "file": "src/app/(app)/help/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "README.md",
+          "guides/README.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/incidents/[id]",
+      "file": "src/app/(app)/incidents/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incidents.md",
+          "concepts/incident-response.md"
+        ],
+        "guides": [
+          "guides/incidents/acknowledge.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/incidents/create",
+      "file": "src/app/(app)/incidents/create/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/incidents/create.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/incidents",
+      "file": "src/app/(app)/incidents/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incidents.md",
+          "concepts/incident-response.md"
+        ],
+        "guides": [
+          "guides/incidents/acknowledge.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/incidents/templates/create",
+      "file": "src/app/(app)/incidents/templates/create/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/incidents/incident-templates.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/incidents/templates",
+      "file": "src/app/(app)/incidents/templates/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/incidents/incident-templates.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/",
+      "file": "src/app/(app)/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "guides/dashboard/README.md",
+          "start/what-is-opsknight.md"
+        ],
+        "guides": [
+          "guides/dashboard/use-command-center.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/policies/[id]",
+      "file": "src/app/(app)/policies/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/escalation-policies.md"
+        ],
+        "guides": [
+          "guides/escalation/configure-policy.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/policies/create",
+      "file": "src/app/(app)/policies/create/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/escalation-policies.md"
+        ],
+        "guides": [
+          "guides/escalation/configure-policy.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/policies",
+      "file": "src/app/(app)/policies/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/escalation-policies.md"
+        ],
+        "guides": [
+          "guides/escalation/configure-policy.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/postmortems/[incidentId]",
+      "file": "src/app/(app)/postmortems/[incidentId]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/postmortems.md",
+          "concepts/postmortem-workflow.md"
+        ],
+        "guides": [
+          "guides/postmortems/create-review-publish.md",
+          "guides/incidents/action-items.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/postmortems/create",
+      "file": "src/app/(app)/postmortems/create/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/postmortems.md",
+          "concepts/postmortem-workflow.md"
+        ],
+        "guides": [
+          "guides/postmortems/create-review-publish.md",
+          "guides/incidents/action-items.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/postmortems",
+      "file": "src/app/(app)/postmortems/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/postmortems.md",
+          "concepts/postmortem-workflow.md"
+        ],
+        "guides": [
+          "guides/postmortems/create-review-publish.md",
+          "guides/incidents/action-items.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/reports/executive/[id]",
+      "file": "src/app/(app)/reports/executive/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/reports/manage-dashboard.md",
+          "guides/reports/read-dashboard.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/reports/executive/new",
+      "file": "src/app/(app)/reports/executive/new/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/reports/create-dashboard.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/reports/executive",
+      "file": "src/app/(app)/reports/executive/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/reports/create-dashboard.md",
+          "guides/reports/read-dashboard.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/reports",
+      "file": "src/app/(app)/reports/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "guides/reports/README.md",
+          "concepts/analytics.md"
+        ],
+        "guides": [
+          "guides/reports/create-dashboard.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/schedules/[id]",
+      "file": "src/app/(app)/schedules/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/schedules.md"
+        ],
+        "guides": [
+          "guides/on-call/build-schedule.md",
+          "guides/on-call/overrides.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/schedules",
+      "file": "src/app/(app)/schedules/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/schedules.md"
+        ],
+        "guides": [
+          "guides/on-call/build-schedule.md",
+          "guides/on-call/overrides.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/services/[id]/integrations",
+      "file": "src/app/(app)/services/[id]/integrations/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md",
+          "integrations/README.md"
+        ],
+        "guides": [
+          "guides/services/manage-service.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/services/[id]/notifications",
+      "file": "src/app/(app)/services/[id]/notifications/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md"
+        ],
+        "guides": [
+          "guides/notifications/configure-routing.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/services/[id]",
+      "file": "src/app/(app)/services/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md",
+          "concepts/teams.md"
+        ],
+        "guides": [
+          "guides/services/manage-service.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/services/[id]/settings",
+      "file": "src/app/(app)/services/[id]/settings/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md",
+          "concepts/teams.md"
+        ],
+        "guides": [
+          "guides/services/manage-service.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/services/[id]/webhooks/[webhookId]/edit",
+      "file": "src/app/(app)/services/[id]/webhooks/[webhookId]/edit/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md"
+        ],
+        "guides": [
+          "integrations/webhooks/webhook.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/services/[id]/webhooks/new",
+      "file": "src/app/(app)/services/[id]/webhooks/new/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md"
+        ],
+        "guides": [
+          "integrations/webhooks/webhook.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/services",
+      "file": "src/app/(app)/services/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md",
+          "concepts/teams.md"
+        ],
+        "guides": [
+          "guides/services/manage-service.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/settings/api-keys",
+      "file": "src/app/(app)/settings/api-keys/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/administration/api-keys.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/chatops/link",
+      "file": "src/app/(app)/settings/chatops/link/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "integrations/communication/slack/user-identity-linking.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/custom-fields",
+      "file": "src/app/(app)/settings/custom-fields/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/administration/custom-fields.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/incident-sla",
+      "file": "src/app/(app)/settings/incident-sla/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incident-sla.md"
+        ],
+        "guides": [
+          "guides/incidents/configure-incident-sla.md",
+          "guides/incidents/migrate-sla-scheduler.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/integrations/chatops",
+      "file": "src/app/(app)/settings/integrations/chatops/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/chatops.md"
+        ],
+        "guides": [
+          "guides/chatops/configure-global-policy.md",
+          "guides/chatops/create-war-room.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/integrations/jira",
+      "file": "src/app/(app)/settings/integrations/jira/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "integrations/issue-tracking/jira/README.md"
+        ],
+        "guides": [
+          "integrations/issue-tracking/jira/connect.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/integrations/microsoft-teams",
+      "file": "src/app/(app)/settings/integrations/microsoft-teams/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "integrations/communication/microsoft-teams/README.md"
+        ],
+        "guides": [
+          "integrations/communication/microsoft-teams/connect.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/integrations",
+      "file": "src/app/(app)/settings/integrations/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "integrations/README.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/settings/integrations/slack",
+      "file": "src/app/(app)/settings/integrations/slack/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "integrations/communication/slack/README.md"
+        ],
+        "guides": [
+          "integrations/communication/slack/connect-with-oauth.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/notifications/history",
+      "file": "src/app/(app)/settings/notifications/history/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/notifications/inspect-delivery.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/notifications/operations",
+      "file": "src/app/(app)/settings/notifications/operations/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/notifications.md"
+        ],
+        "guides": [
+          "guides/notifications/inspect-delivery.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/notifications",
+      "file": "src/app/(app)/settings/notifications/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "guides/notifications/README.md",
+          "concepts/notifications.md"
+        ],
+        "guides": [
+          "guides/notifications/configure-provider.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings",
+      "file": "src/app/(app)/settings/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/administration/settings-overview.md"
+        ],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/privacy-requests",
+      "file": "src/app/(app)/settings/privacy-requests/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "guides/privacy/README.md",
+          "concepts/privacy.md"
+        ],
+        "guides": [
+          "guides/privacy/manage-request.md",
+          "guides/privacy/export-data.md",
+          "guides/privacy/process-erasure.md"
+        ],
+        "reference": [],
+        "troubleshooting": [
+          "guides/privacy/retention-and-troubleshooting.md"
+        ]
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/profile",
+      "file": "src/app/(app)/settings/profile/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/authentication.md"
+        ],
+        "guides": [
+          "guides/profile/manage-profile-and-preferences.md",
+          "guides/notifications/user-preferences.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/security-compliance",
+      "file": "src/app/(app)/settings/security-compliance/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/compliance.md"
+        ],
+        "guides": [
+          "guides/compliance/evaluate-and-export.md",
+          "operate/security/hardening.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/security",
+      "file": "src/app/(app)/settings/security/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/authentication.md"
+        ],
+        "guides": [
+          "guides/administration/manage-sessions.md",
+          "operate/security/hardening.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/service-objectives",
+      "file": "src/app/(app)/settings/service-objectives/page.tsx",
+      "kind": "ui",
+      "classification": "HIDDEN",
+      "documentation": {
+        "concepts": [
+          "concepts/analytics.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/settings/status-page",
+      "file": "src/app/(app)/settings/status-page/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/status-pages/[pageId]",
+      "file": "src/app/(app)/settings/status-pages/[pageId]/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/status-pages/create-and-configure.md",
+          "guides/status-pages/subscribers-and-api-access.md",
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/status-pages",
+      "file": "src/app/(app)/settings/status-pages/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/status-pages/create-and-configure.md",
+          "guides/status-pages/subscribers-and-api-access.md",
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/system/health",
+      "file": "src/app/(app)/settings/system/health/page.tsx",
+      "kind": "ui",
+      "classification": "OPERATOR_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "operate/reliability/health-center.md"
+        ],
+        "reference": [
+          "reference/health.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/system",
+      "file": "src/app/(app)/settings/system/page.tsx",
+      "kind": "ui",
+      "classification": "OPERATOR_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "operate/reliability/health-and-metrics.md"
+        ],
+        "reference": [
+          "reference/configuration/README.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/settings/system/performance",
+      "file": "src/app/(app)/settings/system/performance/page.tsx",
+      "kind": "ui",
+      "classification": "OPERATOR_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "operate/reliability/scaling.md",
+          "operate/capacity/scaling-signals.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/shortcuts",
+      "file": "src/app/(app)/shortcuts/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [],
+        "reference": [
+          "reference/keyboard-shortcuts.md"
+        ],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/system-logs",
+      "file": "src/app/(app)/system-logs/page.tsx",
+      "kind": "ui",
+      "classification": "OPERATOR_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "operate/reliability/system-logs.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/teams/[id]",
+      "file": "src/app/(app)/teams/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/teams.md",
+          "concepts/services.md"
+        ],
+        "guides": [
+          "guides/teams/manage-team.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/teams",
+      "file": "src/app/(app)/teams/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/teams.md",
+          "concepts/services.md"
+        ],
+        "guides": [
+          "guides/teams/manage-team.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/users/[id]",
+      "file": "src/app/(app)/users/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/permissions.md"
+        ],
+        "guides": [
+          "guides/administration/manage-users.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/users",
+      "file": "src/app/(app)/users/page.tsx",
+      "kind": "ui",
+      "classification": "ADMIN_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/permissions.md"
+        ],
+        "guides": [
+          "guides/administration/manage-users.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/m/analytics",
+      "file": "src/app/(mobile)/m/analytics/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md",
+          "concepts/analytics.md"
+        ],
+        "guides": [
+          "guides/mobile/offline-and-updates.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/help",
+      "file": "src/app/(mobile)/m/help/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "guides/mobile/install-and-notifications.md",
+          "guides/mobile/offline-and-updates.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/incidents/[id]",
+      "file": "src/app/(mobile)/m/incidents/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incidents.md"
+        ],
+        "guides": [
+          "guides/mobile/respond-to-incidents.md",
+          "guides/mobile/offline-and-updates.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/incidents/create",
+      "file": "src/app/(mobile)/m/incidents/create/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/mobile/respond-to-incidents.md",
+          "guides/mobile/offline-and-updates.md",
+          "guides/incidents/create.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/incidents",
+      "file": "src/app/(mobile)/m/incidents/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/incidents.md"
+        ],
+        "guides": [
+          "guides/mobile/respond-to-incidents.md",
+          "guides/mobile/offline-and-updates.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/more",
+      "file": "src/app/(mobile)/m/more/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "guides/mobile/install-and-notifications.md",
+          "guides/mobile/offline-and-updates.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/notifications",
+      "file": "src/app/(mobile)/m/notifications/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/notifications.md"
+        ],
+        "guides": [
+          "guides/mobile/install-and-notifications.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m",
+      "file": "src/app/(mobile)/m/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [
+          "guides/mobile/respond-to-incidents.md",
+          "guides/mobile/install-and-notifications.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/policies/[id]",
+      "file": "src/app/(mobile)/m/policies/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/escalation-policies.md"
+        ],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/policies",
+      "file": "src/app/(mobile)/m/policies/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/escalation-policies.md"
+        ],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/postmortems/[id]",
+      "file": "src/app/(mobile)/m/postmortems/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/postmortems.md"
+        ],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/postmortems",
+      "file": "src/app/(mobile)/m/postmortems/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/postmortems.md"
+        ],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/schedules/[id]",
+      "file": "src/app/(mobile)/m/schedules/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/schedules.md"
+        ],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/schedules",
+      "file": "src/app/(mobile)/m/schedules/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/schedules.md"
+        ],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/services/[id]",
+      "file": "src/app/(mobile)/m/services/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md"
+        ],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/services",
+      "file": "src/app/(mobile)/m/services/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/services.md"
+        ],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/status",
+      "file": "src/app/(mobile)/m/status/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/teams/[id]",
+      "file": "src/app/(mobile)/m/teams/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/teams.md"
+        ],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/teams",
+      "file": "src/app/(mobile)/m/teams/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/teams.md"
+        ],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/users/[id]",
+      "file": "src/app/(mobile)/m/users/[id]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md",
+          "guides/administration/manage-users.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/m/users",
+      "file": "src/app/(mobile)/m/users/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "guides/mobile/use-mobile-operations.md",
+          "guides/administration/manage-users.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": true
+    },
+    {
+      "route": "/logs",
+      "file": "src/app/(public)/logs/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "operate/reliability/system-logs.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/m/forgot-password",
+      "file": "src/app/(public)/m/forgot-password/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md",
+          "concepts/authentication.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/m/login",
+      "file": "src/app/(public)/m/login/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md",
+          "concepts/authentication.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/status/[slug]",
+      "file": "src/app/(public)/status/[slug]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/status/[slug]/postmortems/[incidentId]",
+      "file": "src/app/(public)/status/[slug]/postmortems/[incidentId]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/status/[slug]/unsubscribe/[token]",
+      "file": "src/app/(public)/status/[slug]/unsubscribe/[token]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/status/[slug]/verify/[token]",
+      "file": "src/app/(public)/status/[slug]/verify/[token]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/status",
+      "file": "src/app/(public)/status/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/status/postmortems/[incidentId]",
+      "file": "src/app/(public)/status/postmortems/[incidentId]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/status/unsubscribe/[token]",
+      "file": "src/app/(public)/status/unsubscribe/[token]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/status/verify/[token]",
+      "file": "src/app/(public)/status/verify/[token]/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/status-pages.md"
+        ],
+        "guides": [
+          "guides/status-pages/publish-update.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/auth/signout",
+      "file": "src/app/auth/signout/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/authentication.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/clear-desktop-preference",
+      "file": "src/app/clear-desktop-preference/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/mobile.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/debug-mobile",
+      "file": "src/app/debug-mobile/page.tsx",
+      "kind": "ui",
+      "classification": "INTERNAL",
+      "documentation": {
+        "concepts": [],
+        "guides": [
+          "develop/local-development.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/forgot-password",
+      "file": "src/app/forgot-password/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/authentication.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/login",
+      "file": "src/app/login/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/authentication.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/reset-password",
+      "file": "src/app/reset-password/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/authentication.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/set-password",
+      "file": "src/app/set-password/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "concepts/authentication.md"
+        ],
+        "guides": [],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    },
+    {
+      "route": "/setup",
+      "file": "src/app/setup/page.tsx",
+      "kind": "ui",
+      "classification": "PUBLIC_FEATURE",
+      "documentation": {
+        "concepts": [
+          "start/production-install.md"
+        ],
+        "guides": [
+          "start/quickstart.md"
+        ],
+        "reference": [],
+        "troubleshooting": []
+      },
+      "documentationMapping": "explicit-route-rule",
+      "taskDocumentationRequired": false
+    }
+  ]
+}

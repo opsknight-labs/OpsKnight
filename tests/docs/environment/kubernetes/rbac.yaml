@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: docs-runner
+  namespace: opsknight-docs
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: docs-observer
+  namespace: opsknight-docs
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, services, endpoints, configmaps]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: docs-observer
+  namespace: opsknight-docs
+subjects:
+  - kind: ServiceAccount
+    name: docs-runner
+    namespace: opsknight-docs
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: docs-observer

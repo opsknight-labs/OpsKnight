@@ -269,10 +269,15 @@ function matchesRealtimeFilter(
   )
     return false;
   if (
-    (filterName === 'all_open' || filterName === 'all') &&
+    (filterName === 'all_open' || filterName === 'critical_focus') &&
     filter.status === undefined &&
-    filterName === 'all_open' &&
     !['OPEN', 'ACKNOWLEDGED'].includes(status)
+  )
+    return false;
+  if (
+    filterName === 'critical_focus' &&
+    raw.urgency !== 'HIGH' &&
+    raw.priority !== 'P1'
   )
     return false;
   if (filterName === 'muted' && !['SNOOZED', 'SUPPRESSED'].includes(status)) return false;

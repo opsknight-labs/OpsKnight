@@ -1,0 +1,520 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-28T12:20:49.770Z",
+  "source": {
+    "path": "artifacts/load-certification/certification-summary.json",
+    "pullRequest": 777,
+    "artifactSchemaVersion": 1,
+    "artifactGeneratedAt": "2026-09-28T12:20:49.770Z",
+    "sourceRevision": "52d6a3c5c791e7ad9ad21cd76f11cbdf11d3176f",
+    "testHarnessRevision": "e2cd6e28092f544eea2342ebe455cac680fd157b",
+    "environment": {
+      "cpu": "10-core",
+      "memory": "16 GB",
+      "dockerEngine": "28.x",
+      "kind": "v0.31.0"
+    }
+  },
+  "planningProfilesSource": "tests/load/fixtures/users/index.ts",
+  "planningProfiles": [
+    {
+      "profile": "small",
+      "teams": 4,
+      "users": 40,
+      "services": 12,
+      "integrationsPerService": 2,
+      "schedules": 8,
+      "escalationPolicies": 8,
+      "baselineIncidents": 24,
+      "statusPageSubscribers": 1000,
+      "sseSessions": 100,
+      "apiKeys": 12
+    },
+    {
+      "profile": "medium",
+      "teams": 8,
+      "users": 120,
+      "services": 32,
+      "integrationsPerService": 4,
+      "schedules": 16,
+      "escalationPolicies": 16,
+      "baselineIncidents": 100,
+      "statusPageSubscribers": 10000,
+      "sseSessions": 500,
+      "apiKeys": 32
+    },
+    {
+      "profile": "large",
+      "teams": 12,
+      "users": 400,
+      "services": 80,
+      "integrationsPerService": 5,
+      "schedules": 32,
+      "escalationPolicies": 32,
+      "baselineIncidents": 300,
+      "statusPageSubscribers": 100000,
+      "sseSessions": 2500,
+      "apiKeys": 64
+    },
+    {
+      "profile": "storm",
+      "teams": 20,
+      "users": 1000,
+      "services": 200,
+      "integrationsPerService": 5,
+      "schedules": 50,
+      "escalationPolicies": 50,
+      "baselineIncidents": 500,
+      "statusPageSubscribers": 100000,
+      "sseSessions": 5000,
+      "apiKeys": 100
+    }
+  ],
+  "statusDefinitions": {
+    "CERTIFIED": "All required scenarios, thresholds, and correctness invariants passed for the stated profile.",
+    "MEASURED": "Measurements exist, but the record does not declare a certification result.",
+    "NOT CERTIFIED": "The topology was tested but did not pass the complete certification contract.",
+    "NOT TESTED": "No benchmark artifact exists for the topology."
+  },
+  "topologies": [
+    {
+      "topologyId": "compose_integrated_bundled_db",
+      "topologyName": "Compose: Integrated Runtime + Bundled PostgreSQL",
+      "status": "NOT CERTIFIED",
+      "phase": 1,
+      "startedAt": "2026-09-27T16:33:18.158Z",
+      "completedAt": "2026-09-27T16:38:22.594Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 6,
+      "passedScenarios": 2,
+      "measuredPeakRps": 13.46,
+      "measuredWorstP95Ms": 35920.19,
+      "peakActivePgConnections": 11,
+      "peakOldestPendingJobAgeMs": 161262,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "compose_integrated_external_db",
+      "topologyName": "Compose: Integrated Runtime + External PostgreSQL",
+      "status": "NOT TESTED",
+      "phase": null,
+      "startedAt": null,
+      "completedAt": null,
+      "testedLoadLevels": [],
+      "scenarioCount": 0,
+      "passedScenarios": 0,
+      "measuredPeakRps": null,
+      "measuredWorstP95Ms": null,
+      "peakActivePgConnections": null,
+      "peakOldestPendingJobAgeMs": null,
+      "invariantsPassed": null,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "compose_split_bundled_db",
+      "topologyName": "Compose: Split Runtime + Bundled PostgreSQL",
+      "status": "NOT CERTIFIED",
+      "phase": 1,
+      "startedAt": "2026-09-27T16:38:24.958Z",
+      "completedAt": "2026-09-27T16:45:29.813Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 7,
+      "passedScenarios": 0,
+      "measuredPeakRps": 1.68,
+      "measuredWorstP95Ms": 34349.08,
+      "peakActivePgConnections": 9,
+      "peakOldestPendingJobAgeMs": 22823,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "compose_split_pgbouncer",
+      "topologyName": "Compose: Split Runtime + PgBouncer + Bundled PostgreSQL",
+      "status": "NOT CERTIFIED",
+      "phase": 1,
+      "startedAt": "2026-09-27T16:45:31.196Z",
+      "completedAt": "2026-09-27T16:52:54.886Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 8,
+      "passedScenarios": 1,
+      "measuredPeakRps": 14.14,
+      "measuredWorstP95Ms": 40276.41,
+      "peakActivePgConnections": 9,
+      "peakOldestPendingJobAgeMs": 199660,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "compose_split_pgbouncer_external_db_ca",
+      "topologyName": "Compose: Split Runtime + PgBouncer + External PostgreSQL with CA",
+      "status": "NOT TESTED",
+      "phase": null,
+      "startedAt": null,
+      "completedAt": null,
+      "testedLoadLevels": [],
+      "scenarioCount": 0,
+      "passedScenarios": 0,
+      "measuredPeakRps": null,
+      "measuredWorstP95Ms": null,
+      "peakActivePgConnections": null,
+      "peakOldestPendingJobAgeMs": null,
+      "invariantsPassed": null,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "swarm_single_node_split",
+      "topologyName": "Docker Swarm: Single-Node Split Stack + PgBouncer",
+      "status": "NOT CERTIFIED",
+      "phase": 3,
+      "startedAt": "2026-09-27T17:00:53.481Z",
+      "completedAt": "2026-09-27T17:07:49.581Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 7,
+      "passedScenarios": 2,
+      "measuredPeakRps": 14.04,
+      "measuredWorstP95Ms": 36644.9,
+      "peakActivePgConnections": 14,
+      "peakOldestPendingJobAgeMs": 179045,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "swarm_ha_split",
+      "topologyName": "Docker Swarm: High-Availability (HA) Multi-Replica Split Stack",
+      "status": "NOT CERTIFIED",
+      "phase": 3,
+      "startedAt": "2026-09-27T17:08:00.021Z",
+      "completedAt": "2026-09-27T17:12:23.643Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 8,
+      "passedScenarios": 4,
+      "measuredPeakRps": 56.66,
+      "measuredWorstP95Ms": 4001.87,
+      "peakActivePgConnections": 9,
+      "peakOldestPendingJobAgeMs": 90881,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "kind_helm_split_pgbouncer",
+      "topologyName": "Kind Kubernetes (4-Node): Helm Split Runtime + PgBouncer + HPA/PDB",
+      "status": "NOT CERTIFIED",
+      "phase": 4,
+      "startedAt": "2026-09-27T18:25:20.479Z",
+      "completedAt": "2026-09-27T18:34:00.895Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 8,
+      "passedScenarios": 0,
+      "measuredPeakRps": 2.81,
+      "measuredWorstP95Ms": 41634.58,
+      "peakActivePgConnections": 9,
+      "peakOldestPendingJobAgeMs": 289,
+      "invariantsPassed": true,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "kind_kustomize_split_pgbouncer",
+      "topologyName": "Kind Kubernetes (4-Node): Kustomize Split + PgBouncer Profile",
+      "status": "NOT CERTIFIED",
+      "phase": 4,
+      "startedAt": "2026-09-28T03:13:03.920Z",
+      "completedAt": "2026-09-28T03:20:59.161Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 8,
+      "passedScenarios": 0,
+      "measuredPeakRps": 2.79,
+      "measuredWorstP95Ms": 38687.34,
+      "peakActivePgConnections": 13,
+      "peakOldestPendingJobAgeMs": 627,
+      "invariantsPassed": true,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_compose_integrated",
+      "topologyName": "Phase 6 Mega: Compose Integrated Runtime",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-28T17:26:02.847Z",
+      "completedAt": "2026-09-28T17:44:46.609Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 10,
+      "passedScenarios": 0,
+      "measuredPeakRps": 44.32,
+      "measuredWorstP95Ms": 20659.34,
+      "peakActivePgConnections": 17,
+      "peakOldestPendingJobAgeMs": 976695,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_compose_split",
+      "topologyName": "Phase 6 Mega: Compose Split Runtime",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-28T17:45:13.331Z",
+      "completedAt": "2026-09-28T18:03:38.849Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 11,
+      "passedScenarios": 0,
+      "measuredPeakRps": 82.38,
+      "measuredWorstP95Ms": 6166.55,
+      "peakActivePgConnections": 10,
+      "peakOldestPendingJobAgeMs": 826077,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_compose_split_pgbouncer",
+      "topologyName": "Phase 6 Mega: Compose Split Runtime + PgBouncer",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-29T12:20:09.827Z",
+      "completedAt": "2026-09-29T13:27:08.305Z",
+      "testedLoadLevels": [
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5",
+        "L6",
+        "L7",
+        "L8",
+        "L9"
+      ],
+      "scenarioCount": 99,
+      "passedScenarios": 0,
+      "measuredPeakRps": 230.5,
+      "measuredWorstP95Ms": 60004.05,
+      "peakActivePgConnections": 17,
+      "peakOldestPendingJobAgeMs": 3697326,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_swarm_integrated",
+      "topologyName": "Phase 6 Mega: Docker Swarm Integrated Stack",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-29T03:02:30.107Z",
+      "completedAt": "2026-09-29T03:22:11.443Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 8,
+      "passedScenarios": 0,
+      "measuredPeakRps": 484.79,
+      "measuredWorstP95Ms": 4001.24,
+      "peakActivePgConnections": 24,
+      "peakOldestPendingJobAgeMs": 123087018,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_swarm_split",
+      "topologyName": "Phase 6 Mega: Docker Swarm Split Stack",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-29T03:29:01.934Z",
+      "completedAt": "2026-09-29T03:46:20.430Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 9,
+      "passedScenarios": 0,
+      "measuredPeakRps": 49.52,
+      "measuredWorstP95Ms": 11096.7,
+      "peakActivePgConnections": 20,
+      "peakOldestPendingJobAgeMs": 2258192,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_swarm_split_pgbouncer",
+      "topologyName": "Phase 6 Mega: Docker Swarm Split + PgBouncer Stack",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-29T03:48:08.699Z",
+      "completedAt": "2026-09-29T04:06:15.498Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 10,
+      "passedScenarios": 0,
+      "measuredPeakRps": 33.73,
+      "measuredWorstP95Ms": 14118.6,
+      "peakActivePgConnections": 14,
+      "peakOldestPendingJobAgeMs": 124917459,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_swarm_ha_split_pgbouncer",
+      "topologyName": "Phase 6 Mega: Docker Swarm HA Split + PgBouncer",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-29T13:28:49.952Z",
+      "completedAt": "2026-09-29T14:43:34.065Z",
+      "testedLoadLevels": [
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5",
+        "L6",
+        "L7",
+        "L8",
+        "L9"
+      ],
+      "scenarioCount": 99,
+      "passedScenarios": 0,
+      "measuredPeakRps": 104.57,
+      "measuredWorstP95Ms": 32062.43,
+      "peakActivePgConnections": 33,
+      "peakOldestPendingJobAgeMs": 39148467,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_helm_integrated",
+      "topologyName": "Phase 6 Mega: Kind Helm Integrated",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-29T04:32:01.480Z",
+      "completedAt": "2026-09-29T04:48:21.121Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 6,
+      "passedScenarios": 0,
+      "measuredPeakRps": 19.18,
+      "measuredWorstP95Ms": 28125.02,
+      "peakActivePgConnections": 27,
+      "peakOldestPendingJobAgeMs": 591320,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_helm_split",
+      "topologyName": "Phase 6 Mega: Kind Helm Split",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-29T04:50:06.304Z",
+      "completedAt": "2026-09-29T05:04:46.013Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 7,
+      "passedScenarios": 0,
+      "measuredPeakRps": 32.51,
+      "measuredWorstP95Ms": 15066.93,
+      "peakActivePgConnections": 27,
+      "peakOldestPendingJobAgeMs": 771431,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_helm_split_pgbouncer",
+      "topologyName": "Phase 6 Mega: Kind Helm Split + PgBouncer",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-29T15:37:31.706Z",
+      "completedAt": "2026-09-29T17:50:19.651Z",
+      "testedLoadLevels": [
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5",
+        "L6",
+        "L7",
+        "L8",
+        "L9"
+      ],
+      "scenarioCount": 99,
+      "passedScenarios": 0,
+      "measuredPeakRps": 95.47,
+      "measuredWorstP95Ms": 34577.6,
+      "peakActivePgConnections": 48,
+      "peakOldestPendingJobAgeMs": 6129653,
+      "invariantsPassed": true,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_kustomize_integrated",
+      "topologyName": "Phase 6 Mega: Kind Kustomize Integrated",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-29T05:27:09.484Z",
+      "completedAt": "2026-09-29T05:44:56.343Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 6,
+      "passedScenarios": 0,
+      "measuredPeakRps": 14.91,
+      "measuredWorstP95Ms": 30012.96,
+      "peakActivePgConnections": 13,
+      "peakOldestPendingJobAgeMs": 704087,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_kustomize_split",
+      "topologyName": "Phase 6 Mega: Kind Kustomize Split",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-29T05:46:56.826Z",
+      "completedAt": "2026-09-29T06:03:36.278Z",
+      "testedLoadLevels": [
+        "L0"
+      ],
+      "scenarioCount": 7,
+      "passedScenarios": 0,
+      "measuredPeakRps": 32.08,
+      "measuredWorstP95Ms": 16843.43,
+      "peakActivePgConnections": 29,
+      "peakOldestPendingJobAgeMs": 588802,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    },
+    {
+      "topologyId": "phase6_kustomize_split_pgbouncer",
+      "topologyName": "Phase 6 Mega: Kind Kustomize Split + PgBouncer",
+      "status": "NOT CERTIFIED",
+      "phase": 6,
+      "startedAt": "2026-09-29T17:57:31.070Z",
+      "completedAt": "2026-09-29T18:27:12.781Z",
+      "testedLoadLevels": [
+        "L1",
+        "L9"
+      ],
+      "scenarioCount": 20,
+      "passedScenarios": 0,
+      "measuredPeakRps": 66.07,
+      "measuredWorstP95Ms": 30228.75,
+      "peakActivePgConnections": 36,
+      "peakOldestPendingJobAgeMs": 1547324,
+      "invariantsPassed": false,
+      "certifiedCapacity": null
+    }
+  ]
+}

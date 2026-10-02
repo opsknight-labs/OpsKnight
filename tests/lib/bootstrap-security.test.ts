@@ -44,6 +44,7 @@ function bootstrapForm() {
   form.set('email', 'admin@example.com');
   form.set('password', 'a secure admin passphrase');
   form.set('confirmPassword', 'a secure admin passphrase');
+  form.set('setupSecret', 'test-bootstrap-code');
   return form;
 }
 
@@ -56,7 +57,14 @@ describe('bootstrap administrator security', () => {
     delete process.env.NEXTAUTH_URL;
     count.mockResolvedValue(0);
     create.mockResolvedValue({ id: 'admin-1', email: 'admin@example.com' });
-    findUniqueConfig.mockResolvedValue(null);
+    findUniqueConfig.mockResolvedValue({
+      value: {
+        tokenHash: hashBootstrapCode('test-bootstrap-code'),
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        usedAt: null,
+        generation: 1,
+      },
+    });
     updateConfig.mockResolvedValue({});
     findUniqueSettings.mockResolvedValue(null);
     upsertSettings.mockResolvedValue({});
@@ -85,6 +93,14 @@ describe('bootstrap administrator security', () => {
           email: 'admin@example.com',
           role: 'ADMIN',
           status: 'ACTIVE',
+        }),
+      })
+    );
+    expect(updateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { key: 'auth.bootstrap.authorization' },
+        data: expect.objectContaining({
+          value: expect.objectContaining({ usedAt: expect.any(String) }),
         }),
       })
     );
@@ -177,11 +193,41 @@ describe('bootstrap administrator security', () => {
     );
   });
 
+  it.each([
+    'https://custom-ops.mycompany.com/path',
+    'https://custom-ops.mycompany.com/?query=1',
+    'https://user:password@custom-ops.mycompany.com',
+    'https://custom-ops.mycompany.com/#fragment',
+  ])('rejects a non-origin Application URL: %s', async appUrl => {
+    const form = bootstrapForm();
+    form.set('appUrl', appUrl);
+    const result = await bootstrapAdmin(form);
+    expect(result).toMatchObject({ error: expect.stringContaining('origin') });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing bootstrap capability when no environment secret is configured', async () => {
+    const form = bootstrapForm();
+    form.delete('setupSecret');
+    const result = await bootstrapAdmin(form);
+    expect(result).toEqual({ error: 'Invalid, expired, or missing bootstrap code.' });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid bootstrap capability', async () => {
+    const form = bootstrapForm();
+    form.set('setupSecret', 'wrong-bootstrap-code');
+    const result = await bootstrapAdmin(form);
+    expect(result).toEqual({ error: 'Invalid, expired, or already-used bootstrap code.' });
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('rejects setup when SETUP_SECRET is configured in env and missing/invalid in form', async () => {
     process.env.SETUP_SECRET = 'production-deployment-secret-key';
     const form = bootstrapForm();
+    form.delete('setupSecret');
     const result = await bootstrapAdmin(form);
-    expect(result).toEqual({ error: 'Invalid or missing setup secret.' });
+    expect(result).toEqual({ error: 'Invalid, expired, or missing bootstrap code.' });
     expect(create).not.toHaveBeenCalled();
   });
 
@@ -192,5 +238,6 @@ describe('bootstrap administrator security', () => {
     const result = await bootstrapAdmin(form);
     expect(result).toEqual({ success: true, email: 'admin@example.com' });
     expect(create).toHaveBeenCalledTimes(1);
+    expect(updateConfig).not.toHaveBeenCalled();
   });
 });

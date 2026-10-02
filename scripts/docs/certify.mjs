@@ -1,0 +1,212 @@
+#!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { extname, join, resolve } from 'node:path';
+import YAML from 'yaml';
+
+const root = resolve(import.meta.dirname, '../..');
+const run = (file, args) => execFileSync(file, args, { cwd: root, stdio: 'inherit' });
+const fullRuntime = !process.argv.includes('--static');
+const releaseCertification = process.argv.includes('--release');
+const externalRuntime = process.argv.includes('--external-runtime');
+const composeArgs = [
+  'compose', '--project-name', 'opsknight-docs-v2-capture',
+  '-f', 'deploy/compose/docker-compose.yml',
+  '-f', 'tests/docs/environment/compose.yaml',
+];
+
+if (releaseCertification) {
+  const relevantStatus = execFileSync(
+    'git',
+    ['status', '--porcelain', '--', 'docs', 'deploy', 'src', 'scripts/docs', 'tests/docs', 'generated'],
+    { cwd: root, encoding: 'utf8' }
+  ).trim();
+  if (relevantStatus) {
+    throw new Error('Release certification requires a clean documentation, product, deployment, test, and generated-artifact tree.');
+  }
+}
+
+run('node', ['scripts/docs/discover-capabilities.mjs', '--output', 'generated/docs-discovery/current.json']);
+run('node', ['scripts/docs/generate-reference.mjs']);
+run('node', ['scripts/docs/generate-integrations.mjs']);
+run('node', ['scripts/docs/generate-capacity-reference.mjs']);
+run('node', ['scripts/docs/generate-route-contract.mjs']);
+run('node', ['scripts/docs/generate-v15-parity.mjs']);
+run('node', ['scripts/docs/check-v15-parity.mjs']);
+run('node', ['scripts/docs/audit-reader-completeness.mjs']);
+run('node', ['scripts/docs/check-frontmatter.mjs']);
+run('node', ['scripts/check-docs-links.cjs']);
+run('node', ['scripts/docs/check-reader-quality.mjs', ...(releaseCertification ? ['--release'] : [])]);
+run('node', ['scripts/docs/check-dangerous-claims.mjs']);
+run('node', ['scripts/check-docs-capabilities.cjs']);
+// Static certification must reject stale committed evidence immediately. A
+// full runtime pass is also the supported recovery path after a rebase or
+// product update, so validate evidence after Playwright has refreshed it.
+if (!fullRuntime) run('node', ['scripts/docs/check-evidence.mjs']);
+run('node', ['scripts/docs/check-feature-graph.mjs']);
+run('node', ['--test', ...readdirSync(join(root, 'tests/docs/tooling')).filter(name => name.endsWith('.test.mjs')).map(name => `tests/docs/tooling/${name}`)]);
+if (fullRuntime) {
+  if (!externalRuntime) run('docker', [...composeArgs, 'down', '--volumes', '--remove-orphans']);
+  try {
+    run('npx', ['vitest', 'run', '-c', 'vitest.unit.config.ts', 'tests/security/app-host-routing.test.ts']);
+    execFileSync('npx', ['playwright', 'test', '-c', 'playwright.docs.config.ts'], {
+      cwd: root,
+      stdio: 'inherit',
+      env: { ...process.env, CI: '1', ...(externalRuntime ? { DOCS_EXTERNAL_RUNTIME: 'true' } : {}) },
+    });
+    run('node', ['scripts/docs/check-evidence.mjs']);
+  } finally {
+    if (!externalRuntime) run('docker', [...composeArgs, 'down', '--volumes', '--remove-orphans']);
+  }
+}
+
+const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+  const path = join(directory, entry.name);
+  return entry.isDirectory() ? walk(path) : [path];
+});
+const relative = path => path.slice(root.length + 1);
+const discovery = JSON.parse(readFileSync(join(root, 'generated/docs-discovery/current.json'), 'utf8'));
+const catalog = YAML.parse(readFileSync(join(root, 'docs/v2.0.0/capabilities.yaml'), 'utf8'));
+const v15Parity = JSON.parse(readFileSync(join(root, 'generated/docs-certification/v15-active-parity.json'), 'utf8'));
+const readerAudit = JSON.parse(readFileSync(join(root, 'generated/docs-certification/page-audit.json'), 'utf8'));
+const integrationContracts = JSON.parse(readFileSync(join(root, 'generated/docs-contracts/integrations.json'), 'utf8'));
+const capabilities = Object.values(catalog.capabilities);
+const evidence = walk(join(root, 'generated/docs-evidence/current')).filter(path => extname(path) === '.png');
+const journeys = walk(join(root, 'tests/docs/journeys')).filter(path => path.endsWith('.spec.ts'));
+const pages = walk(join(root, 'docs/v2.0.0')).filter(path => path.endsWith('.md'));
+const runtimeImage = fullRuntime ? process.env.DOCS_OPSKNIGHT_IMAGE : undefined;
+const runtimeInspection = runtimeImage ? JSON.parse(execFileSync(
+  'docker', ['image', 'inspect', runtimeImage], { cwd: root, encoding: 'utf8' }
+))[0] : undefined;
+const documentationRevision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+const runtimeSourceRevision = runtimeInspection?.Config?.Labels?.['org.opencontainers.image.revision'];
+if (fullRuntime && !/^[0-9a-f]{40}$/.test(runtimeSourceRevision ?? '')) {
+  throw new Error('Runtime image OCI revision must be a full 40-character Git SHA.');
+}
+if (releaseCertification) {
+  const expectedProductRevision = process.env.DOCS_EXPECTED_PRODUCT_REVISION;
+  if (!/^[0-9a-f]{40}$/.test(expectedProductRevision ?? '')) {
+    throw new Error('Release certification requires DOCS_EXPECTED_PRODUCT_REVISION as a full Git SHA.');
+  }
+  if (runtimeSourceRevision !== expectedProductRevision) {
+    throw new Error(
+      `Runtime image revision ${runtimeSourceRevision ?? 'missing'} does not match expected product revision ${expectedProductRevision}.`
+    );
+  }
+  if (!process.env.DOCS_SITE_BASE_URL || !process.env.DOCS_WEBSITE_DIR) {
+    throw new Error('Release certification requires DOCS_SITE_BASE_URL and DOCS_WEBSITE_DIR for the rendered-site crawl.');
+  }
+  run('node', ['scripts/docs/crawl-rendered-site.mjs']);
+  const renderedSite = JSON.parse(
+    readFileSync(join(root, 'generated/docs-certification/rendered-site.json'), 'utf8')
+  );
+  if (renderedSite.sourceRevision !== documentationRevision) {
+    throw new Error('Rendered-site certificate does not match the documentation revision.');
+  }
+}
+
+const report = {
+  schemaVersion: 2,
+  generatedAt: new Date().toISOString(),
+  sourceRevision: documentationRevision,
+  documentationRevision,
+  productSourceRevision: runtimeSourceRevision || documentationRevision,
+  runtimeSourceRevision: runtimeSourceRevision || null,
+  runtimeImageDigest: runtimeInspection?.RepoDigests?.find(value => value.includes('@sha256:')) || null,
+  releaseState: 'upcoming',
+  apiProof: {
+    smokeProbeScope: 'Every discovered PUBLIC_API route is requested and must not return a server error.',
+    deepContractGroups: ['authentication-and-error-envelope', 'incidents-crud-and-idempotency', 'events-validation'],
+  },
+  checks: {
+    frontmatter: 'passed',
+    links: 'passed',
+    readerQuality: 'passed',
+    readerCompleteness: readerAudit.readerCompleteTaskPages === readerAudit.taskPages ? 'passed' : 'pending',
+    capabilityCoverage: 'passed',
+    featureClassification: discovery.featureGraph.unclassified.length === 0 ? 'passed' : 'failed',
+    featureDocumentationAlarm: discovery.featureGraph.undocumented.length === 0 ? 'clear' : 'attention-required',
+    semanticContractAlarm: discovery.featureGraph.unresolvedSemanticContracts.length === 0 ? 'clear' : 'attention-required',
+    inboundIntegrationContracts: integrationContracts.providers.every(provider =>
+      provider.acceptedActions.length > 0 &&
+      provider.authentication.length > 0 &&
+      provider.request.bodyLimitBytes !== null &&
+      provider.request.rateLimit !== null &&
+      provider.errors.length > 0 &&
+      !/unknown|not-declared|not statically resolved/i.test(JSON.stringify(provider))
+    ) ? 'passed' : 'failed',
+    evidenceContract: 'passed',
+    toolingTests: 'passed',
+    legacyActiveKnowledgeParity: v15Parity.gaps.length === 0 ? 'passed' : 'failed',
+    runtimeJourneys: fullRuntime ? 'passed' : 'not-run',
+    publicApiSmokeMatrix: fullRuntime ? 'passed' : 'not-run',
+    websiteBuild: releaseCertification ? 'passed' : 'release-gated',
+    renderedSiteCrawl: releaseCertification ? 'passed' : 'release-gated',
+  },
+  counts: {
+    documentationPages: pages.length,
+    capabilitiesDiscovered: capabilities.length,
+    capabilitiesDocumented: capabilities.filter(item => item.status === 'documented').length,
+    uiRoutes: discovery.uiRoutes.length,
+    apiRoutes: discovery.apiRoutes.length,
+    configurationItems: discovery.configuration.length,
+    integrationCandidates: discovery.integrations.length,
+    exactInboundIntegrationContracts: integrationContracts.providers.filter(provider =>
+      provider.acceptedActions.length > 0 &&
+      provider.authentication.length > 0 &&
+      provider.request.bodyLimitBytes !== null &&
+      provider.request.rateLimit !== null &&
+      provider.errors.length > 0 &&
+      !/unknown|not-declared|not statically resolved/i.test(JSON.stringify(provider))
+    ).length,
+    databaseModels: discovery.database.models.length,
+    runtimeRoles: discovery.deployment.runtimeRoles.length,
+    featureNodes: discovery.featureGraph.nodes.length,
+    unclassifiedFeatures: discovery.featureGraph.unclassified.length,
+    evidenceBackedClaims: discovery.featureGraph.summary.claims,
+    unsupportedClaims: discovery.featureGraph.summary.unsupportedClaims,
+    supportedProductFeatures: discovery.featureGraph.summary.supported,
+    documentedSupportedFeatures: discovery.featureGraph.summary.documentedSupported,
+    undocumentedSupportedFeatures: discovery.featureGraph.summary.undocumentedSupported,
+    unresolvedSemanticContracts: discovery.featureGraph.summary.unresolvedSemanticContracts,
+    missingEvidence: discovery.featureGraph.nodes.filter(item => item.sources.length === 0).length,
+    supportedPublicApis: discovery.featureGraph.nodes.filter(item => item.kind === 'api' && item.classification === 'PUBLIC_API').length,
+    publicApisSmokeProbed: fullRuntime
+      ? discovery.featureGraph.nodes.filter(item => item.kind === 'api' && item.classification === 'PUBLIC_API').length
+      : 0,
+    publicApiDeepContractGroups: fullRuntime ? 3 : 0,
+    notificationProviders: discovery.notificationProviders.length,
+    rawLimits: discovery.limits.length,
+    publicLimits: discovery.limits.filter(item => !['INTERNAL_IMPLEMENTATION', 'PROVIDER_CONSTRAINT'].includes(item.semanticClassification)).length,
+    journeyFiles: journeys.length,
+    evidenceScreenshots: evidence.length,
+    legacyActiveContracts: v15Parity.activeContracts,
+    legacyActiveContractsMapped: v15Parity.mappedContracts,
+    legacyActiveKnowledgeGaps: v15Parity.gaps.length,
+    taskDocumentationPages: readerAudit.taskPages,
+    readerCompleteTaskPages: readerAudit.readerCompleteTaskPages,
+    sourceVerifiedTaskPages: readerAudit.sourceVerifiedTaskPages,
+    runtimeVerifiedTaskPages: readerAudit.runtimeVerifiedTaskPages,
+  },
+  artifacts: {
+    discovery: 'generated/docs-discovery/current.json',
+    capabilityCatalog: 'docs/v2.0.0/capabilities.yaml',
+    readerAudit: 'generated/docs-certification/page-audit.json',
+    evidence: evidence.map(relative),
+    ...(runtimeInspection ? {
+      runtime: {
+        requestedImage: runtimeImage,
+        digest: runtimeInspection.RepoDigests?.find(value => value.includes('@sha256:')),
+        sourceRevision: runtimeInspection.Config?.Labels?.['org.opencontainers.image.revision'],
+      },
+    } : {}),
+    ...(releaseCertification ? {
+      renderedSite: 'generated/docs-certification/rendered-site.json',
+    } : {}),
+  },
+};
+
+mkdirSync(join(root, 'generated/docs-certification'), { recursive: true });
+const reportName = fullRuntime ? 'current.json' : 'static.json';
+writeFileSync(join(root, 'generated/docs-certification', reportName), `${JSON.stringify(report, null, 2)}\n`);
+console.log(JSON.stringify(report, null, 2));

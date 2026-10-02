@@ -261,7 +261,7 @@ export default function TopbarNotifications() {
     });
   }, []);
 
-  const { isConnected: isLive } = useNotificationStream<Notification>({
+  const { isConnected: isLive, connectionState } = useNotificationStream<Notification>({
     onNotifications: handleIncomingNotifications,
     onUnreadCount: count => setUnreadCount(count),
     onError: error => {
@@ -271,6 +271,17 @@ export default function TopbarNotifications() {
       }
     },
   });
+  const connectionLabel = pollingRequired
+    ? 'Polling'
+    : connectionState === 'live'
+      ? 'Live'
+      : connectionState === 'connecting'
+        ? 'Connecting'
+        : connectionState === 'offline'
+          ? 'Offline'
+          : connectionState === 'paused'
+            ? 'Paused'
+            : 'Reconnecting';
 
   // Demand-driven loading: only fetch 50 notifications when the user actually opens the drawer
   useEffect(() => {
@@ -426,7 +437,7 @@ export default function TopbarNotifications() {
                         isLive ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'
                       )}
                     />
-                    {isLive ? 'Live' : 'Polling'}
+                    {connectionLabel}
                   </span>
                 </div>
               </div>
@@ -564,7 +575,7 @@ export default function TopbarNotifications() {
             className="text-xs text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/70 h-8 px-2.5 cursor-pointer"
             onClick={() => {
               setOpen(false);
-              router.push('/settings/notifications');
+              router.push('/settings/profile?tab=notifications');
             }}
             title="Notification Preferences"
           >

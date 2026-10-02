@@ -77,8 +77,6 @@ export default async function SetupPage({
     process.env.NEXTAUTH_URL ||
     'http://localhost:3000';
 
-  const requiresSecret = Boolean(process.env.SETUP_SECRET || process.env.BOOTSTRAP_SECRET);
-
   return (
     <AuthLayout>
       <AuthCard>
@@ -109,7 +107,7 @@ export default async function SetupPage({
           </p>
         </div>
 
-        <BootstrapSetupForm initialAppUrl={detectedAppUrl} requiresSecret={requiresSecret} />
+        <BootstrapSetupForm initialAppUrl={detectedAppUrl} requiresSecret />
       </AuthCard>
     </AuthLayout>
   );

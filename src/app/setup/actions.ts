@@ -12,6 +12,12 @@ import { getClientIp } from '@/lib/client-ip';
 import { consumeAuthRateLimit } from '@/lib/auth-abuse';
 import { PASSWORD_TRANSPORT_MAX_CODE_UNITS, validatePasswordStrength } from '@/lib/passwords';
 import { getAuthoritativeRequestOrigin } from '@/lib/request-host';
+import { normalizePublicOrigin } from '@/lib/public-origin';
+import {
+  BOOTSTRAP_CONFIG_KEY,
+  hashBootstrapCode,
+  parseBootstrapState,
+} from '@/lib/bootstrap-security';
 
 const BOOTSTRAP_TRANSACTION_ATTEMPTS = 3;
 const BOOTSTRAP_RATE_WINDOW_MS = 15 * 60 * 1000;
@@ -28,7 +34,7 @@ const schema = z
   .object({
     name: z.string().trim().min(1).max(100),
     email: z.string().trim().email().max(254),
-    appUrl: z.string().trim().url().max(256).optional().or(z.literal('')),
+    appUrl: z.string().trim().max(256).optional().or(z.literal('')),
     setupSecret: z.string().trim().max(256).optional().or(z.literal('')),
     password: z.string().min(1).max(PASSWORD_TRANSPORT_MAX_CODE_UNITS),
     confirmPassword: z.string().min(1).max(PASSWORD_TRANSPORT_MAX_CODE_UNITS),
@@ -60,13 +66,21 @@ export async function bootstrapAdmin(formData: FormData) {
   const { name, password, confirmPassword } = parsed.data;
   const email = parsed.data.email.toLowerCase();
 
-  const requiredSecret = process.env.SETUP_SECRET || process.env.BOOTSTRAP_SECRET;
-  if (requiredSecret) {
-    const submittedSecret = parsed.data.setupSecret || '';
-    if (!constantTimeUtf8Equal(submittedSecret, requiredSecret.trim())) {
-      return { error: 'Invalid or missing setup secret.' };
+  let customAppUrl: string | null = null;
+  if (parsed.data.appUrl) {
+    try {
+      customAppUrl = normalizePublicOrigin(parsed.data.appUrl);
+    } catch {
+      return { error: 'Application URL must be an HTTP or HTTPS origin without credentials, a path, query, or fragment.' };
     }
   }
+
+  const requiredSecret = process.env.SETUP_SECRET || process.env.BOOTSTRAP_SECRET;
+  const submittedSecret = parsed.data.setupSecret || '';
+  const environmentSecretAuthorized = Boolean(
+    requiredSecret && constantTimeUtf8Equal(submittedSecret, requiredSecret.trim())
+  );
+  if (!submittedSecret) return { error: 'Invalid, expired, or missing bootstrap code.' };
 
   if (!constantTimeUtf8Equal(password, confirmPassword)) {
     return { error: 'Passwords do not match.' };
@@ -90,6 +104,32 @@ export async function bootstrapAdmin(formData: FormData) {
         async tx => {
           if ((await tx.user.count()) > 0) throw new Error('SYSTEM_ALREADY_INITIALIZED');
 
+          if (!environmentSecretAuthorized) {
+            const authorizationRow = await tx.systemConfig.findUnique({
+              where: { key: BOOTSTRAP_CONFIG_KEY },
+              select: { value: true },
+            });
+            const authorization = parseBootstrapState(authorizationRow?.value);
+            const submittedHash = hashBootstrapCode(submittedSecret);
+            const authorized = Boolean(
+              authorization &&
+                !authorization.usedAt &&
+                new Date(authorization.expiresAt) > new Date() &&
+                constantTimeUtf8Equal(submittedHash, authorization.tokenHash)
+            );
+            if (!authorized || !authorization) throw new Error('BOOTSTRAP_AUTHORIZATION_INVALID');
+            await tx.systemConfig.update({
+              where: { key: BOOTSTRAP_CONFIG_KEY },
+              data: {
+                value: {
+                  ...authorization,
+                  usedAt: new Date().toISOString(),
+                },
+                updatedBy: null,
+              },
+            });
+          }
+
           const created = await tx.user.create({
             data: {
               name,
@@ -112,7 +152,6 @@ export async function bootstrapAdmin(formData: FormData) {
             existingSettings?.appUrl || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL
           );
 
-          const customAppUrl = parsed.data.appUrl ? parsed.data.appUrl.replace(/\/+$/, '') : null;
           const targetAppUrl =
             customAppUrl || (!hasPreconfiguredAppUrl ? resolveBootstrapAppUrl(headerStore) : null);
 
@@ -155,6 +194,9 @@ export async function bootstrapAdmin(formData: FormData) {
     } catch (error) {
       if (error instanceof Error && error.message === 'SYSTEM_ALREADY_INITIALIZED') {
         redirect('/login');
+      }
+      if (error instanceof Error && error.message === 'BOOTSTRAP_AUTHORIZATION_INVALID') {
+        return { error: 'Invalid, expired, or already-used bootstrap code.' };
       }
       if (isTransactionConflict(error) && attempt < BOOTSTRAP_TRANSACTION_ATTEMPTS) continue;
       throw error;

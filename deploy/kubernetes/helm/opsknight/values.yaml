@@ -212,13 +212,19 @@ secrets:
   existingSecret: ''
   keys:
     databaseUrl: DATABASE_URL
+    # Direct PostgreSQL route used by migrations and schema/index installers.
+    # Keep this distinct from a transaction-pooled Web URL.
+    directDatabaseUrl: DIRECT_DATABASE_URL
     webDatabaseUrl: WEB_DATABASE_URL
     nextauthSecret: NEXTAUTH_SECRET
     encryptionKey: ENCRYPTION_KEY
+    setupSecret: SETUP_SECRET
     postgresUser: POSTGRES_USER
     postgresPassword: POSTGRES_PASSWORD
   nextauthSecret: 'change_this_to_a_random_secret_in_production'
   encryptionKey: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
+  # Legacy persistent bootstrap secret. Prefer the 30-minute one-time bootstrap code.
+  setupSecret: ''
 
 # Pre-deploy migration Job. When enabled, migrations run once via a Helm
 # pre-install/pre-upgrade hook Job rather than inside each application pod.
@@ -241,6 +247,10 @@ config:
   nodeEnv: production
   nextauthUrl: 'http://localhost:3000'
   nextPublicAppUrl: 'http://localhost:3000'
+  trustProxyHeaders: 'false'
+  trustedProxyHops: '1'
+  appHostAliases: ''
+  redirectToCanonicalHost: 'true'
   port: '3000'
   hostname: '0.0.0.0'
   nextTelemetryDisabled: '1'

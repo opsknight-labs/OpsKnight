@@ -11,6 +11,10 @@ data:
   NODE_ENV: 'production'
   NEXTAUTH_URL: 'http://localhost:3000' # Update this to your public HTTPS origin
   NEXT_PUBLIC_APP_URL: 'http://localhost:3000' # Normally the same as NEXTAUTH_URL
+  TRUST_PROXY_HEADERS: 'false'
+  TRUSTED_PROXY_HOPS: '1'
+  APP_HOST_ALIASES: ''
+  REDIRECT_TO_CANONICAL_HOST: 'true'
   PORT: '3000'
   HOSTNAME: '0.0.0.0'
   NEXT_TELEMETRY_DISABLED: '1'

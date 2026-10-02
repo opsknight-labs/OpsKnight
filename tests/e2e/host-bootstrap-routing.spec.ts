@@ -205,10 +205,12 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
   });
 
   test('4. operator fills setup form and creates first administrator', async ({ page }) => {
+    const bootstrapCode = issueBootstrapCode();
     await page.goto(`${APP_BASE}/setup`);
 
     await page.getByLabel('Full name').fill('E2E Bootstrap Admin');
     await page.getByLabel('Email address').fill(ADMIN_EMAIL);
+    await page.getByLabel('Bootstrap code').fill(bootstrapCode);
     await page.getByLabel('Administrator password').fill(ADMIN_PASSWORD);
     await page.getByLabel('Confirm password').fill(ADMIN_PASSWORD);
     await page.getByRole('button', { name: 'Create administrator' }).click();

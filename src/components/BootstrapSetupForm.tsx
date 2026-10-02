@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useMemo, useState } from 'react';
+import { useActionState, useMemo, useState, useSyncExternalStore } from 'react';
 import { useFormStatus } from 'react-dom';
 import {
   Mail,
@@ -81,6 +81,11 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [dismissedError, setDismissedError] = useState<string | null>(null);
   const [emailTouched, setEmailTouched] = useState(false);
+  const currentOrigin = useSyncExternalStore(
+    () => () => undefined,
+    () => window.location.origin,
+    () => ''
+  );
 
   const [state, formAction] = useActionState<FormState, FormData>(
     async (_previous, formData) => bootstrapAdmin(formData),
@@ -88,6 +93,23 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
   );
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const normalizedAppOrigin = (() => {
+    try {
+      const candidate = new URL(appUrl);
+      if (
+        !['http:', 'https:'].includes(candidate.protocol) ||
+        candidate.username ||
+        candidate.password ||
+        candidate.pathname !== '/' ||
+        candidate.search ||
+        candidate.hash
+      ) return '';
+      return candidate.origin;
+    } catch {
+      return '';
+    }
+  })();
+  const appUrlMatchesBrowser = Boolean(currentOrigin && normalizedAppOrigin === currentOrigin);
   const passwordsMatch = Boolean(
     password && confirmPassword && Object.is(password, confirmPassword)
   );
@@ -125,6 +147,7 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
   const canSubmit =
     Boolean(name.trim()) &&
     isEmailValid &&
+    Boolean(normalizedAppOrigin) &&
     (!requiresSecret || Boolean(setupSecret.trim())) &&
     isPasswordStrong(password, passwordContext) &&
     passwordsMatch;
@@ -236,7 +259,7 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
           >
             Application URL
           </label>
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">Base URL</span>
+          <span className="text-[11px] text-slate-400 dark:text-slate-500">Detected from request</span>
         </div>
         <div className="group relative flex items-center">
           <div className="absolute left-4 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
@@ -256,9 +279,14 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
         </div>
         <div className="mt-1.5 space-y-1 text-[11px] leading-relaxed">
           <p className="text-slate-500 dark:text-slate-400">
-            The web address where your team accesses OpsKnight. Used to generate login redirects,
-            email invite links, and webhook callbacks.
+            Canonical public address used for application links, callbacks, and host authorization.
+            Keep it aligned with your authentication URL in normal deployments.
           </p>
+          {appUrlMatchesBrowser ? (
+            <p className="text-emerald-600 dark:text-emerald-400">✓ Matches the address currently open in your browser.</p>
+          ) : (
+            <p className="text-amber-600 dark:text-amber-400">⚠ This differs from the address currently open in your browser.</p>
+          )}
           <p className="text-amber-600/90 dark:text-amber-400/90">
             <span className="font-semibold">Important:</span> Enter the exact address (domain or IP)
             you will use. For security, accessing OpsKnight from any unlisted address will be
@@ -267,14 +295,14 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
         </div>
       </div>
 
-      {/* Setup Secret (only shown when required by server environment) */}
+      {/* One-time bootstrap capability, with environment secret compatibility. */}
       {requiresSecret && (
         <div>
           <label
             htmlFor="setup-secret"
             className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5"
           >
-            Setup secret
+            Bootstrap code
           </label>
           <div className="group relative flex items-center">
             <div className="absolute left-4 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
@@ -285,7 +313,7 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
               name="setupSecret"
               type="password"
               autoComplete="off"
-              placeholder="Enter environment setup secret"
+              placeholder="Enter the one-time bootstrap code"
               required
               maxLength={256}
               value={setupSecret}
@@ -297,7 +325,8 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
             />
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            Required by the server environment configuration (SETUP_SECRET).
+            Generate a 30-minute, one-time code with `node scripts/create-bootstrap-code.mjs`.
+            A configured SETUP_SECRET remains accepted for deployment compatibility.
           </p>
         </div>
       )}

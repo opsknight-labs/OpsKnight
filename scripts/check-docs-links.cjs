@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 /**
- * Fail if relative markdown links in docs/v1.4 do not resolve to a file.
+ * Fail if relative Markdown links in the selected documentation tree do not resolve.
  * Skips http(s), mailto, and in-page hashes.
  */
 const fs = require("fs");
 const path = require("path");
 
-const ROOT = fs.existsSync(path.join(__dirname, "..", "docs", "v1.5"))
-  ? path.join(__dirname, "..", "docs", "v1.5")
-  : path.join(__dirname, "..", "docs", "v1.4");
+const requestedRoot = process.argv[2] || "docs/v2.0.0";
+const ROOT = path.resolve(path.join(__dirname, ".."), requestedRoot);
+
+if (!fs.existsSync(ROOT) || !fs.statSync(ROOT).isDirectory()) {
+  console.error(`Documentation root does not exist: ${requestedRoot}`);
+  process.exit(1);
+}
 const LINK_RE = /\[[^\]]*]\(([^)]+)\)/g;
 
 function walk(dir, acc = []) {
@@ -61,4 +65,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Checked ${files.length} files in docs/${path.basename(ROOT)} — relative links resolve.`);
+console.log(`Checked ${files.length} files in ${path.relative(process.cwd(), ROOT)} — relative links resolve.`);

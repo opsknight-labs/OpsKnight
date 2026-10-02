@@ -6,6 +6,7 @@ export type IncidentListFilter =
   | 'all'
   | 'mine'
   | 'all_open'
+  | 'critical_focus'
   | 'muted'
   | 'open'
   | 'acknowledged'
@@ -18,6 +19,7 @@ const incidentFilters: IncidentListFilter[] = [
   'all',
   'mine',
   'all_open',
+  'critical_focus',
   'muted',
   'open',
   'acknowledged',
@@ -85,6 +87,9 @@ export function buildIncidentWhere({
     where.status = { in: activeIncidentStatuses() };
   } else if (filter === 'all_open') {
     where.status = { in: activeIncidentStatuses() };
+  } else if (filter === 'critical_focus') {
+    where.status = { in: activeIncidentStatuses() };
+    where.OR = [{ urgency: 'HIGH' }, { priority: 'P1' }];
   } else if (filter === 'muted') {
     where.status = { in: mutedIncidentStatuses() };
   } else if (filter === 'open') {
@@ -119,11 +124,17 @@ export function buildIncidentWhere({
   }
 
   if (search) {
-    where.OR = [
+    const searchConditions: Prisma.IncidentWhereInput[] = [
       { title: { contains: search, mode: 'insensitive' } },
       { description: { contains: search, mode: 'insensitive' } },
       { id: { contains: search, mode: 'insensitive' } },
     ];
+    if (where.OR) {
+      where.AND = [{ OR: where.OR }, { OR: searchConditions }];
+      delete where.OR;
+    } else {
+      where.OR = searchConditions;
+    }
   }
 
   if (priority && priority !== 'all') {

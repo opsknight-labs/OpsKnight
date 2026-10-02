@@ -55,8 +55,9 @@ enum AuditEntityType {
   COMPLIANCE_MONITORING_RUN
 }
 
-// Data subject a privacy request concerns. Only USER is operable in Phase 2;
-// STATUS_SUBSCRIBER exists so the schema doesn't need another migration for it.
+// Data subject a privacy request concerns. USER supports automated fulfilment
+// for eligible request types. STATUS_SUBSCRIBER is tracked through the same
+// lifecycle but requires manual fulfilment in 2.0.
 enum PrivacyRequestSubjectType {
   USER
   STATUS_SUBSCRIBER

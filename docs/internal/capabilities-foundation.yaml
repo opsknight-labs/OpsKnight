@@ -1,0 +1,190 @@
+version: 2.0.0
+authority_order:
+  - runtime
+  - tests
+  - source
+  - historical_docs
+capabilities:
+  incident_lifecycle:
+    title: Manage the incident lifecycle
+    product_area: incidents
+    concepts:
+      - concepts/incidents.md
+      - concepts/incident-response.md
+      - concepts/incident-sla.md
+    guides: []
+    reference: []
+    tests:
+      - tests/lib/incidents/lifecycle.test.ts
+    sources:
+      - src/lib/incidents/lifecycle.ts
+      - src/app/(app)/incidents/actions.ts
+    evidence: []
+    roles: [responder, administrator]
+    status: partial
+  incident_acknowledgement:
+    title: Acknowledge an incident
+    product_area: incidents
+    concepts:
+      - concepts/incident-response.md
+      - concepts/incident-sla.md
+    guides: []
+    reference: []
+    tests: []
+    sources:
+      - src/components/incident/IncidentDetailScreen.tsx
+      - src/app/(app)/incidents/actions.ts
+    evidence: []
+    roles: [responder, administrator]
+    status: partial
+  services:
+    title: Organize operational services
+    product_area: services
+    concepts:
+      - concepts/services.md
+    guides: []
+    reference: []
+    tests: []
+    sources:
+      - src/app/(app)/services
+    evidence: []
+    roles: [administrator, responder]
+    status: partial
+  teams:
+    title: Manage operational teams
+    product_area: teams
+    concepts:
+      - concepts/teams.md
+    guides: []
+    reference: []
+    tests: []
+    sources:
+      - src/app/(app)/teams
+    evidence: []
+    roles: [administrator]
+    status: partial
+  on_call_schedules:
+    title: Build an on-call schedule
+    product_area: on-call
+    concepts:
+      - concepts/schedules.md
+    guides: []
+    reference: []
+    tests: []
+    sources:
+      - src/lib/schedules
+    evidence: []
+    roles: [administrator, responder]
+    status: partial
+  escalation_policies:
+    title: Configure escalation policies
+    product_area: escalation
+    concepts:
+      - concepts/escalation-policies.md
+    guides: []
+    reference: []
+    tests: []
+    sources:
+      - src/lib/escalation
+    evidence: []
+    roles: [administrator]
+    status: partial
+  notification_delivery:
+    title: Route and inspect notifications
+    product_area: notifications
+    concepts:
+      - concepts/notifications.md
+    guides: []
+    reference: []
+    tests: []
+    sources:
+      - src/lib/notification-providers.ts
+      - src/lib/user-notifications.ts
+    evidence: []
+    roles: [administrator, responder, operator]
+    status: partial
+  chatops_war_rooms:
+    title: Coordinate through provider-backed war rooms
+    product_area: chatops
+    concepts:
+      - concepts/chatops.md
+    guides: []
+    reference: []
+    tests: []
+    sources:
+      - src/lib/war-room
+    evidence: []
+    roles: [administrator, responder]
+    status: partial
+  status_pages:
+    title: Publish service status
+    product_area: status-pages
+    concepts:
+      - concepts/status-pages.md
+    guides: []
+    reference: []
+    tests: []
+    sources:
+      - src/lib/status-page-projection.ts
+      - src/lib/status-page-public-data.ts
+    evidence: []
+    roles: [administrator, responder]
+    status: partial
+  authentication:
+    title: Authenticate users
+    product_area: identity
+    concepts:
+      - concepts/authentication.md
+    guides: []
+    reference: []
+    tests: []
+    sources:
+      - src/lib/auth.ts
+      - src/lib/oidc.ts
+    evidence: []
+    roles: [administrator, operator]
+    status: partial
+  authorization:
+    title: Enforce role and scope permissions
+    product_area: authorization
+    concepts:
+      - concepts/permissions.md
+    guides: []
+    reference: []
+    tests: []
+    sources:
+      - src/lib/authorization.ts
+      - src/lib/rbac.ts
+    evidence: []
+    roles: [administrator, operator]
+    status: partial
+  deployment:
+    title: Deploy OpsKnight
+    product_area: deployment
+    concepts: []
+    guides:
+      - start/quickstart.md
+      - start/production-install.md
+    reference: []
+    tests: []
+    sources:
+      - deploy/compose/docker-compose.yml
+      - deploy/kubernetes/helm
+      - deploy/kubernetes/kustomize
+    evidence: []
+    roles: [operator, administrator]
+    status: partial
+  upgrades:
+    title: Upgrade from OpsKnight 1.x
+    product_area: upgrades
+    concepts: []
+    guides:
+      - start/migrate-from-v1.md
+    reference: []
+    tests: []
+    sources:
+      - prisma/migrations
+      - scripts/validate-release-tag.cjs
+    evidence: []
+    roles: [operator, administrator]
+    status: partial

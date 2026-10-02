@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { jsonSettingsChanged } from '@/lib/settings-api-response';
+import { normalizePublicOrigin } from '@/lib/public-origin';
 import {
   SettingsChangedMutationError,
   isSettingsChangedError,
@@ -22,20 +23,16 @@ const AppUrlSchema = z.object({
 function validateAppUrl(value: string): string | null {
   if (!value) return null;
   try {
-    const url = new URL(value);
-    if (!['http:', 'https:'].includes(url.protocol)) {
-      throw new Error('invalid protocol');
-    }
-    return url.href.replace(/\/$/, '');
+    return normalizePublicOrigin(value);
   } catch {
     throw new AppError({
       code: 'VALIDATION_FAILED',
-      userMessage: 'Application URL must be a valid absolute HTTP or HTTPS URL.',
+      userMessage: 'Application URL must be an HTTP or HTTPS origin without credentials, a path, query, or fragment.',
       fields: [
         {
           field: 'appUrl',
           code: 'invalid_url',
-          message: 'Application URL must be a valid absolute HTTP or HTTPS URL.',
+          message: 'Application URL must be an HTTP or HTTPS origin without credentials, a path, query, or fragment.',
         },
       ],
     });

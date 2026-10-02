@@ -1,0 +1,102 @@
+schemaVersion: 1
+source: generated/docs-evidence/current
+approvedSourceRevision: a379a492bfb02552899967c3dc8b67b970d56957
+runtimeImage: localhost:15000/opsknight-docs-v2@sha256:0ac0900f61f3a8d8f8c3b160661620261319ceb561882f1da5bfb4a985268107
+runtimeSourceRevision: a379a492bfb02552899967c3dc8b67b970d56957
+assets:
+  action-items.png:
+    evidence: response/action-items.png
+    sha256: f9dc328cf545df41fea809800969dcc328f4caad6de3039d2790c9dd1db3773d
+  analytics-overview.png:
+    evidence: analytics/overview.png
+    sha256: 0f762295180a58d4cf875fed0fe008adf6ab3b6041887ad0efa03f1451a4f17b
+  api-keys.png:
+    evidence: administration/api-keys.png
+    sha256: fc23dd27a7cfc96f57e5c0f00a98ed0796f27194d013363ea24fd8c3763316b3
+  audit-log.png:
+    evidence: administration/audit-log.png
+    sha256: 6a75319ad63b36218e46b3f73f7fc739d06a0d0a3157d2ec058c743389eda956
+  custom-fields.png:
+    evidence: administration/custom-fields.png
+    sha256: 0115622b16aaa6f3c6a6405bf6f07764b6a51fb786fa6ba0c054e4abd0da6c03
+  escalation-policies.png:
+    evidence: escalation/policies.png
+    sha256: 6a91c6ac7d420b0e77055942e65f4106b89110496cb5b967208e7b89c82e6ed1
+  escalation-policy-detail.png:
+    evidence: escalation/policy-detail.png
+    sha256: f268dcddb1723847e6f68f68e897326b87a9ab0e8875a498be0964a91dcc0199
+  event-logs.png:
+    evidence: operations/events.png
+    sha256: a862ee6367a87e490ad60a375d6e05bd52c92c228606c4c0b912224ac9101cf0
+  health-center.png:
+    evidence: operations/health-center.png
+    sha256: f6e28a0ce7856907ed9f4555566b52a290a9ebdcfe3bc905129c37302768f87e
+  incident-acknowledged.png:
+    evidence: incidents/acknowledge.png
+    sha256: 7fa745d36629af0a0c1f5637496a7c0a24823bef8f557781bebab8445340baf8
+  incident-create.png:
+    evidence: incidents/create.png
+    sha256: fc5a316007b0d01b8a9e41f5d9f1e8bcf8382c6c5ebdcef5f23cdd44676187ca
+  incident-detail.png:
+    evidence: incidents/detail.png
+    sha256: b48d04550226d0688f77dd4bb11a4b03730418b61dfcdedc60564511b53929d9
+  incident-timeline.png:
+    evidence: incidents/timeline.png
+    sha256: 67a297ea607b4714386a6b2b4b14469f436e06d6673358cace7bdec4abef8a28
+  incidents-list.png:
+    evidence: incidents/list.png
+    sha256: 1cf17a58f86d24bc33ba098966b1e5dd649a144cc1389eba94ac2bf956108316
+  integration-settings.png:
+    evidence: integrations/settings.png
+    sha256: e99b0bab223de8175da23c05f52a78e6701a7f4153e59b64c1590e870985484e
+  notification-settings.png:
+    evidence: notifications/settings.png
+    sha256: 3f5e8dd820e45dc158d782a1c3e96e0fdb5eab319cd6af42403f9ac283cb54c5
+  on-call-schedule-detail.png:
+    evidence: on-call/schedule-detail.png
+    sha256: 0563a1b73d4af443f15e90ab8c4221ecba2b7c0251f3109105863303104ea2d2
+  on-call-schedules.png:
+    evidence: on-call/schedules.png
+    sha256: 82f07b114b49c82d7f041d116a277d3d0d3fabb7cc794c3fade90eed4af55a04
+  postmortems.png:
+    evidence: response/postmortems.png
+    sha256: 9773836047d5016b47fe16a0890c0bd230ffa31c4bd93829300130eca8288d56
+  privacy-requests.png:
+    evidence: administration/privacy-requests.png
+    sha256: 4378d8f73928d30d38ca6596ecdaaecefa7bdbb56d27f5b21ec8870e38b8318d
+  reports.png:
+    evidence: analytics/reports.png
+    sha256: 1fc1c1a0db9ca3cbfba45ea8c51dc8efb8357bce70e6fec877c84c0093cb3aa9
+  services.png:
+    evidence: services/list.png
+    sha256: ad710121bfa1815fc42cc5dda33e09ac4af6efc0410c28e388f9f28ec18354a5
+  status-pages.png:
+    evidence: status-pages/list.png
+    sha256: 1dcddec5669dd4242e563d3dee3e6680b070db3f7f697272cec72f0bca1f27d4
+  system-logs.png:
+    evidence: operations/system-logs.png
+    sha256: d86ff3b183ed071aff4172b63b1c6abd0fb0106256fcac0eb0e934941cd92e1a
+  teams.png:
+    evidence: teams/list.png
+    sha256: 7fb6bb322b7adbfabf0f8ff0efa914de792ee267a08debc4dc408c96a2accff9
+  users.png:
+    evidence: administration/users.png
+    sha256: 89742702eb907af7e37912f95fd80d4ac0f254bd647feff277da49ebf1aacbd9
+  dashboard-template.png:
+    evidence: analytics/dashboard-template.png
+    sha256: 20c7afc6286799f5cd1070e09ebfcfc113c426b8851ee019190e3c9884ab40ca
+  dashboard-saved.png:
+    evidence: analytics/dashboard-saved.png
+    sha256: 7ad0ffedc92d96074a38ff9151f4bfe47e43a2791e75eefb5179e507470fd19a
+  dashboard-edit.png:
+    evidence: analytics/dashboard-edit.png
+    sha256: 521544573961736cc259f0ac0dfdaed1d60b491d945c406e5986bc2a38c0b574
+manualAssets:
+  teams-incident-card.png:
+    sha256: 184bcc4b1fd76b0f99df89d8f0275dca5e8909592f811fc558426da0a6a0a6e2
+    provenance: User-supplied Microsoft Teams incident-card capture added in commit ed8195f334eeeed14cccce1674322d986023bc38.
+    classification: manual-product-example
+  teams-chatops-war-room.png:
+    sha256: ab76f52b3403136e3b3471f6dcee85a791fd337465c1ba25862ff28be870aff4
+    provenance: User-supplied Microsoft Teams ChatOps war-room capture added in commit ed8195f334eeeed14cccce1674322d986023bc38.
+    classification: manual-product-example

@@ -15,13 +15,21 @@ type NotificationStreamHandlers<T = unknown> = {
   onError?: (error: Error) => void;
 };
 
+export type NotificationConnectionState =
+  | 'connecting'
+  | 'live'
+  | 'reconnecting'
+  | 'offline'
+  | 'paused'
+  | 'unsupported';
+
 type Subscriber = {
   id: symbol;
   enabled: () => boolean;
   notifications: (items: unknown[]) => void;
   unread: (count: number) => void;
   error: (error: Error) => void;
-  connection: (connected: boolean) => void;
+  connection: (state: NotificationConnectionState) => void;
 };
 
 const subscribers = new Map<symbol, Subscriber>();
@@ -41,18 +49,18 @@ const canConnect = () =>
   !document.hidden &&
   (typeof navigator === 'undefined' || navigator.onLine);
 
-function notifyConnection(connected: boolean) {
+function notifyConnection(state: NotificationConnectionState) {
   for (const subscriber of subscribers.values()) {
-    if (subscriber.enabled()) subscriber.connection(connected);
+    if (subscriber.enabled()) subscriber.connection(state);
   }
 }
 
-function closeConnection() {
+function closeConnection(state: NotificationConnectionState = 'reconnecting') {
   if (eventSource) {
     eventSource.close();
     eventSource = null;
   }
-  notifyConnection(false);
+  notifyConnection(state);
 }
 
 function clearReconnectTimer() {
@@ -65,6 +73,7 @@ function scheduleReconnect() {
   clearReconnectTimer();
   if (!canConnect()) return;
   reconnectAttempt += 1;
+  notifyConnection('reconnecting');
   const base = Math.min(30_000, 1_000 * 2 ** Math.min(reconnectAttempt - 1, 5));
   const jittered = Math.max(500, Math.round(base * (0.65 + Math.random() * 0.7)));
   reconnectTimer = setTimeout(() => {
@@ -116,10 +125,11 @@ function connect() {
 
   const source = new EventSource(streamUrl);
   eventSource = source;
+  notifyConnection(reconnectAttempt > 0 ? 'reconnecting' : 'connecting');
   source.onopen = () => {
     if (eventSource !== source) return;
     reconnectAttempt = 0;
-    notifyConnection(true);
+    notifyConnection('live');
   };
   source.onmessage = event => {
     if (eventSource !== source) return;
@@ -135,7 +145,7 @@ function connect() {
   source.onerror = () => {
     if (eventSource !== source || isAuthTerminated) return;
     const error = new Error('Notification stream temporarily unavailable');
-    closeConnection();
+    closeConnection('reconnecting');
     for (const subscriber of subscribers.values()) {
       if (subscriber.enabled()) subscriber.error(error);
     }
@@ -156,7 +166,14 @@ function connect() {
 function reconcileConnection() {
   if (!canConnect()) {
     clearReconnectTimer();
-    closeConnection();
+    const state: NotificationConnectionState = !supportsEventSource()
+      ? 'unsupported'
+      : typeof navigator !== 'undefined' && !navigator.onLine
+        ? 'offline'
+        : document.hidden
+          ? 'paused'
+          : 'reconnecting';
+    closeConnection(state);
     return;
   }
   connect();
@@ -181,7 +198,8 @@ export function useNotificationStream<T = unknown>({
   onUnreadCount,
   onError,
 }: NotificationStreamHandlers<T>) {
-  const [isConnected, setIsConnected] = useState(false);
+  const [connectionState, setConnectionState] =
+    useState<NotificationConnectionState>('connecting');
   const enabledRef = useRef(enabled);
   const handlersRef = useRef({ onNotifications, onUnreadCount, onError });
 
@@ -201,10 +219,11 @@ export function useNotificationStream<T = unknown>({
       notifications: items => handlersRef.current.onNotifications?.(items as T[]),
       unread: count => handlersRef.current.onUnreadCount?.(count),
       error: error => handlersRef.current.onError?.(error),
-      connection: setIsConnected,
+      connection: setConnectionState,
     });
 
     if (!supportsEventSource()) {
+      queueMicrotask(() => setConnectionState('unsupported'));
       handlersRef.current.onError?.(new Error('EventSource not supported'));
     } else {
       reconcileConnection();
@@ -214,7 +233,7 @@ export function useNotificationStream<T = unknown>({
       subscribers.delete(id);
       if (subscribers.size === 0) {
         clearReconnectTimer();
-        closeConnection();
+        closeConnection('paused');
         reconnectAttempt = 0;
       } else {
         reconcileConnection();
@@ -222,7 +241,11 @@ export function useNotificationStream<T = unknown>({
     };
   }, []);
 
-  return { isConnected, supported: supportsEventSource() };
+  return {
+    isConnected: connectionState === 'live',
+    connectionState,
+    supported: supportsEventSource(),
+  };
 }
 
 export function resetNotificationStreamForTesting() {

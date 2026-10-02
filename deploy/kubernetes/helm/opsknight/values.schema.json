@@ -8,6 +8,24 @@
       "required": ["mode"],
       "properties": { "mode": { "type": "string", "enum": ["integrated", "split"] } }
     },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeEnv", "nextauthUrl", "nextPublicAppUrl", "trustProxyHeaders", "trustedProxyHops", "appHostAliases", "redirectToCanonicalHost", "port", "hostname", "nextTelemetryDisabled", "notificationControlPlanePersonal"],
+      "properties": {
+        "nodeEnv": { "type": "string" },
+        "nextauthUrl": { "type": "string", "format": "uri" },
+        "nextPublicAppUrl": { "type": "string", "format": "uri" },
+        "trustProxyHeaders": { "type": ["string", "boolean"] },
+        "trustedProxyHops": { "type": ["string", "integer"] },
+        "appHostAliases": { "type": "string" },
+        "redirectToCanonicalHost": { "type": ["string", "boolean"] },
+        "port": { "type": ["string", "integer"] },
+        "hostname": { "type": "string" },
+        "nextTelemetryDisabled": { "type": ["string", "boolean"] },
+        "notificationControlPlanePersonal": { "type": ["string", "boolean"] }
+      }
+    },
     "web": { "$ref": "#/definitions/webRole" },
     "scheduler": { "$ref": "#/definitions/schedulerRole" },
     "generalWorker": { "$ref": "#/definitions/workerRole" },

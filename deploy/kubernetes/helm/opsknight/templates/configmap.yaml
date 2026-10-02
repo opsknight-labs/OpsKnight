@@ -8,6 +8,10 @@ data:
   NODE_ENV: {{ .Values.config.nodeEnv | quote }}
   NEXTAUTH_URL: {{ .Values.config.nextauthUrl | quote }}
   NEXT_PUBLIC_APP_URL: {{ .Values.config.nextPublicAppUrl | quote }}
+  TRUST_PROXY_HEADERS: {{ .Values.config.trustProxyHeaders | quote }}
+  TRUSTED_PROXY_HOPS: {{ .Values.config.trustedProxyHops | quote }}
+  APP_HOST_ALIASES: {{ .Values.config.appHostAliases | quote }}
+  REDIRECT_TO_CANONICAL_HOST: {{ .Values.config.redirectToCanonicalHost | quote }}
   PORT: {{ .Values.config.port | quote }}
   HOSTNAME: {{ .Values.config.hostname | quote }}
   NEXT_TELEMETRY_DISABLED: {{ .Values.config.nextTelemetryDisabled | quote }}

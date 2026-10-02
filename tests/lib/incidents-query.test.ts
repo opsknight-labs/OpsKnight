@@ -18,7 +18,31 @@ describe('incidents-query helpers', () => {
     expect(normalizeIncidentFilter('acknowledged')).toBe('acknowledged');
     expect(normalizeIncidentFilter('open')).toBe('open');
     expect(normalizeIncidentFilter('muted')).toBe('muted');
+    expect(normalizeIncidentFilter('critical_focus')).toBe('critical_focus');
     expect(normalizeIncidentSort('updated')).toBe('updated');
+  });
+
+  it('builds critical focus as active high-urgency or P1 incidents', () => {
+    expect(buildIncidentWhere({ filter: 'critical_focus' })).toEqual({
+      status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+      OR: [{ urgency: 'HIGH' }, { priority: 'P1' }],
+    });
+  });
+
+  it('preserves critical-focus semantics when search is present', () => {
+    expect(buildIncidentWhere({ filter: 'critical_focus', search: 'database' })).toEqual({
+      status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+      AND: [
+        { OR: [{ urgency: 'HIGH' }, { priority: 'P1' }] },
+        {
+          OR: [
+            { title: { contains: 'database', mode: 'insensitive' } },
+            { description: { contains: 'database', mode: 'insensitive' } },
+            { id: { contains: 'database', mode: 'insensitive' } },
+          ],
+        },
+      ],
+    });
   });
 
   it('builds the combined muted filter from snoozed and suppressed states', () => {

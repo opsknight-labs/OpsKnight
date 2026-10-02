@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
+import { GLOBAL_NAVIGATION_SHORTCUTS } from '@/lib/keyboard-shortcuts';
 
 type KeyboardHandlerProps = {
   onShortcutsToggle: () => void;
@@ -54,50 +55,12 @@ export default function GlobalKeyboardHandler({ onShortcutsToggle }: KeyboardHan
       // If G was pressed, handle navigation
       if (gPressedRef.current && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const key = e.key.toLowerCase();
-        switch (key) {
-          case 'd':
-            e.preventDefault();
-            router.push('/');
-            setGPressed(false);
-            break;
-          case 'i':
-            e.preventDefault();
-            router.push('/incidents');
-            setGPressed(false);
-            break;
-          case 's':
-            e.preventDefault();
-            router.push('/services');
-            setGPressed(false);
-            break;
-          case 't':
-            e.preventDefault();
-            router.push('/teams');
-            setGPressed(false);
-            break;
-          case 'u':
-            e.preventDefault();
-            router.push('/users');
-            setGPressed(false);
-            break;
-          case 'c':
-            e.preventDefault();
-            router.push('/schedules');
-            setGPressed(false);
-            break;
-          case 'p':
-            e.preventDefault();
-            router.push('/policies');
-            setGPressed(false);
-            break;
-          case 'a':
-            e.preventDefault();
-            router.push('/analytics');
-            setGPressed(false);
-            break;
-          default:
-            setGPressed(false);
+        const destination = GLOBAL_NAVIGATION_SHORTCUTS.find(item => item.key === key);
+        if (destination) {
+          e.preventDefault();
+          router.push(destination.href);
         }
+        setGPressed(false);
         return;
       }
 

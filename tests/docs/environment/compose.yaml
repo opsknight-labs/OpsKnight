@@ -1,0 +1,58 @@
+# Dedicated to documentation journeys and screenshot capture. Do not reuse the
+# application development or integration-test Compose projects.
+name: opsknight-docs-v2-capture
+
+services:
+  opsknight-db:
+    ports: !override
+      - '127.0.0.1:15432:5432'
+    environment:
+      POSTGRES_USER: opsknight_docs
+      POSTGRES_PASSWORD: opsknight_docs
+      POSTGRES_DB: opsknight_docs
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U opsknight_docs -d opsknight_docs']
+    volumes: !override
+      - docs_postgres_data:/var/lib/postgresql/data
+
+  opsknight-app:
+    image: ${DOCS_OPSKNIGHT_IMAGE:-localhost:15000/opsknight-docs-v2@sha256:0ac0900f61f3a8d8f8c3b160661620261319ceb561882f1da5bfb4a985268107}
+    pull_policy: ${DOCS_IMAGE_PULL_POLICY:-always}
+    ports: !override
+      - '127.0.0.1:13200:3000'
+    environment:
+      NODE_ENV: production
+      # checkov:skip=CKV_SECRET_4: Ephemeral documentation-only database URI.
+      DATABASE_URL: postgresql://opsknight_docs:opsknight_docs@opsknight-db:5432/opsknight_docs?schema=public
+      DIRECT_DATABASE_URL: postgresql://opsknight_docs:opsknight_docs@opsknight-db:5432/opsknight_docs?schema=public
+      NEXTAUTH_URL: http://localhost:13200
+      NEXT_PUBLIC_APP_URL: https://ops.northstar.example
+      # checkov:skip=CKV_SECRET_6: Ephemeral documentation-only secret.
+      NEXTAUTH_SECRET: docs-runtime-only-nextauth-secret
+      # checkov:skip=CKV_SECRET_6: Ephemeral documentation-only secret.
+      API_KEY_SECRET: docs-runtime-only-api-key-secret
+      # checkov:skip=CKV_SECRET_6: Ephemeral documentation-only encryption key.
+      ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
+      NEXTAUTH_COOKIE_SECURE: 'false'
+      PORT: '3000'
+      HOSTNAME: 0.0.0.0
+      NEXT_TELEMETRY_DISABLED: '1'
+
+  mock-slack:
+    image: wiremock/wiremock:3.13.1
+    networks: [opsknight-network]
+  mock-teams:
+    image: wiremock/wiremock:3.13.1
+    networks: [opsknight-network]
+  mock-jira:
+    image: wiremock/wiremock:3.13.1
+    networks: [opsknight-network]
+  mock-smtp:
+    image: axllent/mailpit:v1.27
+    networks: [opsknight-network]
+  webhook-receiver:
+    image: wiremock/wiremock:3.13.1
+    networks: [opsknight-network]
+
+volumes:
+  docs_postgres_data:

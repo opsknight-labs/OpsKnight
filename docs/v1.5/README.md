@@ -1,16 +1,28 @@
 ---
-title: OpsKnight documentation
-description: Install, page people, run incidents, and connect tools for this version.
+title: OpsKnight v1.5 development documentation archive
+description: Historical documentation from the unreleased v1.5 development line.
 order: 1
 ---
 
-# Documentation
+# OpsKnight v1.5 development documentation archive
+
+> **Historical, unreleased material:** v1.5 was a development line and was not
+> published as a stable OpsKnight release. This tree is retained as migration
+> source material while the product and documentation move to 2.0.0. Do not use
+> it as the source of truth for current behavior. Use the current executable
+> behavior, tests, source, and configuration in that order.
 
 OpsKnight is a transparent, self-hosted incident-operations platform. It connects alert ingestion, on-call routing, response coordination, customer communication, and learning on infrastructure you control.
 
-This tree is **v1.5**. Switch versions in the sidebar for older releases.
+This tree records the former **v1.5 development line**. Switch to the released
+documentation for supported versions, or use the v2.0.0 tree when working on
+the next major release.
 
-> **License for this documentation line:** the v1.5/current development line is intended for distribution under **GNU Affero General Public License v3 only (`AGPL-3.0-only`)** once the license transition is merged. Previously published OpsKnight releases remain under the license shipped with those releases. See [Licensing and source availability](./licensing) for the exact boundary and network-source obligations.
+> **License for this documentation line:** the archived v1.5 development material
+> is intended for distribution under **GNU Affero General Public License v3 only
+> (`AGPL-3.0-only`)**. Previously published OpsKnight releases remain under the
+> license shipped with those releases. See [Licensing and source availability](./licensing)
+> for the exact boundary and network-source obligations.
 
 ## Start here
 

@@ -19,10 +19,9 @@ import {
   Sparkles,
   Flame,
   Compass,
-  Sliders,
-  Globe,
+  Zap,
 } from 'lucide-react';
-import { KEYBOARD_SHORTCUTS } from '@/components/KeyboardShortcutsProvider';
+import { KEYBOARD_SHORTCUTS } from '@/lib/keyboard-shortcuts';
 
 const CATEGORY_META = new Map<
   string,
@@ -37,10 +36,10 @@ const CATEGORY_META = new Map<
     },
   ],
   [
-    'Global',
+    'Actions',
     {
-      icon: Globe,
-      description: 'Universal hotkeys available across all views',
+      icon: Zap,
+      description: 'Open global tools and start common response actions',
       badgeColor: 'text-primary border-primary/20 bg-primary/10',
     },
   ],
@@ -52,19 +51,11 @@ const CATEGORY_META = new Map<
       badgeColor: 'text-blue-500 border-blue-500/20 bg-blue-500/10',
     },
   ],
-  [
-    'Settings',
-    {
-      icon: Sliders,
-      description: 'Fast access to profile, security, and integration settings',
-      badgeColor: 'text-emerald-500 border-emerald-500/20 bg-emerald-500/10',
-    },
-  ],
 ]);
 
 export default function ShortcutsPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const categories = ['Incident Triage', 'Global', 'Navigation', 'Settings'];
+  const categories = [...new Set(KEYBOARD_SHORTCUTS.map(shortcut => shortcut.category))];
 
   const normalizedQuery = searchQuery.toLowerCase().trim();
   const filteredShortcuts = !normalizedQuery
