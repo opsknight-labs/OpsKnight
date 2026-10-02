@@ -164,6 +164,22 @@ describe('validateProductionEnv', () => {
     expect(() => validateProductionEnv()).toThrow(/POSTGRES_PASSWORD uses a known default placeholder/);
   });
 
+  it('rejects the NEXTAUTH_SECRET placeholder shipped in env.example', () => {
+    Object.assign(process.env, validProductionEnv, {
+      NEXTAUTH_SECRET: 'changeme_to_a_secure_random_string',
+    });
+
+    expect(() => validateProductionEnv()).toThrow(/NEXTAUTH_SECRET uses a known default placeholder/);
+  });
+
+  it('rejects the API_KEY_SECRET placeholder shipped in env.example', () => {
+    Object.assign(process.env, validProductionEnv, {
+      API_KEY_SECRET: 'changeme_to_a_different_secure_random_string',
+    });
+
+    expect(() => validateProductionEnv()).toThrow(/API_KEY_SECRET uses a known default placeholder/);
+  });
+
   it('allows placeholder secrets when ALLOW_INSECURE_SECRETS is enabled', () => {
     Object.assign(process.env, validProductionEnv, {
       ALLOW_INSECURE_SECRETS: 'true',
