@@ -6,6 +6,7 @@
   (dict "name" "general-worker" "values" .Values.generalWorker)
   (dict "name" "critical-worker" "values" .Values.criticalWorker)
   (dict "name" "bulk-worker" "values" .Values.bulkWorker)
+  (dict "name" "runbook-worker" "values" .Values.runbookWorker)
   (dict "name" "status-projector" "values" .Values.statusProjector)
 }}
 {{- range $role := $roles }}

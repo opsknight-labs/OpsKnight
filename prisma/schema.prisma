@@ -511,16 +511,17 @@ model User {
   overrides                   OnCallOverride[]             @relation("OverrideUser")
   overrideReplacements        OnCallOverride[]             @relation("OverrideReplacesUser")
   layerAssignments            OnCallLayerUser[]
-  runbooksCreated             Runbook[]                  @relation("RunbookCreatedBy")
-  runbookVersionsCreated      RunbookVersion[]           @relation("RunbookVersionCreatedBy")
-  runbookVersionsPublished    RunbookVersion[]           @relation("RunbookVersionPublishedBy")
-  runbookBindingsCreated      ServiceRunbookBinding[]    @relation("ServiceRunbookBindingCreatedBy")
-  runbookTriggersCreated      RunbookTrigger[]           @relation("RunbookTriggerCreatedBy")
-  runbookExecutionsTriggered  RunbookExecution[]         @relation("RunbookExecutionTriggeredBy")
-  runbookAgentsCreated        RunbookAgent[]             @relation("RunbookAgentCreatedBy")
-  runbookAgentsRevoked        RunbookAgent[]             @relation("RunbookAgentRevokedBy")
-  runbookAgentPoolsCreated    RunbookAgentPool[]         @relation("RunbookAgentPoolCreatedBy")
-  runbookSecretsCreated       RunbookSecret[]            @relation("RunbookSecretCreatedBy")
+  runbooksCreated             Runbook[]                    @relation("RunbookCreatedBy")
+  runbookVersionsCreated      RunbookVersion[]             @relation("RunbookVersionCreatedBy")
+  runbookVersionsPublished    RunbookVersion[]             @relation("RunbookVersionPublishedBy")
+  runbookBindingsCreated      ServiceRunbookBinding[]      @relation("ServiceRunbookBindingCreatedBy")
+  runbookTriggersCreated      RunbookTrigger[]             @relation("RunbookTriggerCreatedBy")
+  runbookExecutionsTriggered  RunbookExecution[]           @relation("RunbookExecutionTriggeredBy")
+  runbookStepsApproved        RunbookExecutionStep[]       @relation("RunbookStepApprovedBy")
+  runbookAgentsCreated        RunbookAgent[]               @relation("RunbookAgentCreatedBy")
+  runbookAgentsRevoked        RunbookAgent[]               @relation("RunbookAgentRevokedBy")
+  runbookAgentPoolsCreated    RunbookAgentPool[]           @relation("RunbookAgentPoolCreatedBy")
+  runbookSecretsCreated       RunbookSecret[]              @relation("RunbookSecretCreatedBy")
   apiKeys                     ApiKey[]
   incidentTemplates           IncidentTemplate[]
   updatedProviders            NotificationProvider[]
@@ -804,40 +805,40 @@ model OidcConfig {
 }
 
 model SlackIntegration {
-  id            String    @id @default(cuid())
+  id            String             @id @default(cuid())
   workspaceId   String
   workspaceName String?
   botToken      String
   signingSecret String?
   installedBy   String?
   scopes        String[]
-  enabled       Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  services      Service[] @relation("ServiceSlackIntegration")
+  enabled       Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  services      Service[]          @relation("ServiceSlackIntegration")
   destinations  SlackDestination[]
-  installer     User?     @relation(fields: [installedBy], references: [id], onDelete: SetNull)
+  installer     User?              @relation(fields: [installedBy], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId])
   @@index([workspaceId])
 }
 
 model SlackDestination {
-  id               String            @id @default(cuid())
-  serviceId        String
-  workspaceId      String
-  channelId        String
-  channelName      String?
-  isPrivate        Boolean           @default(false)
-  enabled          Boolean           @default(true)
-  integrationId    String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  updatedBy        String?
+  id            String   @id @default(cuid())
+  serviceId     String
+  workspaceId   String
+  channelId     String
+  channelName   String?
+  isPrivate     Boolean  @default(false)
+  enabled       Boolean  @default(true)
+  integrationId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  updatedBy     String?
 
-  service          Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  integration      SlackIntegration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
-  updater          User?             @relation("SlackDestinationUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+  service     Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  integration SlackIntegration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+  updater     User?             @relation("SlackDestinationUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
 
   @@unique([serviceId, workspaceId, channelId])
   @@index([serviceId])
@@ -966,9 +967,9 @@ model IncidentWarRoom {
   commandConversationId        String?
   commandCreateAttemptedAt     DateTime?
   messageGeneration            Int                    @default(1)
-  projectionVersion     Int                   @default(0)
+  projectionVersion            Int                    @default(0)
   lastProjectedVersion         Int                    @default(0)
-  lastProjectedAt       DateTime?
+  lastProjectedAt              DateTime?
   projectionLeaseToken         String?
   projectionLeaseExpiresAt     DateTime?
   provisioningToken            String?
@@ -988,7 +989,7 @@ model IncidentWarRoom {
   lastError                    String?
   lastErrorCode                String?
   health                       WarRoomHealthState     @default(HEALTHY)
-  lastReconciledAt      DateTime?
+  lastReconciledAt             DateTime?
   // Terminal drift debt: set when reconciliation window expires with
   // unverified external outcome. A low-frequency lane scans these rooms
   // by marker/planned name and archives any orphan channel idempotently
@@ -1801,10 +1802,6 @@ model NotificationDeliveryAttempt {
   reconciliationDeadline DateTime?
   latencyMs              Int?
   notification           Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
-
-  @@unique([notificationId, ordinal])
-  @@index([notificationId, startedAt])
-  @@index([outcome, startedAt])
   // Two additional partial indexes are managed as raw SQL (Prisma 5.x cannot express
   // WHERE predicates in @@index declarations). They are applied via migration
   // 20260927120200_add_voice_attempt_indexes/migration.sql using CREATE INDEX CONCURRENTLY:
@@ -1812,6 +1809,10 @@ model NotificationDeliveryAttempt {
   //   idx_attempt_provider_msg_id — (providerMessageId) WHERE providerMessageId IS NOT NULL
   // Do NOT add @@index entries for these here; doing so would generate a conflicting
   // prisma migrate diff that drops the partial indexes and recreates them as full ones.
+
+  @@unique([notificationId, ordinal])
+  @@index([notificationId, startedAt])
+  @@index([outcome, startedAt])
 }
 
 model NotificationProviderFeedback {
@@ -3377,37 +3378,37 @@ model Runbook {
   archivedAt         DateTime?
   createdById        String?
 
-  createdBy          User?             @relation("RunbookCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  draftVersion       RunbookVersion?   @relation("RunbookDraft", fields: [draftVersionId], references: [id], onDelete: SetNull)
-  publishedVersion   RunbookVersion?   @relation("RunbookPublished", fields: [publishedVersionId], references: [id], onDelete: SetNull)
-  versions           RunbookVersion[]  @relation("RunbookVersions")
-  bindings           ServiceRunbookBinding[]
-  executions         RunbookExecution[]
+  createdBy        User?                   @relation("RunbookCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  draftVersion     RunbookVersion?         @relation("RunbookDraft", fields: [draftVersionId], references: [id], onDelete: SetNull)
+  publishedVersion RunbookVersion?         @relation("RunbookPublished", fields: [publishedVersionId], references: [id], onDelete: SetNull)
+  versions         RunbookVersion[]        @relation("RunbookVersions")
+  bindings         ServiceRunbookBinding[]
+  executions       RunbookExecution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model RunbookVersion {
-  id              String             @id @default(cuid())
-  runbookId       String
-  version         Int
-  state           RunbookVersionState @default(DRAFT)
-  definition      Json
-  schemaVersion   Int                @default(1)
-  checksum        String
-  createdById     String?
-  publishedById   String?
-  publishedAt     DateTime?
+  id            String              @id @default(cuid())
+  runbookId     String
+  version       Int
+  state         RunbookVersionState @default(DRAFT)
+  definition    Json
+  schemaVersion Int                 @default(1)
+  checksum      String
+  createdById   String?
+  publishedById String?
+  publishedAt   DateTime?
 
-  runbook         Runbook  @relation("RunbookVersions", fields: [runbookId], references: [id], onDelete: Cascade)
-  runbookAsDraft  Runbook? @relation("RunbookDraft")
-  runbookAsPublished Runbook? @relation("RunbookPublished")
-  createdBy       User?    @relation("RunbookVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  publishedBy     User?    @relation("RunbookVersionPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
-  inputs          RunbookInput[]
-  bindings        ServiceRunbookBinding[]
-  executions      RunbookExecution[]
+  runbook            Runbook                 @relation("RunbookVersions", fields: [runbookId], references: [id], onDelete: Cascade)
+  runbookAsDraft     Runbook?                @relation("RunbookDraft")
+  runbookAsPublished Runbook?                @relation("RunbookPublished")
+  createdBy          User?                   @relation("RunbookVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  publishedBy        User?                   @relation("RunbookVersionPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  inputs             RunbookInput[]
+  bindings           ServiceRunbookBinding[]
+  executions         RunbookExecution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3418,17 +3419,17 @@ model RunbookVersion {
 }
 
 model RunbookInput {
-  id                String         @id @default(cuid())
-  runbookVersionId  String
-  key               String
-  label             String
-  type              RunbookInputType @default(STRING)
-  required          Boolean        @default(false)
-  defaultValue      String?
-  description       String         @default("")
-  sequence          Int            @default(0)
+  id               String           @id @default(cuid())
+  runbookVersionId String
+  key              String
+  label            String
+  type             RunbookInputType @default(STRING)
+  required         Boolean          @default(false)
+  defaultValue     String?
+  description      String           @default("")
+  sequence         Int              @default(0)
 
-  runbookVersion    RunbookVersion @relation(fields: [runbookVersionId], references: [id], onDelete: Cascade)
+  runbookVersion RunbookVersion @relation(fields: [runbookVersionId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3438,26 +3439,26 @@ model RunbookInput {
 }
 
 model ServiceRunbookBinding {
-  id                  String                @id @default(cuid())
-  serviceId           String
-  runbookId           String
-  runbookVersionId    String?
-  enabled             Boolean               @default(true)
-  mode                RunbookBindingMode    @default(MANUAL)
-  versionStrategy     RunbookVersionStrategy @default(LATEST_PUBLISHED)
-  defaultAgentPoolId  String?
-  defaultAgentId      String?
-  inputValues         Json                  @default("{}")
-  createdById         String?
+  id                 String                 @id @default(cuid())
+  serviceId          String
+  runbookId          String
+  runbookVersionId   String?
+  enabled            Boolean                @default(true)
+  mode               RunbookBindingMode     @default(MANUAL)
+  versionStrategy    RunbookVersionStrategy @default(LATEST_PUBLISHED)
+  defaultAgentPoolId String?
+  defaultAgentId     String?
+  inputValues        Json                   @default("{}")
+  createdById        String?
 
-  service             Service               @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  runbook             Runbook               @relation(fields: [runbookId], references: [id], onDelete: Cascade)
-  runbookVersion      RunbookVersion?       @relation(fields: [runbookVersionId], references: [id], onDelete: SetNull)
-  defaultAgentPool    RunbookAgentPool?     @relation(fields: [defaultAgentPoolId], references: [id], onDelete: SetNull)
-  defaultAgent        RunbookAgent?         @relation(fields: [defaultAgentId], references: [id], onDelete: SetNull)
-  createdBy           User?                 @relation("ServiceRunbookBindingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  triggers            RunbookTrigger[]
-  executions          RunbookExecution[]
+  service          Service            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  runbook          Runbook            @relation(fields: [runbookId], references: [id], onDelete: Cascade)
+  runbookVersion   RunbookVersion?    @relation(fields: [runbookVersionId], references: [id], onDelete: SetNull)
+  defaultAgentPool RunbookAgentPool?  @relation(fields: [defaultAgentPoolId], references: [id], onDelete: SetNull)
+  defaultAgent     RunbookAgent?      @relation(fields: [defaultAgentId], references: [id], onDelete: SetNull)
+  createdBy        User?              @relation("ServiceRunbookBindingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  triggers         RunbookTrigger[]
+  executions       RunbookExecution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3475,9 +3476,9 @@ model RunbookTrigger {
   enabled        Boolean               @default(true)
   createdById    String?
 
-  binding        ServiceRunbookBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
-  createdBy      User?                 @relation("RunbookTriggerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  conditions     RunbookTriggerCondition[]
+  binding    ServiceRunbookBinding     @relation(fields: [bindingId], references: [id], onDelete: Cascade)
+  createdBy  User?                     @relation("RunbookTriggerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  conditions RunbookTriggerCondition[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3487,14 +3488,14 @@ model RunbookTrigger {
 }
 
 model RunbookTriggerCondition {
-  id         String                   @id @default(cuid())
-  triggerId  String
-  field      String
-  operator   RunbookConditionOperator
-  value      Json
-  sequence   Int                      @default(0)
+  id        String                   @id @default(cuid())
+  triggerId String
+  field     String
+  operator  RunbookConditionOperator
+  value     Json
+  sequence  Int                      @default(0)
 
-  trigger    RunbookTrigger           @relation(fields: [triggerId], references: [id], onDelete: Cascade)
+  trigger RunbookTrigger @relation(fields: [triggerId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3519,14 +3520,16 @@ model RunbookExecution {
   triggeredByUserId  String?
   failureCode        String?
   failureMessage     String?
+  inputValues        Json                   @default("{}")
+  definitionChecksum String
 
-  runbook            Runbook                @relation(fields: [runbookId], references: [id], onDelete: Restrict)
-  runbookVersion     RunbookVersion         @relation(fields: [runbookVersionId], references: [id], onDelete: Restrict)
-  incident           Incident?              @relation(fields: [incidentId], references: [id], onDelete: SetNull)
-  service            Service?               @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  binding            ServiceRunbookBinding? @relation(fields: [bindingId], references: [id], onDelete: SetNull)
-  triggeredByUser    User?                  @relation("RunbookExecutionTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
-  steps              RunbookExecutionStep[]
+  runbook         Runbook                @relation(fields: [runbookId], references: [id], onDelete: Restrict)
+  runbookVersion  RunbookVersion         @relation(fields: [runbookVersionId], references: [id], onDelete: Restrict)
+  incident        Incident?              @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  service         Service?               @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  binding         ServiceRunbookBinding? @relation(fields: [bindingId], references: [id], onDelete: SetNull)
+  triggeredByUser User?                  @relation("RunbookExecutionTriggeredBy", fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+  steps           RunbookExecutionStep[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3540,23 +3543,31 @@ model RunbookExecution {
 }
 
 model RunbookExecutionStep {
-  id               String            @id @default(cuid())
-  executionId      String
-  stepKey          String
-  sequence         Int
-  name             String
-  type             RunbookStepType
-  riskClass        RunbookRiskClass  @default(READ_ONLY)
-  status           RunbookStepStatus @default(PENDING)
-  startedAt        DateTime?
-  completedAt      DateTime?
-  outputPreview    String?
-  outputArtifactId String?
-  errorCode        String?
-  errorMessage     String?
+  id                 String            @id @default(cuid())
+  executionId        String
+  stepKey            String
+  sequence           Int
+  name               String
+  type               RunbookStepType
+  riskClass          RunbookRiskClass  @default(READ_ONLY)
+  status             RunbookStepStatus @default(PENDING)
+  startedAt          DateTime?
+  completedAt        DateTime?
+  outputPreview      String?
+  outputArtifactId   String?
+  errorCode          String?
+  errorMessage       String?
+  config             Json              @default("{}")
+  requiresApproval   Boolean           @default(false)
+  timeoutSeconds     Int?
+  maxRetries         Int               @default(0)
+  approvedPlanDigest String?
+  approvedById       String?
+  approvedAt         DateTime?
 
-  execution        RunbookExecution  @relation(fields: [executionId], references: [id], onDelete: Cascade)
-  attempts         RunbookStepAttempt[]
+  execution  RunbookExecution     @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  attempts   RunbookStepAttempt[]
+  approvedBy User?                @relation("RunbookStepApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3567,7 +3578,7 @@ model RunbookExecutionStep {
 }
 
 model RunbookStepAttempt {
-  id               String              @id @default(cuid())
+  id               String               @id @default(cuid())
   executionStepId  String
   attemptNumber    Int
   status           RunbookAttemptStatus @default(PENDING)
@@ -3585,10 +3596,12 @@ model RunbookStepAttempt {
   outputArtifactId String?
   errorCode        String?
   errorMessage     String?
+  preState         Json?
+  postState        Json?
 
-  executionStep    RunbookExecutionStep @relation(fields: [executionStepId], references: [id], onDelete: Cascade)
-  agent            RunbookAgent?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
-  agentPool        RunbookAgentPool?    @relation(fields: [agentPoolId], references: [id], onDelete: SetNull)
+  executionStep RunbookExecutionStep @relation(fields: [executionStepId], references: [id], onDelete: Cascade)
+  agent         RunbookAgent?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  agentPool     RunbookAgentPool?    @relation(fields: [agentPoolId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3601,33 +3614,46 @@ model RunbookStepAttempt {
 }
 
 model RunbookAgent {
-  id                  String            @id @default(cuid())
+  id                  String             @id @default(cuid())
   name                String
   hostname            String?
   status              RunbookAgentStatus @default(ENROLLING)
   publicKey           String?
   enrollmentTokenHash String?
+  enrollmentExpiresAt DateTime?
   enrolledAt          DateTime?
   lastHeartbeatAt     DateTime?
   version             String?
   platform            String?
-  labels              Json              @default("{}")
-  capabilities        Json              @default("[]")
+  labels              Json               @default("{}")
+  capabilities        Json               @default("[]")
   revokedAt           DateTime?
   revokedById         String?
   createdById         String?
 
-  createdBy           User?             @relation("RunbookAgentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  revokedBy           User?             @relation("RunbookAgentRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
-  poolMemberships     RunbookAgentPoolMember[]
-  bindings            ServiceRunbookBinding[]
-  attempts            RunbookStepAttempt[]
+  createdBy       User?                      @relation("RunbookAgentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  revokedBy       User?                      @relation("RunbookAgentRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
+  poolMemberships RunbookAgentPoolMember[]
+  bindings        ServiceRunbookBinding[]
+  attempts        RunbookStepAttempt[]
+  requestNonces   RunbookAgentRequestNonce[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([lastHeartbeatAt])
+}
+
+model RunbookAgentRequestNonce {
+  id        String       @id @default(cuid())
+  agentId   String
+  nonceHash String
+  createdAt DateTime     @default(now())
+  agent     RunbookAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, nonceHash])
+  @@index([createdAt])
 }
 
 model RunbookAgentPool {
@@ -3638,10 +3664,10 @@ model RunbookAgentPool {
   matchLabels Json                 @default("{}")
   createdById String?
 
-  createdBy   User?                @relation("RunbookAgentPoolCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  members     RunbookAgentPoolMember[]
-  bindings    ServiceRunbookBinding[]
-  attempts    RunbookStepAttempt[]
+  createdBy User?                    @relation("RunbookAgentPoolCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  members   RunbookAgentPoolMember[]
+  bindings  ServiceRunbookBinding[]
+  attempts  RunbookStepAttempt[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3663,10 +3689,10 @@ model RunbookAgentPoolMember {
 }
 
 model RunbookSecret {
-  id             String @id @default(cuid())
-  name           String @unique
+  id             String  @id @default(cuid())
+  name           String  @unique
   valueEncrypted String
-  description    String @default("")
+  description    String  @default("")
   createdById    String?
 
   createdBy User? @relation("RunbookSecretCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)

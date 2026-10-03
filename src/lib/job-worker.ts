@@ -351,6 +351,31 @@ async function runOnce(): Promise<void> {
       return;
     }
 
+    if (workerState.workerLane === 'runbook') {
+      const { reconcileRunbooks } = await import('./runbooks/reconciler');
+      const reconciliation = await reconcileRunbooks(
+        Math.min(workerState.workerConfig.batchSize, 100)
+      );
+      const result = await processPendingJobsByType(
+        'RUNBOOK',
+        workerState.workerConfig.batchSize,
+        workerState.workerConfig.concurrency
+      );
+      if (result.failed > 0) {
+        workerState.lastError = `${result.failed} runbook job(s) failed`;
+        logger.warn('[JobWorker] Runbook lane degraded', { failed: result.failed, reconciliation });
+      } else {
+        workerState.lastSuccessAt = new Date();
+        workerState.lastError = null;
+      }
+      scheduleNextRun(
+        result.total > 0
+          ? workerState.workerConfig.busyPollMs
+          : withIdleJitter(workerState.workerConfig.idlePollMs)
+      );
+      return;
+    }
+
     // Escalation first, in its own claim batch. A page must never queue behind
     // a backlog of webhooks or status-page notifications, and this lane owns
     // escalation's recovery so it does not depend on the scheduler lease.
@@ -421,10 +446,7 @@ async function runOnce(): Promise<void> {
  * claim is the concurrency boundary, so multiple worker processes can safely
  * call this loop against the same database.
  */
-export function startJobWorker(
-  lane: JobWorkerLane = 'all',
-  options: JobWorkerOptions = {}
-): void {
+export function startJobWorker(lane: JobWorkerLane = 'all', options: JobWorkerOptions = {}): void {
   if (workerState.initialized) {
     logger.debug('[JobWorker] Already initialized, skipping');
     return;
@@ -432,8 +454,7 @@ export function startJobWorker(
 
   workerState.workerConfig = getJobWorkerConfig();
   workerState.workerLane = lane;
-  workerState.ownsQueueMaintenance =
-    options.ownsQueueMaintenance ?? lane === 'all';
+  workerState.ownsQueueMaintenance = options.ownsQueueMaintenance ?? lane === 'all';
   workerState.initialized = true;
   workerState.lastRunAt = null;
   workerState.lastSuccessAt = null;

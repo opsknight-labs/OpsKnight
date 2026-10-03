@@ -56,7 +56,8 @@ export type JobType =
   | 'MEETING_CLOSE'
   | 'ENCRYPTION_LIFECYCLE'
   | 'COMPLIANCE_EVALUATION_SWEEP'
-  | 'COMPLIANCE_DRIFT_PROJECT';
+  | 'COMPLIANCE_DRIFT_PROJECT'
+  | 'RUNBOOK';
 export type JobStatus =
   | 'PENDING'
   | 'PROCESSING'
@@ -71,6 +72,7 @@ export const GENERAL_WORKER_EXCLUDED_JOB_TYPES: readonly JobType[] = [
   'STATUS_PAGE_NOTIFICATION',
   STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1,
   STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2,
+  'RUNBOOK',
 ];
 interface JobPayload {
   incidentId?: string;
@@ -718,6 +720,12 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
     }, PROCESSING_LEASE_HEARTBEAT_MS);
 
     switch (job.type) {
+      case 'RUNBOOK': {
+        const { processRunbookJob } = await import('../runbooks/orchestrator');
+        await processRunbookJob(job.payload);
+        await markJobCompleted(job.id);
+        return true;
+      }
       case 'ESCALATION': {
         const { executeEscalation } = await import('../escalation');
         const { escalationJobIsSettled } = await import('../escalation/types');

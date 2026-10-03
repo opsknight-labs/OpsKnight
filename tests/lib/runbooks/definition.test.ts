@@ -14,7 +14,7 @@ import {
   collectSecretReferences,
   computePlanDigest,
   computeTriggerFingerprint,
-  validateDefinition
+  validateDefinition,
 } from '@/lib/runbooks/definition';
 import {
   RunbookDefinitionError,
@@ -66,20 +66,14 @@ describe('Runbook Definition Module', () => {
   describe('validateStepKeyUniqueness', () => {
     it('should pass for unique step keys', () => {
       const def = createMockDefinition({
-        steps: [
-          createMockStep({ key: 'step1' }),
-          createMockStep({ key: 'step2' }),
-        ],
+        steps: [createMockStep({ key: 'step1' }), createMockStep({ key: 'step2' })],
       });
       expect(() => validateStepKeyUniqueness(def)).not.toThrow();
     });
 
     it('should throw for duplicate step keys at top level', () => {
       const def = createMockDefinition({
-        steps: [
-          createMockStep({ key: 'step1' }),
-          createMockStep({ key: 'step1' }),
-        ],
+        steps: [createMockStep({ key: 'step1' }), createMockStep({ key: 'step1' })],
       });
       expect(() => validateStepKeyUniqueness(def)).toThrow(RunbookStepKeyDuplicateError);
     });
@@ -110,9 +104,9 @@ describe('Runbook Definition Module', () => {
     });
 
     it('should throw for duplicate input keys', () => {
-      expect(() =>
-        validateInputKeyUniqueness([{ key: 'input1' }, { key: 'input1' }])
-      ).toThrow(RunbookInputKeyDuplicateError);
+      expect(() => validateInputKeyUniqueness([{ key: 'input1' }, { key: 'input1' }])).toThrow(
+        RunbookInputKeyDuplicateError
+      );
     });
   });
 
@@ -120,21 +114,36 @@ describe('Runbook Definition Module', () => {
     it('should compute deterministic checksums', () => {
       const def1 = createMockDefinition();
       const def2 = createMockDefinition();
-      
+
       const sum1 = computeDefinitionChecksum(def1);
       const sum2 = computeDefinitionChecksum(def2);
-      
+
       expect(sum1).toBe(sum2);
     });
 
     it('should produce different checksums for different definitions', () => {
-      const def1 = createMockDefinition({ name: 'One' });
-      const def2 = createMockDefinition({ name: 'Two' });
-      
+      const def1 = createMockDefinition({
+        steps: [createMockStep({ config: { command: 'status' } })],
+      });
+      const def2 = createMockDefinition({
+        steps: [createMockStep({ config: { command: 'restart' } })],
+      });
+
       const sum1 = computeDefinitionChecksum(def1);
       const sum2 = computeDefinitionChecksum(def2);
-      
+
       expect(sum1).not.toBe(sum2);
+    });
+
+    it('is independent of nested object key insertion order', () => {
+      const def1 = createMockDefinition({
+        steps: [createMockStep({ config: { host: 'api.internal', port: 443 } })],
+      });
+      const def2 = createMockDefinition({
+        steps: [createMockStep({ config: { port: 443, host: 'api.internal' } })],
+      });
+
+      expect(computeDefinitionChecksum(def1)).toBe(computeDefinitionChecksum(def2));
     });
   });
 
@@ -188,20 +197,14 @@ describe('Runbook Definition Module', () => {
   describe('requiresAnyAgent', () => {
     it('should return false if all steps are local types', () => {
       const def = createMockDefinition({
-        steps: [
-          createMockStep({ type: 'MANUAL' }),
-          createMockStep({ type: 'HTTP' }),
-        ],
+        steps: [createMockStep({ type: 'MANUAL' }), createMockStep({ type: 'HTTP' })],
       });
       expect(requiresAnyAgent(def)).toBe(false);
     });
 
     it('should return true if any step is not a local type (e.g. requires agent)', () => {
       const def = createMockDefinition({
-        steps: [
-          createMockStep({ type: 'MANUAL' }),
-          createMockStep({ type: 'SHELL' } as any), // assuming SHELL or some other type requires agent
-        ],
+        steps: [createMockStep({ type: 'MANUAL' }), createMockStep({ type: 'BASH' })],
       });
       expect(requiresAnyAgent(def)).toBe(true);
     });
@@ -268,11 +271,11 @@ describe('Runbook Definition Module', () => {
         config: { foo: 'bar' },
         versionChecksum: 'chk',
       };
-      
+
       const digest1 = computePlanDigest(plan);
       const digest2 = computePlanDigest(plan);
       expect(digest1).toBe(digest2);
-      
+
       const digest3 = computePlanDigest({ ...plan, config: { foo: 'baz' } });
       expect(digest1).not.toBe(digest3);
     });
@@ -285,11 +288,11 @@ describe('Runbook Definition Module', () => {
         bindingId: 'b1',
         runbookVersionId: 'v1',
       };
-      
+
       const fp1 = computeTriggerFingerprint(input);
       const fp2 = computeTriggerFingerprint(input);
       expect(fp1).toBe(fp2);
-      
+
       const fp3 = computeTriggerFingerprint({ ...input, sourceEventId: 'ev2' });
       expect(fp1).not.toBe(fp3);
     });
@@ -298,12 +301,10 @@ describe('Runbook Definition Module', () => {
   describe('validateDefinition', () => {
     it('should return summary for valid definition', () => {
       const def = createMockDefinition({
-        steps: [
-          createMockStep({ key: 's1', riskClass: 'NON_IDEMPOTENT', requiresApproval: true })
-        ],
+        steps: [createMockStep({ key: 's1', riskClass: 'NON_IDEMPOTENT', requiresApproval: true })],
       });
       const result = validateDefinition(def);
-      
+
       expect(result.valid).toBe(true);
       expect(result.stepCount).toBe(1);
       expect(result.maxRisk).toBe('NON_IDEMPOTENT');
@@ -315,21 +316,18 @@ describe('Runbook Definition Module', () => {
     it('should return errors for invalid definition', () => {
       const invalidDef = { name: 'Oops' };
       const result = validateDefinition(invalidDef);
-      
+
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
-    
+
     it('should return errors for duplicate step keys', () => {
       // Create a struct that parses cleanly but has duplicates.
       const def = createMockDefinition({
-        steps: [
-          createMockStep({ key: 'dup' }),
-          createMockStep({ key: 'dup' }),
-        ],
+        steps: [createMockStep({ key: 'dup' }), createMockStep({ key: 'dup' })],
       });
       const result = validateDefinition(def);
-      
+
       expect(result.valid).toBe(false);
       expect(result.errors.some(e => e.includes('Duplicate step key: "dup"'))).toBe(true);
     });

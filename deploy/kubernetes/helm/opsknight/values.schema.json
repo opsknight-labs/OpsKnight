@@ -11,7 +11,19 @@
     "config": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["nodeEnv", "nextauthUrl", "nextPublicAppUrl", "trustProxyHeaders", "trustedProxyHops", "appHostAliases", "redirectToCanonicalHost", "port", "hostname", "nextTelemetryDisabled", "notificationControlPlanePersonal"],
+      "required": [
+        "nodeEnv",
+        "nextauthUrl",
+        "nextPublicAppUrl",
+        "trustProxyHeaders",
+        "trustedProxyHops",
+        "appHostAliases",
+        "redirectToCanonicalHost",
+        "port",
+        "hostname",
+        "nextTelemetryDisabled",
+        "notificationControlPlanePersonal"
+      ],
       "properties": {
         "nodeEnv": { "type": "string" },
         "nextauthUrl": { "type": "string", "format": "uri" },
@@ -32,6 +44,7 @@
     "generalWorker": { "$ref": "#/definitions/workerRole" },
     "criticalWorker": { "$ref": "#/definitions/workerRole" },
     "bulkWorker": { "$ref": "#/definitions/workerRole" },
+    "runbookWorker": { "$ref": "#/definitions/workerRole" },
     "statusProjector": { "$ref": "#/definitions/workerRole" },
     "pgbouncer": { "$ref": "#/definitions/pgbouncer" },
     "migrations": {
@@ -104,13 +117,32 @@
     "secrets": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["existingSecret", "keys", "nextauthSecret", "apiKeySecret", "encryptionKey", "encryptionKeys", "setupSecret"],
+      "required": [
+        "existingSecret",
+        "keys",
+        "nextauthSecret",
+        "apiKeySecret",
+        "encryptionKey",
+        "encryptionKeys",
+        "setupSecret"
+      ],
       "properties": {
         "existingSecret": { "type": "string" },
         "keys": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["databaseUrl", "directDatabaseUrl", "webDatabaseUrl", "nextauthSecret", "apiKeySecret", "encryptionKey", "encryptionKeys", "setupSecret", "postgresUser", "postgresPassword"],
+          "required": [
+            "databaseUrl",
+            "directDatabaseUrl",
+            "webDatabaseUrl",
+            "nextauthSecret",
+            "apiKeySecret",
+            "encryptionKey",
+            "encryptionKeys",
+            "setupSecret",
+            "postgresUser",
+            "postgresPassword"
+          ],
           "properties": {
             "databaseUrl": { "type": "string", "minLength": 1 },
             "directDatabaseUrl": { "type": "string", "minLength": 1 },
@@ -223,14 +255,29 @@
         "enabled": { "type": "boolean" },
         "minReplicas": { "type": "integer", "minimum": 1 },
         "maxReplicas": { "type": "integer", "minimum": 1 },
-        "targetCPUUtilizationPercentage": { "type": ["integer", "null"], "minimum": 1, "maximum": 100 },
-        "targetMemoryUtilizationPercentage": { "type": ["integer", "null"], "minimum": 1, "maximum": 100 }
+        "targetCPUUtilizationPercentage": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 100
+        },
+        "targetMemoryUtilizationPercentage": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "maximum": 100
+        }
       }
     },
     "webRole": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["replicaCount", "database", "resources", "autoscaling", "podDisruptionBudget", "terminationGracePeriodSeconds"],
+      "required": [
+        "replicaCount",
+        "database",
+        "resources",
+        "autoscaling",
+        "podDisruptionBudget",
+        "terminationGracePeriodSeconds"
+      ],
       "properties": {
         "replicaCount": { "$ref": "#/definitions/replicaCount" },
         "database": { "$ref": "#/definitions/poolSize" },
@@ -243,7 +290,14 @@
     "schedulerRole": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["replicaCount", "profile", "database", "resources", "podDisruptionBudget", "terminationGracePeriodSeconds"],
+      "required": [
+        "replicaCount",
+        "profile",
+        "database",
+        "resources",
+        "podDisruptionBudget",
+        "terminationGracePeriodSeconds"
+      ],
       "properties": {
         "replicaCount": { "$ref": "#/definitions/replicaCount" },
         "profile": { "type": "string", "enum": ["full", "maintenance"] },
@@ -256,7 +310,14 @@
     "workerRole": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["replicaCount", "database", "worker", "resources", "podDisruptionBudget", "terminationGracePeriodSeconds"],
+      "required": [
+        "replicaCount",
+        "database",
+        "worker",
+        "resources",
+        "podDisruptionBudget",
+        "terminationGracePeriodSeconds"
+      ],
       "properties": {
         "replicaCount": { "$ref": "#/definitions/replicaCount" },
         "database": { "$ref": "#/definitions/poolSize" },
@@ -269,7 +330,22 @@
     "pgbouncer": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "replicas", "image", "port", "poolMode", "maxClientConnections", "defaultPoolSize", "reservePoolSize", "maxPreparedStatements", "existingAuthSecret", "authFileKey", "podDisruptionBudget", "resources", "securityContext"],
+      "required": [
+        "enabled",
+        "replicas",
+        "image",
+        "port",
+        "poolMode",
+        "maxClientConnections",
+        "defaultPoolSize",
+        "reservePoolSize",
+        "maxPreparedStatements",
+        "existingAuthSecret",
+        "authFileKey",
+        "podDisruptionBudget",
+        "resources",
+        "securityContext"
+      ],
       "properties": {
         "enabled": { "type": "boolean" },
         "replicas": { "$ref": "#/definitions/replicaCount" },
@@ -297,7 +373,14 @@
         "securityContext": {
           "type": "object",
           "additionalProperties": true,
-          "required": ["allowPrivilegeEscalation", "capabilities", "runAsNonRoot", "runAsUser", "runAsGroup", "readOnlyRootFilesystem"]
+          "required": [
+            "allowPrivilegeEscalation",
+            "capabilities",
+            "runAsNonRoot",
+            "runAsUser",
+            "runAsGroup",
+            "readOnlyRootFilesystem"
+          ]
         }
       }
     }

@@ -49,7 +49,7 @@ helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \
 
 - `base/` — Shared Namespace, ConfigMap, Secret, ServiceAccount, bundled PostgreSQL StatefulSet & Service, application Service, Ingress, NetworkPolicy, and PodDisruptionBudget.
 - `profiles/integrated/` — Single fixed-replica `opsknight-app` Deployment layered over `../../base`; `hpa.yaml` is an opt-in example.
-- `profiles/split/` — Dedicated `web`, `scheduler` (`maintenance` profile), `general-worker`, `critical-worker`, `bulk-worker`, and `status-projector` Deployments, per-role PDBs, and per-role egress NetworkPolicies.
+- `profiles/split/` — Dedicated `web`, `scheduler` (`maintenance` profile), `general-worker`, `critical-worker`, `bulk-worker`, and `status-projector` Deployments. Helm deployments also include the isolated `runbook-worker`; Kustomize operators should use the integrated runtime until the matching overlay is enabled.
 - `profiles/split-pgbouncer/` — Layers a two-replica `opsknight-pgbouncer` Deployment, Service, PDB, and NetworkPolicy on top of `../split`, routing `opsknight-web` through PgBouncer while keeping `DIRECT_DATABASE_URL` pointed directly at PostgreSQL.
 - `monitoring/servicemonitor.yaml` — Optional Prometheus Operator `ServiceMonitor`.
 

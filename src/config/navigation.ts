@@ -12,6 +12,7 @@ import {
   FileClock,
   ClipboardList,
   BarChart,
+  Workflow,
   LucideIcon,
 } from 'lucide-react';
 
@@ -100,6 +101,13 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
     label: 'Services',
     icon: Server,
     section: 'MAIN',
+  },
+  {
+    href: '/runbooks',
+    label: 'Runbooks',
+    icon: Workflow,
+    section: 'MAIN',
+    requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],
   },
 
   // ── RELIABILITY ───────────────────────────────────────────────────────────

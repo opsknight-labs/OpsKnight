@@ -196,6 +196,16 @@ bulkWorker:
   podDisruptionBudget: { enabled: true, minAvailable: 1 }
   terminationGracePeriodSeconds: 60
 
+runbookWorker:
+  replicaCount: 2
+  database: { poolSize: 3 }
+  worker: { batchSize: 50, concurrency: 10, idlePollMs: 1000, busyPollMs: 100 }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 60
+
 statusProjector:
   replicaCount: 2
   database: { poolSize: 3 }

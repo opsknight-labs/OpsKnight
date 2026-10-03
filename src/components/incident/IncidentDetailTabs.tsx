@@ -3,7 +3,7 @@
 import React, { type ReactNode } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Settings2, History, Zap, FileText } from 'lucide-react';
+import { Settings2, History, Zap, FileText, Workflow } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type IncidentDetailTabsProps = {
@@ -12,6 +12,7 @@ export type IncidentDetailTabsProps = {
   noteCount?: number;
   activityContent: ReactNode;
   timelineContent: ReactNode;
+  runbooksContent: ReactNode;
   postmortemContent?: ReactNode;
   postmortemStatus?: string | null;
   className?: string;
@@ -22,6 +23,7 @@ export default function IncidentDetailTabs({
   eventCount,
   activityContent,
   timelineContent,
+  runbooksContent,
   postmortemContent,
   postmortemStatus,
   className,
@@ -38,6 +40,13 @@ export default function IncidentDetailTabs({
             >
               <Settings2 className="h-4 w-4" />
               <span>Overview</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="runbooks"
+              className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
+            >
+              <Workflow className="h-4 w-4" />
+              <span>Runbooks</span>
             </TabsTrigger>
             <TabsTrigger
               value="timeline"
@@ -83,6 +92,10 @@ export default function IncidentDetailTabs({
 
           <TabsContent value="timeline" className="mt-0 focus-visible:outline-none">
             {timelineContent}
+          </TabsContent>
+
+          <TabsContent value="runbooks" className="mt-0 focus-visible:outline-none">
+            {runbooksContent}
           </TabsContent>
 
           <TabsContent value="postmortem" className="mt-0 focus-visible:outline-none">

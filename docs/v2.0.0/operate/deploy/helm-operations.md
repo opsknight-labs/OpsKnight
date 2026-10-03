@@ -46,7 +46,7 @@ kubectl auth can-i create job -n opsknight
 - `postgresql`: bundled PostgreSQL, storage, resources, credentials, or external TLS CA mounting.
 - `database`: direct application PostgreSQL URL, port, and aggregate connection ceiling.
 - `pgbouncer`: Web-only transaction pool in split mode.
-- `web`, `scheduler`, and worker groups: replicas, database pools, resources, concurrency, PDB, and termination grace.
+- `web`, `scheduler`, and worker groups: replicas, database pools, resources, concurrency, PDB, and termination grace. Runbook automation has a dedicated `runbookWorker` group so automation load cannot consume the critical paging lane.
 - `ingress` and `service`: public routing to Web or integrated application.
 - `startupProbe`, `livenessProbe`, and `readinessProbe`: health behavior.
 - `networkPolicy`: ingress namespace and database/provider egress.
@@ -108,17 +108,17 @@ postgresql:
   storageClass: fast-encrypted
   resources:
     requests: { cpu: 500m, memory: 1Gi }
-    limits: { cpu: "2", memory: 4Gi }
+    limits: { cpu: '2', memory: 4Gi }
 
 ingress:
   enabled: true
   className: nginx
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-buffering: "off"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+    nginx.ingress.kubernetes.io/proxy-buffering: 'off'
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '3600'
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '3600'
   hosts:
     - host: opsknight.example.com
       paths: [{ path: /, pathType: Prefix }]
@@ -142,7 +142,7 @@ topologySpreadConstraints:
 
 resources:
   requests: { cpu: 250m, memory: 512Mi }
-  limits: { cpu: "1", memory: 2Gi }
+  limits: { cpu: '1', memory: 2Gi }
 ```
 
 The bundled database is a single StatefulSet and is not database HA. Use an external managed PostgreSQL service when database host failure must be tolerated.
@@ -228,10 +228,10 @@ Disable the bundled StatefulSet and put the full direct TLS URL in the runtime S
 postgresql:
   enabled: false
   host: db.example.com
-  port: "5432"
+  port: '5432'
 
 database:
-  url: ""
+  url: ''
   port: 5432
   maxApplicationConnections: 120
 
@@ -262,7 +262,7 @@ Add:
 postgresql:
   enabled: false
   host: db.example.com
-  port: "5432"
+  port: '5432'
   tls:
     enabled: true
     existingSecret: opsknight-db-ca

@@ -195,9 +195,11 @@ jobs:
             grep -q "name: opsknight-$role" /tmp/opsknight-helm-split-generic.yaml
             grep -q "name: opsknight-$role" /tmp/opsknight-kustomize-split.yaml
           done
-          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split.yaml)" -eq 6
-          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-generic.yaml)" -eq 6
-          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-pgbouncer.yaml)" -eq 7
+          grep -q 'name: opsknight-runbook-worker' /tmp/opsknight-helm-split.yaml
+          grep -q 'name: opsknight-runbook-worker' /tmp/opsknight-helm-split-generic.yaml
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split.yaml)" -eq 7
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-generic.yaml)" -eq 7
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-pgbouncer.yaml)" -eq 8
           test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split.yaml)" -eq 6
           test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split-pgbouncer.yaml)" -eq 7
           if grep -q 'whenUnsatisfiable: ScheduleAnyway' /tmp/opsknight-helm-split.yaml /tmp/opsknight-helm-split-generic.yaml /tmp/opsknight-helm-split-pgbouncer.yaml /tmp/opsknight-kustomize-split.yaml /tmp/opsknight-kustomize-split-pgbouncer.yaml; then
@@ -251,6 +253,7 @@ jobs:
           grep -q 'OPSKNIGHT_PROCESS_ROLE: general-worker' /tmp/opsknight-compose-split.yaml
           grep -q 'OPSKNIGHT_PROCESS_ROLE: critical-worker' /tmp/opsknight-compose-split.yaml
           grep -q 'OPSKNIGHT_PROCESS_ROLE: bulk-worker' /tmp/opsknight-compose-split.yaml
+          grep -q 'OPSKNIGHT_PROCESS_ROLE: runbook-worker' /tmp/opsknight-compose-split.yaml
           grep -q 'OPSKNIGHT_PROCESS_ROLE: status-projector' /tmp/opsknight-compose-split.yaml
           grep -q 'OPSKNIGHT_MIGRATION_ONLY: "true"' /tmp/opsknight-compose-split.yaml
           grep -q 'condition: service_completed_successfully' /tmp/opsknight-compose-split.yaml

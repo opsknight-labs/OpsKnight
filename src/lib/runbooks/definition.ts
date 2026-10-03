@@ -15,13 +15,13 @@ import {
   RunbookStepKeyDuplicateError,
   RunbookInputKeyDuplicateError,
 } from './errors';
-import type {
-  RunbookDefinition,
-  RunbookStepDefinition,
-  RunbookRiskClass,
-  RunbookStepType,
+import {
+  MAX_RUNBOOK_STEPS,
+  type RunbookDefinition,
+  type RunbookStepDefinition,
+  type RunbookRiskClass,
+  type RunbookStepType,
 } from './types';
-import { MAX_RUNBOOK_STEPS, MAX_RUNBOOK_INPUTS } from './types';
 
 // ---------------------------------------------------------------------------
 // Parse and validate
@@ -34,15 +34,40 @@ import { MAX_RUNBOOK_STEPS, MAX_RUNBOOK_INPUTS } from './types';
 export function parseRunbookDefinition(raw: unknown): RunbookDefinition {
   const result = runbookDefinitionSchema.safeParse(raw);
   if (!result.success) {
-    const issues = result.error.issues.map(
-      (issue) => `${issue.path.join('.')}: ${issue.message}`
-    );
-    throw new RunbookDefinitionError(
-      `Invalid runbook definition: ${issues.join('; ')}`,
-      { issues: result.error.issues }
-    );
+    const issues = result.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`);
+    throw new RunbookDefinitionError(`Invalid runbook definition: ${issues.join('; ')}`, {
+      issues: result.error.issues,
+    });
   }
-  return result.data as RunbookDefinition;
+  const definition = result.data as RunbookDefinition;
+  validateDefinitionStructure(definition);
+  return definition;
+}
+
+function validateDefinitionStructure(definition: RunbookDefinition): void {
+  const stack = definition.steps.map(step => ({ step, depth: 1 }));
+  const keys = new Set<string>();
+  let count = 0;
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    count++;
+    if (count > MAX_RUNBOOK_STEPS) {
+      throw new RunbookDefinitionError(
+        `Runbook contains more than ${MAX_RUNBOOK_STEPS} total steps, including prechecks and verification.`
+      );
+    }
+    if (current.depth > 3) {
+      throw new RunbookDefinitionError('Runbook steps may not be nested more than three levels.');
+    }
+    if (keys.has(current.step.key)) throw new RunbookStepKeyDuplicateError(current.step.key);
+    keys.add(current.step.key);
+    for (const nested of current.step.precheck?.steps ?? []) {
+      stack.push({ step: nested, depth: current.depth + 1 });
+    }
+    for (const nested of current.step.verification?.steps ?? []) {
+      stack.push({ step: nested, depth: current.depth + 1 });
+    }
+  }
 }
 
 /**
@@ -72,9 +97,7 @@ export function validateStepKeyUniqueness(definition: RunbookDefinition): void {
 /**
  * Validates that all input keys within a set of inputs are unique.
  */
-export function validateInputKeyUniqueness(
-  inputs: Array<{ key: string }>
-): void {
+export function validateInputKeyUniqueness(inputs: Array<{ key: string }>): void {
   const keys = new Set<string>();
   for (const input of inputs) {
     if (keys.has(input.key)) {
@@ -103,7 +126,25 @@ export function computeDefinitionChecksum(definition: RunbookDefinition): string
  * suitable for checksumming. Keys are sorted at every level.
  */
 function canonicalizeDefinition(definition: RunbookDefinition): string {
-  return JSON.stringify(definition, Object.keys(definition).sort());
+  return JSON.stringify(sortJsonValue(definition));
+}
+
+/**
+ * Recursively sorts object keys without changing array order. Passing a key
+ * array as JSON.stringify's replacer only preserves keys that occur at the
+ * root and silently drops nested step/config fields, which would make two
+ * materially different execution plans share a checksum.
+ */
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortJsonValue);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nested]) => [key, sortJsonValue(nested)])
+    );
+  }
+  return value;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +173,7 @@ export function flattenSteps(definition: RunbookDefinition): RunbookStepDefiniti
  * Extracts all unique step keys from a definition.
  */
 export function extractStepKeys(definition: RunbookDefinition): string[] {
-  return flattenSteps(definition).map((s) => s.key);
+  return flattenSteps(definition).map(s => s.key);
 }
 
 /**
@@ -140,16 +181,13 @@ export function extractStepKeys(definition: RunbookDefinition): string[] {
  * Useful for determining overall runbook risk level.
  */
 export function getMaxRiskClass(definition: RunbookDefinition): RunbookRiskClass {
-  const riskOrder: Record<RunbookRiskClass, number> = {
-    READ_ONLY: 0,
-    IDEMPOTENT_WRITE: 1,
-    NON_IDEMPOTENT: 2,
-  };
+  const riskRank = (risk: RunbookRiskClass) =>
+    risk === 'NON_IDEMPOTENT' ? 2 : risk === 'IDEMPOTENT_WRITE' ? 1 : 0;
 
   let maxRisk: RunbookRiskClass = 'READ_ONLY';
 
   for (const step of flattenSteps(definition)) {
-    if (riskOrder[step.riskClass] > riskOrder[maxRisk]) {
+    if (riskRank(step.riskClass) > riskRank(maxRisk)) {
       maxRisk = step.riskClass;
     }
   }
@@ -169,7 +207,7 @@ export function requiresAnyAgent(definition: RunbookDefinition): boolean {
     'HTTP',
   ]);
 
-  return flattenSteps(definition).some((step) => !localTypes.has(step.type));
+  return flattenSteps(definition).some(step => !localTypes.has(step.type));
 }
 
 /**
@@ -177,7 +215,7 @@ export function requiresAnyAgent(definition: RunbookDefinition): boolean {
  */
 export function requiresAnyApproval(definition: RunbookDefinition): boolean {
   return flattenSteps(definition).some(
-    (step) => step.type === 'APPROVAL' || step.requiresApproval === true
+    step => step.type === 'APPROVAL' || step.requiresApproval === true
   );
 }
 
@@ -208,9 +246,7 @@ export function extractSecretName(ref: string): string {
  * Resolves all secret references within input values, returning the set
  * of secret names that need to be fetched.
  */
-export function collectSecretReferences(
-  inputValues: Record<string, unknown>
-): Set<string> {
+export function collectSecretReferences(inputValues: Record<string, unknown>): Set<string> {
   const secrets = new Set<string>();
   for (const value of Object.values(inputValues)) {
     if (isSecretReference(value)) {
@@ -240,16 +276,18 @@ export function computePlanDigest(plan: {
   inputValues?: Record<string, unknown>;
   versionChecksum: string;
 }): string {
-  const canonical = JSON.stringify({
-    stepKey: plan.stepKey,
-    stepType: plan.stepType,
-    riskClass: plan.riskClass,
-    config: plan.config,
-    agentPoolId: plan.agentPoolId ?? null,
-    agentId: plan.agentId ?? null,
-    inputValues: plan.inputValues ?? {},
-    versionChecksum: plan.versionChecksum,
-  });
+  const canonical = JSON.stringify(
+    sortJsonValue({
+      stepKey: plan.stepKey,
+      stepType: plan.stepType,
+      riskClass: plan.riskClass,
+      config: plan.config,
+      agentPoolId: plan.agentPoolId ?? null,
+      agentId: plan.agentId ?? null,
+      inputValues: plan.inputValues ?? {},
+      versionChecksum: plan.versionChecksum,
+    })
+  );
   return crypto.createHash('sha256').update(canonical).digest('hex');
 }
 
@@ -308,6 +346,12 @@ export function validateDefinition(raw: unknown): DefinitionValidationResult {
   }
 
   const definition = parseResult.data as RunbookDefinition;
+
+  try {
+    validateDefinitionStructure(definition);
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : 'Invalid runbook structure.');
+  }
 
   // Check step key uniqueness
   const keys = new Set<string>();

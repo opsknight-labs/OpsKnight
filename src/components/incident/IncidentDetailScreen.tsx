@@ -7,6 +7,7 @@ import IncidentHeader from '@/components/incident/IncidentHeader';
 import IncidentWatchers from '@/components/incident/detail/IncidentWatchers';
 import IncidentCommandBar from '@/components/incident/detail/IncidentCommandBar';
 import IncidentDetailTabs from '@/components/incident/IncidentDetailTabs';
+import IncidentRunbooks from '@/components/incident/IncidentRunbooks';
 import IncidentNotes from '@/components/incident/detail/IncidentNotes';
 import IncidentTimeline from '@/components/incident/detail/IncidentTimeline';
 import IncidentResolutionSummary from '@/components/incident/detail/IncidentResolutionSummary';
@@ -115,7 +116,14 @@ export default async function IncidentDetailScreen({
       canManageIncident
         ? prisma.user.findMany({
             where: { status: 'ACTIVE' },
-            select: { id: true, name: true, email: true, avatarUrl: true, gender: true, role: true },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              avatarUrl: true,
+              gender: true,
+              role: true,
+            },
             orderBy: { name: 'asc' },
           })
         : Promise.resolve([]),
@@ -532,6 +540,9 @@ export default async function IncidentDetailScreen({
             eventCount={totalEventsCount}
             noteCount={totalNotesCount}
             activityContent={activityContent}
+            runbooksContent={
+              <IncidentRunbooks incidentId={incident.id} serviceId={incident.serviceId} />
+            }
             timelineContent={timelineContent}
             postmortemContent={postmortemContent}
             postmortemStatus={postmortem?.status ?? null}
