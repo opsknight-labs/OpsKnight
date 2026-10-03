@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { BookOpenCheck, Bot, Clock3, Plus, Workflow } from 'lucide-react';
+import { Activity, BookOpenCheck, Bot, Clock3, Plus, Workflow } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getUserPermissions } from '@/lib/rbac';
@@ -53,6 +53,11 @@ export default async function RunbooksPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/runbooks/health">
+              <Activity /> Health
+            </Link>
+          </Button>
           <Button asChild variant="outline">
             <Link href="/runbooks/agents">
               <Bot /> Agents

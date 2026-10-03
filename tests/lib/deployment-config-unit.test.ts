@@ -877,4 +877,21 @@ describe('deployment configuration invariants', () => {
     expect(cidrPatch).toContain('opsknight-general-worker-network-policy');
     expect(cidrPatch).toContain('opsknight-runbook-worker-network-policy');
   });
+
+  it('packages the outbound Runbook Agent across deployment methods', () => {
+    const compose = read('deploy/compose/docker-compose.agent.yml');
+    const swarm = read('deploy/swarm/docker-stack.agent.yml');
+    const helm = read('deploy/kubernetes/helm/opsknight/templates/agent.yaml');
+    const kustomize = read('deploy/kubernetes/kustomize/components/agent/deployment.yaml');
+    for (const artifact of [compose, swarm, helm, kustomize]) {
+      expect(artifact).toContain('OPSKNIGHT_URL');
+      expect(artifact).toContain('/var/lib/opsknight-agent');
+      expect(artifact).toContain('policy.json');
+    }
+    expect(compose).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN');
+    expect(swarm).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE');
+    expect(helm).toContain('agent.enrollmentToken.existingSecret is required');
+    expect(kustomize).toContain('readOnlyRootFilesystem: true');
+    expect(read('agent/Dockerfile')).toContain('USER opsknight-agent');
+  });
 });

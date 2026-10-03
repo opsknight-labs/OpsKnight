@@ -3,10 +3,16 @@ import 'server-only';
 import crypto from 'crypto';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { agentJobResultSchema, type AgentJobResultInput } from './schemas';
+import {
+  agentArtifactSchema,
+  agentJobResultSchema,
+  type AgentArtifactInput,
+  type AgentJobResultInput,
+} from './schemas';
 import { sha256 } from './agent-auth';
 import { redactRunbookOutput } from './redaction';
 import { resolveSecretInputValues } from './secrets';
+import { isSecretReference } from './definition';
 import { DEFAULT_LEASE_DURATION_SECONDS, isRetryable, isSafeToRetryAfterUnknown } from './types';
 import { agentSupportsStep, retryDelayMs } from './safety';
 import {
@@ -23,17 +29,25 @@ export async function recordAgentHeartbeat(input: {
   platform: string;
   labels?: Record<string, string>;
   capabilities?: string[];
+  policyHash?: string;
+  spoolDepth?: number;
+  activeAttemptCount?: number;
+  lastError?: string | null;
 }) {
   const result = await prisma.runbookAgent.updateMany({
     where: { id: input.agentId, status: { not: 'REVOKED' } },
     data: {
-      status: 'ONLINE',
+      status: input.lastError || (input.spoolDepth ?? 0) > 0 ? 'DEGRADED' : 'ONLINE',
       lastHeartbeatAt: new Date(),
       hostname: input.hostname,
       version: input.version,
       platform: input.platform,
       labels: (input.labels ?? {}) as Prisma.InputJsonValue,
       capabilities: (input.capabilities ?? []) as Prisma.InputJsonValue,
+      policyHash: input.policyHash,
+      spoolDepth: input.spoolDepth,
+      activeAttemptCount: input.activeAttemptCount,
+      lastError: input.lastError,
     },
   });
   if (result.count !== 1) throw new RunbookAgentNotFoundError(input.agentId);
@@ -67,6 +81,7 @@ export async function claimAgentAttempt(agentId: string) {
         orderBy: { createdAt: 'asc' },
         take: 50,
         include: {
+          targetAgentPool: { select: { mode: true } },
           executionStep: {
             include: {
               execution: { select: { id: true, inputValues: true, definitionChecksum: true } },
@@ -93,8 +108,11 @@ export async function claimAgentAttempt(agentId: string) {
         },
       });
       if (claimed.count !== 1) return null;
+      const rawInputValues = attempt.executionStep.execution.inputValues as Record<string, unknown>;
       const resolvedInputValues = await resolveSecretInputValues(
-        attempt.executionStep.execution.inputValues as Record<string, unknown>
+        rawInputValues,
+        { agentId, targetAgentPoolId: attempt.targetAgentPoolId },
+        tx
       );
       return {
         attemptId: attempt.id,
@@ -112,6 +130,9 @@ export async function claimAgentAttempt(agentId: string) {
           timeoutSeconds: attempt.executionStep.timeoutSeconds,
         },
         inputValues: resolvedInputValues,
+        secretInputKeys: Object.entries(rawInputValues)
+          .filter(([, value]) => isSecretReference(value))
+          .map(([key]) => key),
       };
     },
     { isolationLevel: 'Serializable' }
@@ -184,7 +205,20 @@ export async function renewAgentAttemptLease(input: {
     attempt.executionStep.execution.cancelRequestedAt ||
     attempt.executionStep.execution.status === 'CANCEL_REQUESTED'
   ) {
-    return { leaseExpiresAt: now.toISOString(), cancelRequested: true };
+    const acknowledgementDeadline = new Date(now.getTime() + 30_000);
+    const updated = await prisma.runbookStepAttempt.updateMany({
+      where: {
+        id: input.attemptId,
+        claimedAgentId: input.agentId,
+        leaseToken: leaseHash(input.leaseToken),
+        leaseExpiresAt: { gt: now },
+        status: 'RUNNING',
+      },
+      data: { leaseExpiresAt: acknowledgementDeadline },
+    });
+    if (updated.count !== 1)
+      throw new RunbookAgentLeaseExpiredError(input.attemptId, input.agentId);
+    return { leaseExpiresAt: acknowledgementDeadline.toISOString(), cancelRequested: true };
   }
   const updated = await prisma.runbookStepAttempt.updateMany({
     where: {
@@ -208,7 +242,10 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
   return prisma.$transaction(async tx => {
     const attempt = await tx.runbookStepAttempt.findUnique({
       where: { id: input.attemptId },
-      include: { executionStep: { include: { execution: true } } },
+      include: {
+        targetAgentPool: { select: { mode: true } },
+        executionStep: { include: { execution: true } },
+      },
     });
     if (!attempt || attempt.claimedAgentId !== agentId)
       throw new RunbookAgentNotFoundError(agentId);
@@ -234,6 +271,18 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
     }
     if (!attempt.leaseExpiresAt || attempt.leaseExpiresAt <= new Date()) {
       throw new RunbookAgentLeaseExpiredError(input.attemptId, agentId);
+    }
+    if (input.outputArtifactId) {
+      const artifact = await tx.runbookArtifact.findFirst({
+        where: { id: input.outputArtifactId, attemptId: attempt.id },
+        select: { id: true },
+      });
+      if (!artifact) {
+        throw new RunbookPreExecutionFenceError(
+          input.attemptId,
+          'output artifact is not owned by attempt'
+        );
+      }
     }
     const outputPreview = input.outputPreview
       ? redactRunbookOutput(input.outputPreview)
@@ -264,13 +313,14 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
       throw new RunbookPreExecutionFenceError(input.attemptId, 'attempt state changed');
     }
     if (shouldRetry) {
+      const localHostRetry = attempt.targetAgentPool?.mode === 'LOCAL_HOSTS';
       await tx.runbookStepAttempt.create({
         data: {
           executionStepId: attempt.executionStepId,
           attemptNumber: attempt.attemptNumber + 1,
           status: 'PENDING',
-          targetAgentId: attempt.targetAgentId,
-          targetAgentPoolId: attempt.targetAgentPoolId,
+          targetAgentId: localHostRetry ? agentId : attempt.targetAgentId,
+          targetAgentPoolId: localHostRetry ? null : attempt.targetAgentPoolId,
           availableAt: new Date(Date.now() + retryDelayMs(attempt.attemptNumber)),
           claimDeadlineAt: new Date(Date.now() + 300_000),
           idempotencyKey: attempt.idempotencyKey ?? crypto.randomUUID(),
@@ -318,5 +368,46 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
       },
     });
     return { accepted: true, duplicate: false, status: resultStatus };
+  });
+}
+
+export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInput) {
+  const input = agentArtifactSchema.parse(raw);
+  const content = Buffer.from(input.contentBase64, 'base64');
+  if (content.length === 0 || content.length > 1_048_576) {
+    throw new Error('Compressed artifact must be between 1 byte and 1 MiB.');
+  }
+  if (sha256(content) !== input.sha256) throw new Error('Artifact checksum does not match.');
+  return prisma.$transaction(async tx => {
+    const attempt = await tx.runbookStepAttempt.findFirst({
+      where: {
+        id: input.attemptId,
+        claimedAgentId: agentId,
+        status: 'RUNNING',
+        leaseToken: leaseHash(input.leaseToken),
+        leaseExpiresAt: { gt: new Date() },
+        executionStep: { execution: { cancelRequestedAt: null } },
+      },
+      select: { id: true },
+    });
+    if (!attempt) {
+      throw new RunbookPreExecutionFenceError(
+        input.attemptId,
+        'artifact requires an active fenced attempt'
+      );
+    }
+    return tx.runbookArtifact.create({
+      data: {
+        attemptId: attempt.id,
+        kind: input.kind,
+        mediaType: input.mediaType,
+        encoding: input.encoding,
+        sizeBytes: content.length,
+        sha256: input.sha256,
+        content,
+        truncated: input.truncated,
+      },
+      select: { id: true, sizeBytes: true, sha256: true },
+    });
   });
 }

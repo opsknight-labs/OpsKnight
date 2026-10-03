@@ -65,6 +65,22 @@ app.kubernetes.io/component: {{ .role }}
 {{- end -}}
 {{- end }}
 
+{{- define "opsknight.agent.image" -}}
+{{- if .Values.agent.image.digest -}}
+{{- printf "%s@%s" .Values.agent.image.repository (.Values.agent.image.digest | trimPrefix "@") -}}
+{{- else -}}
+{{- printf "%s:%s" .Values.agent.image.repository .Values.agent.image.tag -}}
+{{- end -}}
+{{- end }}
+
+{{- define "opsknight.agent.serviceAccountName" -}}
+{{- if .Values.agent.serviceAccount.create -}}
+{{- default (printf "%s-agent" (include "opsknight.fullname" .)) .Values.agent.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.agent.serviceAccount.name -}}
+{{- end -}}
+{{- end }}
+
 {{/* Use an externally managed Secret when configured. */}}
 {{- define "opsknight.secretName" -}}
 {{- default (printf "%s-secrets" (include "opsknight.fullname" .)) .Values.secrets.existingSecret | trunc 63 | trimSuffix "-" -}}

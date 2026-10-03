@@ -61,17 +61,24 @@ describe('Runbook Type Guards and Utilities', () => {
 
   describe('isTerminalExecutionStatus & isActiveExecutionStatus', () => {
     const terminalStatuses = ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] as const;
-    const activeStatuses = ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'PAUSED', 'CANCEL_REQUESTED'] as const;
+    const activeStatuses = [
+      'QUEUED',
+      'RUNNING',
+      'WAITING_AGENT',
+      'WAITING_APPROVAL',
+      'PAUSED',
+      'CANCEL_REQUESTED',
+    ] as const;
 
     it('identifies terminal statuses correctly', () => {
-      terminalStatuses.forEach((status) => {
+      terminalStatuses.forEach(status => {
         expect(isTerminalExecutionStatus(status)).toBe(true);
         expect(isActiveExecutionStatus(status)).toBe(false);
       });
     });
 
     it('identifies active statuses correctly', () => {
-      activeStatuses.forEach((status) => {
+      activeStatuses.forEach(status => {
         expect(isTerminalExecutionStatus(status)).toBe(false);
         expect(isActiveExecutionStatus(status)).toBe(true);
       });
@@ -81,7 +88,7 @@ describe('Runbook Type Guards and Utilities', () => {
   describe('isTerminalStepStatus', () => {
     const terminal = ['SUCCEEDED', 'FAILED', 'SKIPPED', 'CANCELLED'];
     it('identifies terminal step statuses', () => {
-      RUNBOOK_STEP_STATUSES.forEach((status) => {
+      RUNBOOK_STEP_STATUSES.forEach(status => {
         if (terminal.includes(status)) {
           expect(isTerminalStepStatus(status)).toBe(true);
         } else {
@@ -94,7 +101,7 @@ describe('Runbook Type Guards and Utilities', () => {
   describe('isTerminalAttemptStatus', () => {
     const terminal = ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'UNKNOWN'];
     it('identifies terminal attempt statuses', () => {
-      RUNBOOK_ATTEMPT_STATUSES.forEach((status) => {
+      RUNBOOK_ATTEMPT_STATUSES.forEach(status => {
         if (terminal.includes(status)) {
           expect(isTerminalAttemptStatus(status)).toBe(true);
         } else {
@@ -107,7 +114,7 @@ describe('Runbook Type Guards and Utilities', () => {
   describe('isAgentAvailable', () => {
     const available = ['ONLINE', 'DEGRADED'];
     it('identifies available agent statuses', () => {
-      RUNBOOK_AGENT_STATUSES.forEach((status) => {
+      RUNBOOK_AGENT_STATUSES.forEach(status => {
         if (available.includes(status)) {
           expect(isAgentAvailable(status)).toBe(true);
         } else {
@@ -120,7 +127,7 @@ describe('Runbook Type Guards and Utilities', () => {
   describe('requiresAgent', () => {
     const local = ['MANUAL', 'APPROVAL', 'CONDITION', 'WAIT', 'HTTP'];
     it('identifies step types requiring an agent', () => {
-      RUNBOOK_STEP_TYPES.forEach((type) => {
+      RUNBOOK_STEP_TYPES.forEach(type => {
         if (local.includes(type)) {
           expect(requiresAgent(type)).toBe(false);
         } else {
@@ -159,25 +166,47 @@ describe('Runbook Constants', () => {
   it('has expected RUNBOOK_BINDING_MODES', () => {
     expect(RUNBOOK_BINDING_MODES).toEqual(['MANUAL', 'SUGGESTED', 'AUTOMATIC']);
   });
-  
+
   it('has expected RUNBOOK_VERSION_STRATEGIES', () => {
     expect(RUNBOOK_VERSION_STRATEGIES).toEqual(['PINNED', 'LATEST_PUBLISHED']);
   });
-  
+
   it('has expected TERMINAL_EXECUTION_STATUSES', () => {
-    expect(Array.from(TERMINAL_EXECUTION_STATUSES)).toEqual(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT']);
+    expect(Array.from(TERMINAL_EXECUTION_STATUSES)).toEqual([
+      'SUCCEEDED',
+      'FAILED',
+      'CANCELLED',
+      'TIMED_OUT',
+    ]);
   });
-  
+
   it('has expected LOCAL_STEP_TYPES', () => {
-    expect(Array.from(LOCAL_STEP_TYPES)).toEqual(['MANUAL', 'APPROVAL', 'CONDITION', 'WAIT', 'HTTP']);
+    expect(Array.from(LOCAL_STEP_TYPES)).toEqual([
+      'MANUAL',
+      'APPROVAL',
+      'CONDITION',
+      'WAIT',
+      'HTTP',
+    ]);
   });
-  
+
   it('has expected TERMINAL_STEP_STATUSES', () => {
-    expect(Array.from(TERMINAL_STEP_STATUSES)).toEqual(['SUCCEEDED', 'FAILED', 'SKIPPED', 'CANCELLED']);
+    expect(Array.from(TERMINAL_STEP_STATUSES)).toEqual([
+      'SUCCEEDED',
+      'FAILED',
+      'SKIPPED',
+      'CANCELLED',
+    ]);
   });
-  
+
   it('has expected TERMINAL_ATTEMPT_STATUSES', () => {
-    expect(Array.from(TERMINAL_ATTEMPT_STATUSES)).toEqual(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'UNKNOWN']);
+    expect(Array.from(TERMINAL_ATTEMPT_STATUSES)).toEqual([
+      'SUCCEEDED',
+      'FAILED',
+      'CANCELLED',
+      'TIMED_OUT',
+      'UNKNOWN',
+    ]);
   });
 
   it('validates lengths of other constants arrays', () => {

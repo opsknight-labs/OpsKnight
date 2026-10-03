@@ -34,6 +34,7 @@ Prepare `kubectl` with Kustomize support, namespace access, an immutable OpsKnig
 - `profiles/integrated`: the shared base plus one fixed-replica integrated Deployment; the HPA manifest is opt-in.
 - `profiles/split`: Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, Status Projector, role PDBs, Web Service/HPA, and role-specific NetworkPolicies.
 - `profiles/split-pgbouncer`: split plus two PgBouncer replicas, Service, PDB, NetworkPolicy, auth/config resources, and a Web patch that uses `WEB_DATABASE_URL` while preserving `DIRECT_DATABASE_URL`.
+- `profiles/integrated-agent` and `profiles/split-agent`: the corresponding runtime plus a single outbound Runbook Agent with persistent identity, default read-only RBAC, and a replace-before-use enrollment placeholder. See [Runbook Agent operations](./agent-operations).
 - `monitoring/servicemonitor.yaml`: optional Prometheus Operator resource; it is not included automatically.
 
 The shared base also contains namespace, placeholder Secret, ConfigMap, ServiceAccount, bundled PostgreSQL, ingress, NetworkPolicies, Service, and PDBs. Production overlays must replace placeholder images, origins, credentials, hostnames, storage, and capacity values.
@@ -44,6 +45,7 @@ The shared base also contains namespace, placeholder Secret, ConfigMap, ServiceA
 kubectl kustomize deploy/kubernetes/kustomize/profiles/integrated > /tmp/integrated.yaml
 kubectl kustomize deploy/kubernetes/kustomize/profiles/split > /tmp/split.yaml
 kubectl kustomize deploy/kubernetes/kustomize/profiles/split-pgbouncer > /tmp/split-pgbouncer.yaml
+kubectl kustomize deploy/kubernetes/kustomize/profiles/split-agent > /tmp/split-agent.yaml
 ```
 
 Inspect Services, images, Deployments, StatefulSets, PDBs, NetworkPolicies, ingress, and Secrets. Split profiles require a tested 2.0 split-runtime image; the checked-in placeholder cannot run production.

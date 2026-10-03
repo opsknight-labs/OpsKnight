@@ -16,7 +16,12 @@ export async function reconcileRunbooks(limit = 100) {
     },
     orderBy: { leaseExpiresAt: 'asc' },
     take: limit,
-    include: { executionStep: true },
+    include: {
+      executionStep: {
+        include: { execution: { select: { cancelRequestedAt: true, status: true } } },
+      },
+      targetAgentPool: { select: { mode: true } },
+    },
   });
   let reclaimed = 0;
   let unknown = 0;
@@ -87,6 +92,42 @@ export async function reconcileRunbooks(limit = 100) {
       reclaimed += reset.count;
       continue;
     }
+    if (
+      attempt.executionStep.execution.cancelRequestedAt ||
+      attempt.executionStep.execution.status === 'CANCEL_REQUESTED'
+    ) {
+      await prisma.$transaction(async tx => {
+        const cancelled = await tx.runbookStepAttempt.updateMany({
+          where: { id: attempt.id, status: 'RUNNING', leaseExpiresAt: { lt: now } },
+          data: {
+            status: 'CANCELLED',
+            completedAt: now,
+            leaseToken: null,
+            leaseExpiresAt: null,
+            errorCode: 'CANCEL_ACK_TIMEOUT',
+            errorMessage: 'The Agent did not acknowledge cancellation before its lease expired.',
+          },
+        });
+        if (cancelled.count !== 1) return;
+        await tx.runbookExecutionStep.updateMany({
+          where: { id: attempt.executionStepId, status: 'RUNNING' },
+          data: { status: 'CANCELLED', completedAt: now },
+        });
+        await tx.backgroundJob.create({
+          data: {
+            type: 'RUNBOOK',
+            status: 'PENDING',
+            scheduledAt: now,
+            maxAttempts: 8,
+            payload: {
+              kind: 'ADVANCE_EXECUTION',
+              executionId: attempt.executionStep.executionId,
+            },
+          },
+        });
+      });
+      continue;
+    }
     await prisma.$transaction(async tx => {
       const marked = await tx.runbookStepAttempt.updateMany({
         where: { id: attempt.id, status: 'RUNNING', leaseExpiresAt: { lt: now } },
@@ -105,13 +146,14 @@ export async function reconcileRunbooks(limit = 100) {
         isSafeToRetryAfterUnknown(attempt.executionStep.riskClass) &&
         attempt.attemptNumber <= attempt.executionStep.maxRetries;
       if (safeRetry) {
+        const localHostRetry = attempt.targetAgentPool?.mode === 'LOCAL_HOSTS';
         await tx.runbookStepAttempt.create({
           data: {
             executionStepId: attempt.executionStepId,
             attemptNumber: attempt.attemptNumber + 1,
             status: 'PENDING',
-            targetAgentId: attempt.targetAgentId,
-            targetAgentPoolId: attempt.targetAgentPoolId,
+            targetAgentId: localHostRetry ? attempt.claimedAgentId : attempt.targetAgentId,
+            targetAgentPoolId: localHostRetry ? null : attempt.targetAgentPoolId,
             availableAt: new Date(Date.now() + retryDelayMs(attempt.attemptNumber)),
             claimDeadlineAt: new Date(Date.now() + 300_000),
             idempotencyKey: attempt.idempotencyKey ?? crypto.randomUUID(),

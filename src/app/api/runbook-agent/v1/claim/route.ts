@@ -6,7 +6,19 @@ import { claimAgentAttempt } from '@/lib/runbooks/agent-claims';
 export async function POST(request: Request) {
   try {
     const { agent } = await authenticatedAgentJson(request);
-    const attempt = await claimAgentAttempt(agent.id);
+    const waitSeconds = Math.min(
+      25,
+      Math.max(
+        0,
+        Number.parseInt(new URL(request.url).searchParams.get('waitSeconds') ?? '0', 10) || 0
+      )
+    );
+    const deadline = Date.now() + waitSeconds * 1000;
+    let attempt = await claimAgentAttempt(agent.id);
+    while (!attempt && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 750 + Math.floor(Math.random() * 500)));
+      attempt = await claimAgentAttempt(agent.id);
+    }
     return attempt ? jsonOk({ attempt }) : new NextResponse(null, { status: 204 });
   } catch (error) {
     return agentApiError(error);

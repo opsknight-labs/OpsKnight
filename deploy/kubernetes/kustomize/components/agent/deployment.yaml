@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsknight-agent
+  namespace: opsknight
+  labels: { app: opsknight-agent }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: opsknight-agent }
+  template:
+    metadata:
+      labels: { app: opsknight-agent }
+    spec:
+      serviceAccountName: opsknight-agent
+      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001 }
+      containers:
+        - name: agent
+          image: ghcr.io/opsknight-labs/opsknight-agent:2.0.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - { name: OPSKNIGHT_URL, value: 'http://opsknight-service:80' }
+            - {
+                name: OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE,
+                value: /run/secrets/opsknight-agent/enrollment-token,
+              }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - {
+                name: policy,
+                mountPath: /etc/opsknight-agent/policy.json,
+                subPath: policy.json,
+                readOnly: true,
+              }
+            - { name: enrollment, mountPath: /run/secrets/opsknight-agent, readOnly: true }
+            - { name: data, mountPath: /var/lib/opsknight-agent }
+      volumes:
+        - name: policy
+          configMap: { name: opsknight-agent-policy }
+        - name: enrollment
+          secret: { secretName: opsknight-agent-enrollment }
+        - name: data
+          persistentVolumeClaim: { claimName: opsknight-agent }

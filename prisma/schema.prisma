@@ -3650,6 +3650,8 @@ model RunbookStepAttempt {
   targetAgent     RunbookAgent?        @relation("RunbookAttemptTargetAgent", fields: [targetAgentId], references: [id], onDelete: Restrict)
   targetAgentPool RunbookAgentPool?    @relation("RunbookAttemptTargetAgentPool", fields: [targetAgentPoolId], references: [id], onDelete: Restrict)
   claimedAgent    RunbookAgent?        @relation("RunbookAttemptClaimedAgent", fields: [claimedAgentId], references: [id], onDelete: SetNull)
+  outputArtifact  RunbookArtifact?     @relation("RunbookAttemptOutputArtifact", fields: [outputArtifactId], references: [id], onDelete: SetNull)
+  artifacts       RunbookArtifact[]    @relation("RunbookAttemptArtifacts")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3678,6 +3680,10 @@ model RunbookAgent {
   platform            String?
   labels              Json               @default("{}")
   capabilities        Json               @default("[]")
+  policyHash          String?
+  spoolDepth          Int                @default(0)
+  activeAttemptCount  Int                @default(0)
+  lastError           String?
   revokedAt           DateTime?
   revokedById         String?
   createdById         String?
@@ -3690,6 +3696,7 @@ model RunbookAgent {
   targetedAttempts   RunbookStepAttempt[]       @relation("RunbookAttemptTargetAgent")
   claimedAttempts    RunbookStepAttempt[]       @relation("RunbookAttemptClaimedAgent")
   requestNonces      RunbookAgentRequestNonce[]
+  secretGrants       RunbookSecretGrant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3722,6 +3729,7 @@ model RunbookAgentPool {
   bindings           ServiceRunbookBinding[]
   targetedExecutions RunbookExecution[]       @relation("RunbookExecutionTargetAgentPool")
   targetedAttempts   RunbookStepAttempt[]     @relation("RunbookAttemptTargetAgentPool")
+  secretGrants       RunbookSecretGrant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3749,8 +3757,46 @@ model RunbookSecret {
   description    String  @default("")
   createdById    String?
 
-  createdBy User? @relation("RunbookSecretCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy User?                @relation("RunbookSecretCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  grants    RunbookSecretGrant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model RunbookSecretGrant {
+  id          String  @id @default(cuid())
+  secretId    String
+  agentId     String?
+  agentPoolId String?
+
+  secret    RunbookSecret     @relation(fields: [secretId], references: [id], onDelete: Cascade)
+  agent     RunbookAgent?     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agentPool RunbookAgentPool? @relation(fields: [agentPoolId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([secretId, agentId])
+  @@unique([secretId, agentPoolId])
+  @@index([agentId])
+  @@index([agentPoolId])
+}
+
+model RunbookArtifact {
+  id        String  @id @default(cuid())
+  attemptId String
+  kind      String  @default("OUTPUT")
+  mediaType String  @default("text/plain")
+  encoding  String  @default("gzip")
+  sizeBytes Int
+  sha256    String
+  content   Bytes
+  truncated Boolean @default(false)
+
+  attempt   RunbookStepAttempt   @relation("RunbookAttemptArtifacts", fields: [attemptId], references: [id], onDelete: Cascade)
+  outputFor RunbookStepAttempt[] @relation("RunbookAttemptOutputArtifact")
+
+  createdAt DateTime @default(now())
+
+  @@index([attemptId, createdAt])
 }

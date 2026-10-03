@@ -8,6 +8,7 @@ import {
   startRunbookExecutionSchema,
   approveRunbookStepSchema,
   agentJobResultSchema,
+  agentArtifactSchema,
   createRunbookSecretSchema,
   runbookInputSchema,
 } from '@/lib/runbooks/schemas';
@@ -264,6 +265,30 @@ describe('Runbooks Zod Schemas', () => {
         status: 'CANCELLED',
       });
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe('agentArtifactSchema', () => {
+    const artifact = {
+      attemptId: 'ckopq1234000001la8m123456',
+      leaseToken: 'token123',
+      kind: 'OUTPUT',
+      mediaType: 'text/plain',
+      encoding: 'gzip',
+      contentBase64: Buffer.from('compressed').toString('base64'),
+      sha256: 'a'.repeat(64),
+      truncated: false,
+    };
+
+    it('accepts bounded gzip output metadata', () => {
+      expect(agentArtifactSchema.safeParse(artifact).success).toBe(true);
+    });
+
+    it('rejects unsupported encodings and invalid checksums', () => {
+      expect(agentArtifactSchema.safeParse({ ...artifact, encoding: 'identity' }).success).toBe(
+        false
+      );
+      expect(agentArtifactSchema.safeParse({ ...artifact, sha256: '../bad' }).success).toBe(false);
     });
   });
 

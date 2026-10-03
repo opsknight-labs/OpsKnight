@@ -1,4 +1,14 @@
-import { CheckCircle2, Circle, Clock3, Lightbulb, Play, ShieldCheck, XCircle } from 'lucide-react';
+import Link from 'next/link';
+import {
+  CheckCircle2,
+  Circle,
+  Clock3,
+  Download,
+  Lightbulb,
+  Play,
+  ShieldCheck,
+  XCircle,
+} from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { getUserPermissions } from '@/lib/rbac';
@@ -177,6 +187,14 @@ export default async function IncidentRunbooks({
                         {step.status.replaceAll('_', ' ')}
                         {step.outputPreview ? ` · ${step.outputPreview.slice(0, 160)}` : ''}
                       </div>
+                      {step.outputArtifactId && (
+                        <Link
+                          href={`/api/runbook-artifacts/${step.outputArtifactId}`}
+                          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-rose-600 hover:underline"
+                        >
+                          <Download className="h-3.5 w-3.5" /> Download full output
+                        </Link>
+                      )}
                       {step.status === 'WAITING_APPROVAL' && canApprove && (
                         <form
                           className="mt-3"

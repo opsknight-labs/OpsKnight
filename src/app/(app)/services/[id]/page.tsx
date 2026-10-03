@@ -432,8 +432,10 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     prisma.serviceRunbookBinding.findMany({
       where: { serviceId: id },
       include: {
-        runbook: true,
-        runbookVersion: true,
+        runbook: {
+          include: { publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } } },
+        },
+        runbookVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
         triggers: { include: { conditions: { orderBy: { sequence: 'asc' } } } },
       },
       orderBy: { createdAt: 'desc' },
@@ -442,7 +444,10 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       where: { archivedAt: null, publishedVersionId: { not: null } },
       include: {
         publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
-        versions: { orderBy: { version: 'desc' } },
+        versions: {
+          include: { inputs: { orderBy: { sequence: 'asc' } } },
+          orderBy: { version: 'desc' },
+        },
       },
       orderBy: { name: 'asc' },
     }),

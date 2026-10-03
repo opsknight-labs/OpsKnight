@@ -51,6 +51,7 @@ kubectl auth can-i create job -n opsknight
 - `startupProbe`, `livenessProbe`, and `readinessProbe`: health behavior.
 - `networkPolicy`: ingress namespace and database/provider egress.
 - `metrics.serviceMonitor`: Prometheus Operator discovery and scrape-token Secret.
+- `agent`: optional single-replica outbound Runbook Agent, persistent identity/spool, local policy, enrollment Secret, and opt-in namespaced RBAC. See [Runbook Agent operations](./agent-operations).
 
 Start from checked-in defaults and examples, but keep your production values outside the chart directory so upstream chart changes remain reviewable.
 

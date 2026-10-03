@@ -1,0 +1,10 @@
+{
+  "allowedStepTypes": ["LINUX_DIAGNOSTICS"],
+  "allowNonIdempotent": false,
+  "systemdUnits": [],
+  "dockerContainers": [],
+  "kubernetesNamespaces": [],
+  "bashCommandPatterns": [],
+  "maxRuntimeSeconds": 300,
+  "maxOutputBytes": 1048576
+}

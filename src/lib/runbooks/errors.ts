@@ -91,7 +91,8 @@ export class RunbookVersionAlreadyPublishedError extends RunbookError {
   constructor(runbookId: string) {
     super({
       code: 'RUNBOOK_VERSION_ALREADY_PUBLISHED',
-      userMessage: 'This runbook already has a published version. Retire the current version first or create a new version.',
+      userMessage:
+        'This runbook already has a published version. Retire the current version first or create a new version.',
       details: { runbookId },
     });
     this.name = 'RunbookVersionAlreadyPublishedError';
@@ -191,7 +192,8 @@ export class RunbookApprovalPlanChangedError extends RunbookError {
   constructor(attemptId: string) {
     super({
       code: 'RUNBOOK_APPROVAL_PLAN_CHANGED',
-      userMessage: 'The execution plan has changed since approval was granted. A new approval is required.',
+      userMessage:
+        'The execution plan has changed since approval was granted. A new approval is required.',
       details: { attemptId },
     });
     this.name = 'RunbookApprovalPlanChangedError';

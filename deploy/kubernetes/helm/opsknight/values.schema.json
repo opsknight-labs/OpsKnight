@@ -46,6 +46,119 @@
     "bulkWorker": { "$ref": "#/definitions/workerRole" },
     "runbookWorker": { "$ref": "#/definitions/workerRole" },
     "statusProjector": { "$ref": "#/definitions/workerRole" },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "replicaCount",
+        "image",
+        "url",
+        "enrollmentToken",
+        "policy",
+        "persistence",
+        "serviceAccount",
+        "rbac",
+        "resources",
+        "nodeSelector",
+        "tolerations",
+        "affinity"
+      ],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "replicaCount": { "type": "integer", "const": 1 },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "tag", "digest", "pullPolicy"],
+          "properties": {
+            "repository": { "type": "string", "minLength": 1 },
+            "tag": { "type": "string", "minLength": 1 },
+            "digest": { "type": "string" },
+            "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+          }
+        },
+        "url": { "type": "string" },
+        "enrollmentToken": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["existingSecret", "key"],
+          "properties": {
+            "existingSecret": { "type": "string" },
+            "key": { "type": "string", "minLength": 1 }
+          }
+        },
+        "policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allowedStepTypes",
+            "systemdUnits",
+            "dockerContainers",
+            "kubernetesNamespaces",
+            "bashCommandPatterns",
+            "allowNonIdempotent",
+            "maxRuntimeSeconds",
+            "maxOutputBytes"
+          ],
+          "properties": {
+            "allowedStepTypes": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "enum": ["LINUX_DIAGNOSTICS", "SYSTEMD", "DOCKER", "KUBERNETES", "BASH"]
+              }
+            },
+            "systemdUnits": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+            "dockerContainers": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string" }
+            },
+            "kubernetesNamespaces": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string" }
+            },
+            "bashCommandPatterns": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string" }
+            },
+            "allowNonIdempotent": { "type": "boolean" },
+            "maxRuntimeSeconds": { "type": "integer", "minimum": 1, "maximum": 3600 },
+            "maxOutputBytes": { "type": "integer", "minimum": 1024, "maximum": 10485760 }
+          }
+        },
+        "persistence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "size", "storageClass"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "size": { "$ref": "#/definitions/quantity" },
+            "storageClass": { "type": "string" }
+          }
+        },
+        "serviceAccount": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["create", "name"],
+          "properties": { "create": { "type": "boolean" }, "name": { "type": "string" } }
+        },
+        "rbac": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rules"],
+          "properties": { "rules": { "type": "array", "items": { "type": "object" } } }
+        },
+        "resources": { "$ref": "#/definitions/resources" },
+        "nodeSelector": { "type": "object", "additionalProperties": { "type": "string" } },
+        "tolerations": { "type": "array", "items": { "type": "object" } },
+        "affinity": { "type": "object" }
+      }
+    },
     "pgbouncer": { "$ref": "#/definitions/pgbouncer" },
     "migrations": {
       "type": "object",
@@ -196,6 +309,22 @@
         "properties": {
           "scheduler": {
             "properties": { "profile": { "const": "maintenance" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "agent": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] }
+        }
+      },
+      "then": {
+        "properties": {
+          "agent": {
+            "properties": {
+              "enrollmentToken": { "properties": { "existingSecret": { "minLength": 1 } } }
+            }
           }
         }
       }

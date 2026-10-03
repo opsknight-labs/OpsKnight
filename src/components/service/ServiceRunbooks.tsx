@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, RunbookInput } from '@prisma/client';
 import { BookOpen, Link2, Settings2, Trash2 } from 'lucide-react';
 import {
   attachRunbookAction,
@@ -17,14 +17,22 @@ import {
   CardTitle,
 } from '@/components/ui/shadcn/card';
 import { Label } from '@/components/ui/shadcn/label';
-import { Textarea } from '@/components/ui/shadcn/textarea';
+import { Input } from '@/components/ui/shadcn/input';
+import RunbookBindingVersionInputs from './RunbookBindingVersionInputs';
 
 type Binding = Prisma.ServiceRunbookBindingGetPayload<{
-  include: { runbook: true; runbookVersion: true; triggers: { include: { conditions: true } } };
+  include: {
+    runbook: { include: { publishedVersion: { include: { inputs: true } } } };
+    runbookVersion: { include: { inputs: true } };
+    triggers: { include: { conditions: true } };
+  };
 }>;
 
 type AvailableRunbook = Prisma.RunbookGetPayload<{
-  include: { publishedVersion: { include: { inputs: true } }; versions: true };
+  include: {
+    publishedVersion: { include: { inputs: true } };
+    versions: { include: { inputs: true } };
+  };
 }>;
 
 export default function ServiceRunbooks({
@@ -101,36 +109,29 @@ export default function ServiceRunbooks({
                     <option value="AUTOMATIC">Automatic</option>
                   </select>
                 </Field>
-                <Field label="Version strategy">
-                  <select
-                    name="versionStrategy"
-                    defaultValue={binding.versionStrategy}
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  >
-                    <option value="LATEST_PUBLISHED">Latest published</option>
-                    <option value="PINNED">Pinned</option>
-                  </select>
-                </Field>
-                <Field label="Pinned version">
-                  <select
-                    name="runbookVersionId"
-                    defaultValue={
-                      binding.runbookVersionId ?? binding.runbook.publishedVersionId ?? ''
-                    }
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  >
-                    {availableRunbooks
+                <RunbookBindingVersionInputs
+                  versions={
+                    availableRunbooks
                       .find(item => item.id === binding.runbookId)
-                      ?.versions.filter(
-                        version => version.state === 'PUBLISHED' || version.state === 'RETIRED'
-                      )
-                      .map(version => (
-                        <option key={version.id} value={version.id}>
-                          v{version.version} · {version.state}
-                        </option>
-                      ))}
-                  </select>
-                </Field>
+                      ?.versions.map(version => ({
+                        id: version.id,
+                        version: version.version,
+                        state: version.state,
+                        inputs: version.inputs.map(input => ({
+                          key: input.key,
+                          label: input.label,
+                          type: input.type,
+                          required: input.required,
+                          defaultValue: input.defaultValue,
+                          description: input.description,
+                        })),
+                      })) ?? []
+                  }
+                  publishedVersionId={binding.runbook.publishedVersionId ?? ''}
+                  initialStrategy={binding.versionStrategy}
+                  initialVersionId={binding.runbookVersionId}
+                  values={binding.inputValues as Record<string, unknown>}
+                />
                 <Field label="Status">
                   <select
                     name="enabled"
@@ -154,15 +155,7 @@ export default function ServiceRunbooks({
                     }
                   />
                 </Field>
-                <div className="space-y-2 lg:col-span-4">
-                  <Label>Input values (JSON)</Label>
-                  <Textarea
-                    name="inputValues"
-                    className="min-h-28 font-mono text-xs"
-                    defaultValue={JSON.stringify(binding.inputValues, null, 2)}
-                  />
-                </div>
-                <div className="flex gap-2 lg:col-span-4">
+                <div className="order-2 flex gap-2 lg:col-span-4">
                   <Button type="submit" variant="outline">
                     <Settings2 /> Save binding
                   </Button>
@@ -176,9 +169,12 @@ export default function ServiceRunbooks({
                 </div>
               </form>
             ) : (
-              <pre className="overflow-auto rounded-md bg-muted p-3 text-xs">
-                {JSON.stringify(binding.inputValues, null, 2)}
-              </pre>
+              <InputSummary
+                definitions={
+                  binding.runbookVersion?.inputs ?? binding.runbook.publishedVersion?.inputs ?? []
+                }
+                values={binding.inputValues as Record<string, unknown>}
+              />
             )}
             {canManage && (
               <form
@@ -209,28 +205,20 @@ export default function ServiceRunbooks({
                     Save trigger
                   </Button>
                 </div>
-                <div className="space-y-2 lg:col-span-3">
-                  <Label>Conditions (JSON)</Label>
-                  <Textarea
-                    name="conditions"
-                    className="min-h-28 font-mono text-xs"
-                    defaultValue={JSON.stringify(
-                      (binding.triggers[0]?.conditions ?? []).map(
-                        ({ field, operator, value, sequence }) => ({
-                          field,
-                          operator,
-                          value,
-                          sequence,
-                        })
-                      ),
-                      null,
-                      2
-                    )}
-                    placeholder='[{"field":"incident.urgency","operator":"EQUALS","value":"HIGH","sequence":0}]'
-                  />
+                <div className="space-y-3 lg:col-span-3">
+                  <Label>Conditions</Label>
+                  {(binding.triggers[0]?.conditions ?? []).map(condition => (
+                    <TriggerConditionRow
+                      key={condition.id}
+                      field={condition.field}
+                      operator={condition.operator}
+                      value={condition.value}
+                    />
+                  ))}
+                  <TriggerConditionRow />
                   <p className="text-xs text-muted-foreground">
-                    An empty list matches every event. Automatic mode still stops at steps requiring
-                    approval.
+                    Leave the final field empty to add no condition. Comma-separate values for “in”
+                    operators. Automatic mode still stops at approval gates.
                   </p>
                 </div>
               </form>
@@ -253,58 +241,214 @@ export default function ServiceRunbooks({
             </CardTitle>
             <CardDescription>Automatic mode requires an immutable pinned version.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <form
-              action={attachRunbookAction.bind(null, serviceId)}
-              className="grid gap-3 lg:grid-cols-3"
-            >
-              <Field label="Runbook">
-                <select
+          <CardContent className="space-y-4">
+            {unattached.map(runbook => (
+              <form
+                key={runbook.id}
+                action={attachRunbookAction.bind(null, serviceId)}
+                className="grid gap-3 rounded-md border p-4 lg:grid-cols-3"
+              >
+                <input
+                  type="hidden"
                   name="runbookSelection"
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                >
-                  {unattached.map(runbook => (
-                    <option key={runbook.id} value={`${runbook.id}:${runbook.publishedVersionId}`}>
-                      {runbook.name} · v{runbook.publishedVersion?.version}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Mode">
-                <select
-                  name="mode"
-                  defaultValue="MANUAL"
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                >
-                  <option value="MANUAL">Manual</option>
-                  <option value="SUGGESTED">Suggested</option>
-                  <option value="AUTOMATIC">Automatic</option>
-                </select>
-              </Field>
-              <Field label="Version strategy">
-                <select
-                  name="versionStrategy"
-                  defaultValue="LATEST_PUBLISHED"
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                >
-                  <option value="LATEST_PUBLISHED">Latest published</option>
-                  <option value="PINNED">Pinned</option>
-                </select>
-              </Field>
-              <Field label="Execution target">
-                <TargetSelect agents={availableAgents} pools={availableAgentPools} />
-              </Field>
-              <div className="space-y-2 lg:col-span-3">
-                <Label>Input values (JSON)</Label>
-                <Textarea name="inputValues" className="font-mono text-xs" defaultValue="{}" />
-              </div>
-              <div className="lg:col-span-3">
-                <Button type="submit">Attach runbook</Button>
-              </div>
-            </form>
+                  value={`${runbook.id}:${runbook.publishedVersionId}`}
+                />
+                <div className="lg:col-span-3">
+                  <div className="font-medium">{runbook.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    Published version {runbook.publishedVersion?.version}
+                  </div>
+                </div>
+                <Field label="Mode">
+                  <select
+                    name="mode"
+                    defaultValue="MANUAL"
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="MANUAL">Manual</option>
+                    <option value="SUGGESTED">Suggested</option>
+                    <option value="AUTOMATIC">Automatic</option>
+                  </select>
+                </Field>
+                <Field label="Version strategy">
+                  <select
+                    name="versionStrategy"
+                    defaultValue="LATEST_PUBLISHED"
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="LATEST_PUBLISHED">Latest published</option>
+                    <option value="PINNED">Pinned</option>
+                  </select>
+                </Field>
+                <Field label="Execution target">
+                  <TargetSelect agents={availableAgents} pools={availableAgentPools} />
+                </Field>
+                {(runbook.publishedVersion?.inputs.length ?? 0) > 0 && (
+                  <div className="grid gap-3 border-t pt-3 sm:grid-cols-2 lg:col-span-3">
+                    <InputFields definitions={runbook.publishedVersion?.inputs ?? []} values={{}} />
+                  </div>
+                )}
+                <div className="lg:col-span-3">
+                  <Button type="submit">Attach {runbook.name}</Button>
+                </div>
+              </form>
+            ))}
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+type InputDefinition = Pick<
+  RunbookInput,
+  'key' | 'label' | 'type' | 'required' | 'defaultValue' | 'description'
+>;
+
+function InputFields({
+  definitions,
+  values,
+}: {
+  definitions: InputDefinition[];
+  values: Record<string, unknown>;
+}) {
+  if (definitions.length === 0)
+    return <p className="text-xs text-muted-foreground sm:col-span-2">No inputs required.</p>;
+  return definitions.map(input => {
+    const current = values[input.key] ?? input.defaultValue ?? '';
+    if (input.type === 'BOOLEAN') {
+      return (
+        <label key={input.key} className="flex items-start gap-2 rounded-md border p-3 text-sm">
+          <input
+            name={`input:${input.key}`}
+            type="checkbox"
+            value="true"
+            defaultChecked={current === true || current === 'true'}
+            className="mt-0.5 h-4 w-4"
+          />
+          <span>
+            <span className="font-medium">{input.label}</span>
+            {input.description && (
+              <span className="mt-1 block text-xs text-muted-foreground">{input.description}</span>
+            )}
+          </span>
+        </label>
+      );
+    }
+    const displayed =
+      input.type === 'SECRET_REF' && typeof current === 'string'
+        ? current.replace(/^secret:\/\//, '')
+        : typeof current === 'string' || typeof current === 'number'
+          ? String(current)
+          : '';
+    return (
+      <Field key={input.key} label={`${input.label}${input.required ? ' *' : ''}`}>
+        <Input
+          name={`input:${input.key}`}
+          type={input.type === 'NUMBER' ? 'number' : input.type === 'URL' ? 'url' : 'text'}
+          step={input.type === 'NUMBER' ? 'any' : undefined}
+          required={input.required}
+          defaultValue={displayed}
+          placeholder={
+            input.type === 'DURATION'
+              ? '30s, 5m, or 1h'
+              : input.type === 'SECRET_REF'
+                ? 'Secret name'
+                : undefined
+          }
+          aria-describedby={input.description ? `input-help-${input.key}` : undefined}
+        />
+        {input.description && (
+          <p id={`input-help-${input.key}`} className="text-xs text-muted-foreground">
+            {input.description}
+          </p>
+        )}
+      </Field>
+    );
+  });
+}
+
+function InputSummary({
+  definitions,
+  values,
+}: {
+  definitions: InputDefinition[];
+  values: Record<string, unknown>;
+}) {
+  if (definitions.length === 0)
+    return <p className="text-xs text-muted-foreground">No inputs configured.</p>;
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {definitions.map(input => (
+        <div key={input.key} className="rounded border p-2 text-xs">
+          <span className="font-medium">{input.label}: </span>
+          <span className="text-muted-foreground">
+            {input.type === 'SECRET_REF' && values[input.key]
+              ? 'Configured secret reference'
+              : String(values[input.key] ?? input.defaultValue ?? 'Not set')}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const triggerFields = [
+  ['incident.urgency', 'Incident urgency'],
+  ['incident.priority', 'Incident priority'],
+  ['incident.status', 'Incident status'],
+  ['incident.title', 'Incident title'],
+  ['incident.description', 'Incident description'],
+  ['incident.tags', 'Incident tags'],
+  ['service.name', 'Service name'],
+  ['service.teamId', 'Service team'],
+] as const;
+
+function TriggerConditionRow({
+  field = '',
+  operator = 'EQUALS',
+  value = '',
+}: {
+  field?: string;
+  operator?: string;
+  value?: unknown;
+}) {
+  const knownField = triggerFields.some(([candidate]) => candidate === field);
+  const displayedValue = Array.isArray(value)
+    ? value.join(', ')
+    : value === null
+      ? ''
+      : String(value);
+  return (
+    <div className="grid gap-2 sm:grid-cols-3">
+      <select
+        name="conditionField"
+        defaultValue={field}
+        className="h-10 rounded-md border bg-background px-3 text-sm"
+      >
+        <option value="">No additional condition</option>
+        {field && !knownField && <option value={field}>{field}</option>}
+        {triggerFields.map(([key, label]) => (
+          <option key={key} value={key}>
+            {label}
+          </option>
+        ))}
+      </select>
+      <select
+        name="conditionOperator"
+        defaultValue={operator}
+        className="h-10 rounded-md border bg-background px-3 text-sm"
+      >
+        <option value="EQUALS">Equals</option>
+        <option value="NOT_EQUALS">Does not equal</option>
+        <option value="CONTAINS">Contains</option>
+        <option value="STARTS_WITH">Starts with</option>
+        <option value="IN">Is one of</option>
+        <option value="NOT_IN">Is not one of</option>
+        <option value="EXISTS">Exists</option>
+        <option value="NOT_EXISTS">Does not exist</option>
+      </select>
+      <Input name="conditionValue" defaultValue={displayedValue} placeholder="Match value" />
     </div>
   );
 }

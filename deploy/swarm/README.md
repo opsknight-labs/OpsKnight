@@ -59,6 +59,7 @@ Swarm deployment uses `docker stack deploy --prune` to ensure seamless, conflict
 | **`opsknight-status-projector`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Real-time incident timeline projection and public status sync. |
 | **`opsknight-pgbouncer`** *(Optional)* | 2 | Spread across nodes (`node.id`) | `start-first` | Transaction connection pooler offloading PostgreSQL backend. |
 | **`opsknight-db`** *(Bundled)* | 1 | Pinned: `opsknight.database == true` | `stop-first` | Single-node PostgreSQL persistence (dev/simple deploys). |
+| **`opsknight-agent`** *(Optional overlay)* | 1 | Operator selected | `stop-first` | Outbound, policy-constrained execution with persistent identity and result spool. |
 
 > [!IMPORTANT]
 > **Database HA Architecture Distinction**:

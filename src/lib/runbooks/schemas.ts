@@ -386,6 +386,21 @@ export const agentJobResultSchema = z
 
 export type AgentJobResultInput = z.infer<typeof agentJobResultSchema>;
 
+export const agentArtifactSchema = z
+  .object({
+    attemptId: z.string().cuid(),
+    leaseToken: z.string().min(1).max(512),
+    kind: z.enum(['OUTPUT', 'DIAGNOSTIC']).default('OUTPUT'),
+    mediaType: z.string().trim().min(1).max(100).default('text/plain'),
+    encoding: z.literal('gzip').default('gzip'),
+    contentBase64: z.string().min(1).max(1_500_000),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    truncated: z.boolean().default(false),
+  })
+  .strict();
+
+export type AgentArtifactInput = z.infer<typeof agentArtifactSchema>;
+
 // ---------------------------------------------------------------------------
 // Filter / query schemas
 // ---------------------------------------------------------------------------

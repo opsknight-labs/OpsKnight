@@ -261,13 +261,7 @@ export type RunbookInputType = (typeof RUNBOOK_INPUT_TYPES)[number];
 // Trigger-by type
 // ---------------------------------------------------------------------------
 
-export const RUNBOOK_TRIGGER_BY_TYPES = [
-  'USER',
-  'TRIGGER',
-  'API',
-  'CHATOPS',
-  'SCHEDULE',
-] as const;
+export const RUNBOOK_TRIGGER_BY_TYPES = ['USER', 'TRIGGER', 'API', 'CHATOPS', 'SCHEDULE'] as const;
 export type RunbookTriggerByType = (typeof RUNBOOK_TRIGGER_BY_TYPES)[number];
 
 // ---------------------------------------------------------------------------

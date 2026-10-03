@@ -1,0 +1,52 @@
+export type StepType = 'LINUX_DIAGNOSTICS' | 'SYSTEMD' | 'DOCKER' | 'KUBERNETES' | 'BASH';
+
+export type RiskClass = 'READ_ONLY' | 'IDEMPOTENT_WRITE' | 'NON_IDEMPOTENT';
+
+export interface AgentPolicy {
+  allowedStepTypes: StepType[];
+  allowNonIdempotent: boolean;
+  systemdUnits: string[];
+  dockerContainers: string[];
+  kubernetesNamespaces: string[];
+  bashCommandPatterns: string[];
+  maxRuntimeSeconds: number;
+  maxOutputBytes: number;
+}
+
+export interface AgentIdentity {
+  agentId: string;
+  privateKey: string;
+  publicKey: string;
+}
+
+export interface ClaimedAttempt {
+  attemptId: string;
+  leaseToken: string;
+  leaseExpiresAt: string;
+  idempotencyKey: string | null;
+  planDigest: string | null;
+  executionId: string;
+  step: {
+    key: string;
+    name: string;
+    type: StepType;
+    riskClass: RiskClass;
+    config: Record<string, unknown>;
+    timeoutSeconds: number | null;
+  };
+  inputValues: Record<string, unknown>;
+  secretInputKeys: string[];
+}
+
+export interface SpoolRecord {
+  attemptId: string;
+  leaseToken: string;
+  status: 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'UNKNOWN';
+  exitCode?: number;
+  outputPreview?: string;
+  outputArtifactId?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  preState?: Record<string, unknown>;
+  postState?: Record<string, unknown>;
+}

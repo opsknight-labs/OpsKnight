@@ -1,0 +1,178 @@
+{{- if .Values.agent.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "opsknight.fullname" . }}-agent-policy
+  labels:
+    {{- include "opsknight.labels" . | nindent 4 }}
+data:
+  policy.json: {{ .Values.agent.policy | toJson | quote }}
+---
+{{- if .Values.agent.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "opsknight.agent.serviceAccountName" . }}
+  labels:
+    {{- include "opsknight.labels" . | nindent 4 }}
+automountServiceAccountToken: true
+---
+{{- end }}
+{{- if .Values.agent.rbac.rules }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "opsknight.fullname" . }}-agent
+  labels:
+    {{- include "opsknight.labels" . | nindent 4 }}
+rules:
+  {{- toYaml .Values.agent.rbac.rules | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "opsknight.fullname" . }}-agent
+  labels:
+    {{- include "opsknight.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "opsknight.agent.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "opsknight.fullname" . }}-agent
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opsknight.fullname" . }}-agent
+  labels:
+    {{- include "opsknight.labels" . | nindent 4 }}
+    app.kubernetes.io/component: runbook-agent
+spec:
+  replicas: {{ .Values.agent.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "opsknight.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: runbook-agent
+  template:
+    metadata:
+      labels:
+        {{- include "opsknight.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: runbook-agent
+    spec:
+      serviceAccountName: {{ include "opsknight.agent.serviceAccountName" . }}
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+        - name: agent
+          image: {{ include "opsknight.agent.image" . }}
+          imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+          env:
+            - name: OPSKNIGHT_URL
+              value: {{ default (printf "http://%s:%v" (include "opsknight.fullname" .) .Values.service.port) .Values.agent.url | quote }}
+            - name: OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE
+              value: /run/secrets/opsknight-agent/enrollment-token
+          volumeMounts:
+            - name: policy
+              mountPath: /etc/opsknight-agent/policy.json
+              subPath: policy.json
+              readOnly: true
+            - name: enrollment
+              mountPath: /run/secrets/opsknight-agent
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/opsknight-agent
+          resources:
+            {{- toYaml .Values.agent.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: policy
+          configMap:
+            name: {{ include "opsknight.fullname" . }}-agent-policy
+        - name: enrollment
+          secret:
+            secretName: {{ required "agent.enrollmentToken.existingSecret is required when agent.enabled=true" .Values.agent.enrollmentToken.existingSecret }}
+            items:
+              - key: {{ .Values.agent.enrollmentToken.key }}
+                path: enrollment-token
+        - name: data
+          {{- if .Values.agent.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "opsknight.fullname" . }}-agent
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.agent.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if .Values.agent.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "opsknight.fullname" . }}-agent
+  labels:
+    {{- include "opsknight.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- if .Values.agent.persistence.storageClass }}
+  storageClassName: {{ .Values.agent.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.agent.persistence.size }}
+{{- end }}
+{{- if .Values.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "opsknight.fullname" . }}-agent
+  labels:
+    {{- include "opsknight.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "opsknight.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: runbook-agent
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "opsknight.selectorLabels" . | nindent 14 }}
+              {{- if eq .Values.runtime.mode "split" }}
+              app.kubernetes.io/component: web
+              {{- end }}
+      ports:
+        - { protocol: TCP, port: {{ .Values.service.targetPort }} }
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    # Kubernetes API and explicitly allowed HTTPS execution targets.
+    - to: []
+      ports:
+        - { protocol: TCP, port: 443 }
+{{- end }}
+{{- end }}

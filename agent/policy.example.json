@@ -1,0 +1,10 @@
+{
+  "allowedStepTypes": ["LINUX_DIAGNOSTICS", "SYSTEMD"],
+  "allowNonIdempotent": false,
+  "systemdUnits": ["opsknight.service", "payments-api.service"],
+  "dockerContainers": [],
+  "kubernetesNamespaces": [],
+  "bashCommandPatterns": [],
+  "maxRuntimeSeconds": 300,
+  "maxOutputBytes": 1048576
+}

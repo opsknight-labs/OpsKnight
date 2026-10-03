@@ -10,6 +10,13 @@ const schema = z
     platform: z.string().trim().min(1).max(100),
     labels: z.record(z.string(), z.string().max(200)).optional(),
     capabilities: z.array(z.string().max(100)).max(100).optional(),
+    policyHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
+    spoolDepth: z.number().int().min(0).max(100000).optional(),
+    activeAttemptCount: z.number().int().min(0).max(1000).optional(),
+    lastError: z.string().max(1000).nullable().optional(),
   })
   .strict();
 
