@@ -49,6 +49,16 @@ export const CAPABILITIES = {
   COMPLIANCE_EVIDENCE_READ: 'compliance.evidence.read',
   COMPLIANCE_EXPORT: 'compliance.export',
   COMPLIANCE_DRIFT_MANAGE: 'compliance.drift.manage',
+
+  // Runbooks
+  RUNBOOK_READ_ALL: 'runbook.read.all',
+  RUNBOOK_READ_SCOPED: 'runbook.read.scoped',
+  RUNBOOK_EXECUTE: 'runbook.execute',
+  RUNBOOK_APPROVE: 'runbook.approve',
+  RUNBOOK_MANAGE: 'runbook.manage',
+  RUNBOOK_PUBLISH: 'runbook.publish',
+  RUNBOOK_AGENT_MANAGE: 'runbook.agent.manage',
+  RUNBOOK_SECRET_MANAGE: 'runbook.secret.manage',
 } as const;
 
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
@@ -88,6 +98,10 @@ const RESPONDER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.REPORT_EXPORT,
   CAPABILITIES.USER_READ_ALL,
   CAPABILITIES.POLICY_READ_ALL,
+  // Runbooks: responders can view, execute, and approve published runbooks
+  CAPABILITIES.RUNBOOK_READ_ALL,
+  CAPABILITIES.RUNBOOK_EXECUTE,
+  CAPABILITIES.RUNBOOK_APPROVE,
 ]);
 const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.INCIDENT_READ_ALL,
@@ -111,6 +125,8 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.COMPLIANCE_EVIDENCE_READ,
   // Auditors may export verifiable audit evidence packages.
   CAPABILITIES.COMPLIANCE_EXPORT,
+  // Auditors may view runbook definitions and execution history.
+  CAPABILITIES.RUNBOOK_READ_ALL,
 ]);
 const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.INCIDENT_READ_SCOPED,

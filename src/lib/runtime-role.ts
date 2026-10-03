@@ -7,6 +7,7 @@ export const OPSKNIGHT_PROCESS_ROLES = [
   'critical-worker',
   'bulk-worker',
   'status-projector',
+  'runbook-worker',
 ] as const;
 
 export type OpsKnightProcessRole = (typeof OPSKNIGHT_PROCESS_ROLES)[number];
@@ -15,7 +16,7 @@ export interface RuntimeResponsibilities {
   startScheduler: boolean;
   startJobWorker: boolean;
   schedulerProfile: SchedulerProfile | null;
-  workerLane: 'all' | 'general' | 'critical' | 'bulk' | 'projector' | null;
+  workerLane: 'all' | 'general' | 'critical' | 'bulk' | 'projector' | 'runbook' | null;
 }
 
 export const OPSKNIGHT_SCHEDULER_PROFILES = ['full', 'maintenance'] as const;
@@ -117,6 +118,13 @@ export function getRuntimeResponsibilities(
         startJobWorker: true,
         schedulerProfile: null,
         workerLane: 'projector',
+      };
+    case 'runbook-worker':
+      return {
+        startScheduler: false,
+        startJobWorker: true,
+        schedulerProfile: null,
+        workerLane: 'runbook',
       };
   }
 }

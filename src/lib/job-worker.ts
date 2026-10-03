@@ -36,7 +36,7 @@ export interface JobWorkerConfig {
   busyPollMs: number;
 }
 
-export type JobWorkerLane = 'all' | 'general' | 'critical' | 'bulk' | 'projector';
+export type JobWorkerLane = 'all' | 'general' | 'critical' | 'bulk' | 'projector' | 'runbook';
 
 export interface JobWorkerOptions {
   ownsQueueMaintenance?: boolean;
