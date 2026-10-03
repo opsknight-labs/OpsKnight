@@ -289,7 +289,9 @@ describe('CreateIncidentModal', () => {
 
     await screen.findByText('Declare Incident');
 
-    const titleInput = screen.getByPlaceholderText(/Primary database connection pool exhausted/i);
+    const titleInput = await screen.findByPlaceholderText(
+      /Primary database connection pool exhausted/i
+    );
     fireEvent.change(titleInput, { target: { value: 'Database Outage in US-East' } });
 
     const submitBtn = screen.getByRole('button', { name: /^create incident$/i });
