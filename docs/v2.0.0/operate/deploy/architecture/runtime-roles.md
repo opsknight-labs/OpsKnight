@@ -15,7 +15,7 @@ verification:
 
 # Understand OpsKnight runtime roles
 
-Split mode uses one migration owner and six long-running roles. Every role runs the same tested application image but starts with different ownership.
+Split mode uses one migration owner and seven long-running roles. Every role runs the same tested application image but starts with different ownership.
 
 ## Migration
 
@@ -42,6 +42,10 @@ Processes latency-sensitive paging and incident work. Give it protected resource
 ## Bulk Worker
 
 Processes high-volume or lower-urgency work. Scale only after determining whether the bottleneck is compute, database throughput, or a provider limit.
+
+## Runbook Worker
+
+Executes claimed runbook steps in an isolated queue lane. Monitor claim age, execution latency, retries, reconciliation failures, and downstream provider errors. Keep its direct database pool in the capacity budget; Web or General Worker scaling does not increase runbook throughput.
 
 ## Status Projector
 

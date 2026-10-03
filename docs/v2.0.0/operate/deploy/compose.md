@@ -28,7 +28,7 @@ The checked-in Compose files support a single-host integrated runtime, isolated 
 
 - **Integrated + bundled PostgreSQL:** `opsknight-app` owns web traffic and background work; `opsknight-db` stores data. Simplest evaluation and small-host topology.
 - **Integrated + external PostgreSQL:** same application ownership with an operator-managed database.
-- **Split:** a one-shot migration owner plus Web, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector. Use when failure isolation and role-specific scaling matter.
+- **Split:** a one-shot migration owner plus Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, and Status Projector. Use when failure isolation and role-specific scaling matter.
 - **Split + PgBouncer:** only Web uses transaction pooling; migrations, scheduler, and workers retain direct PostgreSQL connections.
 
 Compose is still a single-host orchestrator. It does not provide multi-node rescheduling. Use [Swarm](./swarm), [Helm](./helm), or [Kustomize](./kustomize) when host failure must be tolerated automatically.
@@ -126,7 +126,7 @@ Confirm no `opsknight-db` container is running and verify readiness. Never point
 
 ## Split-runtime installation
 
-Split mode disables `opsknight-app`. `opsknight-migration` runs once; all six long-running roles wait for it to exit successfully and set `OPSKNIGHT_SKIP_MIGRATIONS=true`.
+Split mode disables `opsknight-app`. `opsknight-migration` runs once; all seven long-running roles wait for it to exit successfully and set `OPSKNIGHT_SKIP_MIGRATIONS=true`.
 
 Validate capacity and render the effective topology:
 
@@ -162,7 +162,7 @@ docker compose \
   ps -a
 ```
 
-`opsknight-migration` must show a successful exit. Web, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector must be healthy. `opsknight-app` must not be running.
+`opsknight-migration` must show a successful exit. Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, and Status Projector must be healthy. `opsknight-app` must not be running.
 
 See [Split runtime](./split-runtime) for lane ownership and failure effects. Scale only a constrained scalable worker after checking the [connection budget](../capacity/sizing); do not create duplicate scheduler ownership casually.
 

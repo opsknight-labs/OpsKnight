@@ -367,7 +367,7 @@ jobs:
           curl -s -f "http://127.0.0.1:33000/api/health?mode=readiness" | grep -q 'healthy'
 
           echo "Verifying split background workers are running..."
-          for role in opsknight-scheduler opsknight-general-worker opsknight-critical-worker opsknight-bulk-worker opsknight-status-projector; do
+          for role in opsknight-scheduler opsknight-general-worker opsknight-critical-worker opsknight-bulk-worker opsknight-runbook-worker opsknight-status-projector; do
             role_state=$(docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml ps "$role" --format '{{.State}}' 2>/dev/null || true)
             echo "Role $role state: $role_state"
             test "$role_state" = "running"
@@ -504,7 +504,7 @@ jobs:
           curl -s -f "http://127.0.0.1:33001/api/health?mode=readiness" | grep -q 'healthy'
 
           echo "Verifying split background workers are running with direct external DB TLS..."
-          for worker in scheduler general-worker critical-worker bulk-worker status-projector; do
+          for worker in scheduler general-worker critical-worker bulk-worker runbook-worker status-projector; do
             w_state=$(docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml ps "opsknight-${worker}" --format '{{.State}}' 2>/dev/null || true)
             if [ "$w_state" != "running" ]; then
               echo "Error: opsknight-${worker} is in state '$w_state', expected 'running'" >&2

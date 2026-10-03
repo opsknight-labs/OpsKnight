@@ -19,7 +19,7 @@ verification:
 
 # Install split OpsKnight with Compose
 
-Split mode disables `opsknight-app`, runs a one-shot migration owner, and starts Web, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector independently.
+Split mode disables `opsknight-app`, runs a one-shot migration owner, and starts Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, and Status Projector independently.
 
 ## Prerequisites
 
@@ -41,7 +41,7 @@ docker compose \
   config --services
 ```
 
-The rendered service list must contain the migration and six long-running roles. `opsknight-app` must not be an active service. Review the resolved image, database URLs, role names, health checks, pool sizes, and replica settings without publishing the secret-bearing output.
+The rendered service list must contain the migration and seven long-running roles. `opsknight-app` must not be an active service. Review the resolved image, database URLs, role names, health checks, pool sizes, and replica settings without publishing the secret-bearing output.
 
 ## Install split runtime
 
@@ -72,7 +72,7 @@ If migration exits non-zero, stop. Do not bypass it or start application roles a
 Confirm:
 
 - migration shows a successful exit;
-- Web, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector are healthy;
+- Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, and Status Projector are healthy;
 - integrated `opsknight-app` is not running;
 - readiness succeeds directly and through public HTTPS;
 - scheduler and role heartbeats are current;

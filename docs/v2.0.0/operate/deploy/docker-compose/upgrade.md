@@ -62,7 +62,7 @@ Do not use `down --volumes` during an upgrade.
 
 1. Confirm the resolved image is the new approved digest for every role.
 2. Require migration success and readiness through loopback and public HTTPS.
-3. In split mode, verify all six long-running roles and absence of integrated ownership.
+3. In split mode, verify all seven long-running roles and absence of integrated ownership.
 4. Sign in, create a synthetic incident, acknowledge and resolve it.
 5. Verify notification delivery, ChatOps action where configured, and status projection.
 6. Watch errors, queue age, scheduler/projection lag, provider failures, and database connections through the soak window.
@@ -92,4 +92,3 @@ Use [Rollback](../../upgrades/rollback). If the release supports application rol
 - [Compose troubleshooting](./troubleshooting)
 - [Production acceptance](./production-checklist)
 - [Backup and restore](../../data/backup-and-restore)
-

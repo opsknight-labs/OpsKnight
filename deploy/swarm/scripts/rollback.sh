@@ -38,6 +38,7 @@ else
     "${STACK_NAME}_opsknight-general-worker"
     "${STACK_NAME}_opsknight-critical-worker"
     "${STACK_NAME}_opsknight-bulk-worker"
+    "${STACK_NAME}_opsknight-runbook-worker"
     "${STACK_NAME}_opsknight-status-projector"
   )
   for svc in "${SPLIT_CANDIDATES[@]}"; do

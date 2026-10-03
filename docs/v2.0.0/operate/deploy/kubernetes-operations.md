@@ -42,7 +42,7 @@ Use a managed PostgreSQL service for production availability unless your team ac
 
 **Integrated** runs web and background responsibilities in the same application Deployment. It is operationally simpler, but replicas also duplicate integrated background ownership and cannot scale each queue independently.
 
-**Split** runs Web, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector as separate Deployments. It isolates failures and scaling signals. The maintained split profile starts two replicas for each role; database leases and queue claims coordinate work, but connection capacity must include every replica.
+**Split** runs Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, and Status Projector as separate Deployments. It isolates failures and scaling signals. The maintained split profile starts two replicas for each role; database leases and queue claims coordinate work, but connection capacity must include every replica.
 
 **Split + PgBouncer** routes only Web through transaction pooling. Scheduler, workers, status projection, and migration require a direct PostgreSQL URL.
 

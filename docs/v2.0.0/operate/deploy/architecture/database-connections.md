@@ -28,7 +28,7 @@ Packaging maps these values into roles differently. Inspect the rendered Compose
 
 ## Direct versus pooled paths
 
-Migration, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector use direct PostgreSQL connections. Web can use PgBouncer in split mode. Do not route Prisma migrations through transaction pooling.
+Migration, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, and Status Projector use direct PostgreSQL connections. Web can use PgBouncer in split mode. Do not route Prisma migrations through transaction pooling.
 
 A representative direct external URL is:
 
@@ -76,4 +76,3 @@ Database backups do not preserve application secrets. Back up `ENCRYPTION_KEY`, 
 - [Compose PgBouncer](../docker-compose/pgbouncer)
 - [Backup and restore](../../data/backup-and-restore)
 - [Database migrations](../../upgrades/database-migrations)
-

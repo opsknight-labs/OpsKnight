@@ -22,7 +22,7 @@ Read [Runtime roles](../architecture/runtime-roles), calculate resources and con
 
 ## Prepare the configuration
 
-Set `runtime.mode: split`, enable the migration Job, and define Web, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector replicas/resources/pools/probes/termination/PDBs. Direct ingress only to Web. Set `database.maxApplicationConnections` to the reviewed ceiling.
+Set `runtime.mode: split`, enable the migration Job, and define Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, and Status Projector replicas/resources/pools/probes/termination/PDBs. Direct ingress only to Web. Set `database.maxApplicationConnections` to the reviewed ceiling.
 
 Keep migration and non-Web roles on direct PostgreSQL. Add [PgBouncer](./pgbouncer) only for Web.
 
@@ -58,4 +58,3 @@ Upgrade one reviewed values revision at a time. To return to integrated, stop sp
 
 - [Configure PgBouncer](./pgbouncer)
 - [Install with Helm](./install)
-

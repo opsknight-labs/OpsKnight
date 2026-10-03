@@ -203,6 +203,48 @@ spec:
 ---
 apiVersion: apps/v1
 kind: Deployment
+metadata: { name: opsknight-runbook-worker, namespace: opsknight }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: runbook-worker } }
+  template:
+    metadata: { labels: { app: opsknight-app, opsknight-role: runbook-worker } }
+    spec:
+      serviceAccountName: opsknight-app
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: opsknight-app
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+          image: ghcr.io/opsknight-labs/opsknight:split-runtime-image-required
+          imagePullPolicy: Always
+          ports: [{ name: http, containerPort: 3000 }]
+          envFrom: [{ configMapRef: { name: opsknight-config } }, { secretRef: { name: opsknight-secrets } }]
+          env:
+            - { name: OPSKNIGHT_SKIP_MIGRATIONS, value: 'true' }
+            - { name: OPSKNIGHT_PROCESS_ROLE, value: runbook-worker }
+            - { name: DATABASE_POOL_SIZE_RUNBOOK_WORKER, value: '3' }
+            - { name: OPSKNIGHT_WORKER_BATCH_SIZE, value: '50' }
+            - { name: OPSKNIGHT_WORKER_CONCURRENCY, value: '10' }
+            - { name: OPSKNIGHT_WORKER_IDLE_POLL_MS, value: '1000' }
+            - { name: OPSKNIGHT_WORKER_BUSY_POLL_MS, value: '100' }
+            - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DATABASE_URL } } }
+            - { name: DIRECT_DATABASE_URL, valueFrom: { secretKeyRef: { name: opsknight-secrets, key: DIRECT_DATABASE_URL } } }
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 1Gi } }
+          startupProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 30 }
+          livenessProbe: { httpGet: { path: '/api/health', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+          readinessProbe: { httpGet: { path: '/api/health?mode=readiness', port: http, httpHeaders: [{ name: Host, value: 'localhost:3000' }] }, periodSeconds: 10, timeoutSeconds: 5, failureThreshold: 3 }
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: { matchLabels: { app: opsknight-app, opsknight-role: runbook-worker } } }
+---
+apiVersion: apps/v1
+kind: Deployment
 metadata: { name: opsknight-status-projector, namespace: opsknight }
 spec:
   replicas: 2

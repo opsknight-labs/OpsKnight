@@ -132,6 +132,7 @@ jobs:
           SWARM_REPLICAS_GENERAL_WORKER=1 \
           SWARM_REPLICAS_CRITICAL_WORKER=1 \
           SWARM_REPLICAS_BULK_WORKER=1 \
+          SWARM_REPLICAS_RUNBOOK_WORKER=1 \
           SWARM_REPLICAS_STATUS_PROJECTOR=1 \
           node deploy/scripts/validate-runtime-capacity.cjs
 
@@ -241,6 +242,7 @@ jobs:
                 opsknight_opsknight-general-worker \
                 opsknight_opsknight-critical-worker \
                 opsknight_opsknight-bulk-worker \
+                opsknight_opsknight-runbook-worker \
                 opsknight_opsknight-status-projector
             fi
           }

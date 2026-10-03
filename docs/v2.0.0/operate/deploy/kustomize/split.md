@@ -28,7 +28,7 @@ For PgBouncer, replace placeholder auth/config for the selected database. Web us
 
 ## Deploy split runtime
 
-Render and confirm six roles plus optional PgBouncer, with no integrated Deployment. Run the one-shot direct migration Job successfully, then apply and wait for each Deployment.
+Render and confirm seven roles plus optional PgBouncer, with no integrated Deployment. Run the one-shot direct migration Job successfully, then apply and wait for each Deployment.
 
 ## Verify every role
 

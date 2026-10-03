@@ -22,7 +22,7 @@ Complete platform, secret, database, ingress, and policy setup. Read [Runtime ro
 
 ## Prepare split configuration
 
-Select `runtime.mode: split` or the split profile. Configure Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Status Projector, and one migration owner. Set role resources, replicas, probes, graceful termination, pool sizes, PDBs, and spread rules. Send ingress only to Web.
+Select `runtime.mode: split` or the split profile. Configure Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, Status Projector, and one migration owner. Set role resources, replicas, probes, graceful termination, pool sizes, PDBs, and spread rules. Send ingress only to Web.
 
 ## Deploy split runtime
 

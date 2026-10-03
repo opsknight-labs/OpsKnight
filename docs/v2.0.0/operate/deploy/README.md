@@ -71,7 +71,7 @@ Compose is a single-host orchestrator. Swarm and Kubernetes can reschedule workl
 ## Choose integrated or split runtime
 
 - **Integrated** runs the web application and background responsibilities together. It is the least complex path for evaluation and smaller installations.
-- **Split** runs Web, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector separately. Choose it when you need role-specific scaling, failure isolation, or Web-only pooling.
+- **Split** runs Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, and Status Projector separately. Choose it when you need role-specific scaling, failure isolation, or Web-only pooling.
 
 Read [Integrated versus split](./architecture/integrated-vs-split) before choosing. Do not run integrated and split ownership at the same time against one database.
 

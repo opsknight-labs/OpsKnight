@@ -16,7 +16,7 @@ verification:
 ## Maintained profiles
 
 - `profiles/integrated`: shared base and a fixed-replica integrated Deployment; `hpa.yaml` is opt-in.
-- `profiles/split`: six fixed-replica runtime Deployments, role PDBs/policies, and Web Service; `web-hpa.yaml` is opt-in.
+- `profiles/split`: seven fixed-replica runtime Deployments, role PDBs/policies, and Web Service; `web-hpa.yaml` is opt-in.
 - `profiles/split-pgbouncer`: split plus PgBouncer resources and Web database patch.
 - `monitoring/servicemonitor.yaml`: optional Prometheus Operator resource, not automatically included.
 

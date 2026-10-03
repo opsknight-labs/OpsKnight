@@ -143,7 +143,7 @@ DATABASE_URL=postgresql://opsknight:password@host:5432/opsknight_db?sslmode=requ
 
 Budget per-process pools across all application replicas plus migration, backup, monitoring, and administrative reserve. See [Scalability and capacity planning](../core-concepts/scalability.md).
 
-Split processes set `OPSKNIGHT_PROCESS_ROLE` to `web`, `scheduler`, `general-worker`, `critical-worker`, `bulk-worker`, or `status-projector`. A dedicated scheduler remains on the backward-compatible `full` profile unless `OPSKNIGHT_SCHEDULER_PROFILE=maintenance` is explicitly set.
+Split processes set `OPSKNIGHT_PROCESS_ROLE` to `web`, `scheduler`, `general-worker`, `critical-worker`, `bulk-worker`, `runbook-worker`, or `status-projector`. A dedicated scheduler remains on the backward-compatible `full` profile unless `OPSKNIGHT_SCHEDULER_PROFILE=maintenance` is explicitly set.
 
 ## Application URL
 

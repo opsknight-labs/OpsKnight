@@ -33,7 +33,7 @@ Choose integrated when:
 
 ## Split runtime
 
-Split mode separates Web, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector. A one-shot migration owner finishes before those long-running roles start.
+Split mode separates Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, and Status Projector. A one-shot migration owner finishes before those long-running roles start.
 
 Choose split when:
 
@@ -77,4 +77,3 @@ Schema migration must have exactly one owner. In split deployments, complete the
 - [Plan database connections](./database-connections)
 - [Install integrated Compose](../docker-compose/integrated)
 - [Install split Compose](../docker-compose/split)
-

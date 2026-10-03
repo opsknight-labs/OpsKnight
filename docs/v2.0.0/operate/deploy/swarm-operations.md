@@ -48,6 +48,7 @@ In split mode, the default service layout is:
 | `opsknight-general-worker` | 2 | stop first | general queues and integrations |
 | `opsknight-critical-worker` | 2 | stop first | urgent paging and notification work |
 | `opsknight-bulk-worker` | 2 | stop first | bulk and maintenance work |
+| `opsknight-runbook-worker` | 2 | stop first | isolated runbook execution and reconciliation |
 | `opsknight-status-projector` | 2 | stop first | incident and public-status projection |
 | `opsknight-pgbouncer` | 2, optional | start first | transaction pooling for web traffic only |
 | `opsknight-db` | 1, optional | stop first | bundled, node-pinned PostgreSQL |

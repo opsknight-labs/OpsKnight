@@ -99,7 +99,7 @@ docker compose <files> config --images
 docker compose <files> pull
 ```
 
-For split mode, run the one-shot migration service and confirm successful exit before updating Web, Scheduler, General Worker, Critical Worker, Bulk Worker, and Status Projector. Then:
+For split mode, run the one-shot migration service and confirm successful exit before updating Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, and Status Projector. Then:
 
 ```bash
 docker compose <files> up -d --wait

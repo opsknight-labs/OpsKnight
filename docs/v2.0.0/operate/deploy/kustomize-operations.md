@@ -32,7 +32,7 @@ Prepare `kubectl` with Kustomize support, namespace access, an immutable OpsKnig
 ## Maintained profiles
 
 - `profiles/integrated`: the shared base plus one fixed-replica integrated Deployment; the HPA manifest is opt-in.
-- `profiles/split`: Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Status Projector, role PDBs, Web Service/HPA, and role-specific NetworkPolicies.
+- `profiles/split`: Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, Status Projector, role PDBs, Web Service/HPA, and role-specific NetworkPolicies.
 - `profiles/split-pgbouncer`: split plus two PgBouncer replicas, Service, PDB, NetworkPolicy, auth/config resources, and a Web patch that uses `WEB_DATABASE_URL` while preserving `DIRECT_DATABASE_URL`.
 - `monitoring/servicemonitor.yaml`: optional Prometheus Operator resource; it is not included automatically.
 
