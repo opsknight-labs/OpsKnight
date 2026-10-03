@@ -14,7 +14,6 @@ import {
   RUNBOOK_INPUT_TYPES,
   RUNBOOK_RISK_CLASSES,
   RUNBOOK_STEP_TYPES,
-  RUNBOOK_TRIGGER_EVENTS,
   RUNBOOK_VERSION_STRATEGIES,
   MAX_RUNBOOK_STEPS,
   MAX_RUNBOOK_INPUTS,
@@ -263,7 +262,10 @@ export type RunbookTriggerConditionInput = z.infer<typeof runbookTriggerConditio
 
 export const createRunbookTriggerSchema = z
   .object({
-    event: z.enum(RUNBOOK_TRIGGER_EVENTS),
+    // INCIDENT_CREATED is the only event currently wired to durable runtime
+    // evaluation. Keep future enum values out of the public write contract
+    // until their producers are implemented.
+    event: z.literal('INCIDENT_CREATED'),
     conditionLogic: z.enum(RUNBOOK_CONDITION_LOGICS).default('AND'),
     enabled: z.boolean().default(true),
     conditions: z.array(runbookTriggerConditionSchema).max(20).default([]),
@@ -371,7 +373,7 @@ export const agentJobResultSchema = z
   .object({
     attemptId: z.string().cuid(),
     leaseToken: z.string().min(1),
-    status: z.enum(['SUCCEEDED', 'FAILED', 'UNKNOWN'] as const),
+    status: z.enum(['SUCCEEDED', 'FAILED', 'CANCELLED', 'UNKNOWN'] as const),
     exitCode: z.number().int().optional(),
     outputPreview: z.string().max(32768).optional(),
     outputArtifactId: z.string().optional(),
@@ -389,7 +391,20 @@ export type AgentJobResultInput = z.infer<typeof agentJobResultSchema>;
 // ---------------------------------------------------------------------------
 
 export const runbookExecutionFilterSchema = z.object({
-  status: z.enum(['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'PAUSED', 'SUCCEEDED', 'FAILED', 'CANCEL_REQUESTED', 'CANCELLED', 'TIMED_OUT'] as const).optional(),
+  status: z
+    .enum([
+      'QUEUED',
+      'RUNNING',
+      'WAITING_AGENT',
+      'WAITING_APPROVAL',
+      'PAUSED',
+      'SUCCEEDED',
+      'FAILED',
+      'CANCEL_REQUESTED',
+      'CANCELLED',
+      'TIMED_OUT',
+    ] as const)
+    .optional(),
   runbookId: z.string().cuid().optional(),
   incidentId: z.string().cuid().optional(),
   serviceId: z.string().cuid().optional(),

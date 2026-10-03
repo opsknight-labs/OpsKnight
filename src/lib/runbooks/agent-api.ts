@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { NextResponse } from 'next/server';
+import { jsonError } from '@/lib/api-response';
 import { authenticateAgentRequest } from './agent-auth';
 
 export async function authenticatedAgentJson(request: Request) {
@@ -20,8 +20,8 @@ export async function authenticatedAgentJson(request: Request) {
 export function agentApiError(error: unknown) {
   const message = error instanceof Error ? error.message : 'Agent request failed.';
   const unauthorized = /auth|signature|replay|revoked|enrollment|lease/i.test(message);
-  return NextResponse.json(
-    { error: unauthorized ? 'Agent authentication or lease validation failed.' : message },
-    { status: unauthorized ? 401 : 400 }
+  return jsonError(
+    unauthorized ? 'Agent authentication or lease validation failed.' : message,
+    unauthorized ? 401 : 400
   );
 }

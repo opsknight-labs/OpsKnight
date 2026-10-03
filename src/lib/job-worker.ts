@@ -28,6 +28,7 @@ const MAX_CONCURRENCY = 50;
 const MAX_IDLE_POLL_MS = 60_000;
 const MAX_BUSY_POLL_MS = 5_000;
 const QUEUE_MAINTENANCE_INTERVAL_MS = 30_000;
+const RUNBOOK_RECONCILIATION_INTERVAL_MS = 30_000;
 
 export interface JobWorkerConfig {
   batchSize: number;
@@ -40,6 +41,7 @@ export type JobWorkerLane = 'all' | 'general' | 'critical' | 'bulk' | 'projector
 
 export interface JobWorkerOptions {
   ownsQueueMaintenance?: boolean;
+  excludeRunbookJobs?: boolean;
 }
 
 interface JobWorkerSharedState {
@@ -53,10 +55,12 @@ interface JobWorkerSharedState {
   lastError: string | null;
   workerLane: JobWorkerLane;
   ownsQueueMaintenance: boolean;
+  excludeRunbookJobs: boolean;
   controlPlaneState: 'UNINITIALIZED' | 'HEALTHY' | 'EMERGENCY_LOCAL';
   lastControlPlaneProbeAt: number;
   lastQueueMaintenanceAt: number;
   queueMaintenanceInFlight: Promise<void> | null;
+  lastRunbookReconciliationAt: number;
 }
 
 declare global {
@@ -74,10 +78,12 @@ const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
   lastError: null,
   workerLane: 'all',
   ownsQueueMaintenance: true,
+  excludeRunbookJobs: false,
   controlPlaneState: 'UNINITIALIZED',
   lastControlPlaneProbeAt: 0,
   lastQueueMaintenanceAt: 0,
   queueMaintenanceInFlight: null,
+  lastRunbookReconciliationAt: 0,
 };
 
 // Next.js standalone webpack builds isolate module scopes between
@@ -352,10 +358,15 @@ async function runOnce(): Promise<void> {
     }
 
     if (workerState.workerLane === 'runbook') {
-      const { reconcileRunbooks } = await import('./runbooks/reconciler');
-      const reconciliation = await reconcileRunbooks(
-        Math.min(workerState.workerConfig.batchSize, 100)
-      );
+      let reconciliation: Awaited<
+        ReturnType<typeof import('./runbooks/reconciler').reconcileRunbooks>
+      > | null = null;
+      const now = Date.now();
+      if (now - workerState.lastRunbookReconciliationAt >= RUNBOOK_RECONCILIATION_INTERVAL_MS) {
+        workerState.lastRunbookReconciliationAt = now;
+        const { reconcileRunbooks } = await import('./runbooks/reconciler');
+        reconciliation = await reconcileRunbooks(Math.min(workerState.workerConfig.batchSize, 100));
+      }
       const result = await processPendingJobsByType(
         'RUNBOOK',
         workerState.workerConfig.batchSize,
@@ -391,10 +402,16 @@ async function runOnce(): Promise<void> {
 
     // Operational background jobs (war-room, Jira, side effects, auto-unsnooze)
     // always continue; processPendingJobs automatically fences bulk fan-out when paused.
-    const result = await processPendingJobs(
-      workerState.workerConfig.batchSize,
-      workerState.workerConfig.concurrency
-    );
+    const result = workerState.excludeRunbookJobs
+      ? await processPendingJobs(
+          workerState.workerConfig.batchSize,
+          workerState.workerConfig.concurrency,
+          ['RUNBOOK']
+        )
+      : await processPendingJobs(
+          workerState.workerConfig.batchSize,
+          workerState.workerConfig.concurrency
+        );
 
     const laneErrors = [...escalation.errors, ...notifications.errors];
     if (escalation.jobsFailed > 0) {
@@ -455,6 +472,7 @@ export function startJobWorker(lane: JobWorkerLane = 'all', options: JobWorkerOp
   workerState.workerConfig = getJobWorkerConfig();
   workerState.workerLane = lane;
   workerState.ownsQueueMaintenance = options.ownsQueueMaintenance ?? lane === 'all';
+  workerState.excludeRunbookJobs = options.excludeRunbookJobs ?? false;
   workerState.initialized = true;
   workerState.lastRunAt = null;
   workerState.lastSuccessAt = null;
@@ -463,6 +481,7 @@ export function startJobWorker(lane: JobWorkerLane = 'all', options: JobWorkerOp
   workerState.controlPlaneState = 'UNINITIALIZED';
   workerState.lastControlPlaneProbeAt = Date.now();
   workerState.lastQueueMaintenanceAt = 0;
+  workerState.lastRunbookReconciliationAt = 0;
 
   logger.info('[JobWorker] Starting', {
     batchSize: workerState.workerConfig.batchSize,
@@ -471,6 +490,7 @@ export function startJobWorker(lane: JobWorkerLane = 'all', options: JobWorkerOp
     busyPollMs: workerState.workerConfig.busyPollMs,
     lane: workerState.workerLane,
     ownsQueueMaintenance: workerState.ownsQueueMaintenance,
+    excludeRunbookJobs: workerState.excludeRunbookJobs,
   });
 
   // Certify notification control-plane tables at worker boot.

@@ -11,9 +11,15 @@ import { matchesCondition } from './matcher';
 import {
   DEFAULT_EXECUTION_TIMEOUT_SECONDS,
   DEFAULT_STEP_TIMEOUT_SECONDS,
+  CIRCUIT_BREAKER_FAIL_THRESHOLD,
+  MAX_AUTO_WRITE_ACTIONS_PER_SERVICE,
+  MAX_CONCURRENT_WRITE_ACTIONS_PER_POOL,
   MAX_OUTPUT_PREVIEW_BYTES,
+  isRetryable,
+  requiresAgent,
   type RunbookStepDefinition,
 } from './types';
+import { retryDelayMs, stepRequiresApproval } from './safety';
 import {
   RunbookApprovalPlanChangedError,
   RunbookDefinitionError,
@@ -76,6 +82,7 @@ export async function startRunbookExecution(input: {
   inputValues?: Record<string, unknown>;
   triggeredByUserId?: string;
   triggerFingerprint?: string;
+  triggerId?: string;
 }) {
   return prisma.$transaction(async tx => {
     const runbook = await tx.runbook.findFirst({
@@ -83,27 +90,143 @@ export async function startRunbookExecution(input: {
       include: { publishedVersion: true },
     });
     if (!runbook) throw new RunbookDefinitionError('Runbook not found or archived.');
+    const binding = input.bindingId
+      ? await tx.serviceRunbookBinding.findFirst({
+          where: {
+            id: input.bindingId,
+            runbookId: runbook.id,
+            enabled: true,
+            ...(input.serviceId ? { serviceId: input.serviceId } : {}),
+            ...(input.triggerId
+              ? { triggers: { some: { id: input.triggerId, enabled: true } } }
+              : {}),
+          },
+        })
+      : null;
+    if (input.bindingId && !binding) {
+      throw new RunbookDefinitionError(
+        'Runbook binding, trigger, service, and runbook do not form a valid execution boundary.'
+      );
+    }
+    if (input.triggerId && !input.bindingId) {
+      throw new RunbookDefinitionError('A trigger execution requires its service binding.');
+    }
+    const resolvedServiceId = input.serviceId ?? binding?.serviceId;
+    if (input.incidentId) {
+      const incident = await tx.incident.findFirst({
+        where: {
+          id: input.incidentId,
+          ...(resolvedServiceId ? { serviceId: resolvedServiceId } : {}),
+        },
+        select: { serviceId: true },
+      });
+      if (!incident) {
+        throw new RunbookDefinitionError('Incident does not belong to the execution service.');
+      }
+      if (!resolvedServiceId) {
+        throw new RunbookDefinitionError('Incident runbook execution requires a service boundary.');
+      }
+    }
     const versionId = input.runbookVersionId ?? runbook.publishedVersionId;
     if (!versionId) throw new RunbookDefinitionError('Runbook must be published before execution.');
     const version = await tx.runbookVersion.findFirst({
-      where: { id: versionId, runbookId: runbook.id, state: 'PUBLISHED' },
+      where: {
+        id: versionId,
+        runbookId: runbook.id,
+        state: input.runbookVersionId ? { in: ['PUBLISHED', 'RETIRED'] } : 'PUBLISHED',
+      },
     });
     if (!version)
       throw new RunbookDefinitionError('Only an immutable published version can execute.');
+    if (
+      version.state === 'RETIRED' &&
+      (!binding || binding.versionStrategy !== 'PINNED' || binding.runbookVersionId !== version.id)
+    ) {
+      throw new RunbookDefinitionError(
+        'A retired version can execute only through the binding that pinned it while published.'
+      );
+    }
     const definition = parseRunbookDefinition(version.definition);
     const steps = executionSteps(definition);
+    const resolvedTargetAgentId = binding?.defaultAgentId ?? null;
+    const resolvedTargetAgentPoolId = binding?.defaultAgentPoolId ?? null;
+    if (
+      steps.some(step => requiresAgent(step.type)) &&
+      !resolvedTargetAgentId &&
+      !resolvedTargetAgentPoolId
+    ) {
+      throw new RunbookDefinitionError(
+        'TARGET_NOT_CONFIGURED: Agent-executed steps require a snapshotted Agent or Agent pool target.'
+      );
+    }
+    const resolvedInputs = binding
+      ? (binding.inputValues as Record<string, unknown>)
+      : (input.inputValues ?? {});
+    const hasWriteAction = steps.some(step => step.riskClass !== 'READ_ONLY');
+    if (!input.triggeredByUserId && hasWriteAction) {
+      if (!resolvedServiceId) {
+        throw new RunbookDefinitionError('Automatic write runbooks require a service boundary.');
+      }
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-service:${resolvedServiceId}`}))`;
+      const activeServiceWrites = await tx.runbookExecution.count({
+        where: {
+          serviceId: resolvedServiceId,
+          triggeredByUserId: null,
+          status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
+          steps: { some: { riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] } } },
+        },
+      });
+      if (activeServiceWrites >= MAX_AUTO_WRITE_ACTIONS_PER_SERVICE) {
+        throw new RunbookDefinitionError(
+          'AUTOMATION_BLAST_RADIUS_LIMIT: too many automatic write runbooks are active for this service.'
+        );
+      }
+      const recentFailures = await tx.runbookExecution.count({
+        where: {
+          serviceId: resolvedServiceId,
+          status: 'FAILED',
+          completedAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+        },
+      });
+      if (recentFailures >= CIRCUIT_BREAKER_FAIL_THRESHOLD) {
+        throw new RunbookDefinitionError(
+          'AUTOMATION_CIRCUIT_OPEN: recent runbook failures require operator review.'
+        );
+      }
+    }
+    if (hasWriteAction && resolvedTargetAgentPoolId) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-pool:${resolvedTargetAgentPoolId}`}))`;
+      const activePoolWrites = await tx.runbookExecutionStep.count({
+        where: {
+          riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
+          status: { in: ['READY', 'RUNNING', 'WAITING_AGENT'] },
+          execution: {
+            resolvedTargetAgentPoolId,
+            status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
+          },
+        },
+      });
+      if (activePoolWrites >= MAX_CONCURRENT_WRITE_ACTIONS_PER_POOL) {
+        throw new RunbookDefinitionError(
+          'AGENT_POOL_CONCURRENCY_LIMIT: too many write actions are active for this Agent pool.'
+        );
+      }
+    }
     const execution = await tx.runbookExecution.create({
       data: {
         runbookId: runbook.id,
         runbookVersionId: version.id,
-        serviceId: input.serviceId,
+        serviceId: resolvedServiceId,
         incidentId: input.incidentId,
         bindingId: input.bindingId,
         triggerFingerprint: input.triggerFingerprint,
+        triggerId: input.triggerId,
         triggeredByType: input.triggeredByUserId ? 'USER' : 'TRIGGER',
         triggeredByUserId: input.triggeredByUserId,
-        inputValues: asJson(input.inputValues ?? {}),
+        inputValues: asJson(resolvedInputs),
         definitionChecksum: version.checksum,
+        resolvedTargetAgentId,
+        resolvedTargetAgentPoolId,
         steps: {
           create: steps.map(step => ({
             stepKey: step.key,
@@ -112,8 +235,7 @@ export async function startRunbookExecution(input: {
             type: step.type,
             riskClass: step.riskClass,
             config: asJson(step.config),
-            requiresApproval:
-              step.type === 'APPROVAL' || step.type === 'MANUAL' || step.requiresApproval === true,
+            requiresApproval: stepRequiresApproval(step),
             timeoutSeconds:
               step.timeoutSeconds ??
               definition.defaultTimeoutSeconds ??
@@ -134,7 +256,7 @@ export async function startRunbookExecution(input: {
           runbookId: runbook.id,
           versionId: version.id,
           incidentId: input.incidentId ?? null,
-          serviceId: input.serviceId ?? null,
+          serviceId: resolvedServiceId ?? null,
         },
       },
       tx
@@ -145,15 +267,20 @@ export async function startRunbookExecution(input: {
 
 function resolvedPlanDigest(
   step: RunbookExecutionStep,
-  execution: { definitionChecksum: string; inputValues: Prisma.JsonValue },
-  attemptAgentPoolId?: string | null
+  execution: {
+    definitionChecksum: string;
+    inputValues: Prisma.JsonValue;
+    resolvedTargetAgentId?: string | null;
+    resolvedTargetAgentPoolId?: string | null;
+  }
 ) {
   return computePlanDigest({
     stepKey: step.stepKey,
     stepType: step.type,
     riskClass: step.riskClass,
     config: step.config as Record<string, unknown>,
-    agentPoolId: attemptAgentPoolId ?? undefined,
+    agentPoolId: execution.resolvedTargetAgentPoolId ?? undefined,
+    agentId: execution.resolvedTargetAgentId ?? undefined,
     inputValues: execution.inputValues as Record<string, unknown>,
     versionChecksum: execution.definitionChecksum,
   });
@@ -198,7 +325,7 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
   if (step.requiresApproval && !step.approvedAt) {
     await prisma.$transaction([
       prisma.runbookExecutionStep.updateMany({
-        where: { id: step.id, status: 'PENDING' },
+        where: { id: step.id, status: 'READY' },
         data: { status: 'WAITING_APPROVAL' },
       }),
       prisma.runbookExecution.update({
@@ -218,10 +345,11 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
       throw new RunbookDefinitionError('Wait duration must be between 0 and 86400 seconds.');
     if (!step.startedAt) {
       await prisma.$transaction(async tx => {
-        await tx.runbookExecutionStep.update({
-          where: { id: step.id },
+        const claimed = await tx.runbookExecutionStep.updateMany({
+          where: { id: step.id, status: 'READY' },
           data: { status: 'RUNNING', startedAt: new Date() },
         });
+        if (claimed.count !== 1) return;
         await enqueueAdvance(tx, executionId, new Date(Date.now() + seconds * 1000));
       });
       return;
@@ -244,19 +372,41 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
         value: config.value,
       }
     );
-    await completeStep(
-      executionId,
-      step.id,
-      matched ? 'SUCCEEDED' : 'SKIPPED',
-      matched ? 'Condition matched.' : 'Condition did not match.'
-    );
+    await prisma.$transaction(async tx => {
+      const completedAt = new Date();
+      const completed = await tx.runbookExecutionStep.updateMany({
+        where: { id: step.id, executionId, status: 'READY' },
+        data: {
+          status: matched ? 'SUCCEEDED' : 'SKIPPED',
+          completedAt,
+          outputPreview: matched ? 'Condition matched.' : 'Condition did not match.',
+        },
+      });
+      if (completed.count !== 1) return;
+      if (!matched) {
+        await tx.runbookExecutionStep.updateMany({
+          where: { executionId, sequence: { gt: step.sequence }, status: 'PENDING' },
+          data: {
+            status: 'SKIPPED',
+            completedAt,
+            outputPreview: 'Skipped by condition.',
+          },
+        });
+      }
+      await tx.runbookExecution.update({
+        where: { id: executionId },
+        data: { status: 'RUNNING' },
+      });
+      await enqueueAdvance(tx, executionId);
+    });
     return;
   }
   if (step.type === 'HTTP') {
-    await prisma.runbookExecutionStep.update({
-      where: { id: step.id },
-      data: { status: 'RUNNING', startedAt: new Date() },
+    const claimed = await prisma.runbookExecutionStep.updateMany({
+      where: { id: step.id, status: 'READY' },
+      data: { status: 'RUNNING', startedAt: new Date(), attemptCount: { increment: 1 } },
     });
+    if (claimed.count !== 1) return;
     const output = await executeHttpStep(step);
     await completeStep(executionId, step.id, 'SUCCEEDED', output);
     return;
@@ -267,22 +417,24 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
     select: {
       definitionChecksum: true,
       inputValues: true,
-      binding: { select: { defaultAgentPoolId: true, defaultAgentId: true } },
+      resolvedTargetAgentId: true,
+      resolvedTargetAgentPoolId: true,
     },
   });
-  const planDigest = resolvedPlanDigest(step, execution, execution.binding?.defaultAgentPoolId);
+  const planDigest = resolvedPlanDigest(step, execution);
   await prisma.$transaction(async tx => {
-    await tx.runbookExecutionStep.update({
-      where: { id: step.id },
+    const claimed = await tx.runbookExecutionStep.updateMany({
+      where: { id: step.id, status: 'READY' },
       data: { status: 'WAITING_AGENT', startedAt: step.startedAt ?? new Date() },
     });
+    if (claimed.count !== 1) return;
     await tx.runbookStepAttempt.create({
       data: {
         executionStepId: step.id,
         attemptNumber: 1,
         status: 'PENDING',
-        agentId: execution.binding?.defaultAgentId,
-        agentPoolId: execution.binding?.defaultAgentPoolId,
+        targetAgentId: execution.resolvedTargetAgentId,
+        targetAgentPoolId: execution.resolvedTargetAgentPoolId,
         claimDeadlineAt: new Date(Date.now() + 300_000),
         idempotencyKey: crypto.randomUUID(),
         planDigest,
@@ -302,14 +454,15 @@ async function completeStep(
   outputPreview: string
 ) {
   await prisma.$transaction(async tx => {
-    await tx.runbookExecutionStep.update({
-      where: { id: stepId },
+    const completed = await tx.runbookExecutionStep.updateMany({
+      where: { id: stepId, executionId, status: { in: ['READY', 'RUNNING'] } },
       data: {
         status,
         completedAt: new Date(),
         outputPreview: outputPreview.slice(0, MAX_OUTPUT_PREVIEW_BYTES),
       },
     });
+    if (completed.count !== 1) return;
     await tx.runbookExecution.update({ where: { id: executionId }, data: { status: 'RUNNING' } });
     await enqueueAdvance(tx, executionId);
   });
@@ -323,19 +476,36 @@ export async function advanceExecution(executionId: string): Promise<void> {
   if (!execution) throw new RunbookExecutionNotFoundError(executionId);
   if (['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'].includes(execution.status)) return;
   if (execution.cancelRequestedAt || execution.status === 'CANCEL_REQUESTED') {
-    await prisma.$transaction([
-      prisma.runbookExecutionStep.updateMany({
+    await prisma.$transaction(async tx => {
+      await tx.runbookStepAttempt.updateMany({
+        where: {
+          executionStep: { executionId },
+          status: { in: ['PENDING', 'CLAIMED'] },
+        },
+        data: {
+          status: 'CANCELLED',
+          completedAt: new Date(),
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      await tx.runbookExecutionStep.updateMany({
         where: {
           executionId,
           status: { in: ['PENDING', 'READY', 'WAITING_APPROVAL', 'WAITING_AGENT'] },
         },
         data: { status: 'CANCELLED', completedAt: new Date() },
-      }),
-      prisma.runbookExecution.update({
-        where: { id: executionId },
-        data: { status: 'CANCELLED', completedAt: new Date() },
-      }),
-    ]);
+      });
+      const active = await tx.runbookStepAttempt.count({
+        where: { executionStep: { executionId }, status: 'RUNNING' },
+      });
+      if (active === 0) {
+        await tx.runbookExecution.updateMany({
+          where: { id: executionId, status: 'CANCEL_REQUESTED' },
+          data: { status: 'CANCELLED', completedAt: new Date() },
+        });
+      }
+    });
     return;
   }
   const timeout = DEFAULT_EXECUTION_TIMEOUT_SECONDS * 1000;
@@ -370,25 +540,48 @@ export async function advanceExecution(executionId: string): Promise<void> {
     return;
   }
   if (['WAITING_AGENT', 'WAITING_APPROVAL'].includes(current.status)) return;
+  if (current.status === 'RUNNING' && current.type !== 'WAIT') return;
+  let owned = current;
+  if (current.status === 'PENDING') {
+    const claimed = await prisma.runbookExecutionStep.updateMany({
+      where: { id: current.id, executionId, status: 'PENDING' },
+      data: { status: 'READY' },
+    });
+    if (claimed.count !== 1) return;
+    owned = { ...current, status: 'READY' };
+  }
   await prisma.runbookExecution.update({
     where: { id: executionId },
     data: { status: 'RUNNING', startedAt: execution.startedAt ?? new Date() },
   });
   try {
-    await processCurrentStep(executionId, current);
+    await processCurrentStep(executionId, owned);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Step failed.';
     await prisma.$transaction(async tx => {
-      await tx.runbookExecutionStep.update({
-        where: { id: current.id },
-        data: {
-          status: 'FAILED',
-          completedAt: new Date(),
-          errorCode: 'STEP_EXECUTION_FAILED',
-          errorMessage: message,
-        },
+      const latest = await tx.runbookExecutionStep.findUnique({ where: { id: current.id } });
+      if (!latest || !['READY', 'RUNNING'].includes(latest.status)) return;
+      const retry = isRetryable(latest.riskClass) && latest.attemptCount <= latest.maxRetries;
+      const changed = await tx.runbookExecutionStep.updateMany({
+        where: { id: current.id, status: latest.status },
+        data: retry
+          ? {
+              status: 'PENDING',
+              startedAt: null,
+              errorCode: 'STEP_RETRY_SCHEDULED',
+              errorMessage: message,
+            }
+          : {
+              status: 'FAILED',
+              completedAt: new Date(),
+              errorCode: 'STEP_EXECUTION_FAILED',
+              errorMessage: message,
+            },
       });
-      await enqueueAdvance(tx, executionId);
+      if (changed.count === 1) {
+        const delay = retry ? retryDelayMs(latest.attemptCount) : 0;
+        await enqueueAdvance(tx, executionId, new Date(Date.now() + delay));
+      }
     });
   }
 }
@@ -404,21 +597,22 @@ export async function approveExecutionStep(input: {
       where: { id: input.stepId, executionId: input.executionId },
       include: {
         execution: {
-          include: { binding: { select: { defaultAgentPoolId: true } } },
+          select: {
+            definitionChecksum: true,
+            inputValues: true,
+            resolvedTargetAgentId: true,
+            resolvedTargetAgentPoolId: true,
+          },
         },
       },
     });
     if (!step) throw new RunbookExecutionNotFoundError(input.executionId);
     if (step.status !== 'WAITING_APPROVAL')
       throw new RunbookExecutionInvalidTransitionError(input.executionId, step.status, 'READY');
-    const expected = resolvedPlanDigest(
-      step,
-      step.execution,
-      step.execution.binding?.defaultAgentPoolId
-    );
+    const expected = resolvedPlanDigest(step, step.execution);
     if (expected !== input.planDigest) throw new RunbookApprovalPlanChangedError(step.id);
-    await tx.runbookExecutionStep.update({
-      where: { id: step.id },
+    const approved = await tx.runbookExecutionStep.updateMany({
+      where: { id: step.id, executionId: input.executionId, status: 'WAITING_APPROVAL' },
       data: {
         status: 'PENDING',
         approvedAt: new Date(),
@@ -426,6 +620,9 @@ export async function approveExecutionStep(input: {
         approvedPlanDigest: expected,
       },
     });
+    if (approved.count !== 1) {
+      throw new RunbookExecutionInvalidTransitionError(input.executionId, step.status, 'READY');
+    }
     await tx.runbookExecution.update({
       where: { id: input.executionId },
       data: { status: 'RUNNING' },

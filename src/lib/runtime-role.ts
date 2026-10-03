@@ -17,6 +17,7 @@ export interface RuntimeResponsibilities {
   startJobWorker: boolean;
   schedulerProfile: SchedulerProfile | null;
   workerLane: 'all' | 'general' | 'critical' | 'bulk' | 'projector' | 'runbook' | null;
+  startIsolatedRunbookWorker: boolean;
 }
 
 export const OPSKNIGHT_SCHEDULER_PROFILES = ['full', 'maintenance'] as const;
@@ -69,6 +70,7 @@ export function getRuntimeResponsibilities(
         startJobWorker: true,
         schedulerProfile: 'full',
         workerLane: 'all',
+        startIsolatedRunbookWorker: true,
       };
     case 'web':
       return {
@@ -76,6 +78,7 @@ export function getRuntimeResponsibilities(
         startJobWorker: false,
         schedulerProfile: null,
         workerLane: null,
+        startIsolatedRunbookWorker: false,
       };
     case 'scheduler':
       return {
@@ -83,6 +86,7 @@ export function getRuntimeResponsibilities(
         startJobWorker: false,
         schedulerProfile: getSchedulerProfile(schedulerProfileValue),
         workerLane: null,
+        startIsolatedRunbookWorker: false,
       };
     case 'worker':
       return {
@@ -90,6 +94,7 @@ export function getRuntimeResponsibilities(
         startJobWorker: true,
         schedulerProfile: null,
         workerLane: 'all',
+        startIsolatedRunbookWorker: false,
       };
     case 'general-worker':
       return {
@@ -97,6 +102,7 @@ export function getRuntimeResponsibilities(
         startJobWorker: true,
         schedulerProfile: null,
         workerLane: 'general',
+        startIsolatedRunbookWorker: false,
       };
     case 'critical-worker':
       return {
@@ -104,6 +110,7 @@ export function getRuntimeResponsibilities(
         startJobWorker: true,
         schedulerProfile: null,
         workerLane: 'critical',
+        startIsolatedRunbookWorker: false,
       };
     case 'bulk-worker':
       return {
@@ -111,6 +118,7 @@ export function getRuntimeResponsibilities(
         startJobWorker: true,
         schedulerProfile: null,
         workerLane: 'bulk',
+        startIsolatedRunbookWorker: false,
       };
     case 'status-projector':
       return {
@@ -118,6 +126,7 @@ export function getRuntimeResponsibilities(
         startJobWorker: true,
         schedulerProfile: null,
         workerLane: 'projector',
+        startIsolatedRunbookWorker: false,
       };
     case 'runbook-worker':
       return {
@@ -125,6 +134,7 @@ export function getRuntimeResponsibilities(
         startJobWorker: true,
         schedulerProfile: null,
         workerLane: 'runbook',
+        startIsolatedRunbookWorker: false,
       };
   }
 }

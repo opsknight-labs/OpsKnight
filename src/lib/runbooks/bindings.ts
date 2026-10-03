@@ -11,8 +11,9 @@ import {
   createRunbookTriggerSchema,
   type CreateRunbookTriggerInput,
 } from './schemas';
-import { isSecretReference } from './definition';
+import { flattenSteps, isSecretReference, parseRunbookDefinition } from './definition';
 import { RunbookDefinitionError, RunbookVersionNotFoundError } from './errors';
+import { requiresAgent } from './types';
 
 function isDuration(value: string): boolean {
   return /^\d+(?:ms|s|m|h|d)$/.test(value);
@@ -66,7 +67,8 @@ async function resolveBindingVersion(
   tx: Prisma.TransactionClient,
   runbookId: string,
   strategy: 'PINNED' | 'LATEST_PUBLISHED',
-  requestedVersionId?: string | null
+  requestedVersionId?: string | null,
+  allowRetiredPinnedVersion = false
 ) {
   const runbook = await tx.runbook.findFirst({
     where: { id: runbookId, archivedAt: null },
@@ -77,11 +79,52 @@ async function resolveBindingVersion(
   if (!versionId)
     throw new RunbookDefinitionError('This runbook does not have a published version.');
   const version = await tx.runbookVersion.findFirst({
-    where: { id: versionId, runbookId, state: 'PUBLISHED' },
+    where: {
+      id: versionId,
+      runbookId,
+      state:
+        strategy === 'PINNED' && allowRetiredPinnedVersion
+          ? { in: ['PUBLISHED', 'RETIRED'] }
+          : 'PUBLISHED',
+    },
     include: { inputs: { orderBy: { sequence: 'asc' } } },
   });
   if (!version) throw new RunbookVersionNotFoundError(versionId);
   return version;
+}
+
+async function validateBindingTarget(
+  tx: Prisma.TransactionClient,
+  version: { definition: Prisma.JsonValue },
+  enabled: boolean,
+  agentId?: string | null,
+  agentPoolId?: string | null
+) {
+  if (agentId && agentPoolId) {
+    throw new RunbookDefinitionError('Select either a specific Agent or an Agent pool, not both.');
+  }
+  const needsAgent = flattenSteps(parseRunbookDefinition(version.definition)).some(step =>
+    requiresAgent(step.type)
+  );
+  if (enabled && needsAgent && !agentId && !agentPoolId) {
+    throw new RunbookDefinitionError(
+      'An enabled runbook with Agent-executed steps requires a specific Agent or Agent pool target.'
+    );
+  }
+  if (agentId) {
+    const agent = await tx.runbookAgent.findFirst({
+      where: { id: agentId, status: { not: 'REVOKED' } },
+      select: { id: true },
+    });
+    if (!agent) throw new RunbookDefinitionError('The selected Runbook Agent is unavailable.');
+  }
+  if (agentPoolId) {
+    const pool = await tx.runbookAgentPool.findUnique({
+      where: { id: agentPoolId },
+      select: { id: true },
+    });
+    if (!pool) throw new RunbookDefinitionError('The selected Runbook Agent pool was not found.');
+  }
 }
 
 export async function createServiceBinding(
@@ -100,6 +143,13 @@ export async function createServiceBinding(
       input.runbookVersionId
     );
     validateBindingInputValues(version.inputs, input.inputValues);
+    await validateBindingTarget(
+      tx,
+      version,
+      input.enabled,
+      input.defaultAgentId,
+      input.defaultAgentPoolId
+    );
     const binding = await tx.serviceRunbookBinding.create({
       data: {
         serviceId,
@@ -134,13 +184,16 @@ export async function createServiceBinding(
 }
 
 export async function updateServiceBinding(
+  serviceId: string,
   bindingId: string,
   raw: UpdateServiceRunbookBindingInput,
   actorId: string
 ) {
   const input = updateServiceRunbookBindingSchema.parse(raw);
   return prisma.$transaction(async tx => {
-    const current = await tx.serviceRunbookBinding.findUnique({ where: { id: bindingId } });
+    const current = await tx.serviceRunbookBinding.findFirst({
+      where: { id: bindingId, serviceId },
+    });
     if (!current) throw new RunbookDefinitionError('Service runbook binding not found.');
     const strategy = input.versionStrategy ?? current.versionStrategy;
     const requestedVersionId =
@@ -155,17 +208,37 @@ export async function updateServiceBinding(
       tx,
       current.runbookId,
       strategy,
-      requestedVersionId
+      requestedVersionId,
+      current.versionStrategy === 'PINNED' &&
+        strategy === 'PINNED' &&
+        requestedVersionId === current.runbookVersionId
     );
     const values = input.inputValues ?? (current.inputValues as Record<string, unknown>);
     validateBindingInputValues(version.inputs, values);
-    const updated = await tx.serviceRunbookBinding.update({
-      where: { id: bindingId },
+    const agentId =
+      input.defaultAgentId === undefined ? current.defaultAgentId : input.defaultAgentId;
+    const agentPoolId =
+      input.defaultAgentPoolId === undefined
+        ? current.defaultAgentPoolId
+        : input.defaultAgentPoolId;
+    await validateBindingTarget(
+      tx,
+      version,
+      input.enabled ?? current.enabled,
+      agentId,
+      agentPoolId
+    );
+    const changed = await tx.serviceRunbookBinding.updateMany({
+      where: { id: bindingId, serviceId },
       data: {
         ...input,
         runbookVersionId: strategy === 'PINNED' ? version.id : null,
         inputValues: values as Prisma.InputJsonValue,
       },
+    });
+    if (changed.count !== 1) throw new RunbookDefinitionError('Service runbook binding not found.');
+    const updated = await tx.serviceRunbookBinding.findFirstOrThrow({
+      where: { id: bindingId, serviceId },
     });
     await logAudit(
       {
@@ -186,9 +259,16 @@ export async function updateServiceBinding(
   });
 }
 
-export async function detachServiceBinding(bindingId: string, actorId: string) {
+export async function detachServiceBinding(serviceId: string, bindingId: string, actorId: string) {
   return prisma.$transaction(async tx => {
-    const binding = await tx.serviceRunbookBinding.delete({ where: { id: bindingId } });
+    const binding = await tx.serviceRunbookBinding.findFirst({
+      where: { id: bindingId, serviceId },
+    });
+    if (!binding) throw new RunbookDefinitionError('Service runbook binding not found.');
+    const deleted = await tx.serviceRunbookBinding.deleteMany({
+      where: { id: bindingId, serviceId },
+    });
+    if (deleted.count !== 1) throw new RunbookDefinitionError('Service runbook binding not found.');
     await logAudit(
       {
         action: 'runbook.service.detached',
@@ -204,13 +284,16 @@ export async function detachServiceBinding(bindingId: string, actorId: string) {
 }
 
 export async function replaceBindingTrigger(
+  serviceId: string,
   bindingId: string,
   raw: CreateRunbookTriggerInput,
   actorId: string
 ) {
   const input = createRunbookTriggerSchema.parse(raw);
   return prisma.$transaction(async tx => {
-    const binding = await tx.serviceRunbookBinding.findUnique({ where: { id: bindingId } });
+    const binding = await tx.serviceRunbookBinding.findFirst({
+      where: { id: bindingId, serviceId },
+    });
     if (!binding) throw new RunbookDefinitionError('Service runbook binding not found.');
     await tx.runbookTrigger.deleteMany({ where: { bindingId, event: input.event } });
     const trigger = await tx.runbookTrigger.create({

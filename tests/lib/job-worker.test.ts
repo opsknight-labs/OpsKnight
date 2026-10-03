@@ -29,9 +29,7 @@ vi.mock('@/lib/notification-capacity-control', () => ({
 }));
 
 vi.mock('@/lib/notification-control-plane', () => ({
-  processCentralNotificationQueue: vi
-    .fn()
-    .mockResolvedValue({ processed: 0, failed: 0, total: 0 }),
+  processCentralNotificationQueue: vi.fn().mockResolvedValue({ processed: 0, failed: 0, total: 0 }),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -150,6 +148,13 @@ describe('dedicated job worker', () => {
     expect(processPendingJobs).toHaveBeenCalledWith(100, 15);
     expect(runQueueMaintenance).not.toHaveBeenCalled();
     expect(getJobWorkerStatus().running).toBe(true);
+  });
+
+  it('lets the integrated runtime reserve runbook work for its isolated lane', async () => {
+    startJobWorker('all', { ownsQueueMaintenance: false, excludeRunbookJobs: true });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(processPendingJobs).toHaveBeenCalledWith(100, 15, ['RUNBOOK']);
   });
 
   it('keeps queue maintenance in a standalone legacy all-lane worker', async () => {

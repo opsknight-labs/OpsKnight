@@ -423,7 +423,12 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const service = serviceRaw;
   const canDeleteService = currentUser.role === 'ADMIN';
 
-  const [serviceRunbookBindings, availableRunbooks] = await Promise.all([
+  const [
+    serviceRunbookBindings,
+    availableRunbooks,
+    availableRunbookAgents,
+    availableRunbookAgentPools,
+  ] = await Promise.all([
     prisma.serviceRunbookBinding.findMany({
       where: { serviceId: id },
       include: {
@@ -439,6 +444,15 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
         versions: { orderBy: { version: 'desc' } },
       },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.runbookAgent.findMany({
+      where: { status: { in: ['ONLINE', 'DEGRADED', 'OFFLINE'] } },
+      select: { id: true, name: true, hostname: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.runbookAgentPool.findMany({
+      select: { id: true, name: true, mode: true },
       orderBy: { name: 'asc' },
     }),
   ]);
@@ -1234,6 +1248,8 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             serviceId={service.id}
             bindings={serviceRunbookBindings}
             availableRunbooks={availableRunbooks}
+            availableAgents={availableRunbookAgents}
+            availableAgentPools={availableRunbookAgentPools}
             canManage={canManageService}
           />
         }

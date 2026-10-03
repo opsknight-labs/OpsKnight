@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { jsonOk } from '@/lib/api-response';
 import { consumeEnrollmentToken } from '@/lib/runbooks/agent-auth';
 import { agentApiError } from '@/lib/runbooks/agent-api';
 
@@ -16,7 +16,7 @@ const schema = z
 export async function POST(request: Request) {
   try {
     const result = await consumeEnrollmentToken(schema.parse(await request.json()));
-    return NextResponse.json({ agent: result, protocolVersion: 'v1' }, { status: 201 });
+    return jsonOk({ agent: result, protocolVersion: 'v1' }, 201);
   } catch (error) {
     return agentApiError(error);
   }

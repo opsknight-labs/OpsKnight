@@ -28,6 +28,16 @@ function jsonObject(value: FormDataEntryValue | null): Record<string, unknown> {
   }
 }
 
+function executionTarget(value: FormDataEntryValue | null) {
+  const raw = typeof value === 'string' ? value : '';
+  if (!raw) return { defaultAgentId: undefined, defaultAgentPoolId: undefined };
+  const [kind, id] = raw.split(':', 2);
+  const targetId = idSchema.parse(id);
+  if (kind === 'agent') return { defaultAgentId: targetId, defaultAgentPoolId: undefined };
+  if (kind === 'pool') return { defaultAgentId: undefined, defaultAgentPoolId: targetId };
+  throw new Error('Invalid Runbook execution target.');
+}
+
 async function bindingActor(serviceId: string) {
   const [actor] = await Promise.all([
     assertCanModifyService(serviceId),
@@ -47,6 +57,7 @@ export async function attachRunbookAction(serviceId: string, formData: FormData)
     mode: formData.get('mode') ?? 'MANUAL',
     versionStrategy: strategy,
     inputValues: jsonObject(formData.get('inputValues')),
+    ...executionTarget(formData.get('executionTarget')),
   });
   await createServiceBinding(serviceId, parsed, actor.id);
   revalidatePath(`/services/${serviceId}`);
@@ -58,6 +69,7 @@ export async function updateRunbookBindingAction(
   formData: FormData
 ) {
   const actor = await bindingActor(idSchema.parse(serviceId));
+  const target = executionTarget(formData.get('executionTarget'));
   const parsed = updateServiceRunbookBindingSchema.parse({
     enabled: formData.get('enabled') === 'true',
     mode: formData.get('mode'),
@@ -67,14 +79,16 @@ export async function updateRunbookBindingAction(
         ? formData.get('runbookVersionId') || null
         : null,
     inputValues: jsonObject(formData.get('inputValues')),
+    defaultAgentId: target.defaultAgentId ?? null,
+    defaultAgentPoolId: target.defaultAgentPoolId ?? null,
   });
-  await updateServiceBinding(idSchema.parse(bindingId), parsed, actor.id);
+  await updateServiceBinding(serviceId, idSchema.parse(bindingId), parsed, actor.id);
   revalidatePath(`/services/${serviceId}`);
 }
 
 export async function detachRunbookAction(serviceId: string, bindingId: string) {
   const actor = await bindingActor(idSchema.parse(serviceId));
-  await detachServiceBinding(idSchema.parse(bindingId), actor.id);
+  await detachServiceBinding(serviceId, idSchema.parse(bindingId), actor.id);
   revalidatePath(`/services/${serviceId}`);
 }
 
@@ -91,6 +105,7 @@ export async function configureRunbookTriggerAction(
     throw new Error('Trigger conditions must be valid JSON.');
   }
   await replaceBindingTrigger(
+    serviceId,
     idSchema.parse(bindingId),
     {
       event: String(formData.get('event') ?? 'INCIDENT_CREATED') as 'INCIDENT_CREATED',

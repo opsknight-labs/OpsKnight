@@ -24,7 +24,7 @@ export default async function RunbookAgentsPage() {
     prisma.runbookAgent.findMany({
       include: {
         poolMemberships: { include: { pool: true } },
-        _count: { select: { attempts: true } },
+        _count: { select: { claimedAttempts: true } },
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -91,7 +91,7 @@ export default async function RunbookAgentsPage() {
               </div>
               <div>
                 Last heartbeat {agent.lastHeartbeatAt?.toLocaleString() || 'Never'} ·{' '}
-                {agent._count.attempts} attempts
+                {agent._count.claimedAttempts} attempts
               </div>
               <div>
                 {agent.poolMemberships.map(item => item.pool.name).join(', ') || 'No agent pool'}

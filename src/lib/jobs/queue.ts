@@ -1339,7 +1339,8 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
 
 export async function processPendingJobs(
   limit: number = 50,
-  concurrency: number = 10
+  concurrency: number = 10,
+  additionalExcludedTypes: JobType[] = []
 ): Promise<{ processed: number; failed: number; total: number }> {
   const excludeTypes: JobType[] = (await bulkDeliveryPaused())
     ? [
@@ -1348,6 +1349,7 @@ export async function processPendingJobs(
         STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2,
       ]
     : [];
+  excludeTypes.push(...additionalExcludedTypes);
   const pendingJobs = await claimPendingJobs(limit, undefined, excludeTypes);
   let processed = 0;
   let failed = 0;

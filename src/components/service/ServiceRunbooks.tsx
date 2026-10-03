@@ -31,11 +31,15 @@ export default function ServiceRunbooks({
   serviceId,
   bindings,
   availableRunbooks,
+  availableAgents,
+  availableAgentPools,
   canManage,
 }: {
   serviceId: string;
   bindings: Binding[];
   availableRunbooks: AvailableRunbook[];
+  availableAgents: Array<{ id: string; name: string; hostname: string | null }>;
+  availableAgentPools: Array<{ id: string; name: string; mode: string }>;
   canManage: boolean;
 }) {
   const unattached = availableRunbooks.filter(
@@ -136,6 +140,19 @@ export default function ServiceRunbooks({
                     <option value="true">Enabled</option>
                     <option value="false">Disabled</option>
                   </select>
+                </Field>
+                <Field label="Execution target">
+                  <TargetSelect
+                    agents={availableAgents}
+                    pools={availableAgentPools}
+                    defaultValue={
+                      binding.defaultAgentId
+                        ? `agent:${binding.defaultAgentId}`
+                        : binding.defaultAgentPoolId
+                          ? `pool:${binding.defaultAgentPoolId}`
+                          : ''
+                    }
+                  />
                 </Field>
                 <div className="space-y-2 lg:col-span-4">
                   <Label>Input values (JSON)</Label>
@@ -274,6 +291,9 @@ export default function ServiceRunbooks({
                   <option value="PINNED">Pinned</option>
                 </select>
               </Field>
+              <Field label="Execution target">
+                <TargetSelect agents={availableAgents} pools={availableAgentPools} />
+              </Field>
               <div className="space-y-2 lg:col-span-3">
                 <Label>Input values (JSON)</Label>
                 <Textarea name="inputValues" className="font-mono text-xs" defaultValue="{}" />
@@ -295,5 +315,44 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <Label>{label}</Label>
       {children}
     </div>
+  );
+}
+
+function TargetSelect({
+  agents,
+  pools,
+  defaultValue = '',
+}: {
+  agents: Array<{ id: string; name: string; hostname: string | null }>;
+  pools: Array<{ id: string; name: string; mode: string }>;
+  defaultValue?: string;
+}) {
+  return (
+    <select
+      name="executionTarget"
+      defaultValue={defaultValue}
+      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+    >
+      <option value="">No Agent target</option>
+      {pools.length > 0 && (
+        <optgroup label="Agent pools">
+          {pools.map(pool => (
+            <option key={pool.id} value={`pool:${pool.id}`}>
+              {pool.name} · {pool.mode.replaceAll('_', ' ')}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {agents.length > 0 && (
+        <optgroup label="Specific Agents">
+          {agents.map(agent => (
+            <option key={agent.id} value={`agent:${agent.id}`}>
+              {agent.name}
+              {agent.hostname ? ` · ${agent.hostname}` : ''}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </select>
   );
 }

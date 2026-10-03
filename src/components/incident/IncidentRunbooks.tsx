@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Clock3, Play, ShieldCheck, XCircle } from 'lucide-react';
+import { CheckCircle2, Circle, Clock3, Lightbulb, Play, ShieldCheck, XCircle } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { getUserPermissions } from '@/lib/rbac';
@@ -25,7 +25,7 @@ export default async function IncidentRunbooks({
   incidentId: string;
   serviceId: string;
 }) {
-  const [permissions, bindings, executions] = await Promise.all([
+  const [permissions, bindings, executions, suggestions] = await Promise.all([
     getUserPermissions(),
     prisma.serviceRunbookBinding.findMany({
       where: { serviceId, enabled: true },
@@ -46,11 +46,53 @@ export default async function IncidentRunbooks({
       orderBy: { createdAt: 'desc' },
       take: 20,
     }),
+    prisma.runbookSuggestion.findMany({
+      where: { incidentId, state: 'SUGGESTED' },
+      include: {
+        binding: { include: { runbook: true } },
+        runbookVersion: { select: { version: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
   ]);
   const canExecute = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_EXECUTE);
   const canApprove = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_APPROVE);
   return (
     <div className="space-y-4">
+      {suggestions.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50/40 dark:bg-amber-950/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Lightbulb className="h-4 w-4" /> Suggested runbooks
+            </CardTitle>
+            <CardDescription>Matched to the incident by a configured trigger.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {suggestions.map(suggestion => (
+              <div
+                key={suggestion.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-background p-3"
+              >
+                <div>
+                  <div className="font-medium">{suggestion.binding.runbook.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    Version {suggestion.runbookVersion.version}
+                  </div>
+                </div>
+                {canExecute && (
+                  <form
+                    action={startIncidentRunbookAction.bind(null, incidentId, suggestion.bindingId)}
+                  >
+                    <Button type="submit" size="sm">
+                      <Play /> Start suggestion
+                    </Button>
+                  </form>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
       {bindings.length > 0 && (
         <Card>
           <CardHeader>
@@ -117,7 +159,8 @@ export default async function IncidentRunbooks({
                 stepType: step.type,
                 riskClass: step.riskClass,
                 config: step.config as Record<string, unknown>,
-                agentPoolId: execution.binding?.defaultAgentPoolId ?? undefined,
+                agentPoolId: execution.resolvedTargetAgentPoolId ?? undefined,
+                agentId: execution.resolvedTargetAgentId ?? undefined,
                 inputValues: execution.inputValues as Record<string, unknown>,
                 versionChecksum: execution.definitionChecksum,
               });
@@ -174,7 +217,7 @@ export default async function IncidentRunbooks({
           </CardContent>
         </Card>
       ))}
-      {bindings.length === 0 && executions.length === 0 && (
+      {bindings.length === 0 && executions.length === 0 && suggestions.length === 0 && (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             No runbooks are attached to this incident&apos;s service.

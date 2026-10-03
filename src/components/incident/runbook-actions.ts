@@ -13,6 +13,14 @@ import {
 
 const idSchema = z.string().cuid();
 
+async function assertExecutionBelongsToIncident(executionId: string, incidentId: string) {
+  const execution = await prisma.runbookExecution.findFirst({
+    where: { id: executionId, incidentId },
+    select: { id: true },
+  });
+  if (!execution) throw new Error('Runbook execution does not belong to this incident.');
+}
+
 export async function startIncidentRunbookAction(incidentId: string, bindingId: string) {
   const [actor] = await Promise.all([
     assertCapability(CAPABILITIES.RUNBOOK_EXECUTE),
@@ -41,6 +49,10 @@ export async function startIncidentRunbookAction(incidentId: string, bindingId: 
     inputValues: binding.inputValues as Record<string, unknown>,
     triggeredByUserId: actor.id,
   });
+  await prisma.runbookSuggestion.updateMany({
+    where: { incidentId, bindingId: binding.id, state: 'SUGGESTED' },
+    data: { state: 'STARTED', startedAt: new Date() },
+  });
   revalidatePath(`/incidents/${incidentId}`);
 }
 
@@ -54,6 +66,7 @@ export async function approveIncidentRunbookStepAction(
     assertCapability(CAPABILITIES.RUNBOOK_APPROVE),
     assertCanViewIncident(idSchema.parse(incidentId)),
   ]);
+  await assertExecutionBelongsToIncident(idSchema.parse(executionId), incidentId);
   await approveExecutionStep({
     executionId: idSchema.parse(executionId),
     stepId: idSchema.parse(stepId),
@@ -68,6 +81,7 @@ export async function cancelIncidentRunbookAction(incidentId: string, executionI
     assertCapability(CAPABILITIES.RUNBOOK_EXECUTE),
     assertCanViewIncident(idSchema.parse(incidentId)),
   ]);
+  await assertExecutionBelongsToIncident(idSchema.parse(executionId), incidentId);
   await cancelExecution(idSchema.parse(executionId), actor.id, 'Cancelled by incident responder.');
   revalidatePath(`/incidents/${incidentId}`);
 }

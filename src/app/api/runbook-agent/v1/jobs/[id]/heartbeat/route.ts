@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { jsonOk } from '@/lib/api-response';
 import { authenticatedAgentJson, agentApiError } from '@/lib/runbooks/agent-api';
 import { renewAgentAttemptLease } from '@/lib/runbooks/agent-claims';
 
@@ -12,7 +12,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       authenticatedAgentJson(request),
     ]);
     const { leaseToken } = schema.parse(json);
-    return NextResponse.json(
+    return jsonOk(
       await renewAgentAttemptLease({
         attemptId: z.string().cuid().parse(id),
         agentId: agent.id,

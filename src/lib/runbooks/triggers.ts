@@ -73,19 +73,29 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
       runbookVersionId: versionId,
     });
     if (binding.mode === 'SUGGESTED') {
-      const existing = await prisma.incidentEvent.findFirst({
-        where: { incidentId, type: 'RUNBOOK_SUGGESTED', message: { contains: fingerprint } },
-        select: { id: true },
-      });
-      if (!existing) {
-        await prisma.incidentEvent.create({
-          data: {
-            incidentId,
-            type: 'RUNBOOK_SUGGESTED',
-            message: `Runbook suggested: ${binding.runbook.name} [${fingerprint}]`,
-          },
+      try {
+        await prisma.$transaction(async tx => {
+          await tx.runbookSuggestion.create({
+            data: {
+              incidentId,
+              bindingId: binding.id,
+              runbookVersionId: versionId,
+              triggerId: trigger.id,
+              sourceEventId,
+              fingerprint,
+            },
+          });
+          await tx.incidentEvent.create({
+            data: {
+              incidentId,
+              type: 'RUNBOOK_SUGGESTED',
+              message: `Runbook suggested: ${binding.runbook.name}`,
+            },
+          });
         });
         suggested++;
+      } catch (error) {
+        if ((error as { code?: string })?.code !== 'P2002') throw error;
       }
       continue;
     }
@@ -96,6 +106,7 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
         serviceId: incident.serviceId,
         incidentId,
         bindingId: binding.id,
+        triggerId: trigger.id,
         inputValues: binding.inputValues as Record<string, unknown>,
         triggerFingerprint: fingerprint,
       });

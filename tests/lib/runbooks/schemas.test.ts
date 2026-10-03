@@ -113,13 +113,13 @@ describe('Runbooks Zod Schemas', () => {
       const result = runbookDefinitionSchema.safeParse({ steps: [] });
       expect(result.success).toBe(false);
     });
-    
+
     it('should enforce maximum step limits', () => {
       // Assuming MAX_RUNBOOK_STEPS is something we exceed here (e.g. 50+ usually, let's just make it fail if needed, or just test it exists)
       const steps = Array.from({ length: 101 }, (_, i) => ({
         key: `step_${i}`,
         name: `Step ${i}`,
-        type: 'BASH'
+        type: 'BASH',
       }));
       const result = runbookDefinitionSchema.safeParse({ steps });
       expect(result.success).toBe(false);
@@ -128,9 +128,6 @@ describe('Runbooks Zod Schemas', () => {
 
   describe('createServiceRunbookBindingSchema', () => {
     it('should validate basic valid binding', () => {
-      const result = createServiceRunbookBindingSchema.safeParse({
-        runbookId: 'cuid123456789012345678901',
-      });
       // Need real cuid for validation? Zod's .cuid() validates string length and format.
       // A standard cuid is usually ~25 chars starting with c, let's use a valid looking one.
       const validCuid = 'ckopq1234000001la8m123456';
@@ -149,7 +146,9 @@ describe('Runbooks Zod Schemas', () => {
       });
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.issues[0].message).toContain('Automatic execution mode should use PINNED');
+        expect(result.error.issues[0].message).toContain(
+          'Automatic execution mode should use PINNED'
+        );
       }
     });
 
@@ -161,7 +160,9 @@ describe('Runbooks Zod Schemas', () => {
       });
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.issues[0].message).toContain('specific runbook version must be selected');
+        expect(result.error.issues[0].message).toContain(
+          'specific runbook version must be selected'
+        );
       }
     });
   });
@@ -190,6 +191,12 @@ describe('Runbooks Zod Schemas', () => {
         expect(result.data.conditionLogic).toBe('AND');
         expect(result.data.conditions).toEqual([]);
       }
+    });
+
+    it('rejects trigger events that do not have a runtime producer yet', () => {
+      expect(createRunbookTriggerSchema.safeParse({ event: 'INCIDENT_UPDATED' }).success).toBe(
+        false
+      );
     });
   });
 
@@ -248,6 +255,15 @@ describe('Runbooks Zod Schemas', () => {
         status: 'DONE',
       });
       expect(result.success).toBe(false);
+    });
+
+    it('accepts explicit cancellation acknowledgements', () => {
+      const result = agentJobResultSchema.safeParse({
+        attemptId: 'ckopq1234000001la8m123456',
+        leaseToken: 'token123',
+        status: 'CANCELLED',
+      });
+      expect(result.success).toBe(true);
     });
   });
 
