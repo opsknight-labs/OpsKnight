@@ -21,7 +21,7 @@ No per-seat pricing. Your incident data stays in your own database.</p>
   <a href="https://github.com/sponsors/dushyant-rahangdale"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?style=flat&logo=githubsponsors&logoColor=white" alt="Sponsor"></a>
 </p>
 
-**[Website](https://opsknight.com/)** &nbsp;·&nbsp; **[Documentation](https://opsknight.com/docs/latest/)** &nbsp;·&nbsp; **[Quick start](#-quick-start)** &nbsp;·&nbsp; **[What's new in 2.0](#-whats-new-in-20)** &nbsp;·&nbsp; **[Product tour](#-product-tour)** &nbsp;·&nbsp; **[Sponsor](https://github.com/sponsors/dushyant-rahangdale)**
+**[Website](https://opsknight.com/)** &nbsp;·&nbsp; **[Documentation](https://opsknight.com/docs/latest/)** &nbsp;·&nbsp; **[Quick start](#-quick-start)** &nbsp;·&nbsp; **[What's new in 2.0](#-whats-new-in-20)** &nbsp;·&nbsp; **[Product tour](#-product-tour)** &nbsp;·&nbsp; **[Video tour (3:34)](https://youtu.be/tE3Y1R4Hteg)** &nbsp;·&nbsp; **[Sponsor](https://github.com/sponsors/dushyant-rahangdale)**
 
 </div>
 
@@ -63,6 +63,18 @@ Integrated and split stacks for Compose, Swarm, Helm and Kustomize, sized from c
 ---
 
 ## 🧭 Product tour
+
+<p align="center">
+  <a href="https://youtu.be/tE3Y1R4Hteg" title="Watch OpsKnight Full Product Tour on YouTube">
+    <img src="public/readme/product-tour.webp" alt="OpsKnight Full Product Tour Preview — Click to Watch on YouTube" width="100%">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://youtu.be/tE3Y1R4Hteg">
+    <img src="https://img.shields.io/badge/▶_Watch_Full_Product_Tour_(3:34)-YouTube-red?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch Full Product Tour on YouTube">
+  </a>
+</p>
 
 ### Command Center — the whole incident picture at a glance
 
