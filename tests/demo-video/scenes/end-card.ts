@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { type DemoDirector } from '../helpers/demo-director';
 
 /**
@@ -9,9 +11,16 @@ export async function playEndCardScene(director: DemoDirector): Promise<void> {
 
   await director.setChapter('OpsKnight', 'Detect. Respond. Communicate. Learn.', 'end-card');
   await director.hideChapterHud();
+  await director.hideCursor();
 
-  // Injected sleek end card screen
-  await page.evaluate(() => {
+  // Load official logo mark as base64 to ensure instant rendering
+  const logoPath = path.resolve(process.cwd(), 'public/logo-mark.png');
+  const logoBase64 = fs.existsSync(logoPath)
+    ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+    : '/logo.png';
+
+  // Injected sleek end card screen with official OpsKnight branding
+  await page.evaluate(({ logoSrc }) => {
     const endCard = document.createElement('div');
     endCard.id = 'demo-end-card';
     endCard.innerHTML = `
@@ -20,13 +29,13 @@ export async function playEndCardScene(director: DemoDirector): Promise<void> {
           position: fixed;
           inset: 0;
           z-index: 2147483640;
-          background: radial-gradient(circle at 50% 45%, #1e1b4b 0%, #090d16 65%, #030712 100%);
+          background: radial-gradient(circle at 50% 45%, #ffffff 0%, #f8fafc 65%, #f1f5f9 100%);
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-          color: #ffffff;
+          color: #0f172a;
           animation: demoFadeIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
         @keyframes demoFadeIn {
@@ -34,37 +43,40 @@ export async function playEndCardScene(director: DemoDirector): Promise<void> {
           100% { opacity: 1; transform: scale(1); }
         }
         .endcard-logo-box {
-          width: 88px;
-          height: 88px;
+          width: 96px;
+          height: 96px;
           margin-bottom: 24px;
           display: flex;
           align-items: center;
           justify-content: center;
-          background: linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(168, 85, 247, 0.15) 100%);
-          border: 1px solid rgba(129, 140, 248, 0.4);
+          background: #ffffff;
+          border: 1px solid rgba(220, 38, 38, 0.18);
           border-radius: 26px;
-          box-shadow: 0 0 60px rgba(99, 102, 241, 0.45);
+          box-shadow: 0 16px 40px -10px rgba(220, 38, 38, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.04);
+        }
+        .endcard-logo-img {
+          width: 76px;
+          height: 76px;
+          object-fit: contain;
         }
         .endcard-title {
-          font-size: 50px;
+          font-size: 52px;
           font-weight: 800;
           letter-spacing: -0.03em;
-          background: linear-gradient(180deg, #ffffff 0%, #cbd5e1 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
+          color: #0f172a;
           margin: 0;
         }
         .endcard-tagline {
           font-size: 21px;
           font-weight: 500;
-          color: #94a3b8;
-          margin-top: 14px;
+          color: #475569;
+          margin-top: 12px;
           letter-spacing: -0.01em;
         }
         .endcard-lead {
           font-size: 15px;
-          font-weight: 600;
-          color: #818cf8;
+          font-weight: 700;
+          color: #dc2626;
           text-transform: uppercase;
           letter-spacing: 0.12em;
           margin-top: 8px;
@@ -73,39 +85,36 @@ export async function playEndCardScene(director: DemoDirector): Promise<void> {
           margin-top: 36px;
           display: flex;
           align-items: center;
-          gap: 20px;
+          gap: 18px;
         }
         .endcard-link {
           display: flex;
           align-items: center;
           gap: 8px;
           padding: 10px 22px;
-          background: rgba(255, 255, 255, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.16);
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
           border-radius: 9999px;
           font-size: 14px;
           font-weight: 600;
-          color: #ffffff;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+          color: #1e293b;
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
         }
         .endcard-star {
           display: flex;
           align-items: center;
           gap: 6px;
-          padding: 10px 20px;
-          background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+          padding: 10px 22px;
+          background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
           border-radius: 9999px;
           font-size: 14px;
           font-weight: 700;
           color: #ffffff;
-          box-shadow: 0 4px 20px rgba(79, 70, 229, 0.5);
+          box-shadow: 0 4px 16px rgba(220, 38, 38, 0.35);
         }
       </style>
       <div class="endcard-logo-box">
-        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-          <path d="m9 12 2 2 4-4"/>
-        </svg>
+        <img src="${logoSrc}" alt="OpsKnight" class="endcard-logo-img" />
       </div>
       <h1 class="endcard-title">OpsKnight</h1>
       <p class="endcard-tagline">Detect. Respond. Communicate. Learn.</p>
@@ -123,7 +132,7 @@ export async function playEndCardScene(director: DemoDirector): Promise<void> {
       </div>
     `;
     document.body.appendChild(endCard);
-  });
+  }, { logoSrc: logoBase64 });
 
   await director.pause(7000);
 }

@@ -3,8 +3,9 @@ import { test as setup, expect } from '@playwright/test';
 setup('authenticate Demo Video capture user', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('sidebarCollapsed', '0');
-    localStorage.setItem('theme', 'dark');
-    document.documentElement.classList.add('dark');
+    localStorage.setItem('theme', 'light');
+    document.documentElement.classList.remove('dark');
+    document.documentElement.classList.add('light');
   });
 
   await page.goto('/login');

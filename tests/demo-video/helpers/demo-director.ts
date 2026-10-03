@@ -46,9 +46,10 @@ export class DemoDirector {
     this.startTime = Date.now();
 
     await this.page.addInitScript(() => {
-      // Ensure dark theme
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
+      // Ensure light theme
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+      localStorage.setItem('theme', 'light');
       localStorage.setItem('sidebarCollapsed', '0');
 
       const inject = () => {
@@ -62,52 +63,36 @@ export class DemoDirector {
 
           #demo-cursor {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 22px;
-            height: 22px;
-            border-radius: 50%;
-            background: rgba(99, 102, 241, 0.45);
-            border: 2px solid #818cf8;
-            box-shadow: 0 0 16px rgba(129, 140, 248, 0.7), 0 0 4px rgba(255, 255, 255, 0.9);
+            top: -100px;
+            left: -100px;
+            width: 24px;
+            height: 24px;
             pointer-events: none;
             z-index: 2147483647;
-            transform: translate(-50%, -50%);
-            transition: width 0.15s cubic-bezier(0.16, 1, 0.3, 1),
-                        height 0.15s cubic-bezier(0.16, 1, 0.3, 1),
-                        background 0.15s ease,
-                        box-shadow 0.15s ease;
+            transform: translate(-4px, -2px);
+            opacity: 0;
+            transition: opacity 0.25s ease, transform 0.08s ease;
           }
-          #demo-cursor-dot {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            background: #ffffff;
-            box-shadow: 0 0 6px #ffffff;
-            transform: translate(-50%, -50%);
+          #demo-cursor.visible {
+            opacity: 1;
           }
           #demo-cursor.clicking {
-            width: 15px;
-            height: 15px;
-            background: rgba(129, 140, 248, 0.9);
-            box-shadow: 0 0 24px rgba(99, 102, 241, 1), 0 0 8px #ffffff;
+            transform: translate(-4px, -2px) scale(0.88);
           }
 
           .demo-click-ripple {
             position: fixed;
             border-radius: 50%;
-            border: 2px solid #818cf8;
+            border: 2px solid rgba(220, 38, 38, 0.7);
+            background: rgba(220, 38, 38, 0.12);
             pointer-events: none;
             z-index: 2147483646;
             transform: translate(-50%, -50%);
-            animation: demo-ripple-anim 0.5s ease-out forwards;
+            animation: demo-ripple-anim 0.45s ease-out forwards;
           }
           @keyframes demo-ripple-anim {
-            0% { width: 10px; height: 10px; opacity: 1; border-width: 2.5px; }
-            100% { width: 60px; height: 60px; opacity: 0; border-width: 1px; }
+            0% { width: 6px; height: 6px; opacity: 1; border-width: 2px; }
+            100% { width: 38px; height: 38px; opacity: 0; border-width: 1px; }
           }
 
           #demo-chapter-hud {
@@ -117,17 +102,17 @@ export class DemoDirector {
             z-index: 2147483640;
             display: flex;
             align-items: center;
-            gap: 14px;
-            padding: 10px 18px;
-            background: rgba(15, 23, 42, 0.82);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            gap: 12px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 0, 0, 0.08);
             border-radius: 9999px;
-            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6),
-                        0 0 1px 1px rgba(255, 255, 255, 0.08);
+            box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.12),
+                        0 0 0 1px rgba(0, 0, 0, 0.04);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            color: #f8fafc;
+            color: #0f172a;
             opacity: 0;
             transform: translateY(12px) scale(0.96);
             transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1),
@@ -143,14 +128,14 @@ export class DemoDirector {
             align-items: center;
             justify-content: center;
             padding: 3px 9px;
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
             border-radius: 9999px;
             font-size: 11px;
             font-weight: 700;
             letter-spacing: 0.06em;
             text-transform: uppercase;
             color: #ffffff;
-            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);
+            box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
           }
           #demo-chapter-text {
             display: flex;
@@ -161,18 +146,20 @@ export class DemoDirector {
             font-size: 13.5px;
             font-weight: 700;
             letter-spacing: -0.01em;
-            color: #ffffff;
+            color: #0f172a;
             line-height: 1.2;
           }
           #demo-chapter-subtitle {
             font-size: 11.5px;
             font-weight: 500;
-            color: #94a3b8;
+            color: #64748b;
             line-height: 1.2;
           }
         </style>
-        <div id="demo-cursor" style="left: 960px; top: 540px;">
-          <div id="demo-cursor-dot"></div>
+        <div id="demo-cursor">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));">
+            <path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.45 0 .67-.54.35-.85L6.35 2.85a.5.5 0 0 0-.85.36z" fill="#0f172a" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
         </div>
         <div id="demo-chapter-hud">
           <div id="demo-chapter-pill">01</div>
@@ -215,53 +202,37 @@ export class DemoDirector {
           /* Virtual Sleek Glowing Cursor */
           #demo-cursor {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 22px;
-            height: 22px;
-            border-radius: 50%;
-            background: rgba(99, 102, 241, 0.45);
-            border: 2px solid #818cf8;
-            box-shadow: 0 0 16px rgba(129, 140, 248, 0.7), 0 0 4px rgba(255, 255, 255, 0.9);
+            top: -100px;
+            left: -100px;
+            width: 24px;
+            height: 24px;
             pointer-events: none;
             z-index: 2147483647;
-            transform: translate(-50%, -50%);
-            transition: width 0.15s cubic-bezier(0.16, 1, 0.3, 1),
-                        height 0.15s cubic-bezier(0.16, 1, 0.3, 1),
-                        background 0.15s ease,
-                        box-shadow 0.15s ease;
+            transform: translate(-4px, -2px);
+            opacity: 0;
+            transition: opacity 0.25s ease, transform 0.08s ease;
           }
-          #demo-cursor-dot {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            background: #ffffff;
-            box-shadow: 0 0 6px #ffffff;
-            transform: translate(-50%, -50%);
+          #demo-cursor.visible {
+            opacity: 1;
           }
           #demo-cursor.clicking {
-            width: 15px;
-            height: 15px;
-            background: rgba(129, 140, 248, 0.9);
-            box-shadow: 0 0 24px rgba(99, 102, 241, 1), 0 0 8px #ffffff;
+            transform: translate(-4px, -2px) scale(0.88);
           }
 
           /* Click Ripple */
           .demo-click-ripple {
             position: fixed;
             border-radius: 50%;
-            border: 2px solid #818cf8;
+            border: 2px solid rgba(220, 38, 38, 0.7);
+            background: rgba(220, 38, 38, 0.12);
             pointer-events: none;
             z-index: 2147483646;
             transform: translate(-50%, -50%);
-            animation: demo-ripple-anim 0.5s ease-out forwards;
+            animation: demo-ripple-anim 0.45s ease-out forwards;
           }
           @keyframes demo-ripple-anim {
-            0% { width: 10px; height: 10px; opacity: 1; border-width: 2.5px; }
-            100% { width: 60px; height: 60px; opacity: 0; border-width: 1px; }
+            0% { width: 6px; height: 6px; opacity: 1; border-width: 2px; }
+            100% { width: 38px; height: 38px; opacity: 0; border-width: 1px; }
           }
 
           /* Cinematic Chapter HUD Badge */
@@ -272,17 +243,17 @@ export class DemoDirector {
             z-index: 2147483640;
             display: flex;
             align-items: center;
-            gap: 14px;
-            padding: 10px 18px;
-            background: rgba(15, 23, 42, 0.82);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            gap: 12px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(0, 0, 0, 0.08);
             border-radius: 9999px;
-            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6),
-                        0 0 1px 1px rgba(255, 255, 255, 0.08);
+            box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.12),
+                        0 0 0 1px rgba(0, 0, 0, 0.04);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            color: #f8fafc;
+            color: #0f172a;
             opacity: 0;
             transform: translateY(12px) scale(0.96);
             transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1),
@@ -298,14 +269,14 @@ export class DemoDirector {
             align-items: center;
             justify-content: center;
             padding: 3px 9px;
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
             border-radius: 9999px;
             font-size: 11px;
             font-weight: 700;
             letter-spacing: 0.06em;
             text-transform: uppercase;
             color: #ffffff;
-            box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);
+            box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
           }
           #demo-chapter-text {
             display: flex;
@@ -316,18 +287,20 @@ export class DemoDirector {
             font-size: 13.5px;
             font-weight: 700;
             letter-spacing: -0.01em;
-            color: #ffffff;
+            color: #0f172a;
             line-height: 1.2;
           }
           #demo-chapter-subtitle {
             font-size: 11.5px;
             font-weight: 500;
-            color: #94a3b8;
+            color: #64748b;
             line-height: 1.2;
           }
         </style>
-        <div id="demo-cursor" style="left: 960px; top: 540px;">
-          <div id="demo-cursor-dot"></div>
+        <div id="demo-cursor">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));">
+            <path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87c.45 0 .67-.54.35-.85L6.35 2.85a.5.5 0 0 0-.85.36z" fill="#0f172a" stroke="#ffffff" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
         </div>
         <div id="demo-chapter-hud">
           <div id="demo-chapter-pill">01</div>
@@ -395,6 +368,16 @@ export class DemoDirector {
   }
 
   /**
+   * Hide the virtual cursor
+   */
+  async hideCursor(): Promise<void> {
+    await this.page.evaluate(() => {
+      const cursor = document.getElementById('demo-cursor');
+      if (cursor) cursor.classList.remove('visible');
+    });
+  }
+
+  /**
    * Human-like smooth mouse movement to target coordinates or element with cubic bezier easing
    */
   async moveCursorTo(
@@ -446,6 +429,7 @@ export class DemoDirector {
         ({ x, y }) => {
           const cursor = document.getElementById('demo-cursor');
           if (cursor) {
+            cursor.classList.add('visible');
             cursor.style.left = `${x}px`;
             cursor.style.top = `${y}px`;
           }

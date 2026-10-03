@@ -15,7 +15,7 @@ export default defineConfig({
     baseURL,
     serviceWorkers: 'block',
     viewport: { width: 1920, height: 1080 },
-    colorScheme: 'dark',
+    colorScheme: 'light',
   },
   projects: [
     {
