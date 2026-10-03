@@ -21,9 +21,114 @@ No per-seat pricing. Your incident data stays in your own database.</p>
   <a href="https://github.com/sponsors/dushyant-rahangdale"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?style=flat&logo=githubsponsors&logoColor=white" alt="Sponsor"></a>
 </p>
 
-**[Website](https://opsknight.com/)** &nbsp;·&nbsp; **[Documentation](https://opsknight.com/docs/latest/)** &nbsp;·&nbsp; **[Quick start](#-quick-start)** &nbsp;·&nbsp; **[What's new in 2.0](#-whats-new-in-20)** &nbsp;·&nbsp; **[Product tour](#-product-tour)** &nbsp;·&nbsp; **[Video tour (3:34)](https://youtu.be/tE3Y1R4Hteg)** &nbsp;·&nbsp; **[Sponsor](https://github.com/sponsors/dushyant-rahangdale)**
+**[Website](https://opsknight.com/)** &nbsp;·&nbsp; **[Documentation](https://opsknight.com/docs/latest/)** &nbsp;·&nbsp; **[Quick start](#-quick-start)** &nbsp;·&nbsp; **[Watch product tour (3:34)](https://youtu.be/tE3Y1R4Hteg)** &nbsp;·&nbsp; **[What's new in 2.0](#-whats-new-in-20)** &nbsp;·&nbsp; **[Sponsor](https://github.com/sponsors/dushyant-rahangdale)**
 
 </div>
+
+---
+
+## 🧭 Product tour
+
+An end-to-end incident lifecycle from initial detection to customer communication and postmortem.
+
+<p align="center">
+  <a href="https://youtu.be/tE3Y1R4Hteg" title="Watch full OpsKnight product walkthrough on YouTube">
+    <img src="public/readme/product-tour.webp" alt="OpsKnight product walkthrough: alert triage, incident response, on-call schedules, war rooms, public status, and postmortems" width="100%">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://youtu.be/tE3Y1R4Hteg"><strong>Watch the full 3:34 tour on YouTube →</strong></a>
+</p>
+
+---
+
+## 🧩 Everything in the incident loop
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 🚨 Detect & Route
+Durable inbound webhooks, deduplication, automated severity assignment, and routing rules based on services and alert metadata.
+
+</td>
+<td width="33%" valign="top">
+
+### ⚡ Respond
+Unified incident workspace with ownership handoffs, real-time activity timelines, response health SLA timers, action items, and 5-Whys postmortems.
+
+</td>
+<td width="33%" valign="top">
+
+### 📅 On-call & Escalate
+Multi-layer rotation schedules with DST-safe handoffs, temporary overrides, and escalation policies targeting users, schedules, and teams.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 📣 Notify & Coordinate
+Multi-channel paging across Web Push, email, SMS, WhatsApp, and interactive Twilio voice with durable retries and delivery evidence.
+
+</td>
+<td valign="top">
+
+### 🌐 Communicate
+Public and private status pages with automated subscriber updates, maintenance windows, and incident postmortems shared directly from the incident.
+
+</td>
+<td valign="top">
+
+### 📊 Analyze & Learn
+Actionable reliability metrics including MTTA, MTTR, SLA compliance tracking, configurable dashboards, NOC/TV mode, and PDF executive reports.
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🖥️ Inside OpsKnight
+
+### Incident Operations
+
+Command Center gives responders real-time operational pulse across active incidents, open alerts, team workload, and approaching SLA breaches.
+
+<p align="center">
+  <img src="public/readme/command-center.webp" alt="OpsKnight Command Center displaying live triage, active alerts, workload distribution, and SLA countdowns" width="100%">
+</p>
+
+Every responder gets complete incident context, real-time collaborative timeline, task tracking, and one-click lifecycle transitions on a single screen.
+
+<p align="center">
+  <img src="public/readme/incident-response.webp" alt="OpsKnight incident response workspace showing responder ownership, contextual timeline, SLA targets, and action items" width="100%">
+</p>
+
+### On-call & Reliability
+
+Manage rota layers with live coverage visibility, seamless shift handoffs, multi-tier escalation policies, and SLA analytics.
+
+<p align="center">
+  <img src="public/readme/platform.webp" alt="OpsKnight reliability platform: on-call schedule layers, escalation policy designer, and SLA performance metrics" width="100%">
+</p>
+
+### 🌐 Communicate with customers
+
+Publish service health, incidents, maintenance, uptime history and post-incident reviews from the same incident workflow.
+
+<p align="center">
+  <img src="public/readme/status-page.webp" alt="OpsKnight public status page displaying real-time system status, operational services, uptime history, and active incident announcements" width="100%">
+</p>
+
+### 📱 Mobile responder PWA — light and dark, iOS and Android
+
+<p align="center">
+  <img src="public/readme/mobile.webp" alt="OpsKnight mobile PWA on iPhone: responder home and incident triage in light mode, push notifications on the lock screen, incident response and on-call in dark mode" width="100%">
+</p>
+
+Install OpsKnight from the browser to get a mobile-first workspace for incidents, on-call, escalation policies, services, teams, status, analytics and postmortems. Push registration is per device, the app follows the system light or dark theme, and offline actions stay authorization-bound when they replay. [Set up the mobile PWA →](https://opsknight.com/docs/latest/guides/mobile/)
 
 ---
 
@@ -59,95 +164,6 @@ Integrated and split stacks for Compose, Swarm, Helm and Kustomize, sized from c
 </table>
 
 <p align="center"><a href="CHANGELOG.md">Read the full 2.0 changelog →</a></p>
-
----
-
-## 🧭 Product tour
-
-<p align="center">
-  <a href="https://youtu.be/tE3Y1R4Hteg" title="Watch OpsKnight Full Product Tour on YouTube">
-    <img src="public/readme/product-tour.gif" alt="OpsKnight Full Product Tour Preview — Click to Watch on YouTube" width="100%">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://youtu.be/tE3Y1R4Hteg">
-    <img src="https://img.shields.io/badge/▶_Watch_Full_Product_Tour_(3:34)-YouTube-red?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch Full Product Tour on YouTube">
-  </a>
-</p>
-
-### Command Center — the whole incident picture at a glance
-
-<p align="center">
-  <img src="public/readme/command-center.webp" alt="Annotated OpsKnight Command Center: global incident banner, live counts, Ops Pulse triage, real-time alerts, workload signals and SLA alerts" width="100%">
-</p>
-
-### Incident response — everything a responder needs on one screen
-
-<p align="center">
-  <img src="public/readme/incident-response.webp" alt="Annotated OpsKnight incident detail: ownership, context, timeline and postmortem, response-health SLA timers, one-click lifecycle and stakeholder subscriptions" width="100%">
-</p>
-
-### Plan, route and measure
-
-<p align="center">
-  <img src="public/readme/platform.webp" alt="OpsKnight analytics with SLA insights, an on-call schedule with live coverage, and an escalation policy" width="100%">
-</p>
-
-### 📱 Mobile responder PWA — light and dark, iOS and Android
-
-<p align="center">
-  <img src="public/readme/mobile.webp" alt="OpsKnight mobile PWA on iPhone: responder home and incident triage in light mode, push notifications on the lock screen, incident response and on-call in dark mode" width="100%">
-</p>
-
-Install OpsKnight from the browser to get a mobile-first workspace for incidents, on-call, escalation policies, services, teams, status, analytics and postmortems. Push registration is per device, the app follows the system light or dark theme, and offline actions stay authorization-bound when they replay. [Set up the mobile PWA →](https://opsknight.com/docs/latest/guides/mobile/)
-
----
-
-## 🧩 Everything in the incident loop
-
-<table>
-<tr>
-<td width="33%" valign="top">
-
-### 🚨 Respond
-Triage, ownership, timelines, notes, action items, templates and interactive 5-Whys postmortems, with SLA-aware lifecycles and durable side effects.
-
-</td>
-<td width="33%" valign="top">
-
-### 📅 On-call and escalation
-Schedules with rotation layers and overrides, DST-safe handoffs, and escalation policies that target users, teams and schedules.
-
-</td>
-<td width="33%" valign="top">
-
-### 📣 Notify and page
-Email, Web Push, SMS, WhatsApp and voice through a durable delivery pipeline with retries, outcomes and administrator evidence.
-
-</td>
-</tr>
-<tr>
-<td valign="top">
-
-### 💬 ChatOps
-Slack and Microsoft Teams war rooms with interactive incident actions, plus bidirectional Jira lifecycle sync.
-
-</td>
-<td valign="top">
-
-### 📊 Status and analytics
-A themed public status page with subscribers, analytics for MTTA / MTTR / SLA, configurable dashboards, PDF reports and NOC/TV mode.
-
-</td>
-<td valign="top">
-
-### 🔐 Identity and operations
-OIDC SSO, SCIM 2.0, role-based access, API keys, audit evidence, privacy workflows, Health Center, Prometheus metrics and backups.
-
-</td>
-</tr>
-</table>
 
 ---
 
