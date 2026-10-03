@@ -287,14 +287,12 @@ describe('CreateIncidentModal', () => {
   it('shows warning popup and highlights missing service when clicking Create Incident without selecting a service', async () => {
     render(<CreateIncidentModal />);
 
-    await screen.findByText('Declare Incident');
-
     const titleInput = await screen.findByPlaceholderText(
       /Primary database connection pool exhausted/i
     );
     fireEvent.change(titleInput, { target: { value: 'Database Outage in US-East' } });
 
-    const submitBtn = screen.getByRole('button', { name: /^create incident$/i });
+    const submitBtn = await screen.findByRole('button', { name: /^create incident$/i });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -316,9 +314,7 @@ describe('CreateIncidentModal', () => {
   it('shows warning popup when clicking Create Incident with empty title and empty service', async () => {
     render(<CreateIncidentModal />);
 
-    await screen.findByText('Declare Incident');
-
-    const submitBtn = screen.getByRole('button', { name: /^create incident$/i });
+    const submitBtn = await screen.findByRole('button', { name: /^create incident$/i });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -377,7 +373,7 @@ describe('CreateIncidentModal', () => {
     );
     fireEvent.change(titleInput, { target: { value: 'Production Incident' } });
 
-    const submitBtn = screen.getByRole('button', { name: /^create incident$/i });
+    const submitBtn = await screen.findByRole('button', { name: /^create incident$/i });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -410,7 +406,7 @@ describe('CreateIncidentModal', () => {
     );
     fireEvent.change(titleInput, { target: { value: 'Production Incident' } });
 
-    const submitBtn = screen.getByRole('button', { name: /^create incident$/i });
+    const submitBtn = await screen.findByRole('button', { name: /^create incident$/i });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
