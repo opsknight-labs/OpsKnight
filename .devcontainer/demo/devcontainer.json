@@ -1,0 +1,30 @@
+{
+  "name": "OpsKnight Demo",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20",
+  "workspaceFolder": "/workspaces/OpsKnight",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "enableDockerInit": true
+    },
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "prisma.prisma"]
+    },
+    "codespaces": {
+      "openFiles": ["README.md"]
+    }
+  },
+  "postCreateCommand": "chmod +x deploy/demo/*.sh && (npm ci --prefer-offline || npm install)",
+  "postStartCommand": "bash deploy/demo/start-demo.sh",
+  "remoteUser": "node",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "OpsKnight Demo",
+      "onAutoForward": "openBrowser"
+    }
+  }
+}

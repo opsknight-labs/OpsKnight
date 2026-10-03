@@ -94,7 +94,8 @@
     "load:verify": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/verify-results.ts",
     "load:metrics": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/metrics.ts",
     "load:providers": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/providers/server.ts",
-    "load:certify": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/topology.ts"
+    "load:certify": "ts-node -r tsconfig-paths/register --project tsconfig.script.json tests/load/helpers/topology.ts",
+    "seed:demo": "DEMO_MODE=true ts-node --project tsconfig.seed.json prisma/demo/seed-demo.ts"
   },
   "dependencies": {
     "@aws-sdk/client-ses": "^3.971.0",

@@ -1,0 +1,74 @@
+name: Demo Environment Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'deploy/demo/**'
+      - '.devcontainer/demo/**'
+      - 'prisma/demo/**'
+      - '.github/workflows/demo.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/demo/**'
+      - '.devcontainer/demo/**'
+      - 'prisma/demo/**'
+      - '.github/workflows/demo.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-demo:
+    name: Validate Codespaces Demo Stack
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node & Dependencies
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: '20'
+          install-deps: 'true'
+          generate-prisma: 'true'
+
+      - name: Validate devcontainer JSON syntax
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('.devcontainer/demo/devcontainer.json', 'utf8'))"
+          echo "✅ devcontainer.json syntax is valid."
+
+      - name: Validate shell syntax
+        run: |
+          bash -n deploy/demo/start-demo.sh
+          bash -n deploy/demo/seed-demo.sh
+          bash -n deploy/demo/expire-demo.sh
+          echo "✅ Shell script syntax is valid."
+
+      - name: Validate Docker Compose configuration
+        run: |
+          export POSTGRES_PASSWORD=test_postgres_pass
+          export NEXTAUTH_SECRET=test_nextauth_secret_with_32_characters_min
+          export API_KEY_SECRET=test_api_key_secret_with_32_characters_min
+          export ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          docker compose -f deploy/demo/docker-compose.yml config > /dev/null
+          echo "✅ Docker Compose config is valid."
+
+      - name: Launch demo stack
+        run: |
+          bash deploy/demo/start-demo.sh
+
+      - name: Run automated verification suite
+        run: |
+          node deploy/demo/verify-demo.mjs
+
+      - name: Test TTL expiry watchdog
+        run: |
+          DEMO_TTL=5 bash deploy/demo/expire-demo.sh
+          test -f .demo-expired
+          if docker compose -p opsknight-demo -f deploy/demo/docker-compose.yml ps -q | grep .; then
+            echo "❌ Error: Containers still running after demo expiration!"
+            exit 1
+          fi
+          echo "✅ Expiry watchdog verified and stack cleanly torn down."

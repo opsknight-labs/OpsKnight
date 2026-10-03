@@ -19,9 +19,10 @@ No per-seat pricing. Your incident data stays in your own database.</p>
   <a href="https://github.com/opsknight-labs/OpsKnight/actions/workflows/tests.yml"><img src="https://github.com/opsknight-labs/OpsKnight/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
   <a href="https://github.com/opsknight-labs/OpsKnight/actions/workflows/security.yml"><img src="https://github.com/opsknight-labs/OpsKnight/actions/workflows/security.yml/badge.svg" alt="Security"></a>
   <a href="https://github.com/sponsors/dushyant-rahangdale"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?style=flat&logo=githubsponsors&logoColor=white" alt="Sponsor"></a>
+  <a href="https://codespaces.new/opsknight-labs/OpsKnight?devcontainer_path=.devcontainer%2Fdemo%2Fdevcontainer.json"><img src="https://github.com/codespaces/badge.svg" alt="Open in GitHub Codespaces"></a>
 </p>
 
-**[Website](https://opsknight.com/)** &nbsp;·&nbsp; **[Documentation](https://opsknight.com/docs/latest/)** &nbsp;·&nbsp; **[Quick start](#-quick-start)** &nbsp;·&nbsp; **[What's new in 2.0](#-whats-new-in-20)** &nbsp;·&nbsp; **[Product tour](#-product-tour)** &nbsp;·&nbsp; **[Sponsor](https://github.com/sponsors/dushyant-rahangdale)**
+**[Website](https://opsknight.com/)** &nbsp;·&nbsp; **[Documentation](https://opsknight.com/docs/latest/)** &nbsp;·&nbsp; **[Try Demo](#-try-opsknight-demo-browser)** &nbsp;·&nbsp; **[Quick start](#-quick-start)** &nbsp;·&nbsp; **[What's new in 2.0](#-whats-new-in-20)** &nbsp;·&nbsp; **[Product tour](#-product-tour)** &nbsp;·&nbsp; **[Sponsor](https://github.com/sponsors/dushyant-rahangdale)**
 
 </div>
 
@@ -99,18 +100,21 @@ Install OpsKnight from the browser to get a mobile-first workspace for incidents
 <td width="33%" valign="top">
 
 ### 🚨 Respond
+
 Triage, ownership, timelines, notes, action items, templates and interactive 5-Whys postmortems, with SLA-aware lifecycles and durable side effects.
 
 </td>
 <td width="33%" valign="top">
 
 ### 📅 On-call and escalation
+
 Schedules with rotation layers and overrides, DST-safe handoffs, and escalation policies that target users, teams and schedules.
 
 </td>
 <td width="33%" valign="top">
 
 ### 📣 Notify and page
+
 Email, Web Push, SMS, WhatsApp and voice through a durable delivery pipeline with retries, outcomes and administrator evidence.
 
 </td>
@@ -119,18 +123,21 @@ Email, Web Push, SMS, WhatsApp and voice through a durable delivery pipeline wit
 <td valign="top">
 
 ### 💬 ChatOps
+
 Slack and Microsoft Teams war rooms with interactive incident actions, plus bidirectional Jira lifecycle sync.
 
 </td>
 <td valign="top">
 
 ### 📊 Status and analytics
+
 A themed public status page with subscribers, analytics for MTTA / MTTR / SLA, configurable dashboards, PDF reports and NOC/TV mode.
 
 </td>
 <td valign="top">
 
 ### 🔐 Identity and operations
+
 OIDC SSO, SCIM 2.0, role-based access, API keys, audit evidence, privacy workflows, Health Center, Prometheus metrics and backups.
 
 </td>
@@ -158,6 +165,26 @@ OIDC SSO, SCIM 2.0, role-based access, API keys, audit evidence, privacy workflo
 </p>
 
 Monitoring, cloud, uptime, CI/CD, ChatOps, ticketing, notification and identity providers each have a documented contract for authentication, lifecycle actions and recovery. [Browse the certified integration catalog →](https://opsknight.com/docs/latest/integrations/)
+
+---
+
+## ⚡ Try OpsKnight Demo (Browser)
+
+Experience OpsKnight immediately in your browser with zero local installation or configuration. Click below to launch a private, seeded demo environment on GitHub Codespaces:
+
+<p align="center">
+  <a href="https://codespaces.new/opsknight-labs/OpsKnight?devcontainer_path=.devcontainer%2Fdemo%2Fdevcontainer.json">
+    <img src="https://img.shields.io/badge/▶%20Launch_OpsKnight_Demo-GitHub_Codespaces-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="Launch OpsKnight Demo in GitHub Codespaces">
+  </a>
+</p>
+
+| Parameter               | Details                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| :---------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Launch**              | 1-Click via GitHub Codespaces (preconfigured Node 20 + Docker + PostgreSQL 15 stack).                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **Credentials**         | **Email:** `demo@opsknight.local`<br>**Password:** `OpsKnightDemo!`                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Preloaded Scenarios** | • **Incidents:** Active P1 checkout outage, P2 API latency regression, snoozed maintenance window<br>• **Services & Teams:** 6 teams, Gold/Silver/Bronze SLA tiers across 3 regions (`us-east-1`, `eu-west-1`, `ap-south-1`)<br>• **On-Call:** Multi-layer rotations, DST-safe schedules, and active coverage handoffs<br>• **Status Pages:** `/status` (mixed live catalog), `/status/healthy` (all green), `/status/degraded` (partial outage)<br>• **Analytics & Learning:** SLA rollups, MTTA/MTTR compliance curves, and 5-Whys postmortems |
+| **Zero Setup**          | Pre-seeded database skips `/setup` onboarding and directs you straight into the active Command Center.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Lifecycle**           | Ephemeral stack automatically expires and wipes all resources after 60 minutes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ---
 
@@ -195,12 +222,12 @@ Open `http://localhost:3000/setup`, enter the short-lived bootstrap code, and cr
 
 ## 🏗️ Deploy anywhere
 
-| | Topology | Best for | Guide |
-| :-- | :-- | :-- | :-- |
-| <img src="https://img.shields.io/badge/-Compose-2496ED?style=flat&logo=docker&logoColor=white" alt=""> | Integrated or split, single host | Evaluation and small teams | [Docker Compose →](https://opsknight.com/docs/latest/operate/deploy/docker-compose/) |
-| <img src="https://img.shields.io/badge/-Swarm-2496ED?style=flat&logo=docker&logoColor=white" alt=""> | Integrated or split across nodes | Multi-node Docker estates | [Docker Swarm →](https://opsknight.com/docs/latest/operate/deploy/swarm/) |
-| <img src="https://img.shields.io/badge/-Helm-0F1689?style=flat&logo=helm&logoColor=white" alt=""> | Schema-validated chart | Production Kubernetes | [Helm →](https://opsknight.com/docs/latest/operate/deploy/helm/) |
-| <img src="https://img.shields.io/badge/-Kustomize-326CE5?style=flat&logo=kubernetes&logoColor=white" alt=""> | Bases and overlays | GitOps with Argo CD or Flux | [Kustomize →](https://opsknight.com/docs/latest/operate/deploy/kustomize/) |
+|                                                                                                              | Topology                         | Best for                    | Guide                                                                                |
+| :----------------------------------------------------------------------------------------------------------- | :------------------------------- | :-------------------------- | :----------------------------------------------------------------------------------- |
+| <img src="https://img.shields.io/badge/-Compose-2496ED?style=flat&logo=docker&logoColor=white" alt="">       | Integrated or split, single host | Evaluation and small teams  | [Docker Compose →](https://opsknight.com/docs/latest/operate/deploy/docker-compose/) |
+| <img src="https://img.shields.io/badge/-Swarm-2496ED?style=flat&logo=docker&logoColor=white" alt="">         | Integrated or split across nodes | Multi-node Docker estates   | [Docker Swarm →](https://opsknight.com/docs/latest/operate/deploy/swarm/)            |
+| <img src="https://img.shields.io/badge/-Helm-0F1689?style=flat&logo=helm&logoColor=white" alt="">            | Schema-validated chart           | Production Kubernetes       | [Helm →](https://opsknight.com/docs/latest/operate/deploy/helm/)                     |
+| <img src="https://img.shields.io/badge/-Kustomize-326CE5?style=flat&logo=kubernetes&logoColor=white" alt=""> | Bases and overlays               | GitOps with Argo CD or Flux | [Kustomize →](https://opsknight.com/docs/latest/operate/deploy/kustomize/)           |
 
 PostgreSQL 14 or later is required. For production, pin the tested multi-architecture image digest, size the database connection budget and complete the topology's acceptance checklist. [Choose a topology →](https://opsknight.com/docs/latest/operate/deploy/) · [Plan capacity →](https://opsknight.com/docs/latest/operate/capacity/choose-deployment/)
 
@@ -216,13 +243,13 @@ Integrated mode runs Web and background work in one process. Split mode gives We
 
 ## 🤔 Why OpsKnight?
 
-| | **OpsKnight** | Typical per-seat SaaS |
-| :-- | :-- | :-- |
-| **Where it runs** | Your infrastructure | Vendor cloud |
-| **Incident data** | Stays in your PostgreSQL | Stored by the vendor |
-| **Pricing** | No seat meter, no software fee | Per-user plans |
-| **Source** | Open under AGPL-3.0-only | Closed |
-| **Operations** | Documented runtime, health and delivery evidence | Opaque |
+|                   | **OpsKnight**                                    | Typical per-seat SaaS |
+| :---------------- | :----------------------------------------------- | :-------------------- |
+| **Where it runs** | Your infrastructure                              | Vendor cloud          |
+| **Incident data** | Stays in your PostgreSQL                         | Stored by the vendor  |
+| **Pricing**       | No seat meter, no software fee                   | Per-user plans        |
+| **Source**        | Open under AGPL-3.0-only                         | Closed                |
+| **Operations**    | Documented runtime, health and delivery evidence | Opaque                |
 
 OpsKnight is an independent project and is not affiliated with PagerDuty, Opsgenie or other vendors.
 
@@ -241,8 +268,8 @@ Encrypted provider credentials with key rotation, independent session and API-ke
 The versioned 2.0 documentation is the source of truth for product behavior, configuration, deployment, integrations and operations.
 
 | [**Get started**](https://opsknight.com/docs/latest/start/) | [**Guides**](https://opsknight.com/docs/latest/guides/) | [**Operate**](https://opsknight.com/docs/latest/operate/) | [**API reference**](https://opsknight.com/docs/latest/reference/api/) | [**Troubleshooting**](https://opsknight.com/docs/latest/troubleshooting/) |
-| :-: | :-: | :-: | :-: | :-: |
-| Install and first incident | Day-to-day workflows | Deploy, scale, upgrade | REST API and keys | Diagnose and recover |
+| :---------------------------------------------------------: | :-----------------------------------------------------: | :-------------------------------------------------------: | :-------------------------------------------------------------------: | :-----------------------------------------------------------------------: |
+|                 Install and first incident                  |                  Day-to-day workflows                   |                  Deploy, scale, upgrade                   |                           REST API and keys                           |                           Diagnose and recover                            |
 
 ---
 
