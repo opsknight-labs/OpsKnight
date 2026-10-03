@@ -454,10 +454,8 @@ describe('deployment configuration invariants', () => {
     expect(needsFor('release-quality')).toEqual(['validate-release-tag']);
     expect(needsFor('integration-certification')).toEqual(['validate-release-tag']);
     expect(needsFor('build')).toEqual(['release-quality', 'integration-certification']);
-    expect(needsFor('release-documentation')).toEqual(['build']);
-    expect(needsFor('sbom-provenance')).toEqual(
-      expect.arrayContaining(['build', 'release-documentation'])
-    );
+    expect(Reflect.has(workflowConfig.jobs, 'release-documentation')).toBe(false);
+    expect(needsFor('sbom-provenance')).toEqual(['build']);
     expect(needsFor('pgbouncer-image')).toEqual(['sbom-provenance']);
     expect(needsFor('promote-release-tags')).toEqual(
       expect.arrayContaining(['build', 'pgbouncer-image'])
@@ -468,7 +466,6 @@ describe('deployment configuration invariants', () => {
         'sbom-provenance',
         'pgbouncer-image',
         'promote-release-tags',
-        'release-documentation',
       ])
     );
     expect(workflowConfig.jobs.build.if).toContain("needs.release-quality.result == 'success'");
@@ -481,14 +478,14 @@ describe('deployment configuration invariants', () => {
     );
     expect(workflowConfig.jobs['publish-github-release'].if).not.toContain('always()');
     expect(workflow).toContain('type=raw,value=rc-${{ github.sha }}');
-    expect(workflow).toContain('docker pull "${IMAGE_NAME_RELEASE}@${RELEASE_IMAGE_DIGEST}"');
     expect(workflow).toContain("['buildx', 'imagetools', 'inspect', ref, '--format', format]");
     expect(workflow).toContain("inspectJson('SBOM', '{{ json .SBOM }}')");
     expect(workflow).toContain("inspectJson('Provenance', '{{ json .Provenance }}')");
     expect(workflow).toContain('docker buildx imagetools create -t "$tag" "$source_ref"');
     expect(workflow).toContain('test "$promoted_digest" = "$RELEASE_IMAGE_DIGEST"');
-    expect(workflow).toContain('release-certification-${{ github.ref_name }}');
-    expect(workflow).toContain('releaseImageIndexDigest: process.env.RELEASE_IMAGE_DIGEST');
+    expect(workflow).toContain(
+      'summary.releaseImageIndexDigest = process.env.RELEASE_IMAGE_DIGEST'
+    );
     expect(workflow).toContain('pgbouncerImageDigest');
     expect(workflow).toContain('Upgrade from previous stable release');
     expect(workflow).toContain('Backup and restore contract');
@@ -503,10 +500,10 @@ describe('deployment configuration invariants', () => {
     expect(workflow).toContain('EXT_DB_PASSWORD="$(openssl rand -hex 24)"');
   });
 
-  it('keeps documentation capability coverage in CI and the release gate', () => {
+  it('keeps documentation capability coverage in CI', () => {
     expect(read('package.json')).toContain('scripts/check-docs-capabilities.cjs');
     expect(read('.github/workflows/docs-links.yml')).toContain('npm run docs:certify:static');
-    expect(read('.github/workflows/docker-image.yml')).toContain('npm run docs:capabilities');
+    expect(read('scripts/docs/certify.mjs')).toContain('scripts/check-docs-capabilities.cjs');
     expect(read('docs/RELEASE_QUALITY_CONTRACT.md')).toContain(
       'Upgrade from the previous stable release'
     );

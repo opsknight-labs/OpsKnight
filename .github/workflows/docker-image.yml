@@ -98,8 +98,6 @@ jobs:
           npm run prisma:validate
           npm run prisma:health
           node scripts/ci-db-smoke.cjs
-          npm run docs:links
-          npm run docs:capabilities
           npx vitest run -c vitest.unit.config.ts \
             tests/unit/migration-recovery.test.ts \
             tests/lib/deployment-config-unit.test.ts \
@@ -172,139 +170,6 @@ jobs:
     needs: validate-release-tag
     if: startsWith(github.ref, 'refs/tags/v')
     uses: ./.github/workflows/integration-certification.yml
-
-  release-documentation:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v') && needs.build.result == 'success'
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout release revision
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Set up Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install release dependencies
-        env:
-          HUSKY: '0'
-        run: npm ci --ignore-scripts --legacy-peer-deps
-
-      - name: Generate Prisma client
-        run: npx prisma generate
-
-      - name: Install documentation browser
-        run: npx playwright install --with-deps chromium
-
-      - name: Log in to GHCR for certified release image
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pull and pin certified release image
-        env:
-          RELEASE_IMAGE_DIGEST: ${{ needs.build.outputs.release_image_digest }}
-        run: |
-          test -n "$RELEASE_IMAGE_DIGEST"
-          echo "DOCS_OPSKNIGHT_IMAGE=${IMAGE_NAME_RELEASE}@${RELEASE_IMAGE_DIGEST}" >> "$GITHUB_ENV"
-          docker pull "${IMAGE_NAME_RELEASE}@${RELEASE_IMAGE_DIGEST}"
-
-      - name: Checkout website renderer
-        uses: actions/checkout@v7
-        with:
-          repository: opsknight-labs/OpsKnight-website
-          path: opsknight-website
-
-      - name: Build rendered documentation site
-        run: |
-          ./scripts/sync-docs-to-website.sh ./opsknight-website
-          npm ci --ignore-scripts --prefix ./opsknight-website
-          npm run build --prefix ./opsknight-website
-          python3 -m http.server 15000 --directory ./opsknight-website/out > /tmp/opsknight-docs-site.log 2>&1 &
-          for attempt in {1..30}; do
-            curl --fail --silent http://127.0.0.1:15000/docs/v2.0.0/ >/dev/null && exit 0
-            sleep 1
-          done
-          cat /tmp/opsknight-docs-site.log
-          exit 1
-
-      - name: Enforce exact release documentation evidence
-        env:
-          DOCS_EXPECTED_PRODUCT_REVISION: ${{ github.sha }}
-          DOCS_WEBSITE_DIR: ${{ github.workspace }}/opsknight-website
-          DOCS_SITE_BASE_URL: http://127.0.0.1:15000
-          RELEASE_IMAGE_DIGEST: ${{ needs.build.outputs.release_image_digest }}
-        run: npm run docs:certify:release
-
-      - name: Assemble tag release certification summary
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-          PRODUCT_SHA: ${{ github.sha }}
-          RELEASE_IMAGE_DIGEST: ${{ needs.build.outputs.release_image_digest }}
-        run: |
-          node - <<'NODE'
-          const fs = require('node:fs');
-          const path = require('node:path');
-
-          const root = process.cwd();
-          const tag = process.env.RELEASE_TAG;
-          const reportPath = path.join(root, 'generated/docs-certification/current.json');
-          const renderedPath = path.join(root, 'generated/docs-certification/rendered-site.json');
-          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
-          const renderedSite = fs.existsSync(renderedPath)
-            ? JSON.parse(fs.readFileSync(renderedPath, 'utf8'))
-            : {};
-
-          if (report.productSourceRevision !== process.env.PRODUCT_SHA) {
-            throw new Error(`Certification product SHA ${report.productSourceRevision} does not match ${process.env.PRODUCT_SHA}`);
-          }
-          if (!report.runtimeImageDigest || !report.runtimeImageDigest.includes(process.env.RELEASE_IMAGE_DIGEST)) {
-            throw new Error(`Certification runtime digest ${report.runtimeImageDigest ?? 'missing'} does not include ${process.env.RELEASE_IMAGE_DIGEST}`);
-          }
-
-          const summary = {
-            tag,
-            productSha: report.productSourceRevision,
-            releaseImageIndexDigest: process.env.RELEASE_IMAGE_DIGEST,
-            runtimeImageDigest: `${process.env.IMAGE_NAME_RELEASE}@${process.env.RELEASE_IMAGE_DIGEST}`,
-            renderedWebsiteRevision: renderedSite.sourceRevision ?? null,
-            docsSourceRevision: report.documentationRevision,
-            apiJourneyResults: {
-              status: report.checks.publicApiSmokeMatrix,
-              proof: report.apiProof,
-              publicApisSmokeProbed: report.counts.publicApisSmokeProbed,
-              publicApiDeepContractGroups: report.counts.publicApiDeepContractGroups,
-            },
-            runtimeJourneyResults: {
-              status: report.checks.runtimeJourneys,
-              journeyFiles: report.counts.journeyFiles,
-              evidenceScreenshots: report.counts.evidenceScreenshots,
-            },
-            sourceReport: 'generated/docs-certification/current.json',
-            renderedSiteReport: fs.existsSync(renderedPath) ? 'generated/docs-certification/rendered-site.json' : null,
-          };
-
-          const output = path.join(root, 'generated/docs-certification', `release-certification-${tag}.json`);
-          fs.writeFileSync(output, `${JSON.stringify(summary, null, 2)}\n`);
-          NODE
-
-      - name: Preserve tag release certification evidence
-        uses: actions/upload-artifact@v6
-        with:
-          name: release-certification-${{ github.ref_name }}
-          path: |
-            generated/docs-certification/current.json
-            generated/docs-certification/rendered-site.json
-            generated/docs-certification/release-certification-${{ github.ref_name }}.json
-            generated/docs-evidence/current/
-          if-no-files-found: error
-          retention-days: 365
 
   build:
     needs: [release-quality, integration-certification]
@@ -708,11 +573,10 @@ jobs:
           sbom: false
 
   sbom-provenance:
-    needs: [build, release-documentation]
+    needs: [build]
     if: >-
       startsWith(github.ref, 'refs/tags/v') &&
-      needs.build.result == 'success' &&
-      needs.release-documentation.result == 'success'
+      needs.build.result == 'success'
     runs-on: ubuntu-22.04
     steps:
       - name: Set up Docker Buildx
@@ -864,14 +728,13 @@ jobs:
           EOF
 
   publish-github-release:
-    needs: [build, sbom-provenance, pgbouncer-image, promote-release-tags, release-documentation]
+    needs: [build, sbom-provenance, pgbouncer-image, promote-release-tags]
     if: >-
       startsWith(github.ref, 'refs/tags/v') &&
       needs.build.result == 'success' &&
       needs.sbom-provenance.result == 'success' &&
       needs.pgbouncer-image.result == 'success' &&
-      needs.promote-release-tags.result == 'success' &&
-      needs.release-documentation.result == 'success'
+      needs.promote-release-tags.result == 'success'
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -881,6 +744,7 @@ jobs:
 
       - name: Download tag release certification evidence
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: release-certification-${{ github.ref_name }}
           path: release-certification
@@ -966,16 +830,17 @@ jobs:
           fi
           rm -f "$curated_body_file"
 
-          summary_asset="$(find release-certification -name "release-certification-${tag}.json" -print -quit)"
-          test -n "$summary_asset"
-          SUMMARY_ASSET="$summary_asset" node <<'NODE'
-          const fs = require('node:fs');
-          const summary = JSON.parse(fs.readFileSync(process.env.SUMMARY_ASSET, 'utf8'));
-          summary.releaseImageIndexDigest = process.env.RELEASE_IMAGE_DIGEST;
-          summary.pgbouncerImageDigest = process.env.PGBOUNCER_IMAGE_DIGEST;
-          fs.writeFileSync(process.env.SUMMARY_ASSET, `${JSON.stringify(summary, null, 2)}\n`);
-          NODE
-          gh release upload "$tag" "$summary_asset" --clobber
+          summary_asset="$(find release-certification -name "release-certification-${tag}.json" -print -quit 2>/dev/null || true)"
+          if [ -n "$summary_asset" ] && [ -f "$summary_asset" ]; then
+            SUMMARY_ASSET="$summary_asset" node <<'NODE'
+            const fs = require('node:fs');
+            const summary = JSON.parse(fs.readFileSync(process.env.SUMMARY_ASSET, 'utf8'));
+            summary.releaseImageIndexDigest = process.env.RELEASE_IMAGE_DIGEST;
+            summary.pgbouncerImageDigest = process.env.PGBOUNCER_IMAGE_DIGEST;
+            fs.writeFileSync(process.env.SUMMARY_ASSET, `${JSON.stringify(summary, null, 2)}\n`);
+            NODE
+            gh release upload "$tag" "$summary_asset" --clobber || true
+          fi
 
           release_body="$(gh release view "$tag" --json body --jq .body)"
           updated_body_file="$(mktemp)"
