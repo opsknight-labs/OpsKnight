@@ -11,7 +11,11 @@ reader:
 verification:
   level: source
   verified_at: 2026-09-29
-  evidence: [deploy/kubernetes/helm/opsknight/templates/pgbouncer-deployment.yaml, deploy/kubernetes/helm/opsknight/values.yaml]
+  evidence:
+    [
+      deploy/kubernetes/helm/opsknight/templates/pgbouncer-deployment.yaml,
+      deploy/kubernetes/helm/opsknight/values.yaml,
+    ]
 ---
 
 # Configure PgBouncer with Helm
@@ -24,9 +28,58 @@ Use `runtime.mode: split`, calculate the backend connection budget, and configur
 
 Enable `pgbouncer`, set reviewed client/backend pool limits, supply credentials through the existing Secret, and configure private CA verification when required. Web receives the pooled URL; migration, Scheduler, workers, and Status Projector retain direct URLs.
 
+Create `values.pgbouncer.yaml` to enable and configure PgBouncer pooling:
+
+```yaml
+pgbouncer:
+  enabled: true
+  replicas: 2
+  port: 6432
+  poolMode: transaction
+  maxClientConnections: 1000
+  defaultPoolSize: 10
+  reservePoolSize: 5
+  maxPreparedStatements: 100
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+    runAsNonRoot: true
+    runAsUser: 70
+    runAsGroup: 70
+    readOnlyRootFilesystem: true
+```
+
 ## Deploy PgBouncer
 
-Lint/render and inspect PgBouncer Deployment, Service, Secret references, NetworkPolicy, PDB, and Web database environment. Ensure the migration Job never targets port `6432`. Install/upgrade and watch PgBouncer plus Web readiness.
+Lint/render and inspect the PgBouncer Deployment, Service, Secret references, NetworkPolicy, PDB, and Web database environment. Ensure the migration Job never targets port `6432`.
+
+Apply the configuration with Helm:
+
+```sh
+helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \
+  --namespace opsknight \
+  -f values.production.yaml \
+  -f values.split.yaml \
+  -f values.pgbouncer.yaml
+```
+
+Watch rollout readiness across PgBouncer and Web pods:
+
+```sh
+kubectl -n opsknight rollout status deployment/opsknight-pgbouncer
+kubectl -n opsknight rollout status deployment/opsknight-web
+```
 
 ## Verify pooling
 
@@ -52,4 +105,3 @@ First validate the direct Web connection budget, update Web to direct PostgreSQL
 
 - [Install with Helm](./install)
 - [Helm troubleshooting](./troubleshooting)
-
