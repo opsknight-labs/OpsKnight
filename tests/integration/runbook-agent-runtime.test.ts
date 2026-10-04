@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { build } from 'esbuild';
 import { createServer } from 'node:http';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -13,11 +13,20 @@ import { once } from 'node:events';
 import { canonicalEnvelope } from '../../agent/src/envelope';
 import { ResultSpool } from '../../agent/src/spool';
 
-async function exerciseRuntime(mode: 'crash-before-upload' | 'lease-loss' | 'terminal-rejection') {
+async function exerciseRuntime(
+  mode: 'crash-before-upload' | 'lease-loss' | 'terminal-rejection' | 'spool-unwritable'
+) {
   const directory = await mkdtemp(join(tmpdir(), 'opsknight-runtime-test-'));
   const controlKey = generateKeyPairSync('ed25519');
   const agentKey = generateKeyPairSync('ed25519');
-  const command = mode === 'lease-loss' ? 'sleep 30' : 'head -c 40000 /dev/zero';
+  const command =
+    mode === 'lease-loss'
+      ? 'sleep 30'
+      : mode === 'spool-unwritable'
+        ? 'sleep 0.5; printf completed'
+        : 'head -c 40000 /dev/zero';
+  let claimCount = 0;
+  let permissionTimer: NodeJS.Timeout | null = null;
   const running: { child: ChildProcess | null } = { child: null };
   let claimed = false;
   let crashInjected = false;
@@ -51,6 +60,7 @@ async function exerciseRuntime(mode: 'crash-before-upload' | 'lease-loss' | 'ter
         response.end(JSON.stringify({ data }));
       };
       if (request.url?.includes('/claim')) {
+        claimCount++;
         if (claimed) {
           response.writeHead(204);
           response.end();
@@ -81,6 +91,10 @@ async function exerciseRuntime(mode: 'crash-before-upload' | 'lease-loss' | 'ter
           }),
         });
       } else if (request.url?.endsWith('/start')) {
+        if (mode === 'spool-unwritable')
+          permissionTimer = setTimeout(() => {
+            void chmod(join(directory, 'data/spool'), 0o500).catch(rejectSubmitted);
+          }, 100);
         send(
           signed({
             attemptId: 'attempt1',
@@ -188,6 +202,15 @@ async function exerciseRuntime(mode: 'crash-before-upload' | 'lease-loss' | 'ter
       });
     };
     start();
+    if (mode === 'spool-unwritable') {
+      const exitTimeout = setTimeout(() => running.child!.kill('SIGKILL'), 5000);
+      try {
+        const [exitCode] = await once(running.child!, 'exit');
+        return { result: { exitCode }, uploadSawDurableResult, quarantined: 0, claimCount };
+      } finally {
+        clearTimeout(exitTimeout);
+      }
+    }
     if (mode === 'crash-before-upload') {
       await once(running.child!, 'exit');
       start();
@@ -202,11 +225,13 @@ async function exerciseRuntime(mode: 'crash-before-upload' | 'lease-loss' | 'ter
         result,
         uploadSawDurableResult,
         quarantined: await new ResultSpool(join(directory, 'data/spool')).deadLetterDepth(),
+        claimCount,
       };
     } finally {
       clearTimeout(timeout);
     }
   } finally {
+    if (permissionTimer) clearTimeout(permissionTimer);
     if (running.child && running.child.exitCode === null && running.child.signalCode === null) {
       const exited = once(running.child, 'exit');
       running.child.kill('SIGTERM');
@@ -214,6 +239,7 @@ async function exerciseRuntime(mode: 'crash-before-upload' | 'lease-loss' | 'ter
     }
     server.closeAllConnections();
     server.close();
+    await chmod(join(directory, 'data/spool'), 0o700).catch(() => undefined);
     await rm(directory, { recursive: true, force: true });
   }
 }
@@ -238,4 +264,12 @@ describe('Agent runtime fault injection', () => {
     });
     expect(quarantined).toBe(1);
   });
+  it.skipIf(process.getuid?.() === 0)(
+    'stops claiming work when a completed result cannot be persisted',
+    async () => {
+      const { result, claimCount } = await exerciseRuntime('spool-unwritable');
+      expect(result).toMatchObject({ exitCode: 1 });
+      expect(claimCount).toBe(1);
+    }
+  );
 });

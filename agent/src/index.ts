@@ -88,6 +88,7 @@ async function run() {
   let lastError: string | null = null;
   let shuttingDown = false;
   let activeController: AbortController | null = null;
+  const abortUnfinishedExecution = () => activeController?.abort('LEASE_LOST');
 
   const flushSpool = async () => {
     for (const record of await spool.list()) {
@@ -136,105 +137,118 @@ async function run() {
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
 
-  while (!shuttingDown) {
-    await flushSpool();
-    let attempt: ClaimedAttempt | null = null;
-    let started = false;
-    let renewTimer: NodeJS.Timeout | null = null;
-    let authority: LeaseAuthority | null = null;
-    let resultPersisted = false;
-    try {
-      attempt = await client.claim();
-      if (!attempt) continue;
-      verifyExecutionEnvelope(attempt, executionPublicKey!, identity.agentId);
-      let startResult: Awaited<ReturnType<AgentClient['start']>> | null = null;
-      for (let retry = 0; retry < 3; retry++) {
-        try {
-          startResult = await client.start(attempt.attemptId, attempt.leaseToken);
-          break;
-        } catch (error) {
-          if (error instanceof AgentApiError || retry === 2) throw error;
-        }
-      }
-      if (!startResult) throw new Error('Missing start acknowledgement.');
-      started = true;
-      assertPolicyAllows(attempt, policy);
-      if (!(await spool.markStarted(attempt.attemptId))) {
-        lastError = 'A previously dispatched attempt was offered again.';
-        continue;
-      }
-      active += 1;
-      const controller = new AbortController();
-      activeController = controller;
-      authority = new LeaseAuthority(controller);
-      authority.renew(startResult.leaseExpiresAt, attempt.executionDeadlineAt);
-      let renewing = false;
-      renewTimer = setInterval(() => {
-        if (renewing || !authority?.valid) return;
-        renewing = true;
-        void client
-          .renew(attempt!.attemptId, attempt!.leaseToken)
-          .then(result => {
-            if (result?.cancelRequested) controller.abort();
-            else if (result && authority?.valid)
-              authority.renew(result.leaseExpiresAt, attempt!.executionDeadlineAt);
-          })
-          .catch(error => {
-            lastError = 'Execution lease renewal failed.';
-            if (error instanceof AgentApiError && [401, 403, 404, 409, 410].includes(error.status))
-              controller.abort('LEASE_LOST');
-          })
-          .finally(() => {
-            renewing = false;
-          });
-      }, 10_000);
-      const result = await executeAttempt(attempt, policy, controller.signal);
-      const producedAt = new Date().toISOString();
-      clearInterval(renewTimer);
-      renewTimer = null;
-      authority.dispose();
-      activeController = null;
-      active -= 1;
-      const redactedOutput = redactSecretInputs(attempt, result.output);
-      const record: SpoolRecord = {
-        attemptId: attempt.attemptId,
-        leaseToken: attempt.leaseToken,
-        producedAt,
-        status: result.status,
-        exitCode: result.exitCode,
-        outputPreview: redactedOutput.slice(0, 32_768),
-        localOutput: redactedOutput,
-        errorCode: result.errorCode,
-        errorMessage: result.errorMessage
-          ? redactSecretInputs(attempt, result.errorMessage)
-          : undefined,
-      };
-      // Once the outcome is known, an I/O failure must never overwrite it with UNKNOWN.
-      resultPersisted = true;
-      await spool.put(record);
+  try {
+    while (!shuttingDown) {
       await flushSpool();
-      lastError = null;
-    } catch (error) {
-      if (renewTimer) clearInterval(renewTimer);
-      authority?.dispose();
-      active = 0;
-      lastError = error instanceof Error ? error.message : String(error);
-      activeController = null;
-      if (attempt && started && !resultPersisted) {
-        await spool.put({
+      let attempt: ClaimedAttempt | null = null;
+      let started = false;
+      let renewTimer: NodeJS.Timeout | null = null;
+      let authority: LeaseAuthority | null = null;
+      let resultPersisted = false;
+      let outcomeKnown = false;
+      try {
+        attempt = await client.claim();
+        if (!attempt) continue;
+        verifyExecutionEnvelope(attempt, executionPublicKey!, identity.agentId);
+        let startResult: Awaited<ReturnType<AgentClient['start']>> | null = null;
+        for (let retry = 0; retry < 3; retry++) {
+          try {
+            startResult = await client.start(attempt.attemptId, attempt.leaseToken);
+            break;
+          } catch (error) {
+            if (error instanceof AgentApiError || retry === 2) throw error;
+          }
+        }
+        if (!startResult) throw new Error('Missing start acknowledgement.');
+        started = true;
+        assertPolicyAllows(attempt, policy);
+        if (!(await spool.markStarted(attempt.attemptId))) {
+          lastError = 'A previously dispatched attempt was offered again.';
+          continue;
+        }
+        active += 1;
+        const controller = new AbortController();
+        activeController = controller;
+        authority = new LeaseAuthority(controller);
+        authority.renew(startResult.leaseExpiresAt, attempt.executionDeadlineAt);
+        let renewing = false;
+        renewTimer = setInterval(() => {
+          if (renewing || !authority?.valid) return;
+          renewing = true;
+          void client
+            .renew(attempt!.attemptId, attempt!.leaseToken)
+            .then(result => {
+              if (result?.cancelRequested) controller.abort();
+              else if (result && authority?.valid)
+                authority.renew(result.leaseExpiresAt, attempt!.executionDeadlineAt);
+            })
+            .catch(error => {
+              lastError = 'Execution lease renewal failed.';
+              if (
+                error instanceof AgentApiError &&
+                [401, 403, 404, 409, 410].includes(error.status)
+              )
+                controller.abort('LEASE_LOST');
+            })
+            .finally(() => {
+              renewing = false;
+            });
+        }, 10_000);
+        const result = await executeAttempt(attempt, policy, controller.signal);
+        outcomeKnown = true;
+        const producedAt = new Date().toISOString();
+        clearInterval(renewTimer);
+        renewTimer = null;
+        authority.dispose();
+        activeController = null;
+        active -= 1;
+        const redactedOutput = redactSecretInputs(attempt, result.output);
+        const record: SpoolRecord = {
           attemptId: attempt.attemptId,
           leaseToken: attempt.leaseToken,
-          producedAt: new Date().toISOString(),
-          status: lastError.startsWith('LOCAL_POLICY_DENIED') ? 'FAILED' : 'UNKNOWN',
-          errorCode: lastError.startsWith('LOCAL_POLICY_DENIED')
-            ? 'LOCAL_POLICY_DENIED'
-            : 'AGENT_FAILURE',
-          errorMessage: lastError,
-        });
+          producedAt,
+          status: result.status,
+          exitCode: result.exitCode,
+          outputPreview: redactedOutput.slice(0, 32_768),
+          localOutput: redactedOutput,
+          errorCode: result.errorCode,
+          errorMessage: result.errorMessage
+            ? redactSecretInputs(attempt, result.errorMessage)
+            : undefined,
+        };
+        await spool.put(record);
+        resultPersisted = true;
+        await flushSpool();
+        lastError = null;
+      } catch (error) {
+        if (renewTimer) clearInterval(renewTimer);
+        authority?.dispose();
+        active = 0;
+        lastError = error instanceof Error ? error.message : String(error);
+        activeController = null;
+        // Stop accepting work if a known outcome cannot reach durable storage.
+        if (outcomeKnown && !resultPersisted) throw error;
+        if (attempt && started && !resultPersisted) {
+          await spool.put({
+            attemptId: attempt.attemptId,
+            leaseToken: attempt.leaseToken,
+            producedAt: new Date().toISOString(),
+            status: lastError.startsWith('LOCAL_POLICY_DENIED') ? 'FAILED' : 'UNKNOWN',
+            errorCode: lastError.startsWith('LOCAL_POLICY_DENIED')
+              ? 'LOCAL_POLICY_DENIED'
+              : 'AGENT_FAILURE',
+            errorMessage: lastError,
+          });
+        }
+        if (shuttingDown) break;
+        await new Promise(resolve => setTimeout(resolve, 2_000));
       }
-      if (shuttingDown) break;
-      await new Promise(resolve => setTimeout(resolve, 2_000));
     }
+  } finally {
+    clearInterval(heartbeatTimer);
+    abortUnfinishedExecution();
+    process.removeListener('SIGINT', shutdown);
+    process.removeListener('SIGTERM', shutdown);
   }
 }
 
