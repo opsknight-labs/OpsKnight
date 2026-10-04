@@ -55,8 +55,19 @@ export async function consumeEnrollmentToken(input: {
   version: string;
   platform: string;
 }) {
-  if (!input.publicKey.includes('PUBLIC KEY'))
+  let publicKey: string;
+  try {
+    const parsedKey = crypto.createPublicKey(input.publicKey);
+    if (
+      !input.publicKey.trim().startsWith('-----BEGIN PUBLIC KEY-----') ||
+      parsedKey.asymmetricKeyType !== 'ed25519'
+    ) {
+      throw new Error('Invalid signing key');
+    }
+    publicKey = parsedKey.export({ type: 'spki', format: 'pem' }).toString();
+  } catch {
     throw new Error('A PEM public signing key is required.');
+  }
   const tokenHash = sha256(input.token);
   return prisma.$transaction(async tx => {
     const candidate = await tx.runbookAgent.findFirst({
@@ -70,7 +81,7 @@ export async function consumeEnrollmentToken(input: {
     const updated = await tx.runbookAgent.updateMany({
       where: { id: candidate.id, enrollmentTokenHash: tokenHash, status: 'ENROLLING' },
       data: {
-        publicKey: input.publicKey,
+        publicKey,
         enrollmentTokenHash: null,
         enrollmentExpiresAt: null,
         enrolledAt: new Date(),

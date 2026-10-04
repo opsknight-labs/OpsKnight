@@ -150,6 +150,16 @@ async function run() {
         attempt = await client.claim();
         if (!attempt) continue;
         verifyExecutionEnvelope(attempt, executionPublicKey!, identity.agentId);
+        if (
+          attempt.secretInputKeys.length > 0 &&
+          new URL(baseUrl!).protocol !== 'https:' &&
+          !(
+            process.env.NODE_ENV === 'development' &&
+            process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true'
+          )
+        ) {
+          throw new Error('Secret-backed execution requires an HTTPS control-plane URL.');
+        }
         let startResult: Awaited<ReturnType<AgentClient['start']>> | null = null;
         for (let retry = 0; retry < 3; retry++) {
           try {

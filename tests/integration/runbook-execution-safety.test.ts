@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Prisma } from '@prisma/client';
+import { generateKeyPairSync } from 'node:crypto';
 import { computeDefinitionChecksum } from '@/lib/runbooks/definition';
 import { advanceExecution, startRunbookExecution } from '@/lib/runbooks/orchestrator';
 import {
@@ -7,7 +8,9 @@ import {
   fenceAgentAttempt,
   renewAgentAttemptLease,
   submitAgentResult,
+  recordAgentHeartbeat,
 } from '@/lib/runbooks/agent-claims';
+import { consumeEnrollmentToken } from '@/lib/runbooks/agent-auth';
 import { reconcileRunbooks } from '@/lib/runbooks/reconciler';
 import { evaluateIncidentTriggers } from '@/lib/runbooks/triggers';
 import { encrypt } from '@/lib/encryption';
@@ -81,6 +84,158 @@ async function createAgentTarget(definition: RunbookDefinition) {
 describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   beforeEach(async () => resetDatabase());
   afterAll(async () => testPrisma.$disconnect());
+
+  it('keeps quarantined Agents degraded and rejects invalid enrollment keys before consuming tokens', async () => {
+    const agent = await testPrisma.runbookAgent.create({
+      data: { name: 'Quarantine', status: 'ONLINE' },
+    });
+    await recordAgentHeartbeat({
+      agentId: agent.id,
+      version: '2.0.0',
+      platform: 'linux',
+      spoolDepth: 0,
+      deadLetterDepth: 1,
+    });
+    expect(
+      (await testPrisma.runbookAgent.findUniqueOrThrow({ where: { id: agent.id } })).status
+    ).toBe('DEGRADED');
+    await expect(
+      consumeEnrollmentToken({
+        token: 'unused',
+        publicKey: '-----BEGIN PUBLIC KEY-----invalid',
+        version: '2.0.0',
+        platform: 'linux',
+      })
+    ).rejects.toThrow('A PEM public signing key is required.');
+    const wrongKey = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    await expect(
+      consumeEnrollmentToken({
+        token: 'unused',
+        publicKey: wrongKey.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+        version: '2.0.0',
+        platform: 'linux',
+      })
+    ).rejects.toThrow('A PEM public signing key is required.');
+  });
+
+  it('rejects ambiguous writes to multi-member local-host pools but permits shared targets', async () => {
+    const target = await createAgentTarget({
+      description: 'Host targeting',
+      steps: [
+        {
+          key: 'restart',
+          name: 'Restart',
+          type: 'SYSTEMD',
+          riskClass: 'NON_IDEMPOTENT',
+          config: { action: 'restart', unit: 'api.service' },
+        },
+      ],
+    });
+    const second = await testPrisma.runbookAgent.create({
+      data: { name: 'Other host', status: 'ONLINE' },
+    });
+    await testPrisma.runbookAgentPool.update({
+      where: { id: target.pool.id },
+      data: { mode: 'LOCAL_HOSTS', members: { create: { agentId: second.id } } },
+    });
+    const start = {
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+      triggeredByUserId: target.actor.id,
+    };
+    await expect(startRunbookExecution(start)).rejects.toThrow(/AMBIGUOUS_HOST_TARGET/);
+    await testPrisma.runbookAgentPool.update({
+      where: { id: target.pool.id },
+      data: { mode: 'SHARED_TARGET' },
+    });
+    await expect(startRunbookExecution(start)).resolves.toHaveProperty('id');
+  });
+
+  it('skips locked pending attempts instead of blocking other Agents', async () => {
+    const target = await createAgentTarget({
+      description: 'Skip locked',
+      steps: [
+        {
+          key: 'status',
+          name: 'Status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: { action: 'status', unit: 'api.service' },
+        },
+      ],
+    });
+    const attemptIds: string[] = [];
+    for (let index = 0; index < 2; index++) {
+      const execution = await startRunbookExecution({
+        runbookId: target.runbook.id,
+        bindingId: target.binding.id,
+        serviceId: target.service.id,
+        triggerFingerprint: `skip-${index}`,
+      });
+      await advanceExecution(execution.id);
+      attemptIds.push(
+        (
+          await testPrisma.runbookStepAttempt.findFirstOrThrow({
+            where: { executionStep: { executionId: execution.id } },
+          })
+        ).id
+      );
+    }
+    await testPrisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "RunbookStepAttempt" WHERE "id" = ${attemptIds[0]} FOR UPDATE`;
+      expect((await claimAgentAttempt(target.agent.id))?.attemptId).toBe(attemptIds[1]);
+    });
+    expect((await claimAgentAttempt(target.agent.id))?.attemptId).toBe(attemptIds[0]);
+  });
+
+  it('rechecks local-host membership at claim and start', async () => {
+    const target = await createAgentTarget({
+      description: 'Changing hosts',
+      steps: [
+        {
+          key: 'start',
+          name: 'Start',
+          type: 'SYSTEMD',
+          riskClass: 'IDEMPOTENT_WRITE',
+          config: { action: 'start', unit: 'api.service' },
+        },
+      ],
+    });
+    await testPrisma.runbookAgentPool.update({
+      where: { id: target.pool.id },
+      data: { mode: 'LOCAL_HOSTS' },
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    await advanceExecution(execution.id);
+    const second = await testPrisma.runbookAgent.create({
+      data: { name: 'Joined host', status: 'ONLINE' },
+    });
+    const membership = await testPrisma.runbookAgentPoolMember.create({
+      data: { poolId: target.pool.id, agentId: second.id },
+    });
+    expect(await claimAgentAttempt(target.agent.id)).toBeNull();
+    await testPrisma.runbookAgentPoolMember.delete({ where: { id: membership.id } });
+    const claim = (await claimAgentAttempt(target.agent.id))!;
+    await testPrisma.runbookAgentPoolMember.create({
+      data: { poolId: target.pool.id, agentId: second.id },
+    });
+    await expect(
+      fenceAgentAttempt({
+        attemptId: claim.attemptId,
+        agentId: target.agent.id,
+        leaseToken: claim.leaseToken,
+      })
+    ).rejects.toThrow();
+    expect(
+      (await testPrisma.runbookStepAttempt.findUniqueOrThrow({ where: { id: claim.attemptId } }))
+        .status
+    ).toBe('CLAIMED');
+  });
 
   it('creates one execution signing identity under concurrent initialization', async () => {
     const keys = await Promise.all([
@@ -231,8 +386,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     });
     await advanceExecution(execution.id);
     const claim = await claimAgentAttempt(target.agent.id);
-    expect(claim?.inputValues).toEqual({ unit: 'api.service' });
-    expect(claim?.secretInputKeys).toEqual(['unit']);
+    expect(claim).toBeNull();
+    const secureClaim = await claimAgentAttempt(target.agent.id, true);
+    expect(secureClaim?.inputValues).toEqual({ unit: 'api.service' });
+    expect(secureClaim?.secretInputKeys).toEqual(['unit']);
   });
 
   it('rejects a published definition with a corrupted checksum', async () => {

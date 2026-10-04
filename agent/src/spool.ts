@@ -1,6 +1,6 @@
 // Paths stay inside the operator-configured spool; attempt IDs and enumerated filenames are validated.
 /* eslint-disable security/detect-non-literal-fs-filename */
-import { mkdir, readdir, readFile, rename, unlink, open } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, unlink, open, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { SpoolRecord } from './types';
@@ -81,9 +81,54 @@ export class ResultSpool {
       .sort();
     const records: SpoolRecord[] = [];
     for (const name of names) {
-      records.push(JSON.parse(await readFile(join(this.directory, name), 'utf8')) as SpoolRecord);
+      const content = await readFile(join(this.directory, name), 'utf8');
+      let record: SpoolRecord;
+      try {
+        record = JSON.parse(content) as SpoolRecord;
+        if (
+          !record ||
+          record.attemptId !== name.slice(0, -5) ||
+          typeof record.leaseToken !== 'string' ||
+          typeof record.producedAt !== 'string' ||
+          !Number.isFinite(Date.parse(record.producedAt)) ||
+          [
+            record.localOutput,
+            record.outputPreview,
+            record.outputArtifactId,
+            record.errorCode,
+            record.errorMessage,
+          ].some(value => value !== undefined && typeof value !== 'string') ||
+          (record.exitCode !== undefined && !Number.isInteger(record.exitCode)) ||
+          !['SUCCEEDED', 'FAILED', 'CANCELLED', 'UNKNOWN'].includes(record.status)
+        ) {
+          throw new Error('Malformed spool record');
+        }
+      } catch {
+        await this.quarantine(name.slice(0, -5));
+        continue;
+      }
+      records.push(record);
     }
+    await this.cleanupDispatchMarkers();
     return records;
+  }
+
+  private async cleanupDispatchMarkers() {
+    const directory = join(this.directory, 'dispatched');
+    let names: string[];
+    try {
+      names = await readdir(directory);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw error;
+    }
+    // Retain beyond the maximum 24-hour execution and five-minute signed claim lease.
+    // Immediate removal on ACK would reopen replay of an unexpired signed claim/start.
+    const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
+    for (const name of names.filter(name => /^[a-z0-9]+\.started$/i.test(name))) {
+      const path = join(directory, name);
+      if ((await stat(path)).mtimeMs < cutoff) await unlink(path);
+    }
   }
 
   async depth() {

@@ -9,6 +9,11 @@ on:
       - 'src/lib/runbooks/**'
       - 'src/components/runbooks/**'
       - 'src/components/incident/**'
+      - 'src/components/service/**'
+      - 'src/app/(app)/services/**'
+      - 'src/lib/event-outbox.ts'
+      - 'src/lib/authorization.ts'
+      - 'src/lib/encryption/**'
       - 'src/app/api/runbook*/**'
       - 'src/app/(app)/runbooks/**'
       - 'src/lib/job-worker.ts'
@@ -64,12 +69,14 @@ jobs:
           tests/lib/runbooks tests/lib/deployment-config-unit.test.ts
           tests/api/runbook-artifacts.test.ts tests/api/metrics.test.ts
           tests/lib/operational-metric-registry.test.ts
+          tests/unit/encryption-registry.test.ts tests/lib/encryption-keyring-rotation.test.ts
           tests/integration/runbook-agent-runtime.test.ts
       - name: Real PostgreSQL concurrency and execution fences
         env: { VITEST_USE_REAL_DB: '1' }
         run: >-
           npx vitest run --no-file-parallelism --maxWorkers=1
           tests/integration/runbook-execution-safety.test.ts
+          tests/integration/encryption-migration.test.ts
 
   deployment-manifests:
     uses: ./.github/workflows/deployment-validation.yml

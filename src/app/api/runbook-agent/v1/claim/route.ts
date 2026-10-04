@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { jsonOk } from '@/lib/api-response';
 import { authenticatedAgentJson, agentApiError } from '@/lib/runbooks/agent-api';
 import { claimAgentAttempt } from '@/lib/runbooks/agent-claims';
+import { hasConfidentialAgentTransport } from '@/lib/runbooks/agent-transport';
 
 export async function POST(request: Request) {
   try {
@@ -14,10 +15,11 @@ export async function POST(request: Request) {
       )
     );
     const deadline = Date.now() + waitSeconds * 1000;
-    let attempt = await claimAgentAttempt(agent.id);
+    const confidentialTransport = hasConfidentialAgentTransport(request);
+    let attempt = await claimAgentAttempt(agent.id, confidentialTransport);
     while (!attempt && Date.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, 2_000 + Math.floor(Math.random() * 3_001)));
-      attempt = await claimAgentAttempt(agent.id);
+      attempt = await claimAgentAttempt(agent.id, confidentialTransport);
     }
     return attempt ? jsonOk({ attempt }) : new NextResponse(null, { status: 204 });
   } catch (error) {

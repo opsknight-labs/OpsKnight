@@ -1,7 +1,7 @@
 import 'server-only';
 
 import crypto from 'crypto';
-import type { Prisma, RunbookStepType } from '@prisma/client';
+import { Prisma, type RunbookStepType } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import {
   agentArtifactSchema,
@@ -44,7 +44,10 @@ export async function recordAgentHeartbeat(input: {
   const result = await prisma.runbookAgent.updateMany({
     where: { id: input.agentId, status: { not: 'REVOKED' } },
     data: {
-      status: input.lastError || (input.spoolDepth ?? 0) > 0 ? 'DEGRADED' : 'ONLINE',
+      status:
+        input.lastError || (input.spoolDepth ?? 0) > 0 || (input.deadLetterDepth ?? 0) > 0
+          ? 'DEGRADED'
+          : 'ONLINE',
       lastHeartbeatAt: new Date(),
       hostname: input.hostname,
       version: input.version,
@@ -62,7 +65,7 @@ export async function recordAgentHeartbeat(input: {
   return { serverTime: new Date().toISOString() };
 }
 
-export async function claimAgentAttempt(agentId: string) {
+export async function claimAgentAttempt(agentId: string, confidentialTransport = false) {
   for (let transactionAttempt = 0; transactionAttempt < 3; transactionAttempt++) {
     try {
       const claimedAttempt = await prisma.$transaction(
@@ -107,7 +110,7 @@ export async function claimAgentAttempt(agentId: string) {
             orderBy: { createdAt: 'asc' },
             take: 50,
             include: {
-              targetAgentPool: { select: { mode: true } },
+              targetAgentPool: { select: { mode: true, _count: { select: { members: true } } } },
               executionStep: {
                 include: {
                   execution: {
@@ -122,9 +125,39 @@ export async function claimAgentAttempt(agentId: string) {
               },
             },
           });
-          const attempt = candidates.find(candidate => {
+          const eligible = candidates.filter(candidate => {
+            if (
+              !candidate.targetAgentId &&
+              candidate.executionStep.riskClass !== 'READ_ONLY' &&
+              candidate.targetAgentPool?.mode === 'LOCAL_HOSTS' &&
+              candidate.targetAgentPool._count.members > 1
+            )
+              return false;
+            const keys = referencedStepInputKeys(candidate.executionStep.config);
+            const inputs = candidate.executionStep.execution.inputValues as Record<string, unknown>;
+            const hasSecrets = Object.entries(inputs).some(
+              ([key, value]) => keys.has(key) && isSecretReference(value)
+            );
+            if (
+              hasSecrets &&
+              !confidentialTransport &&
+              !(
+                process.env.NODE_ENV === 'development' &&
+                process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true'
+              )
+            )
+              return false;
             return agentSupportsStep(capabilities, candidate.executionStep.type);
           });
+          if (eligible.length === 0) return null;
+          const locked = await tx.$queryRaw<Array<{ id: string }>>`
+            SELECT "id" FROM "RunbookStepAttempt"
+            WHERE "id" IN (${Prisma.join(eligible.map(candidate => candidate.id))})
+              AND "status" = 'PENDING'
+            ORDER BY "createdAt", "id"
+            LIMIT 1 FOR UPDATE SKIP LOCKED
+          `;
+          const attempt = eligible.find(candidate => candidate.id === locked[0]?.id);
           if (!attempt) return null;
           const rawLeaseToken = crypto.randomBytes(32).toString('base64url');
           const leaseExpiresAt = new Date(Date.now() + DEFAULT_LEASE_DURATION_SECONDS * 1000);
@@ -197,7 +230,7 @@ export async function claimAgentAttempt(agentId: string) {
               .map(([key]) => key),
           };
         },
-        { isolationLevel: 'Serializable' }
+        { isolationLevel: 'ReadCommitted' }
       );
       return claimedAttempt ? await signExecutionEnvelope(claimedAttempt) : null;
     } catch (error) {
@@ -235,7 +268,24 @@ export async function fenceAgentAttempt(input: {
       },
     } satisfies Prisma.RunbookStepAttemptWhereInput;
     const updated = await tx.runbookStepAttempt.updateMany({
-      where: { ...fence, status: 'CLAIMED' },
+      where: {
+        ...fence,
+        status: 'CLAIMED',
+        OR: [
+          { executionStep: { riskClass: 'READ_ONLY' } },
+          { targetAgentId: input.agentId },
+          { targetAgentPool: { mode: 'SHARED_TARGET' } },
+          {
+            targetAgentPool: {
+              mode: 'LOCAL_HOSTS',
+              members: {
+                some: { agentId: input.agentId },
+                none: { agentId: { not: input.agentId } },
+              },
+            },
+          },
+        ],
+      },
       data: {
         status: 'RUNNING',
         startedAt: now,

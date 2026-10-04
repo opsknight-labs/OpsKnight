@@ -259,6 +259,20 @@ export async function startRunbookExecution(input: {
     }
     if (hasWriteAction && resolvedTargetAgentPoolId) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-pool:${resolvedTargetAgentPoolId}`}))`;
+      if (
+        !resolvedTargetAgentId &&
+        steps.some(step => requiresAgent(step.type) && step.riskClass !== 'READ_ONLY')
+      ) {
+        const pool = await tx.runbookAgentPool.findUniqueOrThrow({
+          where: { id: resolvedTargetAgentPoolId },
+          select: { mode: true, _count: { select: { members: true } } },
+        });
+        if (pool.mode === 'LOCAL_HOSTS' && pool._count.members > 1) {
+          throw new RunbookDefinitionError(
+            'AMBIGUOUS_HOST_TARGET: writes to a multi-member LOCAL_HOSTS pool require a specific Agent.'
+          );
+        }
+      }
       const activePoolWrites = await tx.runbookExecutionStep.count({
         where: {
           riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },

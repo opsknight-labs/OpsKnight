@@ -164,9 +164,10 @@ sudo systemctl enable --now opsknight-agent`;
       </Tabs>
       <p className="text-xs text-muted-foreground">
         Split runtimes use <code>http://opsknight-web:3000</code>. Native and remote Agents should
-        use the externally reachable HTTPS URL. Keep the enrollment Secret while the deployment
-        references it; the consumed token cannot enroll again. Persisted identity is used after
-        enrollment.
+        use the externally reachable HTTPS URL. Secret-backed steps require HTTPS, including
+        container Agents; internal HTTP URLs only support steps without secrets. Keep the enrollment
+        Secret while the deployment references it; the consumed token cannot enroll again. Persisted
+        identity is used after enrollment.
       </p>
     </div>
   );

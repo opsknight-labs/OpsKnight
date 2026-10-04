@@ -180,7 +180,18 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
     storageType: 'SCALAR',
     plaintextLegacyAllowed: false,
     label: 'Runbook Secret Value',
-    description: 'Encrypted secret value used in runbook execution (database passwords, API tokens, etc.)',
+    description:
+      'Encrypted secret value used in runbook execution (database passwords, API tokens, etc.)',
+  },
+  {
+    id: 'runbook-execution-signing-key.private-key',
+    model: 'RunbookExecutionSigningKey',
+    field: 'privateKeyEncrypted',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: false,
+    label: 'Runbook Execution Signing Private Key',
+    description:
+      'Ed25519 private key authenticating execution envelopes and lease acknowledgements',
   },
 ];
 

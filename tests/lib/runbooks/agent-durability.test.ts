@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateKeyPairSync, sign } from 'node:crypto';
@@ -16,6 +16,43 @@ import type { ClaimedAttempt } from '../../../agent/src/types';
 afterEach(() => vi.useRealTimers());
 
 describe('Agent authority and durable recovery', () => {
+  it('quarantines corrupt records without blocking delivery and expires only old replay markers', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'opsknight-spool-corrupt-'));
+    try {
+      const spool = new ResultSpool(directory);
+      await spool.markStarted('old');
+      await spool.markStarted('recent');
+      const expired = new Date(Date.now() - 3 * 86400000);
+      // Paths are confined to this test's freshly allocated temporary directory.
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      await utimes(join(directory, 'dispatched', 'old.started'), expired, expired);
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      await writeFile(join(directory, 'broken.json'), '{invalid');
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      await writeFile(
+        join(directory, 'broken2.json'),
+        JSON.stringify({
+          attemptId: 'broken2',
+          leaseToken: 'token',
+          producedAt: new Date().toISOString(),
+          status: 'SUCCEEDED',
+          localOutput: { malformed: true },
+        })
+      );
+      await spool.put({
+        attemptId: 'good',
+        leaseToken: 'token',
+        producedAt: new Date().toISOString(),
+        status: 'SUCCEEDED',
+      });
+      expect((await spool.list()).map(record => record.attemptId)).toEqual(['good']);
+      expect(await spool.deadLetterDepth()).toBe(2);
+      expect(await spool.markStarted('recent')).toBe(false);
+      expect(await spool.markStarted('old')).toBe(true);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
   it('self-fences after renewal connectivity is lost', async () => {
     vi.useFakeTimers();
     const controller = new AbortController();

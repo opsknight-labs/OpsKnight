@@ -158,6 +158,10 @@ export default async function RunbookAgentsPage() {
                     <option value="SHARED_TARGET">Shared target (fail over)</option>
                     <option value="LOCAL_HOSTS">Local hosts (pin retries)</option>
                   </select>
+                  <p className="text-xs text-muted-foreground">
+                    Multi-member local-host pools support read-only steps. Select a specific Agent
+                    for machine-specific writes; shared-target pools may use any member.
+                  </p>
                 </div>
                 <Button type="submit">
                   <Network /> Create pool

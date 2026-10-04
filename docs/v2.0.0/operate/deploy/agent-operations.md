@@ -133,3 +133,23 @@ The legacy all-job worker now reconciles Runbooks too. For production workload i
 Fault-injection tests cover Agent crash/restart during artifact upload, renewal connectivity loss, exact start retries, trigger isolation, frozen suggestions, and signed payload tampering. These tests establish correctness under those failures; they are not fleet load certification. Before sizing a large fleet, measure idle-Agent and reconnect QPS, concurrent Runbook backlog, paging latency, database connections, and artifact WAL/backup growth. Artifacts remain bounded to 1 MiB compressed each in PostgreSQL with retention cleanup; plan storage capacity accordingly.
 
 To replace a compromised Agent, revoke it in the UI, remove its identity volume, create a new enrollment, and review its secret grants. Revocation immediately prevents future signed claims. Output artifacts default to 30-day retention; set `RUNBOOK_ARTIFACT_RETENTION_DAYS` (1–3650) on the integrated runtime or dedicated Runbook Worker to match your incident-data retention policy.
+
+## Secret transport and host targeting
+
+Signed envelopes provide integrity, not confidentiality. Secret-backed steps require an
+HTTPS Agent control-plane URL. The server excludes secret-bearing claims over HTTP before
+resolving secrets; non-secret steps may still use the internal HTTP defaults in Compose,
+Swarm, Helm and Kustomize. Configure the Agent URL to your trusted HTTPS ingress for secrets.
+When TLS terminates at a proxy, enable `TRUST_PROXY_HEADERS=true` only if that proxy overwrites
+`X-Forwarded-Proto` and direct access to the backend is blocked. Ambiguous protocol chains
+are rejected. A development-only override requires both `NODE_ENV=development` and
+`OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS=true` on the server and Agent; it is ignored in production.
+
+Machine-specific writes require a specific Agent. `SHARED_TARGET` pools allow any member;
+multi-member `LOCAL_HOSTS` pools reject Agent writes until a specific Agent is selected.
+Claims recheck this boundary if membership changes after execution creation. Read-only
+pool execution may choose any initial member, with local-host retries pinned to that member.
+
+Corrupt spool records are quarantined independently. Dead-letter results keep Agent health
+degraded until reviewed. Dispatch markers expire after two days, beyond the maximum execution
+and signed lease lifetime, rather than reopening replay immediately after acknowledgement.
