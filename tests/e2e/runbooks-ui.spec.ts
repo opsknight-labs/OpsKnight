@@ -70,6 +70,19 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await page.getByRole('button', { name: 'Configure step' }).first().click();
   await page.getByLabel('Step key', { exact: true }).fill('baseline_check');
   await expect(page.getByRole('dialog')).toBeVisible();
+  const before = page
+    .getByRole('dialog')
+    .locator('.mt-6 > section[aria-label="Before action checks"]');
+  await before.getByRole('button', { name: 'Add precheck', exact: true }).click();
+  await before.locator('summary').first().click();
+  await before.getByLabel('Step name', { exact: true }).fill('Check service exists');
+  await before.getByLabel('Service unit or input reference').fill('payments.service');
+  const after = page
+    .getByRole('dialog')
+    .locator('.mt-6 > section[aria-label="After action checks"]');
+  await after.getByRole('button', { name: 'Add verification', exact: true }).click();
+  await after.locator('summary').first().click();
+  await after.getByLabel('Step name', { exact: true }).fill('Verify service recovered');
   await page.keyboard.press('Escape');
   await page
     .getByRole('button', { name: 'Move Capture baseline diagnostics down', exact: true })
@@ -83,6 +96,9 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await page.getByRole('tab', { name: /^Advanced/ }).click();
   await page.getByRole('button', { name: 'Refresh JSON from builder' }).click();
   const json = page.getByLabel('Definition JSON', { exact: true });
+  const nested = JSON.parse(await json.inputValue());
+  expect(nested.steps[0].precheck.steps[0].name).toBe('Check service exists');
+  expect(nested.steps[0].verification.steps[0].name).toBe('Verify service recovered');
   await json.fill(`${await json.inputValue()}\n`);
   await expect(
     page.getByRole('alert').filter({ hasText: 'Advanced JSON has unapplied changes' })

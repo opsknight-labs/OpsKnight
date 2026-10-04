@@ -45,10 +45,19 @@ Service bindings provide concrete values. Configurable fields can reference
 inputs using `${{ inputs.unit }}`. Secrets use `SECRET_REF` values such as
 `secret://payments-api-token`, never plaintext credentials.
 
-## Advanced JSON and nested checks
+## Prechecks, verification, and Advanced JSON
 
-Nested `precheck` and `verification` steps are supported by the engine and
-preserved by builder edits, but are authored in **Advanced · Edit JSON**.
+In **Configure step**, use **Add precheck** under **Before action** and
+**Add verification** under **After action**. Expand a check to edit it with
+the same typed controls as a normal step; use its arrows to reorder or remove
+it. Read-only, write, and approval badges identify its risk. Checks support
+up to three nesting levels and ten checks per group; the server limits the
+whole workflow to fifty steps, including checks.
+
+A failed precheck prevents the action from running. Failed verification fails
+the remediation workflow even when the action succeeded. Exit code zero alone
+does not prove recovery. Existing checks are summarized on the step card.
+**Advanced · Edit JSON** remains compatible with all nested definitions.
 For example, a restart step can contain a read-only Systemd precheck and verification:
 
 ```json

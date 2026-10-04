@@ -200,7 +200,9 @@ export default function RunbookBuilder({
               )}
               {(step.precheck || step.verification) && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Includes nested checks. Preserved during editing; inspect them in Advanced.
+                  Before: {step.precheck?.steps.map(check => check.name).join(' → ') || 'None'}
+                  {' · '}After:{' '}
+                  {step.verification?.steps.map(check => check.name).join(' → ') || 'None'}
                 </p>
               )}
               {!readOnly && (
@@ -215,162 +217,13 @@ export default function RunbookBuilder({
                       </Button>
                     }
                   >
-                    <div className="space-y-4">
-                      <Field label="Name">
-                        <Input
-                          aria-label="Step name"
-                          value={step.name}
-                          maxLength={200}
-                          onChange={event => changeStep(index, { name: event.target.value })}
-                        />
-                      </Field>
-                      <Field label="Step key">
-                        <Input
-                          aria-label="Step key"
-                          value={step.key}
-                          onChange={event => changeStep(index, { key: event.target.value })}
-                        />
-                      </Field>
-                      <Field label="Description / responder instructions">
-                        <Textarea
-                          aria-label="Step description"
-                          value={step.description ?? ''}
-                          onChange={event => changeStep(index, { description: event.target.value })}
-                        />
-                      </Field>
-                      {fieldsFor(step.type).map(field => {
-                        if (step.type === 'CONDITION' && field.key === 'field') {
-                          return (
-                            <Field key={field.key} label="Condition field">
-                              <FormSelect
-                                name={`condition-field-${index}`}
-                                label="Condition field"
-                                value={canonicalConditionField(String(step.config.field ?? ''))}
-                                onValueChange={value =>
-                                  changeStep(index, { config: { ...step.config, field: value } })
-                                }
-                                options={[
-                                  ...CONDITION_FIELDS,
-                                  ...inputs.map(input => ({
-                                    value: `input.${input.key}`,
-                                    label: `Input → ${input.label} (${input.key})`,
-                                  })),
-                                ]}
-                              />
-                              <p className="text-xs text-muted-foreground">
-                                A false condition skips all remaining pending steps.
-                                Incident/service fields are unavailable when execution has no
-                                corresponding resource.
-                              </p>
-                            </Field>
-                          );
-                        }
-                        const raw = Object.entries(step.config).find(
-                          ([key]) => key === field.key
-                        )?.[1];
-                        const value =
-                          raw === undefined
-                            ? ''
-                            : Array.isArray(raw)
-                              ? raw.join(', ')
-                              : typeof raw === 'object'
-                                ? JSON.stringify(raw)
-                                : String(raw);
-                        const update = (next: string) => {
-                          const config = {
-                            ...step.config,
-                            [field.key]: field.number ? Number(next) : next,
-                          };
-                          if (step.type === 'CONDITION') {
-                            if (['IN', 'NOT_IN'].includes(String(config.operator))) {
-                              config.value = String(
-                                field.key === 'value' ? next : (step.config.value ?? '')
-                              )
-                                .split(',')
-                                .map(value => value.trim())
-                                .filter(Boolean);
-                            } else if (['EXISTS', 'NOT_EXISTS'].includes(String(config.operator))) {
-                              config.value = null;
-                            }
-                          }
-                          const updated = { ...step, config };
-                          const minimumRisk = builderRisk(updated);
-                          const ranks = new Map([
-                            ['READ_ONLY', 0],
-                            ['IDEMPOTENT_WRITE', 1],
-                            ['NON_IDEMPOTENT', 2],
-                          ]);
-                          const riskClass =
-                            ranks.get(step.riskClass)! > ranks.get(minimumRisk)!
-                              ? step.riskClass
-                              : minimumRisk;
-                          changeStep(index, {
-                            config,
-                            riskClass,
-                            requiresApproval:
-                              riskClass === 'NON_IDEMPOTENT' || step.requiresApproval,
-                          });
-                        };
-                        return (
-                          <Field key={field.key} label={field.label}>
-                            {field.options ? (
-                              <FormSelect
-                                name={`config-${field.key}`}
-                                label={field.label}
-                                value={value}
-                                onValueChange={update}
-                                options={field.options.map(option => ({
-                                  value: option,
-                                  label: option,
-                                }))}
-                              />
-                            ) : field.multiline ? (
-                              <Textarea
-                                aria-label={field.label}
-                                value={value}
-                                onChange={event => update(event.target.value)}
-                                className="font-mono text-xs"
-                              />
-                            ) : (
-                              <Input
-                                aria-label={field.label}
-                                value={value}
-                                type={field.number ? 'number' : 'text'}
-                                min={field.number ? 0 : undefined}
-                                onChange={event => update(event.target.value)}
-                              />
-                            )}
-                          </Field>
-                        );
-                      })}
-                      <Field label="Timeout (seconds)">
-                        <Input
-                          aria-label="Step timeout"
-                          type="number"
-                          min={1}
-                          max={86400}
-                          value={step.timeoutSeconds ?? 300}
-                          onChange={event =>
-                            changeStep(index, { timeoutSeconds: Number(event.target.value) })
-                          }
-                        />
-                      </Field>
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={step.requiresApproval || step.riskClass === 'NON_IDEMPOTENT'}
-                          disabled={step.riskClass === 'NON_IDEMPOTENT'}
-                          onChange={event =>
-                            changeStep(index, { requiresApproval: event.target.checked })
-                          }
-                        />
-                        Require explicit approval
-                      </label>
-                      <p className="text-xs text-muted-foreground">
-                        Use {'${{ inputs.key }}'} for typed input references. Keep credentials in
-                        scoped secrets, not command text or headers.
-                      </p>
-                    </div>
+                    <StepConfiguration
+                      step={step}
+                      inputs={inputs}
+                      editorId={String(stepIdentities.at(index))}
+                      depth={1}
+                      onChange={patch => changeStep(index, patch)}
+                    />
                   </ConfigureSheet>
                   <Button
                     type="button"
@@ -574,8 +427,8 @@ export default function RunbookBuilder({
   const advanced = (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Advanced editing includes nested prechecks, verification and additional configuration. Apply
-        JSON before saving. Refresh from the builder before editing to avoid replacing newer
+        Advanced editing remains compatible with all builder checks and additional configuration.
+        Apply JSON before saving. Refresh from the builder before editing to avoid replacing newer
         changes.
       </p>
       <Button
@@ -702,5 +555,325 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <Label>{label}</Label>
       {children}
     </div>
+  );
+}
+
+function NestedChecks({
+  phase,
+  step,
+  inputs,
+  depth,
+  onChange,
+}: {
+  phase: 'precheck' | 'verification';
+  step: RunbookStepDefinition;
+  inputs: RunbookInputInput[];
+  depth: number;
+  onChange: (patch: Partial<RunbookStepDefinition>) => void;
+}) {
+  const group = phase === 'precheck' ? step.precheck : step.verification;
+  const checks = group?.steps ?? [];
+  const [identities, setIdentities] = useState(checks.map(check => check.key));
+  const [type, setType] = useState<RunbookStepType>('SYSTEMD');
+  const label = phase === 'precheck' ? 'Before action' : 'After action';
+  const commit = (steps: RunbookStepDefinition[]) =>
+    onChange({
+      [phase]: steps.length ? { ...group, steps } : undefined,
+    });
+  const move = (index: number, offset: number) => {
+    const next = [...checks];
+    const item = next.splice(index, 1)[0];
+    if (!item) return;
+    next.splice(index + offset, 0, item);
+    const ids = [...identities];
+    const id = ids.splice(index, 1)[0];
+    ids.splice(index + offset, 0, id);
+    setIdentities(ids);
+    commit(next);
+  };
+  return (
+    <section aria-label={`${label} checks`} className="mt-5 space-y-3 rounded-xl border p-3">
+      <h4 className="font-semibold">{label}</h4>
+      <p className="text-xs text-muted-foreground">
+        {phase === 'precheck'
+          ? 'A failed precheck prevents the action from running.'
+          : 'A failed verification means remediation failed, even if the action exited successfully.'}
+      </p>
+      <ol className="space-y-2" aria-label={`${label} ordered checks`}>
+        {checks.map((check, index) => (
+          <li key={identities.at(index) ?? check.key} className="rounded-lg border p-3">
+            <details>
+              <summary className="cursor-pointer break-words text-sm font-medium">
+                {index + 1}. {check.name}{' '}
+                <Badge variant={check.riskClass === 'READ_ONLY' ? 'secondary' : 'warning'}>
+                  {check.riskClass === 'READ_ONLY' ? 'READ ONLY' : 'WRITE'}
+                </Badge>{' '}
+                {(check.requiresApproval ||
+                  check.riskClass === 'NON_IDEMPOTENT' ||
+                  check.type === 'APPROVAL') && <Badge variant="warning">APPROVAL</Badge>}
+              </summary>
+              <div className="mt-3">
+                <StepConfiguration
+                  step={check}
+                  inputs={inputs}
+                  editorId={identities.at(index) ?? check.key}
+                  depth={depth + 1}
+                  onChange={patch =>
+                    commit(
+                      checks.map((item, position) =>
+                        position === index ? { ...item, ...patch } : item
+                      )
+                    )
+                  }
+                />
+              </div>
+            </details>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Move ${check.name} up in ${label}`}
+                disabled={index === 0}
+                onClick={() => move(index, -1)}
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Move ${check.name} down in ${label}`}
+                disabled={index === checks.length - 1}
+                onClick={() => move(index, 1)}
+              >
+                <ArrowDown className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={`Remove ${check.name} from ${label}`}
+                onClick={() => {
+                  setIdentities(identities.filter((_, position) => position !== index));
+                  commit(checks.filter((_, position) => position !== index));
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                Remove
+              </Button>
+            </div>
+          </li>
+        ))}
+      </ol>
+      {depth < 3 && checks.length < 10 ? (
+        <div className="flex flex-wrap gap-2">
+          <FormSelect
+            name={`${phase}-type-${step.key}`}
+            label={`${label} check type`}
+            value={type}
+            onValueChange={value => setType(value as RunbookStepType)}
+            options={RUNBOOK_STEP_TYPES.map(value => ({
+              value,
+              label: value.replaceAll('_', ' '),
+            }))}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const key = `${phase}_${crypto.randomUUID().replaceAll('-', '_')}`;
+              setIdentities([...identities, key]);
+              commit([...checks, newBuilderStep(type, key)]);
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            {phase === 'precheck' ? 'Add precheck' : 'Add verification'}
+          </Button>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Maximum{' '}
+          {depth >= 3 ? 'nesting depth reached (three levels)' : 'ten checks per group reached'}.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function StepConfiguration({
+  step,
+  inputs,
+  editorId,
+  depth,
+  onChange,
+}: {
+  step: RunbookStepDefinition;
+  inputs: RunbookInputInput[];
+  editorId: string;
+  depth: number;
+  onChange: (patch: Partial<RunbookStepDefinition>) => void;
+}) {
+  return (
+    <>
+      <NestedChecks
+        phase="precheck"
+        step={step}
+        inputs={inputs}
+        depth={depth}
+        onChange={onChange}
+      />
+      <div className="space-y-4">
+        <h4 className="font-semibold">{depth === 1 ? 'Action' : 'Check configuration'}</h4>
+        <Field label="Name">
+          <Input
+            aria-label="Step name"
+            value={step.name}
+            maxLength={200}
+            onChange={event => onChange({ name: event.target.value })}
+          />
+        </Field>
+        <Field label="Step key">
+          <Input
+            aria-label="Step key"
+            value={step.key}
+            onChange={event => onChange({ key: event.target.value })}
+          />
+        </Field>
+        <Field label="Description / responder instructions">
+          <Textarea
+            aria-label="Step description"
+            value={step.description ?? ''}
+            onChange={event => onChange({ description: event.target.value })}
+          />
+        </Field>
+        {fieldsFor(step.type).map(field => {
+          if (step.type === 'CONDITION' && field.key === 'field') {
+            return (
+              <Field key={field.key} label="Condition field">
+                <FormSelect
+                  name={`condition-field-${editorId}`}
+                  label="Condition field"
+                  value={canonicalConditionField(String(step.config.field ?? ''))}
+                  onValueChange={value => onChange({ config: { ...step.config, field: value } })}
+                  options={[
+                    ...CONDITION_FIELDS,
+                    ...inputs.map(input => ({
+                      value: `input.${input.key}`,
+                      label: `Input → ${input.label} (${input.key})`,
+                    })),
+                  ]}
+                />
+                <p className="text-xs text-muted-foreground">
+                  A false condition skips all remaining pending steps. Incident/service fields are
+                  unavailable when execution has no corresponding resource.
+                </p>
+              </Field>
+            );
+          }
+          const raw = Object.entries(step.config).find(([key]) => key === field.key)?.[1];
+          const value =
+            raw === undefined
+              ? ''
+              : Array.isArray(raw)
+                ? raw.join(', ')
+                : typeof raw === 'object'
+                  ? JSON.stringify(raw)
+                  : String(raw);
+          const update = (next: string) => {
+            const config = {
+              ...step.config,
+              [field.key]: field.number ? Number(next) : next,
+            };
+            if (step.type === 'CONDITION') {
+              if (['IN', 'NOT_IN'].includes(String(config.operator))) {
+                config.value = String(field.key === 'value' ? next : (step.config.value ?? ''))
+                  .split(',')
+                  .map(value => value.trim())
+                  .filter(Boolean);
+              } else if (['EXISTS', 'NOT_EXISTS'].includes(String(config.operator))) {
+                config.value = null;
+              }
+            }
+            const updated = { ...step, config };
+            const minimumRisk = builderRisk(updated);
+            const ranks = new Map([
+              ['READ_ONLY', 0],
+              ['IDEMPOTENT_WRITE', 1],
+              ['NON_IDEMPOTENT', 2],
+            ]);
+            const riskClass =
+              ranks.get(step.riskClass)! > ranks.get(minimumRisk)! ? step.riskClass : minimumRisk;
+            onChange({
+              config,
+              riskClass,
+              requiresApproval: riskClass === 'NON_IDEMPOTENT' || step.requiresApproval,
+            });
+          };
+          return (
+            <Field key={field.key} label={field.label}>
+              {field.options ? (
+                <FormSelect
+                  name={`config-${field.key}`}
+                  label={field.label}
+                  value={value}
+                  onValueChange={update}
+                  options={field.options.map(option => ({
+                    value: option,
+                    label: option,
+                  }))}
+                />
+              ) : field.multiline ? (
+                <Textarea
+                  aria-label={field.label}
+                  value={value}
+                  onChange={event => update(event.target.value)}
+                  className="font-mono text-xs"
+                />
+              ) : (
+                <Input
+                  aria-label={field.label}
+                  value={value}
+                  type={field.number ? 'number' : 'text'}
+                  min={field.number ? 0 : undefined}
+                  onChange={event => update(event.target.value)}
+                />
+              )}
+            </Field>
+          );
+        })}
+        <Field label="Timeout (seconds)">
+          <Input
+            aria-label="Step timeout"
+            type="number"
+            min={1}
+            max={86400}
+            value={step.timeoutSeconds ?? 300}
+            onChange={event => onChange({ timeoutSeconds: Number(event.target.value) })}
+          />
+        </Field>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={step.requiresApproval || step.riskClass === 'NON_IDEMPOTENT'}
+            disabled={step.riskClass === 'NON_IDEMPOTENT'}
+            onChange={event => onChange({ requiresApproval: event.target.checked })}
+          />
+          Require explicit approval
+        </label>
+        <p className="text-xs text-muted-foreground">
+          Use {'${{ inputs.key }}'} for typed input references. Keep credentials in scoped secrets,
+          not command text or headers.
+        </p>
+      </div>
+      <NestedChecks
+        phase="verification"
+        step={step}
+        inputs={inputs}
+        depth={depth}
+        onChange={onChange}
+      />
+    </>
   );
 }

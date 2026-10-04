@@ -86,6 +86,66 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   beforeEach(async () => resetDatabase());
   afterAll(async () => testPrisma.$disconnect());
 
+  it.each(['precheck', 'verification'] as const)(
+    'fails remediation when its %s fails',
+    async phase => {
+      const check = (key: string) => ({
+        key,
+        name: key,
+        type: 'SYSTEMD' as const,
+        riskClass: 'READ_ONLY' as const,
+        config: { action: 'status', unit: 'payments.service' },
+      });
+      const target = await createAgentTarget({
+        steps: [
+          {
+            key: 'restart',
+            name: 'Restart service',
+            type: 'SYSTEMD',
+            riskClass: 'NON_IDEMPOTENT',
+            requiresApproval: true,
+            config: { action: 'restart', unit: 'payments.service' },
+            precheck: { steps: [check('before')] },
+            verification: { steps: [check('after')] },
+          },
+        ],
+      });
+      const execution = await startRunbookExecution({
+        runbookId: target.runbook.id,
+        bindingId: target.binding.id,
+        serviceId: target.service.id,
+        triggeredByUserId: target.actor.id,
+      });
+      const steps = await testPrisma.runbookExecutionStep.findMany({
+        where: { executionId: execution.id },
+        orderBy: { sequence: 'asc' },
+      });
+      expect(steps.map(step => step.stepKey)).toEqual(['before', 'restart', 'after']);
+      if (phase === 'verification')
+        await testPrisma.runbookExecutionStep.updateMany({
+          where: { executionId: execution.id, stepKey: { in: ['before', 'restart'] } },
+          data: { status: 'SUCCEEDED', completedAt: new Date() },
+        });
+      await testPrisma.runbookExecutionStep.update({
+        where: {
+          id: steps.find(step => step.stepKey === (phase === 'precheck' ? 'before' : 'after'))!.id,
+        },
+        data: { status: 'FAILED', errorCode: 'CHECK_FAILED', completedAt: new Date() },
+      });
+      await advanceExecution(execution.id);
+      expect(
+        await testPrisma.runbookExecution.findUniqueOrThrow({ where: { id: execution.id } })
+      ).toMatchObject({ status: 'FAILED', failureCode: 'CHECK_FAILED' });
+      const action = await testPrisma.runbookExecutionStep.findUniqueOrThrow({
+        where: { id: steps[1].id },
+      });
+      expect(action.status).toBe(phase === 'precheck' ? 'PENDING' : 'SUCCEEDED');
+      expect(
+        await testPrisma.runbookStepAttempt.count({ where: { executionStepId: action.id } })
+      ).toBe(0);
+    }
+  );
+
   it.each(['NOT_EXISTS', 'NOT_EQUALS'] as const)(
     'suppresses stored invalid AUTOMATIC triggers using %s',
     async operator => {
