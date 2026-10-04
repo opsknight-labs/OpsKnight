@@ -160,12 +160,32 @@ async function run() {
     });
   };
   await heartbeat();
+  let publishingHealth = false;
+  const publishHealth = async () => {
+    if (publishingHealth) return;
+    publishingHealth = true;
+    try {
+      await mkdir(dataDirectory, { recursive: true, mode: 0o700 });
+      const temporary = `${dataDirectory}/health.${process.pid}.tmp`;
+      await writeFile(
+        temporary,
+        JSON.stringify({ pid: process.pid, updatedAt: Date.now(), ready: true }),
+        { mode: 0o600 }
+      );
+      await rename(temporary, `${dataDirectory}/health.json`);
+    } finally {
+      publishingHealth = false;
+    }
+  };
+  await publishHealth();
   const heartbeatTimer = setInterval(() => void heartbeat().catch(() => undefined), 30_000);
+  const healthTimer = setInterval(() => void publishHealth().catch(() => undefined), 15_000);
 
   const shutdown = () => {
     shuttingDown = true;
     activeController?.abort();
     clearInterval(heartbeatTimer);
+    clearInterval(healthTimer);
     process.exitCode = 0;
   };
   process.once('SIGINT', shutdown);
@@ -292,6 +312,7 @@ async function run() {
     }
   } finally {
     clearInterval(heartbeatTimer);
+    clearInterval(healthTimer);
     abortUnfinishedExecution();
     process.removeListener('SIGINT', shutdown);
     process.removeListener('SIGTERM', shutdown);

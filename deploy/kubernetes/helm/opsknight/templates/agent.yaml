@@ -78,6 +78,23 @@ spec:
         - name: agent
           image: {{ include "opsknight.agent.image" . }}
           imagePullPolicy: {{ .Values.agent.image.pullPolicy }}
+          startupProbe:
+            exec:
+              command: [node, /usr/local/bin/opsknight-agent-healthcheck.mjs]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            exec:
+              command: [node, /usr/local/bin/opsknight-agent-healthcheck.mjs]
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: [node, /usr/local/bin/opsknight-agent-healthcheck.mjs]
+            periodSeconds: 15
+            timeoutSeconds: 5
           env:
             - name: OPSKNIGHT_URL
               value: {{ default (printf "http://%s:%v" (include "opsknight.fullname" .) .Values.service.port) .Values.agent.url | quote }}

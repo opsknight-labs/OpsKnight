@@ -22,11 +22,13 @@ Runbook Agents execute host, container, and Kubernetes actions without accepting
 
 The Agent is separate from the Runbook Worker. The worker plans and reconciles database state; the Agent is the constrained execution plane close to the target.
 
+The image healthcheck and Kubernetes startup, liveness, and readiness probes check an initialized local progress record and its running process. They do not contact OpsKnight: a temporary control-plane outage must not restart an otherwise functioning Agent or disrupt its durable result spool. Progress older than 90 seconds is unhealthy; Kubernetes permits up to five minutes for startup. An Agent reporting unavailable capabilities can still be locally healthy; review its effective capabilities in the UI before targeting it.
+
 ## Runbook authoring and operations UI
 
 Advanced JSON edits are not saved implicitly. An unapplied-changes warning remains visible even when switching editor tabs, and draft saving is disabled until the JSON is applied to the builder or discarded with **Refresh JSON from builder**. Step editor identity remains stable during reordering and key edits.
 
-The dedicated browser suite covers publication, service attachment and target selection, trigger configuration, incident suggestions, exact-plan approval, and cancellation. A separate journey covers enrollment, pool membership, scoped secret grants, and rotation. These tests use an isolated database and seed asynchronous worker transitions; they never execute host remediation. Precheck/verification controls reuse the typed step editor; server-side library/execution pagination remains follow-up product work.
+The dedicated browser suite covers publication, service attachment and target selection, trigger configuration, incident suggestions, exact-plan approval, and cancellation. A separate journey covers enrollment, pool membership, scoped secret grants, and rotation. These tests use an isolated database and seed asynchronous worker transitions; they never execute host remediation. Precheck/verification controls reuse the typed step editor; library, execution, and Agent lists provide server-side pagination and filters.
 
 The Runbooks library supports search, published/draft filters, and creation templates. Edit a draft through the ordered step builder and each step's configuration panel; define typed inputs in the Inputs tab. Advanced JSON is an explicit alternative, not the primary editor. Save the draft before publishing: the publish confirmation publishes only the saved version. Published versions remain immutable.
 

@@ -23,7 +23,24 @@ spec:
       containers:
         - name: agent
           image: ghcr.io/opsknight-labs/opsknight-agent:2.0.0
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
+          startupProbe:
+            exec:
+              command: [node, /usr/local/bin/opsknight-agent-healthcheck.mjs]
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            exec:
+              command: [node, /usr/local/bin/opsknight-agent-healthcheck.mjs]
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: [node, /usr/local/bin/opsknight-agent-healthcheck.mjs]
+            periodSeconds: 15
+            timeoutSeconds: 5
           env:
             - { name: OPSKNIGHT_URL, value: 'http://opsknight-service:80' }
             - name: OPSKNIGHT_EXECUTION_PUBLIC_KEY
