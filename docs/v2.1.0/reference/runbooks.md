@@ -54,6 +54,12 @@ execution creation. Without an incident/service, those objects are absent.
 Inputs are the execution's resolved values. Legacy bare incident paths such as
 `priority` are interpreted as `incident.priority`.
 
+The server rejects unsupported fields and operators when saving, publishing,
+or starting a workflow. `input.<key>` must name a declared runbook input.
+Trigger conditions allow only the listed incident/service fields, never inputs.
+Stored triggers with invalid paths are suppressed before matching, including
+`NOT_EXISTS` and `NOT_EQUALS`; a misspelled field cannot activate automation.
+
 A false CONDITION skips itself and all remaining pending workflow steps.
 It is a workflow gate, not an if/else branch. Operators use strict type
 comparison: numeric inputs require JSON numbers, not quoted strings.

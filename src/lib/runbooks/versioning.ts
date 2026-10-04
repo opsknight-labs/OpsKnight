@@ -63,8 +63,8 @@ export async function createRunbook(
   actorId: string
 ) {
   const metadata = createRunbookSchema.parse(input);
-  const definition = parseRunbookDefinition(input.definition ?? EMPTY_DEFINITION);
   const inputs = runbookInputsSchema.parse(input.inputs ?? []);
+  const definition = parseRunbookDefinition(input.definition ?? EMPTY_DEFINITION, inputs);
   validateInputKeyUniqueness(inputs);
   const checksum = computeDefinitionChecksum(definition);
 
@@ -132,8 +132,8 @@ export async function updateDraftVersion(
   input: { definition: unknown; inputs?: RunbookInputInput[] },
   actorId: string
 ) {
-  const definition = parseRunbookDefinition(input.definition);
   const inputs = runbookInputsSchema.parse(input.inputs ?? []);
+  const definition = parseRunbookDefinition(input.definition, inputs);
   const checksum = computeDefinitionChecksum(definition);
 
   return prisma.$transaction(async tx => {
@@ -180,12 +180,12 @@ export async function publishDraftVersion(versionId: string, actorId: string) {
   return prisma.$transaction(async tx => {
     const draft = await tx.runbookVersion.findUnique({
       where: { id: versionId },
-      include: { runbook: true },
+      include: { runbook: true, inputs: true },
     });
     if (!draft) throw new RunbookVersionNotFoundError(versionId);
     if (draft.state !== 'DRAFT') throw new RunbookVersionImmutableError(versionId, draft.state);
 
-    const parsed = parseRunbookDefinition(draft.definition);
+    const parsed = parseRunbookDefinition(draft.definition, draft.inputs);
     const checksum = computeDefinitionChecksum(parsed);
     if (checksum !== draft.checksum) {
       throw new RunbookDefinitionError(

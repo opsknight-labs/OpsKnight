@@ -18,7 +18,7 @@ import {
   validateResolvedStepConfig,
 } from './definition';
 import { matchesCondition } from './matcher';
-import { canonicalConditionField } from './builder';
+import { workflowConditionSchema } from './conditions';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
 import { suggestionPlanSchema } from './suggestion-plan';
 import {
@@ -187,7 +187,7 @@ export async function startRunbookExecution(input: {
         'A retired version can execute only through the binding that pinned it while published.'
       );
     }
-    const definition = parseRunbookDefinition(version.definition);
+    const definition = parseRunbookDefinition(version.definition, version.inputs);
     if (computeDefinitionChecksum(definition) !== version.checksum) {
       throw new RunbookDefinitionError('Published runbook checksum does not match its definition.');
     }
@@ -492,7 +492,7 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
         service: { select: { id: true, name: true, teamId: true } },
       },
     });
-    const config = step.config as Record<string, unknown>;
+    const config = workflowConditionSchema.parse(step.config);
     const matched = matchesCondition(
       {
         input: execution.inputValues,
@@ -502,8 +502,8 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
         service: execution.service,
       },
       {
-        field: canonicalConditionField(String(config.field ?? '')),
-        operator: String(config.operator ?? 'EQUALS') as never,
+        field: config.field,
+        operator: config.operator,
         value: config.value,
       }
     );

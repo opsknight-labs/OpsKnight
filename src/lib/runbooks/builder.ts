@@ -1,4 +1,5 @@
 import type { RunbookDefinition, RunbookStepDefinition, RunbookStepType } from './types';
+export { canonicalConditionField } from './conditions';
 
 export const RUNBOOK_TEMPLATES = [
   'empty',
@@ -15,11 +16,6 @@ export const CONDITION_FIELDS = [
   { value: 'incident.tags', label: 'Incident tags' },
   { value: 'service.name', label: 'Service name' },
 ] as const;
-export function canonicalConditionField(field: string): string {
-  return ['priority', 'urgency', 'status', 'title', 'description', 'tags'].includes(field)
-    ? `incident.${field}`
-    : field;
-}
 export function newBuilderStep(type: RunbookStepType, key: string): RunbookStepDefinition {
   const config: Record<string, unknown> =
     type === 'HTTP'

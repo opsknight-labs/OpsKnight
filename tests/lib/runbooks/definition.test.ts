@@ -49,6 +49,41 @@ function createMockDefinition(overrides: Partial<RunbookDefinition> = {}): Runbo
 
 describe('Runbook Definition Module', () => {
   describe('parseRunbookDefinition', () => {
+    it.each(['NOT_EXISTS', 'NOT_EQUALS'])('rejects typo fields with %s', operator => {
+      for (const field of [
+        'incident.severityTYPO',
+        'service.invalid',
+        'whatever',
+        'input.foo.bar',
+      ]) {
+        const definition = createMockDefinition({
+          steps: [
+            createMockStep({
+              type: 'CONDITION',
+              config: { field, operator, value: 'P1' },
+            }),
+          ],
+        });
+        expect(() => parseRunbookDefinition(definition, [])).toThrow(RunbookDefinitionError);
+      }
+    });
+
+    it('rejects invalid operators and undeclared input paths, including nested checks', () => {
+      const gate = createMockStep({
+        type: 'CONDITION',
+        config: { field: 'input.environment', operator: 'NOT_EXISTS' },
+      });
+      const definition = createMockDefinition({ steps: [gate] });
+      expect(() => parseRunbookDefinition(definition, [])).toThrow(/undeclared/);
+      expect(parseRunbookDefinition(definition, [{ key: 'environment' }])).toBeDefined();
+      const nested = createMockDefinition({
+        steps: [createMockStep({ key: 'parent', precheck: { steps: [gate] } })],
+      });
+      expect(() => parseRunbookDefinition(nested, [])).toThrow(/undeclared/);
+      gate.config = { field: 'incident.priority', operator: 'NOT_EXIST' };
+      expect(() => parseRunbookDefinition(definition)).toThrow(/operator/);
+    });
+
     it('should successfully parse a valid runbook definition', () => {
       const validDef = createMockDefinition();
       const result = parseRunbookDefinition(validDef);

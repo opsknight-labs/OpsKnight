@@ -340,6 +340,13 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
           .approvedPlanDigest
     )
     .not.toBeNull();
+  await expect(page.getByRole('alertdialog')).not.toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Approve exact plan', exact: true })
+  ).not.toBeVisible();
+  await expect(
+    page.getByText('WAITING APPROVAL', { exact: true }).filter({ visible: true })
+  ).toHaveCount(0);
   await page.getByRole('button', { name: 'Cancel execution', exact: true }).click();
   await page
     .getByRole('alertdialog')

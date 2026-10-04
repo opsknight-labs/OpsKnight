@@ -3,7 +3,7 @@
 import { useActionState, useState, type ReactNode, type ComponentProps } from 'react';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
-import { usePathname, unstable_rethrow } from 'next/navigation';
+import { usePathname, useRouter, unstable_rethrow } from 'next/navigation';
 import { Activity, BookOpen, Bot, Loader2, Play } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -113,12 +113,14 @@ export function ActionForm({
   className?: string;
   onSuccess?: () => void;
 }) {
+  const router = useRouter();
   const [state, submit, pending] = useActionState<{ error?: string; saved?: boolean }, FormData>(
     async (_state: { error?: string; saved?: boolean }, data: FormData) => {
       try {
         const result = await action(data);
         if (result?.error) return { error: result.error };
         onSuccess?.();
+        router.refresh();
         return { saved: true };
       } catch (error) {
         unstable_rethrow(error);

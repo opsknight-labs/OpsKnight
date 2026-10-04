@@ -14,6 +14,27 @@ import {
 } from '@/lib/runbooks/schemas';
 
 describe('Runbooks Zod Schemas', () => {
+  it.each(['NOT_EXISTS', 'NOT_EQUALS'])('rejects unsupported trigger fields with %s', operator => {
+    for (const field of [
+      'incident.severityTYPO',
+      'service.invalid',
+      'whatever',
+      'input.environment',
+    ]) {
+      expect(
+        createRunbookTriggerSchema.safeParse({
+          event: 'INCIDENT_CREATED',
+          conditions: [{ field, operator, value: 'P1' }],
+        }).success
+      ).toBe(false);
+    }
+    expect(
+      createRunbookTriggerSchema.safeParse({
+        event: 'INCIDENT_CREATED',
+        conditions: [{ field: 'incident.priority', operator, value: 'P1' }],
+      }).success
+    ).toBe(true);
+  });
   it('rejects unconstrained SELECT input definitions', () => {
     expect(
       runbookInputSchema.safeParse({ key: 'environment', label: 'Environment', type: 'SELECT' })
@@ -180,9 +201,9 @@ describe('Runbooks Zod Schemas', () => {
         event: 'INCIDENT_CREATED',
         conditions: [
           {
-            field: 'severity',
+            field: 'incident.priority',
             operator: 'EQUALS',
-            value: 'SEV1',
+            value: 'P1',
           },
         ],
       });

@@ -7,6 +7,7 @@
  */
 
 import { z } from 'zod';
+import { conditionContextFieldSchema } from './conditions';
 import {
   RUNBOOK_BINDING_MODES,
   RUNBOOK_CONDITION_LOGICS,
@@ -23,6 +24,8 @@ import {
 // Shared primitives
 // ---------------------------------------------------------------------------
 
+// Hyphen-separated groups cannot overlap: the repeated alphanumeric class excludes '-'.
+// eslint-disable-next-line security/detect-unsafe-regex
 const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export const runbookSlugSchema = z
@@ -101,7 +104,7 @@ export const runbookDefinitionSchema = z
     // Validate unique step keys
     const keys = new Set<string>();
     for (let i = 0; i < data.steps.length; i++) {
-      const step = data.steps[i]!;
+      const step = data.steps.at(i)!;
       if (keys.has(step.key)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -180,7 +183,7 @@ export const runbookInputsSchema = z
   .superRefine((inputs, ctx) => {
     const keys = new Set<string>();
     for (let i = 0; i < inputs.length; i++) {
-      const input = inputs[i]!;
+      const input = inputs.at(i)!;
       if (keys.has(input.key)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -251,7 +254,12 @@ export type UpdateServiceRunbookBindingInput = z.infer<typeof updateServiceRunbo
 
 export const runbookTriggerConditionSchema = z
   .object({
-    field: z.string().trim().min(1).max(100),
+    field: z
+      .string()
+      .refine(
+        field => conditionContextFieldSchema.safeParse(field).success,
+        'Unsupported trigger condition field'
+      ),
     operator: z.enum(RUNBOOK_CONDITION_OPERATORS),
     value: z.unknown(),
     sequence: z.number().int().min(0).default(0),
@@ -345,10 +353,7 @@ export const createRunbookSecretSchema = z
       .trim()
       .min(1)
       .max(200)
-      .regex(
-        /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-        'Secret name must be lowercase alphanumeric with hyphens'
-      ),
+      .regex(slugRegex, 'Secret name must be lowercase alphanumeric with hyphens'),
     value: z.string().min(1).max(65536),
     description: z.string().trim().max(1000).default(''),
   })

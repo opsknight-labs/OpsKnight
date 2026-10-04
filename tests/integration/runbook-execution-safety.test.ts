@@ -86,6 +86,35 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   beforeEach(async () => resetDatabase());
   afterAll(async () => testPrisma.$disconnect());
 
+  it.each(['NOT_EXISTS', 'NOT_EQUALS'] as const)(
+    'suppresses stored invalid AUTOMATIC triggers using %s',
+    async operator => {
+      const target = await createAgentTarget({
+        steps: [
+          { key: 'manual', name: 'Manual', type: 'MANUAL', riskClass: 'READ_ONLY', config: {} },
+        ],
+      });
+      await testPrisma.serviceRunbookBinding.update({
+        where: { id: target.binding.id },
+        data: { mode: 'AUTOMATIC' },
+      });
+      await testPrisma.runbookTrigger.create({
+        data: {
+          bindingId: target.binding.id,
+          event: 'INCIDENT_CREATED',
+          conditions: { create: { field: 'incident.severityTYPO', operator, value: 'P1' } },
+        },
+      });
+      const incident = await createTestIncident(
+        'Invalid trigger must not start',
+        target.service.id
+      );
+      const result = await evaluateIncidentTriggers(incident.id, `typo-${operator}`);
+      expect(result).toMatchObject({ matched: 0, started: 0, suppressed: 1 });
+      expect(await testPrisma.runbookExecution.count()).toBe(0);
+    }
+  );
+
   it.each(['P1', 'P3'])(
     'evaluates live incident priority %s and gates following steps',
     async priority => {

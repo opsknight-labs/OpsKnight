@@ -9,6 +9,7 @@
  */
 
 import crypto from 'crypto';
+import { workflowConditionSchema } from './conditions';
 import { runbookDefinitionSchema } from './schemas';
 import {
   RunbookDefinitionError,
@@ -31,7 +32,10 @@ import {
  * Parses and validates a runbook definition from raw JSON.
  * Throws `RunbookDefinitionError` on validation failure.
  */
-export function parseRunbookDefinition(raw: unknown): RunbookDefinition {
+export function parseRunbookDefinition(
+  raw: unknown,
+  inputs?: ReadonlyArray<{ key: string }>
+): RunbookDefinition {
   const result = runbookDefinitionSchema.safeParse(raw);
   if (!result.success) {
     const issues = result.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`);
@@ -41,6 +45,18 @@ export function parseRunbookDefinition(raw: unknown): RunbookDefinition {
   }
   const definition = result.data as RunbookDefinition;
   validateDefinitionStructure(definition);
+  if (inputs) {
+    const declared = new Set(inputs.map(input => input.key));
+    for (const step of flattenSteps(definition)) {
+      if (step.type !== 'CONDITION') continue;
+      const { field } = workflowConditionSchema.parse(step.config);
+      if (field.startsWith('input.') && !declared.has(field.slice(6))) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" references undeclared CONDITION input "${field}".`
+        );
+      }
+    }
+  }
   return definition;
 }
 
@@ -150,6 +166,11 @@ function validateTarget(
 }
 
 function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates = true): void {
+  if (step.type === 'CONDITION' && !workflowConditionSchema.safeParse(step.config).success) {
+    throw new RunbookDefinitionError(
+      `Step "${step.key}" has an unsupported CONDITION field or operator.`
+    );
+  }
   const minimumRisk = minimumRiskForStep(step);
   // Both keys are validated enum values, indexing only a fixed risk table.
   // eslint-disable-next-line security/detect-object-injection
