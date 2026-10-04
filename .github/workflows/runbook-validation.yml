@@ -2,29 +2,10 @@ name: Runbook protocol validation
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
   push:
-    branches: ['feat/**', 'fix/**']
-    paths:
-      - 'agent/**'
-      - 'src/lib/runbooks/**'
-      - 'src/components/runbooks/**'
-      - 'src/components/incident/**'
-      - 'src/components/service/**'
-      - 'src/app/(app)/services/**'
-      - 'src/lib/event-outbox.ts'
-      - 'src/lib/authorization.ts'
-      - 'src/lib/encryption/**'
-      - 'src/app/api/runbook*/**'
-      - 'src/app/(app)/runbooks/**'
-      - 'src/lib/job-worker.ts'
-      - 'prisma/**'
-      - 'deploy/**'
-      - 'tests/**/runbook*'
-      - 'tests/lib/runbooks/**'
-      - 'playwright.runbooks.config.ts'
-      - '.github/workflows/runbook-validation.yml'
-      - '.github/workflows/deployment-validation.yml'
-      - '.github/workflows/swarm-validation.yml'
+    branches: [main, 'feat/**', 'fix/**']
 
 permissions:
   contents: read
@@ -34,7 +15,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect validation changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      runbooks: ${{ steps.gates.outputs.runbooks }}
+      deployment: ${{ steps.gates.outputs.deployment }}
+      swarm: ${{ steps.gates.outputs.swarm }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Test change classification
+        run: node --test tests/ci/runbook-change-gates.test.cjs
+      - name: Detect affected checks
+        id: gates
+        run: node scripts/ci/runbook-change-gates.cjs
+
   runbook-ui:
+    needs: changes
+    if: needs.changes.outputs.runbooks == 'true'
     name: Runbook authoring and mobile UI
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -80,6 +81,8 @@ jobs:
           retention-days: 7
 
   execution-safety:
+    needs: changes
+    if: needs.changes.outputs.runbooks == 'true'
     name: Runbook fault injection and database safety
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -112,7 +115,7 @@ jobs:
       - name: Agent runtime and authorization regressions
         run: >-
           npx vitest run --no-file-parallelism --maxWorkers=1
-          tests/lib/runbooks tests/lib/deployment-config-unit.test.ts
+          tests/lib/runbooks tests/components/RunbookBuilder.test.tsx tests/lib/deployment-config-unit.test.ts
           tests/api/runbook-artifacts.test.ts tests/api/metrics.test.ts
           tests/lib/operational-metric-registry.test.ts
           tests/unit/encryption-registry.test.ts tests/lib/encryption-keyring-rotation.test.ts
@@ -125,6 +128,10 @@ jobs:
           tests/integration/encryption-migration.test.ts
 
   deployment-manifests:
+    needs: changes
+    if: needs.changes.outputs.deployment == 'true'
     uses: ./.github/workflows/deployment-validation.yml
   swarm-manifests:
+    needs: changes
+    if: needs.changes.outputs.swarm == 'true'
     uses: ./.github/workflows/swarm-validation.yml
