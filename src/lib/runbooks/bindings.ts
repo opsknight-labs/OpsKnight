@@ -132,9 +132,8 @@ async function validateBindingTarget(
   if (agentId && agentPoolId) {
     throw new RunbookDefinitionError('Select either a specific Agent or an Agent pool, not both.');
   }
-  const needsAgent = flattenSteps(parseRunbookDefinition(version.definition)).some(step =>
-    requiresAgent(step.type)
-  );
+  const steps = flattenSteps(parseRunbookDefinition(version.definition));
+  const needsAgent = steps.some(step => requiresAgent(step.type));
   if (enabled && needsAgent && !agentId && !agentPoolId) {
     throw new RunbookDefinitionError(
       'An enabled runbook with Agent-executed steps requires a specific Agent or Agent pool target.'
@@ -150,9 +149,18 @@ async function validateBindingTarget(
   if (agentPoolId) {
     const pool = await tx.runbookAgentPool.findUnique({
       where: { id: agentPoolId },
-      select: { id: true },
+      select: { id: true, mode: true, _count: { select: { members: true } } },
     });
     if (!pool) throw new RunbookDefinitionError('The selected Runbook Agent pool was not found.');
+    if (
+      pool.mode === 'LOCAL_HOSTS' &&
+      pool._count.members > 1 &&
+      steps.some(step => requiresAgent(step.type) && step.riskClass !== 'READ_ONLY')
+    ) {
+      throw new RunbookDefinitionError(
+        `Machine-specific write actions require a specific Agent. This LOCAL_HOSTS pool contains ${pool._count.members} Agents.`
+      );
+    }
   }
 }
 

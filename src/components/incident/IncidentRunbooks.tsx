@@ -1,21 +1,18 @@
 import Link from 'next/link';
-import {
-  CheckCircle2,
-  Circle,
-  Clock3,
-  Download,
-  Lightbulb,
-  Play,
-  ShieldCheck,
-  XCircle,
-} from 'lucide-react';
+import { CheckCircle2, Circle, Clock3, Download, Lightbulb, Play, XCircle } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
 import { redactRunbookOutput } from '@/lib/runbooks/redaction';
 import { computePlanDigest, resolveInputTemplates } from '@/lib/runbooks/definition';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Button } from '@/components/ui/shadcn/button';
+import EmptyState from '@/components/ui/EmptyState';
+import {
+  ActionForm,
+  ConfirmAction,
+  StatusBadge,
+  SubmitButton,
+} from '@/components/runbooks/RunbookControls';
 import {
   Card,
   CardContent,
@@ -81,7 +78,7 @@ export default async function IncidentRunbooks({
   return (
     <div className="space-y-4">
       {suggestions.length > 0 && (
-        <Card className="border-amber-300 bg-amber-50/40 dark:bg-amber-950/10">
+        <Card className="rounded-xl border-primary/30 bg-primary/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Lightbulb className="h-4 w-4" /> Suggested runbooks
@@ -102,33 +99,37 @@ export default async function IncidentRunbooks({
                 </div>
                 {canExecute && (
                   <div className="flex gap-2">
-                    <form
+                    <ActionForm
                       action={startIncidentRunbookSuggestionAction.bind(
                         null,
                         incidentId,
                         suggestion.id
                       )}
                     >
-                      <Button type="submit" size="sm" disabled={!suggestion.planSnapshot}>
+                      <SubmitButton
+                        pendingLabel="Starting…"
+                        size="sm"
+                        disabled={!suggestion.planSnapshot}
+                      >
                         <Play /> Start suggestion
-                      </Button>
-                    </form>
+                      </SubmitButton>
+                    </ActionForm>
                     {!suggestion.planSnapshot && (
                       <span className="text-xs text-muted-foreground">
                         Generate a new suggestion to freeze its plan.
                       </span>
                     )}
-                    <form
+                    <ActionForm
                       action={dismissIncidentRunbookSuggestionAction.bind(
                         null,
                         incidentId,
                         suggestion.id
                       )}
                     >
-                      <Button type="submit" size="sm" variant="ghost">
+                      <SubmitButton pendingLabel="Dismissing…" size="sm" variant="ghost">
                         Dismiss
-                      </Button>
-                    </form>
+                      </SubmitButton>
+                    </ActionForm>
                   </div>
                 )}
               </div>
@@ -137,39 +138,46 @@ export default async function IncidentRunbooks({
         </Card>
       )}
       {bindings.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Available runbooks</CardTitle>
-            <CardDescription>
-              Manual and suggested workflows attached to this service.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {bindings.map(binding => (
-              <div
-                key={binding.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
-              >
-                <div>
-                  <div className="font-medium">{binding.runbook.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {binding.mode} ·{' '}
-                    {binding.versionStrategy === 'PINNED'
-                      ? `v${binding.runbookVersion?.version}`
-                      : 'latest published'}
+        <details className="rounded-xl border bg-card">
+          <summary className="cursor-pointer p-4 text-sm font-semibold">
+            Available workflows · {bindings.length}
+          </summary>
+          <Card className="border-0 shadow-none">
+            <CardHeader>
+              <CardTitle className="text-base">Available runbooks</CardTitle>
+              <CardDescription>
+                Manual and suggested workflows attached to this service.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {bindings.map(binding => (
+                <div
+                  key={binding.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3"
+                >
+                  <div>
+                    <div className="font-medium">{binding.runbook.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {binding.mode} ·{' '}
+                      {binding.versionStrategy === 'PINNED'
+                        ? `v${binding.runbookVersion?.version}`
+                        : 'latest published'}
+                    </div>
                   </div>
+                  {canExecute && (
+                    <ActionForm
+                      action={startIncidentRunbookAction.bind(null, incidentId, binding.id)}
+                    >
+                      <SubmitButton pendingLabel="Starting…" size="sm">
+                        <Play /> Start
+                      </SubmitButton>
+                    </ActionForm>
+                  )}
                 </div>
-                {canExecute && (
-                  <form action={startIncidentRunbookAction.bind(null, incidentId, binding.id)}>
-                    <Button type="submit" size="sm">
-                      <Play /> Start
-                    </Button>
-                  </form>
-                )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+              ))}
+            </CardContent>
+          </Card>
+        </details>
       )}
       {executions.map(execution => (
         <Card key={execution.id}>
@@ -182,131 +190,124 @@ export default async function IncidentRunbooks({
                   {execution.createdAt.toLocaleString()}
                 </CardDescription>
               </div>
-              <Badge
-                variant={
-                  execution.status === 'SUCCEEDED'
-                    ? 'default'
-                    : execution.status === 'FAILED'
-                      ? 'destructive'
-                      : 'secondary'
-                }
-              >
-                {execution.status.replaceAll('_', ' ')}
-              </Badge>
+              <StatusBadge status={execution.status} />
             </div>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {execution.steps.map(step => {
-              const digest = computePlanDigest({
-                stepKey: step.stepKey,
-                stepType: step.type,
-                riskClass: step.riskClass,
-                config: step.config as Record<string, unknown>,
-                agentPoolId: execution.resolvedTargetAgentPoolId ?? undefined,
-                agentId: execution.resolvedTargetAgentId ?? undefined,
-                inputValues: execution.inputValues as Record<string, unknown>,
-                versionChecksum: execution.definitionChecksum,
-              });
-              const approvalPlan = resolvedApprovalPlan(
-                step.type,
-                step.config as Record<string, unknown>,
-                execution.inputValues as Record<string, unknown>
-              );
-              return (
-                <div key={step.id} className="rounded-md border p-3">
-                  <div className="flex items-start gap-3">
-                    <StepIcon status={step.status} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium">{step.name}</span>
-                        <Badge variant="outline">{step.riskClass.replaceAll('_', ' ')}</Badge>
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {step.status.replaceAll('_', ' ')}
-                        {step.outputPreview ? ` · ${step.outputPreview.slice(0, 160)}` : ''}
-                      </div>
-                      {step.outputArtifactId && (
-                        <Link
-                          href={`/api/runbook-artifacts/${step.outputArtifactId}`}
-                          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-rose-600 hover:underline"
-                        >
-                          <Download className="h-3.5 w-3.5" /> Download full output
-                        </Link>
-                      )}
-                      {step.status === 'WAITING_APPROVAL' && canApprove && (
-                        <div className="mt-3 space-y-3 rounded-md border bg-muted/30 p-3">
-                          <dl className="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[8rem_1fr]">
-                            <dt className="text-muted-foreground">Action</dt>
-                            <dd>{step.type.replaceAll('_', ' ')}</dd>
-                            {approvalPlan.map(([label, value]) => (
-                              <div key={label} className="contents">
-                                <dt className="text-muted-foreground">{label}</dt>
-                                <dd className="break-all font-mono">{value}</dd>
-                              </div>
-                            ))}
-                            <dt className="text-muted-foreground">Execution target</dt>
-                            <dd>
-                              {execution.resolvedTargetAgent
-                                ? `${execution.resolvedTargetAgent.name}${execution.resolvedTargetAgent.hostname ? ` (${execution.resolvedTargetAgent.hostname})` : ''}`
-                                : execution.resolvedTargetAgentPool
-                                  ? `Pool: ${execution.resolvedTargetAgentPool.name}`
-                                  : 'OpsKnight control plane'}
-                            </dd>
-                            <dt className="text-muted-foreground">Version</dt>
-                            <dd>
-                              v{execution.runbookVersion.version} ·{' '}
-                              <span className="font-mono">
-                                {execution.definitionChecksum.slice(0, 12)}…
-                              </span>
-                            </dd>
-                            <dt className="text-muted-foreground">Timeout</dt>
-                            <dd>{step.timeoutSeconds ?? 300}s</dd>
-                          </dl>
-                          <form
-                            action={approveIncidentRunbookStepAction.bind(
-                              null,
-                              incidentId,
-                              execution.id,
-                              step.id,
-                              digest
-                            )}
-                          >
-                            <Button type="submit" size="sm">
-                              <ShieldCheck /> Approve exact plan
-                            </Button>
-                          </form>
+          <CardContent className="space-y-4">
+            <ol aria-label={`${execution.runbook.name} execution timeline`}>
+              {execution.steps.map(step => {
+                const digest = computePlanDigest({
+                  stepKey: step.stepKey,
+                  stepType: step.type,
+                  riskClass: step.riskClass,
+                  config: step.config as Record<string, unknown>,
+                  agentPoolId: execution.resolvedTargetAgentPoolId ?? undefined,
+                  agentId: execution.resolvedTargetAgentId ?? undefined,
+                  inputValues: execution.inputValues as Record<string, unknown>,
+                  versionChecksum: execution.definitionChecksum,
+                });
+                const approvalPlan = resolvedApprovalPlan(
+                  step.type,
+                  step.config as Record<string, unknown>,
+                  execution.inputValues as Record<string, unknown>
+                );
+                return (
+                  <li
+                    key={step.id}
+                    className="relative ml-2 border-l-2 border-border pb-6 pl-4 last:border-transparent"
+                  >
+                    <div className="flex items-start gap-3">
+                      <StepIcon status={step.status} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{step.name}</span>
+                          <Badge variant="outline">{step.riskClass.replaceAll('_', ' ')}</Badge>
                         </div>
-                      )}
-                      {step.status === 'UNKNOWN' && (
-                        <p className="mt-2 text-xs font-medium text-amber-700">
-                          The action may have executed. Verify the target before retrying.
-                        </p>
-                      )}
+                        <div className="mt-1 break-words text-xs text-muted-foreground">
+                          {step.status.replaceAll('_', ' ')}
+                          {step.outputPreview ? ` · ${step.outputPreview.slice(0, 160)}` : ''}
+                        </div>
+                        {step.outputArtifactId && (
+                          <Link
+                            href={`/api/runbook-artifacts/${step.outputArtifactId}`}
+                            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                          >
+                            <Download className="h-3.5 w-3.5" /> Download full output
+                          </Link>
+                        )}
+                        {step.status === 'WAITING_APPROVAL' && canApprove && (
+                          <div className="mt-3 space-y-3 rounded-md border bg-muted/30 p-3">
+                            <dl className="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[8rem_1fr]">
+                              <dt className="text-muted-foreground">Action</dt>
+                              <dd>{step.type.replaceAll('_', ' ')}</dd>
+                              {approvalPlan.map(([label, value]) => (
+                                <div key={label} className="contents">
+                                  <dt className="text-muted-foreground">{label}</dt>
+                                  <dd className="break-all font-mono">{value}</dd>
+                                </div>
+                              ))}
+                              <dt className="text-muted-foreground">Execution target</dt>
+                              <dd>
+                                {execution.resolvedTargetAgent
+                                  ? `${execution.resolvedTargetAgent.name}${execution.resolvedTargetAgent.hostname ? ` (${execution.resolvedTargetAgent.hostname})` : ''}`
+                                  : execution.resolvedTargetAgentPool
+                                    ? `Pool: ${execution.resolvedTargetAgentPool.name}`
+                                    : 'OpsKnight control plane'}
+                              </dd>
+                              <dt className="text-muted-foreground">Version</dt>
+                              <dd>
+                                v{execution.runbookVersion.version} ·{' '}
+                                <span className="font-mono">
+                                  {execution.definitionChecksum.slice(0, 12)}…
+                                </span>
+                              </dd>
+                              <dt className="text-muted-foreground">Timeout</dt>
+                              <dd>{step.timeoutSeconds ?? 300}s</dd>
+                            </dl>
+                            <ConfirmAction
+                              action={approveIncidentRunbookStepAction.bind(
+                                null,
+                                incidentId,
+                                execution.id,
+                                step.id,
+                                digest
+                              )}
+                              title={`Approve ${step.name}?`}
+                              description={`Authorize the exact displayed plan for ${execution.resolvedTargetAgent?.name ?? execution.resolvedTargetAgentPool?.name ?? 'OpsKnight control plane'}. Risk: ${step.riskClass.replaceAll('_', ' ')}. The action may change the target; inspect its resolved parameters before approving.`}
+                              label="Approve exact plan"
+                              variant="default"
+                            />
+                          </div>
+                        )}
+                        {step.status === 'UNKNOWN' && (
+                          <p className="mt-2 text-xs font-medium text-amber-700">
+                            The action may have executed. Verify the target before retrying.
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </div>
-              );
-            })}
+                  </li>
+                );
+              })}
+            </ol>
             {canExecute &&
               !['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'].includes(execution.status) && (
-                <form
-                  className="pt-2"
+                <ConfirmAction
                   action={cancelIncidentRunbookAction.bind(null, incidentId, execution.id)}
-                >
-                  <Button type="submit" variant="outline" size="sm">
-                    Cancel execution
-                  </Button>
-                </form>
+                  title={`Cancel ${execution.runbook.name}?`}
+                  description="Pending steps stop and running Agents receive cancellation. A started write may have an unknown outcome; verify the target before retrying."
+                  label="Cancel execution"
+                  variant="outline"
+                />
               )}
           </CardContent>
         </Card>
       ))}
       {bindings.length === 0 && executions.length === 0 && suggestions.length === 0 && (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No runbooks are attached to this incident&apos;s service.
-          </CardContent>
-        </Card>
+        <EmptyState
+          title="No incident runbooks"
+          description="Attach published workflows to this incident’s service to offer diagnostics and recovery."
+        />
       )}
     </div>
   );
@@ -360,7 +361,7 @@ function resolvedApprovalPlan(
 function StepIcon({ status }: { status: string }) {
   if (status === 'SUCCEEDED') return <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />;
   if (status === 'FAILED' || status === 'UNKNOWN')
-    return <XCircle className="mt-0.5 h-4 w-4 text-rose-600" />;
+    return <XCircle className="mt-0.5 h-4 w-4 text-destructive" />;
   if (status.startsWith('WAITING') || status === 'RUNNING')
     return <Clock3 className="mt-0.5 h-4 w-4 text-amber-600" />;
   return <Circle className="mt-0.5 h-4 w-4 text-muted-foreground" />;

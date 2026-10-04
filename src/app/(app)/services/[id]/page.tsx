@@ -457,7 +457,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       orderBy: { name: 'asc' },
     }),
     prisma.runbookAgentPool.findMany({
-      select: { id: true, name: true, mode: true },
+      select: { id: true, name: true, mode: true, _count: { select: { members: true } } },
       orderBy: { name: 'asc' },
     }),
   ]);

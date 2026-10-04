@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import { RunbookError } from '@/lib/runbooks/errors';
 import type { RunbookInput } from '@prisma/client';
 import { CAPABILITIES } from '@/lib/authorization';
 import prisma from '@/lib/prisma';
@@ -73,7 +74,7 @@ async function inputDefinitions(runbookId: string, versionId?: string | null) {
 
 function executionTarget(value: FormDataEntryValue | null) {
   const raw = typeof value === 'string' ? value : '';
-  if (!raw) return { defaultAgentId: undefined, defaultAgentPoolId: undefined };
+  if (!raw || raw === 'none') return { defaultAgentId: undefined, defaultAgentPoolId: undefined };
   const [kind, id] = raw.split(':', 2);
   const targetId = idSchema.parse(id);
   if (kind === 'agent') return { defaultAgentId: targetId, defaultAgentPoolId: undefined };
@@ -106,7 +107,12 @@ export async function attachRunbookAction(serviceId: string, formData: FormData)
     inputValues: generatedInputValues(formData, definitions),
     ...executionTarget(formData.get('executionTarget')),
   });
-  await createServiceBinding(serviceId, parsed, actor.id);
+  try {
+    await createServiceBinding(serviceId, parsed, actor.id);
+  } catch (error) {
+    if (error instanceof RunbookError) return { error: error.userMessage };
+    throw error;
+  }
   revalidatePath(`/services/${serviceId}`);
 }
 
@@ -139,7 +145,12 @@ export async function updateRunbookBindingAction(
     defaultAgentId: target.defaultAgentId ?? null,
     defaultAgentPoolId: target.defaultAgentPoolId ?? null,
   });
-  await updateServiceBinding(serviceId, idSchema.parse(bindingId), parsed, actor.id);
+  try {
+    await updateServiceBinding(serviceId, idSchema.parse(bindingId), parsed, actor.id);
+  } catch (error) {
+    if (error instanceof RunbookError) return { error: error.userMessage };
+    throw error;
+  }
   revalidatePath(`/services/${serviceId}`);
 }
 
@@ -160,8 +171,8 @@ export async function configureRunbookTriggerAction(
   const rawValues = formData.getAll('conditionValue').map(String);
   const conditions = fields.flatMap((field, sequence) => {
     if (!field) return [];
-    const operator = conditionOperatorSchema.parse(operators[sequence] ?? 'EQUALS');
-    const rawValue = rawValues[sequence] ?? '';
+    const operator = conditionOperatorSchema.parse(operators.at(sequence) ?? 'EQUALS');
+    const rawValue = rawValues.at(sequence) ?? '';
     const value =
       operator === 'EXISTS' || operator === 'NOT_EXISTS'
         ? null

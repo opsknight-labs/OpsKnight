@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import { RunbookError, RunbookDefinitionError } from '@/lib/runbooks/errors';
+import { RUNBOOK_TEMPLATES, runbookTemplate } from '@/lib/runbooks/builder';
 import { CAPABILITIES } from '@/lib/authorization';
 import { logAudit } from '@/lib/audit';
 import prisma from '@/lib/prisma';
@@ -17,6 +19,7 @@ import {
   createRunbookSecretWithGrant,
   grantRunbookSecret,
   revokeRunbookSecretGrant,
+  rotateRunbookSecret,
 } from '@/lib/runbooks/secrets';
 import {
   archiveRunbook,
@@ -29,6 +32,16 @@ import {
 
 const idSchema = z.string().cuid();
 
+export async function rotateRunbookSecretAction(secretId: string, formData: FormData) {
+  const actor = await assertCapability(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
+  await rotateRunbookSecret(
+    idSchema.parse(secretId),
+    { value: readString(formData, 'value') },
+    actor.id
+  );
+  revalidatePath('/runbooks/agents');
+}
+
 function readString(formData: FormData, key: string): string {
   const value = formData.get(key);
   return typeof value === 'string' ? value : '';
@@ -38,7 +51,7 @@ function parseJson(value: string, label: string): unknown {
   try {
     return JSON.parse(value);
   } catch {
-    throw new Error(`${label} must contain valid JSON.`);
+    throw new RunbookDefinitionError(`${label} must contain valid JSON.`);
   }
 }
 
@@ -49,6 +62,9 @@ export async function createRunbookAction(formData: FormData) {
       name: readString(formData, 'name'),
       slug: readString(formData, 'slug'),
       description: readString(formData, 'description'),
+      definition: runbookTemplate(
+        z.enum(RUNBOOK_TEMPLATES).parse(readString(formData, 'template') || 'empty')
+      ),
     },
     actor.id
   );
@@ -73,17 +89,27 @@ export async function updateRunbookMetadataAction(runbookId: string, formData: F
 }
 
 export async function saveDraftAction(versionId: string, runbookId: string, formData: FormData) {
-  const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
-  const parsedVersionId = idSchema.parse(versionId);
-  const parsedRunbookId = idSchema.parse(runbookId);
-  const definition = runbookDefinitionSchema.parse(
-    parseJson(readString(formData, 'definition'), 'Definition')
-  );
-  const inputs = runbookInputsSchema.parse(
-    parseJson(readString(formData, 'inputs') || '[]', 'Inputs')
-  );
-  await updateDraftVersion(parsedVersionId, { definition, inputs }, actor.id);
-  revalidatePath(`/runbooks/${parsedRunbookId}`);
+  try {
+    const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
+    const parsedVersionId = idSchema.parse(versionId);
+    const parsedRunbookId = idSchema.parse(runbookId);
+    const definition = runbookDefinitionSchema.parse(
+      parseJson(readString(formData, 'definition'), 'Definition')
+    );
+    const inputs = runbookInputsSchema.parse(
+      parseJson(readString(formData, 'inputs') || '[]', 'Inputs')
+    );
+    await updateDraftVersion(parsedVersionId, { definition, inputs }, actor.id);
+    revalidatePath(`/runbooks/${parsedRunbookId}`);
+  } catch (error) {
+    if (error instanceof RunbookError) return { error: error.userMessage };
+    if (error instanceof z.ZodError)
+      return {
+        error:
+          'Check the definition and typed input fields. Keys must be unique and values must match their declared types.',
+      };
+    throw error;
+  }
 }
 
 export async function publishDraftAction(versionId: string, runbookId: string) {

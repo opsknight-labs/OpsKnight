@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import { generateKeyPairSync } from 'node:crypto';
 import { computeDefinitionChecksum } from '@/lib/runbooks/definition';
+import { createServiceBinding, updateServiceBinding } from '@/lib/runbooks/bindings';
 import { advanceExecution, startRunbookExecution } from '@/lib/runbooks/orchestrator';
 import {
   claimAgentAttempt,
@@ -84,6 +85,60 @@ async function createAgentTarget(definition: RunbookDefinition) {
 describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   beforeEach(async () => resetDatabase());
   afterAll(async () => testPrisma.$disconnect());
+
+  it('rejects ambiguous local-host write targets during binding creation and update', async () => {
+    const target = await createAgentTarget({
+      description: 'Binding validation',
+      steps: [
+        {
+          key: 'start',
+          name: 'Start',
+          type: 'SYSTEMD',
+          riskClass: 'IDEMPOTENT_WRITE',
+          config: { action: 'start', unit: 'api.service' },
+        },
+      ],
+    });
+    const second = await testPrisma.runbookAgent.create({
+      data: { name: 'Second machine', status: 'ONLINE' },
+    });
+    await testPrisma.runbookAgentPool.update({
+      where: { id: target.pool.id },
+      data: { mode: 'LOCAL_HOSTS', members: { create: { agentId: second.id } } },
+    });
+    await expect(
+      updateServiceBinding(
+        target.service.id,
+        target.binding.id,
+        { defaultAgentPoolId: target.pool.id },
+        target.actor.id
+      )
+    ).rejects.toThrow('This LOCAL_HOSTS pool contains 2 Agents');
+    const service = await createTestService('Binding guard');
+    await expect(
+      createServiceBinding(
+        service.id,
+        {
+          runbookId: target.runbook.id,
+          runbookVersionId: target.version.id,
+          versionStrategy: 'PINNED',
+          enabled: true,
+          mode: 'MANUAL',
+          defaultAgentPoolId: target.pool.id,
+          inputValues: {},
+        },
+        target.actor.id
+      )
+    ).rejects.toThrow('Machine-specific write actions require a specific Agent');
+    await expect(
+      updateServiceBinding(
+        target.service.id,
+        target.binding.id,
+        { defaultAgentPoolId: null, defaultAgentId: target.agent.id },
+        target.actor.id
+      )
+    ).resolves.toHaveProperty('defaultAgentId', target.agent.id);
+  });
 
   it('keeps quarantined Agents degraded and rejects invalid enrollment keys before consuming tokens', async () => {
     const agent = await testPrisma.runbookAgent.create({
@@ -385,8 +440,9 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       serviceId: target.service.id,
     });
     await advanceExecution(execution.id);
-    const claim = await claimAgentAttempt(target.agent.id);
-    expect(claim).toBeNull();
+    await expect(claimAgentAttempt(target.agent.id)).rejects.toThrow(
+      'HTTPS required for secret-backed steps'
+    );
     const secureClaim = await claimAgentAttempt(target.agent.id, true);
     expect(secureClaim?.inputValues).toEqual({ unit: 'api.service' });
     expect(secureClaim?.secretInputKeys).toEqual(['unit']);

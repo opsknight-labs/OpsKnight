@@ -21,6 +21,7 @@ on:
       - 'deploy/**'
       - 'tests/**/runbook*'
       - 'tests/lib/runbooks/**'
+      - 'playwright.runbooks.config.ts'
       - '.github/workflows/runbook-validation.yml'
       - '.github/workflows/deployment-validation.yml'
       - '.github/workflows/swarm-validation.yml'
@@ -33,6 +34,51 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  runbook-ui:
+    name: Runbook authoring and mobile UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: opsknight
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: runbook_ui_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U opsknight -d runbook_ui_test"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    env:
+      DATABASE_URL: postgresql://opsknight:test_password@localhost:5432/runbook_ui_test
+      DIRECT_URL: postgresql://opsknight:test_password@localhost:5432/runbook_ui_test
+      NEXTAUTH_URL: http://127.0.0.1:3205
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3205
+      NEXTAUTH_SECRET: runbook-ui-test-session-signing-independent-secret
+      API_KEY_SECRET: runbook-ui-test-api-key-independent-secret
+      ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
+      PLAYWRIGHT_PRODUCTION_SERVER: 'true'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+      - name: Apply migrations to isolated UI database
+        run: npx prisma migrate deploy
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Production build
+        run: npm run build
+      - name: Authoring and 390px browser checks
+        run: npx playwright test --config playwright.runbooks.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runbook-ui-results
+          path: test-results/
+          retention-days: 7
+
   execution-safety:
     name: Runbook fault injection and database safety
     runs-on: ubuntu-latest

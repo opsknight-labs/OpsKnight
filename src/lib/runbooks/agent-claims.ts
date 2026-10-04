@@ -23,6 +23,7 @@ import { agentSupportsStep, isRetryableFailure, retryDelayMs } from './safety';
 import { signExecutionEnvelope } from './execution-signing';
 import {
   RunbookAgentLeaseExpiredError,
+  RunbookDefinitionError,
   RunbookAgentLeaseTokenMismatchError,
   RunbookAgentNotFoundError,
   RunbookPreExecutionFenceError,
@@ -125,14 +126,17 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
               },
             },
           });
+          let blockedSecretTransport = false;
           const eligible = candidates.filter(candidate => {
+            if (!agentSupportsStep(capabilities, candidate.executionStep.type)) return false;
             if (
               !candidate.targetAgentId &&
               candidate.executionStep.riskClass !== 'READ_ONLY' &&
               candidate.targetAgentPool?.mode === 'LOCAL_HOSTS' &&
               candidate.targetAgentPool._count.members > 1
-            )
+            ) {
               return false;
+            }
             const keys = referencedStepInputKeys(candidate.executionStep.config);
             const inputs = candidate.executionStep.execution.inputValues as Record<string, unknown>;
             const hasSecrets = Object.entries(inputs).some(
@@ -145,11 +149,19 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
                 process.env.NODE_ENV === 'development' &&
                 process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true'
               )
-            )
+            ) {
+              blockedSecretTransport = true;
               return false;
+            }
             return agentSupportsStep(capabilities, candidate.executionStep.type);
           });
-          if (eligible.length === 0) return null;
+          if (eligible.length === 0) {
+            if (blockedSecretTransport)
+              throw new RunbookDefinitionError(
+                'HTTPS required for secret-backed steps. Configure this Agent with a trusted HTTPS control-plane URL.'
+              );
+            return null;
+          }
           const locked = await tx.$queryRaw<Array<{ id: string }>>`
             SELECT "id" FROM "RunbookStepAttempt"
             WHERE "id" IN (${Prisma.join(eligible.map(candidate => candidate.id))})

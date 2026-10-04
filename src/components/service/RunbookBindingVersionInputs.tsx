@@ -4,6 +4,10 @@ import { useState } from 'react';
 import type { RunbookInputType, RunbookVersionState } from '@prisma/client';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
+import { FormSelect } from '@/components/runbooks/RunbookControls';
+import RunbookTargetSelect, {
+  type RunbookTargetOptions,
+} from '@/components/runbooks/RunbookTargetSelect';
 
 type InputDefinition = {
   key: string;
@@ -19,9 +23,8 @@ type Version = {
   version: number;
   state: RunbookVersionState;
   inputs: InputDefinition[];
+  hasAgentWrite?: boolean;
 };
-
-const selectClass = 'h-10 w-full rounded-md border bg-background px-3 text-sm';
 
 export default function RunbookBindingVersionInputs({
   versions,
@@ -29,12 +32,14 @@ export default function RunbookBindingVersionInputs({
   initialStrategy,
   initialVersionId,
   values,
+  targets,
 }: {
   versions: Version[];
   publishedVersionId: string;
   initialStrategy: 'LATEST_PUBLISHED' | 'PINNED';
   initialVersionId: string | null;
   values: Record<string, unknown>;
+  targets?: RunbookTargetOptions & { defaultValue: string };
 }) {
   const [strategy, setStrategy] = useState(initialStrategy);
   const [versionId, setVersionId] = useState(initialVersionId ?? publishedVersionId);
@@ -48,34 +53,37 @@ export default function RunbookBindingVersionInputs({
     <>
       <div className="space-y-2">
         <Label htmlFor={`version-strategy-${publishedVersionId}`}>Version strategy</Label>
-        <select
-          id={`version-strategy-${publishedVersionId}`}
+        <FormSelect
           name="versionStrategy"
+          label="Version strategy"
           value={strategy}
-          onChange={event => setStrategy(event.target.value as typeof strategy)}
-          className={selectClass}
-        >
-          <option value="LATEST_PUBLISHED">Latest published</option>
-          <option value="PINNED">Pinned</option>
-        </select>
+          onValueChange={value => setStrategy(value as typeof strategy)}
+          options={[
+            { value: 'LATEST_PUBLISHED', label: 'Latest published' },
+            { value: 'PINNED', label: 'Pinned' },
+          ]}
+        />
       </div>
       <div className="space-y-2">
         <Label htmlFor={`pinned-version-${publishedVersionId}`}>Pinned version</Label>
-        <select
-          id={`pinned-version-${publishedVersionId}`}
+        <FormSelect
           name="runbookVersionId"
+          label="Pinned version"
           value={versionId}
-          onChange={event => setVersionId(event.target.value)}
+          onValueChange={setVersionId}
           disabled={strategy !== 'PINNED'}
-          className={selectClass}
-        >
-          {selectable.map(candidate => (
-            <option key={candidate.id} value={candidate.id}>
-              v{candidate.version} · {candidate.state}
-            </option>
-          ))}
-        </select>
+          options={selectable.map(candidate => ({
+            value: candidate.id,
+            label: `v${candidate.version} · ${candidate.state}`,
+          }))}
+        />
       </div>
+      {targets && (
+        <div className="space-y-2">
+          <Label>Execution target</Label>
+          <RunbookTargetSelect {...targets} hasAgentWrite={version?.hasAgentWrite} />
+        </div>
+      )}
       <div
         key={effectiveVersionId}
         className="order-1 grid gap-3 border-t pt-3 sm:grid-cols-2 lg:col-span-4"

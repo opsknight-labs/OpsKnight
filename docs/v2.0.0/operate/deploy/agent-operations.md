@@ -22,6 +22,16 @@ Runbook Agents execute host, container, and Kubernetes actions without accepting
 
 The Agent is separate from the Runbook Worker. The worker plans and reconciles database state; the Agent is the constrained execution plane close to the target.
 
+## Runbook authoring and operations UI
+
+The Runbooks library supports search, published/draft filters, and creation templates. Edit a draft through the ordered step builder and each step's configuration panel; define typed inputs in the Inputs tab. Advanced JSON is an explicit alternative, not the primary editor. Save the draft before publishing: the publish confirmation publishes only the saved version. Published versions remain immutable.
+
+Service bindings show their selected version, target, inputs, and triggers together. Use **Configure** to change them. Machine-specific write actions cannot target a multi-member `LOCAL_HOSTS` pool; choose a specific Agent instead. Incident executions show ordered step progress and approvals for the exact frozen action and parameters. Cancellation, publication, revocation, and detach operations require confirmation.
+
+**Runbooks → Agents** separates Agents, Pools, and Secrets. Pool membership and scoped secret grants are managed in their configuration panels; secret values remain masked and can be rotated without displaying the existing value. Secret-backed steps require HTTPS between the Agent and control plane. An HTTP polling Agent reports an explicit HTTPS-required error instead of receiving secret material.
+
+**Runbooks → Health** shows queue and safety indicators, Agent heartbeat/spool attention, and worker state visible to the current process. In split deployments, a web process cannot certify the whole worker fleet; monitor each worker readiness endpoint separately. Execution-signing identity rotation and fleet/load certification remain separate future work.
+
 ## Safe enrollment sequence
 
 1. In **Runbooks → Agents**, create an Agent and copy its one-time token.
