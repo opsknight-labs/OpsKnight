@@ -11,7 +11,8 @@ reader:
 verification:
   level: source
   verified_at: 2026-09-29
-  evidence: [deploy/kubernetes/helm/opsknight/values.yaml, deploy/kubernetes/helm/opsknight/templates/]
+  evidence:
+    [deploy/kubernetes/helm/opsknight/values.yaml, deploy/kubernetes/helm/opsknight/templates/]
 ---
 
 # Configure split runtime with Helm
@@ -22,13 +23,135 @@ Read [Runtime roles](../architecture/runtime-roles), calculate resources and con
 
 ## Prepare the configuration
 
-Set `runtime.mode: split`, enable the migration Job, and define Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, and Status Projector replicas/resources/pools/probes/termination/PDBs. Direct ingress only to Web. Set `database.maxApplicationConnections` to the reviewed ceiling.
+Set `runtime.mode: split`, enable the migration Job, and define Web, Scheduler, General Worker, Critical Worker, Bulk Worker, Runbook Worker, and Status Projector replicas, resources, connection pool sizes, probes, termination grace periods, and PDBs. Direct ingress only to Web. Set `database.maxApplicationConnections` to the reviewed ceiling.
+
+Create `values.split.yaml` with the complete role configuration:
+
+```yaml
+runtime:
+  mode: split
+
+# Enforce High Availability by spreading pods across distinct Kubernetes nodes/zones
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: DoNotSchedule
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+
+database:
+  port: 5432
+  maxApplicationConnections: 200
+
+migrations:
+  job:
+    enabled: true
+
+# Web Tier (handles HTTP/UI/API traffic)
+web:
+  replicaCount: 2
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: '1', memory: 1Gi }
+  database:
+    poolSize: 10
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+
+# Scheduler Tier (runs scheduled incident sweeps & alert evaluations)
+scheduler:
+  replicaCount: 2
+  profile: maintenance
+  resources:
+    requests: { cpu: 150m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  database:
+    poolSize: 3
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# General Worker (background async job execution)
+generalWorker:
+  replicaCount: 2
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  database:
+    poolSize: 15
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# Critical Worker (p1/p2 pages, voice call dispatch, webhook deliveries)
+criticalWorker:
+  replicaCount: 2
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { cpu: '1', memory: 1Gi }
+  database:
+    poolSize: 15
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# Bulk Worker (reporting rollups, data retention purges, telemetry processing)
+bulkWorker:
+  replicaCount: 2
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  database:
+    poolSize: 10
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# Runbook Worker (isolated remediation orchestration and reconciliation)
+runbookWorker:
+  replicaCount: 2
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  database:
+    poolSize: 3
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# Status Projector (real-time status page projections & incident state updates)
+statusProjector:
+  replicaCount: 2
+  resources:
+    requests: { cpu: 150m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  database:
+    poolSize: 5
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+```
 
 Keep migration and non-Web roles on direct PostgreSQL. Add [PgBouncer](./pgbouncer) only for Web.
 
 ## Deploy split runtime
 
-Lint, render, and inspect the chart. The integrated Deployment must be absent. Install/upgrade and require the migration hook to complete before all role rollouts become ready.
+Lint, render, and inspect the chart. The integrated Deployment must be absent.
+
+```sh
+helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \
+  --namespace opsknight \
+  -f values.production.yaml \
+  -f values.split.yaml
+```
+
+Require the migration hook to complete before all role rollouts become ready:
 
 ```sh
 kubectl -n opsknight get job,deployment,pod -w

@@ -23,6 +23,7 @@ Understanding the fundamental building blocks of OpsKnight.
 | [Status Page](./status-page.md)                           | Public status communication |
 | [Urgency Mapping](./urgency-mapping.md)                   | Severity and response logic |
 | [Authentication & Security](./authentication-security.md) | Access controls and safety  |
+| [Scalability & Performance](./scalability.md)             | System capacity and limits  |
 
 ## How It All Connects
 

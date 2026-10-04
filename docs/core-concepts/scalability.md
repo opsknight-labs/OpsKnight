@@ -1,3 +1,7 @@
+---
+order: 14
+---
+
 # OpsKnight Scalability Guide
 
 This document outlines the system capacity, performance optimizations, and configuration requirements for running OpsKnight at scale.

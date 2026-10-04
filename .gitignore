@@ -58,6 +58,8 @@ verify_fix.ts
 !prisma/migrations/**/*.sql
 /reports/
 /ci-artifacts/
+/screenshots/
+/test-results/
 
 # load testing raw telemetry
 artifacts/load-certification/**/*.json
