@@ -9,6 +9,9 @@ vi.mock('@/lib/jobs/queue', () => ({
 
 // The critical lanes have their own tests. Here they are stubbed so this file
 // tests only the worker loop's pacing and shutdown, without reaching a database.
+vi.mock('@/lib/runbooks/reconciler', () => ({
+  reconcileRunbooks: vi.fn().mockResolvedValue({ reconciled: 0 }),
+}));
 vi.mock('@/lib/escalation/worker', () => ({
   runCriticalEscalationCycle: vi.fn(),
   criticalEscalationCycleWasBusy: vi.fn(() => false),

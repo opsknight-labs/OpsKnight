@@ -4,46 +4,6 @@ import { executeNetworkDiagnostic } from './network-diagnostics';
 import { captureEvidence } from './evidence';
 import { assertPolicyAllows } from './policy';
 
-function isSafeSystemdUnit(value: string): boolean {
-  return value.length > 0 && value.length <= 128 && /^[A-Za-z0-9@_.:-]+$/.test(value);
-}
-
-function isSafeBashCommand(value: string): boolean {
-  if (value.length === 0 || value.length > 4096) return false;
-  if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(value)) return false;
-  // Disallow command-chaining and substitution primitives for remote input.
-  if (/[;&|`$<>]/.test(value)) return false;
-  return true;
-}
-
-function sanitizeCommandSpec(
-  attempt: ClaimedAttempt,
-  spec: { command: string; args: string[] }
-): { command: string; args: string[] } {
-  if (attempt.step.type === 'SYSTEMD' && attempt.step.config.action === 'logs') {
-    const unitIndex = spec.args.indexOf('--unit');
-    if (unitIndex === -1 || unitIndex + 1 >= spec.args.length) {
-      throw new Error('Invalid systemd logs command specification.');
-    }
-    const unit = String(spec.args[unitIndex + 1]);
-    if (!isSafeSystemdUnit(unit)) {
-      throw new Error('Unsafe systemd unit name.');
-    }
-  }
-
-  if (attempt.step.type === 'BASH') {
-    const commandIndex = spec.args.indexOf('-c');
-    if (commandIndex === -1 || commandIndex + 1 >= spec.args.length) {
-      throw new Error('Invalid bash command specification.');
-    }
-    const script = String(spec.args[commandIndex + 1]);
-    if (!isSafeBashCommand(script)) {
-      throw new Error('Unsafe bash command.');
-    }
-  }
-
-  return spec;
-}
 
 export interface ExecutionResult {
   status: 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'UNKNOWN';
@@ -70,7 +30,10 @@ export function containerHealthPassed(output: string): boolean {
   }
 }
 
-export function commandFor(attempt: ClaimedAttempt): { command: string; args: string[] } {
+export function commandFor(
+  attempt: ClaimedAttempt,
+  policy?: AgentPolicy
+): { command: string; args: string[] } {
   const config = attempt.step.config;
   switch (attempt.step.type) {
     case 'LINUX_DIAGNOSTICS': {
@@ -186,8 +149,15 @@ export function commandFor(attempt: ClaimedAttempt): { command: string; args: st
         ],
       };
     }
-    case 'BASH':
-      return { command: 'bash', args: ['--noprofile', '--norc', '-c', String(config.command)] };
+    case 'BASH': {
+      // Execute the operator-owned allowlist entry, never the remote claim's command string.
+      const approvedCommand = policy?.bashCommandPatterns.find(
+        command => command === config.command
+      );
+      if (approvedCommand === undefined)
+        throw new Error('LOCAL_POLICY_DENIED: shell command is not allowlisted.');
+      return { command: 'bash', args: ['--noprofile', '--norc', '-c', approvedCommand] };
+    }
   }
 }
 
@@ -255,17 +225,7 @@ async function executeCommand(
     ['dns', 'tcp', 'http'].includes(String(attempt.step.config.diagnostic))
   )
     return executeNetworkDiagnostic(attempt, policy, signal);
-  let spec: { command: string; args: string[] };
-  try {
-    spec = sanitizeCommandSpec(attempt, commandFor(attempt));
-  } catch (error) {
-    return {
-      status: 'FAILED',
-      output: '',
-      errorCode: 'INVALID_COMMAND_SPEC',
-      errorMessage: error instanceof Error ? error.message : 'Invalid command specification.',
-    };
-  }
+  const spec = commandFor(attempt, policy);
   const configuredTimeout = attempt.step.timeoutSeconds ?? policy.maxRuntimeSeconds;
   const timeoutMs = Math.min(configuredTimeout, policy.maxRuntimeSeconds) * 1000;
   const inputEnvironment = Object.fromEntries(
