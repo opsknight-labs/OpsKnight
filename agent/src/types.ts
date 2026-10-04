@@ -11,6 +11,11 @@ export interface AgentPolicy {
   bashCommandPatterns: string[];
   maxRuntimeSeconds: number;
   maxOutputBytes: number;
+  podmanContainers?: string[];
+  kubernetesActions?: string[];
+  kubernetesMaxReplicas?: number;
+  networkHosts?: string[];
+  networkPorts?: number[];
 }
 
 export interface AgentIdentity {
@@ -21,6 +26,7 @@ export interface AgentIdentity {
 
 export interface ClaimedAttempt {
   signature?: string;
+  signingKeyId?: string;
   signingAgentId?: string;
   executionDeadlineAt?: string;
   definitionChecksum?: string;

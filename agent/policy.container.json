@@ -3,7 +3,12 @@
   "allowNonIdempotent": false,
   "systemdUnits": [],
   "dockerContainers": [],
+  "podmanContainers": [],
   "kubernetesNamespaces": [],
+  "kubernetesActions": ["get", "describe", "logs", "events", "rollout-status"],
+  "kubernetesMaxReplicas": 0,
+  "networkHosts": [],
+  "networkPorts": [],
   "bashCommandPatterns": [],
   "maxRuntimeSeconds": 300,
   "maxOutputBytes": 1048576

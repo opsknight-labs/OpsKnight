@@ -33,8 +33,6 @@ export default function RunbookTargetSelect({
           ...pools.map(pool => ({
             value: `pool:${pool.id}`,
             label: `${pool.name} · ${pool.mode.replaceAll('_', ' ')}${pool._count ? ` · ${pool._count.members} Agents` : ''}`,
-            disabled:
-              hasAgentWrite && pool.mode === 'LOCAL_HOSTS' && (pool._count?.members ?? 0) > 1,
           })),
           ...agents.map(agent => ({
             value: `agent:${agent.id}`,
@@ -44,7 +42,8 @@ export default function RunbookTargetSelect({
       />
       {invalid && (
         <p role="alert" className="text-xs text-destructive">
-          Machine-specific write actions require a specific Agent. Select one before saving.
+          Machine-specific writes require a specific Agent or a selector resolving to exactly one
+          healthy Agent.
         </p>
       )}
       <p className="text-xs text-muted-foreground">

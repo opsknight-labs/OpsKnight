@@ -7,6 +7,8 @@
  */
 
 import { z } from 'zod';
+import { runbookEvidenceSchema } from './evidence';
+import { schedulingLabelsSchema } from './labels';
 import { conditionContextFieldSchema } from './conditions';
 import {
   RUNBOOK_BINDING_MODES,
@@ -208,6 +210,7 @@ export const createServiceRunbookBindingSchema = z
     versionStrategy: z.enum(RUNBOOK_VERSION_STRATEGIES).default('LATEST_PUBLISHED'),
     defaultAgentPoolId: z.string().cuid().optional(),
     defaultAgentId: z.string().cuid().optional(),
+    agentSelector: schedulingLabelsSchema.optional(),
     inputValues: z.record(z.string(), z.unknown()).default({}),
   })
   .strict()
@@ -242,6 +245,7 @@ export const updateServiceRunbookBindingSchema = z
     versionStrategy: z.enum(RUNBOOK_VERSION_STRATEGIES).optional(),
     defaultAgentPoolId: z.string().cuid().optional().nullable(),
     defaultAgentId: z.string().cuid().optional().nullable(),
+    agentSelector: schedulingLabelsSchema.optional(),
     inputValues: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();
@@ -336,7 +340,7 @@ export const createRunbookAgentPoolSchema = z
     name: z.string().trim().min(1).max(200),
     description: z.string().trim().max(1000).default(''),
     mode: z.enum(['LOCAL_HOSTS', 'SHARED_TARGET'] as const).default('SHARED_TARGET'),
-    matchLabels: z.record(z.string(), z.string()).default({}),
+    matchLabels: schedulingLabelsSchema.default({}),
   })
   .strict();
 
@@ -385,8 +389,8 @@ export const agentJobResultSchema = z
     outputArtifactId: z.string().optional(),
     errorCode: z.string().max(100).optional(),
     errorMessage: z.string().max(5000).optional(),
-    preState: z.record(z.string(), z.unknown()).optional(),
-    postState: z.record(z.string(), z.unknown()).optional(),
+    preState: runbookEvidenceSchema.optional(),
+    postState: runbookEvidenceSchema.optional(),
   })
   .strict();
 
@@ -429,7 +433,11 @@ export const runbookExecutionFilterSchema = z.object({
   runbookId: z.string().cuid().optional(),
   incidentId: z.string().cuid().optional(),
   serviceId: z.string().cuid().optional(),
-  page: z.coerce.number().int().positive().default(1),
+  agentId: z.string().cuid().optional(),
+  from: z.date().optional(),
+  to: z.date().optional(),
+  trigger: z.enum(['automatic', 'responder']).optional(),
+  page: z.coerce.number().int().positive().max(10000).default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
 });
 
@@ -437,8 +445,24 @@ export type RunbookExecutionFilter = z.infer<typeof runbookExecutionFilterSchema
 
 export const runbookAgentFilterSchema = z.object({
   status: z.enum(['ENROLLING', 'ONLINE', 'DEGRADED', 'OFFLINE', 'REVOKED'] as const).optional(),
-  page: z.coerce.number().int().positive().default(1),
+  q: z.string().max(200).optional(),
+  poolId: z.string().cuid().optional(),
+  platform: z.string().max(100).optional(),
+  capability: z.string().max(100).optional(),
+  labels: schedulingLabelsSchema.optional(),
+  page: z.coerce.number().int().positive().max(10000).default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
 });
 
 export type RunbookAgentFilter = z.infer<typeof runbookAgentFilterSchema>;
+
+export const runbookLibraryFilterSchema = z
+  .object({
+    q: z.string().max(200).optional(),
+    status: z.enum(['published', 'draft']).optional(),
+    ownerId: z.string().cuid().optional(),
+    serviceId: z.string().cuid().optional(),
+    page: z.coerce.number().int().positive().max(10000).default(1),
+    pageSize: z.coerce.number().int().positive().max(100).default(20),
+  })
+  .strict();

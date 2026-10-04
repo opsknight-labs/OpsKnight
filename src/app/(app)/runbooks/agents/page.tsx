@@ -25,7 +25,17 @@ import {
   CardDescription,
 } from '@/components/ui/shadcn/card';
 import { Input } from '@/components/ui/shadcn/input';
+import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Label } from '@/components/ui/shadcn/label';
+import { RunbookAgentStatus, type Prisma } from '@prisma/client';
+import { runbookAgentFilterSchema } from '@/lib/runbooks/schemas';
+import { schedulingLabelsSchema } from '@/lib/runbooks/pool-labels';
+import {
+  RunbookFilters,
+  RunbookPagination,
+  runbookPageQuery,
+  RUNBOOK_PAGE_SIZE,
+} from '@/components/runbooks/RunbookPagination';
 import {
   addAgentToPoolAction,
   createAgentPoolAction,
@@ -35,20 +45,87 @@ import {
   revokeAgentAction,
   revokeRunbookSecretGrantAction,
   rotateRunbookSecretAction,
+  updateSchedulingLabelsAction,
+  rotateExecutionSigningIdentityAction,
+  updateIncidentRemediationBudgetAction,
 } from '../actions';
 
 export const revalidate = 0;
-export default async function RunbookAgentsPage() {
+export default async function RunbookAgentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const permissions = await getUserPermissions();
   const canManage = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const canManageSecrets = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
+  const { query, page: requestedPage } = runbookPageQuery(await searchParams);
   const [databaseClock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT NOW() AS now`;
   if (!databaseClock) throw new Error('Database clock query returned no rows.');
+  const onlineSince = new Date(databaseClock.now.getTime() - 90000);
+  const statusFilter = Object.values(RunbookAgentStatus).find(status => status === query.status);
+  const label = query.label ?? '';
+  const split = label.indexOf('=');
+  const labelKey = split > 0 ? label.slice(0, split) : '';
+  const labelValue = split > 0 ? label.slice(split + 1) : '';
+  const labels = schedulingLabelsSchema.safeParse(
+    labelKey && labelValue ? { [labelKey]: labelValue } : {}
+  );
+  const filter = runbookAgentFilterSchema.parse({
+    status: statusFilter,
+    q: query.q,
+    poolId: query.pool,
+    platform: query.platform?.slice(0, 100),
+    capability: query.capability?.slice(0, 100),
+    labels: labels.success ? labels.data : undefined,
+    page: requestedPage,
+  });
+  const agentWhere: Prisma.RunbookAgentWhereInput = {
+    ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
+    ...(statusFilter === 'OFFLINE'
+      ? {
+          OR: [
+            { status: 'OFFLINE' },
+            {
+              status: { in: ['ONLINE', 'DEGRADED'] },
+              OR: [{ lastHeartbeatAt: null }, { lastHeartbeatAt: { lt: onlineSince } }],
+            },
+          ],
+        }
+      : statusFilter === 'ONLINE' || statusFilter === 'DEGRADED'
+        ? { status: statusFilter, lastHeartbeatAt: { gte: onlineSince } }
+        : statusFilter
+          ? { status: statusFilter }
+          : {}),
+    ...(filter.poolId ? { poolMemberships: { some: { poolId: filter.poolId } } } : {}),
+    ...(filter.platform ? { platform: filter.platform } : {}),
+    ...(filter.capability ? { capabilities: { array_contains: [filter.capability] } } : {}),
+    ...(filter.labels
+      ? {
+          AND: Object.entries(filter.labels).map(([key, value]) => ({
+            labels: { path: [key], equals: value },
+          })),
+        }
+      : {}),
+  };
+  const agentTotal = await prisma.runbookAgent.count({ where: agentWhere });
+  const page = Math.min(requestedPage, Math.max(1, Math.ceil(agentTotal / RUNBOOK_PAGE_SIZE)));
+  const signingKeys = canManage
+    ? await prisma.runbookExecutionSigningKey.findMany({
+        where: { state: { not: 'RETIRED' } },
+        select: { id: true, publicKey: true, state: true, retiredAt: true },
+        orderBy: { createdAt: 'asc' },
+      })
+    : [];
+  const budget = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
   const [agents, pools, secrets, signingKey] = await Promise.all([
     prisma.runbookAgent.findMany({
+      where: agentWhere,
+      skip: (page - 1) * RUNBOOK_PAGE_SIZE,
+      take: RUNBOOK_PAGE_SIZE,
       include: { poolMemberships: { include: { pool: true } } },
-      orderBy: { name: 'asc' },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
     }),
     prisma.runbookAgentPool.findMany({
       include: {
@@ -73,8 +150,8 @@ export default async function RunbookAgentsPage() {
         })
       : Promise.resolve([]),
     canManage
-      ? prisma.runbookExecutionSigningKey.findUnique({
-          where: { id: 'default' },
+      ? prisma.runbookExecutionSigningKey.findFirst({
+          where: { state: 'ACTIVE' },
           select: { publicKey: true },
         })
       : Promise.resolve(null),
@@ -105,6 +182,43 @@ export default async function RunbookAgentsPage() {
             OpsKnight session.
           </p>
           <code className="mt-2 block break-all select-all text-xs">{signingKey.publicKey}</code>
+          <p className="mt-3 text-xs">
+            For overlapping rotation, set OPSKNIGHT_EXECUTION_PUBLIC_KEYS to this trusted key map on
+            every Agent, wait for fleet acknowledgement, then activate NEXT. RETIRING keys have a
+            24-hour grace period.
+          </p>
+          <code className="mt-2 block break-all text-xs">
+            {JSON.stringify(Object.fromEntries(signingKeys.map(key => [key.id, key.publicKey])))}
+          </code>
+          <ActionForm action={rotateExecutionSigningIdentityAction}>
+            <input type="hidden" name="operation" value="stage" />
+            <SubmitButton disabled={signingKeys.some(key => key.state === 'NEXT')}>
+              Stage next signing identity
+            </SubmitButton>
+          </ActionForm>
+          {signingKeys
+            .filter(key => key.state !== 'ACTIVE')
+            .map(key => (
+              <ActionForm key={key.id} action={rotateExecutionSigningIdentityAction}>
+                <input
+                  type="hidden"
+                  name="operation"
+                  value={key.state === 'NEXT' ? 'activate' : 'retire'}
+                />
+                <input type="hidden" name="keyId" value={key.id} />
+                <p className="mt-2 text-xs">
+                  {key.state} · {key.id}
+                  {key.state === 'RETIRING' && key.retiredAt
+                    ? ` · Grace ends ${key.retiredAt.toLocaleString()}`
+                    : ''}
+                </p>
+                <SubmitButton>
+                  {key.state === 'NEXT'
+                    ? 'Activate acknowledged identity'
+                    : 'Retire after grace period'}
+                </SubmitButton>
+              </ActionForm>
+            ))}
         </details>
       )}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -147,11 +261,44 @@ export default async function RunbookAgentsPage() {
                   <dd>{agent.poolMemberships.map(item => item.pool.name).join(', ') || 'None'}</dd>
                   <dt className="text-muted-foreground">Jobs</dt>
                   <dd>{agent.activeAttemptCount} running</dd>
+                  <dt className="text-muted-foreground">Trusted signing identities</dt>
+                  <dd className="break-all">
+                    {Array.isArray(agent.trustedSigningKeys)
+                      ? agent.trustedSigningKeys
+                          .filter((key): key is string => typeof key === 'string')
+                          .join(', ') || 'No rotation acknowledgement'
+                      : 'No rotation acknowledgement'}
+                  </dd>
                   <dt className="text-muted-foreground">Spool</dt>
                   <dd>
                     {agent.spoolDepth} pending · {agent.deadLetterDepth} dead letter
                   </dd>
                 </dl>
+                {Array.isArray(agent.capabilityReport) &&
+                  agent.capabilityReport.map((entry, index) => {
+                    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+                    return (
+                      <p key={index} className="text-xs">
+                        {String(entry.name)} · configured {entry.configured ? '✓' : '—'} · available{' '}
+                        {entry.available ? '✓' : '—'} {entry.reason ? `· ${entry.reason}` : ''}
+                      </p>
+                    );
+                  })}
+                {canManage && (
+                  <details>
+                    <summary className="cursor-pointer text-xs">Scheduling labels</summary>
+                    <ActionForm action={updateSchedulingLabelsAction}>
+                      <input type="hidden" name="id" value={agent.id} />
+                      <input type="hidden" name="kind" value="agent" />
+                      <Textarea
+                        name="labels"
+                        aria-label={`Labels for ${agent.name}`}
+                        defaultValue={JSON.stringify(agent.labels)}
+                      />
+                      <SubmitButton>Save scheduling labels</SubmitButton>
+                    </ActionForm>
+                  </details>
+                )}
                 {agent.lastError && (
                   <p className="break-words rounded-lg bg-destructive/10 p-3 text-xs text-destructive">
                     {agent.lastError}
@@ -194,6 +341,9 @@ export default async function RunbookAgentsPage() {
             <Field label="Description">
               <Input name="description" aria-label="Pool description" />
             </Field>
+            <Field label="Match labels (JSON)">
+              <Textarea name="matchLabels" aria-label="Pool match labels" defaultValue="{}" />
+            </Field>
             <FormSelect
               name="mode"
               label="Pool semantics"
@@ -215,6 +365,21 @@ export default async function RunbookAgentsPage() {
           <Card key={pool.id} className="rounded-xl">
             <CardHeader>
               <CardTitle className="text-base">{pool.name}</CardTitle>
+              {canManage && (
+                <details>
+                  <summary className="cursor-pointer text-xs">Dynamic label selector</summary>
+                  <ActionForm action={updateSchedulingLabelsAction}>
+                    <input type="hidden" name="id" value={pool.id} />
+                    <input type="hidden" name="kind" value="pool" />
+                    <Textarea
+                      name="labels"
+                      aria-label={`Selector for ${pool.name}`}
+                      defaultValue={JSON.stringify(pool.matchLabels)}
+                    />
+                    <SubmitButton>Save pool selector</SubmitButton>
+                  </ActionForm>
+                </details>
+              )}
               <CardDescription>{pool.description}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -243,8 +408,10 @@ export default async function RunbookAgentsPage() {
                     key={member.id}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
                   >
-                    <span className="text-sm">{member.agent.name}</span>
-                    {canManage && (
+                    <span className="text-sm">
+                      {member.agent.name} · {member.source.toLowerCase()}
+                    </span>
+                    {canManage && member.source === 'EXPLICIT' && (
                       <ConfirmAction
                         action={removeAgentFromPoolAction.bind(null, member.id)}
                         title={`Remove ${member.agent.name}?`}
@@ -430,6 +597,59 @@ export default async function RunbookAgentsPage() {
         ]}
       />
       <RunbookNavigation />
+      <RunbookFilters
+        query={query}
+        fields={[
+          { name: 'q', label: 'Search Agents' },
+          { name: 'pool', label: 'Pool ID' },
+          { name: 'platform', label: 'Platform' },
+          { name: 'capability', label: 'Capability' },
+          { name: 'label', label: 'Label (key=value)' },
+        ]}
+        statusOptions={Object.values(RunbookAgentStatus).map(value => ({ value, label: value }))}
+      />
+      <RunbookPagination page={page} total={agentTotal} query={query} />
+      {permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE) && (
+        <details className="rounded-xl border p-4">
+          <summary className="cursor-pointer font-semibold">Automatic remediation budgets</summary>
+          <ActionForm
+            action={updateIncidentRemediationBudgetAction}
+            className="mt-3 grid gap-3 sm:grid-cols-3"
+          >
+            <Field label="Automatic executions per incident">
+              <Input
+                name="executions"
+                aria-label="Automatic executions per incident"
+                type="number"
+                min={0}
+                max={100}
+                defaultValue={budget?.runbookAutoExecutionsPerIncident ?? 3}
+              />
+            </Field>
+            <Field label="Automatic writes per incident">
+              <Input
+                name="writes"
+                aria-label="Automatic writes per incident"
+                type="number"
+                min={0}
+                max={100}
+                defaultValue={budget?.runbookAutoWritesPerIncident ?? 3}
+              />
+            </Field>
+            <Field label="Automatic non-idempotent actions per incident">
+              <Input
+                name="nonIdempotent"
+                aria-label="Automatic non-idempotent actions per incident"
+                type="number"
+                min={0}
+                max={100}
+                defaultValue={budget?.runbookAutoNonIdempotentPerIncident ?? 0}
+              />
+            </Field>
+            <SubmitButton>Save remediation budgets</SubmitButton>
+          </ActionForm>
+        </details>
+      )}
       <DetailTabs
         tabs={[
           { id: 'agents', label: 'Agents', count: agents.length, content: agentPanel },

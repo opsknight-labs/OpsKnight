@@ -129,7 +129,7 @@ export function minimumRiskForStep(step: RunbookStepDefinition): RunbookRiskClas
       }
     case 'SYSTEMD': {
       const action = configuredString(step, 'action', 'status');
-      return action === 'status'
+      return ['status', 'logs'].includes(action)
         ? 'READ_ONLY'
         : action === 'restart'
           ? 'NON_IDEMPOTENT'
@@ -137,16 +137,18 @@ export function minimumRiskForStep(step: RunbookStepDefinition): RunbookRiskClas
     }
     case 'DOCKER': {
       const action = configuredString(step, 'action', 'inspect');
-      return ['inspect', 'logs'].includes(action)
+      return ['inspect', 'logs', 'health'].includes(action)
         ? 'READ_ONLY'
         : action === 'restart'
           ? 'NON_IDEMPOTENT'
           : 'IDEMPOTENT_WRITE';
     }
     case 'KUBERNETES':
-      return configuredString(step, 'action', 'get') === 'rollout-restart'
-        ? 'NON_IDEMPOTENT'
-        : 'READ_ONLY';
+      return configuredString(step, 'action', 'get') === 'scale'
+        ? 'IDEMPOTENT_WRITE'
+        : configuredString(step, 'action', 'get') === 'rollout-restart'
+          ? 'NON_IDEMPOTENT'
+          : 'READ_ONLY';
     default:
       return 'READ_ONLY';
   }
@@ -172,6 +174,14 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
     );
   }
   const minimumRisk = minimumRiskForStep(step);
+  if (
+    (step.type === 'SYSTEMD' || step.type === 'LINUX_DIAGNOSTICS') &&
+    step.config.lines !== undefined &&
+    (!Number.isInteger(step.config.lines) ||
+      Number(step.config.lines) < 1 ||
+      Number(step.config.lines) > 500)
+  )
+    throw new RunbookDefinitionError('Journal lines must be an integer between 1 and 500.');
   // Both keys are validated enum values, indexing only a fixed risk table.
   // eslint-disable-next-line security/detect-object-injection
   if (RISK_RANK[step.riskClass] < RISK_RANK[minimumRisk]) {
@@ -181,7 +191,7 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
   }
   if (step.type === 'SYSTEMD') {
     const action = configuredString(step, 'action', 'status');
-    if (!['status', 'start', 'stop', 'restart'].includes(action)) {
+    if (!['status', 'start', 'stop', 'restart', 'logs'].includes(action)) {
       throw new RunbookDefinitionError(`Step "${step.key}" has an unsupported systemd action.`);
     }
     validateTarget(
@@ -194,7 +204,12 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
   }
   if (step.type === 'DOCKER') {
     const action = configuredString(step, 'action', 'inspect');
-    if (!['inspect', 'logs', 'start', 'stop', 'restart'].includes(action)) {
+    if (
+      !(allowInputTemplates && INPUT_TEMPLATE.test(configuredString(step, 'runtime'))) &&
+      !['docker', 'podman'].includes(configuredString(step, 'runtime', 'docker'))
+    )
+      throw new RunbookDefinitionError('Unsupported container runtime.');
+    if (!['inspect', 'logs', 'health', 'start', 'stop', 'restart'].includes(action)) {
       throw new RunbookDefinitionError(`Step "${step.key}" has an unsupported Docker action.`);
     }
     validateTarget(
@@ -207,7 +222,11 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
   }
   if (step.type === 'KUBERNETES') {
     const action = configuredString(step, 'action', 'get');
-    if (!['get', 'describe', 'logs', 'rollout-restart'].includes(action)) {
+    if (
+      !['get', 'describe', 'logs', 'events', 'rollout-status', 'rollout-restart', 'scale'].includes(
+        action
+      )
+    ) {
       throw new RunbookDefinitionError(`Step "${step.key}" has an unsupported Kubernetes action.`);
     }
     validateTarget(
@@ -233,10 +252,82 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
         step.key,
         allowInputTemplates
       );
-    if (action === 'rollout-restart' && !name) {
+    if (['rollout-restart', 'rollout-status', 'scale'].includes(action) && !name) {
       throw new RunbookDefinitionError(
         `Step "${step.key}" requires a Kubernetes resource name for rollout-restart.`
       );
+    }
+    if (
+      action === 'scale' &&
+      !(allowInputTemplates && INPUT_TEMPLATE.test(String(step.config.replicas))) &&
+      (!Number.isInteger(step.config.replicas) ||
+        Number(step.config.replicas) < 0 ||
+        Number(step.config.replicas) > 10000)
+    )
+      throw new RunbookDefinitionError('Kubernetes replicas must be an integer from 0 to 10000.');
+  }
+  if (step.type === 'LINUX_DIAGNOSTICS') {
+    const diagnostic = configuredString(step, 'diagnostic', 'summary');
+    if (
+      ![
+        'summary',
+        'disk',
+        'memory',
+        'processes',
+        'network',
+        'dns',
+        'tcp',
+        'http',
+        'journal',
+        'listeners',
+        'process',
+        'filesystem',
+      ].includes(diagnostic)
+    )
+      throw new RunbookDefinitionError('Unsupported Linux diagnostic.');
+    if (diagnostic === 'journal')
+      validateTarget(
+        configuredString(step, 'unit'),
+        SYSTEMD_UNIT,
+        'systemd unit',
+        step.key,
+        allowInputTemplates
+      );
+    if (
+      ['dns', 'tcp'].includes(diagnostic) &&
+      !configuredString(step, diagnostic === 'dns' ? 'hostname' : 'host')
+    )
+      throw new RunbookDefinitionError('Network diagnostic requires a host.');
+    if (
+      diagnostic === 'tcp' &&
+      (!Number.isInteger(step.config.port) ||
+        Number(step.config.port) < 1 ||
+        Number(step.config.port) > 65535)
+    )
+      throw new RunbookDefinitionError('Invalid TCP diagnostic port.');
+    if (diagnostic === 'http' && !configuredString(step, 'url'))
+      throw new RunbookDefinitionError('HTTP diagnostic requires a URL.');
+    if (diagnostic === 'http') {
+      const value = configuredString(step, 'url');
+      if (!(allowInputTemplates && INPUT_TEMPLATE.test(value))) {
+        let url: URL;
+        try {
+          url = new URL(value);
+        } catch {
+          throw new RunbookDefinitionError('HTTP diagnostic requires a valid URL.');
+        }
+        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
+          throw new RunbookDefinitionError(
+            'HTTP diagnostic URL must use HTTP(S) without credentials.'
+          );
+      }
+      if (
+        step.config.expectedStatus !== undefined &&
+        (!Number.isInteger(step.config.expectedStatus) ||
+          Number(step.config.expectedStatus) < 100 ||
+          Number(step.config.expectedStatus) > 599)
+      )
+        throw new RunbookDefinitionError('Expected HTTP status must be between 100 and 599.');
     }
   }
   if (step.type === 'BASH' && !configuredString(step, 'command')) {

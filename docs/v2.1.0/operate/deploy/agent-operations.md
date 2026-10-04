@@ -67,6 +67,55 @@ Validated runbook inputs are exposed to child processes as `OPSKNIGHT_INPUT_<UPP
 
 Restart the Agent after changing policy. Verify that the policy hash changes in the Agent screen.
 
+### Typed diagnostics and Podman
+
+DNS, TCP and Agent-local HTTP diagnostics use `networkHosts` and `networkPorts`
+as exact destination allowlists. Private endpoints are intentionally allowed
+only by the local operator; HTTP rejects credentials and redirects. DNS needs
+port 53, TCP needs its configured port, and HTTP needs its URL port (80/443 by
+default). Configure Kubernetes/Swarm egress separately when required: local
+policy does not override network policy. Keep output and time bounds enabled.
+
+Systemd logs and journal diagnostics use a unit allowlist and at most 500 lines.
+Docker and Podman share typed container actions but use independent
+`dockerContainers` / `podmanContainers` allowlists. The container image includes
+both CLIs; an inaccessible runtime is not advertised as effective. Host-native
+Agents need the appropriate CLI and narrowly scoped runtime access. No overlay
+automatically mounts host runtime sockets, enables privilege, or grants sudo.
+For remote Podman access, supply operator-controlled runtime connection
+configuration; do not expose unauthenticated sockets.
+
+Kubernetes policy includes `kubernetesActions` and `kubernetesMaxReplicas`.
+Default actions are read-only and the replica limit is zero. Explicitly add
+`scale` and a safe maximum before authoring a scale step; add only the required
+namespaced RBAC and API egress. Scale is an idempotent write; rollout restart is
+non-idempotent and requires approval. Bounded read-only startup/heartbeat probes
+distinguish configured executors from working binaries/runtime connections.
+Capability probing does not certify permission for every resource/action.
+
+### Scheduling labels and signing rotation
+
+Administrators manage scheduling labels and pool selectors in **Runbooks →
+Agents**. Heartbeats cannot self-grant labels or secret-bearing pool membership.
+Pools are the union of explicit and label-matched members; an empty selector
+does not match the whole fleet. Use a service binding selector for exact host
+placement, and review the snapshotted Agent before approving a write.
+
+In **Pinned execution public key**, stage NEXT and copy the displayed trusted
+JSON key map into `OPSKNIGHT_EXECUTION_PUBLIC_KEYS` on every Agent. The map
+supersedes the legacy single-key setting and may hold up to eight Ed25519 pins.
+Restart Agents to load the map. Activation is blocked until all enrolled
+non-revoked Agents, including offline ones, acknowledge NEXT. Keep both keys
+through activation; the old identity becomes RETIRING. Wait at least 24 hours
+before retiring it and removing its pin. Envelope and lease signatures bind the
+key ID, so changing an ID or supplying an unknown key fails verification.
+
+Compose and Swarm forward the JSON environment variable. Helm and Kustomize
+read `OPSKNIGHT_EXECUTION_PUBLIC_KEYS` from the existing enrollment Secret;
+the legacy single-pin key is optional when using the map. Quote JSON in shell
+and env files. Never copy signing private keys: these stay encrypted in the
+control-plane database. Back up encryption keys and PostgreSQL together.
+
 ## Docker Compose
 
 ```sh

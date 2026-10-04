@@ -887,6 +887,7 @@ describe('deployment configuration invariants', () => {
       expect(artifact).toContain('OPSKNIGHT_URL');
       expect(artifact).toContain('/var/lib/opsknight-agent');
       expect(artifact).toContain('policy.json');
+      expect(artifact).toContain('OPSKNIGHT_EXECUTION_PUBLIC_KEYS');
     }
     expect(compose).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN');
     expect(compose).toContain('read_only: true');
@@ -911,5 +912,10 @@ describe('deployment configuration invariants', () => {
     expect(setupUi).toContain('OPSKNIGHT_AGENT_POLICY_PATH');
     expect(read('agent/Dockerfile')).toContain('USER opsknight-agent');
     expect(read('agent/Dockerfile')).toMatch(/apk add --no-cache[^\n]*\bbash\b/);
+    expect(read('agent/Dockerfile')).toMatch(/apk add --no-cache[^\n]*\bpodman\b/);
+    const values = YAML.parse(read('deploy/kubernetes/helm/opsknight/values.yaml'));
+    expect(values.agent.policy.podmanContainers).toEqual([]);
+    expect(values.agent.policy.kubernetesActions).not.toContain('scale');
+    expect(values.agent.policy.networkHosts).toEqual([]);
   });
 });

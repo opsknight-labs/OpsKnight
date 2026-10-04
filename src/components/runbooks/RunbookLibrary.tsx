@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, BookOpen, Plus, Search } from 'lucide-react';
+import { ArrowRight, BookOpen, Plus } from 'lucide-react';
 import { createRunbookAction } from '@/app/(app)/runbooks/actions';
 import EmptyState from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/shadcn/button';
@@ -131,41 +131,9 @@ export default function RunbookLibrary({
   }>;
   canManage: boolean;
 }) {
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
-  const filtered = runbooks.filter(
-    item =>
-      `${item.name} ${item.description}`.toLowerCase().includes(search.toLowerCase()) &&
-      (filter === 'all' ||
-        (filter === 'published' ? item.publishedVersion !== null : item.draftVersion !== null))
-  );
+  const filtered = runbooks;
   return (
     <section className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            aria-label="Search runbooks"
-            placeholder="Search runbooks…"
-            value={search}
-            onChange={event => setSearch(event.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <div className="sm:w-44">
-          <FormSelect
-            name="filter"
-            label="Filter runbooks"
-            value={filter}
-            onValueChange={setFilter}
-            options={[
-              { value: 'all', label: 'All runbooks' },
-              { value: 'published', label: 'Published' },
-              { value: 'draft', label: 'Drafts' },
-            ]}
-          />
-        </div>
-      </div>
       <p aria-live="polite" className="text-xs text-muted-foreground">
         {filtered.length} runbooks
       </p>

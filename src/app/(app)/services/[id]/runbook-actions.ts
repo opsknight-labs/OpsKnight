@@ -105,6 +105,7 @@ export async function attachRunbookAction(serviceId: string, formData: FormData)
     mode: formData.get('mode') ?? 'MANUAL',
     versionStrategy: strategy,
     inputValues: generatedInputValues(formData, definitions),
+    agentSelector: JSON.parse(String(formData.get('agentSelector') ?? '{}')),
     ...executionTarget(formData.get('executionTarget')),
   });
   try {
@@ -144,6 +145,7 @@ export async function updateRunbookBindingAction(
     inputValues: generatedInputValues(formData, definitions),
     defaultAgentId: target.defaultAgentId ?? null,
     defaultAgentPoolId: target.defaultAgentPoolId ?? null,
+    agentSelector: JSON.parse(String(formData.get('agentSelector') ?? '{}')),
   });
   try {
     await updateServiceBinding(serviceId, idSchema.parse(bindingId), parsed, actor.id);

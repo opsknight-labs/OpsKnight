@@ -6,17 +6,70 @@ import { assertCapability } from '@/lib/rbac';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import EmptyState from '@/components/ui/EmptyState';
 import { RunbookNavigation, StatusBadge } from '@/components/runbooks/RunbookControls';
+import {
+  RunbookFilters,
+  RunbookPagination,
+  runbookPageQuery,
+  RUNBOOK_PAGE_SIZE,
+} from '@/components/runbooks/RunbookPagination';
+import { RunbookExecutionStatus, type Prisma } from '@prisma/client';
+import { runbookExecutionFilterSchema } from '@/lib/runbooks/schemas';
 
 export const revalidate = 0;
-export default async function RunbookExecutionsPage() {
+export default async function RunbookExecutionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
+  const { query, page: requestedPage } = runbookPageQuery(await searchParams);
+  const status = Object.values(RunbookExecutionStatus).find(value => value === query.status);
+  const from =
+    query.from && Number.isFinite(Date.parse(query.from)) ? new Date(query.from) : undefined;
+  const to =
+    query.to && Number.isFinite(Date.parse(query.to))
+      ? new Date(`${query.to}T23:59:59.999Z`)
+      : undefined;
+  const filter = runbookExecutionFilterSchema.parse({
+    status,
+    runbookId: query.runbook,
+    serviceId: query.service,
+    incidentId: query.incident,
+    agentId: query.agent,
+    from,
+    to,
+    trigger: ['automatic', 'responder'].includes(query.trigger) ? query.trigger : undefined,
+    page: requestedPage,
+  });
+  const where: Prisma.RunbookExecutionWhereInput = {
+    ...(status ? { status } : {}),
+    ...(filter.runbookId ? { runbookId: filter.runbookId } : {}),
+    ...(filter.serviceId ? { serviceId: filter.serviceId } : {}),
+    ...(filter.incidentId ? { incidentId: filter.incidentId } : {}),
+    ...(filter.agentId ? { resolvedTargetAgentId: filter.agentId } : {}),
+    ...(query.trigger === 'automatic'
+      ? { triggeredByUserId: null }
+      : query.trigger === 'responder'
+        ? { triggeredByUserId: { not: null } }
+        : {}),
+    ...(from || to ? { createdAt: { gte: from, lte: to } } : {}),
+  };
+  const total = await prisma.runbookExecution.count({ where });
+  const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / RUNBOOK_PAGE_SIZE)));
   const executions = await prisma.runbookExecution.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: 50,
+    where,
+    orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+    skip: (page - 1) * RUNBOOK_PAGE_SIZE,
+    take: RUNBOOK_PAGE_SIZE,
     select: {
       id: true,
       status: true,
       createdAt: true,
+      startedAt: true,
+      completedAt: true,
+      service: { select: { name: true } },
+      resolvedTargetAgent: { select: { name: true } },
+      triggeredByUser: { select: { name: true } },
       incidentId: true,
       runbook: { select: { id: true, name: true } },
       runbookVersion: { select: { version: true } },
@@ -31,6 +84,22 @@ export default async function RunbookExecutionsPage() {
         icon={<Play className="h-8 w-8" />}
       />
       <RunbookNavigation />
+      <RunbookFilters
+        query={query}
+        fields={[
+          { name: 'runbook', label: 'Runbook ID' },
+          { name: 'service', label: 'Service ID' },
+          { name: 'incident', label: 'Incident ID' },
+          { name: 'agent', label: 'Agent ID' },
+          { name: 'from', label: 'From date', type: 'date' },
+          { name: 'to', label: 'To date', type: 'date' },
+          { name: 'trigger', label: 'Trigger (automatic or responder)' },
+        ]}
+        statusOptions={Object.values(RunbookExecutionStatus).map(value => ({
+          value,
+          label: value.replaceAll('_', ' '),
+        }))}
+      />
       <section className="space-y-3" aria-label="Recent executions">
         {executions.map(item => (
           <Link
@@ -45,7 +114,17 @@ export default async function RunbookExecutionsPage() {
             <div>
               <h2 className="font-semibold">{item.runbook.name}</h2>
               <p className="text-xs text-muted-foreground">
-                v{item.runbookVersion.version} · {item.createdAt.toLocaleString()}
+                v{item.runbookVersion.version} ·{' '}
+                {item.startedAt
+                  ? `Started ${item.startedAt.toLocaleString()}`
+                  : `Queued ${item.createdAt.toLocaleString()}`}
+                {' · '}
+                {item.service?.name || 'No service'} ·{' '}
+                {item.resolvedTargetAgent?.name || 'Control plane/pool'} ·{' '}
+                {item.triggeredByUser?.name || 'Automatic'} ·{' '}
+                {item.startedAt
+                  ? `${Math.max(0, Math.round(((item.completedAt ?? new Date()).getTime() - item.startedAt.getTime()) / 1000))}s`
+                  : 'Not started'}
               </p>
             </div>
             <StatusBadge status={item.status} />
@@ -59,6 +138,7 @@ export default async function RunbookExecutionsPage() {
           />
         )}
       </section>
+      <RunbookPagination page={page} total={total} query={query} />
     </div>
   );
 }

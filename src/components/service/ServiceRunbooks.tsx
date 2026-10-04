@@ -12,6 +12,7 @@ import {
   FormSelect,
 } from '@/components/runbooks/RunbookControls';
 import RunbookTargetSelect from '@/components/runbooks/RunbookTargetSelect';
+import { Textarea } from '@/components/ui/shadcn/textarea';
 import {
   attachRunbookAction,
   detachRunbookAction,
@@ -187,6 +188,13 @@ export default function ServiceRunbooks({
                           : 'none',
                     }}
                   />
+                  <Field label="Agent selector (JSON)">
+                    <Textarea
+                      name="agentSelector"
+                      aria-label="Agent selector"
+                      defaultValue={JSON.stringify(binding.agentSelector)}
+                    />
+                  </Field>
                   <Field label="Status">
                     <FormSelect
                       name="enabled"
@@ -336,6 +344,9 @@ export default function ServiceRunbooks({
                           : false
                       }
                     />
+                  </Field>
+                  <Field label="Agent selector (JSON)">
+                    <Textarea name="agentSelector" aria-label="Agent selector" defaultValue="{}" />
                   </Field>
                   {(runbook.publishedVersion?.inputs.length ?? 0) > 0 && (
                     <div className="grid gap-3 border-t pt-3 sm:grid-cols-2 lg:col-span-3">

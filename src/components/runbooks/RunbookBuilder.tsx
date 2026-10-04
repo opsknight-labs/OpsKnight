@@ -65,32 +65,73 @@ function fieldsFor(type: RunbookStepType): ConfigField[] {
       ];
     case 'SYSTEMD':
       return [
-        { key: 'action', label: 'Action', options: ['status', 'start', 'stop', 'restart'] },
+        { key: 'action', label: 'Action', options: ['status', 'start', 'stop', 'restart', 'logs'] },
         { key: 'unit', label: 'Service unit or input reference' },
+        { key: 'lines', label: 'Recent log lines (maximum 500)', number: true },
       ];
     case 'DOCKER':
       return [
         {
           key: 'action',
           label: 'Action',
-          options: ['inspect', 'logs', 'start', 'stop', 'restart'],
+          options: ['inspect', 'logs', 'health', 'start', 'stop', 'restart'],
         },
         { key: 'container', label: 'Container or input reference' },
+        { key: 'runtime', label: 'Container runtime', options: ['docker', 'podman'] },
       ];
     case 'KUBERNETES':
       return [
-        { key: 'action', label: 'Action', options: ['get', 'describe', 'logs', 'rollout-restart'] },
+        {
+          key: 'action',
+          label: 'Action',
+          options: [
+            'get',
+            'describe',
+            'logs',
+            'events',
+            'rollout-status',
+            'rollout-restart',
+            'scale',
+          ],
+        },
         { key: 'namespace', label: 'Namespace' },
         { key: 'resource', label: 'Resource type' },
         { key: 'name', label: 'Resource name' },
+        {
+          key: 'replicas',
+          label: 'Desired replicas (Agent policy is authoritative)',
+          number: true,
+        },
       ];
     case 'LINUX_DIAGNOSTICS':
       return [
         {
           key: 'diagnostic',
           label: 'Diagnostic',
-          options: ['summary', 'disk', 'memory', 'processes', 'network'],
+          options: [
+            'summary',
+            'disk',
+            'memory',
+            'processes',
+            'network',
+            'dns',
+            'tcp',
+            'http',
+            'journal',
+            'listeners',
+            'process',
+            'filesystem',
+          ],
         },
+        { key: 'hostname', label: 'DNS hostname' },
+        { key: 'host', label: 'TCP host' },
+        { key: 'port', label: 'TCP port', number: true },
+        { key: 'url', label: 'Local health URL' },
+        { key: 'expectedStatus', label: 'Expected HTTP status', number: true },
+        { key: 'unit', label: 'Journal service unit' },
+        { key: 'lines', label: 'Journal lines (maximum 500)', number: true },
+        { key: 'pattern', label: 'Process lookup pattern' },
+        { key: 'path', label: 'Filesystem path' },
       ];
     case 'BASH':
       return [{ key: 'command', label: 'Exact allowlisted command', multiline: true }];

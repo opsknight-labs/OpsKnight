@@ -95,3 +95,26 @@ published version in **Versions** before attaching it to a service. Published
 versions are immutable; create a new draft to make further changes.
 
 Continue with [service binding and incident response](./respond).
+
+## Choose diagnostics, evidence and smart targets
+
+Use typed Linux DNS, TCP or HTTP diagnostics for private service checks; ask the
+Agent operator to allow the exact hostname and port locally. HTTP defaults to
+status 200 and never follows redirects. Choose Systemd **logs** or Linux
+**journal** for a bounded unit log snapshot. Container steps select Docker or
+Podman explicitly; Kubernetes supports events, rollout status and scale.
+Scaling is idempotent but still a write, subject to approvals, namespace/action
+policy, replica limits and Kubernetes RBAC.
+
+Attach read-only verification to the write action, checking the actual recovery
+goal. Incident evidence compares the baseline and post-state. **Verified recovery**
+appears only when the action, authored checks and healthy observed post-state
+all pass; an exit code alone is not proof.
+
+In service binding configuration, use **Agent selector (JSON)** for host labels,
+for example `{"host":"${{ incident.labels.host }}","env":"prod"}`. Administrators
+manage Agent labels and pool selectors under **Runbooks → Agents**; incident
+labels come from `key=value` tags. Local write selectors must select exactly one
+healthy capable host, which is pinned for the execution. Review automatic
+budgets with your administrator; exhaustion produces a suggestion for responder
+approval. See the [reference](../../reference/runbooks) for limits and semantics.

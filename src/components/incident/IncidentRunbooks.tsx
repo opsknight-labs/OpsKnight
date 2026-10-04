@@ -4,8 +4,14 @@ import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
 import { redactRunbookOutput } from '@/lib/runbooks/redaction';
-import { computePlanDigest, resolveInputTemplates } from '@/lib/runbooks/definition';
+import {
+  computePlanDigest,
+  resolveInputTemplates,
+  flattenSteps,
+  parseRunbookDefinition,
+} from '@/lib/runbooks/definition';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { compareEvidence, verificationResultSchema } from '@/lib/runbooks/evidence';
 import EmptyState from '@/components/ui/EmptyState';
 import {
   ActionForm,
@@ -74,9 +80,41 @@ export default async function IncidentRunbooks({
     }),
   ]);
   const canExecute = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_EXECUTE);
+  const [budget, usedWrites, usedExecutions, usedNonIdempotent] = await Promise.all([
+    prisma.systemSettings.findUnique({
+      where: { id: 'default' },
+      select: {
+        runbookAutoExecutionsPerIncident: true,
+        runbookAutoWritesPerIncident: true,
+        runbookAutoNonIdempotentPerIncident: true,
+      },
+    }),
+    prisma.runbookExecutionStep.count({
+      where: {
+        execution: { incidentId, triggeredByUserId: null },
+        riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
+      },
+    }),
+    prisma.runbookExecution.count({ where: { incidentId, triggeredByUserId: null } }),
+    prisma.runbookExecutionStep.count({
+      where: { execution: { incidentId, triggeredByUserId: null }, riskClass: 'NON_IDEMPOTENT' },
+    }),
+  ]);
   const canApprove = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_APPROVE);
   return (
     <div className="space-y-4">
+      <div className="rounded-xl border bg-card p-4 text-sm">
+        <h3 className="font-semibold">Automation safety</h3>
+        <p>
+          {usedExecutions} / {budget?.runbookAutoExecutionsPerIncident ?? 3} automatic executions ·{' '}
+          {usedWrites} / {budget?.runbookAutoWritesPerIncident ?? 3} automatic writes ·{' '}
+          {usedNonIdempotent} / {budget?.runbookAutoNonIdempotentPerIncident ?? 0} non-idempotent
+          actions used.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Further remediation requires responder approval when an incident budget is exhausted.
+        </p>
+      </div>
       {suggestions.length > 0 && (
         <Card className="rounded-xl border-primary/30 bg-primary/5">
           <CardHeader>
@@ -211,6 +249,29 @@ export default async function IncidentRunbooks({
                   step.config as Record<string, unknown>,
                   execution.inputValues as Record<string, unknown>
                 );
+                const evidence = compareEvidence(
+                  step.attempts[0]?.preState,
+                  step.attempts[0]?.postState
+                );
+                const authored = flattenSteps(
+                  parseRunbookDefinition(execution.runbookVersion.definition)
+                ).find(item => item.key === step.stepKey);
+                const verificationKeys = authored?.verification
+                  ? flattenSteps({ steps: authored.verification.steps }).map(item => item.key)
+                  : [];
+                const result = verificationResultSchema.safeParse(step.verificationResult);
+                const differences = result.success ? result.data.differences : evidence.differences;
+                const verified =
+                  result.success &&
+                  result.data.verified &&
+                  execution.status === 'SUCCEEDED' &&
+                  step.status === 'SUCCEEDED' &&
+                  verificationKeys.length > 0 &&
+                  verificationKeys.every(key =>
+                    execution.steps.some(
+                      item => item.stepKey === key && item.status === 'SUCCEEDED'
+                    )
+                  );
                 return (
                   <li
                     key={step.id}
@@ -221,12 +282,27 @@ export default async function IncidentRunbooks({
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{step.name}</span>
+                          {verified && <Badge variant="success">Verified recovery</Badge>}
                           <Badge variant="outline">{step.riskClass.replaceAll('_', ' ')}</Badge>
                         </div>
                         <div className="mt-1 break-words text-xs text-muted-foreground">
                           {step.status.replaceAll('_', ' ')}
                           {step.outputPreview ? ` · ${step.outputPreview.slice(0, 160)}` : ''}
                         </div>
+                        {step.attempts[0]?.preState && step.attempts[0]?.postState && (
+                          <details className="mt-2 rounded-lg border p-3 text-xs">
+                            <summary className="cursor-pointer font-medium">
+                              Recovery evidence · {verified ? 'verified' : 'not verified'}
+                            </summary>
+                            <ul className="mt-2 space-y-1">
+                              {differences.map(change => (
+                                <li className="break-words" key={change.field}>
+                                  {change.field}: {change.before} → {change.after}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
                         {step.outputArtifactId && (
                           <Link
                             href={`/api/runbook-artifacts/${step.outputArtifactId}`}

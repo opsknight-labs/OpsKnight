@@ -123,6 +123,11 @@
               "uniqueItems": true,
               "items": { "type": "string" }
             },
+            "podmanContainers": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+            "kubernetesActions": { "type": "array", "uniqueItems": true, "items": { "enum": ["get", "describe", "logs", "events", "rollout-status", "rollout-restart", "scale"] } },
+            "kubernetesMaxReplicas": { "type": "integer", "minimum": 0, "maximum": 10000 },
+            "networkHosts": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+            "networkPorts": { "type": "array", "uniqueItems": true, "items": { "type": "integer", "minimum": 1, "maximum": 65535 } },
             "bashCommandPatterns": {
               "type": "array",
               "uniqueItems": true,

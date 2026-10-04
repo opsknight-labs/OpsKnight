@@ -88,6 +88,13 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.agent.enrollmentToken.existingSecret }}
                   key: OPSKNIGHT_EXECUTION_PUBLIC_KEY
+                  optional: true
+            - name: OPSKNIGHT_EXECUTION_PUBLIC_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.agent.enrollmentToken.existingSecret }}
+                  key: OPSKNIGHT_EXECUTION_PUBLIC_KEYS
+                  optional: true
           volumeMounts:
             - name: policy
               mountPath: /etc/opsknight-agent/policy.json

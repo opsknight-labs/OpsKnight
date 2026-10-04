@@ -7,8 +7,9 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { AgentApiError, AgentClient, enrollAgent } from './client';
 import { LeaseAuthority } from './lease';
-import { verifyExecutionEnvelope } from './envelope';
+import { verifyExecutionEnvelope, parseTrustedSigningKeys } from './envelope';
 import { executeAttempt } from './executor';
+import { probeCapabilities } from './capabilities';
 import { assertPolicyAllows, loadPolicy } from './policy';
 import { ResultSpool } from './spool';
 import type { AgentIdentity, ClaimedAttempt, SpoolRecord } from './types';
@@ -17,7 +18,10 @@ const baseUrl = process.env.OPSKNIGHT_URL?.trim();
 const dataDirectory = process.env.OPSKNIGHT_AGENT_DATA_DIR ?? '/var/lib/opsknight-agent';
 const identityPath = process.env.OPSKNIGHT_AGENT_IDENTITY_FILE ?? `${dataDirectory}/identity.json`;
 const policyPath = process.env.OPSKNIGHT_AGENT_POLICY_FILE ?? '/etc/opsknight-agent/policy.json';
-const executionPublicKey = process.env.OPSKNIGHT_EXECUTION_PUBLIC_KEY?.trim();
+const executionPublicKey = parseTrustedSigningKeys(
+  process.env.OPSKNIGHT_EXECUTION_PUBLIC_KEYS,
+  process.env.OPSKNIGHT_EXECUTION_PUBLIC_KEY
+);
 
 if (!baseUrl) throw new Error('OPSKNIGHT_URL is required.');
 if (!executionPublicKey)
@@ -78,6 +82,32 @@ function redactSecretInputs(attempt: ClaimedAttempt, output: string): string {
   return secretValues.reduce((redacted, value) => redacted.split(value).join('[REDACTED]'), output);
 }
 
+function redactEvidence(
+  attempt: ClaimedAttempt,
+  state: Record<string, unknown>
+): Record<string, unknown> {
+  const visit = (value: unknown, field = ''): unknown =>
+    typeof value === 'string'
+      ? redactSecretInputs(attempt, value).slice(
+          0,
+          field === 'serviceState'
+            ? 100
+            : field === 'captureError'
+              ? 200
+              : field === 'url'
+                ? 2048
+                : 4096
+        )
+      : Array.isArray(value)
+        ? value.map(item => visit(item, field))
+        : value && typeof value === 'object'
+          ? Object.fromEntries(
+              Object.entries(value).map(([key, nested]) => [key, visit(nested, key)])
+            )
+          : value;
+  return visit(state) as Record<string, unknown>;
+}
+
 async function run() {
   const identity = await loadIdentity();
   const { policy, hash: policyHash } = await loadPolicy(policyPath);
@@ -116,8 +146,12 @@ async function run() {
   };
 
   const heartbeat = async () => {
+    const effective = await probeCapabilities(policy);
     await client.heartbeat({
-      capabilities: policy.allowedStepTypes.map(type => `RUNBOOK_${type}`),
+      capabilities: effective.capabilities,
+      capabilityReport: effective.report,
+      trustedSigningKeys:
+        typeof executionPublicKey === 'object' ? Object.keys(executionPublicKey) : ['default'],
       policyHash,
       spoolDepth: await spool.depth(),
       deadLetterDepth: await spool.deadLetterDepth(),
@@ -218,6 +252,8 @@ async function run() {
           leaseToken: attempt.leaseToken,
           producedAt,
           status: result.status,
+          preState: result.preState ? redactEvidence(attempt, result.preState) : undefined,
+          postState: result.postState ? redactEvidence(attempt, result.postState) : undefined,
           exitCode: result.exitCode,
           outputPreview: redactedOutput.slice(0, 32_768),
           localOutput: redactedOutput,

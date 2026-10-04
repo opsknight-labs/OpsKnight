@@ -8,6 +8,13 @@ import { RUNBOOK_TEMPLATES, runbookTemplate } from '@/lib/runbooks/builder';
 import { CAPABILITIES } from '@/lib/authorization';
 import { logAudit } from '@/lib/audit';
 import prisma from '@/lib/prisma';
+import { schedulingLabelsSchema, synchronizeLabelMemberships } from '@/lib/runbooks/pool-labels';
+import {
+  stageExecutionSigningKey,
+  activateExecutionSigningKey,
+  retireExecutionSigningKey,
+  RunbookSigningRotationError,
+} from '@/lib/runbooks/execution-signing';
 import { assertCapability } from '@/lib/rbac';
 import { createAgentEnrollment } from '@/lib/runbooks/agent-auth';
 import {
@@ -192,6 +199,7 @@ export async function revokeAgentAction(agentId: string) {
         enrollmentExpiresAt: null,
       },
     });
+    await synchronizeLabelMemberships(tx);
     await logAudit(
       {
         action: 'runbook.agent.revoked',
@@ -220,10 +228,13 @@ export async function createAgentPoolAction(formData: FormData) {
     name: readString(formData, 'name'),
     description: readString(formData, 'description'),
     mode: readString(formData, 'mode') || 'SHARED_TARGET',
-    matchLabels: {},
+    matchLabels: schedulingLabelsSchema.parse(
+      JSON.parse(readString(formData, 'matchLabels') || '{}')
+    ),
   });
   await prisma.$transaction(async tx => {
     const pool = await tx.runbookAgentPool.create({ data: { ...input, createdById: actor.id } });
+    await synchronizeLabelMemberships(tx);
     await logAudit(
       {
         action: 'runbook.agent_pool.created',
@@ -231,6 +242,83 @@ export async function createAgentPoolAction(formData: FormData) {
         entityId: pool.id,
         actorId: actor.id,
         details: { name: pool.name, mode: pool.mode },
+      },
+      tx
+    );
+  });
+  revalidatePath('/runbooks/agents');
+}
+
+export async function updateSchedulingLabelsAction(formData: FormData) {
+  const actor = await assertCapability(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
+  const id = idSchema.parse(readString(formData, 'id'));
+  const kind = z.enum(['agent', 'pool']).parse(readString(formData, 'kind'));
+  const labels = schedulingLabelsSchema.parse(JSON.parse(readString(formData, 'labels') || '{}'));
+  await prisma.$transaction(async tx => {
+    if (kind === 'agent') await tx.runbookAgent.update({ where: { id }, data: { labels } });
+    else await tx.runbookAgentPool.update({ where: { id }, data: { matchLabels: labels } });
+    await synchronizeLabelMemberships(tx);
+    await logAudit(
+      {
+        action: 'runbook.scheduling_labels.updated',
+        entityType: kind === 'agent' ? 'RUNBOOK_AGENT' : 'RUNBOOK_AGENT_POOL',
+        entityId: id,
+        actorId: actor.id,
+        newValue: labels,
+      },
+      tx
+    );
+  });
+  revalidatePath('/runbooks/agents');
+}
+
+export async function rotateExecutionSigningIdentityAction(formData: FormData) {
+  const actor = await assertCapability(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
+  const operation = z
+    .enum(['stage', 'activate', 'retire'])
+    .parse(readString(formData, 'operation'));
+  try {
+    if (operation === 'stage') await stageExecutionSigningKey(actor.id);
+    else {
+      const id = z.string().min(1).max(100).parse(readString(formData, 'keyId'));
+      if (operation === 'activate') await activateExecutionSigningKey(id, actor.id);
+      else await retireExecutionSigningKey(id, actor.id);
+    }
+  } catch (error) {
+    if (error instanceof RunbookSigningRotationError) return { error: error.message };
+    throw error;
+  }
+  revalidatePath('/runbooks/agents');
+}
+
+export async function updateIncidentRemediationBudgetAction(formData: FormData) {
+  const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
+  const number = z.coerce.number().int().min(0).max(100);
+  const data = z
+    .object({
+      runbookAutoExecutionsPerIncident: number,
+      runbookAutoWritesPerIncident: number,
+      runbookAutoNonIdempotentPerIncident: number,
+    })
+    .strict()
+    .parse({
+      runbookAutoExecutionsPerIncident: formData.get('executions'),
+      runbookAutoWritesPerIncident: formData.get('writes'),
+      runbookAutoNonIdempotentPerIncident: formData.get('nonIdempotent'),
+    });
+  await prisma.$transaction(async tx => {
+    await tx.systemSettings.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', ...data },
+      update: data,
+    });
+    await logAudit(
+      {
+        action: 'runbook.incident_budget.updated',
+        entityType: 'SYSTEM_CONFIG',
+        entityId: 'default',
+        actorId: actor.id,
+        newValue: data,
       },
       tx
     );
@@ -246,7 +334,7 @@ export async function addAgentToPoolAction(formData: FormData) {
     const member = await tx.runbookAgentPoolMember.upsert({
       where: { poolId_agentId: { poolId, agentId } },
       create: { poolId, agentId },
-      update: {},
+      update: { source: 'EXPLICIT' },
     });
     await logAudit(
       {
@@ -266,7 +354,11 @@ export async function removeAgentFromPoolAction(memberId: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const id = idSchema.parse(memberId);
   await prisma.$transaction(async tx => {
+    const existing = await tx.runbookAgentPoolMember.findUniqueOrThrow({ where: { id } });
+    if (existing.source === 'DYNAMIC')
+      throw new Error('Change the pool selector or Agent labels to remove dynamic membership.');
     const member = await tx.runbookAgentPoolMember.delete({ where: { id } });
+    await synchronizeLabelMemberships(tx);
     await logAudit(
       {
         action: 'runbook.agent_pool.member_removed',

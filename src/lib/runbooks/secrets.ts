@@ -167,7 +167,14 @@ export async function resolveSecretInputValues(
         some: {
           OR: [
             { agentId: scope.agentId },
-            ...(scope.targetAgentPoolId ? [{ agentPoolId: scope.targetAgentPoolId }] : []),
+            ...(scope.targetAgentPoolId
+              ? [
+                  {
+                    agentPoolId: scope.targetAgentPoolId,
+                    agentPool: { members: { some: { agentId: scope.agentId } } },
+                  },
+                ]
+              : []),
           ],
         },
       },

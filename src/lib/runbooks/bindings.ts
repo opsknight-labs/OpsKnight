@@ -127,14 +127,15 @@ async function validateBindingTarget(
   version: { definition: Prisma.JsonValue },
   enabled: boolean,
   agentId?: string | null,
-  agentPoolId?: string | null
+  agentPoolId?: string | null,
+  selector: Record<string, unknown> = {}
 ) {
   if (agentId && agentPoolId) {
     throw new RunbookDefinitionError('Select either a specific Agent or an Agent pool, not both.');
   }
   const steps = flattenSteps(parseRunbookDefinition(version.definition));
   const needsAgent = steps.some(step => requiresAgent(step.type));
-  if (enabled && needsAgent && !agentId && !agentPoolId) {
+  if (enabled && needsAgent && !agentId && !agentPoolId && !Object.keys(selector).length) {
     throw new RunbookDefinitionError(
       'An enabled runbook with Agent-executed steps requires a specific Agent or Agent pool target.'
     );
@@ -154,6 +155,7 @@ async function validateBindingTarget(
     if (!pool) throw new RunbookDefinitionError('The selected Runbook Agent pool was not found.');
     if (
       pool.mode === 'LOCAL_HOSTS' &&
+      !Object.keys(selector).length &&
       pool._count.members > 1 &&
       steps.some(step => requiresAgent(step.type) && step.riskClass !== 'READ_ONLY')
     ) {
@@ -186,7 +188,8 @@ export async function createServiceBinding(
       version,
       input.enabled,
       input.defaultAgentId,
-      input.defaultAgentPoolId
+      input.defaultAgentPoolId,
+      input.agentSelector
     );
     const binding = await tx.serviceRunbookBinding.create({
       data: {
@@ -198,6 +201,7 @@ export async function createServiceBinding(
         versionStrategy: input.versionStrategy,
         defaultAgentPoolId: input.defaultAgentPoolId,
         defaultAgentId: input.defaultAgentId,
+        agentSelector: input.agentSelector,
         inputValues: inputValues as Prisma.InputJsonValue,
         createdById: actorId,
       },
@@ -267,7 +271,8 @@ export async function updateServiceBinding(
       version,
       input.enabled ?? current.enabled,
       agentId,
-      agentPoolId
+      agentPoolId,
+      (input.agentSelector ?? current.agentSelector) as Record<string, unknown>
     );
     const changed = await tx.serviceRunbookBinding.updateMany({
       where: { id: bindingId, serviceId },

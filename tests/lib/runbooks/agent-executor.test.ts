@@ -8,7 +8,16 @@ const policy: AgentPolicy = {
   systemdUnits: [],
   dockerContainers: [],
   kubernetesNamespaces: [],
-  bashCommandPatterns: [],
+  bashCommandPatterns: [
+    'set -o pipefail; values=("$OPSKNIGHT_INPUT_ENV" ready); [[ "${values[0]}" == "prod" ]] && printf "%s" "${values[1]}"',
+    'set -o pipefail; false | true',
+    '[[ "$BASH_ENV" == /dev/null ]]',
+    'printf "%s|%s" "$OPSKNIGHT_INPUT_SERVICE" "$OPSKNIGHT_INPUT_REPLICAS"',
+    "printf '0123456789'",
+    'exit 99',
+    'sleep 30',
+    'exit 1',
+  ],
   maxRuntimeSeconds: 30,
   maxOutputBytes: 1024,
 };

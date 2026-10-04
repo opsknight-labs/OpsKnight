@@ -36,6 +36,14 @@ export async function recordAgentHeartbeat(input: {
   platform: string;
   labels?: Record<string, string>;
   capabilities?: string[];
+  capabilityReport?: {
+    name: string;
+    type: string;
+    configured: boolean;
+    available: boolean;
+    reason: string | null;
+  }[];
+  trustedSigningKeys?: string[];
   policyHash?: string;
   spoolDepth?: number;
   deadLetterDepth?: number;
@@ -53,8 +61,10 @@ export async function recordAgentHeartbeat(input: {
       hostname: input.hostname,
       version: input.version,
       platform: input.platform,
-      labels: (input.labels ?? {}) as Prisma.InputJsonValue,
+      // Scheduling labels are administrator-owned; heartbeat must not self-grant pool secrets.
       capabilities: (input.capabilities ?? []) as Prisma.InputJsonValue,
+      capabilityReport: input.capabilityReport as Prisma.InputJsonValue | undefined,
+      trustedSigningKeys: input.trustedSigningKeys as Prisma.InputJsonValue | undefined,
       policyHash: input.policyHash,
       spoolDepth: input.spoolDepth,
       deadLetterDepth: input.deadLetterDepth,
@@ -100,6 +110,20 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
             ],
             executionStep: {
               type: { in: supportedStepTypes },
+              OR: [
+                { type: { not: 'DOCKER' } },
+                {
+                  containerRuntime: {
+                    in: [
+                      ...(!capabilities.includes('RUNBOOK_PODMAN') ||
+                      capabilities.includes('RUNBOOK_DOCKER_RUNTIME')
+                        ? ['docker']
+                        : []),
+                      ...(capabilities.includes('RUNBOOK_PODMAN') ? ['podman'] : []),
+                    ],
+                  },
+                },
+              ],
               execution: {
                 status: { in: ['RUNNING', 'WAITING_AGENT'] },
                 cancelRequestedAt: null,
@@ -128,6 +152,7 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
                       inputValues: true,
                       definitionChecksum: true,
                       deadlineAt: true,
+                      targetSelection: true,
                     },
                   },
                 },
@@ -187,6 +212,31 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
           `;
           const attempt = eligible.find(candidate => candidate.id === locked[0]?.id);
           if (!attempt) return null;
+          const selection = attempt.executionStep.execution.targetSelection;
+          const sourcePoolId =
+            selection &&
+            typeof selection === 'object' &&
+            !Array.isArray(selection) &&
+            typeof selection.sourcePoolId === 'string'
+              ? selection.sourcePoolId
+              : null;
+          if (
+            sourcePoolId &&
+            !(await tx.runbookAgentPoolMember.findUnique({
+              where: { poolId_agentId: { poolId: sourcePoolId, agentId } },
+              select: { id: true },
+            }))
+          )
+            return null;
+          if (
+            sourcePoolId &&
+            selection &&
+            typeof selection === 'object' &&
+            !Array.isArray(selection) &&
+            selection.implicitLocalHost === true &&
+            (await tx.runbookAgentPoolMember.count({ where: { poolId: sourcePoolId } })) !== 1
+          )
+            return null;
           const rawLeaseToken = crypto.randomBytes(32).toString('base64url');
           const leaseExpiresAt = new Date(Date.now() + DEFAULT_LEASE_DURATION_SECONDS * 1000);
           const claimed = await tx.runbookStepAttempt.updateMany({
@@ -209,7 +259,20 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
           );
           const resolvedInputValues = await resolveSecretInputValues(
             rawInputValues,
-            { agentId, targetAgentPoolId: attempt.targetAgentPoolId },
+            {
+              agentId,
+              targetAgentPoolId:
+                attempt.targetAgentPoolId ??
+                (() => {
+                  const selection = attempt.executionStep.execution.targetSelection;
+                  return selection &&
+                    typeof selection === 'object' &&
+                    !Array.isArray(selection) &&
+                    typeof selection.sourcePoolId === 'string'
+                    ? selection.sourcePoolId
+                    : null;
+                })(),
+            },
             tx
           );
           const resolvedConfig = resolveInputTemplates(
@@ -281,6 +344,41 @@ export async function fenceAgentAttempt(input: {
 }) {
   return prisma.$transaction(async tx => {
     const now = new Date();
+    const authority = await tx.runbookStepAttempt.findUnique({
+      where: { id: input.attemptId },
+      select: { executionStep: { select: { execution: { select: { targetSelection: true } } } } },
+    });
+    const selection = authority?.executionStep.execution.targetSelection;
+    const sourcePoolId =
+      selection &&
+      typeof selection === 'object' &&
+      !Array.isArray(selection) &&
+      typeof selection.sourcePoolId === 'string'
+        ? selection.sourcePoolId
+        : null;
+    if (
+      sourcePoolId &&
+      !(await tx.runbookAgentPoolMember.findUnique({
+        where: { poolId_agentId: { poolId: sourcePoolId, agentId: input.agentId } },
+        select: { id: true },
+      }))
+    )
+      throw new RunbookPreExecutionFenceError(
+        input.attemptId,
+        'Selected Agent is no longer a member of the source pool'
+      );
+    if (
+      sourcePoolId &&
+      selection &&
+      typeof selection === 'object' &&
+      !Array.isArray(selection) &&
+      selection.implicitLocalHost === true &&
+      (await tx.runbookAgentPoolMember.count({ where: { poolId: sourcePoolId } })) !== 1
+    )
+      throw new RunbookPreExecutionFenceError(
+        input.attemptId,
+        'Implicit local host target became ambiguous'
+      );
     const fence = {
       id: input.attemptId,
       claimedAgentId: input.agentId,

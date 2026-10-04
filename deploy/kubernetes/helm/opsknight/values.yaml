@@ -225,7 +225,12 @@ agent:
     allowedStepTypes: [LINUX_DIAGNOSTICS]
     systemdUnits: []
     dockerContainers: []
+    podmanContainers: []
     kubernetesNamespaces: []
+    kubernetesActions: [get, describe, logs, events, rollout-status]
+    kubernetesMaxReplicas: 0
+    networkHosts: []
+    networkPorts: []
     bashCommandPatterns: []
     allowNonIdempotent: false
     maxRuntimeSeconds: 300

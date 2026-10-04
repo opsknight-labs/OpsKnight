@@ -20,8 +20,8 @@ Host/container/cluster execution requires an eligible Agent with matching local
 policy and platform permissions. HTTP and control-flow steps are control-plane
 operations; a configured URL still undergoes server-side validation.
 
-Nested `precheck` and `verification` definitions are supported through Advanced
-JSON. They are preserved during ordinary builder editing. See the
+Nested `precheck` and `verification` definitions have first-class typed Builder
+controls and remain compatible with Advanced JSON. See the
 [authoring example](../guides/runbooks/author).
 
 ## Inputs and risk
@@ -39,9 +39,83 @@ Minimum risk is derived from the action. Non-idempotent actions require explicit
 approval; authors cannot make a restart safe by relabeling its risk.
 
 The maximum is 50 steps, including nested steps, and 30 input definitions.
-Library filtering currently operates on loaded Runbooks. Execution history
-currently shows the most recent 50 executions; server-side pagination is not
-yet available.
+Library, execution history and Agent lists use server-side filtering and stable
+20-row pages. Library filters include text, publication state, owner and service;
+history includes status, Runbook, service, incident, Agent, date range and trigger;
+Agents include pool, status, platform, capability and `key=value` labels.
+
+## Typed diagnostics and runtime actions
+
+Linux diagnostics support `summary`, `disk`, `memory`, `processes`, `network`,
+`listeners`, `process` (pattern), `filesystem` (path), `journal` (unit/lines),
+`dns` (hostname), `tcp` (host/port), and `http` (url/expectedStatus).
+Agent-local HTTP checks can reach private services only when both the exact
+hostname and port are in local `networkHosts` / `networkPorts`. Redirects and
+URL credentials are rejected. DNS uses an allowlisted host and port 53.
+Systemd `logs` and journal diagnostics use fixed argv and 1–500 lines.
+
+`DOCKER` config supports `runtime: "docker"` (default) or `"podman"`, with
+`inspect`, `logs`, `health`, `start`, `stop`, and `restart`. Podman uses an
+independent `podmanContainers` allowlist and effective runtime capability.
+The health action requires a configured healthcheck reporting `healthy`; merely
+running, starting, unhealthy or absent healthchecks do not pass that action.
+Kubernetes adds `events`, `rollout-status`, and `scale`. Scale requires an exact
+resource/name, integer `replicas`, `IDEMPOTENT_WRITE` or stronger risk, and local
+namespace/action/`kubernetesMaxReplicas` authorization. Restart remains
+`NON_IDEMPOTENT`. Platform RBAC is an independent boundary.
+
+## Evidence and verified recovery
+
+Attempts persist bounded structured `preState` and `postState` snapshots. They
+include CPU load/cores (not CPU percentage), memory, load, and relevant service,
+container, Kubernetes, network, disk, process or log evidence when available.
+Incident step details show changes and retain downloadable raw output artifacts.
+Secret input values are redacted from evidence and output.
+
+`Verified recovery` is a persisted verification result, not an execution status.
+It requires a successful workflow and write action, successful authored
+verification checks, and positive healthy post-state. Failed capture, unhealthy
+containers/services/checks or unconverged Kubernetes generations cannot receive
+the badge. Metrics or exit code zero alone are insufficient. Scale-to-zero does
+not prove recovery. Evidence reflects what the execution Agent observed; it is
+not an independent external availability guarantee.
+
+## Targeting and automatic budgets
+
+Administrators own Agent scheduling labels. Agent heartbeats cannot change them.
+Pools combine explicit members with label-selector matches; removing a dynamic
+member requires changing the selector or labels. Service bindings can target
+a specific Agent, a pool, or an `agentSelector` JSON map. Values can reference
+`${{ inputs.host }}` or `${{ incident.labels.host }}`; incident labels use
+`key=value` incident tags. Local write selectors must resolve to one healthy,
+capable Agent. Shared targets select an eligible member. The selected identity
+and selector/pool provenance are snapshotted; queued writes never switch hosts
+when labels change. An absent/ambiguous match fails closed.
+
+Under **Runbooks → Agents → Automatic remediation budgets**, administrators set
+per-incident execution/write/non-idempotent limits (defaults 3/3/0). Automatic
+execution reserves the entire authored plan transactionally under an incident
+lock; failed or canceled attempts do not refund that conservative budget.
+Exhaustion becomes a frozen suggestion requiring responder action instead of
+silently dropping remediation. Explicit responder executions still require
+normal risk approvals and local policy, but do not consume automatic budgets.
+Incident Runbooks shows usage. Existing service/pool circuit and concurrency
+limits remain active.
+
+## Signing and effective capabilities
+
+Signing identities rotate through ACTIVE → RETIRING → RETIRED with NEXT staged
+alongside ACTIVE. Distribute the trusted `OPSKNIGHT_EXECUTION_PUBLIC_KEYS` JSON
+map before activating NEXT; every enrolled non-revoked Agent, including offline
+Agents, must acknowledge its ID. Retire the old key only after the 24-hour grace
+period. IDs are signed inside execution and lease envelopes. Private signing
+keys remain encrypted; the UI exposes only public pins. See
+[Agent operations](../operate/deploy/agent-operations).
+
+Agents probe configured binaries and runtime access before heartbeats. The UI
+distinguishes configured/unavailable from effective capabilities; scheduling
+uses effective capabilities and distinguishes Docker from Podman. Probes are
+bounded and read-only, and never grant Unix privileges or Kubernetes RBAC.
 
 ## Bash executor
 

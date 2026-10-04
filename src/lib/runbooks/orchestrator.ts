@@ -18,6 +18,7 @@ import {
   validateResolvedStepConfig,
 } from './definition';
 import { matchesCondition } from './matcher';
+import { finalizeVerificationEvidence } from './verification-evidence';
 import { workflowConditionSchema } from './conditions';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
 import { suggestionPlanSchema } from './suggestion-plan';
@@ -31,7 +32,12 @@ import {
   isRetryable,
   requiresAgent,
 } from './types';
-import { isRetryableFailure, retryDelayMs, stepRequiresApproval } from './safety';
+import {
+  agentSupportsStep,
+  isRetryableFailure,
+  retryDelayMs,
+  stepRequiresApproval,
+} from './safety';
 import {
   RunbookApprovalPlanChangedError,
   RunbookDefinitionError,
@@ -194,7 +200,7 @@ export async function startRunbookExecution(input: {
     if (planSnapshot && planSnapshot.definitionChecksum !== version.checksum)
       throw new RunbookDefinitionError('Suggested definition checksum changed.');
     const steps = executionSteps(definition);
-    const resolvedTargetAgentId = planSnapshot
+    let resolvedTargetAgentId = planSnapshot
       ? planSnapshot.agentId
       : (binding?.defaultAgentId ?? null);
     const resolvedTargetAgentPoolId = planSnapshot
@@ -203,7 +209,10 @@ export async function startRunbookExecution(input: {
     if (
       steps.some(step => requiresAgent(step.type)) &&
       !resolvedTargetAgentId &&
-      !resolvedTargetAgentPoolId
+      !resolvedTargetAgentPoolId &&
+      !Object.keys(
+        (planSnapshot?.agentSelector ?? binding?.agentSelector ?? {}) as Record<string, unknown>
+      ).length
     ) {
       throw new RunbookDefinitionError(
         'TARGET_NOT_CONFIGURED: Agent-executed steps require a snapshotted Agent or Agent pool target.'
@@ -218,6 +227,91 @@ export async function startRunbookExecution(input: {
           : (input.inputValues ?? {})
     );
     validateBindingInputValues(version.inputs, resolvedInputs);
+    const selector = (planSnapshot?.agentSelector ?? binding?.agentSelector ?? {}) as Record<
+      string,
+      string
+    >;
+    let selectedLabels = selector;
+    let implicitLocalHost = false;
+    if (Object.keys(selector).length && !resolvedTargetAgentId) {
+      const incident = input.incidentId
+        ? await tx.incident.findUnique({
+            where: { id: input.incidentId },
+            select: { tags: { select: { tag: { select: { name: true } } } } },
+          })
+        : null;
+      const labels = Object.fromEntries(
+        (incident?.tags ?? []).flatMap(({ tag }) => {
+          const split = tag.name.indexOf('=');
+          return split > 0 ? [[tag.name.slice(0, split), tag.name.slice(split + 1)]] : [];
+        })
+      );
+      const resolvedSelector = Object.fromEntries(
+        Object.entries(selector).map(([key, value]) => {
+          const reference = /^\$\{\{\s*incident\.labels\.([a-zA-Z0-9_.-]+)\s*\}\}$/.exec(value);
+          const resolved = reference
+            ? Object.entries(labels).find(([name]) => name === reference[1])?.[1]
+            : resolveInputTemplates(value, resolvedInputs);
+          if (typeof resolved !== 'string' || !resolved)
+            throw new RunbookDefinitionError(
+              'TARGET_NOT_FOUND: selector input or incident label is unavailable.'
+            );
+          return [key, resolved];
+        })
+      );
+      const candidates = await tx.runbookAgent.findMany({
+        where: {
+          status: 'ONLINE',
+          lastHeartbeatAt: { gte: new Date(Date.now() - 90000) },
+          ...(resolvedTargetAgentPoolId
+            ? { poolMemberships: { some: { poolId: resolvedTargetAgentPoolId } } }
+            : {}),
+          AND: Object.entries(resolvedSelector).map(([key, value]) => ({
+            labels: { path: [key], equals: value },
+          })),
+        },
+        select: { id: true, capabilities: true },
+        orderBy: [{ activeAttemptCount: 'asc' }, { id: 'asc' }],
+      });
+      selectedLabels = resolvedSelector;
+      const eligible = candidates.filter(agent =>
+        steps
+          .filter(step => requiresAgent(step.type))
+          .every(
+            step =>
+              Array.isArray(agent.capabilities) &&
+              agentSupportsStep(
+                agent.capabilities.filter((value): value is string => typeof value === 'string'),
+                step.type
+              ) &&
+              (step.type !== 'DOCKER' ||
+                ((resolveInputTemplates(step.config, resolvedInputs) as Record<string, unknown>)
+                  .runtime === 'podman'
+                  ? agent.capabilities.includes('RUNBOOK_PODMAN')
+                  : !agent.capabilities.includes('RUNBOOK_PODMAN') ||
+                    agent.capabilities.includes('RUNBOOK_DOCKER_RUNTIME')))
+          )
+      );
+      const pool = resolvedTargetAgentPoolId
+        ? await tx.runbookAgentPool.findUniqueOrThrow({
+            where: { id: resolvedTargetAgentPoolId },
+            select: { mode: true },
+          })
+        : null;
+      if (!eligible.length)
+        throw new RunbookDefinitionError(
+          'TARGET_NOT_FOUND: no healthy capable Agent matches the selector.'
+        );
+      if (
+        steps.some(step => requiresAgent(step.type) && step.riskClass !== 'READ_ONLY') &&
+        pool?.mode !== 'SHARED_TARGET' &&
+        eligible.length !== 1
+      )
+        throw new RunbookDefinitionError(
+          'TARGET_AMBIGUOUS: local write selector must resolve to exactly one Agent.'
+        );
+      resolvedTargetAgentId = eligible[0].id;
+    }
     for (const step of steps) {
       const resolvedConfig = resolveInputTemplates(step.config, resolvedInputs) as Record<
         string,
@@ -229,6 +323,33 @@ export async function startRunbookExecution(input: {
     const executionTimeoutSeconds =
       definition.defaultTimeoutSeconds ?? DEFAULT_EXECUTION_TIMEOUT_SECONDS;
     const hasWriteAction = steps.some(step => step.riskClass !== 'READ_ONLY');
+    if (!input.triggeredByUserId && input.incidentId) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-incident-budget:${input.incidentId}`}))`;
+      const limits = await tx.systemSettings.findUnique({ where: { id: 'default' } });
+      const automatic = { incidentId: input.incidentId, triggeredByUserId: null };
+      const [usedExecutions, usedWrites, usedNonIdempotent] = await Promise.all([
+        tx.runbookExecution.count({ where: automatic }),
+        tx.runbookExecutionStep.count({
+          where: {
+            execution: automatic,
+            riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
+          },
+        }),
+        tx.runbookExecutionStep.count({
+          where: { execution: automatic, riskClass: 'NON_IDEMPOTENT' },
+        }),
+      ]);
+      if (
+        usedExecutions >= (limits?.runbookAutoExecutionsPerIncident ?? 3) ||
+        usedWrites + steps.filter(step => step.riskClass !== 'READ_ONLY').length >
+          (limits?.runbookAutoWritesPerIncident ?? 3) ||
+        usedNonIdempotent + steps.filter(step => step.riskClass === 'NON_IDEMPOTENT').length >
+          (limits?.runbookAutoNonIdempotentPerIncident ?? 0)
+      )
+        throw new RunbookDefinitionError(
+          'AUTO_REMEDIATION_BUDGET_EXHAUSTED: responder approval is required.'
+        );
+    }
     if (!input.triggeredByUserId && hasWriteAction) {
       if (!resolvedServiceId) {
         throw new RunbookDefinitionError('Automatic write runbooks require a service boundary.');
@@ -272,8 +393,41 @@ export async function startRunbookExecution(input: {
         });
         if (pool.mode === 'LOCAL_HOSTS' && pool._count.members > 1) {
           throw new RunbookDefinitionError(
-            'AMBIGUOUS_HOST_TARGET: writes to a multi-member LOCAL_HOSTS pool require a specific Agent.'
+            'TARGET_AMBIGUOUS: AMBIGUOUS_HOST_TARGET: writes to a multi-member LOCAL_HOSTS pool require a specific Agent.'
           );
+        }
+        if (pool.mode === 'LOCAL_HOSTS') {
+          const host = await tx.runbookAgent.findFirst({
+            where: {
+              status: 'ONLINE',
+              lastHeartbeatAt: { gte: new Date(Date.now() - 90000) },
+              poolMemberships: { some: { poolId: resolvedTargetAgentPoolId } },
+            },
+            select: { id: true, capabilities: true },
+          });
+          if (!host)
+            throw new RunbookDefinitionError(
+              'TARGET_NOT_FOUND: local write pool has no healthy host.'
+            );
+          if (
+            !Array.isArray(host.capabilities) ||
+            !steps
+              .filter(step => requiresAgent(step.type))
+              .every(
+                step =>
+                  agentSupportsStep(host.capabilities as string[], step.type) &&
+                  (step.type !== 'DOCKER' ||
+                    (step.config.runtime === 'podman'
+                      ? (host.capabilities as string[]).includes('RUNBOOK_PODMAN')
+                      : !(host.capabilities as string[]).includes('RUNBOOK_PODMAN') ||
+                        (host.capabilities as string[]).includes('RUNBOOK_DOCKER_RUNTIME')))
+              )
+          )
+            throw new RunbookDefinitionError(
+              'TARGET_NOT_FOUND: local write host lacks an effective executor.'
+            );
+          resolvedTargetAgentId = host.id;
+          implicitLocalHost = true;
         }
       }
       const activePoolWrites = await tx.runbookExecutionStep.count({
@@ -281,7 +435,10 @@ export async function startRunbookExecution(input: {
           riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
           status: { in: ['PENDING', 'READY', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
           execution: {
-            resolvedTargetAgentPoolId,
+            OR: [
+              { resolvedTargetAgentPoolId },
+              { targetSelection: { path: ['sourcePoolId'], equals: resolvedTargetAgentPoolId } },
+            ],
             status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
           },
         },
@@ -308,13 +465,26 @@ export async function startRunbookExecution(input: {
         timeoutSeconds: executionTimeoutSeconds,
         deadlineAt: new Date(executionStartedAt.getTime() + executionTimeoutSeconds * 1000),
         resolvedTargetAgentId,
-        resolvedTargetAgentPoolId,
+        resolvedTargetAgentPoolId: resolvedTargetAgentId ? null : resolvedTargetAgentPoolId,
+        targetSelection: {
+          selector,
+          resolvedSelector: selectedLabels,
+          implicitLocalHost,
+          selectedAgentId: resolvedTargetAgentId,
+          sourcePoolId: resolvedTargetAgentPoolId,
+        },
         steps: {
           create: steps.map(step => ({
             stepKey: step.key,
             sequence: step.sequence,
             name: step.name,
             type: step.type,
+            containerRuntime:
+              step.type === 'DOCKER' &&
+              (resolveInputTemplates(step.config, resolvedInputs) as Record<string, unknown>)
+                .runtime === 'podman'
+                ? 'podman'
+                : 'docker',
             riskClass: step.riskClass,
             config: asJson(step.config),
             requiresApproval: stepRequiresApproval(step),
@@ -736,6 +906,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           'RUNBOOK_FAILED',
           `Runbook failed at step: ${failed.name}`
         );
+        await finalizeVerificationEvidence(tx, executionId);
       }
     });
     return;
@@ -757,6 +928,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           'RUNBOOK_COMPLETED',
           'Runbook execution completed.'
         );
+        await finalizeVerificationEvidence(tx, executionId);
       }
     });
     return;

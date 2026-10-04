@@ -15,7 +15,15 @@ import { consumeEnrollmentToken } from '@/lib/runbooks/agent-auth';
 import { reconcileRunbooks } from '@/lib/runbooks/reconciler';
 import { evaluateIncidentTriggers } from '@/lib/runbooks/triggers';
 import { encrypt } from '@/lib/encryption';
-import { getExecutionSigningKey } from '@/lib/runbooks/execution-signing';
+import {
+  getExecutionSigningKey,
+  stageExecutionSigningKey,
+  activateExecutionSigningKey,
+  retireExecutionSigningKey,
+  signExecutionEnvelope,
+} from '@/lib/runbooks/execution-signing';
+import { synchronizeLabelMemberships } from '@/lib/runbooks/pool-labels';
+import { finalizeVerificationEvidence } from '@/lib/runbooks/verification-evidence';
 import { verifyExecutionEnvelope } from '../../agent/src/envelope';
 import type { RunbookDefinition } from '@/lib/runbooks/types';
 import {
@@ -85,6 +93,411 @@ async function createAgentTarget(definition: RunbookDefinition) {
 describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   beforeEach(async () => resetDatabase());
   afterAll(async () => testPrisma.$disconnect());
+
+  it('converts budget exhaustion into one frozen suggestion rather than dropping remediation', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'status',
+          name: 'Status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: { action: 'status', unit: 'api.service' },
+        },
+      ],
+    });
+    const incident = await createTestIncident('Budget exhausted', target.service.id);
+    await testPrisma.systemSettings.create({
+      data: { id: 'default', runbookAutoExecutionsPerIncident: 0 },
+    });
+    await testPrisma.serviceRunbookBinding.update({
+      where: { id: target.binding.id },
+      data: {
+        mode: 'AUTOMATIC',
+        agentSelector: { env: 'prod' },
+        triggers: { create: { event: 'INCIDENT_CREATED' } },
+      },
+    });
+    await testPrisma.runbookAgent.update({
+      where: { id: target.agent.id },
+      data: { labels: { env: 'prod' } },
+    });
+    expect(await evaluateIncidentTriggers(incident.id, 'budget-event')).toMatchObject({
+      matched: 1,
+      started: 0,
+      suggested: 1,
+    });
+    await evaluateIncidentTriggers(incident.id, 'budget-event');
+    expect(await testPrisma.runbookExecution.count()).toBe(0);
+    expect(await testPrisma.runbookSuggestion.count()).toBe(1);
+    expect(
+      await testPrisma.incidentEvent.count({
+        where: { incidentId: incident.id, type: 'RUNBOOK_SUGGESTED' },
+      })
+    ).toBe(1);
+    expect((await testPrisma.runbookSuggestion.findFirstOrThrow()).planSnapshot).toMatchObject({
+      agentSelector: { env: 'prod' },
+      definitionChecksum: target.version.checksum,
+    });
+    await testPrisma.systemSettings.update({
+      where: { id: 'default' },
+      data: { runbookAutoExecutionsPerIncident: 1 },
+    });
+    expect(await evaluateIncidentTriggers(incident.id, 'already-executed-event')).toMatchObject({
+      started: 1,
+    });
+    expect(await evaluateIncidentTriggers(incident.id, 'already-executed-event')).toMatchObject({
+      started: 0,
+      suggested: 0,
+    });
+    expect(await testPrisma.runbookSuggestion.count()).toBe(1);
+  });
+
+  it('resolves incident label targeting and fences removal of the pinned source-pool member', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'status',
+          name: 'Status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: { action: 'status', unit: 'api.service' },
+        },
+      ],
+    });
+    const incident = await createTestIncident('Selector incident', target.service.id);
+    await testPrisma.incidentTag.create({
+      data: {
+        incident: { connect: { id: incident.id } },
+        tag: { create: { name: 'host=node-a' } },
+      },
+    });
+    await testPrisma.runbookAgent.update({
+      where: { id: target.agent.id },
+      data: { labels: { host: 'node-a' } },
+    });
+    await testPrisma.serviceRunbookBinding.update({
+      where: { id: target.binding.id },
+      data: { agentSelector: { host: '${{ incident.labels.host }}' } },
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+      incidentId: incident.id,
+      triggeredByUserId: target.actor.id,
+    });
+    expect(execution).toMatchObject({
+      resolvedTargetAgentId: target.agent.id,
+      resolvedTargetAgentPoolId: null,
+    });
+    expect(execution.targetSelection).toMatchObject({
+      sourcePoolId: target.pool.id,
+      selectedAgentId: target.agent.id,
+    });
+    await advanceExecution(execution.id);
+    const claim = (await claimAgentAttempt(target.agent.id))!;
+    expect(claim).not.toBeNull();
+    await testPrisma.runbookAgentPoolMember.deleteMany({
+      where: { agentId: target.agent.id, poolId: target.pool.id },
+    });
+    await expect(
+      fenceAgentAttempt({
+        attemptId: claim.attemptId,
+        agentId: target.agent.id,
+        leaseToken: claim.leaseToken,
+      })
+    ).rejects.toThrow('source pool');
+  });
+
+  it.each(['podman', '${{ inputs.runtime }}'])(
+    'never dispatches %s Podman work to a Docker-only Agent',
+    async runtime => {
+      const target = await createAgentTarget({
+        steps: [
+          {
+            key: 'inspect',
+            name: 'Inspect',
+            type: 'DOCKER',
+            riskClass: 'READ_ONLY',
+            config: { runtime, action: 'inspect', container: 'api' },
+          },
+        ],
+      });
+      if (runtime !== 'podman')
+        await testPrisma.runbookInput.create({
+          data: {
+            runbookVersionId: target.version.id,
+            key: 'runtime',
+            label: 'Runtime',
+            type: 'STRING',
+            defaultValue: 'podman',
+            sequence: 0,
+          },
+        });
+      await testPrisma.runbookAgent.update({
+        where: { id: target.agent.id },
+        data: { capabilities: ['RUNBOOK_DOCKER', 'RUNBOOK_DOCKER_RUNTIME'] },
+      });
+      const execution = await startRunbookExecution({
+        runbookId: target.runbook.id,
+        bindingId: target.binding.id,
+        serviceId: target.service.id,
+      });
+      await advanceExecution(execution.id);
+      expect(await claimAgentAttempt(target.agent.id)).toBeNull();
+      await testPrisma.runbookAgent.update({
+        where: { id: target.agent.id },
+        data: { capabilities: ['RUNBOOK_DOCKER', 'RUNBOOK_PODMAN'] },
+      });
+      expect(await claimAgentAttempt(target.agent.id)).toMatchObject({
+        step: { config: { runtime: 'podman' } },
+      });
+    }
+  );
+
+  it('atomically reserves the per-incident budget under concurrent starts', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'status',
+          name: 'Status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: { action: 'status', unit: 'api.service' },
+        },
+      ],
+    });
+    const incident = await createTestIncident('Budget concurrency', target.service.id);
+    await testPrisma.systemSettings.create({
+      data: { id: 'default', runbookAutoExecutionsPerIncident: 1 },
+    });
+    const input = {
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+      incidentId: incident.id,
+    };
+    const results = await Promise.allSettled([
+      startRunbookExecution(input),
+      startRunbookExecution(input),
+    ]);
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.find(result => result.status === 'rejected')).toMatchObject({
+      reason: expect.objectContaining({
+        message: expect.stringContaining('AUTO_REMEDIATION_BUDGET_EXHAUSTED'),
+      }),
+    });
+    expect(await testPrisma.runbookExecution.count({ where: { incidentId: incident.id } })).toBe(1);
+    await expect(
+      startRunbookExecution({ ...input, triggeredByUserId: target.actor.id })
+    ).resolves.toBeDefined();
+  });
+
+  it('maintains explicit plus label membership without accepting Agent-authored labels', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'status',
+          name: 'Status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: { action: 'status', unit: 'api.service' },
+        },
+      ],
+    });
+    const dynamic = await testPrisma.runbookAgentPool.create({
+      data: { name: 'Production', matchLabels: { env: 'prod' } },
+    });
+    await testPrisma.runbookAgent.update({
+      where: { id: target.agent.id },
+      data: { labels: { env: 'prod' } },
+    });
+    await testPrisma.$transaction(tx => synchronizeLabelMemberships(tx));
+    expect(
+      await testPrisma.runbookAgentPoolMember.findUnique({
+        where: { poolId_agentId: { poolId: dynamic.id, agentId: target.agent.id } },
+      })
+    ).toMatchObject({ source: 'DYNAMIC' });
+    await recordAgentHeartbeat({
+      agentId: target.agent.id,
+      version: 'test',
+      platform: 'linux',
+      labels: { env: 'attacker' },
+      capabilities: ['RUNBOOK_SYSTEMD'],
+    });
+    expect(
+      (await testPrisma.runbookAgent.findUniqueOrThrow({ where: { id: target.agent.id } })).labels
+    ).toEqual({ env: 'prod' });
+    await testPrisma.runbookAgent.update({
+      where: { id: target.agent.id },
+      data: { labels: { env: 'dev' } },
+    });
+    await testPrisma.$transaction(tx => synchronizeLabelMemberships(tx));
+    expect(await testPrisma.runbookAgentPoolMember.count({ where: { poolId: dynamic.id } })).toBe(
+      0
+    );
+    expect(
+      await testPrisma.runbookAgentPoolMember.count({ where: { poolId: target.pool.id } })
+    ).toBe(1);
+  });
+
+  it('pins exact selector matches and rejects ambiguous local write targeting', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'start',
+          name: 'Start',
+          type: 'SYSTEMD',
+          riskClass: 'IDEMPOTENT_WRITE',
+          requiresApproval: true,
+          config: { action: 'start', unit: 'api.service' },
+        },
+      ],
+    });
+    await testPrisma.runbookAgentPool.update({
+      where: { id: target.pool.id },
+      data: { mode: 'LOCAL_HOSTS' },
+    });
+    await testPrisma.runbookAgent.update({
+      where: { id: target.agent.id },
+      data: { labels: { host: 'node-a' } },
+    });
+    await testPrisma.serviceRunbookBinding.update({
+      where: { id: target.binding.id },
+      data: { agentSelector: { host: 'node-a' } },
+    });
+    const input = {
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+      triggeredByUserId: target.actor.id,
+    };
+    expect(await startRunbookExecution(input)).toMatchObject({
+      resolvedTargetAgentId: target.agent.id,
+    });
+    await testPrisma.runbookAgent.create({
+      data: {
+        name: 'duplicate',
+        status: 'ONLINE',
+        lastHeartbeatAt: new Date(),
+        capabilities: ['RUNBOOK_SYSTEMD'],
+        labels: { host: 'node-a' },
+        poolMemberships: { create: { poolId: target.pool.id } },
+      },
+    });
+    await expect(startRunbookExecution(input)).rejects.toThrow('TARGET_AMBIGUOUS');
+  });
+
+  it('rotates signing identity only after offline fleet acknowledgement and grace', async () => {
+    const actor = await createTestUser();
+    const old = await getExecutionSigningKey();
+    const agent = await testPrisma.runbookAgent.create({
+      data: { name: 'offline-agent', status: 'OFFLINE' },
+    });
+    const next = await stageExecutionSigningKey(actor.id);
+    await expect(activateExecutionSigningKey(next.id)).rejects.toThrow('Every enrolled Agent');
+    await testPrisma.runbookAgent.update({
+      where: { id: agent.id },
+      data: { trustedSigningKeys: [old.id, next.id] },
+    });
+    await activateExecutionSigningKey(next.id);
+    expect((await signExecutionEnvelope({ test: true })).signingKeyId).toBe(next.id);
+    expect(
+      (await testPrisma.runbookExecutionSigningKey.findUniqueOrThrow({ where: { id: old.id } }))
+        .state
+    ).toBe('RETIRING');
+    await expect(retireExecutionSigningKey(old.id)).rejects.toThrow('grace period');
+    await testPrisma.runbookExecutionSigningKey.update({
+      where: { id: old.id },
+      data: { retiredAt: new Date(Date.now() - 1) },
+    });
+    await retireExecutionSigningKey(old.id);
+    expect(
+      (await testPrisma.runbookExecutionSigningKey.findUniqueOrThrow({ where: { id: old.id } }))
+        .state
+    ).toBe('RETIRED');
+  });
+
+  it('persists verification proof only with authored successful checks and healthy post-state', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'start',
+          name: 'Start',
+          type: 'SYSTEMD',
+          riskClass: 'IDEMPOTENT_WRITE',
+          config: { action: 'start', unit: 'api.service' },
+          verification: {
+            steps: [
+              {
+                key: 'verify',
+                name: 'Verify',
+                type: 'SYSTEMD',
+                riskClass: 'READ_ONLY',
+                config: { action: 'status', unit: 'api.service' },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+      triggeredByUserId: target.actor.id,
+    });
+    await testPrisma.runbookExecution.update({
+      where: { id: execution.id },
+      data: { status: 'SUCCEEDED' },
+    });
+    await testPrisma.runbookExecutionStep.updateMany({
+      where: { executionId: execution.id },
+      data: { status: 'SUCCEEDED' },
+    });
+    const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id, stepKey: 'start' },
+    });
+    const capturedAt = new Date().toISOString();
+    await testPrisma.runbookStepAttempt.create({
+      data: {
+        executionStepId: step.id,
+        claimedAgentId: target.agent.id,
+        attemptNumber: 1,
+        status: 'SUCCEEDED',
+        preState: { capturedAt, serviceState: 'inactive' },
+        postState: { capturedAt, serviceState: 'active' },
+      },
+    });
+    const verificationStep = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id, stepKey: 'verify' },
+    });
+    await testPrisma.runbookStepAttempt.create({
+      data: {
+        executionStepId: verificationStep.id,
+        claimedAgentId: target.agent.id,
+        attemptNumber: 1,
+        status: 'SUCCEEDED',
+        preState: { capturedAt, serviceState: 'active' },
+        postState: { capturedAt, serviceState: 'active' },
+      },
+    });
+    await testPrisma.$transaction(tx => finalizeVerificationEvidence(tx, execution.id));
+    expect(
+      (await testPrisma.runbookExecutionStep.findUniqueOrThrow({ where: { id: step.id } }))
+        .verificationResult
+    ).toMatchObject({ verified: true });
+    await testPrisma.runbookExecutionStep.updateMany({
+      where: { executionId: execution.id, stepKey: 'verify' },
+      data: { status: 'FAILED' },
+    });
+    await testPrisma.$transaction(tx => finalizeVerificationEvidence(tx, execution.id));
+    expect(
+      (await testPrisma.runbookExecutionStep.findUniqueOrThrow({ where: { id: step.id } }))
+        .verificationResult
+    ).toMatchObject({ verified: false });
+  });
 
   it.each(['precheck', 'verification'] as const)(
     'fails remediation when its %s fails',

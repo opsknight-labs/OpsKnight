@@ -2455,6 +2455,9 @@ model MetricRollup {
 
 model SystemSettings {
   id                                   String   @id @default("default")
+  runbookAutoExecutionsPerIncident      Int      @default(3)
+  runbookAutoWritesPerIncident          Int      @default(3)
+  runbookAutoNonIdempotentPerIncident   Int      @default(0)
   appUrl                               String?
   encryptionKey                        String?
   incidentRetentionDays                Int      @default(730)
@@ -3455,6 +3458,7 @@ model ServiceRunbookBinding {
   mode               RunbookBindingMode     @default(MANUAL)
   versionStrategy    RunbookVersionStrategy @default(LATEST_PUBLISHED)
   defaultAgentPoolId String?
+  agentSelector      Json @default("{}")
   defaultAgentId     String?
   inputValues        Json                   @default("{}")
   createdById        String?
@@ -3519,6 +3523,9 @@ model RunbookExecutionSigningKey {
   publicKey           String
   privateKeyEncrypted String
   createdAt           DateTime @default(now())
+  state               String   @default("ACTIVE")
+  activatedAt         DateTime?
+  retiredAt           DateTime?
 }
 
 model RunbookSuggestion {
@@ -3570,6 +3577,7 @@ model RunbookExecution {
   definitionChecksum        String
   resolvedTargetAgentId     String?
   resolvedTargetAgentPoolId String?
+  targetSelection           Json @default("{}")
 
   runbook                 Runbook                @relation(fields: [runbookId], references: [id], onDelete: Restrict)
   runbookVersion          RunbookVersion         @relation(fields: [runbookVersionId], references: [id], onDelete: Restrict)
@@ -3601,6 +3609,8 @@ model RunbookExecutionStep {
   id                 String            @id @default(cuid())
   executionId        String
   stepKey            String
+  containerRuntime   String @default("docker")
+  verificationResult Json?
   sequence           Int
   name               String
   type               RunbookStepType
@@ -3692,6 +3702,8 @@ model RunbookAgent {
   version             String?
   platform            String?
   labels              Json               @default("{}")
+  capabilityReport    Json               @default("[]")
+  trustedSigningKeys  Json               @default("[]")
   capabilities        Json               @default("[]")
   policyHash          String?
   spoolDepth          Int                @default(0)
@@ -3717,6 +3729,7 @@ model RunbookAgent {
 
   @@index([status])
   @@index([lastHeartbeatAt])
+  @@index([enrollmentTokenHash])
 }
 
 model RunbookAgentRequestNonce {
@@ -3753,6 +3766,7 @@ model RunbookAgentPoolMember {
   id      String @id @default(cuid())
   poolId  String
   agentId String
+  source  String @default("EXPLICIT")
 
   pool  RunbookAgentPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
   agent RunbookAgent     @relation(fields: [agentId], references: [id], onDelete: Cascade)

@@ -59,7 +59,10 @@ export function builderRisk(step: RunbookStepDefinition): RunbookStepDefinition[
         ? 'IDEMPOTENT_WRITE'
         : 'NON_IDEMPOTENT';
   }
-  if (['SYSTEMD', 'DOCKER'].includes(step.type) && ['start', 'stop'].includes(action))
+  if (
+    (['SYSTEMD', 'DOCKER'].includes(step.type) && ['start', 'stop'].includes(action)) ||
+    (step.type === 'KUBERNETES' && action === 'scale')
+  )
     return 'IDEMPOTENT_WRITE';
   return 'READ_ONLY';
 }

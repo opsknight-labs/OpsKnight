@@ -5,7 +5,8 @@ services:
     image: ${OPSKNIGHT_AGENT_IMAGE:?Set OPSKNIGHT_AGENT_IMAGE to a tested tag or digest}
     environment:
       OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:-http://opsknight-web:3000}
-      OPSKNIGHT_EXECUTION_PUBLIC_KEY: ${OPSKNIGHT_EXECUTION_PUBLIC_KEY:?Copy the pinned execution public key from Runbooks > Agents}
+      OPSKNIGHT_EXECUTION_PUBLIC_KEY: ${OPSKNIGHT_EXECUTION_PUBLIC_KEY:-}
+      OPSKNIGHT_EXECUTION_PUBLIC_KEYS: ${OPSKNIGHT_EXECUTION_PUBLIC_KEYS:-}
       OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE: /run/secrets/opsknight_agent_enrollment_token
     secrets:
       - source: opsknight_agent_enrollment_token

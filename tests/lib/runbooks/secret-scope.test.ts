@@ -21,7 +21,14 @@ describe('Runbook secret execution scope', () => {
     expect(findMany).toHaveBeenCalledWith({
       where: {
         name: { in: ['database-password'] },
-        grants: { some: { OR: [{ agentId: 'agent-1' }, { agentPoolId: 'pool-1' }] } },
+        grants: {
+          some: {
+            OR: [
+              { agentId: 'agent-1' },
+              { agentPoolId: 'pool-1', agentPool: { members: { some: { agentId: 'agent-1' } } } },
+            ],
+          },
+        },
       },
     });
   });

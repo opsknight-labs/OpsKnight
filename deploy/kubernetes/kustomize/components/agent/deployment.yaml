@@ -29,7 +29,11 @@ spec:
             - name: OPSKNIGHT_EXECUTION_PUBLIC_KEY
               valueFrom:
                 secretKeyRef:
-                  { name: opsknight-agent-enrollment, key: OPSKNIGHT_EXECUTION_PUBLIC_KEY }
+                  { name: opsknight-agent-enrollment, key: OPSKNIGHT_EXECUTION_PUBLIC_KEY, optional: true }
+            - name: OPSKNIGHT_EXECUTION_PUBLIC_KEYS
+              valueFrom:
+                secretKeyRef:
+                  { name: opsknight-agent-enrollment, key: OPSKNIGHT_EXECUTION_PUBLIC_KEYS, optional: true }
             - {
                 name: OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE,
                 value: /run/secrets/opsknight-agent/enrollment-token,

@@ -413,3 +413,99 @@ test('390px infrastructure, health and builder have no horizontal overflow', asy
   }
   await page.screenshot({ path: 'test-results/runbooks-incident-mobile.png', fullPage: true });
 });
+
+test('server pagination, administrator labels, effective capabilities and budget settings', async ({
+  page,
+}) => {
+  await login(page);
+  const prefix = `Pagination fixture ${Date.now()}`;
+  await prisma.runbook.createMany({
+    data: Array.from({ length: 21 }, (_, index) => ({
+      name: `${prefix} ${String(index).padStart(2, '0')}`,
+      slug: `pagination-${Date.now()}-${index}`,
+    })),
+  });
+  await page.getByRole('textbox', { name: 'Search runbooks' }).fill(prefix);
+  await page.getByRole('button', { name: 'Apply filters' }).click();
+  await expect(page).toHaveURL(/q=Pagination/);
+  await expect(page.getByRole('navigation', { name: 'Runbook pagination' })).toContainText(
+    'Page 1 of 2 · 21 results'
+  );
+  await page.getByRole('link', { name: 'Next page', exact: true }).click();
+  await expect(page.getByRole('navigation', { name: 'Runbook pagination' })).toContainText(
+    'Page 2 of 2 · 21 results'
+  );
+  await page.goto('/runbooks/executions?to=not-a-date');
+  await expect(page.getByRole('heading', { name: 'Executions', exact: true })).toBeVisible();
+
+  const agent = await prisma.runbookAgent.create({
+    data: {
+      name: `Capability fixture ${Date.now()}`,
+      status: 'ONLINE',
+      lastHeartbeatAt: new Date(),
+      capabilities: ['RUNBOOK_LINUX_DIAGNOSTICS'],
+      capabilityReport: [
+        {
+          name: 'Podman',
+          type: 'DOCKER',
+          configured: true,
+          available: false,
+          reason: 'Runtime access unavailable.',
+        },
+      ],
+    },
+  });
+  await page.goto(`/runbooks/agents?q=${encodeURIComponent(agent.name)}`);
+  await expect(
+    page.getByText('Runtime access unavailable.', { exact: false }).filter({ visible: true })
+  ).toBeVisible();
+  await page.getByText('Scheduling labels', { exact: true }).filter({ visible: true }).click();
+  await page
+    .getByRole('textbox', { name: `Labels for ${agent.name}` })
+    .fill('{"env":"prod","host":"node-a"}');
+  await page.getByRole('button', { name: 'Save scheduling labels' }).click();
+  await expect
+    .poll(
+      async () => (await prisma.runbookAgent.findUniqueOrThrow({ where: { id: agent.id } })).labels
+    )
+    .toEqual({ env: 'prod', host: 'node-a' });
+  await page
+    .getByText('Automatic remediation budgets', { exact: true })
+    .filter({ visible: true })
+    .click();
+  await page
+    .getByRole('spinbutton', { name: 'Automatic executions per incident', exact: true })
+    .fill('2');
+  await page
+    .getByRole('spinbutton', { name: 'Automatic writes per incident', exact: true })
+    .fill('1');
+  await page
+    .getByRole('spinbutton', { name: 'Automatic non-idempotent actions per incident', exact: true })
+    .fill('0');
+  await page.getByRole('button', { name: 'Save remediation budgets' }).click();
+  await expect
+    .poll(
+      async () =>
+        (await prisma.systemSettings.findUniqueOrThrow({ where: { id: 'default' } }))
+          .runbookAutoExecutionsPerIncident
+    )
+    .toBe(2);
+  await page
+    .getByText('Pinned execution public key', { exact: true })
+    .filter({ visible: true })
+    .click();
+  await page.getByRole('button', { name: 'Stage next signing identity' }).click();
+  await expect
+    .poll(async () => prisma.runbookExecutionSigningKey.count({ where: { state: 'NEXT' } }))
+    .toBe(1);
+  await expect(page.getByRole('button', { name: 'Activate acknowledged identity' })).toBeVisible();
+  await page.getByRole('button', { name: 'Activate acknowledged identity' }).click();
+  await expect(
+    page
+      .getByText(
+        'Every enrolled Agent, including offline Agents, must acknowledge the NEXT trusted key.'
+      )
+      .filter({ visible: true })
+  ).toBeVisible();
+  expect(await prisma.runbookExecutionSigningKey.count({ where: { state: 'NEXT' } })).toBe(1);
+});

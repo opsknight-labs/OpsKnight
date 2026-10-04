@@ -21,7 +21,7 @@ export class AgentClient {
   constructor(
     private readonly baseUrl: string,
     private readonly identity: AgentIdentity,
-    private readonly executionPublicKey?: string
+    private readonly executionPublicKey?: string | Record<string, string>
   ) {}
 
   private async request<T>(pathname: string, body: unknown): Promise<T | null> {
@@ -65,6 +65,14 @@ export class AgentClient {
     deadLetterDepth: number;
     activeAttemptCount: number;
     lastError: string | null;
+    capabilityReport?: {
+      name: string;
+      type: string;
+      configured: boolean;
+      available: boolean;
+      reason: string | null;
+    }[];
+    trustedSigningKeys?: string[];
   }) {
     return this.request('/api/runbook-agent/v1/heartbeat', {
       hostname: hostname(),
