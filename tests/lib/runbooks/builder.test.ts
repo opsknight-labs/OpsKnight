@@ -30,4 +30,7 @@ describe('Runbook authoring templates', () => {
     ).toBe('NON_IDEMPOTENT');
     expect(builderRisk(newBuilderStep('DOCKER', 'inspect'))).toBe('READ_ONLY');
   });
+  it('uses the canonical incident priority field for new condition steps', () => {
+    expect(newBuilderStep('CONDITION', 'gate').config.field).toBe('incident.priority');
+  });
 });

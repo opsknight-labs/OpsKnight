@@ -14,6 +14,12 @@ import {
 } from '@/lib/runbooks/schemas';
 
 describe('Runbooks Zod Schemas', () => {
+  it('rejects unconstrained SELECT input definitions', () => {
+    expect(
+      runbookInputSchema.safeParse({ key: 'environment', label: 'Environment', type: 'SELECT' })
+        .success
+    ).toBe(false);
+  });
   describe('createRunbookSchema', () => {
     it('should validate valid runbook creation input', () => {
       const result = createRunbookSchema.safeParse({

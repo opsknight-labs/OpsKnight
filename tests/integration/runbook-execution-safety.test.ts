@@ -86,6 +86,90 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   beforeEach(async () => resetDatabase());
   afterAll(async () => testPrisma.$disconnect());
 
+  it.each(['P1', 'P3'])(
+    'evaluates live incident priority %s and gates following steps',
+    async priority => {
+      const target = await createAgentTarget({
+        steps: [
+          {
+            key: 'gate',
+            name: 'Priority gate',
+            type: 'CONDITION',
+            riskClass: 'READ_ONLY',
+            config: { field: 'incident.priority', operator: 'EQUALS', value: 'P1' },
+          },
+          {
+            key: 'inspect',
+            name: 'Inspect service',
+            type: 'SYSTEMD',
+            riskClass: 'READ_ONLY',
+            config: { action: 'status', unit: 'api.service' },
+          },
+        ],
+      });
+      const incident = await createTestIncident('Condition context', target.service.id, {
+        priority,
+      });
+      const execution = await startRunbookExecution({
+        runbookId: target.runbook.id,
+        bindingId: target.binding.id,
+        serviceId: target.service.id,
+        incidentId: incident.id,
+      });
+      await advanceExecution(execution.id);
+      await advanceExecution(execution.id);
+      const steps = await testPrisma.runbookExecutionStep.findMany({
+        where: { executionId: execution.id },
+        orderBy: { sequence: 'asc' },
+      });
+      expect(steps[0].status).toBe(priority === 'P1' ? 'SUCCEEDED' : 'SKIPPED');
+      expect(steps[1].status).toBe(priority === 'P1' ? 'WAITING_AGENT' : 'SKIPPED');
+      expect(
+        await testPrisma.runbookStepAttempt.count({ where: { executionStepId: steps[1].id } })
+      ).toBe(priority === 'P1' ? 1 : 0);
+    }
+  );
+
+  it('claims public work after more than fifty transport-blocked secret attempts', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'inspect',
+          name: 'Inspect',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: { action: 'status', unit: 'api.service' },
+        },
+      ],
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    await advanceExecution(execution.id);
+    const publicAttempt = await testPrisma.runbookStepAttempt.findFirstOrThrow({
+      where: { executionStep: { executionId: execution.id } },
+    });
+    await testPrisma.runbookStepAttempt.createMany({
+      data: Array.from({ length: 51 }, (_, index) => ({
+        executionStepId: publicAttempt.executionStepId,
+        attemptNumber: index + 2,
+        targetAgentPoolId: target.pool.id,
+        status: 'PENDING' as const,
+        requiresConfidentialTransport: true,
+        claimDeadlineAt: new Date(Date.now() + 300000),
+        createdAt: new Date(publicAttempt.createdAt.getTime() - 1000 - index),
+      })),
+    });
+    expect((await claimAgentAttempt(target.agent.id))?.attemptId).toBe(publicAttempt.id);
+    expect(
+      await testPrisma.runbookStepAttempt.count({
+        where: { requiresConfidentialTransport: true, status: 'PENDING' },
+      })
+    ).toBe(51);
+  });
+
   it('rejects ambiguous local-host write targets during binding creation and update', async () => {
     const target = await createAgentTarget({
       description: 'Binding validation',
@@ -443,6 +527,12 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     await expect(claimAgentAttempt(target.agent.id)).rejects.toThrow(
       'HTTPS required for secret-backed steps'
     );
+    expect(
+      await testPrisma.runbookStepAttempt.findFirst({
+        where: { executionStep: { executionId: execution.id } },
+        select: { requiresConfidentialTransport: true },
+      })
+    ).toEqual({ requiresConfidentialTransport: true });
     const secureClaim = await claimAgentAttempt(target.agent.id, true);
     expect(secureClaim?.inputValues).toEqual({ unit: 'api.service' });
     expect(secureClaim?.secretInputKeys).toEqual(['unit']);

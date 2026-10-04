@@ -87,26 +87,34 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
               ['LINUX_DIAGNOSTICS', 'SYSTEMD', 'DOCKER', 'KUBERNETES', 'BASH'].includes(type)
             );
           if (supportedStepTypes.length === 0) return null;
+          const claimWhere: Prisma.RunbookStepAttemptWhereInput = {
+            status: 'PENDING',
+            availableAt: { lte: now },
+            claimDeadlineAt: { gt: now },
+            OR: [
+              { targetAgentId: agentId },
+              {
+                targetAgentId: null,
+                targetAgentPool: { members: { some: { agentId } } },
+              },
+            ],
+            executionStep: {
+              type: { in: supportedStepTypes },
+              execution: {
+                status: { in: ['RUNNING', 'WAITING_AGENT'] },
+                cancelRequestedAt: null,
+                deadlineAt: { gt: now },
+              },
+            },
+          };
+          const allowConfidential =
+            confidentialTransport ||
+            (process.env.NODE_ENV === 'development' &&
+              process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true');
           const candidates = await tx.runbookStepAttempt.findMany({
             where: {
-              status: 'PENDING',
-              availableAt: { lte: now },
-              claimDeadlineAt: { gt: now },
-              OR: [
-                { targetAgentId: agentId },
-                {
-                  targetAgentId: null,
-                  targetAgentPool: { members: { some: { agentId } } },
-                },
-              ],
-              executionStep: {
-                type: { in: supportedStepTypes },
-                execution: {
-                  status: { in: ['RUNNING', 'WAITING_AGENT'] },
-                  cancelRequestedAt: null,
-                  deadlineAt: { gt: now },
-                },
-              },
+              ...claimWhere,
+              ...(!allowConfidential ? { requiresConfidentialTransport: false } : {}),
             },
             orderBy: { createdAt: 'asc' },
             take: 50,
@@ -156,6 +164,14 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
             return agentSupportsStep(capabilities, candidate.executionStep.type);
           });
           if (eligible.length === 0) {
+            if (
+              !allowConfidential &&
+              (await tx.runbookStepAttempt.findFirst({
+                where: { ...claimWhere, requiresConfidentialTransport: true },
+                select: { id: true },
+              }))
+            )
+              blockedSecretTransport = true;
             if (blockedSecretTransport)
               throw new RunbookDefinitionError(
                 'HTTPS required for secret-backed steps. Configure this Agent with a trusted HTTPS control-plane URL.'
@@ -630,6 +646,7 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
           executionStepId: attempt.executionStepId,
           attemptNumber: attempt.attemptNumber + 1,
           status: 'PENDING',
+          requiresConfidentialTransport: attempt.requiresConfidentialTransport,
           targetAgentId: localHostRetry ? agentId : attempt.targetAgentId,
           targetAgentPoolId: localHostRetry ? null : attempt.targetAgentPoolId,
           availableAt: new Date(Date.now() + retryDelayMs(attempt.attemptNumber)),

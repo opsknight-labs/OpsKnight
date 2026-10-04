@@ -10,12 +10,15 @@ import {
   computePlanDigest,
   computeDefinitionChecksum,
   containsSecretReference,
+  referencedStepInputKeys,
+  isSecretReference,
   flattenSteps,
   parseRunbookDefinition,
   resolveInputTemplates,
   validateResolvedStepConfig,
 } from './definition';
 import { matchesCondition } from './matcher';
+import { canonicalConditionField } from './builder';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
 import { suggestionPlanSchema } from './suggestion-plan';
 import {
@@ -473,13 +476,33 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
   if (step.type === 'CONDITION') {
     const execution = await prisma.runbookExecution.findUniqueOrThrow({
       where: { id: executionId },
-      select: { inputValues: true },
+      select: {
+        inputValues: true,
+        incident: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            status: true,
+            urgency: true,
+            priority: true,
+            tags: { select: { tag: { select: { name: true } } } },
+          },
+        },
+        service: { select: { id: true, name: true, teamId: true } },
+      },
     });
     const config = step.config as Record<string, unknown>;
     const matched = matchesCondition(
-      { input: execution.inputValues },
       {
-        field: String(config.field ?? ''),
+        input: execution.inputValues,
+        incident: execution.incident
+          ? { ...execution.incident, tags: execution.incident.tags.map(item => item.tag.name) }
+          : null,
+        service: execution.service,
+      },
+      {
+        field: canonicalConditionField(String(config.field ?? '')),
         operator: String(config.operator ?? 'EQUALS') as never,
         value: config.value,
       }
@@ -558,6 +581,12 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
         executionStepId: step.id,
         attemptNumber: 1,
         status: 'PENDING',
+        requiresConfidentialTransport: Object.entries(
+          execution.inputValues as Record<string, unknown>
+        ).some(
+          ([key, value]) =>
+            referencedStepInputKeys(step.config).has(key) && isSecretReference(value)
+        ),
         targetAgentId: execution.resolvedTargetAgentId,
         targetAgentPoolId: execution.resolvedTargetAgentPoolId,
         claimDeadlineAt: new Date(Date.now() + 300_000),

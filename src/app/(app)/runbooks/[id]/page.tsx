@@ -80,7 +80,7 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
           ({ key, label, type, required, defaultValue, description, sequence }) => ({
             key,
             label,
-            type,
+            type: type === 'SELECT' ? 'STRING' : type,
             required,
             ...(defaultValue === null ? {} : { defaultValue }),
             description,

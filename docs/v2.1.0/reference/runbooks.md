@@ -26,8 +26,11 @@ JSON. They are preserved during ordinary builder editing. See the
 
 ## Inputs and risk
 
-Input types are `STRING`, `NUMBER`, `BOOLEAN`, `URL`, `DURATION`, `SECRET_REF`,
-and `SELECT`. Input keys are unique and definitions specify required/default
+Input types are `STRING`, `NUMBER`, `BOOLEAN`, `URL`, `DURATION`, and `SECRET_REF`.
+Unconstrained `SELECT` is not accepted for new input definitions; use `STRING`
+until option-aware selection is implemented. The database retains its legacy
+enum value for compatibility, not as a constrained dropdown contract.
+Input keys are unique and definitions specify required/default
 behavior. Values are validated when configuring and executing a binding.
 Secret references identify encrypted credentials and require a scoped grant.
 
@@ -39,6 +42,27 @@ The maximum is 50 steps, including nested steps, and 30 input definitions.
 Library filtering currently operates on loaded Runbooks. Execution history
 currently shows the most recent 50 executions; server-side pagination is not
 yet available.
+
+## CONDITION fields and behavior
+
+Builder conditions select `incident.priority`, `incident.urgency`,
+`incident.status`, `incident.title`, `incident.description`, `incident.tags`,
+`service.name`, or a defined input such as `input.replica_count`.
+Advanced definitions can also access incident/service IDs and `service.teamId`.
+Incident/service values are read when the condition executes, not frozen at
+execution creation. Without an incident/service, those objects are absent.
+Inputs are the execution's resolved values. Legacy bare incident paths such as
+`priority` are interpreted as `incident.priority`.
+
+A false CONDITION skips itself and all remaining pending workflow steps.
+It is a workflow gate, not an if/else branch. Operators use strict type
+comparison: numeric inputs require JSON numbers, not quoted strings.
+Use Advanced JSON for non-string comparison values.
+
+Control-plane HTTP steps reject private, loopback, link-local, and metadata
+endpoints through safe outbound fetching. Internal remediation needs an
+appropriate Agent executor, such as an explicitly allowlisted Bash command,
+not an exemption from control-plane SSRF rules.
 
 ## Permissions
 

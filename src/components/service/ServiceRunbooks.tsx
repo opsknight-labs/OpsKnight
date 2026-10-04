@@ -143,7 +143,16 @@ export default function ServiceRunbooks({
                   className="grid gap-3 lg:grid-cols-4"
                 >
                   <Field label="Mode">
-                    <FormSelect name="mode" label="Execution mode" defaultValue={binding.mode} options={[{ value: 'MANUAL', label: 'Manual' }, { value: 'SUGGESTED', label: 'Suggested' }, { value: 'AUTOMATIC', label: 'Automatic · requires pinned version' }]} />
+                    <FormSelect
+                      name="mode"
+                      label="Execution mode"
+                      defaultValue={binding.mode}
+                      options={[
+                        { value: 'MANUAL', label: 'Manual' },
+                        { value: 'SUGGESTED', label: 'Suggested' },
+                        { value: 'AUTOMATIC', label: 'Automatic · requires pinned version' },
+                      ]}
+                    />
                   </Field>
                   <RunbookBindingVersionInputs
                     versions={
@@ -179,7 +188,15 @@ export default function ServiceRunbooks({
                     }}
                   />
                   <Field label="Status">
-                    <FormSelect name="enabled" label="Binding status" defaultValue={String(binding.enabled)} options={[{ value: 'true', label: 'Enabled' }, { value: 'false', label: 'Disabled' }]} />
+                    <FormSelect
+                      name="enabled"
+                      label="Binding status"
+                      defaultValue={String(binding.enabled)}
+                      options={[
+                        { value: 'true', label: 'Enabled' },
+                        { value: 'false', label: 'Disabled' },
+                      ]}
+                    />
                   </Field>
                   <div className="order-2 flex gap-2 lg:col-span-4">
                     <SubmitButton variant="outline">
@@ -198,10 +215,23 @@ export default function ServiceRunbooks({
                   className="mt-4 grid gap-3 border-t pt-4 lg:grid-cols-3"
                 >
                   <Field label="Trigger event">
-                    <FormSelect name="event" label="Trigger event" defaultValue="INCIDENT_CREATED" options={[{ value: 'INCIDENT_CREATED', label: 'Incident created' }]} />
+                    <FormSelect
+                      name="event"
+                      label="Trigger event"
+                      defaultValue="INCIDENT_CREATED"
+                      options={[{ value: 'INCIDENT_CREATED', label: 'Incident created' }]}
+                    />
                   </Field>
                   <Field label="Condition logic">
-                    <FormSelect name="conditionLogic" label="Condition logic" defaultValue={binding.triggers[0]?.conditionLogic ?? 'AND'} options={[{ value: 'AND', label: 'Match all' }, { value: 'OR', label: 'Match any' }]} />
+                    <FormSelect
+                      name="conditionLogic"
+                      label="Condition logic"
+                      defaultValue={binding.triggers[0]?.conditionLogic ?? 'AND'}
+                      options={[
+                        { value: 'AND', label: 'Match all' },
+                        { value: 'OR', label: 'Match any' },
+                      ]}
+                    />
                   </Field>
                   <div className="flex items-end">
                     <SubmitButton variant="outline" pendingLabel="Saving trigger…">
@@ -274,10 +304,27 @@ export default function ServiceRunbooks({
                     </div>
                   </div>
                   <Field label="Mode">
-                    <FormSelect name="mode" label="Execution mode" defaultValue="MANUAL" options={[{ value: 'MANUAL', label: 'Manual' }, { value: 'SUGGESTED', label: 'Suggested' }, { value: 'AUTOMATIC', label: 'Automatic · requires pinned version' }]} />
+                    <FormSelect
+                      name="mode"
+                      label="Execution mode"
+                      defaultValue="MANUAL"
+                      options={[
+                        { value: 'MANUAL', label: 'Manual' },
+                        { value: 'SUGGESTED', label: 'Suggested' },
+                        { value: 'AUTOMATIC', label: 'Automatic · requires pinned version' },
+                      ]}
+                    />
                   </Field>
                   <Field label="Version strategy">
-                    <FormSelect name="versionStrategy" label="Version strategy" defaultValue="LATEST_PUBLISHED" options={[{ value: 'LATEST_PUBLISHED', label: 'Latest published' }, { value: 'PINNED', label: 'Pinned' }]} />
+                    <FormSelect
+                      name="versionStrategy"
+                      label="Version strategy"
+                      defaultValue="LATEST_PUBLISHED"
+                      options={[
+                        { value: 'LATEST_PUBLISHED', label: 'Latest published' },
+                        { value: 'PINNED', label: 'Pinned' },
+                      ]}
+                    />
                   </Field>
                   <Field label="Execution target">
                     <RunbookTargetSelect
@@ -432,33 +479,31 @@ function TriggerConditionRow({
       : String(value);
   return (
     <div className="grid gap-2 sm:grid-cols-3">
-      <select
+      <FormSelect
         name="conditionField"
-        defaultValue={field}
-        className="h-10 rounded-md border bg-background px-3 text-sm"
-      >
-        <option value="">No additional condition</option>
-        {field && !knownField && <option value={field}>{field}</option>}
-        {triggerFields.map(([key, label]) => (
-          <option key={key} value={key}>
-            {label}
-          </option>
-        ))}
-      </select>
-      <select
+        label="Trigger condition field"
+        defaultValue={field || 'none'}
+        options={[
+          { value: 'none', label: 'No additional condition' },
+          ...(field && !knownField ? [{ value: field, label: field }] : []),
+          ...triggerFields.map(([value, label]) => ({ value, label })),
+        ]}
+      />
+      <FormSelect
         name="conditionOperator"
+        label="Trigger condition operator"
         defaultValue={operator}
-        className="h-10 rounded-md border bg-background px-3 text-sm"
-      >
-        <option value="EQUALS">Equals</option>
-        <option value="NOT_EQUALS">Does not equal</option>
-        <option value="CONTAINS">Contains</option>
-        <option value="STARTS_WITH">Starts with</option>
-        <option value="IN">Is one of</option>
-        <option value="NOT_IN">Is not one of</option>
-        <option value="EXISTS">Exists</option>
-        <option value="NOT_EXISTS">Does not exist</option>
-      </select>
+        options={[
+          { value: 'EQUALS', label: 'Equals' },
+          { value: 'NOT_EQUALS', label: 'Does not equal' },
+          { value: 'CONTAINS', label: 'Contains' },
+          { value: 'STARTS_WITH', label: 'Starts with' },
+          { value: 'IN', label: 'Is one of' },
+          { value: 'NOT_IN', label: 'Is not one of' },
+          { value: 'EXISTS', label: 'Exists' },
+          { value: 'NOT_EXISTS', label: 'Does not exist' },
+        ]}
+      />
       <Input name="conditionValue" defaultValue={displayedValue} placeholder="Match value" />
     </div>
   );

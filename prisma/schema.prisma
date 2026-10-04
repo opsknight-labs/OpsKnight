@@ -3638,6 +3638,7 @@ model RunbookStepAttempt {
   executionStepId   String
   attemptNumber     Int
   status            RunbookAttemptStatus @default(PENDING)
+  requiresConfidentialTransport Boolean @default(false)
   targetAgentId     String?
   targetAgentPoolId String?
   claimedAgentId    String?
@@ -3668,6 +3669,7 @@ model RunbookStepAttempt {
   updatedAt DateTime @updatedAt
 
   @@unique([executionStepId, attemptNumber])
+  @@index([requiresConfidentialTransport, status, createdAt], map: "RunbookStepAttempt_transport_status_createdAt_idx")
   @@index([executionStepId])
   @@index([status, updatedAt])
   @@index([status, availableAt])

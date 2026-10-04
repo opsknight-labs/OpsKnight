@@ -95,13 +95,21 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toBeEnabled();
   await page.getByRole('tab', { name: /^Inputs/ }).click();
   await page.getByRole('button', { name: 'Add input', exact: true }).click();
-  await page.getByLabel('Input 1 key', { exact: true }).fill('service');
-  await page.getByLabel('Input 1 label', { exact: true }).fill('Service unit');
+  await page
+    .locator('[role="tabpanel"]:visible')
+    .getByLabel('Input 1 key', { exact: true })
+    .fill('service');
+  await page
+    .locator('[role="tabpanel"]:visible')
+    .getByLabel('Input 1 label', { exact: true })
+    .fill('Service unit');
   await page.getByRole('button', { name: 'Save draft', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Changes saved.' })).toBeVisible();
   await page.reload();
   await page.getByRole('tab', { name: /^Inputs/ }).click();
-  await expect(page.getByLabel('Input 1 key', { exact: true })).toHaveValue('service');
+  await expect(
+    page.locator('[role="tabpanel"]:visible').getByLabel('Input 1 key', { exact: true })
+  ).toHaveValue('service');
   await page.getByRole('button', { name: 'Publish draft', exact: true }).click();
   await expect(page.getByRole('alertdialog')).toContainText('Only the saved draft is published');
   await page.getByRole('button', { name: 'Keep unchanged', exact: true }).click();
@@ -246,7 +254,8 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
     .filter({ has: page.getByRole('link', { name, exact: true }) })
     .getByRole('button', { name: 'Configure', exact: true })
     .click();
-  await page.locator('select[name="conditionField"]').selectOption('incident.urgency');
+  await page.getByRole('combobox', { name: 'Trigger condition field' }).click();
+  await page.getByRole('option', { name: 'Incident urgency', exact: true }).click();
   await page.locator('input[name="conditionValue"]').fill('HIGH');
   await page.getByRole('button', { name: 'Save trigger', exact: true }).click();
   const binding = await prisma.serviceRunbookBinding.findFirstOrThrow({

@@ -6,6 +6,20 @@ export const RUNBOOK_TEMPLATES = [
   'service-recovery',
   'kubernetes-recovery',
 ] as const;
+export const CONDITION_FIELDS = [
+  { value: 'incident.priority', label: 'Incident priority' },
+  { value: 'incident.urgency', label: 'Incident urgency' },
+  { value: 'incident.status', label: 'Incident status' },
+  { value: 'incident.title', label: 'Incident title' },
+  { value: 'incident.description', label: 'Incident description' },
+  { value: 'incident.tags', label: 'Incident tags' },
+  { value: 'service.name', label: 'Service name' },
+] as const;
+export function canonicalConditionField(field: string): string {
+  return ['priority', 'urgency', 'status', 'title', 'description', 'tags'].includes(field)
+    ? `incident.${field}`
+    : field;
+}
 export function newBuilderStep(type: RunbookStepType, key: string): RunbookStepDefinition {
   const config: Record<string, unknown> =
     type === 'HTTP'
@@ -21,7 +35,7 @@ export function newBuilderStep(type: RunbookStepType, key: string): RunbookStepD
               : type === 'WAIT'
                 ? { durationSeconds: 5 }
                 : type === 'CONDITION'
-                  ? { field: 'priority', operator: 'EQUALS', value: 'P1' }
+                  ? { field: 'incident.priority', operator: 'EQUALS', value: 'P1' }
                   : type === 'BASH'
                     ? { command: '' }
                     : {};

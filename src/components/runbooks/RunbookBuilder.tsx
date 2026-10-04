@@ -30,7 +30,12 @@ import {
   runbookInputsSchema,
   type RunbookInputInput,
 } from '@/lib/runbooks/schemas';
-import { newBuilderStep, builderRisk } from '@/lib/runbooks/builder';
+import {
+  newBuilderStep,
+  builderRisk,
+  CONDITION_FIELDS,
+  canonicalConditionField,
+} from '@/lib/runbooks/builder';
 import {
   ActionForm,
   ConfigureSheet,
@@ -234,6 +239,32 @@ export default function RunbookBuilder({
                         />
                       </Field>
                       {fieldsFor(step.type).map(field => {
+                        if (step.type === 'CONDITION' && field.key === 'field') {
+                          return (
+                            <Field key={field.key} label="Condition field">
+                              <FormSelect
+                                name={`condition-field-${index}`}
+                                label="Condition field"
+                                value={canonicalConditionField(String(step.config.field ?? ''))}
+                                onValueChange={value =>
+                                  changeStep(index, { config: { ...step.config, field: value } })
+                                }
+                                options={[
+                                  ...CONDITION_FIELDS,
+                                  ...inputs.map(input => ({
+                                    value: `input.${input.key}`,
+                                    label: `Input → ${input.label} (${input.key})`,
+                                  })),
+                                ]}
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                A false condition skips all remaining pending steps.
+                                Incident/service fields are unavailable when execution has no
+                                corresponding resource.
+                              </p>
+                            </Field>
+                          );
+                        }
                         const raw = Object.entries(step.config).find(
                           ([key]) => key === field.key
                         )?.[1];

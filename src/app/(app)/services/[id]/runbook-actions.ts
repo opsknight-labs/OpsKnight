@@ -170,7 +170,7 @@ export async function configureRunbookTriggerAction(
   const operators = formData.getAll('conditionOperator').map(String);
   const rawValues = formData.getAll('conditionValue').map(String);
   const conditions = fields.flatMap((field, sequence) => {
-    if (!field) return [];
+    if (!field || field === 'none') return [];
     const operator = conditionOperatorSchema.parse(operators.at(sequence) ?? 'EQUALS');
     const rawValue = rawValues.at(sequence) ?? '';
     const value =
