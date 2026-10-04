@@ -42,5 +42,5 @@ export function isRetryableFailure(
   riskClass: RunbookRiskClass,
   errorCode?: string | null
 ): boolean {
-  return riskClass !== 'NON_IDEMPOTENT' && !PERMANENT_FAILURE_CODES.has(errorCode ?? '');
+  return riskClass === 'READ_ONLY' && !PERMANENT_FAILURE_CODES.has(errorCode ?? '');
 }

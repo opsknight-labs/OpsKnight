@@ -58,8 +58,9 @@ function TargetSelect({
 
 export default async function RunbookAgentsPage() {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
-  const [permissions, agents, pools, secrets] = await Promise.all([
-    getUserPermissions(),
+  const permissions = await getUserPermissions();
+  const canManageSecrets = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
+  const [agents, pools, secrets] = await Promise.all([
     prisma.runbookAgent.findMany({
       include: {
         poolMemberships: { include: { pool: true } },
@@ -71,13 +72,14 @@ export default async function RunbookAgentsPage() {
       include: { members: { include: { agent: true } }, _count: { select: { bindings: true } } },
       orderBy: { name: 'asc' },
     }),
-    prisma.runbookSecret.findMany({
-      include: { grants: { include: { agent: true, agentPool: true } } },
-      orderBy: { name: 'asc' },
-    }),
+    canManageSecrets
+      ? prisma.runbookSecret.findMany({
+          include: { grants: { include: { agent: true, agentPool: true } } },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
   ]);
   const canManage = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
-  const canManageSecrets = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
   const activeAgents = agents.filter(agent => agent.status !== 'REVOKED');
 
   return (

@@ -74,7 +74,7 @@ describe('Runbook Definition Module', () => {
           }),
         ],
       });
-      expect(() => parseRunbookDefinition(definition)).toThrow(/IDEMPOTENT_WRITE/);
+      expect(() => parseRunbookDefinition(definition)).toThrow(/NON_IDEMPOTENT/);
     });
 
     it('rejects unsafe target syntax and unsupported delayed verification', () => {

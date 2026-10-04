@@ -13,6 +13,26 @@ import {
 
 const idSchema = z.string().cuid();
 
+export async function dismissIncidentRunbookSuggestionAction(
+  incidentId: string,
+  suggestionId: string
+) {
+  await Promise.all([
+    assertCapability(CAPABILITIES.RUNBOOK_EXECUTE),
+    assertCanViewIncident(idSchema.parse(incidentId)),
+  ]);
+  await prisma.runbookSuggestion.updateMany({
+    where: {
+      id: idSchema.parse(suggestionId),
+      incidentId,
+      state: 'SUGGESTED',
+      binding: { service: { incidents: { some: { id: incidentId } } } },
+    },
+    data: { state: 'DISMISSED' },
+  });
+  revalidatePath(`/incidents/${incidentId}`);
+}
+
 async function assertExecutionBelongsToIncident(executionId: string, incidentId: string) {
   const execution = await prisma.runbookExecution.findFirst({
     where: { id: executionId, incidentId },
@@ -49,9 +69,36 @@ export async function startIncidentRunbookAction(incidentId: string, bindingId: 
     inputValues: binding.inputValues as Record<string, unknown>,
     triggeredByUserId: actor.id,
   });
-  await prisma.runbookSuggestion.updateMany({
-    where: { incidentId, bindingId: binding.id, state: 'SUGGESTED' },
-    data: { state: 'STARTED', startedAt: new Date() },
+  revalidatePath(`/incidents/${incidentId}`);
+}
+
+export async function startIncidentRunbookSuggestionAction(
+  incidentId: string,
+  suggestionId: string
+) {
+  const [actor] = await Promise.all([
+    assertCapability(CAPABILITIES.RUNBOOK_EXECUTE),
+    assertCanViewIncident(idSchema.parse(incidentId)),
+  ]);
+  const suggestion = await prisma.runbookSuggestion.findFirst({
+    where: {
+      id: idSchema.parse(suggestionId),
+      incidentId,
+      state: 'SUGGESTED',
+      binding: { enabled: true, service: { incidents: { some: { id: incidentId } } } },
+    },
+    include: { binding: true },
+  });
+  if (!suggestion) throw new Error('Runbook suggestion is unavailable or already handled.');
+  await startRunbookExecution({
+    runbookId: suggestion.binding.runbookId,
+    runbookVersionId: suggestion.runbookVersionId,
+    suggestionId: suggestion.id,
+    incidentId,
+    serviceId: suggestion.binding.serviceId,
+    bindingId: suggestion.binding.id,
+    inputValues: suggestion.binding.inputValues as Record<string, unknown>,
+    triggeredByUserId: actor.id,
   });
   revalidatePath(`/incidents/${incidentId}`);
 }

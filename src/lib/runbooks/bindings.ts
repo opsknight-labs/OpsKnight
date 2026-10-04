@@ -63,6 +63,35 @@ export function validateBindingInputValues(
   }
 }
 
+export function applyRunbookInputDefaults(
+  definitions: Pick<RunbookInput, 'key' | 'type' | 'defaultValue'>[],
+  values: Record<string, unknown>
+): Record<string, unknown> {
+  const normalized = { ...values };
+  for (const input of definitions) {
+    if (
+      normalized[input.key] !== undefined ||
+      input.defaultValue === null ||
+      input.defaultValue === undefined
+    ) {
+      continue;
+    }
+    if (
+      (input.type === 'BOOLEAN' && !['true', 'false'].includes(input.defaultValue)) ||
+      (input.type === 'NUMBER' && input.defaultValue.trim() === '')
+    ) {
+      throw new RunbookDefinitionError(`Runbook input "${input.key}" has an invalid default.`);
+    }
+    normalized[input.key] =
+      input.type === 'NUMBER'
+        ? Number(input.defaultValue)
+        : input.type === 'BOOLEAN'
+          ? input.defaultValue === 'true'
+          : input.defaultValue;
+  }
+  return normalized;
+}
+
 async function resolveBindingVersion(
   tx: Prisma.TransactionClient,
   runbookId: string,
@@ -142,7 +171,8 @@ export async function createServiceBinding(
       input.versionStrategy,
       input.runbookVersionId
     );
-    validateBindingInputValues(version.inputs, input.inputValues);
+    const inputValues = applyRunbookInputDefaults(version.inputs, input.inputValues);
+    validateBindingInputValues(version.inputs, inputValues);
     await validateBindingTarget(
       tx,
       version,
@@ -160,7 +190,7 @@ export async function createServiceBinding(
         versionStrategy: input.versionStrategy,
         defaultAgentPoolId: input.defaultAgentPoolId,
         defaultAgentId: input.defaultAgentId,
-        inputValues: input.inputValues as Prisma.InputJsonValue,
+        inputValues: inputValues as Prisma.InputJsonValue,
         createdById: actorId,
       },
     });
@@ -213,7 +243,10 @@ export async function updateServiceBinding(
         strategy === 'PINNED' &&
         requestedVersionId === current.runbookVersionId
     );
-    const values = input.inputValues ?? (current.inputValues as Record<string, unknown>);
+    const values = applyRunbookInputDefaults(
+      version.inputs,
+      input.inputValues ?? (current.inputValues as Record<string, unknown>)
+    );
     validateBindingInputValues(version.inputs, values);
     const agentId =
       input.defaultAgentId === undefined ? current.defaultAgentId : input.defaultAgentId;

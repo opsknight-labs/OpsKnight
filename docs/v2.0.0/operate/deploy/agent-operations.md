@@ -106,4 +106,10 @@ Use **Runbooks → Health** and Prometheus metrics to watch Agent status, active
 
 Cancellation is cooperative: OpsKnight marks the request, the lease heartbeat observes it, and the Agent sends `SIGTERM` to the process group followed by `SIGKILL` after five seconds. A timed-out or lost write action can become `UNKNOWN`; verify the external target before retrying.
 
+Automatic retries are restricted to read-only failures. HTTP POST/PATCH, service or container restarts, and Kubernetes rollout restarts require non-idempotent risk classification. A command failure or timeout after a write starts is recorded as `UNKNOWN`, including results from older Agents that report these failures as `FAILED`. Do not start another remediation until you have checked the target's actual state.
+
+The Agent start fence checks the execution deadline, cancellation, and Agent revocation. Lease renewal requests cancellation immediately when the execution deadline passes. A bounded, signed result produced before the deadline can recover an expired lease's unknown outcome when no safe retry has superseded it.
+
+Incident suggestions start the exact version displayed, even after a newer version is published. Before approving a step, review its resolved action, resource, Agent or pool, version checksum, and timeout. Scoped secret values remain hidden. Secret metadata and grants are visible only to users with secret-management permission.
+
 To replace a compromised Agent, revoke it in the UI, remove its identity volume, create a new enrollment, and review its secret grants. Revocation immediately prevents future signed claims. Output artifacts default to 30-day retention; set `RUNBOOK_ARTIFACT_RETENTION_DAYS` (1–3650) on the integrated runtime or dedicated Runbook Worker to match your incident-data retention policy.

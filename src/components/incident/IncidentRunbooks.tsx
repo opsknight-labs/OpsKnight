@@ -12,7 +12,8 @@ import {
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { getUserPermissions } from '@/lib/rbac';
-import { computePlanDigest } from '@/lib/runbooks/definition';
+import { redactRunbookOutput } from '@/lib/runbooks/redaction';
+import { computePlanDigest, resolveInputTemplates } from '@/lib/runbooks/definition';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import {
@@ -25,7 +26,9 @@ import {
 import {
   approveIncidentRunbookStepAction,
   cancelIncidentRunbookAction,
+  dismissIncidentRunbookSuggestionAction,
   startIncidentRunbookAction,
+  startIncidentRunbookSuggestionAction,
 } from './runbook-actions';
 
 export default async function IncidentRunbooks({
@@ -48,6 +51,8 @@ export default async function IncidentRunbooks({
         runbook: true,
         runbookVersion: true,
         binding: true,
+        resolvedTargetAgent: { select: { name: true, hostname: true } },
+        resolvedTargetAgentPool: { select: { name: true } },
         steps: {
           orderBy: { sequence: 'asc' },
           include: { attempts: { orderBy: { attemptNumber: 'desc' }, take: 1 } },
@@ -90,13 +95,30 @@ export default async function IncidentRunbooks({
                   </div>
                 </div>
                 {canExecute && (
-                  <form
-                    action={startIncidentRunbookAction.bind(null, incidentId, suggestion.bindingId)}
-                  >
-                    <Button type="submit" size="sm">
-                      <Play /> Start suggestion
-                    </Button>
-                  </form>
+                  <div className="flex gap-2">
+                    <form
+                      action={startIncidentRunbookSuggestionAction.bind(
+                        null,
+                        incidentId,
+                        suggestion.id
+                      )}
+                    >
+                      <Button type="submit" size="sm">
+                        <Play /> Start suggestion
+                      </Button>
+                    </form>
+                    <form
+                      action={dismissIncidentRunbookSuggestionAction.bind(
+                        null,
+                        incidentId,
+                        suggestion.id
+                      )}
+                    >
+                      <Button type="submit" size="sm" variant="ghost">
+                        Dismiss
+                      </Button>
+                    </form>
+                  </div>
                 )}
               </div>
             ))}
@@ -174,6 +196,11 @@ export default async function IncidentRunbooks({
                 inputValues: execution.inputValues as Record<string, unknown>,
                 versionChecksum: execution.definitionChecksum,
               });
+              const approvalPlan = resolvedApprovalPlan(
+                step.type,
+                step.config as Record<string, unknown>,
+                execution.inputValues as Record<string, unknown>
+              );
               return (
                 <div key={step.id} className="rounded-md border p-3">
                   <div className="flex items-start gap-3">
@@ -196,20 +223,48 @@ export default async function IncidentRunbooks({
                         </Link>
                       )}
                       {step.status === 'WAITING_APPROVAL' && canApprove && (
-                        <form
-                          className="mt-3"
-                          action={approveIncidentRunbookStepAction.bind(
-                            null,
-                            incidentId,
-                            execution.id,
-                            step.id,
-                            digest
-                          )}
-                        >
-                          <Button type="submit" size="sm">
-                            <ShieldCheck /> Approve exact plan
-                          </Button>
-                        </form>
+                        <div className="mt-3 space-y-3 rounded-md border bg-muted/30 p-3">
+                          <dl className="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[8rem_1fr]">
+                            <dt className="text-muted-foreground">Action</dt>
+                            <dd>{step.type.replaceAll('_', ' ')}</dd>
+                            {approvalPlan.map(([label, value]) => (
+                              <div key={label} className="contents">
+                                <dt className="text-muted-foreground">{label}</dt>
+                                <dd className="break-all font-mono">{value}</dd>
+                              </div>
+                            ))}
+                            <dt className="text-muted-foreground">Execution target</dt>
+                            <dd>
+                              {execution.resolvedTargetAgent
+                                ? `${execution.resolvedTargetAgent.name}${execution.resolvedTargetAgent.hostname ? ` (${execution.resolvedTargetAgent.hostname})` : ''}`
+                                : execution.resolvedTargetAgentPool
+                                  ? `Pool: ${execution.resolvedTargetAgentPool.name}`
+                                  : 'OpsKnight control plane'}
+                            </dd>
+                            <dt className="text-muted-foreground">Version</dt>
+                            <dd>
+                              v{execution.runbookVersion.version} ·{' '}
+                              <span className="font-mono">
+                                {execution.definitionChecksum.slice(0, 12)}…
+                              </span>
+                            </dd>
+                            <dt className="text-muted-foreground">Timeout</dt>
+                            <dd>{step.timeoutSeconds ?? 300}s</dd>
+                          </dl>
+                          <form
+                            action={approveIncidentRunbookStepAction.bind(
+                              null,
+                              incidentId,
+                              execution.id,
+                              step.id,
+                              digest
+                            )}
+                          >
+                            <Button type="submit" size="sm">
+                              <ShieldCheck /> Approve exact plan
+                            </Button>
+                          </form>
+                        </div>
                       )}
                       {step.status === 'UNKNOWN' && (
                         <p className="mt-2 text-xs font-medium text-amber-700">
@@ -244,6 +299,51 @@ export default async function IncidentRunbooks({
       )}
     </div>
   );
+}
+
+function safePlanValue(value: unknown): string {
+  if (typeof value === 'string') {
+    if (value.includes('secret://')) return '[scoped secret]';
+    try {
+      const url = new URL(value);
+      if (url.username || url.password) {
+        url.username = '';
+        url.password = '';
+      }
+      return redactRunbookOutput(url.toString()).slice(0, 500);
+    } catch {
+      return redactRunbookOutput(value).slice(0, 500);
+    }
+  }
+  return JSON.stringify(value).slice(0, 500);
+}
+
+function resolvedApprovalPlan(
+  type: string,
+  config: Record<string, unknown>,
+  inputValues: Record<string, unknown>
+): Array<[string, string]> {
+  const resolved = resolveInputTemplates(config, inputValues) as Record<string, unknown>;
+  const keys =
+    type === 'HTTP'
+      ? ['method', 'url']
+      : type === 'SYSTEMD'
+        ? ['action', 'unit']
+        : type === 'DOCKER'
+          ? ['action', 'container']
+          : type === 'KUBERNETES'
+            ? ['action', 'namespace', 'resource', 'name']
+            : type === 'BASH'
+              ? ['command']
+              : type === 'WAIT'
+                ? ['durationSeconds']
+                : [];
+  return Object.entries(resolved)
+    .filter(([key, value]) => keys.includes(key) && value !== undefined)
+    .map(([key, value]) => [
+      key.replace(/([A-Z])/g, ' $1').replace(/^./, value => value.toUpperCase()),
+      safePlanValue(value),
+    ]);
 }
 
 function StepIcon({ status }: { status: string }) {

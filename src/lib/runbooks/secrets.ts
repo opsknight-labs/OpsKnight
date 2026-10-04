@@ -34,6 +34,50 @@ export async function createRunbookSecret(raw: unknown, actorId: string) {
   });
 }
 
+export async function createRunbookSecretWithGrant(
+  raw: unknown,
+  target: { agentId?: string; agentPoolId?: string },
+  actorId: string
+) {
+  if (Boolean(target.agentId) === Boolean(target.agentPoolId)) {
+    throw new Error('Select exactly one Agent or Agent pool for a secret grant.');
+  }
+  const input = createRunbookSecretSchema.parse(raw);
+  const valueEncrypted = await encrypt(input.value);
+  return prisma.$transaction(async tx => {
+    const secret = await tx.runbookSecret.create({
+      data: {
+        name: input.name,
+        description: input.description,
+        valueEncrypted,
+        createdById: actorId,
+      },
+    });
+    await tx.runbookSecretGrant.create({
+      data: {
+        secretId: secret.id,
+        agentId: target.agentId,
+        agentPoolId: target.agentPoolId,
+      },
+    });
+    await logAudit(
+      {
+        action: 'runbook.secret.created',
+        entityType: 'RUNBOOK_SECRET',
+        entityId: secret.id,
+        actorId,
+        details: {
+          name: secret.name,
+          initialAgentId: target.agentId ?? null,
+          initialAgentPoolId: target.agentPoolId ?? null,
+        },
+      },
+      tx
+    );
+    return { id: secret.id, name: secret.name, description: secret.description };
+  });
+}
+
 export async function rotateRunbookSecret(secretId: string, raw: unknown, actorId: string) {
   const input = updateRunbookSecretSchema.parse(raw);
   const valueEncrypted = input.value === undefined ? undefined : await encrypt(input.value);

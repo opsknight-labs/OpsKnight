@@ -21,7 +21,7 @@ function commandFor(attempt: ClaimedAttempt): { command: string; args: string[] 
         processes: { command: 'ps', args: ['aux'] },
         network: { command: 'ss', args: ['-tunap'] },
       };
-      const selected = commands[diagnostic];
+      const selected = Object.entries(commands).find(([key]) => key === diagnostic)?.[1];
       if (!selected) throw new Error(`Unsupported diagnostic: ${diagnostic}`);
       return selected;
     }
@@ -157,7 +157,7 @@ export async function executeAttempt(
         return resolve({ status: 'CANCELLED', exitCode: code ?? undefined, output });
       if (timedOut) {
         return resolve({
-          status: 'FAILED',
+          status: attempt.step.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN',
           exitCode: code ?? undefined,
           output,
           errorCode: 'COMMAND_TIMEOUT',
@@ -165,7 +165,8 @@ export async function executeAttempt(
         });
       }
       resolve({
-        status: code === 0 ? 'SUCCEEDED' : 'FAILED',
+        status:
+          code === 0 ? 'SUCCEEDED' : attempt.step.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN',
         exitCode: code ?? undefined,
         output,
         ...(code === 0

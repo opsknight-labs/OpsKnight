@@ -12,8 +12,10 @@ import {
   flattenSteps,
   parseRunbookDefinition,
   resolveInputTemplates,
+  validateResolvedStepConfig,
 } from './definition';
 import { matchesCondition } from './matcher';
+import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
 import {
   DEFAULT_EXECUTION_TIMEOUT_SECONDS,
   DEFAULT_STEP_TIMEOUT_SECONDS,
@@ -86,6 +88,7 @@ export async function startRunbookExecution(input: {
   serviceId?: string;
   incidentId?: string;
   bindingId?: string;
+  suggestionId?: string;
   inputValues?: Record<string, unknown>;
   triggeredByUserId?: string;
   triggerFingerprint?: string;
@@ -118,6 +121,20 @@ export async function startRunbookExecution(input: {
     if (input.triggerId && !input.bindingId) {
       throw new RunbookDefinitionError('A trigger execution requires its service binding.');
     }
+    const suggestion = input.suggestionId
+      ? await tx.runbookSuggestion.findFirst({
+          where: {
+            id: input.suggestionId,
+            state: 'SUGGESTED',
+            incidentId: input.incidentId,
+            bindingId: input.bindingId,
+            binding: { runbookId: runbook.id, enabled: true },
+          },
+        })
+      : null;
+    if (input.suggestionId && !suggestion) {
+      throw new RunbookDefinitionError('Runbook suggestion is unavailable or already handled.');
+    }
     const resolvedServiceId = input.serviceId ?? binding?.serviceId;
     if (input.incidentId) {
       const incident = await tx.incident.findFirst({
@@ -134,19 +151,23 @@ export async function startRunbookExecution(input: {
         throw new RunbookDefinitionError('Incident runbook execution requires a service boundary.');
       }
     }
-    const versionId = input.runbookVersionId ?? runbook.publishedVersionId;
+    const versionId =
+      suggestion?.runbookVersionId ?? input.runbookVersionId ?? runbook.publishedVersionId;
     if (!versionId) throw new RunbookDefinitionError('Runbook must be published before execution.');
     const version = await tx.runbookVersion.findFirst({
       where: {
         id: versionId,
         runbookId: runbook.id,
-        state: input.runbookVersionId ? { in: ['PUBLISHED', 'RETIRED'] } : 'PUBLISHED',
+        state:
+          input.runbookVersionId || suggestion ? { in: ['PUBLISHED', 'RETIRED'] } : 'PUBLISHED',
       },
+      include: { inputs: { orderBy: { sequence: 'asc' } } },
     });
     if (!version)
       throw new RunbookDefinitionError('Only an immutable published version can execute.');
     if (
       version.state === 'RETIRED' &&
+      !suggestion &&
       (!binding || binding.versionStrategy !== 'PINNED' || binding.runbookVersionId !== version.id)
     ) {
       throw new RunbookDefinitionError(
@@ -166,9 +187,18 @@ export async function startRunbookExecution(input: {
         'TARGET_NOT_CONFIGURED: Agent-executed steps require a snapshotted Agent or Agent pool target.'
       );
     }
-    const resolvedInputs = binding
-      ? (binding.inputValues as Record<string, unknown>)
-      : (input.inputValues ?? {});
+    const resolvedInputs = applyRunbookInputDefaults(
+      version.inputs,
+      binding ? (binding.inputValues as Record<string, unknown>) : (input.inputValues ?? {})
+    );
+    validateBindingInputValues(version.inputs, resolvedInputs);
+    for (const step of steps) {
+      const resolvedConfig = resolveInputTemplates(step.config, resolvedInputs) as Record<
+        string,
+        unknown
+      >;
+      validateResolvedStepConfig(step, resolvedConfig);
+    }
     const executionStartedAt = new Date();
     const executionTimeoutSeconds =
       definition.defaultTimeoutSeconds ?? DEFAULT_EXECUTION_TIMEOUT_SECONDS;
@@ -229,7 +259,7 @@ export async function startRunbookExecution(input: {
         serviceId: resolvedServiceId,
         incidentId: input.incidentId,
         bindingId: input.bindingId,
-        triggerFingerprint: input.triggerFingerprint,
+        triggerFingerprint: input.triggerFingerprint ?? suggestion?.fingerprint,
         triggerId: input.triggerId,
         triggeredByType: input.triggeredByUserId ? 'USER' : 'TRIGGER',
         triggeredByUserId: input.triggeredByUserId,
@@ -254,6 +284,15 @@ export async function startRunbookExecution(input: {
         },
       },
     });
+    if (suggestion) {
+      const startedSuggestion = await tx.runbookSuggestion.updateMany({
+        where: { id: suggestion.id, state: 'SUGGESTED' },
+        data: { state: 'STARTED', startedAt: executionStartedAt },
+      });
+      if (startedSuggestion.count !== 1) {
+        throw new RunbookDefinitionError('Runbook suggestion was already handled.');
+      }
+    }
     await addIncidentRunbookEvent(
       tx,
       input.incidentId,
@@ -683,21 +722,32 @@ export async function advanceExecution(executionId: string): Promise<void> {
         isRetryable(latest.riskClass) &&
         isRetryableFailure(latest.riskClass, errorCode) &&
         latest.attemptCount <= latest.maxRetries;
+      const ambiguousWrite =
+        latest.status === 'RUNNING' &&
+        latest.riskClass !== 'READ_ONLY' &&
+        errorCode !== 'INVALID_CONFIG';
       const changed = await tx.runbookExecutionStep.updateMany({
         where: { id: current.id, status: latest.status },
-        data: retry
+        data: ambiguousWrite
           ? {
-              status: 'PENDING',
-              startedAt: null,
-              errorCode: 'STEP_RETRY_SCHEDULED',
+              status: 'UNKNOWN',
+              completedAt: new Date(),
+              errorCode: 'LOCAL_STEP_OUTCOME_UNKNOWN',
               errorMessage: message,
             }
-          : {
-              status: 'FAILED',
-              completedAt: new Date(),
-              errorCode,
-              errorMessage: message,
-            },
+          : retry
+            ? {
+                status: 'PENDING',
+                startedAt: null,
+                errorCode: 'STEP_RETRY_SCHEDULED',
+                errorMessage: message,
+              }
+            : {
+                status: 'FAILED',
+                completedAt: new Date(),
+                errorCode,
+                errorMessage: message,
+              },
       });
       if (changed.count === 1) {
         const delay = retry ? retryDelayMs(latest.attemptCount) : 0;

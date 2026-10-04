@@ -12,7 +12,7 @@ import {
 import { sha256 } from './agent-auth';
 import { redactRunbookOutput } from './redaction';
 import { resolveSecretInputValues } from './secrets';
-import { isSecretReference, resolveInputTemplates } from './definition';
+import { isSecretReference, resolveInputTemplates, validateResolvedStepConfig } from './definition';
 import { DEFAULT_LEASE_DURATION_SECONDS, isRetryable, isSafeToRetryAfterUnknown } from './types';
 import { agentSupportsStep, isRetryableFailure, retryDelayMs } from './safety';
 import {
@@ -139,6 +139,20 @@ export async function claimAgentAttempt(agentId: string) {
             { agentId, targetAgentPoolId: attempt.targetAgentPoolId },
             tx
           );
+          const resolvedConfig = resolveInputTemplates(
+            attempt.executionStep.config,
+            resolvedInputValues
+          ) as Record<string, unknown>;
+          validateResolvedStepConfig(
+            {
+              key: attempt.executionStep.stepKey,
+              name: attempt.executionStep.name,
+              type: attempt.executionStep.type,
+              riskClass: attempt.executionStep.riskClass,
+              config: resolvedConfig,
+            },
+            resolvedConfig
+          );
           return {
             attemptId: attempt.id,
             leaseToken: rawLeaseToken,
@@ -151,7 +165,7 @@ export async function claimAgentAttempt(agentId: string) {
               name: attempt.executionStep.name,
               type: attempt.executionStep.type,
               riskClass: attempt.executionStep.riskClass,
-              config: resolveInputTemplates(attempt.executionStep.config, resolvedInputValues),
+              config: resolvedConfig,
               timeoutSeconds: Math.max(
                 1,
                 Math.min(
@@ -196,8 +210,13 @@ export async function fenceAgentAttempt(input: {
       leaseToken: leaseHash(input.leaseToken),
       leaseExpiresAt: { gt: now },
       status: 'CLAIMED',
+      claimedAgent: { status: { in: ['ONLINE', 'DEGRADED'] } },
       executionStep: {
-        execution: { cancelRequestedAt: null, status: { in: ['RUNNING', 'WAITING_AGENT'] } },
+        execution: {
+          cancelRequestedAt: null,
+          status: { in: ['RUNNING', 'WAITING_AGENT'] },
+          deadlineAt: { gt: now },
+        },
       },
     },
     data: {
@@ -232,16 +251,20 @@ export async function renewAgentAttemptLease(input: {
       leaseToken: leaseHash(input.leaseToken),
       leaseExpiresAt: { gt: now },
       status: 'RUNNING',
+      claimedAgent: { status: { not: 'REVOKED' } },
     },
     select: {
       executionStep: {
-        select: { execution: { select: { cancelRequestedAt: true, status: true } } },
+        select: {
+          execution: { select: { cancelRequestedAt: true, status: true, deadlineAt: true } },
+        },
       },
     },
   });
   if (!attempt) throw new RunbookAgentLeaseExpiredError(input.attemptId, input.agentId);
   if (
     attempt.executionStep.execution.cancelRequestedAt ||
+    attempt.executionStep.execution.deadlineAt <= now ||
     !['RUNNING', 'WAITING_AGENT'].includes(attempt.executionStep.execution.status)
   ) {
     const acknowledgementDeadline = new Date(now.getTime() + 30_000);
@@ -259,6 +282,12 @@ export async function renewAgentAttemptLease(input: {
       throw new RunbookAgentLeaseExpiredError(input.attemptId, input.agentId);
     return { leaseExpiresAt: acknowledgementDeadline.toISOString(), cancelRequested: true };
   }
+  const renewedUntil = new Date(
+    Math.min(
+      now.getTime() + DEFAULT_LEASE_DURATION_SECONDS * 1000,
+      attempt.executionStep.execution.deadlineAt.getTime()
+    )
+  );
   const updated = await prisma.runbookStepAttempt.updateMany({
     where: {
       id: input.attemptId,
@@ -267,11 +296,11 @@ export async function renewAgentAttemptLease(input: {
       leaseExpiresAt: { gt: now },
       status: 'RUNNING',
     },
-    data: { leaseExpiresAt: new Date(now.getTime() + DEFAULT_LEASE_DURATION_SECONDS * 1000) },
+    data: { leaseExpiresAt: renewedUntil },
   });
   if (updated.count !== 1) throw new RunbookAgentLeaseExpiredError(input.attemptId, input.agentId);
   return {
-    leaseExpiresAt: new Date(now.getTime() + DEFAULT_LEASE_DURATION_SECONDS * 1000).toISOString(),
+    leaseExpiresAt: renewedUntil.toISOString(),
     cancelRequested: false,
   };
 }
@@ -279,6 +308,11 @@ export async function renewAgentAttemptLease(input: {
 export async function submitAgentResult(agentId: string, raw: AgentJobResultInput) {
   const input = agentJobResultSchema.parse(raw);
   return prisma.$transaction(async tx => {
+    const agent = await tx.runbookAgent.findFirst({
+      where: { id: agentId, status: { not: 'REVOKED' } },
+      select: { id: true },
+    });
+    if (!agent) throw new RunbookAgentNotFoundError(agentId);
     const attempt = await tx.runbookStepAttempt.findUnique({
       where: { id: input.attemptId },
       include: {
@@ -288,6 +322,14 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
     });
     if (!attempt || attempt.claimedAgentId !== agentId)
       throw new RunbookAgentNotFoundError(agentId);
+    // Older Agents may report a started write as FAILED even though its effect is unknown.
+    if (
+      input.status === 'FAILED' &&
+      attempt.executionStep.riskClass !== 'READ_ONLY' &&
+      ['COMMAND_TIMEOUT', 'COMMAND_FAILED'].includes(input.errorCode ?? '')
+    ) {
+      input.status = 'UNKNOWN';
+    }
     if (attempt.status === 'UNKNOWN' && attempt.errorCode === 'AGENT_LEASE_EXPIRED') {
       if (
         attempt.executionStep.status !== 'UNKNOWN' ||

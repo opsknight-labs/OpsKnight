@@ -86,10 +86,12 @@ const INPUT_TEMPLATE = /^\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}$/;
 const SYSTEMD_UNIT =
   /^[A-Za-z0-9][A-Za-z0-9_.@:-]*\.(?:service|socket|timer|target|mount|path|slice|scope|device|automount|swap)$/;
 const DOCKER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+// Linear character scan; the final optional group only checks the last character.
+// eslint-disable-next-line security/detect-unsafe-regex
 const KUBERNETES_NAME = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
 
 function configuredString(step: RunbookStepDefinition, key: string, fallback = ''): string {
-  const value = step.config[key];
+  const value = Object.entries(step.config).find(([name]) => name === key)?.[1];
   return typeof value === 'string' ? value : fallback;
 }
 
@@ -99,35 +101,58 @@ export function minimumRiskForStep(step: RunbookStepDefinition): RunbookRiskClas
     case 'BASH':
       return 'NON_IDEMPOTENT';
     case 'HTTP':
-      return ['GET', 'HEAD'].includes(configuredString(step, 'method', 'GET').toUpperCase())
+      switch (configuredString(step, 'method', 'GET').toUpperCase()) {
+        case 'GET':
+        case 'HEAD':
+          return 'READ_ONLY';
+        case 'PUT':
+        case 'DELETE':
+          return 'IDEMPOTENT_WRITE';
+        default:
+          return 'NON_IDEMPOTENT';
+      }
+    case 'SYSTEMD': {
+      const action = configuredString(step, 'action', 'status');
+      return action === 'status'
         ? 'READ_ONLY'
-        : 'IDEMPOTENT_WRITE';
-    case 'SYSTEMD':
-      return configuredString(step, 'action', 'status') === 'status'
+        : action === 'restart'
+          ? 'NON_IDEMPOTENT'
+          : 'IDEMPOTENT_WRITE';
+    }
+    case 'DOCKER': {
+      const action = configuredString(step, 'action', 'inspect');
+      return ['inspect', 'logs'].includes(action)
         ? 'READ_ONLY'
-        : 'IDEMPOTENT_WRITE';
-    case 'DOCKER':
-      return ['inspect', 'logs'].includes(configuredString(step, 'action', 'inspect'))
-        ? 'READ_ONLY'
-        : 'IDEMPOTENT_WRITE';
+        : action === 'restart'
+          ? 'NON_IDEMPOTENT'
+          : 'IDEMPOTENT_WRITE';
+    }
     case 'KUBERNETES':
       return configuredString(step, 'action', 'get') === 'rollout-restart'
-        ? 'IDEMPOTENT_WRITE'
+        ? 'NON_IDEMPOTENT'
         : 'READ_ONLY';
     default:
       return 'READ_ONLY';
   }
 }
 
-function validateTarget(value: string, pattern: RegExp, label: string, stepKey: string): void {
-  if (INPUT_TEMPLATE.test(value)) return;
+function validateTarget(
+  value: string,
+  pattern: RegExp,
+  label: string,
+  stepKey: string,
+  allowInputTemplate: boolean
+): void {
+  if (allowInputTemplate && INPUT_TEMPLATE.test(value)) return;
   if (!value || value.startsWith('-') || !pattern.test(value)) {
     throw new RunbookDefinitionError(`Step "${stepKey}" has an invalid ${label}.`);
   }
 }
 
-function validateStepSemantics(step: RunbookStepDefinition): void {
+function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates = true): void {
   const minimumRisk = minimumRiskForStep(step);
+  // Both keys are validated enum values, indexing only a fixed risk table.
+  // eslint-disable-next-line security/detect-object-injection
   if (RISK_RANK[step.riskClass] < RISK_RANK[minimumRisk]) {
     throw new RunbookDefinitionError(
       `Step "${step.key}" declares ${step.riskClass}, but ${step.type} ${configuredString(step, 'action', configuredString(step, 'method')) || 'execution'} requires at least ${minimumRisk}.`
@@ -138,14 +163,26 @@ function validateStepSemantics(step: RunbookStepDefinition): void {
     if (!['status', 'start', 'stop', 'restart'].includes(action)) {
       throw new RunbookDefinitionError(`Step "${step.key}" has an unsupported systemd action.`);
     }
-    validateTarget(configuredString(step, 'unit'), SYSTEMD_UNIT, 'systemd unit', step.key);
+    validateTarget(
+      configuredString(step, 'unit'),
+      SYSTEMD_UNIT,
+      'systemd unit',
+      step.key,
+      allowInputTemplates
+    );
   }
   if (step.type === 'DOCKER') {
     const action = configuredString(step, 'action', 'inspect');
     if (!['inspect', 'logs', 'start', 'stop', 'restart'].includes(action)) {
       throw new RunbookDefinitionError(`Step "${step.key}" has an unsupported Docker action.`);
     }
-    validateTarget(configuredString(step, 'container'), DOCKER_NAME, 'Docker container', step.key);
+    validateTarget(
+      configuredString(step, 'container'),
+      DOCKER_NAME,
+      'Docker container',
+      step.key,
+      allowInputTemplates
+    );
   }
   if (step.type === 'KUBERNETES') {
     const action = configuredString(step, 'action', 'get');
@@ -156,16 +193,25 @@ function validateStepSemantics(step: RunbookStepDefinition): void {
       configuredString(step, 'namespace', 'default'),
       KUBERNETES_NAME,
       'Kubernetes namespace',
-      step.key
+      step.key,
+      allowInputTemplates
     );
     validateTarget(
       configuredString(step, 'resource', 'pods'),
       KUBERNETES_NAME,
       'Kubernetes resource',
-      step.key
+      step.key,
+      allowInputTemplates
     );
     const name = configuredString(step, 'name');
-    if (name) validateTarget(name, KUBERNETES_NAME, 'Kubernetes resource name', step.key);
+    if (name)
+      validateTarget(
+        name,
+        KUBERNETES_NAME,
+        'Kubernetes resource name',
+        step.key,
+        allowInputTemplates
+      );
     if (action === 'rollout-restart' && !name) {
       throw new RunbookDefinitionError(
         `Step "${step.key}" requires a Kubernetes resource name for rollout-restart.`
@@ -184,6 +230,14 @@ function validateStepSemantics(step: RunbookStepDefinition): void {
       throw new RunbookDefinitionError(`Step "${step.key}" requires an HTTP URL.`);
     }
   }
+}
+
+/** Re-applies executable and target validation after typed input resolution. */
+export function validateResolvedStepConfig(
+  step: Pick<RunbookStepDefinition, 'key' | 'name' | 'type' | 'riskClass' | 'config'>,
+  config: Record<string, unknown>
+): void {
+  validateStepSemantics({ ...step, config } as RunbookStepDefinition, false);
 }
 
 /**
@@ -297,6 +351,8 @@ export function getMaxRiskClass(definition: RunbookDefinition): RunbookRiskClass
   let maxRisk: RunbookRiskClass = 'READ_ONLY';
 
   for (const step of flattenSteps(definition)) {
+    // Validated risk enums cannot address arbitrary properties.
+    // eslint-disable-next-line security/detect-object-injection
     if (RISK_RANK[step.riskClass] > RISK_RANK[maxRisk]) {
       maxRisk = step.riskClass;
     }
@@ -398,6 +454,8 @@ export function resolveInputTemplates(
     if (!Object.prototype.hasOwnProperty.call(inputValues, key)) {
       throw new RunbookDefinitionError(`Missing required runbook input "${key}".`);
     }
+    // The own-property guard above excludes prototype values.
+    // eslint-disable-next-line security/detect-object-injection
     const resolved = inputValues[key];
     if (!['string', 'number', 'boolean'].includes(typeof resolved)) {
       throw new RunbookDefinitionError(

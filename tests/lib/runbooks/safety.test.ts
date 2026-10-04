@@ -33,6 +33,7 @@ describe('runbook safety policy', () => {
     expect(isRetryableFailure('READ_ONLY', 'LOCAL_POLICY_DENIED')).toBe(false);
     expect(isRetryableFailure('IDEMPOTENT_WRITE', 'INVALID_CONFIG')).toBe(false);
     expect(isRetryableFailure('READ_ONLY', 'COMMAND_TIMEOUT')).toBe(true);
+    expect(isRetryableFailure('IDEMPOTENT_WRITE', 'COMMAND_TIMEOUT')).toBe(false);
     expect(isRetryableFailure('NON_IDEMPOTENT', 'COMMAND_TIMEOUT')).toBe(false);
   });
 });

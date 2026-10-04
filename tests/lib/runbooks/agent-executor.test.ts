@@ -72,4 +72,11 @@ describe('runbook Agent executor', () => {
     const result = await execution;
     expect(result.status).toBe('CANCELLED');
   });
+
+  it('treats a failed write command as ambiguous instead of retryable failure', async () => {
+    const writeAttempt = attempt('exit 1');
+    writeAttempt.step.riskClass = 'IDEMPOTENT_WRITE';
+    const result = await executeAttempt(writeAttempt, policy, new AbortController().signal);
+    expect(result).toMatchObject({ status: 'UNKNOWN', errorCode: 'COMMAND_FAILED' });
+  });
 });

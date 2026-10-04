@@ -14,7 +14,7 @@ import {
   runbookInputsSchema,
 } from '@/lib/runbooks/schemas';
 import {
-  createRunbookSecret,
+  createRunbookSecretWithGrant,
   grantRunbookSecret,
   revokeRunbookSecretGrant,
 } from '@/lib/runbooks/secrets';
@@ -255,15 +255,15 @@ export async function removeAgentFromPoolAction(memberId: string) {
 
 export async function createRunbookSecretAction(formData: FormData) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
-  const secret = await createRunbookSecret(
+  await createRunbookSecretWithGrant(
     {
       name: readString(formData, 'name'),
       value: readString(formData, 'value'),
       description: readString(formData, 'description'),
     },
+    parseTarget(readString(formData, 'target')),
     actor.id
   );
-  await grantRunbookSecret(secret.id, parseTarget(readString(formData, 'target')), actor.id);
   revalidatePath('/runbooks/agents');
 }
 
