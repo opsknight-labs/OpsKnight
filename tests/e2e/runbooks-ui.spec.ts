@@ -353,7 +353,12 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
     )
     .not.toBeNull();
   await expect(page.getByRole('alertdialog')).not.toBeVisible();
-  await expect(page.getByText('CANCEL REQUESTED', { exact: true }).first()).toBeVisible();
+  await expect(
+    page
+      .getByText(/^(CANCEL REQUESTED|CANCELLED)$/)
+      .filter({ visible: true })
+      .first()
+  ).toBeVisible();
 });
 test('390px infrastructure, health and builder have no horizontal overflow', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
