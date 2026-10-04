@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opsknight.com/schemas/docs/v2.1.0-metadata.schema.json",
+  "title": "OpsKnight 2.1.0 documentation frontmatter",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["title", "description", "type", "product_area", "audience", "verification"],
+  "properties": {
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+    "type": {
+      "enum": [
+        "tutorial",
+        "concept",
+        "how-to",
+        "reference",
+        "troubleshooting",
+        "deployment",
+        "integration",
+        "developer"
+      ]
+    },
+    "product_area": { "type": "string", "minLength": 1 },
+    "audience": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["responder", "administrator", "operator", "developer", "viewer"]
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level"],
+      "properties": {
+        "level": { "enum": ["draft", "source", "test", "runtime"] },
+        "verified_at": { "type": "string", "format": "date" },
+        "evidence": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "reader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "enum": ["MAPPED", "READER_COMPLETE", "SOURCE_VERIFIED", "RUNTIME_VERIFIED"]
+        },
+        "task": { "type": "string", "minLength": 1 },
+        "reviewer": { "type": ["string", "null"] },
+        "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+        "revision": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+        "journey": { "type": ["string", "null"] },
+        "evidence": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "verification": {
+            "type": "object",
+            "properties": { "level": { "enum": ["source", "test", "runtime"] } }
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "verification": {
+            "type": "object",
+            "required": ["verified_at", "evidence"],
+            "properties": {
+              "verified_at": { "type": "string", "format": "date" },
+              "evidence": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -4,12 +4,13 @@ import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { exists, filesUnder, readRepositoryFile } from './discovery-lib.mjs';
 
-const schema = JSON.parse(readRepositoryFile('docs/v2.0.0/metadata.schema.json'));
+const docsRoot = process.argv[2] || 'docs/v2.0.0';
+const schema = JSON.parse(readRepositoryFile(`${docsRoot}/metadata.schema.json`));
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 addFormats(ajv);
 const validate = ajv.compile(schema);
 const failures = [];
-const markdownFiles = filesUnder('docs/v2.0.0', path => path.endsWith('.md'));
+const markdownFiles = filesUnder(docsRoot, path => path.endsWith('.md'));
 
 // A page and a same-named directory landing normalize to the same public URL.
 // Reject the pair so the website cannot shadow README.md or emit duplicate nav.
