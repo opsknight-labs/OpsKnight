@@ -48,6 +48,7 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       ENCRYPTION_KEYS: ${ENCRYPTION_KEYS:-}
       ALLOW_INSECURE_SECRETS: ${ALLOW_INSECURE_SECRETS:-false}
+      RUNBOOK_ARTIFACT_RETENTION_DAYS: ${RUNBOOK_ARTIFACT_RETENTION_DAYS:-30}
       # Central personal-notification control plane (default: on).
       # During a rolling upgrade, set to 'false' on old replicas to hold them
       # on the legacy direct-dispatch path until all replicas are updated.

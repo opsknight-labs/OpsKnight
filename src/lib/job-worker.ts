@@ -28,6 +28,7 @@ const MAX_CONCURRENCY = 50;
 const MAX_IDLE_POLL_MS = 60_000;
 const MAX_BUSY_POLL_MS = 5_000;
 const QUEUE_MAINTENANCE_INTERVAL_MS = 30_000;
+const RUNBOOK_RECONCILIATION_INTERVAL_MS = 30_000;
 
 export interface JobWorkerConfig {
   batchSize: number;
@@ -36,10 +37,11 @@ export interface JobWorkerConfig {
   busyPollMs: number;
 }
 
-export type JobWorkerLane = 'all' | 'general' | 'critical' | 'bulk' | 'projector';
+export type JobWorkerLane = 'all' | 'general' | 'critical' | 'bulk' | 'projector' | 'runbook';
 
 export interface JobWorkerOptions {
   ownsQueueMaintenance?: boolean;
+  excludeRunbookJobs?: boolean;
 }
 
 interface JobWorkerSharedState {
@@ -53,10 +55,12 @@ interface JobWorkerSharedState {
   lastError: string | null;
   workerLane: JobWorkerLane;
   ownsQueueMaintenance: boolean;
+  excludeRunbookJobs: boolean;
   controlPlaneState: 'UNINITIALIZED' | 'HEALTHY' | 'EMERGENCY_LOCAL';
   lastControlPlaneProbeAt: number;
   lastQueueMaintenanceAt: number;
   queueMaintenanceInFlight: Promise<void> | null;
+  lastRunbookReconciliationAt: number;
 }
 
 declare global {
@@ -74,10 +78,12 @@ const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
   lastError: null,
   workerLane: 'all',
   ownsQueueMaintenance: true,
+  excludeRunbookJobs: false,
   controlPlaneState: 'UNINITIALIZED',
   lastControlPlaneProbeAt: 0,
   lastQueueMaintenanceAt: 0,
   queueMaintenanceInFlight: null,
+  lastRunbookReconciliationAt: 0,
 };
 
 // Next.js standalone webpack builds isolate module scopes between
@@ -351,6 +357,36 @@ async function runOnce(): Promise<void> {
       return;
     }
 
+    if (workerState.workerLane === 'runbook') {
+      let reconciliation: Awaited<
+        ReturnType<typeof import('./runbooks/reconciler').reconcileRunbooks>
+      > | null = null;
+      const now = Date.now();
+      if (now - workerState.lastRunbookReconciliationAt >= RUNBOOK_RECONCILIATION_INTERVAL_MS) {
+        workerState.lastRunbookReconciliationAt = now;
+        const { reconcileRunbooks } = await import('./runbooks/reconciler');
+        reconciliation = await reconcileRunbooks(Math.min(workerState.workerConfig.batchSize, 100));
+      }
+      const result = await processPendingJobsByType(
+        'RUNBOOK',
+        workerState.workerConfig.batchSize,
+        workerState.workerConfig.concurrency
+      );
+      if (result.failed > 0) {
+        workerState.lastError = `${result.failed} runbook job(s) failed`;
+        logger.warn('[JobWorker] Runbook lane degraded', { failed: result.failed, reconciliation });
+      } else {
+        workerState.lastSuccessAt = new Date();
+        workerState.lastError = null;
+      }
+      scheduleNextRun(
+        result.total > 0
+          ? workerState.workerConfig.busyPollMs
+          : withIdleJitter(workerState.workerConfig.idlePollMs)
+      );
+      return;
+    }
+
     // Escalation first, in its own claim batch. A page must never queue behind
     // a backlog of webhooks or status-page notifications, and this lane owns
     // escalation's recovery so it does not depend on the scheduler lease.
@@ -364,12 +400,27 @@ async function runOnce(): Promise<void> {
     // recovery runs on every replica too.
     const notifications = await runCriticalNotificationCycle();
 
+    if (
+      !workerState.excludeRunbookJobs &&
+      Date.now() - workerState.lastRunbookReconciliationAt >= RUNBOOK_RECONCILIATION_INTERVAL_MS
+    ) {
+      const { reconcileRunbooks } = await import('./runbooks/reconciler');
+      await reconcileRunbooks(Math.min(workerState.workerConfig.batchSize, 100));
+      workerState.lastRunbookReconciliationAt = Date.now();
+    }
+
     // Operational background jobs (war-room, Jira, side effects, auto-unsnooze)
     // always continue; processPendingJobs automatically fences bulk fan-out when paused.
-    const result = await processPendingJobs(
-      workerState.workerConfig.batchSize,
-      workerState.workerConfig.concurrency
-    );
+    const result = workerState.excludeRunbookJobs
+      ? await processPendingJobs(
+          workerState.workerConfig.batchSize,
+          workerState.workerConfig.concurrency,
+          ['RUNBOOK']
+        )
+      : await processPendingJobs(
+          workerState.workerConfig.batchSize,
+          workerState.workerConfig.concurrency
+        );
 
     const laneErrors = [...escalation.errors, ...notifications.errors];
     if (escalation.jobsFailed > 0) {
@@ -421,10 +472,7 @@ async function runOnce(): Promise<void> {
  * claim is the concurrency boundary, so multiple worker processes can safely
  * call this loop against the same database.
  */
-export function startJobWorker(
-  lane: JobWorkerLane = 'all',
-  options: JobWorkerOptions = {}
-): void {
+export function startJobWorker(lane: JobWorkerLane = 'all', options: JobWorkerOptions = {}): void {
   if (workerState.initialized) {
     logger.debug('[JobWorker] Already initialized, skipping');
     return;
@@ -432,8 +480,8 @@ export function startJobWorker(
 
   workerState.workerConfig = getJobWorkerConfig();
   workerState.workerLane = lane;
-  workerState.ownsQueueMaintenance =
-    options.ownsQueueMaintenance ?? lane === 'all';
+  workerState.ownsQueueMaintenance = options.ownsQueueMaintenance ?? lane === 'all';
+  workerState.excludeRunbookJobs = options.excludeRunbookJobs ?? false;
   workerState.initialized = true;
   workerState.lastRunAt = null;
   workerState.lastSuccessAt = null;
@@ -442,6 +490,7 @@ export function startJobWorker(
   workerState.controlPlaneState = 'UNINITIALIZED';
   workerState.lastControlPlaneProbeAt = Date.now();
   workerState.lastQueueMaintenanceAt = 0;
+  workerState.lastRunbookReconciliationAt = 0;
 
   logger.info('[JobWorker] Starting', {
     batchSize: workerState.workerConfig.batchSize,
@@ -450,6 +499,7 @@ export function startJobWorker(
     busyPollMs: workerState.workerConfig.busyPollMs,
     lane: workerState.workerLane,
     ownsQueueMaintenance: workerState.ownsQueueMaintenance,
+    excludeRunbookJobs: workerState.excludeRunbookJobs,
   });
 
   // Certify notification control-plane tables at worker boot.

@@ -1,6 +1,6 @@
 {{- if and .Values.networkPolicy.enabled (eq .Values.runtime.mode "split") }}
 {{- $root := . }}
-{{- range $role := list "scheduler" "general-worker" "critical-worker" "bulk-worker" "status-projector" }}
+{{- range $role := list "scheduler" "general-worker" "critical-worker" "bulk-worker" "runbook-worker" "status-projector" }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

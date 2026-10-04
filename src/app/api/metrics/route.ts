@@ -23,6 +23,13 @@ type MetricsSnapshot = {
   providerCooldowns: Array<{ provider: string; count: number }> | null;
   slaLegacyCapture: { count: number; lastSeenAt: Date | null } | null;
   slaLegacyAckMutation: { count: number; lastSeenAt: Date | null } | null;
+  runbookExecutions: Array<{ status: string; count: number }> | null;
+  runbookAttempts: Array<{ status: string; count: number }> | null;
+  runbookAgents: Array<{ status: string; count: number }> | null;
+  runbookAgentWork: { spoolDepth: number; activeAttempts: number; deadLetterDepth: number } | null;
+  runbookArtifactStorage: { count: number; bytes: number } | null;
+  runbookOldestPendingAt: Date | null | undefined;
+  runbookCircuitsOpen: number | null;
   collectedAt: number;
 };
 
@@ -90,6 +97,13 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       cooldowns,
       slaLegacyCapture,
       slaLegacyAckMutation,
+      runbookExecutions,
+      runbookAttempts,
+      runbookAgents,
+      runbookAgentWork,
+      runbookArtifactStorage,
+      runbookOldestPending,
+      runbookCircuitsOpen,
     ] = await Promise.allSettled([
       collectWithTimeout('jobs', DB_COLLECTOR_TIMEOUT_MS, () =>
         prisma.backgroundJob.groupBy({ by: ['status'], _count: { id: true } })
@@ -177,6 +191,52 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
           FROM "IncidentSlaLegacyAckMutation"
         `
       ),
+      collectWithTimeout('runbook-executions', DB_COLLECTOR_TIMEOUT_MS, () =>
+        prisma.runbookExecution.groupBy({ by: ['status'], _count: { id: true } })
+      ),
+      collectWithTimeout('runbook-attempts', DB_COLLECTOR_TIMEOUT_MS, () =>
+        prisma.runbookStepAttempt.groupBy({ by: ['status'], _count: { id: true } })
+      ),
+      collectWithTimeout('runbook-agents', DB_COLLECTOR_TIMEOUT_MS, () =>
+        prisma.runbookAgent.groupBy({ by: ['status'], _count: { id: true } })
+      ),
+      collectWithTimeout('runbook-agent-work', DB_COLLECTOR_TIMEOUT_MS, async () => {
+        const result = await prisma.runbookAgent.aggregate({
+          where: { status: { not: 'REVOKED' } },
+          _sum: { spoolDepth: true, activeAttemptCount: true, deadLetterDepth: true },
+        });
+        return {
+          spoolDepth: result._sum.spoolDepth ?? 0,
+          deadLetterDepth: result._sum.deadLetterDepth ?? 0,
+          activeAttempts: result._sum.activeAttemptCount ?? 0,
+        };
+      }),
+      collectWithTimeout('runbook-artifact-storage', DB_COLLECTOR_TIMEOUT_MS, async () => {
+        const result = await prisma.runbookArtifact.aggregate({
+          _count: { id: true },
+          _sum: { sizeBytes: true },
+        });
+        return { count: result._count.id, bytes: result._sum.sizeBytes ?? 0 };
+      }),
+      collectWithTimeout('runbook-oldest-pending', DB_COLLECTOR_TIMEOUT_MS, () =>
+        prisma.runbookStepAttempt.findFirst({
+          where: { status: 'PENDING' },
+          orderBy: { availableAt: 'asc' },
+          select: { availableAt: true },
+        })
+      ),
+      collectWithTimeout(
+        'runbook-circuits-open',
+        DB_COLLECTOR_TIMEOUT_MS,
+        () => prisma.$queryRaw<Array<{ count: bigint }>>`
+          SELECT COUNT(*)::bigint AS count FROM (
+            SELECT "serviceId" FROM "RunbookExecution"
+            WHERE "serviceId" IS NOT NULL AND "status" = 'FAILED'
+              AND "completedAt" >= NOW() - INTERVAL '15 minutes'
+            GROUP BY "serviceId" HAVING COUNT(*) >= 3
+          ) circuits
+        `
+      ),
       collectWithTimeout('incident-collaboration-metrics', DB_COLLECTOR_TIMEOUT_MS, async () => {
         const { collectIncidentCollaborationMetricsFromDB } =
           await import('@/lib/incident-collaboration/meeting-metrics');
@@ -223,6 +283,29 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
               lastSeenAt: slaLegacyAckMutation.value[0].lastSeenAt,
             }
           : null,
+      runbookExecutions:
+        runbookExecutions.status === 'fulfilled'
+          ? runbookExecutions.value.map(row => ({ status: row.status, count: row._count.id }))
+          : null,
+      runbookAttempts:
+        runbookAttempts.status === 'fulfilled'
+          ? runbookAttempts.value.map(row => ({ status: row.status, count: row._count.id }))
+          : null,
+      runbookAgents:
+        runbookAgents.status === 'fulfilled'
+          ? runbookAgents.value.map(row => ({ status: row.status, count: row._count.id }))
+          : null,
+      runbookAgentWork: runbookAgentWork.status === 'fulfilled' ? runbookAgentWork.value : null,
+      runbookArtifactStorage:
+        runbookArtifactStorage.status === 'fulfilled' ? runbookArtifactStorage.value : null,
+      runbookOldestPendingAt:
+        runbookOldestPending.status === 'fulfilled'
+          ? (runbookOldestPending.value?.availableAt ?? null)
+          : undefined,
+      runbookCircuitsOpen:
+        runbookCircuitsOpen.status === 'fulfilled'
+          ? Number(runbookCircuitsOpen.value[0]?.count ?? 0)
+          : null,
       collectedAt: Date.now(),
     };
     const degraded =
@@ -236,7 +319,14 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       value.integrationControlPlane === null ||
       value.providerCooldowns === null ||
       value.slaLegacyCapture === null ||
-      value.slaLegacyAckMutation === null;
+      value.slaLegacyAckMutation === null ||
+      value.runbookExecutions === null ||
+      value.runbookAttempts === null ||
+      value.runbookAgents === null ||
+      value.runbookAgentWork === null ||
+      value.runbookArtifactStorage === null ||
+      value.runbookOldestPendingAt === undefined ||
+      value.runbookCircuitsOpen === null;
     // A JS timeout cannot cancel every Prisma operation. Back off degraded
     // collectors so repeated scrapes cannot create an unbounded query storm.
     metricsCache = { value, expiresAt: Date.now() + (degraded ? 60_000 : 10_000) };
@@ -352,6 +442,39 @@ async function getMetrics(req: Request) {
   for (const row of snapshot.providerCooldowns ?? []) {
     metrics.set('opsknight_provider_cooldown', row.count > 0 ? 1 : 0, { provider: row.provider });
   }
+  for (const row of snapshot.runbookExecutions ?? []) {
+    metrics.set('opsknight_runbook_executions', row.count, { status: row.status.toLowerCase() });
+  }
+  for (const row of snapshot.runbookAttempts ?? []) {
+    metrics.set('opsknight_runbook_attempts', row.count, { status: row.status.toLowerCase() });
+  }
+  for (const row of snapshot.runbookAgents ?? []) {
+    metrics.set('opsknight_runbook_agents', row.count, { status: row.status.toLowerCase() });
+  }
+  if (snapshot.runbookAgentWork) {
+    metrics.set('opsknight_runbook_agent_spool_depth', snapshot.runbookAgentWork.spoolDepth);
+    metrics.set(
+      'opsknight_runbook_agent_dead_letter_depth',
+      snapshot.runbookAgentWork.deadLetterDepth
+    );
+    metrics.set(
+      'opsknight_runbook_agent_active_attempts',
+      snapshot.runbookAgentWork.activeAttempts
+    );
+  }
+  if (snapshot.runbookArtifactStorage) {
+    metrics.set('opsknight_runbook_artifacts', snapshot.runbookArtifactStorage.count);
+    metrics.set('opsknight_runbook_artifact_storage_bytes', snapshot.runbookArtifactStorage.bytes);
+  }
+  if (snapshot.runbookOldestPendingAt !== undefined) {
+    metrics.set(
+      'opsknight_runbook_oldest_pending_attempt_age_seconds',
+      ageSeconds(snapshot.runbookOldestPendingAt)
+    );
+  }
+  if (snapshot.runbookCircuitsOpen !== null) {
+    metrics.set('opsknight_runbook_service_circuits_open', snapshot.runbookCircuitsOpen);
+  }
 
   const collectionErrors =
     Number(snapshot.incidentCount === null) +
@@ -364,7 +487,14 @@ async function getMetrics(req: Request) {
     Number(snapshot.integrationControlPlane === null) +
     Number(snapshot.providerCooldowns === null) +
     Number(snapshot.slaLegacyCapture === null) +
-    Number(snapshot.slaLegacyAckMutation === null);
+    Number(snapshot.slaLegacyAckMutation === null) +
+    Number(snapshot.runbookExecutions === null) +
+    Number(snapshot.runbookAttempts === null) +
+    Number(snapshot.runbookAgents === null) +
+    Number(snapshot.runbookAgentWork === null) +
+    Number(snapshot.runbookArtifactStorage === null) +
+    Number(snapshot.runbookOldestPendingAt === undefined) +
+    Number(snapshot.runbookCircuitsOpen === null);
   metrics.set('opsknight_metrics_collection_errors', collectionErrors);
   metrics.set('opsknight_metrics_cache_hits_total', metricsCacheHits);
   metrics.set('opsknight_metrics_cache_misses_total', metricsCacheMisses);

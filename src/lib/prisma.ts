@@ -32,6 +32,8 @@ function rolePoolSize(): string | undefined {
       return process.env.DATABASE_POOL_SIZE_BULK_WORKER;
     case 'status-projector':
       return process.env.DATABASE_POOL_SIZE_STATUS_PROJECTOR;
+    case 'runbook-worker':
+      return process.env.DATABASE_POOL_SIZE_RUNBOOK_WORKER;
   }
 }
 

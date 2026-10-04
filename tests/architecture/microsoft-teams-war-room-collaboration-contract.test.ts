@@ -15,11 +15,11 @@ describe('Microsoft Teams war-room collaboration contract', () => {
     const allMigrations = `${enumsMigration}\n${stateMigration}`;
 
     expect(schema).toContain('enum WarRoomHealthState');
-    expect(schema).toContain('projectionVersion     Int                   @default(0)');
-    expect(schema).toContain('lastProjectedAt       DateTime?');
-    expect(schema).toContain('lastReconciledAt      DateTime?');
-    expect(schema).toContain('lastSyncAt       DateTime?');
-    expect(schema).toContain('lastErrorCode    String?');
+    expect(schema).toMatch(/projectionVersion\s+Int\s+@default\(0\)/);
+    expect(schema).toMatch(/lastProjectedAt\s+DateTime\?/);
+    expect(schema).toMatch(/lastReconciledAt\s+DateTime\?/);
+    expect(schema).toMatch(/lastSyncAt\s+DateTime\?/);
+    expect(schema).toMatch(/lastErrorCode\s+String\?/);
     const participantState = schema.match(/enum WarRoomParticipantState \{([\s\S]*?)\n\}/)?.[1];
     expect(participantState).toContain('PENDING');
     expect(participantState).toContain('PROCESSING');

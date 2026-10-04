@@ -118,6 +118,8 @@ const eslintConfig = defineConfig([
     "prisma/generated/**",
     "scripts/**",
     "deploy/scripts/**",
+    "tests/ci/**",
+    "**/*.cjs",
     "coverage/**",
     "reports/**",
     "*.log",

@@ -127,7 +127,8 @@ export function getLifecycleSideEffects(
   if (input.source === 'CHATOPS') {
     if (input.status === 'ACKNOWLEDGED') effects.add('LIFECYCLE_WAR_ROOM_TOPIC');
     if (input.status === 'RESOLVED') effects.add('LIFECYCLE_WAR_ROOM_ARCHIVE');
-    if (input.status === 'SNOOZED' || input.status === 'SUPPRESSED') effects.add('LIFECYCLE_WAR_ROOM_SYNC');
+    if (input.status === 'SNOOZED' || input.status === 'SUPPRESSED')
+      effects.add('LIFECYCLE_WAR_ROOM_SYNC');
     return Array.from(effects);
   }
   if (input.status === 'RESOLVED') effects.add('LIFECYCLE_WAR_ROOM_ARCHIVE');
@@ -320,6 +321,20 @@ export async function enqueueIncidentCreationSideEffects(
   tx: Prisma.TransactionClient,
   input: IncidentCreationOutboxInput
 ): Promise<void> {
+  const runbookSourceEventId = crypto.randomUUID();
+  await tx.backgroundJob.create({
+    data: {
+      type: 'RUNBOOK',
+      status: 'PENDING',
+      scheduledAt: new Date(),
+      maxAttempts: 8,
+      payload: {
+        kind: 'EVALUATE_TRIGGER',
+        incidentId: input.incidentId,
+        sourceEventId: runbookSourceEventId,
+      },
+    },
+  });
   await enqueueSideEffects(
     tx,
     input.incidentId,

@@ -6,6 +6,14 @@ import {
 } from '@/lib/encryption/registry';
 
 describe('Encryption Registry Unit Tests', () => {
+  it('includes the execution signing key in migration and retirement inventory', () => {
+    expect(getTargetById('runbook-execution-signing-key.private-key')).toMatchObject({
+      model: 'RunbookExecutionSigningKey',
+      field: 'privateKeyEncrypted',
+      storageType: 'SCALAR',
+      plaintextLegacyAllowed: false,
+    });
+  });
   it('getTargetById returns target when present', () => {
     const oidc = getTargetById('oidc.client-secret');
     expect(oidc).toBeDefined();

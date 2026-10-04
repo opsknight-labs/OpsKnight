@@ -2,11 +2,12 @@
 
 import React, { type ReactNode } from 'react';
 import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
-import { Flame, ShieldAlert, Zap, Bell, Settings } from 'lucide-react';
+import { Flame, ShieldAlert, Zap, Bell, Settings, Workflow } from 'lucide-react';
 
 export type ServiceDetailTab =
   | 'incidents'
   | 'escalation'
+  | 'runbooks'
   | 'integrations'
   | 'notifications'
   | 'settings';
@@ -18,6 +19,7 @@ export type ServiceDetailTabsProps = {
   notificationsCount?: number | string;
   incidentsContent: ReactNode;
   escalationContent: ReactNode;
+  runbooksContent: ReactNode;
   integrationsContent: ReactNode;
   notificationsContent: ReactNode;
   settingsContent: ReactNode;
@@ -31,6 +33,7 @@ export default function ServiceDetailTabs({
   notificationsCount,
   incidentsContent,
   escalationContent,
+  runbooksContent,
   integrationsContent,
   notificationsContent,
   settingsContent,
@@ -47,6 +50,11 @@ export default function ServiceDetailTabs({
       id: 'escalation',
       label: 'Escalation Policy',
       icon: <ShieldAlert className="h-4 w-4" />,
+    },
+    {
+      id: 'runbooks',
+      label: 'Runbooks',
+      icon: <Workflow className="h-4 w-4" />,
     },
     {
       id: 'integrations',
@@ -74,6 +82,9 @@ export default function ServiceDetailTabs({
       </DetailTabContent>
       <DetailTabContent value="escalation" className="mt-0 space-y-6">
         {escalationContent}
+      </DetailTabContent>
+      <DetailTabContent value="runbooks" className="mt-0 space-y-6">
+        {runbooksContent}
       </DetailTabContent>
       <DetailTabContent value="integrations" className="mt-0 space-y-6">
         {integrationsContent}

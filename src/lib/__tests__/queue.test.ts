@@ -496,6 +496,7 @@ describe('general worker ownership', () => {
       'STATUS_PAGE_NOTIFICATION',
       'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
       'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2',
+      'RUNBOOK',
     ]);
   });
 });

@@ -161,7 +161,7 @@ describe('deployment configuration invariants', () => {
     );
     expect(integrated).toContain('name: OPSKNIGHT_SKIP_MIGRATIONS');
     expect(integrated).toContain('value: "true"');
-    expect(split.match(/name: OPSKNIGHT_SKIP_MIGRATIONS/g)).toHaveLength(6);
+    expect(split.match(/name: OPSKNIGHT_SKIP_MIGRATIONS/g)).toHaveLength(7);
     expect(migration).toContain('kind: Job');
     expect(migration).toContain('name: OPSKNIGHT_MIGRATION_ONLY');
     expect(migration).toContain('key: DIRECT_DATABASE_URL');
@@ -651,6 +651,7 @@ describe('deployment configuration invariants', () => {
     expect(split).toContain('opsknight-general-worker:');
     expect(split).toContain('opsknight-critical-worker:');
     expect(split).toContain('opsknight-bulk-worker:');
+    expect(split).toContain('opsknight-runbook-worker:');
     expect(split).toContain('opsknight-status-projector:');
 
     // Host port isolation: ONLY web publishes port 3000
@@ -659,6 +660,7 @@ describe('deployment configuration invariants', () => {
     expect(split).not.toMatch(/opsknight-general-worker:[\s\S]*?ports:/);
     expect(split).not.toMatch(/opsknight-critical-worker:[\s\S]*?ports:/);
     expect(split).not.toMatch(/opsknight-bulk-worker:[\s\S]*?ports:/);
+    expect(split).not.toMatch(/opsknight-runbook-worker:[\s\S]*?ports:/);
     expect(split).not.toMatch(/opsknight-status-projector:[\s\S]*?ports:/);
 
     // Security hardening
@@ -695,7 +697,7 @@ describe('deployment configuration invariants', () => {
 
     // Dedicated one-shot migration contract
     expect(entrypoint).toContain('OPSKNIGHT_MIGRATION_ONLY');
-    expect(split).toContain('OPSKNIGHT_MIGRATION_ONLY: "true"');
+    expect(split).toContain("OPSKNIGHT_MIGRATION_ONLY: 'true'");
     expect(split).toContain('condition: service_completed_successfully');
 
     // External DB overlay disables bundled database cleanly without injecting PgBouncer into non-pooled topologies
@@ -741,8 +743,8 @@ describe('deployment configuration invariants', () => {
     // Default split capacity within budget
     const defaultSplit = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'split' });
     expect(defaultSplit.safe).toBe(true);
-    expect(defaultSplit.totalDemand).toBe(29);
-    expect(defaultSplit.headroom).toBe(51);
+    expect(defaultSplit.totalDemand).toBe(32);
+    expect(defaultSplit.headroom).toBe(48);
 
     // Integrated mode accounts for webReplicas * webPool
     const singleIntegrated = calculateRuntimeCapacity({ OPSKNIGHT_RUNTIME_MODE: 'integrated' });
@@ -765,7 +767,7 @@ describe('deployment configuration invariants', () => {
       DATABASE_MAX_CONNECTIONS: '25',
     });
     expect(overflow.safe).toBe(false);
-    expect(overflow.headroom).toBe(-4);
+    expect(overflow.headroom).toBe(-7);
 
     // PgBouncer bounds web connection demand
     const pgbouncerBounded = calculateRuntimeCapacity({
@@ -778,7 +780,7 @@ describe('deployment configuration invariants', () => {
     });
     expect(pgbouncerBounded.safe).toBe(true);
     expect(pgbouncerBounded.webConnections).toBe(15);
-    expect(pgbouncerBounded.totalDemand).toBe(34);
+    expect(pgbouncerBounded.totalDemand).toBe(37);
 
     // Fail-closed input handling: reject malformed numbers, booleans, negative counts
     expect(() => calculateRuntimeCapacity({ WEB_REPLICAS: '100foo' })).toThrow(
@@ -821,6 +823,7 @@ describe('deployment configuration invariants', () => {
     expect(stack).toContain('replicas: ${SWARM_REPLICAS_GENERAL_WORKER:-2}');
     expect(stack).toContain('replicas: ${SWARM_REPLICAS_CRITICAL_WORKER:-2}');
     expect(stack).toContain('replicas: ${SWARM_REPLICAS_BULK_WORKER:-2}');
+    expect(stack).toContain('replicas: ${SWARM_REPLICAS_RUNBOOK_WORKER:-2}');
     expect(stack).toContain('replicas: ${SWARM_REPLICAS_STATUS_PROJECTOR:-2}');
 
     // HA Swarm capacity preflight without PgBouncer (2 replicas each)
@@ -831,11 +834,12 @@ describe('deployment configuration invariants', () => {
       SWARM_REPLICAS_GENERAL_WORKER: '2',
       SWARM_REPLICAS_CRITICAL_WORKER: '2',
       SWARM_REPLICAS_BULK_WORKER: '2',
+      SWARM_REPLICAS_RUNBOOK_WORKER: '2',
       SWARM_REPLICAS_STATUS_PROJECTOR: '2',
     });
     expect(swarmHa.safe).toBe(true);
-    expect(swarmHa.totalDemand).toBe(58);
-    expect(swarmHa.headroom).toBe(22);
+    expect(swarmHa.totalDemand).toBe(64);
+    expect(swarmHa.headroom).toBe(16);
 
     // HA Swarm capacity preflight with PgBouncer (2 replicas each)
     const swarmHaPgBouncer = calculateRuntimeCapacity({
@@ -847,11 +851,12 @@ describe('deployment configuration invariants', () => {
       SWARM_REPLICAS_GENERAL_WORKER: '2',
       SWARM_REPLICAS_CRITICAL_WORKER: '2',
       SWARM_REPLICAS_BULK_WORKER: '2',
+      SWARM_REPLICAS_RUNBOOK_WORKER: '2',
       SWARM_REPLICAS_STATUS_PROJECTOR: '2',
     });
     expect(swarmHaPgBouncer.safe).toBe(true);
-    expect(swarmHaPgBouncer.totalDemand).toBe(68);
-    expect(swarmHaPgBouncer.headroom).toBe(12);
+    expect(swarmHaPgBouncer.totalDemand).toBe(74);
+    expect(swarmHaPgBouncer.headroom).toBe(6);
 
     // Swarm deploy.sh enforces fail-closed split image contract
     const deployScript = read('deploy/swarm/scripts/deploy.sh');
@@ -870,5 +875,47 @@ describe('deployment configuration invariants', () => {
     expect(cidrPatch).toContain('cidr: 10.24.0.0/16');
     expect(cidrPatch).toContain('opsknight-scheduler-network-policy');
     expect(cidrPatch).toContain('opsknight-general-worker-network-policy');
+    expect(cidrPatch).toContain('opsknight-runbook-worker-network-policy');
+  });
+
+  it('packages the outbound Runbook Agent across deployment methods', () => {
+    const compose = read('deploy/compose/docker-compose.agent.yml');
+    const swarm = read('deploy/swarm/docker-stack.agent.yml');
+    const helm = read('deploy/kubernetes/helm/opsknight/templates/agent.yaml');
+    const kustomize = read('deploy/kubernetes/kustomize/components/agent/deployment.yaml');
+    for (const artifact of [compose, swarm, helm, kustomize]) {
+      expect(artifact).toContain('OPSKNIGHT_URL');
+      expect(artifact).toContain('/var/lib/opsknight-agent');
+      expect(artifact).toContain('policy.json');
+      expect(artifact).toContain('OPSKNIGHT_EXECUTION_PUBLIC_KEYS');
+    }
+    expect(compose).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN');
+    expect(compose).toContain('read_only: true');
+    expect(swarm).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE');
+    expect(swarm).toContain('read_only: true');
+    expect(helm).toContain('agent.enrollmentToken.existingSecret is required');
+    expect(helm).toContain('agent.networkPolicy.kubernetesApiCIDRs');
+    expect(helm).toContain('seccompProfile:');
+    expect(kustomize).toContain('readOnlyRootFilesystem: true');
+    expect(kustomize).toContain('seccompProfile: { type: RuntimeDefault }');
+    expect(read('deploy/kubernetes/kustomize/components/agent/kustomization.yaml')).not.toContain(
+      'REPLACE_WITH_SINGLE_USE_TOKEN'
+    );
+    expect(read('deploy/kubernetes/kustomize/components/agent/network-policy.yaml')).not.toContain(
+      'port: 443'
+    );
+    const setupUi = read('src/components/runbooks/AgentSetupInstructions.tsx');
+    for (const method of ['Compose', 'Swarm', 'Helm', 'Kustomize', 'Linux']) {
+      expect(setupUi).toContain(`>${method}<`);
+    }
+    expect(setupUi).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN');
+    expect(setupUi).toContain('OPSKNIGHT_AGENT_POLICY_PATH');
+    expect(read('agent/Dockerfile')).toContain('USER opsknight-agent');
+    expect(read('agent/Dockerfile')).toMatch(/apk add --no-cache[^\n]*\bbash\b/);
+    expect(read('agent/Dockerfile')).toMatch(/apk add --no-cache[^\n]*\bpodman\b/);
+    const values = YAML.parse(read('deploy/kubernetes/helm/opsknight/values.yaml'));
+    expect(values.agent.policy.podmanContainers).toEqual([]);
+    expect(values.agent.policy.kubernetesActions).not.toContain('scale');
+    expect(values.agent.policy.networkHosts).toEqual([]);
   });
 });

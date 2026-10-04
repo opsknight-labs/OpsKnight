@@ -20,6 +20,7 @@ concurrency:
 env:
   IMAGE_NAME_TEST: ghcr.io/${{ github.repository_owner }}/opsknight-test
   IMAGE_NAME_RELEASE: ghcr.io/${{ github.repository_owner }}/opsknight
+  IMAGE_NAME_AGENT: ghcr.io/${{ github.repository_owner }}/opsknight-agent
 
 jobs:
   validate-release-tag:
@@ -289,6 +290,19 @@ jobs:
             exit 1
           fi
 
+      - name: Build Agent image (PR validation - no push)
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./agent/Dockerfile
+          platforms: linux/amd64
+          push: false
+          tags: opsknight-agent-pr-validation:${{ github.sha }}
+          cache-from: type=gha,scope=opsknight-agent-main-amd64
+          provenance: false
+          sbom: false
+
       - name: Verify Compose split runtime and PgBouncer live stack
         if: github.event_name == 'pull_request'
         shell: bash
@@ -367,7 +381,7 @@ jobs:
           curl -s -f "http://127.0.0.1:33000/api/health?mode=readiness" | grep -q 'healthy'
 
           echo "Verifying split background workers are running..."
-          for role in opsknight-scheduler opsknight-general-worker opsknight-critical-worker opsknight-bulk-worker opsknight-status-projector; do
+          for role in opsknight-scheduler opsknight-general-worker opsknight-critical-worker opsknight-bulk-worker opsknight-runbook-worker opsknight-status-projector; do
             role_state=$(docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml ps "$role" --format '{{.State}}' 2>/dev/null || true)
             echo "Role $role state: $role_state"
             test "$role_state" = "running"
@@ -504,7 +518,7 @@ jobs:
           curl -s -f "http://127.0.0.1:33001/api/health?mode=readiness" | grep -q 'healthy'
 
           echo "Verifying split background workers are running with direct external DB TLS..."
-          for worker in scheduler general-worker critical-worker bulk-worker status-projector; do
+          for worker in scheduler general-worker critical-worker bulk-worker runbook-worker status-projector; do
             w_state=$(docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml ps "opsknight-${worker}" --format '{{.State}}' 2>/dev/null || true)
             if [ "$w_state" != "running" ]; then
               echo "Error: opsknight-${worker} is in state '$w_state', expected 'running'" >&2
@@ -569,6 +583,22 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/opsknight-pgbouncer:sha-${{ github.sha }}
           cache-from: type=gha,scope=opsknight-pgbouncer-main
           cache-to: type=gha,scope=opsknight-pgbouncer-main,mode=max
+          provenance: false
+          sbom: false
+
+      - name: Build + push Agent (test channel - main)
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./agent/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME_AGENT }}:latest
+            ${{ env.IMAGE_NAME_AGENT }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=opsknight-agent-main-amd64
+          cache-to: type=gha,scope=opsknight-agent-main-amd64,mode=max
           provenance: false
           sbom: false
 
@@ -681,12 +711,54 @@ jobs:
           provenance: mode=max
           sbom: true
 
+  agent-image:
+    needs: sbom-provenance
+    if: startsWith(github.ref, 'refs/tags/v') && needs.sbom-provenance.result == 'success'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Docker metadata (Agent release)
+        id: agent_meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME_AGENT }}
+          tags: |
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ !contains(github.ref_name, '-') }}
+            type=semver,pattern={{major}},enable=${{ !contains(github.ref_name, '-') }}
+      - name: Build + push Agent release image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./agent/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.agent_meta.outputs.tags }}
+          labels: ${{ steps.agent_meta.outputs.labels }}
+          cache-from: type=gha,scope=opsknight-agent-release
+          cache-to: type=gha,scope=opsknight-agent-release,mode=max
+          provenance: mode=max
+          sbom: true
+
   promote-release-tags:
-    needs: [build, pgbouncer-image]
+    needs: [build, pgbouncer-image, agent-image]
     if: >-
       startsWith(github.ref, 'refs/tags/v') &&
       needs.build.result == 'success' &&
-      needs.pgbouncer-image.result == 'success'
+      needs.pgbouncer-image.result == 'success' &&
+      needs.agent-image.result == 'success'
     runs-on: ubuntu-22.04
     steps:
       - name: Set up Docker Buildx
@@ -728,7 +800,7 @@ jobs:
           EOF
 
   publish-github-release:
-    needs: [build, sbom-provenance, pgbouncer-image, promote-release-tags]
+    needs: [build, sbom-provenance, pgbouncer-image, agent-image, promote-release-tags]
     if: >-
       startsWith(github.ref, 'refs/tags/v') &&
       needs.build.result == 'success' &&

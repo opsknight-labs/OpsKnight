@@ -1,6 +1,7 @@
 name: Docker Swarm Validation
 
 on:
+  workflow_call:
   push:
     branches:
       - main
@@ -10,6 +11,7 @@ on:
       - 'deploy/images/pgbouncer/**'
       - 'deploy/scripts/validate-runtime-capacity.cjs'
       - 'Dockerfile'
+      - 'agent/**'
       - 'package.json'
       - 'prisma/**'
       - '.github/workflows/swarm-validation.yml'
@@ -22,6 +24,7 @@ on:
       - 'deploy/images/pgbouncer/**'
       - 'deploy/scripts/validate-runtime-capacity.cjs'
       - 'Dockerfile'
+      - 'agent/**'
       - 'package.json'
       - 'prisma/**'
       - '.github/workflows/swarm-validation.yml'
@@ -36,6 +39,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPSKNIGHT_IMAGE: ghcr.io/opsknight-labs/opsknight:ci-test
+      OPSKNIGHT_AGENT_IMAGE: ghcr.io/opsknight-labs/opsknight-agent:ci-test
+      OPSKNIGHT_EXECUTION_PUBLIC_KEY: ci-pinned-public-key
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
@@ -63,7 +68,8 @@ jobs:
             deploy/swarm/docker-stack.external-db.integrated.yml \
             deploy/swarm/docker-stack.ca.split.yml \
             deploy/swarm/docker-stack.ca.integrated.yml \
-            deploy/swarm/docker-stack.pgbouncer-ca.yml
+            deploy/swarm/docker-stack.pgbouncer-ca.yml \
+            deploy/swarm/docker-stack.agent.yml
 
       - name: Validate Bundled DB Stack Config
         run: |
@@ -82,6 +88,12 @@ jobs:
           cd deploy/swarm
           docker stack config -c docker-stack.yml >/dev/null
           echo "Core split docker-stack.yml is valid."
+
+      - name: Validate Runbook Agent Overlay Config
+        run: |
+          cd deploy/swarm
+          docker stack config -c docker-stack.yml -c docker-stack.agent.yml >/dev/null
+          echo "Runbook Agent overlay configuration is valid."
 
       - name: Validate Core Split Stack Fails Closed Without OPSKNIGHT_IMAGE
         run: |
@@ -132,6 +144,7 @@ jobs:
           SWARM_REPLICAS_GENERAL_WORKER=1 \
           SWARM_REPLICAS_CRITICAL_WORKER=1 \
           SWARM_REPLICAS_BULK_WORKER=1 \
+          SWARM_REPLICAS_RUNBOOK_WORKER=1 \
           SWARM_REPLICAS_STATUS_PROJECTOR=1 \
           node deploy/scripts/validate-runtime-capacity.cjs
 
@@ -241,6 +254,7 @@ jobs:
                 opsknight_opsknight-general-worker \
                 opsknight_opsknight-critical-worker \
                 opsknight_opsknight-bulk-worker \
+                opsknight_opsknight-runbook-worker \
                 opsknight_opsknight-status-projector
             fi
           }

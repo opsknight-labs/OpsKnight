@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opsknight-agent-policy
+  namespace: opsknight
+data:
+  policy.json: |
+    {
+      "allowedStepTypes": ["LINUX_DIAGNOSTICS"],
+      "systemdUnits": [],
+      "dockerContainers": [],
+      "podmanContainers": [],
+      "kubernetesNamespaces": [],
+      "kubernetesActions": ["get", "describe", "logs", "events", "rollout-status"],
+      "kubernetesMaxReplicas": 0,
+      "networkHosts": [],
+      "networkPorts": [],
+      "bashCommandPatterns": [],
+      "allowNonIdempotent": false,
+      "maxRuntimeSeconds": 300,
+      "maxOutputBytes": 1048576
+    }

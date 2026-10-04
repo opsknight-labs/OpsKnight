@@ -10,6 +10,7 @@
 let shutdownHandlersRegistered = false;
 let stopScheduler: (() => Promise<void>) | null = null;
 let stopJobWorkerService: (() => Promise<void>) | null = null;
+let stopIntegratedRunbookWorkerService: (() => Promise<void>) | null = null;
 let shutdownPromise: Promise<void> | null = null;
 
 async function stopRuntimeServices(): Promise<void> {
@@ -21,6 +22,10 @@ async function stopRuntimeServices(): Promise<void> {
 
   if (stopJobWorkerService) {
     stops.push(stopJobWorkerService());
+  }
+  if (stopIntegratedRunbookWorkerService) {
+    await stopIntegratedRunbookWorkerService();
+    stopIntegratedRunbookWorkerService = null;
   }
 
   const results = await Promise.allSettled(stops);
@@ -80,8 +85,16 @@ export async function register() {
         // Elected schedulers own maintenance in integrated and split modes.
         // Preserve it only for the legacy standalone all-lane worker role.
         ownsQueueMaintenance: role === 'worker',
+        excludeRunbookJobs: role === 'integrated',
       });
       stopJobWorkerService = stopJobWorker;
+    }
+
+    if (responsibilities.startIsolatedRunbookWorker) {
+      const { startIntegratedRunbookWorker, stopIntegratedRunbookWorker } =
+        await import('./lib/runbooks/integrated-worker');
+      startIntegratedRunbookWorker();
+      stopIntegratedRunbookWorkerService = stopIntegratedRunbookWorker;
     }
 
     const { logger } = await import('./lib/logger');
@@ -90,6 +103,7 @@ export async function register() {
       scheduler: responsibilities.startScheduler,
       schedulerProfile: responsibilities.schedulerProfile,
       jobWorker: responsibilities.startJobWorker,
+      isolatedRunbookWorker: responsibilities.startIsolatedRunbookWorker,
     });
 
     if (!shutdownHandlersRegistered) {

@@ -1,0 +1,1 @@
+ALTER TABLE "RunbookAgent" ADD COLUMN "deadLetterDepth" INTEGER NOT NULL DEFAULT 0;

@@ -196,6 +196,67 @@ bulkWorker:
   podDisruptionBudget: { enabled: true, minAvailable: 1 }
   terminationGracePeriodSeconds: 60
 
+runbookWorker:
+  replicaCount: 2
+  database: { poolSize: 3 }
+  worker: { batchSize: 50, concurrency: 10, idlePollMs: 1000, busyPollMs: 100 }
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 1Gi }
+  podDisruptionBudget: { enabled: true, minAvailable: 1 }
+  terminationGracePeriodSeconds: 60
+
+# Outbound execution Agent. A single replica is intentional because the
+# enrollment token is single-use and the identity is stored on its PVC.
+agent:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: ghcr.io/opsknight-labs/opsknight-agent
+    tag: '2.0.0'
+    digest: ''
+    pullPolicy: IfNotPresent
+  # Empty uses the in-cluster OpsKnight Service URL.
+  url: ''
+  enrollmentToken:
+    existingSecret: ''
+    key: OPSKNIGHT_AGENT_ENROLLMENT_TOKEN
+  policy:
+    allowedStepTypes: [LINUX_DIAGNOSTICS]
+    systemdUnits: []
+    dockerContainers: []
+    podmanContainers: []
+    kubernetesNamespaces: []
+    kubernetesActions: [get, describe, logs, events, rollout-status]
+    kubernetesMaxReplicas: 0
+    networkHosts: []
+    networkPorts: []
+    bashCommandPatterns: []
+    allowNonIdempotent: false
+    maxRuntimeSeconds: 300
+    maxOutputBytes: 1048576
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ''
+  serviceAccount:
+    create: true
+    name: ''
+  # No Kubernetes write privileges are granted by default. Add narrowly scoped
+  # Role rules only for the resource types the local Agent policy permits.
+  rbac:
+    rules: []
+  networkPolicy:
+    # Required only when KUBERNETES execution is enabled. Use the smallest
+    # control-plane CIDRs exposed by your cluster; global HTTPS is never opened.
+    kubernetesApiCIDRs: []
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
 statusProjector:
   replicaCount: 2
   database: { poolSize: 3 }
@@ -271,6 +332,7 @@ config:
   nextTelemetryDisabled: '1'
   notificationControlPlanePersonal: 'true'
   allowInsecureSecrets: 'false'
+  runbookArtifactRetentionDays: 30
 
 # Full DATABASE_URL override. Prefer this for managed PostgreSQL, TLS parameters,
 # PgBouncer, or credentials containing characters that require URI encoding.

@@ -74,6 +74,7 @@ import JiraServiceMappingSettings from '@/components/service/JiraServiceMappingS
 import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings';
 import ServiceVisibilitySettings from '@/components/service/ServiceVisibilitySettings';
 import ServiceResponsePolicyHub from '@/components/service/ServiceResponsePolicyHub';
+import ServiceRunbooks from '@/components/service/ServiceRunbooks';
 import IncidentClassificationSettings from '@/components/incident-sla/IncidentClassificationSettings';
 import {
   getGlobalWarRoomPolicy,
@@ -356,7 +357,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     slaMetricsResult.status === 'fulfilled' && Boolean(slaMetricsResult.value);
   const slaMetrics = isSlaMetricsAvailable ? slaMetricsResult.value : null;
   const uptimeByService = new Map<string, number>(
-    uptimeResult.status === 'fulfilled' && uptimeResult.value && typeof uptimeResult.value === 'object'
+    uptimeResult.status === 'fulfilled' &&
+      uptimeResult.value &&
+      typeof uptimeResult.value === 'object'
       ? Object.entries(uptimeResult.value as Record<string, number>)
       : []
   );
@@ -417,17 +420,59 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const service = serviceRaw as any;
+  const service = serviceRaw;
   const canDeleteService = currentUser.role === 'ADMIN';
+
+  const [
+    serviceRunbookBindings,
+    availableRunbooks,
+    availableRunbookAgents,
+    availableRunbookAgentPools,
+  ] = await Promise.all([
+    prisma.serviceRunbookBinding.findMany({
+      where: { serviceId: id },
+      include: {
+        runbook: {
+          include: { publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } } },
+        },
+        runbookVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
+        triggers: { include: { conditions: { orderBy: { sequence: 'asc' } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.runbook.findMany({
+      where: { archivedAt: null, publishedVersionId: { not: null } },
+      include: {
+        publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
+        versions: {
+          include: { inputs: { orderBy: { sequence: 'asc' } } },
+          orderBy: { version: 'desc' },
+        },
+      },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.runbookAgent.findMany({
+      where: { status: { in: ['ONLINE', 'DEGRADED', 'OFFLINE'] } },
+      select: { id: true, name: true, hostname: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.runbookAgentPool.findMany({
+      select: { id: true, name: true, mode: true, _count: { select: { members: true } } },
+      orderBy: { name: 'asc' },
+    }),
+  ]);
 
   // SLA and Health Computations with truthful failure degradation
   const dynamicStatus: 'OPERATIONAL' | 'DEGRADED' | 'CRITICAL' | 'UNKNOWN' = isSlaMetricsAvailable
-    ? slaMetrics?.dynamicStatus ?? 'UNKNOWN'
+    ? (slaMetrics?.dynamicStatus ?? 'UNKNOWN')
     : 'UNKNOWN';
-  const activeIncidentsCount = isSlaMetricsAvailable ? slaMetrics?.activeIncidents ?? 0 : undefined;
-  const windowTotalIncidents = isSlaMetricsAvailable ? slaMetrics?.totalIncidents ?? 0 : undefined;
-  const slaCompliance = isSlaMetricsAvailable ? slaMetrics?.resolveCompliance ?? null : null;
+  const activeIncidentsCount = isSlaMetricsAvailable
+    ? (slaMetrics?.activeIncidents ?? 0)
+    : undefined;
+  const windowTotalIncidents = isSlaMetricsAvailable
+    ? (slaMetrics?.totalIncidents ?? 0)
+    : undefined;
+  const slaCompliance = isSlaMetricsAvailable ? (slaMetrics?.resolveCompliance ?? null) : null;
   const mttr = isSlaMetricsAvailable && slaMetrics?.mttr ? slaMetrics.mttr / 60 : undefined;
   const effectiveDurationDays =
     isSlaMetricsAvailable && slaMetrics
@@ -468,7 +513,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       {service.incidents.length > 0 ? (
         <div className="space-y-4">
           <IncidentList
-            incidents={service.incidents.map((i: any) => ({
+            incidents={service.incidents.map(i => ({
               id: i.id,
               title: i.title,
               status: i.status,
@@ -539,7 +584,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                 Escalation Step Order ({service.policy.steps?.length || 0} Steps)
               </h4>
               <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
-                {service.policy.steps?.map((step: any, idx: number) => (
+                {service.policy.steps?.map((step, idx: number) => (
                   <div
                     key={step.id}
                     className="p-3.5 flex items-center justify-between gap-4 text-xs hover:bg-muted/20 transition-colors"
@@ -609,7 +654,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
       {service.integrations && service.integrations.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {service.integrations.map((integration: any) => {
+          {service.integrations.map(integration => {
             const integrationType = integration.type as IntegrationType;
             const typeInfo = INTEGRATION_TYPES.find(t => t.value === integrationType) || {
               label: integration.type,
@@ -750,12 +795,13 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                             <br />
                             &nbsp; -H{' '}
                             <span className="text-blue-300">
-                              "Content-Type: application/json"
+                              &quot;Content-Type: application/json&quot;
                             </span>{' '}
                             \<br />
                             &nbsp; -H{' '}
                             <span className="text-green-400">
-                              "Authorization: Token token={integration.key.substring(0, 10)}..."
+                              &quot;Authorization: Token token={integration.key.substring(0, 10)}
+                              ...&quot;
                             </span>{' '}
                             \<br />
                             &nbsp; -d{' '}
@@ -1202,6 +1248,16 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}
         escalationContent={escalationContent}
+        runbooksContent={
+          <ServiceRunbooks
+            serviceId={service.id}
+            bindings={serviceRunbookBindings}
+            availableRunbooks={availableRunbooks}
+            availableAgents={availableRunbookAgents}
+            availableAgentPools={availableRunbookAgentPools}
+            canManage={canManageService}
+          />
+        }
         integrationsContent={integrationsContent}
         notificationsContent={notificationsContent}
         settingsContent={settingsContent}

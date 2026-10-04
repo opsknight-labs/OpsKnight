@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opsknight-agent
+  namespace: opsknight
+spec:
+  podSelector:
+    matchLabels: { app: opsknight-agent }
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { app: opsknight-app }
+      ports:
+        - { protocol: TCP, port: 3000 }
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }

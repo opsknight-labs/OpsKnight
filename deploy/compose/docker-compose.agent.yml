@@ -1,0 +1,25 @@
+services:
+  opsknight-agent:
+    image: ${OPSKNIGHT_AGENT_IMAGE:-ghcr.io/opsknight-labs/opsknight-agent:2.0.0}
+    pull_policy: ${OPSKNIGHT_PULL_POLICY:-always}
+    restart: unless-stopped
+    environment:
+      OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:-http://opsknight-app:3000}
+      OPSKNIGHT_EXECUTION_PUBLIC_KEY: ${OPSKNIGHT_EXECUTION_PUBLIC_KEY:-}
+      OPSKNIGHT_EXECUTION_PUBLIC_KEYS: ${OPSKNIGHT_EXECUTION_PUBLIC_KEYS:-}
+      OPSKNIGHT_AGENT_ENROLLMENT_TOKEN: ${OPSKNIGHT_AGENT_ENROLLMENT_TOKEN:?Create a single-use token in Runbooks > Agents}
+    volumes:
+      - opsknight_agent_data:/var/lib/opsknight-agent
+      - ${OPSKNIGHT_AGENT_POLICY_PATH:-../../agent/policy.container.json}:/etc/opsknight-agent/policy.json:ro
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    networks:
+      - opsknight-network
+
+volumes:
+  opsknight_agent_data:

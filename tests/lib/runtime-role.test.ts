@@ -14,6 +14,7 @@ describe('runtime process roles', () => {
       startJobWorker: true,
       schedulerProfile: 'full',
       workerLane: 'all',
+      startIsolatedRunbookWorker: true,
     });
   });
 
@@ -23,18 +24,21 @@ describe('runtime process roles', () => {
       startJobWorker: false,
       schedulerProfile: null,
       workerLane: null,
+      startIsolatedRunbookWorker: false,
     });
     expect(getRuntimeResponsibilities('scheduler')).toEqual({
       startScheduler: true,
       startJobWorker: false,
       schedulerProfile: 'full',
       workerLane: null,
+      startIsolatedRunbookWorker: false,
     });
     expect(getRuntimeResponsibilities('worker')).toEqual({
       startScheduler: false,
       startJobWorker: true,
       schedulerProfile: null,
       workerLane: 'all',
+      startIsolatedRunbookWorker: false,
     });
     expect(getRuntimeResponsibilities('general-worker').workerLane).toBe('general');
     expect(getRuntimeResponsibilities('critical-worker').workerLane).toBe('critical');

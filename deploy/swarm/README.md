@@ -29,7 +29,8 @@ OpsKnight on Docker Swarm maps identical runtime contracts from Kubernetes and D
              ┌───────────────────────────┼───────────────────────────┐
              │                           │                           │
     opsknight-scheduler        opsknight-workers            opsknight-projector
-    (2 Replicas, Lease-Fenced) (general, critical, bulk)    (Dedicated Read Projector)
+    (2 Replicas, Lease-Fenced) (general, critical, bulk,   (Dedicated Read Projector)
+                                runbook)
 ```
 
 ### Connection Routing Model
@@ -40,7 +41,7 @@ OpsKnight on Docker Swarm maps identical runtime contracts from Kubernetes and D
 ### Supported Runtime Topologies
 
 OpsKnight on Swarm supports two deployment topologies selectable via `SWARM_RUNTIME_MODE`:
-1. **Split Runtime (`SWARM_RUNTIME_MODE=split`, Default)**: Enterprise architecture with separate process containers for HTTP web serving, maintenance scheduling, and dedicated worker lanes (`general`, `critical`, `bulk`).
+1. **Split Runtime (`SWARM_RUNTIME_MODE=split`, Default)**: Enterprise architecture with separate process containers for HTTP web serving, maintenance scheduling, and dedicated worker lanes (`general`, `critical`, `bulk`, `runbook`).
 2. **Integrated Runtime (`SWARM_RUNTIME_MODE=integrated`)**: Single-container deployment (`opsknight-app`) running web, workers, and schedulers for small-to-medium teams.
 
 Swarm deployment uses `docker stack deploy --prune` to ensure seamless, conflict-free switching between `split` and `integrated` topologies without leaving obsolete ghost services running.
@@ -54,9 +55,11 @@ Swarm deployment uses `docker stack deploy --prune` to ensure seamless, conflict
 | **`opsknight-general-worker`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Standard background queues, webhooks, non-urgent syncs. |
 | **`opsknight-critical-worker`** | 2 | Spread across nodes (`node.id`) | `stop-first` | High-priority alerting, SMS, Twilio, push notifications. |
 | **`opsknight-bulk-worker`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Heavy digest emails, compliance rollups, audit purging. |
+| **`opsknight-runbook-worker`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Isolated runbook execution, retries, and reconciliation. |
 | **`opsknight-status-projector`** | 2 | Spread across nodes (`node.id`) | `stop-first` | Real-time incident timeline projection and public status sync. |
 | **`opsknight-pgbouncer`** *(Optional)* | 2 | Spread across nodes (`node.id`) | `start-first` | Transaction connection pooler offloading PostgreSQL backend. |
 | **`opsknight-db`** *(Bundled)* | 1 | Pinned: `opsknight.database == true` | `stop-first` | Single-node PostgreSQL persistence (dev/simple deploys). |
+| **`opsknight-agent`** *(Optional overlay)* | 1 | Operator selected | `stop-first` | Outbound, policy-constrained execution with persistent identity and result spool. |
 
 > [!IMPORTANT]
 > **Database HA Architecture Distinction**:

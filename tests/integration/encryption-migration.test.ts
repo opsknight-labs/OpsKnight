@@ -47,6 +47,46 @@ describeIfRealDB('encryption migration integration (real PostgreSQL)', () => {
     await testPrisma.$disconnect();
   });
 
+  it('rotates the execution signing key before retiring k1 without changing the pinned identity', async () => {
+    const keys = crypto.generateKeyPairSync('ed25519');
+    const publicKey = keys.publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+    const privatePem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+    await testPrisma.runbookExecutionSigningKey.create({
+      data: {
+        id: 'default',
+        publicKey,
+        privateKeyEncrypted: await encryptWithKey(privatePem, KEY_1, 'k1'),
+      },
+    });
+    await runFullVerification(testPrisma);
+    expect(
+      (await evaluateKeyRetirementReadiness(testPrisma)).assessments.find(a => a.keyId === 'k1')
+        ?.status
+    ).toBe('ACTIVE_REFERENCES_EXIST');
+    expect(
+      (await startEncryptionRun(testPrisma, { mode: 'MIGRATE', runSynchronously: true })).status
+    ).toBe('COMPLETED');
+    await runFullVerification(testPrisma);
+    expect(
+      (await evaluateKeyRetirementReadiness(testPrisma)).assessments.find(a => a.keyId === 'k1')
+        ?.remainingReferences
+    ).toBe(0);
+    process.env.ENCRYPTION_KEYS = `k2:${KEY_2}`;
+    const row = await testPrisma.runbookExecutionSigningKey.findUniqueOrThrow({
+      where: { id: 'default' },
+    });
+    expect(row.privateKeyEncrypted).toMatch(/^v3:k2:/);
+    expect(row.publicKey).toBe(publicKey);
+    const signature = crypto.sign(
+      null,
+      Buffer.from('after retirement'),
+      crypto.createPrivateKey(await decrypt(row.privateKeyEncrypted))
+    );
+    expect(crypto.verify(null, Buffer.from('after retirement'), keys.publicKey, signature)).toBe(
+      true
+    );
+  });
+
   it('PREVIEW mode accurately scans secrets without mutating any database records', async () => {
     const k1Secret = await encryptWithKey('super-secret-oidc-token', KEY_1, 'k1');
 

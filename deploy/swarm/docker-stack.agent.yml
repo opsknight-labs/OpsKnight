@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  opsknight-agent:
+    image: ${OPSKNIGHT_AGENT_IMAGE:?Set OPSKNIGHT_AGENT_IMAGE to a tested tag or digest}
+    environment:
+      OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:-http://opsknight-web:3000}
+      OPSKNIGHT_EXECUTION_PUBLIC_KEY: ${OPSKNIGHT_EXECUTION_PUBLIC_KEY:-}
+      OPSKNIGHT_EXECUTION_PUBLIC_KEYS: ${OPSKNIGHT_EXECUTION_PUBLIC_KEYS:-}
+      OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE: /run/secrets/opsknight_agent_enrollment_token
+    secrets:
+      - source: opsknight_agent_enrollment_token
+        target: /run/secrets/opsknight_agent_enrollment_token
+    configs:
+      - source: opsknight_agent_policy
+        target: /etc/opsknight-agent/policy.json
+    volumes:
+      - opsknight_agent_data:/var/lib/opsknight-agent
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777,noexec,nosuid
+    networks:
+      - opsknight
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+      update_config:
+        order: stop-first
+        failure_action: rollback
+      resources:
+        reservations: { cpus: '0.05', memory: 64M }
+        limits: { cpus: '1.0', memory: 512M }
+
+secrets:
+  opsknight_agent_enrollment_token:
+    external: true
+
+configs:
+  opsknight_agent_policy:
+    file: ../../agent/policy.container.json
+
+volumes:
+  opsknight_agent_data:
+
+networks:
+  opsknight:
+    external: true
+    name: ${SWARM_NETWORK_NAME:-opsknight}

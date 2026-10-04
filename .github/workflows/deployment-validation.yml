@@ -1,10 +1,12 @@
 name: Deployment manifests
 
 on:
+  workflow_call:
   pull_request:
     branches: [main]
     paths:
       - 'Dockerfile'
+      - 'agent/**'
       - 'docker-entrypoint.sh'
       - 'scripts/auto-recover-migrations.ts'
       - 'scripts/validate-release-tag.cjs'
@@ -23,6 +25,7 @@ on:
     branches: [main]
     paths:
       - 'Dockerfile'
+      - 'agent/**'
       - 'docker-entrypoint.sh'
       - 'scripts/auto-recover-migrations.ts'
       - 'scripts/validate-release-tag.cjs'
@@ -57,6 +60,9 @@ jobs:
           cp env.example .env
           docker compose -f deploy/compose/docker-compose.yml config > /tmp/opsknight-compose.yaml
           docker compose -f deploy/compose/docker-compose.dev.yml config > /tmp/opsknight-compose-dev.yaml
+          OPSKNIGHT_EXECUTION_PUBLIC_KEY='ci-pinned-public-key' OPSKNIGHT_AGENT_ENROLLMENT_TOKEN='ci-single-use-token' OPSKNIGHT_PULL_POLICY=never \
+            docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.agent.yml \
+            config > /tmp/opsknight-compose-agent.yaml
           OPSKNIGHT_DATABASE_URL='postgresql://user:encoded%40password@db.example.com:6432/opsknight_db?sslmode=require' \
             docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.external-db.yml \
             config > /tmp/opsknight-compose-external-db.yaml
@@ -119,6 +125,13 @@ jobs:
             --is-upgrade \
             --set migrations.job.enabled=true \
             > /tmp/opsknight-helm-migration-upgrade-job.yaml
+          helm template opsknight deploy/kubernetes/helm/opsknight \
+            --namespace opsknight \
+            --set agent.enabled=true \
+            --set-string agent.enrollmentToken.existingSecret=opsknight-agent-enrollment \
+            --set networkPolicy.enabled=true \
+            --set-string agent.networkPolicy.kubernetesApiCIDRs[0]=10.96.0.1/32 \
+            > /tmp/opsknight-helm-agent.yaml
           if helm template opsknight deploy/kubernetes/helm/opsknight --set runtime.mode=invalid >/dev/null 2>&1; then
             echo 'invalid runtime.mode unexpectedly rendered'
             exit 1
@@ -175,6 +188,8 @@ jobs:
           cp /tmp/opsknight-kustomize.yaml /tmp/opsknight-kustomize-integrated.yaml
           kubectl kustomize deploy/kubernetes/kustomize/profiles/split > /tmp/opsknight-kustomize-split.yaml
           kubectl kustomize deploy/kubernetes/kustomize/profiles/split-pgbouncer > /tmp/opsknight-kustomize-split-pgbouncer.yaml
+          kubectl kustomize deploy/kubernetes/kustomize/profiles/integrated-agent > /tmp/opsknight-kustomize-integrated-agent.yaml
+          kubectl kustomize deploy/kubernetes/kustomize/profiles/split-agent > /tmp/opsknight-kustomize-split-agent.yaml
 
       - name: Validate rendered invariants
         shell: bash
@@ -190,16 +205,16 @@ jobs:
           grep -q 'NEXT_PUBLIC_APP_URL' /tmp/opsknight-kustomize-base.yaml
           grep -q 'startupProbe:' /tmp/opsknight-kustomize.yaml
           grep -q 'startupProbe:' /tmp/opsknight-kustomize-integrated.yaml
-          for role in web scheduler general-worker critical-worker bulk-worker status-projector; do
+          for role in web scheduler general-worker critical-worker bulk-worker runbook-worker status-projector; do
             grep -q "name: opsknight-$role" /tmp/opsknight-helm-split.yaml
             grep -q "name: opsknight-$role" /tmp/opsknight-helm-split-generic.yaml
             grep -q "name: opsknight-$role" /tmp/opsknight-kustomize-split.yaml
           done
-          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split.yaml)" -eq 6
-          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-generic.yaml)" -eq 6
-          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-pgbouncer.yaml)" -eq 7
-          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split.yaml)" -eq 6
-          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split-pgbouncer.yaml)" -eq 7
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split.yaml)" -eq 7
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-generic.yaml)" -eq 7
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-helm-split-pgbouncer.yaml)" -eq 8
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split.yaml)" -eq 7
+          test "$(grep -c 'whenUnsatisfiable: DoNotSchedule' /tmp/opsknight-kustomize-split-pgbouncer.yaml)" -eq 8
           if grep -q 'whenUnsatisfiable: ScheduleAnyway' /tmp/opsknight-helm-split.yaml /tmp/opsknight-helm-split-generic.yaml /tmp/opsknight-helm-split-pgbouncer.yaml /tmp/opsknight-kustomize-split.yaml /tmp/opsknight-kustomize-split-pgbouncer.yaml; then
             echo 'split runtime unexpectedly allowed soft topology spreading'
             exit 1
@@ -243,6 +258,13 @@ jobs:
           grep -q 'port: 6432' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'port: 5432' /tmp/opsknight-kustomize-split-pgbouncer.yaml
           grep -q 'kubernetes.io/metadata.name: ingress-nginx' /tmp/opsknight-kustomize.yaml
+          grep -q 'name: opsknight-agent' /tmp/opsknight-helm-agent.yaml
+          grep -q 'OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE' /tmp/opsknight-helm-agent.yaml
+          grep -q 'kind: NetworkPolicy' /tmp/opsknight-helm-agent.yaml
+          grep -q 'cidr: "10.96.0.1/32"' /tmp/opsknight-helm-agent.yaml
+          grep -q 'name: opsknight-agent' /tmp/opsknight-kustomize-integrated-agent.yaml
+          grep -q 'name: opsknight-agent' /tmp/opsknight-kustomize-split-agent.yaml
+          grep -q 'OPSKNIGHT_AGENT_ENROLLMENT_TOKEN' /tmp/opsknight-compose-agent.yaml
           grep -q '127.0.0.1' /tmp/opsknight-compose.yaml
           grep -q 'db.example.com:6432' /tmp/opsknight-compose-external-db.yaml
           ! grep -q 'opsknight-pgbouncer' /tmp/opsknight-compose-external-db.yaml
@@ -251,6 +273,7 @@ jobs:
           grep -q 'OPSKNIGHT_PROCESS_ROLE: general-worker' /tmp/opsknight-compose-split.yaml
           grep -q 'OPSKNIGHT_PROCESS_ROLE: critical-worker' /tmp/opsknight-compose-split.yaml
           grep -q 'OPSKNIGHT_PROCESS_ROLE: bulk-worker' /tmp/opsknight-compose-split.yaml
+          grep -q 'OPSKNIGHT_PROCESS_ROLE: runbook-worker' /tmp/opsknight-compose-split.yaml
           grep -q 'OPSKNIGHT_PROCESS_ROLE: status-projector' /tmp/opsknight-compose-split.yaml
           grep -q 'OPSKNIGHT_MIGRATION_ONLY: "true"' /tmp/opsknight-compose-split.yaml
           grep -q 'condition: service_completed_successfully' /tmp/opsknight-compose-split.yaml

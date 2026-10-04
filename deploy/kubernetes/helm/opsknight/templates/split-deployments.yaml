@@ -20,6 +20,7 @@
   (mul .Values.generalWorker.replicaCount .Values.generalWorker.database.poolSize)
   (mul .Values.criticalWorker.replicaCount .Values.criticalWorker.database.poolSize)
   (mul .Values.bulkWorker.replicaCount .Values.bulkWorker.database.poolSize)
+  (mul .Values.runbookWorker.replicaCount .Values.runbookWorker.database.poolSize)
   (mul .Values.statusProjector.replicaCount .Values.statusProjector.database.poolSize)
 -}}
 {{- if gt (int $estimatedConnections) (int .Values.database.maxApplicationConnections) }}
@@ -31,6 +32,7 @@
   (dict "name" "general-worker" "processRole" "general-worker" "values" .Values.generalWorker "poolEnv" "DATABASE_POOL_SIZE_GENERAL_WORKER")
   (dict "name" "critical-worker" "processRole" "critical-worker" "values" .Values.criticalWorker "poolEnv" "DATABASE_POOL_SIZE_CRITICAL_WORKER")
   (dict "name" "bulk-worker" "processRole" "bulk-worker" "values" .Values.bulkWorker "poolEnv" "DATABASE_POOL_SIZE_BULK_WORKER")
+  (dict "name" "runbook-worker" "processRole" "runbook-worker" "values" .Values.runbookWorker "poolEnv" "DATABASE_POOL_SIZE_RUNBOOK_WORKER")
   (dict "name" "status-projector" "processRole" "status-projector" "values" .Values.statusProjector "poolEnv" "DATABASE_POOL_SIZE_STATUS_PROJECTOR")
 }}
 {{- range $index, $role := $roles }}

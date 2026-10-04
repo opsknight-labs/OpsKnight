@@ -178,6 +178,7 @@ describe('deployment secret matrix', () => {
       'opsknight-general-worker',
       'opsknight-critical-worker',
       'opsknight-bulk-worker',
+      'opsknight-runbook-worker',
       'opsknight-status-projector',
     ]) {
       expectComposeRole(split.services[role]);
@@ -198,6 +199,7 @@ describe('deployment secret matrix', () => {
       'opsknight-general-worker',
       'opsknight-critical-worker',
       'opsknight-bulk-worker',
+      'opsknight-runbook-worker',
       'opsknight-status-projector',
     ]) {
       expectSwarmRole(split.services[role]);

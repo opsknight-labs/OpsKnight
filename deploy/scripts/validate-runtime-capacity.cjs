@@ -199,6 +199,20 @@ function calculateRuntimeCapacity(customEnv) {
     3
   );
 
+  const runbookReplicas = parseStrictPositiveInt(
+    'RUNBOOK_WORKER_REPLICAS',
+    env.SWARM_REPLICAS_RUNBOOK_WORKER ||
+      env.SWARM_RUNBOOK_WORKER_REPLICAS ||
+      env.RUNBOOK_WORKER_REPLICAS ||
+      env.RUNBOOK_REPLICAS,
+    1
+  );
+  const runbookPool = parseStrictPositiveInt(
+    'DATABASE_POOL_SIZE_RUNBOOK_WORKER',
+    env.DATABASE_POOL_SIZE_RUNBOOK_WORKER,
+    3
+  );
+
   const projectorReplicas = parseStrictPositiveInt(
     'STATUS_PROJECTOR_REPLICAS',
     env.SWARM_REPLICAS_STATUS_PROJECTOR ||
@@ -233,6 +247,7 @@ function calculateRuntimeCapacity(customEnv) {
         generalReplicas * generalPool +
         criticalReplicas * criticalPool +
         bulkReplicas * bulkPool +
+        runbookReplicas * runbookPool +
         projectorReplicas * projectorPool;
 
   const totalDemand = webConnections + directWorkerConnections;
@@ -290,6 +305,14 @@ function calculateRuntimeCapacity(customEnv) {
               total: bulkReplicas * bulkPool,
             }
           : null,
+      runbookWorker:
+        mode === 'split'
+          ? {
+              replicas: runbookReplicas,
+              pool: runbookPool,
+              total: runbookReplicas * runbookPool,
+            }
+          : null,
       statusProjector:
         mode === 'split'
           ? {
@@ -331,6 +354,7 @@ function main() {
       console.log(`- General Worker: ${JSON.stringify(analysis.breakdown.generalWorker)}`);
       console.log(`- Critical Worker: ${JSON.stringify(analysis.breakdown.criticalWorker)}`);
       console.log(`- Bulk Worker: ${JSON.stringify(analysis.breakdown.bulkWorker)}`);
+      console.log(`- Runbook Worker: ${JSON.stringify(analysis.breakdown.runbookWorker)}`);
       console.log(`- Status Projector: ${JSON.stringify(analysis.breakdown.statusProjector)}`);
       console.log(`- Direct Worker Total: ${analysis.directWorkerConnections} connections`);
     }

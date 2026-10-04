@@ -47,6 +47,14 @@ services:
       - source: opsknight_custom_ca
         target: /etc/ssl/certs/custom-ca.crt
 
+  opsknight-runbook-worker:
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt
+      SSL_CERT_FILE: /etc/ssl/certs/custom-ca.crt
+    secrets:
+      - source: opsknight_custom_ca
+        target: /etc/ssl/certs/custom-ca.crt
+
   opsknight-status-projector:
     environment:
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/custom-ca.crt

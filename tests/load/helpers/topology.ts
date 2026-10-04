@@ -72,7 +72,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     phase: 1,
     family: 'compose',
     description:
-      'Dedicated web, scheduler, general-worker, critical-worker, bulk-worker, status-projector',
+      'Dedicated web, scheduler, general-worker, critical-worker, bulk-worker, runbook-worker, status-projector',
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
       'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f tests/load/deploy/compose/load.split.override.yml up -d --wait',
@@ -193,7 +193,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
       'docker swarm init 2>/dev/null || true',
-      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=split ENABLE_PGBOUNCER=true SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.split.override.yml SWARM_REPLICAS_WEB=1 SWARM_REPLICAS_SCHEDULER=1 SWARM_REPLICAS_GENERAL_WORKER=1 SWARM_REPLICAS_CRITICAL_WORKER=1 SWARM_REPLICAS_BULK_WORKER=1 SWARM_REPLICAS_STATUS_PROJECTOR=1 SWARM_REPLICAS_PGBOUNCER=1 ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
+      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=split ENABLE_PGBOUNCER=true SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.split.override.yml SWARM_REPLICAS_WEB=1 SWARM_REPLICAS_SCHEDULER=1 SWARM_REPLICAS_GENERAL_WORKER=1 SWARM_REPLICAS_CRITICAL_WORKER=1 SWARM_REPLICAS_BULK_WORKER=1 SWARM_REPLICAS_RUNBOOK_WORKER=1 SWARM_REPLICAS_STATUS_PROJECTOR=1 SWARM_REPLICAS_PGBOUNCER=1 ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
       'docker service update --publish-add published=5432,target=5432 opsknight-load_opsknight-db 2>/dev/null || true',
     ],
     recoveryDrills: [
@@ -231,11 +231,11 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     phase: 3,
     family: 'swarm',
     description:
-      'Swarm HA overlay with 2x replicas across web, general-worker, critical-worker, bulk-worker, status-projector, and pgbouncer',
+      'Swarm HA overlay with 2x replicas across web, general-worker, critical-worker, bulk-worker, runbook-worker, status-projector, and pgbouncer',
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
       'docker swarm init 2>/dev/null || true',
-      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=split ENABLE_PGBOUNCER=true SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.split.override.yml SWARM_REPLICAS_WEB=2 SWARM_REPLICAS_SCHEDULER=2 SWARM_REPLICAS_GENERAL_WORKER=2 SWARM_REPLICAS_CRITICAL_WORKER=2 SWARM_REPLICAS_BULK_WORKER=2 SWARM_REPLICAS_STATUS_PROJECTOR=2 SWARM_REPLICAS_PGBOUNCER=2 ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
+      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=split ENABLE_PGBOUNCER=true SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.split.override.yml SWARM_REPLICAS_WEB=2 SWARM_REPLICAS_SCHEDULER=2 SWARM_REPLICAS_GENERAL_WORKER=2 SWARM_REPLICAS_CRITICAL_WORKER=2 SWARM_REPLICAS_BULK_WORKER=2 SWARM_REPLICAS_RUNBOOK_WORKER=2 SWARM_REPLICAS_STATUS_PROJECTOR=2 SWARM_REPLICAS_PGBOUNCER=2 ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
       'docker service update --publish-add published=5432,target=5432 opsknight-load_opsknight-db 2>/dev/null || true',
     ],
     recoveryDrills: [
@@ -297,8 +297,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
       {
         name: 'k8s_helm_delete_scheduler_pod',
         role: 'scheduler',
-        faultCommand:
-          'kubectl delete pod -n helm-test -l opsknight-role=scheduler --wait=false',
+        faultCommand: 'kubectl delete pod -n helm-test -l opsknight-role=scheduler --wait=false',
       },
       {
         name: 'k8s_helm_delete_pgbouncer_pod',
@@ -381,7 +380,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     name: 'Phase 6 Mega: Compose Integrated Runtime',
     phase: 6,
     family: 'compose',
-    description: 'Single-container integrated runtime pushed to limit with 25-min progressive workload',
+    description:
+      'Single-container integrated runtime pushed to limit with 25-min progressive workload',
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
       'docker compose -f deploy/compose/docker-compose.yml -f tests/load/deploy/compose/load.override.yml up -d --wait',
@@ -415,7 +415,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     name: 'Phase 6 Mega: Compose Split Runtime',
     phase: 6,
     family: 'compose',
-    description: 'Dedicated web, scheduler, and worker roles without PgBouncer under 25-min progressive workload',
+    description:
+      'Dedicated web, scheduler, and worker roles without PgBouncer under 25-min progressive workload',
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
       'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f tests/load/deploy/compose/load.split.override.yml up -d --wait',
@@ -456,7 +457,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     name: 'Phase 6 Mega: Compose Split Runtime + PgBouncer',
     phase: 6,
     family: 'compose',
-    description: 'Split runtime with transaction-pooled PgBouncer under 25-min progressive workload',
+    description:
+      'Split runtime with transaction-pooled PgBouncer under 25-min progressive workload',
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
       'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f tests/load/deploy/compose/load.split.override.yml up -d --wait',
@@ -497,7 +499,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     name: 'Phase 6 Mega: Compose Split + External PostgreSQL',
     phase: 6,
     family: 'compose',
-    description: 'Split runtime against external PostgreSQL instance under 25-min progressive workload',
+    description:
+      'Split runtime against external PostgreSQL instance under 25-min progressive workload',
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
       'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.external-db.yml up -d --wait',
@@ -521,7 +524,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     name: 'Phase 6 Mega: Compose Split + PgBouncer + External PostgreSQL',
     phase: 6,
     family: 'compose',
-    description: 'Split runtime + PgBouncer against external PostgreSQL instance under 25-min progressive workload',
+    description:
+      'Split runtime + PgBouncer against external PostgreSQL instance under 25-min progressive workload',
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
       'docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.split.yml -f deploy/compose/docker-compose.pgbouncer.yml -f deploy/compose/docker-compose.external-db.yml up -d --wait',
@@ -584,11 +588,12 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     name: 'Phase 6 Mega: Docker Swarm Split Stack',
     phase: 6,
     family: 'swarm',
-    description: 'Docker Swarm split worker roles without PgBouncer under 25-min progressive workload',
+    description:
+      'Docker Swarm split worker roles without PgBouncer under 25-min progressive workload',
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
       'docker swarm init 2>/dev/null || true',
-      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=split ENABLE_PGBOUNCER=false SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.split.override.yml SWARM_REPLICAS_WEB=1 SWARM_REPLICAS_SCHEDULER=1 SWARM_REPLICAS_GENERAL_WORKER=1 SWARM_REPLICAS_CRITICAL_WORKER=1 SWARM_REPLICAS_BULK_WORKER=1 SWARM_REPLICAS_STATUS_PROJECTOR=1 ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
+      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=split ENABLE_PGBOUNCER=false SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.split.override.yml SWARM_REPLICAS_WEB=1 SWARM_REPLICAS_SCHEDULER=1 SWARM_REPLICAS_GENERAL_WORKER=1 SWARM_REPLICAS_CRITICAL_WORKER=1 SWARM_REPLICAS_BULK_WORKER=1 SWARM_REPLICAS_RUNBOOK_WORKER=1 SWARM_REPLICAS_STATUS_PROJECTOR=1 ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
       'docker service update --publish-add published=5432,target=5432 opsknight-load_opsknight-db 2>/dev/null || true',
       'sleep 5',
     ],
@@ -622,7 +627,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
       'docker swarm init 2>/dev/null || true',
-      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=split ENABLE_PGBOUNCER=true SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.split.override.yml SWARM_REPLICAS_WEB=1 SWARM_REPLICAS_SCHEDULER=1 SWARM_REPLICAS_GENERAL_WORKER=1 SWARM_REPLICAS_CRITICAL_WORKER=1 SWARM_REPLICAS_BULK_WORKER=1 SWARM_REPLICAS_STATUS_PROJECTOR=1 SWARM_REPLICAS_PGBOUNCER=1 ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
+      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=split ENABLE_PGBOUNCER=true SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.split.override.yml SWARM_REPLICAS_WEB=1 SWARM_REPLICAS_SCHEDULER=1 SWARM_REPLICAS_GENERAL_WORKER=1 SWARM_REPLICAS_CRITICAL_WORKER=1 SWARM_REPLICAS_BULK_WORKER=1 SWARM_REPLICAS_RUNBOOK_WORKER=1 SWARM_REPLICAS_STATUS_PROJECTOR=1 SWARM_REPLICAS_PGBOUNCER=1 ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
       'docker service update --publish-add published=5432,target=5432 opsknight-load_opsknight-db 2>/dev/null || true',
       'sleep 5',
     ],
@@ -661,7 +666,7 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     baseUrl: 'http://127.0.0.1:3100',
     deployCommands: [
       'docker swarm init 2>/dev/null || true',
-      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=split ENABLE_PGBOUNCER=true SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.split.override.yml SWARM_REPLICAS_WEB=2 SWARM_REPLICAS_SCHEDULER=2 SWARM_REPLICAS_GENERAL_WORKER=2 SWARM_REPLICAS_CRITICAL_WORKER=2 SWARM_REPLICAS_BULK_WORKER=2 SWARM_REPLICAS_STATUS_PROJECTOR=2 SWARM_REPLICAS_PGBOUNCER=2 ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
+      'SWARM_STACK_NAME=opsknight-load SWARM_RUNTIME_MODE=split ENABLE_PGBOUNCER=true SWARM_EXTRA_STACK_FILE=tests/load/deploy/swarm/load.split.override.yml SWARM_REPLICAS_WEB=2 SWARM_REPLICAS_SCHEDULER=2 SWARM_REPLICAS_GENERAL_WORKER=2 SWARM_REPLICAS_CRITICAL_WORKER=2 SWARM_REPLICAS_BULK_WORKER=2 SWARM_REPLICAS_RUNBOOK_WORKER=2 SWARM_REPLICAS_STATUS_PROJECTOR=2 SWARM_REPLICAS_PGBOUNCER=2 ALLOW_INSECURE_SECRETS=true bash deploy/swarm/scripts/deploy.sh',
       'docker service update --publish-add published=5432,target=5432 opsknight-load_opsknight-db 2>/dev/null || true',
       'sleep 5',
     ],
@@ -697,7 +702,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     name: 'Phase 6 Mega: Kind Helm Integrated',
     phase: 6,
     family: 'kind-helm',
-    description: 'Kind Kubernetes Helm chart in integrated runtime mode under 25-min progressive workload',
+    description:
+      'Kind Kubernetes Helm chart in integrated runtime mode under 25-min progressive workload',
     baseUrl: 'http://127.0.0.1:3100',
     k8sNamespace: 'helm-test',
     deployCommands: [
@@ -712,7 +718,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
       {
         name: 'k8s_helm_restart_app_pod',
         role: 'app',
-        faultCommand: 'kubectl delete pod -n helm-test -l app.kubernetes.io/name=opsknight --wait=false',
+        faultCommand:
+          'kubectl delete pod -n helm-test -l app.kubernetes.io/name=opsknight --wait=false',
       },
     ],
     teardownCommands: [
@@ -735,7 +742,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     name: 'Phase 6 Mega: Kind Helm Split',
     phase: 6,
     family: 'kind-helm',
-    description: 'Kind Kubernetes Helm chart with split worker roles without PgBouncer under 25-min progressive workload',
+    description:
+      'Kind Kubernetes Helm chart with split worker roles without PgBouncer under 25-min progressive workload',
     baseUrl: 'http://127.0.0.1:3100',
     k8sNamespace: 'helm-test',
     deployCommands: [
@@ -750,7 +758,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
       {
         name: 'k8s_helm_delete_critical_worker_pod',
         role: 'critical-worker',
-        faultCommand: 'kubectl delete pod -n helm-test -l opsknight-role=critical-worker --wait=false',
+        faultCommand:
+          'kubectl delete pod -n helm-test -l opsknight-role=critical-worker --wait=false',
       },
     ],
     teardownCommands: [
@@ -774,7 +783,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     name: 'Phase 6 Mega: Kind Helm Split + PgBouncer',
     phase: 6,
     family: 'kind-helm',
-    description: 'Kind Kubernetes Helm chart with split worker roles and PgBouncer under 25-min progressive workload',
+    description:
+      'Kind Kubernetes Helm chart with split worker roles and PgBouncer under 25-min progressive workload',
     baseUrl: 'http://127.0.0.1:3100',
     k8sNamespace: 'helm-test',
     deployCommands: [
@@ -789,12 +799,14 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
       {
         name: 'k8s_helm_delete_critical_worker_pod',
         role: 'critical-worker',
-        faultCommand: 'kubectl delete pod -n helm-test -l opsknight-role=critical-worker --wait=false',
+        faultCommand:
+          'kubectl delete pod -n helm-test -l opsknight-role=critical-worker --wait=false',
       },
       {
         name: 'k8s_helm_delete_pgbouncer_pod',
         role: 'pgbouncer',
-        faultCommand: 'kubectl delete pod -n helm-test -l app.kubernetes.io/component=pgbouncer --wait=false',
+        faultCommand:
+          'kubectl delete pod -n helm-test -l app.kubernetes.io/component=pgbouncer --wait=false',
       },
     ],
     teardownCommands: [
@@ -837,7 +849,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
       {
         name: 'k8s_kustomize_restart_app_pod',
         role: 'app',
-        faultCommand: 'kubectl delete pod -n kustomize-test -l app.kubernetes.io/name=opsknight --wait=false',
+        faultCommand:
+          'kubectl delete pod -n kustomize-test -l app.kubernetes.io/name=opsknight --wait=false',
       },
     ],
     teardownCommands: [
@@ -859,7 +872,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     name: 'Phase 6 Mega: Kind Kustomize Split',
     phase: 6,
     family: 'kind-kustomize',
-    description: 'Kind Kubernetes Kustomize split profile without PgBouncer under 25-min progressive workload',
+    description:
+      'Kind Kubernetes Kustomize split profile without PgBouncer under 25-min progressive workload',
     baseUrl: 'http://127.0.0.1:3100',
     k8sNamespace: 'kustomize-test',
     deployCommands: [
@@ -878,7 +892,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
       {
         name: 'k8s_kustomize_delete_critical_worker_pod',
         role: 'critical-worker',
-        faultCommand: 'kubectl delete pod -n kustomize-test -l opsknight-role=critical-worker --wait=false',
+        faultCommand:
+          'kubectl delete pod -n kustomize-test -l opsknight-role=critical-worker --wait=false',
       },
     ],
     teardownCommands: [
@@ -901,7 +916,8 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
     name: 'Phase 6 Mega: Kind Kustomize Split + PgBouncer',
     phase: 6,
     family: 'kind-kustomize',
-    description: 'Kind Kubernetes Kustomize split + PgBouncer profile under 25-min progressive workload',
+    description:
+      'Kind Kubernetes Kustomize split + PgBouncer profile under 25-min progressive workload',
     baseUrl: 'http://127.0.0.1:3100',
     k8sNamespace: 'kustomize-test',
     deployCommands: [
@@ -917,12 +933,14 @@ export const TOPOLOGY_MATRIX: TopologyDefinition[] = [
       {
         name: 'k8s_kustomize_delete_critical_worker_pod',
         role: 'critical-worker',
-        faultCommand: 'kubectl delete pod -n kustomize-test -l opsknight-role=critical-worker --wait=false',
+        faultCommand:
+          'kubectl delete pod -n kustomize-test -l opsknight-role=critical-worker --wait=false',
       },
       {
         name: 'k8s_kustomize_delete_bulk_worker_pod',
         role: 'bulk-worker',
-        faultCommand: 'kubectl delete pod -n kustomize-test -l opsknight-role=bulk-worker --wait=false',
+        faultCommand:
+          'kubectl delete pod -n kustomize-test -l opsknight-role=bulk-worker --wait=false',
       },
     ],
     teardownCommands: [
@@ -1006,9 +1024,9 @@ export interface LoadCertificationSummaryV2 extends LoadCertificationSummaryBase
 function isTopologyResult(value: unknown): value is TopologyCertificationResult {
   return Boolean(
     value &&
-      typeof value === 'object' &&
-      typeof (value as TopologyCertificationResult).topologyId === 'string' &&
-      Array.isArray((value as TopologyCertificationResult).scenarios)
+    typeof value === 'object' &&
+    typeof (value as TopologyCertificationResult).topologyId === 'string' &&
+    Array.isArray((value as TopologyCertificationResult).scenarios)
   );
 }
 
@@ -1038,7 +1056,9 @@ export function parseCertificationSummary(value: unknown): TopologyCertification
       !envelope.scaleDimensions ||
       typeof envelope.scaleDimensions !== 'object')
   ) {
-    throw new Error('Invalid load-certification summary v2: scale profile and dimensions are required');
+    throw new Error(
+      'Invalid load-certification summary v2: scale profile and dimensions are required'
+    );
   }
   const results = envelope.results;
   if (!Array.isArray(results) || !results.every(isTopologyResult)) {
@@ -1061,9 +1081,7 @@ export function assertCertificationSummaryMergeCompatible(
   }
   const envelope = value as Partial<LoadCertificationSummaryV2>;
   if (envelope.schemaVersion !== 2) {
-    throw new Error(
-      'Cannot merge partial load-certification evidence from a pre-v2 summary'
-    );
+    throw new Error('Cannot merge partial load-certification evidence from a pre-v2 summary');
   }
   const sameDimensions =
     JSON.stringify(envelope.scaleDimensions) === JSON.stringify(expected.scaleDimensions);
@@ -1198,7 +1216,10 @@ export interface QueueSnapshot {
   containerStats?: string;
 }
 
-export async function captureQueueSnapshot(prisma: PrismaClient, stage: string): Promise<QueueSnapshot> {
+export async function captureQueueSnapshot(
+  prisma: PrismaClient,
+  stage: string
+): Promise<QueueSnapshot> {
   const now = new Date();
   const [
     pendingCriticalDue,
@@ -1277,7 +1298,11 @@ export async function captureQueueSnapshot(prisma: PrismaClient, stage: string):
         status: 'FAILED',
       },
     }),
-    prisma.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint AS count FROM pg_stat_activity WHERE datname = 'opsknight_db';`.catch(() => [{ count: BigInt(0) }]),
+    prisma.$queryRaw<
+      Array<{ count: bigint }>
+    >`SELECT COUNT(*)::bigint AS count FROM pg_stat_activity WHERE datname = 'opsknight_db';`.catch(
+      () => [{ count: BigInt(0) }]
+    ),
   ]);
 
   const pendingCritical = pendingCriticalDue + futureScheduledCritical;
@@ -1371,7 +1396,8 @@ async function runK6Scenario(options: {
       }
     );
   } catch (err) {
-    exitCode = typeof (err as { code?: number }).code === 'number' ? (err as { code: number }).code : 1;
+    exitCode =
+      typeof (err as { code?: number }).code === 'number' ? (err as { code: number }).code : 1;
     const stderr = (err as { stderr?: string }).stderr;
     if (stderr) {
       console.warn(`    [k6 stderr] ${stderr.trim().split('\n').slice(-10).join('\n    ')}`);
@@ -1543,7 +1569,9 @@ export function deriveCapacityFromScenarios(
     (maxP95Ms === undefined || r.p95Ms <= maxP95Ms);
 
   // 2. Alert Ingestion (Strict thresholds: errorRate <= 1%, p95 <= 500ms)
-  const alertRecords = records.filter(r => r.scenario.includes('alert-ingestion') || r.scenario.includes('mega-journey'));
+  const alertRecords = records.filter(
+    r => r.scenario.includes('alert-ingestion') || r.scenario.includes('mega-journey')
+  );
   const validAlertRecords = alertRecords.filter(r => isScenarioPassing(r, 0.01, 500));
   const maxSustainedAlertRps =
     validAlertRecords.length > 0 ? Math.max(...validAlertRecords.map(r => r.rps)) : 0;
@@ -1564,12 +1592,13 @@ export function deriveCapacityFromScenarios(
   // 4. Escalations (Strict thresholds: errorRate <= 1%)
   const escRecords = records.filter(r => r.scenario.includes('escalation'));
   const validEscRecords = escRecords.filter(r => isScenarioPassing(r, 0.01, 2000));
-  const maxEscRps =
-    validEscRecords.length > 0 ? Math.max(...validEscRecords.map(r => r.rps)) : 0;
+  const maxEscRps = validEscRecords.length > 0 ? Math.max(...validEscRecords.map(r => r.rps)) : 0;
 
   // 5. Concurrent users (VUs) (Strict thresholds: p95 <= 1000ms, errorRate <= 1%)
   const levelToVUs: Record<string, number> = { L0: 5, L1: 25, L2: 100, L3: 300, L4: 1000 };
-  const lifecycleRecords = records.filter(r => r.scenario.includes('incident-lifecycle') || r.scenario.includes('user-workload'));
+  const lifecycleRecords = records.filter(
+    r => r.scenario.includes('incident-lifecycle') || r.scenario.includes('user-workload')
+  );
   const validLifecycleRecords = lifecycleRecords.filter(r => isScenarioPassing(r, 0.01, 1000));
   const maxVUs =
     validLifecycleRecords.length > 0
@@ -1597,18 +1626,22 @@ export function deriveCapacityFromScenarios(
   const usersPerCore = Math.round(maxVUs / cpuCores);
   const dbConnectionsPer100Rps =
     maxSustainedAlertRps > 0
-      ? (Math.min(100, Math.max(5, (100 / maxSustainedAlertRps) * 8))).toFixed(1)
+      ? Math.min(100, Math.max(5, (100 / maxSustainedAlertRps) * 8)).toFixed(1)
       : 'N/A';
 
   let deploymentRecommendation = 'General evaluation';
   if (maxSustainedAlertRps < 200) {
-    deploymentRecommendation = 'Small scale / single-team setups (< 200 RPS). Simple, lowest overhead.';
+    deploymentRecommendation =
+      'Small scale / single-team setups (< 200 RPS). Simple, lowest overhead.';
   } else if (maxSustainedAlertRps < 800) {
-    deploymentRecommendation = 'Medium scale production (200-800 RPS). Worker role isolation protects critical paging.';
+    deploymentRecommendation =
+      'Medium scale production (200-800 RPS). Worker role isolation protects critical paging.';
   } else if (maxSustainedAlertRps < 2000) {
-    deploymentRecommendation = 'Large enterprise production (800-2,000 RPS). PgBouncer transaction pooling eliminates connection ceiling.';
+    deploymentRecommendation =
+      'Large enterprise production (800-2,000 RPS). PgBouncer transaction pooling eliminates connection ceiling.';
   } else {
-    deploymentRecommendation = 'Enterprise HA multi-cluster (2,000+ RPS). Multi-replica redundancy and auto-scaling.';
+    deploymentRecommendation =
+      'Enterprise HA multi-cluster (2,000+ RPS). Multi-replica redundancy and auto-scaling.';
   }
 
   return {
@@ -1706,27 +1739,51 @@ export function generateCertificationMarkdownReport(
 
   lines.push('', '## 3. Evidence-Based Deployment Sizing Guidance', '');
   lines.push('### 3.1 Empirically Measured Limits (Phase 6 Testbed)');
-  lines.push('- **Docker Compose Split + PgBouncer**: Peak **230.5 Alert RPS** (single-worker process CPU saturation limit under L9 catastrophic storm).');
-  lines.push('- **Docker Swarm HA Split + PgBouncer (2 Replicas)**: Peak **104.6 Alert RPS** (Docker Swarm ingress routing mesh and overlay network latency boundary).');
-  lines.push('- **Kubernetes Helm Split + PgBouncer (Kind 4-Node, 3 Workers)**: Peak **95.5 Alert RPS** (100% invariants certified, zero queue backlog / 0ms drain across progressive L1–L8).');
-  lines.push('- **Kubernetes Kustomize Split + PgBouncer (Kind 4-Node, 3 Workers)**: Peak **66.1 Alert RPS** (targeted baseline and breaking-point ramp).');
+  lines.push(
+    '- **Docker Compose Split + PgBouncer**: Peak **230.5 Alert RPS** (single-worker process CPU saturation limit under L9 catastrophic storm).'
+  );
+  lines.push(
+    '- **Docker Swarm HA Split + PgBouncer (2 Replicas)**: Peak **104.6 Alert RPS** (Docker Swarm ingress routing mesh and overlay network latency boundary).'
+  );
+  lines.push(
+    '- **Kubernetes Helm Split + PgBouncer (Kind 4-Node, 3 Workers)**: Peak **95.5 Alert RPS** (100% invariants certified, zero queue backlog / 0ms drain across progressive L1–L8).'
+  );
+  lines.push(
+    '- **Kubernetes Kustomize Split + PgBouncer (Kind 4-Node, 3 Workers)**: Peak **66.1 Alert RPS** (targeted baseline and breaking-point ramp).'
+  );
   lines.push('');
   lines.push('### 3.2 Target / Theoretical Multi-Replica Production Sizing Guidance');
   lines.push('> [!NOTE]');
-  lines.push('> Sizing tiers above the single-node / 4-node testbed maximums (> 230 RPS) represent theoretical scaling models predicated on horizontal replica autoscaling (HPA) and managed multi-AZ PostgreSQL; they are not single-instance Phase 6 measured limits.');
+  lines.push(
+    '> Sizing tiers above the single-node / 4-node testbed maximums (> 230 RPS) represent theoretical scaling models predicated on horizontal replica autoscaling (HPA) and managed multi-AZ PostgreSQL; they are not single-instance Phase 6 measured limits.'
+  );
   lines.push('');
   lines.push('- **Small Setup (< 200 Alert RPS, < 100 VUs)**:');
   lines.push('  - *Recommended*: **Compose Integrated** or **Helm/Swarm Integrated**.');
-  lines.push('  - *Rationale*: Single container process minimizes memory footprint and operational complexity while comfortably supporting normal on-call workloads.');
+  lines.push(
+    '  - *Rationale*: Single container process minimizes memory footprint and operational complexity while comfortably supporting normal on-call workloads.'
+  );
   lines.push('- **Medium Setup (200 – 800 Alert RPS, 100 – 500 VUs) [Target Architecture]**:');
   lines.push('  - *Recommended*: **Compose Split** or **Swarm/Helm Split**.');
-  lines.push('  - *Rationale*: Dedicated worker roles ensure that high-volume bulk or general jobs cannot starve critical paging and escalation notifications.');
+  lines.push(
+    '  - *Rationale*: Dedicated worker roles ensure that high-volume bulk or general jobs cannot starve critical paging and escalation notifications.'
+  );
   lines.push('- **Large Setup (800 – 2,000 Alert RPS, 500 – 2,000 VUs) [Target Architecture]**:');
-  lines.push('  - *Recommended*: **Compose Split + PgBouncer** or **Helm/Kustomize Split + PgBouncer**.');
-  lines.push('  - *Rationale*: PgBouncer transaction-mode pooling decouples 200+ Prisma client connections from the PostgreSQL engine connection limit.');
-  lines.push('- **Enterprise HA Setup (2,000+ Alert RPS, Multi-AZ / High Availability) [Target Architecture]**:');
-  lines.push('  - *Recommended*: **Kind/Kubernetes (or Swarm HA) Split + PgBouncer + External HA PostgreSQL**.');
-  lines.push('  - *Rationale*: Zero single-point-of-failure topology with PodDisruptionBudgets, automated rolling rollouts, horizontal replica scaling, and outbox failure isolation.');
+  lines.push(
+    '  - *Recommended*: **Compose Split + PgBouncer** or **Helm/Kustomize Split + PgBouncer**.'
+  );
+  lines.push(
+    '  - *Rationale*: PgBouncer transaction-mode pooling decouples 200+ Prisma client connections from the PostgreSQL engine connection limit.'
+  );
+  lines.push(
+    '- **Enterprise HA Setup (2,000+ Alert RPS, Multi-AZ / High Availability) [Target Architecture]**:'
+  );
+  lines.push(
+    '  - *Recommended*: **Kind/Kubernetes (or Swarm HA) Split + PgBouncer + External HA PostgreSQL**.'
+  );
+  lines.push(
+    '  - *Rationale*: Zero single-point-of-failure topology with PodDisruptionBudgets, automated rolling rollouts, horizontal replica scaling, and outbox failure isolation.'
+  );
 
   lines.push('', '## 4. Benchmark Measured Telemetry Summary', '');
   lines.push(
@@ -1746,13 +1803,25 @@ export function generateCertificationMarkdownReport(
   }
 
   lines.push('', '## 5. Standardized Resource Profiles', '');
-  lines.push('- **Host Specifications**: 10-core CPU, 16 GB RAM, Darwin arm64 / Linux x86_64, Docker Engine 28.x, Kind v0.31.0.');
+  lines.push(
+    '- **Host Specifications**: 10-core CPU, 16 GB RAM, Darwin arm64 / Linux x86_64, Docker Engine 28.x, Kind v0.31.0.'
+  );
   lines.push('- **Docker Compose**:');
-  lines.push('  - Integrated: 1 container (web+worker), max DB pool = 40, PostgreSQL max_connections = 100.');
-  lines.push('  - Split: web (pool=10), critical-worker (pool=15), general-worker (pool=15), bulk-worker (pool=10), status-projector (pool=5).');
-  lines.push('  - PgBouncer: Transaction mode pooling, max 200 client connections -> 30 server connections.');
-  lines.push('- **Docker Swarm HA**: 2x Web, 2x Critical Worker, 2x General Worker, 2x Bulk Worker, 2x Status Projector, 2x PgBouncer.');
-  lines.push('- **Kind Kubernetes (4-Node)**: 1 Control Plane + 3 Worker Nodes, PodDisruptionBudgets (`minAvailable: 1`), isolated worker CPU/RAM quotas.');
+  lines.push(
+    '  - Integrated: 1 container (web+worker), max DB pool = 40, PostgreSQL max_connections = 100.'
+  );
+  lines.push(
+    '  - Split: web (pool=10), critical-worker (pool=15), general-worker (pool=15), bulk-worker (pool=10), runbook-worker (pool=3), status-projector (pool=5).'
+  );
+  lines.push(
+    '  - PgBouncer: Transaction mode pooling, max 200 client connections -> 30 server connections.'
+  );
+  lines.push(
+    '- **Docker Swarm HA**: 2x Web, 2x Critical Worker, 2x General Worker, 2x Bulk Worker, 2x Runbook Worker, 2x Status Projector, 2x PgBouncer.'
+  );
+  lines.push(
+    '- **Kind Kubernetes (4-Node)**: 1 Control Plane + 3 Worker Nodes, PodDisruptionBudgets (`minAvailable: 1`), isolated worker CPU/RAM quotas.'
+  );
 
   lines.push('', '## 6. Correctness Invariant Certification', '');
   lines.push(
@@ -1880,8 +1949,7 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
   process.env.OPSKNIGHT_LOAD_CERT_DB = 'true';
   process.env.OPSKNIGHT_ALLOW_LOAD_DB_SEED = 'true';
   if (!process.env.ENCRYPTION_KEY) {
-    process.env.ENCRYPTION_KEY =
-      '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08';
+    process.env.ENCRYPTION_KEY = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08';
   }
   if (
     !process.env.NEXTAUTH_SECRET ||
@@ -1900,7 +1968,9 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
       const startedAt = new Date().toISOString();
       const topologyDir = path.join(artifactsRoot, topology.id);
       await fs.mkdir(topologyDir, { recursive: true });
-      console.log(`\n=== [Phase ${topology.phase}] Deploying ${topology.id} (${topology.name}) ===`);
+      console.log(
+        `\n=== [Phase ${topology.phase}] Deploying ${topology.id} (${topology.name}) ===`
+      );
 
       if (!opts.skipDeploy) {
         for (const cmd of topology.deployCommands) {
@@ -1955,7 +2025,11 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
           );
 
           // If running recovery.js and topology has recovery drills, trigger all declared recovery drills
-          if (scenarioFile === 'recovery.js' && topology.recoveryDrills.length > 0 && !opts.skipDeploy) {
+          if (
+            scenarioFile === 'recovery.js' &&
+            topology.recoveryDrills.length > 0 &&
+            !opts.skipDeploy
+          ) {
             for (const drill of topology.recoveryDrills) {
               const drillSummaryPath = path.join(
                 topologyDir,
@@ -2089,7 +2163,9 @@ export async function runLoadCertificationOrchestrator(argv = process.argv.slice
       try {
         await runLoadCleanup();
       } catch (cleanupErr) {
-        console.warn(`  [Cleanup] Warning during cleanup for ${topology.id}: ${(cleanupErr as Error).message}`);
+        console.warn(
+          `  [Cleanup] Warning during cleanup for ${topology.id}: ${(cleanupErr as Error).message}`
+        );
       }
 
       if (!opts.skipDeploy) {

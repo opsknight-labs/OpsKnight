@@ -64,6 +64,20 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  name: opsknight-runbook-worker-network-policy
+  namespace: opsknight
+spec:
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 10.24.0.0/16
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
   name: opsknight-status-projector-network-policy
   namespace: opsknight
 spec:

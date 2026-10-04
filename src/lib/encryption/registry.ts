@@ -173,6 +173,26 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
     label: 'Web Push Subscription Token',
     description: 'Encrypted Web Push Subscription JSON for user notification devices',
   },
+  {
+    id: 'runbook-secret.value',
+    model: 'RunbookSecret',
+    field: 'valueEncrypted',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: false,
+    label: 'Runbook Secret Value',
+    description:
+      'Encrypted secret value used in runbook execution (database passwords, API tokens, etc.)',
+  },
+  {
+    id: 'runbook-execution-signing-key.private-key',
+    model: 'RunbookExecutionSigningKey',
+    field: 'privateKeyEncrypted',
+    storageType: 'SCALAR',
+    plaintextLegacyAllowed: false,
+    label: 'Runbook Execution Signing Private Key',
+    description:
+      'Ed25519 private key authenticating execution envelopes and lease acknowledgements',
+  },
 ];
 
 /**

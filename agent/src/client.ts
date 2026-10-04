@@ -1,0 +1,174 @@
+import { createHash, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
+import { hostname, platform } from 'node:os';
+import type { AgentIdentity, ClaimedAttempt, SpoolRecord } from './types';
+import { verifyLeaseAcknowledgement } from './envelope';
+
+type JsonObject = Record<string, unknown>;
+
+export class AgentApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+  }
+  get terminal() {
+    return [400, 403, 404, 409, 410, 422].includes(this.status);
+  }
+}
+
+export class AgentClient {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly identity: AgentIdentity,
+    private readonly executionPublicKey?: string | Record<string, string>
+  ) {}
+
+  private async request<T>(pathname: string, body: unknown): Promise<T | null> {
+    const raw = JSON.stringify(body);
+    const timestamp = new Date().toISOString();
+    const nonce = randomBytes(24).toString('base64url');
+    const payload = [
+      'POST',
+      new URL(pathname, this.baseUrl).pathname,
+      timestamp,
+      nonce,
+      createHash('sha256').update(raw).digest('hex'),
+    ].join('\n');
+    const signature = sign(null, Buffer.from(payload), this.identity.privateKey).toString('base64');
+    const response = await fetch(new URL(pathname, this.baseUrl), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-opsknight-agent-id': this.identity.agentId,
+        'x-opsknight-timestamp': timestamp,
+        'x-opsknight-nonce': nonce,
+        'x-opsknight-signature': signature,
+      },
+      body: raw,
+      signal: AbortSignal.timeout(35_000),
+    });
+    if (response.status === 204) return null;
+    const json = (await response.json()) as JsonObject;
+    if (!response.ok)
+      throw new AgentApiError(
+        String(json.error ?? `Agent API returned ${response.status}.`),
+        response.status
+      );
+    return (json.data ?? json) as T;
+  }
+
+  heartbeat(input: {
+    capabilities: string[];
+    policyHash: string;
+    spoolDepth: number;
+    deadLetterDepth: number;
+    activeAttemptCount: number;
+    lastError: string | null;
+    capabilityReport?: {
+      name: string;
+      type: string;
+      configured: boolean;
+      available: boolean;
+      reason: string | null;
+    }[];
+    trustedSigningKeys?: string[];
+  }) {
+    return this.request('/api/runbook-agent/v1/heartbeat', {
+      hostname: hostname(),
+      version: process.env.npm_package_version ?? '2.0.0',
+      platform: platform(),
+      ...input,
+    });
+  }
+
+  async claim(): Promise<ClaimedAttempt | null> {
+    const result = await this.request<{ attempt: ClaimedAttempt }>(
+      '/api/runbook-agent/v1/claim?waitSeconds=25',
+      {}
+    );
+    return result?.attempt ?? null;
+  }
+
+  private async leaseRequest<T extends JsonObject>(
+    pathname: string,
+    attemptId: string,
+    leaseToken: string,
+    body: unknown = { leaseToken }
+  ): Promise<T> {
+    const value = await this.request<T>(pathname, body);
+    if (!value || !this.executionPublicKey)
+      throw new Error('Missing signed lease acknowledgement or pinned key.');
+    verifyLeaseAcknowledgement(
+      value,
+      this.executionPublicKey,
+      this.identity.agentId,
+      attemptId,
+      createHash('sha256').update(leaseToken).digest('hex')
+    );
+    return value;
+  }
+
+  start(attemptId: string, leaseToken: string) {
+    return this.leaseRequest<{
+      startedAt: string;
+      leaseExpiresAt: string;
+      alreadyStarted: boolean;
+    }>(`/api/runbook-agent/v1/jobs/${attemptId}/start`, attemptId, leaseToken);
+  }
+
+  renew(attemptId: string, leaseToken: string) {
+    return this.leaseRequest<{ cancelRequested: boolean; leaseExpiresAt: string }>(
+      `/api/runbook-agent/v1/jobs/${attemptId}/heartbeat`,
+      attemptId,
+      leaseToken
+    );
+  }
+
+  async submit(record: SpoolRecord) {
+    const result = await this.leaseRequest<{ accepted: boolean }>(
+      `/api/runbook-agent/v1/jobs/${record.attemptId}/result`,
+      record.attemptId,
+      record.leaseToken,
+      record
+    );
+    if (result.accepted !== true) throw new Error('Result was not acknowledged.');
+    return result;
+  }
+
+  uploadArtifact(input: JsonObject) {
+    return this.leaseRequest<{ id: string }>(
+      '/api/runbook-agent/v1/artifacts',
+      String(input.attemptId),
+      String(input.leaseToken),
+      input
+    );
+  }
+}
+
+export async function enrollAgent(baseUrl: string, token: string): Promise<AgentIdentity> {
+  const { privateKey, publicKey } = generateKeyPairSync('ed25519', {
+    privateKeyEncoding: { format: 'pem', type: 'pkcs8' },
+    publicKeyEncoding: { format: 'pem', type: 'spki' },
+  });
+  const response = await fetch(new URL('/api/runbook-agent/v1/enroll', baseUrl), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      token,
+      publicKey,
+      hostname: hostname(),
+      version: process.env.npm_package_version ?? '2.0.0',
+      platform: platform(),
+    }),
+  });
+  const json = (await response.json()) as {
+    data?: { agent: { id: string } };
+    agent?: { id: string };
+    error?: string;
+  };
+  if (!response.ok) throw new Error(json.error ?? 'Agent enrollment failed.');
+  const agent = json.data?.agent ?? json.agent;
+  if (!agent) throw new Error('Agent enrollment response did not include an identity.');
+  return { agentId: agent.id, privateKey, publicKey };
+}

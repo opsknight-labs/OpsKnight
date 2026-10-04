@@ -35,6 +35,13 @@ spec:
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
+metadata: { name: opsknight-runbook-worker-pdb, namespace: opsknight }
+spec:
+  minAvailable: 1
+  selector: { matchLabels: { app: opsknight-app, opsknight-role: runbook-worker } }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
 metadata: { name: opsknight-status-projector-pdb, namespace: opsknight }
 spec:
   minAvailable: 1

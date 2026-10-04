@@ -1,0 +1,15 @@
+{
+  "allowedStepTypes": ["LINUX_DIAGNOSTICS", "SYSTEMD"],
+  "allowNonIdempotent": false,
+  "systemdUnits": ["opsknight.service", "payments-api.service"],
+  "dockerContainers": [],
+  "podmanContainers": [],
+  "kubernetesNamespaces": [],
+  "kubernetesActions": ["get", "describe", "logs", "events", "rollout-status"],
+  "kubernetesMaxReplicas": 0,
+  "networkHosts": [],
+  "networkPorts": [],
+  "bashCommandPatterns": ["journalctl -u opsknight.service --since -15min"],
+  "maxRuntimeSeconds": 300,
+  "maxOutputBytes": 1048576
+}
