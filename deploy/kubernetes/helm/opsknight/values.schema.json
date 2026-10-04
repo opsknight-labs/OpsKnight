@@ -36,7 +36,8 @@
         "hostname": { "type": "string" },
         "nextTelemetryDisabled": { "type": ["string", "boolean"] },
         "notificationControlPlanePersonal": { "type": ["string", "boolean"] },
-        "allowInsecureSecrets": { "type": ["string", "boolean"] }
+        "allowInsecureSecrets": { "type": ["string", "boolean"] },
+        "runbookArtifactRetentionDays": { "type": "integer", "minimum": 1, "maximum": 3650 }
       }
     },
     "web": { "$ref": "#/definitions/webRole" },

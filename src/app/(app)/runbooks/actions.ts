@@ -254,7 +254,7 @@ export async function removeAgentFromPoolAction(memberId: string) {
 }
 
 export async function createRunbookSecretAction(formData: FormData) {
-  const actor = await assertCapability(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
+  const actor = await assertCapability(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
   const secret = await createRunbookSecret(
     {
       name: readString(formData, 'name'),
@@ -268,7 +268,7 @@ export async function createRunbookSecretAction(formData: FormData) {
 }
 
 export async function grantRunbookSecretAction(secretId: string, formData: FormData) {
-  const actor = await assertCapability(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
+  const actor = await assertCapability(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
   await grantRunbookSecret(
     idSchema.parse(secretId),
     parseTarget(readString(formData, 'target')),
@@ -278,7 +278,7 @@ export async function grantRunbookSecretAction(secretId: string, formData: FormD
 }
 
 export async function revokeRunbookSecretGrantAction(grantId: string) {
-  const actor = await assertCapability(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
+  const actor = await assertCapability(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
   await revokeRunbookSecretGrant(idSchema.parse(grantId), actor.id);
   revalidatePath('/runbooks/agents');
 }

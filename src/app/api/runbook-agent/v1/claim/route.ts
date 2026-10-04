@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const deadline = Date.now() + waitSeconds * 1000;
     let attempt = await claimAgentAttempt(agent.id);
     while (!attempt && Date.now() < deadline) {
-      await new Promise(resolve => setTimeout(resolve, 750 + Math.floor(Math.random() * 500)));
+      await new Promise(resolve => setTimeout(resolve, 2_000 + Math.floor(Math.random() * 3_001)));
       attempt = await claimAgentAttempt(agent.id);
     }
     return attempt ? jsonOk({ attempt }) : new NextResponse(null, { status: 204 });

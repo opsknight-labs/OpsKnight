@@ -77,6 +77,7 @@ export default async function RunbookAgentsPage() {
     }),
   ]);
   const canManage = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
+  const canManageSecrets = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
   const activeAgents = agents.filter(agent => agent.status !== 'REVOKED');
 
   return (
@@ -291,7 +292,7 @@ export default async function RunbookAgentsPage() {
           Values are encrypted at rest and never displayed after creation. Every secret must be
           granted to a specific agent or pool.
         </p>
-        {canManage && activeAgents.length + pools.length > 0 && (
+        {canManageSecrets && activeAgents.length + pools.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Create secret</CardTitle>
@@ -348,7 +349,7 @@ export default async function RunbookAgentsPage() {
                           ? `Pool · ${grant.agentPool.name}`
                           : `Agent · ${grant.agent?.name || 'Deleted'}`}
                       </span>
-                      {canManage && (
+                      {canManageSecrets && (
                         <form action={revokeRunbookSecretGrantAction.bind(null, grant.id)}>
                           <Button
                             type="submit"
@@ -366,7 +367,7 @@ export default async function RunbookAgentsPage() {
                     <p className="text-sm text-destructive">No target can access this secret.</p>
                   )}
                 </div>
-                {canManage && activeAgents.length + pools.length > 0 && (
+                {canManageSecrets && activeAgents.length + pools.length > 0 && (
                   <form
                     action={grantRunbookSecretAction.bind(null, secret.id)}
                     className="flex gap-2"

@@ -12,6 +12,8 @@ import {
   isSecretReference,
   extractSecretName,
   collectSecretReferences,
+  containsSecretReference,
+  resolveInputTemplates,
   computePlanDigest,
   computeTriggerFingerprint,
   validateDefinition,
@@ -60,6 +62,40 @@ describe('Runbook Definition Module', () => {
         name: 'Missing schemaVersion and steps',
       };
       expect(() => parseRunbookDefinition(invalidDef)).toThrow(RunbookDefinitionError);
+    });
+
+    it('rejects risk declarations below executable semantics', () => {
+      const definition = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'SYSTEMD',
+            riskClass: 'READ_ONLY',
+            config: { action: 'restart', unit: 'api.service' },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(definition)).toThrow(/IDEMPOTENT_WRITE/);
+    });
+
+    it('rejects unsafe target syntax and unsupported delayed verification', () => {
+      const unsafeTarget = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'DOCKER',
+            config: { action: 'inspect', container: '--host=attacker' },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(unsafeTarget)).toThrow(/invalid Docker container/);
+
+      const delayedVerification = createMockDefinition({
+        steps: [
+          createMockStep({
+            verification: { delaySeconds: 10, steps: [createMockStep({ key: 'verify' })] },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(delayedVerification)).toThrow(/explicit WAIT/);
     });
   });
 
@@ -162,6 +198,48 @@ describe('Runbook Definition Module', () => {
       const flattened = flattenSteps(def);
       expect(flattened).toHaveLength(3);
       expect(flattened.map(s => s.key)).toEqual(['pre', 'main', 'post']);
+    });
+
+    it('recursively expands nested prechecks and verification', () => {
+      const def = createMockDefinition({
+        steps: [
+          createMockStep({
+            key: 'main',
+            precheck: {
+              steps: [
+                createMockStep({
+                  key: 'pre',
+                  verification: { steps: [createMockStep({ key: 'nested-verify' })] },
+                }),
+              ],
+            },
+          }),
+        ],
+      });
+      expect(flattenSteps(def).map(step => step.key)).toEqual(['pre', 'nested-verify', 'main']);
+    });
+  });
+
+  describe('resolveInputTemplates', () => {
+    it('preserves exact input types and interpolates scalar text', () => {
+      expect(
+        resolveInputTemplates(
+          { replicas: '${{ inputs.count }}', url: 'https://${{ inputs.host }}/health' },
+          { count: 3, host: 'api.internal' }
+        )
+      ).toEqual({ replicas: 3, url: 'https://api.internal/health' });
+    });
+
+    it('fails closed for missing and non-scalar embedded inputs', () => {
+      expect(() => resolveInputTemplates('${{ inputs.missing }}', {})).toThrow(/Missing required/);
+      expect(() => resolveInputTemplates('value=${{ inputs.value }}', { value: {} })).toThrow(
+        /must be scalar/
+      );
+    });
+
+    it('detects nested secret references', () => {
+      expect(containsSecretReference({ headers: ['secret://api-key'] })).toBe(true);
+      expect(containsSecretReference({ headers: ['public'] })).toBe(false);
     });
   });
 

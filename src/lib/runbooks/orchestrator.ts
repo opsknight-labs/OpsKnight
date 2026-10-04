@@ -1,12 +1,18 @@
 import 'server-only';
 
 import crypto from 'crypto';
-import type { Prisma, RunbookExecutionStep } from '@prisma/client';
+import type { IncidentEventType, Prisma, RunbookExecutionStep } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { safeOutboundFetch } from '@/lib/network-security';
-import { computePlanDigest, parseRunbookDefinition } from './definition';
+import {
+  computePlanDigest,
+  containsSecretReference,
+  flattenSteps,
+  parseRunbookDefinition,
+  resolveInputTemplates,
+} from './definition';
 import { matchesCondition } from './matcher';
 import {
   DEFAULT_EXECUTION_TIMEOUT_SECONDS,
@@ -17,9 +23,8 @@ import {
   MAX_OUTPUT_PREVIEW_BYTES,
   isRetryable,
   requiresAgent,
-  type RunbookStepDefinition,
 } from './types';
-import { retryDelayMs, stepRequiresApproval } from './safety';
+import { isRetryableFailure, retryDelayMs, stepRequiresApproval } from './safety';
 import {
   RunbookApprovalPlanChangedError,
   RunbookDefinitionError,
@@ -61,16 +66,18 @@ async function enqueueAdvance(
   });
 }
 
+async function addIncidentRunbookEvent(
+  tx: Prisma.TransactionClient,
+  incidentId: string | null | undefined,
+  type: IncidentEventType,
+  message: string
+) {
+  if (!incidentId) return;
+  await tx.incidentEvent.create({ data: { incidentId, type, message } });
+}
+
 function executionSteps(definition: ReturnType<typeof parseRunbookDefinition>) {
-  const rows: Array<RunbookStepDefinition & { sequence: number }> = [];
-  for (const step of definition.steps) {
-    for (const precheck of step.precheck?.steps ?? [])
-      rows.push({ ...precheck, sequence: rows.length });
-    rows.push({ ...step, sequence: rows.length });
-    for (const verification of step.verification?.steps ?? [])
-      rows.push({ ...verification, sequence: rows.length });
-  }
-  return rows;
+  return flattenSteps(definition).map((step, sequence) => ({ ...step, sequence }));
 }
 
 export async function startRunbookExecution(input: {
@@ -162,6 +169,9 @@ export async function startRunbookExecution(input: {
     const resolvedInputs = binding
       ? (binding.inputValues as Record<string, unknown>)
       : (input.inputValues ?? {});
+    const executionStartedAt = new Date();
+    const executionTimeoutSeconds =
+      definition.defaultTimeoutSeconds ?? DEFAULT_EXECUTION_TIMEOUT_SECONDS;
     const hasWriteAction = steps.some(step => step.riskClass !== 'READ_ONLY');
     if (!input.triggeredByUserId && hasWriteAction) {
       if (!resolvedServiceId) {
@@ -199,7 +209,7 @@ export async function startRunbookExecution(input: {
       const activePoolWrites = await tx.runbookExecutionStep.count({
         where: {
           riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
-          status: { in: ['READY', 'RUNNING', 'WAITING_AGENT'] },
+          status: { in: ['PENDING', 'READY', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
           execution: {
             resolvedTargetAgentPoolId,
             status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
@@ -225,6 +235,8 @@ export async function startRunbookExecution(input: {
         triggeredByUserId: input.triggeredByUserId,
         inputValues: asJson(resolvedInputs),
         definitionChecksum: version.checksum,
+        timeoutSeconds: executionTimeoutSeconds,
+        deadlineAt: new Date(executionStartedAt.getTime() + executionTimeoutSeconds * 1000),
         resolvedTargetAgentId,
         resolvedTargetAgentPoolId,
         steps: {
@@ -236,15 +248,18 @@ export async function startRunbookExecution(input: {
             riskClass: step.riskClass,
             config: asJson(step.config),
             requiresApproval: stepRequiresApproval(step),
-            timeoutSeconds:
-              step.timeoutSeconds ??
-              definition.defaultTimeoutSeconds ??
-              DEFAULT_STEP_TIMEOUT_SECONDS,
+            timeoutSeconds: step.timeoutSeconds ?? DEFAULT_STEP_TIMEOUT_SECONDS,
             maxRetries: step.maxRetries ?? definition.defaultMaxRetries ?? 0,
           })),
         },
       },
     });
+    await addIncidentRunbookEvent(
+      tx,
+      input.incidentId,
+      'RUNBOOK_STARTED',
+      `Runbook started: ${runbook.name}`
+    );
     await enqueueAdvance(tx, execution.id);
     await logAudit(
       {
@@ -286,16 +301,21 @@ function resolvedPlanDigest(
   });
 }
 
-async function executeHttpStep(step: RunbookExecutionStep): Promise<string> {
-  const config = step.config as Record<string, unknown>;
+async function executeHttpStep(
+  step: RunbookExecutionStep,
+  config: Record<string, unknown>,
+  deadlineAt: Date
+): Promise<string> {
   if (typeof config.url !== 'string') throw new RunbookDefinitionError('HTTP step requires a URL.');
   const method = typeof config.method === 'string' ? config.method.toUpperCase() : 'GET';
   if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method))
     throw new RunbookDefinitionError('Unsupported HTTP method.');
   const controller = new AbortController();
+  const remainingMs = deadlineAt.getTime() - Date.now();
+  if (remainingMs <= 0) throw new RunbookDefinitionError('Execution deadline has expired.');
   const timer = setTimeout(
     () => controller.abort(),
-    (step.timeoutSeconds ?? DEFAULT_STEP_TIMEOUT_SECONDS) * 1000
+    Math.min((step.timeoutSeconds ?? DEFAULT_STEP_TIMEOUT_SECONDS) * 1000, remainingMs)
   );
   try {
     const response = await safeOutboundFetch(config.url, {
@@ -323,16 +343,24 @@ async function executeHttpStep(step: RunbookExecutionStep): Promise<string> {
 
 async function processCurrentStep(executionId: string, step: RunbookExecutionStep) {
   if (step.requiresApproval && !step.approvedAt) {
-    await prisma.$transaction([
-      prisma.runbookExecutionStep.updateMany({
+    await prisma.$transaction(async tx => {
+      const changed = await tx.runbookExecutionStep.updateMany({
         where: { id: step.id, status: 'READY' },
         data: { status: 'WAITING_APPROVAL' },
-      }),
-      prisma.runbookExecution.update({
+      });
+      if (changed.count !== 1) return;
+      const execution = await tx.runbookExecution.update({
         where: { id: executionId },
         data: { status: 'WAITING_APPROVAL' },
-      }),
-    ]);
+        select: { incidentId: true },
+      });
+      await addIncidentRunbookEvent(
+        tx,
+        execution.incidentId,
+        'RUNBOOK_APPROVAL_REQUIRED',
+        `Runbook approval required: ${step.name}`
+      );
+    });
     return;
   }
   if (step.type === 'APPROVAL' || step.type === 'MANUAL') {
@@ -340,6 +368,10 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
     return;
   }
   if (step.type === 'WAIT') {
+    const execution = await prisma.runbookExecution.findUniqueOrThrow({
+      where: { id: executionId },
+      select: { deadlineAt: true },
+    });
     const seconds = Number((step.config as Record<string, unknown>).durationSeconds ?? 0);
     if (!Number.isFinite(seconds) || seconds < 0 || seconds > 86400)
       throw new RunbookDefinitionError('Wait duration must be between 0 and 86400 seconds.');
@@ -350,7 +382,11 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
           data: { status: 'RUNNING', startedAt: new Date() },
         });
         if (claimed.count !== 1) return;
-        await enqueueAdvance(tx, executionId, new Date(Date.now() + seconds * 1000));
+        await enqueueAdvance(
+          tx,
+          executionId,
+          new Date(Math.min(Date.now() + seconds * 1000, execution.deadlineAt.getTime()))
+        );
       });
       return;
     }
@@ -402,12 +438,25 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
     return;
   }
   if (step.type === 'HTTP') {
+    const execution = await prisma.runbookExecution.findUniqueOrThrow({
+      where: { id: executionId },
+      select: { deadlineAt: true, inputValues: true },
+    });
+    const config = resolveInputTemplates(
+      step.config,
+      execution.inputValues as Record<string, unknown>
+    ) as Record<string, unknown>;
+    if (containsSecretReference(config)) {
+      throw new RunbookDefinitionError(
+        'HTTP steps cannot consume secret references; use a scoped execution Agent.'
+      );
+    }
     const claimed = await prisma.runbookExecutionStep.updateMany({
       where: { id: step.id, status: 'READY' },
       data: { status: 'RUNNING', startedAt: new Date(), attemptCount: { increment: 1 } },
     });
     if (claimed.count !== 1) return;
-    const output = await executeHttpStep(step);
+    const output = await executeHttpStep(step, config, execution.deadlineAt);
     await completeStep(executionId, step.id, 'SUCCEEDED', output);
     return;
   }
@@ -463,7 +512,10 @@ async function completeStep(
       },
     });
     if (completed.count !== 1) return;
-    await tx.runbookExecution.update({ where: { id: executionId }, data: { status: 'RUNNING' } });
+    await tx.runbookExecution.update({
+      where: { id: executionId },
+      data: { status: 'RUNNING' },
+    });
     await enqueueAdvance(tx, executionId);
   });
 }
@@ -500,19 +552,58 @@ export async function advanceExecution(executionId: string): Promise<void> {
         where: { executionStep: { executionId }, status: 'RUNNING' },
       });
       if (active === 0) {
-        await tx.runbookExecution.updateMany({
+        const cancelled = await tx.runbookExecution.updateMany({
           where: { id: executionId, status: 'CANCEL_REQUESTED' },
           data: { status: 'CANCELLED', completedAt: new Date() },
         });
+        if (cancelled.count === 1) {
+          await addIncidentRunbookEvent(
+            tx,
+            execution.incidentId,
+            'RUNBOOK_CANCELLED',
+            'Runbook execution cancelled.'
+          );
+        }
       }
     });
     return;
   }
-  const timeout = DEFAULT_EXECUTION_TIMEOUT_SECONDS * 1000;
-  if (execution.startedAt && Date.now() - execution.startedAt.getTime() > timeout) {
-    await prisma.runbookExecution.update({
-      where: { id: executionId },
-      data: { status: 'TIMED_OUT', completedAt: new Date(), failureCode: 'EXECUTION_TIMEOUT' },
+  if (execution.deadlineAt <= new Date()) {
+    await prisma.$transaction(async tx => {
+      await tx.runbookStepAttempt.updateMany({
+        where: {
+          executionStep: { executionId },
+          status: { in: ['PENDING', 'CLAIMED'] },
+        },
+        data: {
+          status: 'TIMED_OUT',
+          completedAt: new Date(),
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      await tx.runbookExecutionStep.updateMany({
+        where: {
+          executionId,
+          status: { in: ['PENDING', 'READY', 'WAITING_APPROVAL', 'WAITING_AGENT'] },
+        },
+        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
+      });
+      const timedOut = await tx.runbookExecution.updateMany({
+        where: {
+          id: executionId,
+          status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
+        },
+        data: { status: 'TIMED_OUT', completedAt: new Date(), failureCode: 'EXECUTION_TIMEOUT' },
+      });
+      if (timedOut.count === 1) {
+        await addIncidentRunbookEvent(
+          tx,
+          execution.incidentId,
+          'RUNBOOK_FAILED',
+          'Runbook execution timed out.'
+        );
+      }
     });
     return;
   }
@@ -520,22 +611,48 @@ export async function advanceExecution(executionId: string): Promise<void> {
     step => step.status === 'FAILED' || step.status === 'UNKNOWN'
   );
   if (failed) {
-    await prisma.runbookExecution.update({
-      where: { id: executionId },
-      data: {
-        status: 'FAILED',
-        completedAt: new Date(),
-        failureCode: failed.errorCode ?? 'STEP_FAILED',
-        failureMessage: failed.errorMessage,
-      },
+    await prisma.$transaction(async tx => {
+      const changed = await tx.runbookExecution.updateMany({
+        where: {
+          id: executionId,
+          status: { notIn: ['FAILED', 'SUCCEEDED', 'CANCELLED', 'TIMED_OUT'] },
+        },
+        data: {
+          status: 'FAILED',
+          completedAt: new Date(),
+          failureCode: failed.errorCode ?? 'STEP_FAILED',
+          failureMessage: failed.errorMessage,
+        },
+      });
+      if (changed.count === 1) {
+        await addIncidentRunbookEvent(
+          tx,
+          execution.incidentId,
+          'RUNBOOK_FAILED',
+          `Runbook failed at step: ${failed.name}`
+        );
+      }
     });
     return;
   }
   const current = execution.steps.find(step => !TERMINAL_STEP.has(step.status));
   if (!current) {
-    await prisma.runbookExecution.update({
-      where: { id: executionId },
-      data: { status: 'SUCCEEDED', completedAt: new Date() },
+    await prisma.$transaction(async tx => {
+      const changed = await tx.runbookExecution.updateMany({
+        where: {
+          id: executionId,
+          status: { notIn: ['FAILED', 'SUCCEEDED', 'CANCELLED', 'TIMED_OUT'] },
+        },
+        data: { status: 'SUCCEEDED', completedAt: new Date() },
+      });
+      if (changed.count === 1) {
+        await addIncidentRunbookEvent(
+          tx,
+          execution.incidentId,
+          'RUNBOOK_COMPLETED',
+          'Runbook execution completed.'
+        );
+      }
     });
     return;
   }
@@ -558,10 +675,14 @@ export async function advanceExecution(executionId: string): Promise<void> {
     await processCurrentStep(executionId, owned);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Step failed.';
+    const errorCode = error instanceof RunbookDefinitionError ? 'INVALID_CONFIG' : 'STEP_FAILED';
     await prisma.$transaction(async tx => {
       const latest = await tx.runbookExecutionStep.findUnique({ where: { id: current.id } });
       if (!latest || !['READY', 'RUNNING'].includes(latest.status)) return;
-      const retry = isRetryable(latest.riskClass) && latest.attemptCount <= latest.maxRetries;
+      const retry =
+        isRetryable(latest.riskClass) &&
+        isRetryableFailure(latest.riskClass, errorCode) &&
+        latest.attemptCount <= latest.maxRetries;
       const changed = await tx.runbookExecutionStep.updateMany({
         where: { id: current.id, status: latest.status },
         data: retry
@@ -574,7 +695,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           : {
               status: 'FAILED',
               completedAt: new Date(),
-              errorCode: 'STEP_EXECUTION_FAILED',
+              errorCode,
               errorMessage: message,
             },
       });
@@ -602,6 +723,7 @@ export async function approveExecutionStep(input: {
             inputValues: true,
             resolvedTargetAgentId: true,
             resolvedTargetAgentPoolId: true,
+            incidentId: true,
           },
         },
       },
@@ -628,6 +750,12 @@ export async function approveExecutionStep(input: {
       data: { status: 'RUNNING' },
     });
     await enqueueAdvance(tx, input.executionId);
+    await addIncidentRunbookEvent(
+      tx,
+      step.execution.incidentId,
+      'RUNBOOK_APPROVED',
+      `Runbook step approved: ${step.name}`
+    );
     await logAudit(
       {
         action: 'runbook.execution.step.approved',

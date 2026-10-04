@@ -26,3 +26,21 @@ export function retryDelayMs(attemptNumber: number): number {
 export function canAutomaticallyRetryUnknown(riskClass: RunbookRiskClass): boolean {
   return riskClass === 'READ_ONLY';
 }
+
+const PERMANENT_FAILURE_CODES = new Set([
+  'INVALID_CONFIG',
+  'LOCAL_POLICY_DENIED',
+  'MISSING_SECRET_GRANT',
+  'UNSUPPORTED_ACTION',
+  'EXECUTOR_START_FAILED',
+  'RUNBOOK_DEFINITION_INVALID',
+  'HTTP_OUTBOUND_DENIED',
+]);
+
+/** Deterministic policy/configuration failures must not consume retry budget. */
+export function isRetryableFailure(
+  riskClass: RunbookRiskClass,
+  errorCode?: string | null
+): boolean {
+  return riskClass !== 'NON_IDEMPOTENT' && !PERMANENT_FAILURE_CODES.has(errorCode ?? '');
+}

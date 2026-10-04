@@ -61,11 +61,127 @@ function validateDefinitionStructure(definition: RunbookDefinition): void {
     }
     if (keys.has(current.step.key)) throw new RunbookStepKeyDuplicateError(current.step.key);
     keys.add(current.step.key);
+    validateStepSemantics(current.step);
+    if ((current.step.verification?.delaySeconds ?? 0) > 0) {
+      throw new RunbookDefinitionError(
+        `Step "${current.step.key}" uses verification.delaySeconds, which is not supported. Add an explicit WAIT verification step instead.`
+      );
+    }
     for (const nested of current.step.precheck?.steps ?? []) {
       stack.push({ step: nested, depth: current.depth + 1 });
     }
     for (const nested of current.step.verification?.steps ?? []) {
       stack.push({ step: nested, depth: current.depth + 1 });
+    }
+  }
+}
+
+const RISK_RANK: Record<RunbookRiskClass, number> = {
+  READ_ONLY: 0,
+  IDEMPOTENT_WRITE: 1,
+  NON_IDEMPOTENT: 2,
+};
+
+const INPUT_TEMPLATE = /^\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}$/;
+const SYSTEMD_UNIT =
+  /^[A-Za-z0-9][A-Za-z0-9_.@:-]*\.(?:service|socket|timer|target|mount|path|slice|scope|device|automount|swap)$/;
+const DOCKER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+const KUBERNETES_NAME = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
+
+function configuredString(step: RunbookStepDefinition, key: string, fallback = ''): string {
+  const value = step.config[key];
+  return typeof value === 'string' ? value : fallback;
+}
+
+/** Minimum risk is derived from executable semantics, never author trust. */
+export function minimumRiskForStep(step: RunbookStepDefinition): RunbookRiskClass {
+  switch (step.type) {
+    case 'BASH':
+      return 'NON_IDEMPOTENT';
+    case 'HTTP':
+      return ['GET', 'HEAD'].includes(configuredString(step, 'method', 'GET').toUpperCase())
+        ? 'READ_ONLY'
+        : 'IDEMPOTENT_WRITE';
+    case 'SYSTEMD':
+      return configuredString(step, 'action', 'status') === 'status'
+        ? 'READ_ONLY'
+        : 'IDEMPOTENT_WRITE';
+    case 'DOCKER':
+      return ['inspect', 'logs'].includes(configuredString(step, 'action', 'inspect'))
+        ? 'READ_ONLY'
+        : 'IDEMPOTENT_WRITE';
+    case 'KUBERNETES':
+      return configuredString(step, 'action', 'get') === 'rollout-restart'
+        ? 'IDEMPOTENT_WRITE'
+        : 'READ_ONLY';
+    default:
+      return 'READ_ONLY';
+  }
+}
+
+function validateTarget(value: string, pattern: RegExp, label: string, stepKey: string): void {
+  if (INPUT_TEMPLATE.test(value)) return;
+  if (!value || value.startsWith('-') || !pattern.test(value)) {
+    throw new RunbookDefinitionError(`Step "${stepKey}" has an invalid ${label}.`);
+  }
+}
+
+function validateStepSemantics(step: RunbookStepDefinition): void {
+  const minimumRisk = minimumRiskForStep(step);
+  if (RISK_RANK[step.riskClass] < RISK_RANK[minimumRisk]) {
+    throw new RunbookDefinitionError(
+      `Step "${step.key}" declares ${step.riskClass}, but ${step.type} ${configuredString(step, 'action', configuredString(step, 'method')) || 'execution'} requires at least ${minimumRisk}.`
+    );
+  }
+  if (step.type === 'SYSTEMD') {
+    const action = configuredString(step, 'action', 'status');
+    if (!['status', 'start', 'stop', 'restart'].includes(action)) {
+      throw new RunbookDefinitionError(`Step "${step.key}" has an unsupported systemd action.`);
+    }
+    validateTarget(configuredString(step, 'unit'), SYSTEMD_UNIT, 'systemd unit', step.key);
+  }
+  if (step.type === 'DOCKER') {
+    const action = configuredString(step, 'action', 'inspect');
+    if (!['inspect', 'logs', 'start', 'stop', 'restart'].includes(action)) {
+      throw new RunbookDefinitionError(`Step "${step.key}" has an unsupported Docker action.`);
+    }
+    validateTarget(configuredString(step, 'container'), DOCKER_NAME, 'Docker container', step.key);
+  }
+  if (step.type === 'KUBERNETES') {
+    const action = configuredString(step, 'action', 'get');
+    if (!['get', 'describe', 'logs', 'rollout-restart'].includes(action)) {
+      throw new RunbookDefinitionError(`Step "${step.key}" has an unsupported Kubernetes action.`);
+    }
+    validateTarget(
+      configuredString(step, 'namespace', 'default'),
+      KUBERNETES_NAME,
+      'Kubernetes namespace',
+      step.key
+    );
+    validateTarget(
+      configuredString(step, 'resource', 'pods'),
+      KUBERNETES_NAME,
+      'Kubernetes resource',
+      step.key
+    );
+    const name = configuredString(step, 'name');
+    if (name) validateTarget(name, KUBERNETES_NAME, 'Kubernetes resource name', step.key);
+    if (action === 'rollout-restart' && !name) {
+      throw new RunbookDefinitionError(
+        `Step "${step.key}" requires a Kubernetes resource name for rollout-restart.`
+      );
+    }
+  }
+  if (step.type === 'BASH' && !configuredString(step, 'command')) {
+    throw new RunbookDefinitionError(`Step "${step.key}" requires a Bash command.`);
+  }
+  if (step.type === 'HTTP') {
+    const method = configuredString(step, 'method', 'GET').toUpperCase();
+    if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      throw new RunbookDefinitionError(`Step "${step.key}" has an unsupported HTTP method.`);
+    }
+    if (!configuredString(step, 'url')) {
+      throw new RunbookDefinitionError(`Step "${step.key}" requires an HTTP URL.`);
     }
   }
 }
@@ -157,15 +273,12 @@ function sortJsonValue(value: unknown): unknown {
  */
 export function flattenSteps(definition: RunbookDefinition): RunbookStepDefinition[] {
   const result: RunbookStepDefinition[] = [];
-  for (const step of definition.steps) {
-    if (step.precheck?.steps) {
-      result.push(...step.precheck.steps);
-    }
+  const append = (step: RunbookStepDefinition) => {
+    for (const precheck of step.precheck?.steps ?? []) append(precheck);
     result.push(step);
-    if (step.verification?.steps) {
-      result.push(...step.verification.steps);
-    }
-  }
+    for (const verification of step.verification?.steps ?? []) append(verification);
+  };
+  for (const step of definition.steps) append(step);
   return result;
 }
 
@@ -181,13 +294,10 @@ export function extractStepKeys(definition: RunbookDefinition): string[] {
  * Useful for determining overall runbook risk level.
  */
 export function getMaxRiskClass(definition: RunbookDefinition): RunbookRiskClass {
-  const riskRank = (risk: RunbookRiskClass) =>
-    risk === 'NON_IDEMPOTENT' ? 2 : risk === 'IDEMPOTENT_WRITE' ? 1 : 0;
-
   let maxRisk: RunbookRiskClass = 'READ_ONLY';
 
   for (const step of flattenSteps(definition)) {
-    if (riskRank(step.riskClass) > riskRank(maxRisk)) {
+    if (RISK_RANK[step.riskClass] > RISK_RANK[maxRisk]) {
       maxRisk = step.riskClass;
     }
   }
@@ -224,6 +334,7 @@ export function requiresAnyApproval(definition: RunbookDefinition): boolean {
 // ---------------------------------------------------------------------------
 
 const SECRET_REF_PREFIX = 'secret://';
+const INPUT_TEMPLATE_GLOBAL = /\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}/g;
 
 /**
  * Checks if a value is a secret reference (e.g., "secret://prod-db-password").
@@ -254,6 +365,56 @@ export function collectSecretReferences(inputValues: Record<string, unknown>): S
     }
   }
   return secrets;
+}
+
+/** Resolve input placeholders at dispatch time without coercing exact values. */
+export function resolveInputTemplates(
+  value: unknown,
+  inputValues: Record<string, unknown>,
+  depth = 0
+): unknown {
+  if (depth > 12) throw new RunbookDefinitionError('Step configuration is nested too deeply.');
+  if (Array.isArray(value)) {
+    return value.map(item => resolveInputTemplates(item, inputValues, depth + 1));
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, nested]) => [
+        key,
+        resolveInputTemplates(nested, inputValues, depth + 1),
+      ])
+    );
+  }
+  if (typeof value !== 'string') return value;
+
+  const exact = value.match(INPUT_TEMPLATE);
+  if (exact) {
+    if (!Object.prototype.hasOwnProperty.call(inputValues, exact[1])) {
+      throw new RunbookDefinitionError(`Missing required runbook input "${exact[1]}".`);
+    }
+    return inputValues[exact[1]];
+  }
+  return value.replace(INPUT_TEMPLATE_GLOBAL, (_match, key: string) => {
+    if (!Object.prototype.hasOwnProperty.call(inputValues, key)) {
+      throw new RunbookDefinitionError(`Missing required runbook input "${key}".`);
+    }
+    const resolved = inputValues[key];
+    if (!['string', 'number', 'boolean'].includes(typeof resolved)) {
+      throw new RunbookDefinitionError(
+        `Runbook input "${key}" must be scalar when embedded in text.`
+      );
+    }
+    return String(resolved);
+  });
+}
+
+export function containsSecretReference(value: unknown): boolean {
+  if (isSecretReference(value)) return true;
+  if (Array.isArray(value)) return value.some(containsSecretReference);
+  if (value !== null && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).some(containsSecretReference);
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------

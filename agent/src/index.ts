@@ -144,6 +144,7 @@ async function run() {
       const record: SpoolRecord = {
         attemptId: attempt.attemptId,
         leaseToken: attempt.leaseToken,
+        producedAt: new Date().toISOString(),
         status: result.status,
         exitCode: result.exitCode,
         outputPreview: redactedOutput.slice(0, 32_768),
@@ -165,6 +166,7 @@ async function run() {
         await spool.put({
           attemptId: attempt.attemptId,
           leaseToken: attempt.leaseToken,
+          producedAt: new Date().toISOString(),
           status: 'FAILED',
           errorCode: lastError.startsWith('LOCAL_POLICY_DENIED')
             ? 'LOCAL_POLICY_DENIED'

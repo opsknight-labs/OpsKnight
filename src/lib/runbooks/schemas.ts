@@ -373,6 +373,7 @@ export const agentJobResultSchema = z
   .object({
     attemptId: z.string().cuid(),
     leaseToken: z.string().min(1),
+    producedAt: z.string().datetime().optional(),
     status: z.enum(['SUCCEEDED', 'FAILED', 'CANCELLED', 'UNKNOWN'] as const),
     exitCode: z.number().int().optional(),
     outputPreview: z.string().max(32768).optional(),

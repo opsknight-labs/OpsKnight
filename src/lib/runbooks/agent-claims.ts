@@ -1,7 +1,7 @@
 import 'server-only';
 
 import crypto from 'crypto';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, RunbookStepType } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import {
   agentArtifactSchema,
@@ -12,9 +12,9 @@ import {
 import { sha256 } from './agent-auth';
 import { redactRunbookOutput } from './redaction';
 import { resolveSecretInputValues } from './secrets';
-import { isSecretReference } from './definition';
+import { isSecretReference, resolveInputTemplates } from './definition';
 import { DEFAULT_LEASE_DURATION_SECONDS, isRetryable, isSafeToRetryAfterUnknown } from './types';
-import { agentSupportsStep, retryDelayMs } from './safety';
+import { agentSupportsStep, isRetryableFailure, retryDelayMs } from './safety';
 import {
   RunbookAgentLeaseExpiredError,
   RunbookAgentLeaseTokenMismatchError,
@@ -55,88 +55,127 @@ export async function recordAgentHeartbeat(input: {
 }
 
 export async function claimAgentAttempt(agentId: string) {
-  return prisma.$transaction(
-    async tx => {
-      const agent = await tx.runbookAgent.findFirst({
-        where: { id: agentId, status: { in: ['ONLINE', 'DEGRADED'] } },
-        select: { id: true, capabilities: true },
-      });
-      if (!agent) throw new RunbookAgentNotFoundError(agentId);
-      const candidates = await tx.runbookStepAttempt.findMany({
-        where: {
-          status: 'PENDING',
-          availableAt: { lte: new Date() },
-          claimDeadlineAt: { gt: new Date() },
-          OR: [
-            { targetAgentId: agentId },
-            {
-              targetAgentId: null,
-              targetAgentPool: { members: { some: { agentId } } },
+  for (let transactionAttempt = 0; transactionAttempt < 3; transactionAttempt++) {
+    try {
+      return await prisma.$transaction(
+        async tx => {
+          const now = new Date();
+          const agent = await tx.runbookAgent.findFirst({
+            where: { id: agentId, status: { in: ['ONLINE', 'DEGRADED'] } },
+            select: { id: true, capabilities: true },
+          });
+          if (!agent) throw new RunbookAgentNotFoundError(agentId);
+          const capabilities = Array.isArray(agent.capabilities)
+            ? agent.capabilities.filter((value): value is string => typeof value === 'string')
+            : [];
+          const supportedStepTypes = capabilities
+            .filter(capability => capability.startsWith('RUNBOOK_'))
+            .map(capability => capability.slice('RUNBOOK_'.length))
+            .filter((type): type is RunbookStepType =>
+              ['LINUX_DIAGNOSTICS', 'SYSTEMD', 'DOCKER', 'KUBERNETES', 'BASH'].includes(type)
+            );
+          if (supportedStepTypes.length === 0) return null;
+          const candidates = await tx.runbookStepAttempt.findMany({
+            where: {
+              status: 'PENDING',
+              availableAt: { lte: now },
+              claimDeadlineAt: { gt: now },
+              OR: [
+                { targetAgentId: agentId },
+                {
+                  targetAgentId: null,
+                  targetAgentPool: { members: { some: { agentId } } },
+                },
+              ],
+              executionStep: {
+                type: { in: supportedStepTypes },
+                execution: {
+                  status: { in: ['RUNNING', 'WAITING_AGENT'] },
+                  cancelRequestedAt: null,
+                  deadlineAt: { gt: now },
+                },
+              },
             },
-          ],
-          executionStep: {
-            execution: { status: { in: ['RUNNING', 'WAITING_AGENT'] }, cancelRequestedAt: null },
-          },
-        },
-        orderBy: { createdAt: 'asc' },
-        take: 50,
-        include: {
-          targetAgentPool: { select: { mode: true } },
-          executionStep: {
+            orderBy: { createdAt: 'asc' },
+            take: 50,
             include: {
-              execution: { select: { id: true, inputValues: true, definitionChecksum: true } },
+              targetAgentPool: { select: { mode: true } },
+              executionStep: {
+                include: {
+                  execution: {
+                    select: {
+                      id: true,
+                      inputValues: true,
+                      definitionChecksum: true,
+                      deadlineAt: true,
+                    },
+                  },
+                },
+              },
             },
-          },
+          });
+          const attempt = candidates.find(candidate => {
+            return agentSupportsStep(capabilities, candidate.executionStep.type);
+          });
+          if (!attempt) return null;
+          const rawLeaseToken = crypto.randomBytes(32).toString('base64url');
+          const leaseExpiresAt = new Date(Date.now() + DEFAULT_LEASE_DURATION_SECONDS * 1000);
+          const claimed = await tx.runbookStepAttempt.updateMany({
+            where: { id: attempt.id, status: 'PENDING' },
+            data: {
+              status: 'CLAIMED',
+              claimedAgentId: agentId,
+              leaseToken: sha256(rawLeaseToken),
+              leaseExpiresAt,
+            },
+          });
+          if (claimed.count !== 1) return null;
+          const rawInputValues = attempt.executionStep.execution.inputValues as Record<
+            string,
+            unknown
+          >;
+          const resolvedInputValues = await resolveSecretInputValues(
+            rawInputValues,
+            { agentId, targetAgentPoolId: attempt.targetAgentPoolId },
+            tx
+          );
+          return {
+            attemptId: attempt.id,
+            leaseToken: rawLeaseToken,
+            leaseExpiresAt: leaseExpiresAt.toISOString(),
+            idempotencyKey: attempt.idempotencyKey,
+            planDigest: attempt.planDigest,
+            executionId: attempt.executionStep.execution.id,
+            step: {
+              key: attempt.executionStep.stepKey,
+              name: attempt.executionStep.name,
+              type: attempt.executionStep.type,
+              riskClass: attempt.executionStep.riskClass,
+              config: resolveInputTemplates(attempt.executionStep.config, resolvedInputValues),
+              timeoutSeconds: Math.max(
+                1,
+                Math.min(
+                  attempt.executionStep.timeoutSeconds ?? DEFAULT_LEASE_DURATION_SECONDS,
+                  Math.floor(
+                    (attempt.executionStep.execution.deadlineAt.getTime() - now.getTime()) / 1000
+                  )
+                )
+              ),
+            },
+            inputValues: resolvedInputValues,
+            secretInputKeys: Object.entries(rawInputValues)
+              .filter(([, value]) => isSecretReference(value))
+              .map(([key]) => key),
+          };
         },
-      });
-      const capabilities = Array.isArray(agent.capabilities)
-        ? agent.capabilities.filter((value): value is string => typeof value === 'string')
-        : [];
-      const attempt = candidates.find(candidate => {
-        return agentSupportsStep(capabilities, candidate.executionStep.type);
-      });
-      if (!attempt) return null;
-      const rawLeaseToken = crypto.randomBytes(32).toString('base64url');
-      const leaseExpiresAt = new Date(Date.now() + DEFAULT_LEASE_DURATION_SECONDS * 1000);
-      const claimed = await tx.runbookStepAttempt.updateMany({
-        where: { id: attempt.id, status: 'PENDING' },
-        data: {
-          status: 'CLAIMED',
-          claimedAgentId: agentId,
-          leaseToken: sha256(rawLeaseToken),
-          leaseExpiresAt,
-        },
-      });
-      if (claimed.count !== 1) return null;
-      const rawInputValues = attempt.executionStep.execution.inputValues as Record<string, unknown>;
-      const resolvedInputValues = await resolveSecretInputValues(
-        rawInputValues,
-        { agentId, targetAgentPoolId: attempt.targetAgentPoolId },
-        tx
+        { isolationLevel: 'Serializable' }
       );
-      return {
-        attemptId: attempt.id,
-        leaseToken: rawLeaseToken,
-        leaseExpiresAt: leaseExpiresAt.toISOString(),
-        idempotencyKey: attempt.idempotencyKey,
-        planDigest: attempt.planDigest,
-        executionId: attempt.executionStep.execution.id,
-        step: {
-          key: attempt.executionStep.stepKey,
-          name: attempt.executionStep.name,
-          type: attempt.executionStep.type,
-          riskClass: attempt.executionStep.riskClass,
-          config: attempt.executionStep.config,
-          timeoutSeconds: attempt.executionStep.timeoutSeconds,
-        },
-        inputValues: resolvedInputValues,
-        secretInputKeys: Object.entries(rawInputValues)
-          .filter(([, value]) => isSecretReference(value))
-          .map(([key]) => key),
-      };
-    },
-    { isolationLevel: 'Serializable' }
-  );
+    } catch (error) {
+      if ((error as { code?: string })?.code === 'P2034' && transactionAttempt < 2) continue;
+      throw error;
+    }
+  }
+  return null;
 }
 
 function leaseHash(token: string): string {
@@ -203,7 +242,7 @@ export async function renewAgentAttemptLease(input: {
   if (!attempt) throw new RunbookAgentLeaseExpiredError(input.attemptId, input.agentId);
   if (
     attempt.executionStep.execution.cancelRequestedAt ||
-    attempt.executionStep.execution.status === 'CANCEL_REQUESTED'
+    !['RUNNING', 'WAITING_AGENT'].includes(attempt.executionStep.execution.status)
   ) {
     const acknowledgementDeadline = new Date(now.getTime() + 30_000);
     const updated = await prisma.runbookStepAttempt.updateMany({
@@ -249,12 +288,145 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
     });
     if (!attempt || attempt.claimedAgentId !== agentId)
       throw new RunbookAgentNotFoundError(agentId);
+    if (attempt.status === 'UNKNOWN' && attempt.errorCode === 'AGENT_LEASE_EXPIRED') {
+      if (
+        attempt.executionStep.status !== 'UNKNOWN' ||
+        attempt.executionStep.errorCode !== 'UNKNOWN_OUTCOME'
+      ) {
+        throw new RunbookPreExecutionFenceError(
+          input.attemptId,
+          'a safe retry already superseded this ambiguous attempt'
+        );
+      }
+      const producedAt = input.producedAt ? new Date(input.producedAt) : null;
+      const latestCredibleProduction = attempt.leaseExpiresAt
+        ? new Date(attempt.leaseExpiresAt.getTime() + 60_000)
+        : null;
+      if (
+        !producedAt ||
+        !latestCredibleProduction ||
+        producedAt > latestCredibleProduction ||
+        producedAt > attempt.executionStep.execution.deadlineAt ||
+        producedAt > new Date(Date.now() + 60_000) ||
+        attempt.leaseToken !== leaseHash(input.leaseToken)
+      ) {
+        throw new RunbookPreExecutionFenceError(
+          input.attemptId,
+          'late result is outside the signed result-recovery fence'
+        );
+      }
+      const executionOutcomeUnknown =
+        attempt.executionStep.execution.status === 'FAILED' &&
+        attempt.executionStep.execution.failureCode === 'UNKNOWN_OUTCOME';
+      const cancellationRequested =
+        Boolean(attempt.executionStep.execution.cancelRequestedAt) ||
+        (!executionOutcomeUnknown &&
+          !['RUNNING', 'WAITING_AGENT'].includes(attempt.executionStep.execution.status));
+      if (
+        (cancellationRequested && input.status !== 'CANCELLED') ||
+        (!cancellationRequested && input.status === 'CANCELLED') ||
+        input.status === 'UNKNOWN'
+      ) {
+        throw new RunbookPreExecutionFenceError(
+          input.attemptId,
+          'late result conflicts with cancellation or remains ambiguous'
+        );
+      }
+      if (input.outputArtifactId) {
+        const artifact = await tx.runbookArtifact.findFirst({
+          where: { id: input.outputArtifactId, attemptId: attempt.id },
+          select: { id: true },
+        });
+        if (!artifact) {
+          throw new RunbookPreExecutionFenceError(
+            input.attemptId,
+            'output artifact is not owned by attempt'
+          );
+        }
+      }
+      const outputPreview = input.outputPreview
+        ? redactRunbookOutput(input.outputPreview)
+        : undefined;
+      const recovered = await tx.runbookStepAttempt.updateMany({
+        where: {
+          id: attempt.id,
+          status: 'UNKNOWN',
+          errorCode: 'AGENT_LEASE_EXPIRED',
+          claimedAgentId: agentId,
+          leaseToken: leaseHash(input.leaseToken),
+        },
+        data: {
+          status: input.status,
+          completedAt: producedAt,
+          exitCode: input.exitCode,
+          outputPreview,
+          outputArtifactId: input.outputArtifactId,
+          errorCode: input.errorCode,
+          errorMessage: input.errorMessage ? redactRunbookOutput(input.errorMessage) : undefined,
+          preState: input.preState as Prisma.InputJsonValue | undefined,
+          postState: input.postState as Prisma.InputJsonValue | undefined,
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      if (recovered.count !== 1) {
+        throw new RunbookPreExecutionFenceError(input.attemptId, 'late result state changed');
+      }
+      const stepStatus = input.status === 'SUCCEEDED' ? 'SUCCEEDED' : 'FAILED';
+      const recoveredStep = await tx.runbookExecutionStep.updateMany({
+        where: { id: attempt.executionStepId, status: 'UNKNOWN', errorCode: 'UNKNOWN_OUTCOME' },
+        data: {
+          status: stepStatus,
+          completedAt: producedAt,
+          outputPreview,
+          outputArtifactId: input.outputArtifactId,
+          errorCode: input.errorCode,
+          errorMessage: input.errorMessage ? redactRunbookOutput(input.errorMessage) : undefined,
+        },
+      });
+      if (recoveredStep.count !== 1) {
+        throw new RunbookPreExecutionFenceError(input.attemptId, 'late result step state changed');
+      }
+      await tx.runbookExecution.updateMany({
+        where: {
+          id: attempt.executionStep.executionId,
+          status: 'FAILED',
+          failureCode: 'UNKNOWN_OUTCOME',
+        },
+        data: {
+          status: 'RUNNING',
+          completedAt: null,
+          failureCode: null,
+          failureMessage: null,
+        },
+      });
+      await tx.backgroundJob.create({
+        data: {
+          type: 'RUNBOOK',
+          status: 'PENDING',
+          scheduledAt: new Date(),
+          maxAttempts: 8,
+          payload: {
+            kind: 'ADVANCE_EXECUTION',
+            executionId: attempt.executionStep.executionId,
+          },
+        },
+      });
+      return { accepted: true, duplicate: false, status: input.status, reconciledLate: true };
+    }
     if (['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'UNKNOWN'].includes(attempt.status)) {
       return { accepted: true, duplicate: true, status: attempt.status };
     }
+    const resultProducedAt = input.producedAt ? new Date(input.producedAt) : new Date();
+    if (resultProducedAt > attempt.executionStep.execution.deadlineAt) {
+      throw new RunbookPreExecutionFenceError(
+        input.attemptId,
+        'result was produced after the execution deadline'
+      );
+    }
     const cancellationRequested =
       Boolean(attempt.executionStep.execution.cancelRequestedAt) ||
-      attempt.executionStep.execution.status === 'CANCEL_REQUESTED';
+      !['RUNNING', 'WAITING_AGENT'].includes(attempt.executionStep.execution.status);
     if (
       attempt.status !== 'RUNNING' ||
       attempt.executionStep.execution.status === 'CANCELLED' ||
@@ -290,14 +462,17 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
     const resultStatus = input.status;
     const retryUnknown =
       resultStatus === 'UNKNOWN' && isSafeToRetryAfterUnknown(attempt.executionStep.riskClass);
-    const retryFailed = resultStatus === 'FAILED' && isRetryable(attempt.executionStep.riskClass);
+    const retryFailed =
+      resultStatus === 'FAILED' &&
+      isRetryable(attempt.executionStep.riskClass) &&
+      isRetryableFailure(attempt.executionStep.riskClass, input.errorCode);
     const shouldRetry =
       (retryUnknown || retryFailed) && attempt.attemptNumber <= attempt.executionStep.maxRetries;
     const completed = await tx.runbookStepAttempt.updateMany({
       where: { id: attempt.id, status: 'RUNNING', claimedAgentId: agentId },
       data: {
         status: resultStatus,
-        completedAt: new Date(),
+        completedAt: resultProducedAt,
         exitCode: input.exitCode,
         outputPreview,
         outputArtifactId: input.outputArtifactId,
@@ -348,7 +523,7 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
       where: { id: attempt.executionStepId, status: 'RUNNING' },
       data: {
         status: stepStatus,
-        completedAt: new Date(),
+        completedAt: resultProducedAt,
         outputPreview,
         outputArtifactId: input.outputArtifactId,
         errorCode: input.errorCode,
@@ -386,7 +561,13 @@ export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInpu
         status: 'RUNNING',
         leaseToken: leaseHash(input.leaseToken),
         leaseExpiresAt: { gt: new Date() },
-        executionStep: { execution: { cancelRequestedAt: null } },
+        executionStep: {
+          execution: {
+            cancelRequestedAt: null,
+            status: { in: ['RUNNING', 'WAITING_AGENT'] },
+            deadlineAt: { gt: new Date() },
+          },
+        },
       },
       select: { id: true },
     });

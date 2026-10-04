@@ -27,6 +27,7 @@ type MetricsSnapshot = {
   runbookAttempts: Array<{ status: string; count: number }> | null;
   runbookAgents: Array<{ status: string; count: number }> | null;
   runbookAgentWork: { spoolDepth: number; activeAttempts: number } | null;
+  runbookArtifactStorage: { count: number; bytes: number } | null;
   runbookOldestPendingAt: Date | null | undefined;
   runbookCircuitsOpen: number | null;
   collectedAt: number;
@@ -100,6 +101,7 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       runbookAttempts,
       runbookAgents,
       runbookAgentWork,
+      runbookArtifactStorage,
       runbookOldestPending,
       runbookCircuitsOpen,
     ] = await Promise.allSettled([
@@ -208,6 +210,13 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
           activeAttempts: result._sum.activeAttemptCount ?? 0,
         };
       }),
+      collectWithTimeout('runbook-artifact-storage', DB_COLLECTOR_TIMEOUT_MS, async () => {
+        const result = await prisma.runbookArtifact.aggregate({
+          _count: { id: true },
+          _sum: { sizeBytes: true },
+        });
+        return { count: result._count.id, bytes: result._sum.sizeBytes ?? 0 };
+      }),
       collectWithTimeout('runbook-oldest-pending', DB_COLLECTOR_TIMEOUT_MS, () =>
         prisma.runbookStepAttempt.findFirst({
           where: { status: 'PENDING' },
@@ -286,6 +295,8 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
           ? runbookAgents.value.map(row => ({ status: row.status, count: row._count.id }))
           : null,
       runbookAgentWork: runbookAgentWork.status === 'fulfilled' ? runbookAgentWork.value : null,
+      runbookArtifactStorage:
+        runbookArtifactStorage.status === 'fulfilled' ? runbookArtifactStorage.value : null,
       runbookOldestPendingAt:
         runbookOldestPending.status === 'fulfilled'
           ? (runbookOldestPending.value?.availableAt ?? null)
@@ -312,6 +323,7 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       value.runbookAttempts === null ||
       value.runbookAgents === null ||
       value.runbookAgentWork === null ||
+      value.runbookArtifactStorage === null ||
       value.runbookOldestPendingAt === undefined ||
       value.runbookCircuitsOpen === null;
     // A JS timeout cannot cancel every Prisma operation. Back off degraded
@@ -445,6 +457,10 @@ async function getMetrics(req: Request) {
       snapshot.runbookAgentWork.activeAttempts
     );
   }
+  if (snapshot.runbookArtifactStorage) {
+    metrics.set('opsknight_runbook_artifacts', snapshot.runbookArtifactStorage.count);
+    metrics.set('opsknight_runbook_artifact_storage_bytes', snapshot.runbookArtifactStorage.bytes);
+  }
   if (snapshot.runbookOldestPendingAt !== undefined) {
     metrics.set(
       'opsknight_runbook_oldest_pending_attempt_age_seconds',
@@ -471,6 +487,7 @@ async function getMetrics(req: Request) {
     Number(snapshot.runbookAttempts === null) +
     Number(snapshot.runbookAgents === null) +
     Number(snapshot.runbookAgentWork === null) +
+    Number(snapshot.runbookArtifactStorage === null) +
     Number(snapshot.runbookOldestPendingAt === undefined) +
     Number(snapshot.runbookCircuitsOpen === null);
   metrics.set('opsknight_metrics_collection_errors', collectionErrors);

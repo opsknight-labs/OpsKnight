@@ -327,6 +327,7 @@ config:
   nextTelemetryDisabled: '1'
   notificationControlPlanePersonal: 'true'
   allowInsecureSecrets: 'false'
+  runbookArtifactRetentionDays: 30
 
 # Full DATABASE_URL override. Prefer this for managed PostgreSQL, TLS parameters,
 # PgBouncer, or credentials containing characters that require URI encoding.

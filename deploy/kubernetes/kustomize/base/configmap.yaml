@@ -22,3 +22,4 @@ data:
   # legacy direct-dispatch path. Remove after all replicas are updated.
   NOTIFICATION_CONTROL_PLANE_PERSONAL: 'true'
   ALLOW_INSECURE_SECRETS: 'false'
+  RUNBOOK_ARTIFACT_RETENTION_DAYS: '30'

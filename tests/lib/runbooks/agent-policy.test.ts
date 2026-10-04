@@ -124,18 +124,26 @@ describe('runbook Agent result spool', () => {
     await spool.put({
       attemptId: 'attempt123',
       leaseToken: 'lease',
+      producedAt: '2026-10-04T00:00:00.000Z',
       status: 'FAILED',
       errorCode: 'FIRST',
     });
     await spool.put({
       attemptId: 'attempt123',
       leaseToken: 'lease',
+      producedAt: '2026-10-04T00:00:01.000Z',
       status: 'SUCCEEDED',
       outputPreview: 'done',
     });
     expect(await spool.depth()).toBe(1);
     expect(await spool.list()).toEqual([
-      { attemptId: 'attempt123', leaseToken: 'lease', status: 'SUCCEEDED', outputPreview: 'done' },
+      {
+        attemptId: 'attempt123',
+        leaseToken: 'lease',
+        producedAt: '2026-10-04T00:00:01.000Z',
+        status: 'SUCCEEDED',
+        outputPreview: 'done',
+      },
     ]);
     await spool.remove('attempt123');
     expect(await spool.depth()).toBe(0);
@@ -146,7 +154,12 @@ describe('runbook Agent result spool', () => {
     temporaryDirectories.push(directory);
     const spool = new ResultSpool(directory);
     await expect(
-      spool.put({ attemptId: '../escape', leaseToken: 'lease', status: 'FAILED' })
+      spool.put({
+        attemptId: '../escape',
+        leaseToken: 'lease',
+        producedAt: '2026-10-04T00:00:00.000Z',
+        status: 'FAILED',
+      })
     ).rejects.toThrow('Invalid attempt ID');
   });
 });

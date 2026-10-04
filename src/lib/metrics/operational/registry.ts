@@ -1044,6 +1044,22 @@ export const OPERATIONAL_METRICS = [
     scope: 'cluster_snapshot',
     estimatedMaxSeries: 1,
   },
+  {
+    name: 'opsknight_runbook_artifacts',
+    help: 'Runbook artifacts currently retained in PostgreSQL',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_runbook_artifact_storage_bytes',
+    help: 'Compressed runbook artifact bytes currently retained in PostgreSQL',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
 ] as const satisfies readonly MetricDefinition[];
 
 type RegisteredMetricName = (typeof OPERATIONAL_METRICS)[number]['name'];

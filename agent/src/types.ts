@@ -41,6 +41,7 @@ export interface ClaimedAttempt {
 export interface SpoolRecord {
   attemptId: string;
   leaseToken: string;
+  producedAt: string;
   status: 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'UNKNOWN';
   exitCode?: number;
   outputPreview?: string;

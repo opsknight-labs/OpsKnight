@@ -3551,6 +3551,8 @@ model RunbookExecution {
   status                    RunbookExecutionStatus @default(QUEUED)
   startedAt                 DateTime?
   completedAt               DateTime?
+  timeoutSeconds            Int                    @default(3600)
+  deadlineAt                DateTime
   cancelRequestedAt         DateTime?
   triggeredByType           RunbookTriggerByType   @default(USER)
   triggeredByUserId         String?
@@ -3577,6 +3579,7 @@ model RunbookExecution {
 
   @@unique([triggerFingerprint])
   @@index([status, updatedAt])
+  @@index([status, deadlineAt])
   @@index([incidentId])
   @@index([serviceId])
   @@index([runbookId])
@@ -3799,4 +3802,5 @@ model RunbookArtifact {
   createdAt DateTime @default(now())
 
   @@index([attemptId, createdAt])
+  @@index([createdAt])
 }

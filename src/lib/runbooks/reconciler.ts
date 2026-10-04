@@ -7,6 +7,57 @@ import { retryDelayMs } from './safety';
 
 export async function reconcileRunbooks(limit = 100) {
   const now = new Date();
+  const overdueExecutions = await prisma.runbookExecution.findMany({
+    where: {
+      deadlineAt: { lte: now },
+      status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
+    },
+    select: { id: true, incidentId: true },
+    orderBy: { deadlineAt: 'asc' },
+    take: limit,
+  });
+  for (const { id: executionId, incidentId } of overdueExecutions) {
+    await prisma.$transaction(async tx => {
+      const timedOut = await tx.runbookExecution.updateMany({
+        where: {
+          id: executionId,
+          deadlineAt: { lte: now },
+          status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
+        },
+        data: { status: 'TIMED_OUT', completedAt: now, failureCode: 'EXECUTION_TIMEOUT' },
+      });
+      if (timedOut.count !== 1) return;
+      await tx.runbookStepAttempt.updateMany({
+        where: {
+          executionStep: { executionId },
+          status: { in: ['PENDING', 'CLAIMED'] },
+        },
+        data: {
+          status: 'TIMED_OUT',
+          completedAt: now,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          errorCode: 'EXECUTION_TIMEOUT',
+        },
+      });
+      await tx.runbookExecutionStep.updateMany({
+        where: {
+          executionId,
+          status: { in: ['PENDING', 'READY', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
+        },
+        data: { status: 'CANCELLED', completedAt: now, errorCode: 'EXECUTION_TIMEOUT' },
+      });
+      if (incidentId) {
+        await tx.incidentEvent.create({
+          data: {
+            incidentId,
+            type: 'RUNBOOK_FAILED',
+            message: 'Runbook execution timed out.',
+          },
+        });
+      }
+    });
+  }
   const expired = await prisma.runbookStepAttempt.findMany({
     where: {
       OR: [
@@ -134,8 +185,6 @@ export async function reconcileRunbooks(limit = 100) {
         data: {
           status: 'UNKNOWN',
           completedAt: now,
-          leaseToken: null,
-          leaseExpiresAt: null,
           errorCode: 'AGENT_LEASE_EXPIRED',
           errorMessage:
             'Agent disappeared after execution began; the outcome requires verification.',
@@ -194,6 +243,16 @@ export async function reconcileRunbooks(limit = 100) {
   });
   await prisma.runbookAgentRequestNonce.deleteMany({
     where: { createdAt: { lt: new Date(Date.now() - 10 * 60 * 1000) } },
+  });
+  const configuredRetentionDays = Number.parseInt(
+    process.env.RUNBOOK_ARTIFACT_RETENTION_DAYS ?? '30',
+    10
+  );
+  const artifactRetentionDays = Number.isFinite(configuredRetentionDays)
+    ? Math.min(3650, Math.max(1, configuredRetentionDays))
+    : 30;
+  const artifactsDeleted = await prisma.runbookArtifact.deleteMany({
+    where: { createdAt: { lt: new Date(now.getTime() - artifactRetentionDays * 86_400_000) } },
   });
   const localRunning = await prisma.runbookExecutionStep.findMany({
     where: {
@@ -281,10 +340,12 @@ export async function reconcileRunbooks(limit = 100) {
   }
   return {
     inspected: expired.length,
+    timedOutExecutions: overdueExecutions.length,
     reclaimed,
     unknown,
     recovered: recoveryIds.length,
     localRecovered,
     agentsOffline: offline.count,
+    artifactsDeleted: artifactsDeleted.count,
   };
 }
