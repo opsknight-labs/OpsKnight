@@ -910,5 +910,6 @@ describe('deployment configuration invariants', () => {
     expect(setupUi).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN');
     expect(setupUi).toContain('OPSKNIGHT_AGENT_POLICY_PATH');
     expect(read('agent/Dockerfile')).toContain('USER opsknight-agent');
+    expect(read('agent/Dockerfile')).toMatch(/apk add --no-cache[^\n]*\bbash\b/);
   });
 });

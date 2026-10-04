@@ -71,7 +71,7 @@ function commandFor(attempt: ClaimedAttempt): { command: string; args: string[] 
       };
     }
     case 'BASH':
-      return { command: 'sh', args: ['-c', String(config.command)] };
+      return { command: 'bash', args: ['--noprofile', '--norc', '-c', String(config.command)] };
   }
 }
 
@@ -98,6 +98,8 @@ export async function executeAttempt(
       env: {
         ...process.env,
         ...inputEnvironment,
+        // Non-interactive Bash otherwise sources an inherited BASH_ENV before the approved command.
+        ...(attempt.step.type === 'BASH' ? { BASH_ENV: '/dev/null' } : {}),
         PATH: process.env.PATH ?? '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
       },
       stdio: ['ignore', 'pipe', 'pipe'] as const,

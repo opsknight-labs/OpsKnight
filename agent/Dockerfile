@@ -5,7 +5,7 @@ COPY agent ./agent
 RUN esbuild agent/src/index.ts --bundle --platform=node --target=node20 --format=esm --packages=external --banner:js='import { createRequire as __cr } from "module"; const require = __cr(import.meta.url);' --outfile=/out/opsknight-agent.mjs
 
 FROM node:20-alpine
-RUN apk add --no-cache docker-cli iproute2 kubectl procps \
+RUN apk add --no-cache bash docker-cli iproute2 kubectl procps \
   && addgroup -S opsknight-agent && adduser -S -G opsknight-agent opsknight-agent \
   && mkdir -p /var/lib/opsknight-agent /etc/opsknight-agent \
   && chown -R opsknight-agent:opsknight-agent /var/lib/opsknight-agent /etc/opsknight-agent

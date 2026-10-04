@@ -43,6 +43,12 @@ Library filtering currently operates on loaded Runbooks. Execution history
 currently shows the most recent 50 executions; server-side pagination is not
 yet available.
 
+## Bash executor
+
+`BASH` steps run with Bash, not POSIX `sh`. The container Agent includes Bash;
+native Agents must install Bash on their `PATH`. Commands use a non-login,
+non-interactive shell without profile/rc or inherited `BASH_ENV` startup files.
+
 ## CONDITION fields and behavior
 
 Builder conditions select `incident.priority`, `incident.urgency`,

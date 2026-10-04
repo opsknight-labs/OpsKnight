@@ -35,6 +35,36 @@ function attempt(command: string, inputValues: Record<string, unknown> = {}): Cl
 }
 
 describe('runbook Agent executor', () => {
+  it('executes Bash-specific syntax with typed inputs', async () => {
+    const result = await executeAttempt(
+      attempt(
+        'set -o pipefail; values=("$OPSKNIGHT_INPUT_ENV" ready); [[ "${values[0]}" == "prod" ]] && printf "%s" "${values[1]}"',
+        { env: 'prod' }
+      ),
+      policy,
+      new AbortController().signal
+    );
+    expect(result).toMatchObject({ status: 'SUCCEEDED', exitCode: 0, output: 'ready' });
+  });
+
+  it('honors Bash pipefail instead of accepting a failed pipeline', async () => {
+    const result = await executeAttempt(
+      attempt('set -o pipefail; false | true'),
+      policy,
+      new AbortController().signal
+    );
+    expect(result).toMatchObject({ status: 'FAILED', exitCode: 1, errorCode: 'COMMAND_FAILED' });
+  });
+
+  it('does not source inherited non-interactive Bash startup files', async () => {
+    const result = await executeAttempt(
+      attempt('[[ "$BASH_ENV" == /dev/null ]]'),
+      policy,
+      new AbortController().signal
+    );
+    expect(result).toMatchObject({ status: 'SUCCEEDED', exitCode: 0 });
+  });
+
   it('passes typed inputs through the constrained environment', async () => {
     const result = await executeAttempt(
       attempt('printf "%s|%s" "$OPSKNIGHT_INPUT_SERVICE" "$OPSKNIGHT_INPUT_REPLICAS"', {

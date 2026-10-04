@@ -53,6 +53,12 @@ Keep bootstrap Secrets while deployment manifests reference them. Once enrolled,
 
 ## Local policy
 
+`BASH` steps require Bash on the native Agent's `PATH`; install it before enabling
+that executor. The Agent container includes Bash. Commands run non-interactively
+with `bash --noprofile --norc -c`, not POSIX `sh` or a login shell. Bash arrays,
+`[[ ... ]]`, and `set -o pipefail` are supported. Profile/rc files and inherited
+`BASH_ENV` startup scripts are not loaded; configure dependencies explicitly.
+
 `agent/policy.container.json` is the fail-closed diagnostics-only baseline; `agent/policy.example.json` demonstrates an explicitly allowlisted native service. `allowedStepTypes` enables executors; the Systemd unit, Docker container, Kubernetes namespace, and Bash command lists further constrain targets. A trailing `*` is the only wildcard for resource-name allowlists. Bash commands require an exact match so an allowed prefix cannot append another shell operation. Non-idempotent actions remain disabled unless `allowNonIdempotent` is explicitly enabled.
 
 Platform authorization is a second boundary. Kubernetes RBAC, Docker socket access, Unix permissions, sudoers, or polkit must grant only the operations the local policy allows. A policy entry never grants an operating-system permission by itself.
