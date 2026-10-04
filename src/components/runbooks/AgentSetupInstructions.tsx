@@ -50,7 +50,13 @@ function SetupBlock({ value }: { value: string }) {
   );
 }
 
-export default function AgentSetupInstructions({ token }: { token: string }) {
+export default function AgentSetupInstructions({
+  token,
+  executionPublicKey,
+}: {
+  token: string;
+  executionPublicKey: string;
+}) {
   const [image, setImage] = useState('ghcr.io/opsknight-labs/opsknight-agent:2.0.0');
   const [url, setUrl] = useState('http://opsknight-app:3000');
   const [policyPath, setPolicyPath] = useState('../../agent/policy.container.json');
@@ -59,6 +65,7 @@ export default function AgentSetupInstructions({ token }: { token: string }) {
     const compose = `export OPSKNIGHT_AGENT_IMAGE=${shellQuote(image)}
 export OPSKNIGHT_AGENT_URL=${shellQuote(url)}
 export OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=${shellQuote(token)}
+export OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
 export OPSKNIGHT_AGENT_POLICY_PATH=${shellQuote(policyPath)}
 
 docker compose -f deploy/compose/docker-compose.yml \\
@@ -66,12 +73,14 @@ docker compose -f deploy/compose/docker-compose.yml \\
     const swarm = `printf '%s' ${shellQuote(token)} | docker secret create opsknight_agent_enrollment_token -
 export OPSKNIGHT_AGENT_IMAGE=${shellQuote(image)}
 export OPSKNIGHT_AGENT_URL=${shellQuote(url)}
+export OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
 
 docker stack deploy --with-registry-auth \\
   -c deploy/swarm/docker-stack.integrated.yml \\
   -c deploy/swarm/docker-stack.agent.yml opsknight`;
     const helm = `kubectl -n opsknight create secret generic opsknight-agent-enrollment \\
-  --from-literal=OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=${shellQuote(token)}
+  --from-literal=OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=${shellQuote(token)} \\
+  --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
 
 helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \\
   --namespace opsknight --create-namespace \\
@@ -79,19 +88,21 @@ helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \\
   ${helmImage} \\
   --set agent.enrollmentToken.existingSecret=opsknight-agent-enrollment`;
     const kustomize = `kubectl -n opsknight create secret generic opsknight-agent-enrollment \\
-  --from-literal=enrollment-token=${shellQuote(token)}
+  --from-literal=enrollment-token=${shellQuote(token)} \\
+  --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
 
 # Choose integrated-agent or split-agent for your runtime.
 kubectl apply -k deploy/kubernetes/kustomize/profiles/integrated-agent`;
     const linux = `# /etc/opsknight-agent/agent.env (mode 0600)
 OPSKNIGHT_URL=${url}
 OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=${token}
+OPSKNIGHT_EXECUTION_PUBLIC_KEY=${executionPublicKey}
 OPSKNIGHT_AGENT_POLICY_FILE=/etc/opsknight-agent/policy.json
 OPSKNIGHT_AGENT_DATA_DIR=/var/lib/opsknight-agent
 
 sudo systemctl enable --now opsknight-agent`;
     return { compose, swarm, helm, kustomize, linux };
-  }, [image, policyPath, token, url]);
+  }, [image, policyPath, token, url, executionPublicKey]);
 
   return (
     <div className="space-y-4 rounded-lg border bg-background p-4">
@@ -153,8 +164,9 @@ sudo systemctl enable --now opsknight-agent`;
       </Tabs>
       <p className="text-xs text-muted-foreground">
         Split runtimes use <code>http://opsknight-web:3000</code>. Native and remote Agents should
-        use the externally reachable HTTPS URL. Remove the enrollment token after the first
-        successful heartbeat; the persisted identity is used afterward.
+        use the externally reachable HTTPS URL. Keep the enrollment Secret while the deployment
+        references it; the consumed token cannot enroll again. Persisted identity is used after
+        enrollment.
       </p>
     </div>
   );

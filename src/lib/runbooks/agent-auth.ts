@@ -2,6 +2,7 @@ import 'server-only';
 
 import crypto from 'crypto';
 import prisma from '@/lib/prisma';
+import { getExecutionSigningKey } from './execution-signing';
 import { RunbookAgentNotFoundError, RunbookAgentRevokedError } from './errors';
 
 const SIGNATURE_WINDOW_MS = 5 * 60 * 1000;
@@ -32,6 +33,7 @@ export async function createAgentEnrollment(input: {
   actorId: string;
 }) {
   const token = crypto.randomBytes(32).toString('base64url');
+  const { publicKey: executionPublicKey } = await getExecutionSigningKey();
   const enrollmentExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
   const agent = await prisma.runbookAgent.create({
     data: {
@@ -43,7 +45,7 @@ export async function createAgentEnrollment(input: {
       createdById: input.actorId,
     },
   });
-  return { agent, token, enrollmentExpiresAt };
+  return { agent, token, enrollmentExpiresAt, executionPublicKey };
 }
 
 export async function consumeEnrollmentToken(input: {

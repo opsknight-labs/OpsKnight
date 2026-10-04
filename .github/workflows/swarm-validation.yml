@@ -1,6 +1,7 @@
 name: Docker Swarm Validation
 
 on:
+  workflow_call:
   push:
     branches:
       - main
@@ -39,6 +40,7 @@ jobs:
     env:
       OPSKNIGHT_IMAGE: ghcr.io/opsknight-labs/opsknight:ci-test
       OPSKNIGHT_AGENT_IMAGE: ghcr.io/opsknight-labs/opsknight-agent:ci-test
+      OPSKNIGHT_EXECUTION_PUBLIC_KEY: ci-pinned-public-key
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7

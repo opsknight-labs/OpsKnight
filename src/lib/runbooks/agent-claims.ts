@@ -12,9 +12,15 @@ import {
 import { sha256 } from './agent-auth';
 import { redactRunbookOutput } from './redaction';
 import { resolveSecretInputValues } from './secrets';
-import { isSecretReference, resolveInputTemplates, validateResolvedStepConfig } from './definition';
+import {
+  isSecretReference,
+  referencedStepInputKeys,
+  resolveInputTemplates,
+  validateResolvedStepConfig,
+} from './definition';
 import { DEFAULT_LEASE_DURATION_SECONDS, isRetryable, isSafeToRetryAfterUnknown } from './types';
 import { agentSupportsStep, isRetryableFailure, retryDelayMs } from './safety';
+import { signExecutionEnvelope } from './execution-signing';
 import {
   RunbookAgentLeaseExpiredError,
   RunbookAgentLeaseTokenMismatchError,
@@ -31,6 +37,7 @@ export async function recordAgentHeartbeat(input: {
   capabilities?: string[];
   policyHash?: string;
   spoolDepth?: number;
+  deadLetterDepth?: number;
   activeAttemptCount?: number;
   lastError?: string | null;
 }) {
@@ -46,6 +53,7 @@ export async function recordAgentHeartbeat(input: {
       capabilities: (input.capabilities ?? []) as Prisma.InputJsonValue,
       policyHash: input.policyHash,
       spoolDepth: input.spoolDepth,
+      deadLetterDepth: input.deadLetterDepth,
       activeAttemptCount: input.activeAttemptCount,
       lastError: input.lastError,
     },
@@ -57,7 +65,7 @@ export async function recordAgentHeartbeat(input: {
 export async function claimAgentAttempt(agentId: string) {
   for (let transactionAttempt = 0; transactionAttempt < 3; transactionAttempt++) {
     try {
-      return await prisma.$transaction(
+      const claimedAttempt = await prisma.$transaction(
         async tx => {
           const now = new Date();
           const agent = await tx.runbookAgent.findFirst({
@@ -130,10 +138,14 @@ export async function claimAgentAttempt(agentId: string) {
             },
           });
           if (claimed.count !== 1) return null;
-          const rawInputValues = attempt.executionStep.execution.inputValues as Record<
+          const allInputValues = attempt.executionStep.execution.inputValues as Record<
             string,
             unknown
           >;
+          const referencedKeys = referencedStepInputKeys(attempt.executionStep.config);
+          const rawInputValues = Object.fromEntries(
+            Object.entries(allInputValues).filter(([key]) => referencedKeys.has(key))
+          );
           const resolvedInputValues = await resolveSecretInputValues(
             rawInputValues,
             { agentId, targetAgentPoolId: attempt.targetAgentPoolId },
@@ -154,6 +166,9 @@ export async function claimAgentAttempt(agentId: string) {
             resolvedConfig
           );
           return {
+            signingAgentId: agentId,
+            executionDeadlineAt: attempt.executionStep.execution.deadlineAt.toISOString(),
+            definitionChecksum: attempt.executionStep.execution.definitionChecksum,
             attemptId: attempt.id,
             leaseToken: rawLeaseToken,
             leaseExpiresAt: leaseExpiresAt.toISOString(),
@@ -184,6 +199,7 @@ export async function claimAgentAttempt(agentId: string) {
         },
         { isolationLevel: 'Serializable' }
       );
+      return claimedAttempt ? await signExecutionEnvelope(claimedAttempt) : null;
     } catch (error) {
       if ((error as { code?: string })?.code === 'P2034' && transactionAttempt < 2) continue;
       throw error;
@@ -202,14 +218,13 @@ export async function fenceAgentAttempt(input: {
   agentId: string;
   leaseToken: string;
 }) {
-  const now = new Date();
-  const updated = await prisma.runbookStepAttempt.updateMany({
-    where: {
+  return prisma.$transaction(async tx => {
+    const now = new Date();
+    const fence = {
       id: input.attemptId,
       claimedAgentId: input.agentId,
       leaseToken: leaseHash(input.leaseToken),
       leaseExpiresAt: { gt: now },
-      status: 'CLAIMED',
       claimedAgent: { status: { in: ['ONLINE', 'DEGRADED'] } },
       executionStep: {
         execution: {
@@ -218,24 +233,41 @@ export async function fenceAgentAttempt(input: {
           deadlineAt: { gt: now },
         },
       },
-    },
-    data: {
-      status: 'RUNNING',
-      startedAt: now,
-      leaseExpiresAt: new Date(now.getTime() + DEFAULT_LEASE_DURATION_SECONDS * 1000),
-    },
+    } satisfies Prisma.RunbookStepAttemptWhereInput;
+    const updated = await tx.runbookStepAttempt.updateMany({
+      where: { ...fence, status: 'CLAIMED' },
+      data: {
+        status: 'RUNNING',
+        startedAt: now,
+        leaseExpiresAt: new Date(now.getTime() + DEFAULT_LEASE_DURATION_SECONDS * 1000),
+      },
+    });
+    if (updated.count !== 1) {
+      const running = await tx.runbookStepAttempt.findFirst({
+        where: { ...fence, status: 'RUNNING' },
+        select: { startedAt: true, leaseExpiresAt: true },
+      });
+      if (running?.startedAt && running.leaseExpiresAt)
+        return {
+          startedAt: running.startedAt.toISOString(),
+          leaseExpiresAt: running.leaseExpiresAt.toISOString(),
+          alreadyStarted: true,
+        };
+      throw new RunbookPreExecutionFenceError(
+        input.attemptId,
+        'lease, cancellation, or execution state changed'
+      );
+    }
+    await tx.runbookExecutionStep.updateMany({
+      where: { attempts: { some: { id: input.attemptId } }, status: 'WAITING_AGENT' },
+      data: { status: 'RUNNING' },
+    });
+    return {
+      startedAt: now.toISOString(),
+      leaseExpiresAt: new Date(now.getTime() + DEFAULT_LEASE_DURATION_SECONDS * 1000).toISOString(),
+      alreadyStarted: false,
+    };
   });
-  if (updated.count !== 1) {
-    throw new RunbookPreExecutionFenceError(
-      input.attemptId,
-      'lease, cancellation, or execution state changed'
-    );
-  }
-  await prisma.runbookExecutionStep.updateMany({
-    where: { attempts: { some: { id: input.attemptId } }, status: 'WAITING_AGENT' },
-    data: { status: 'RUNNING' },
-  });
-  return { startedAt: now.toISOString() };
 }
 
 export async function renewAgentAttemptLease(input: {

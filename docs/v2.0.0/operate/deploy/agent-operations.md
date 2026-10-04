@@ -28,11 +28,14 @@ The Agent is separate from the Runbook Worker. The worker plans and reconciles d
 2. Create or review a local `policy.json`. Start with diagnostics only.
 3. Persist `/var/lib/opsknight-agent`; it contains the private identity and result spool.
 4. Supply the token through a protected environment or Secret and start exactly one Agent.
+   Also pin `OPSKNIGHT_EXECUTION_PUBLIC_KEY` from the trusted **Runbooks → Agents** page. The setup snippets include this value. Agents refuse unsigned or altered execution envelopes.
 5. Confirm the Agent becomes `ONLINE`, reports a policy hash, and has spool depth zero.
 6. Add it to a `LOCAL_HOSTS` pool for machine-local actions or a `SHARED_TARGET` pool for a common cluster/API target.
 7. Grant each referenced secret to only that Agent or pool.
 
 Do not share an identity volume between running replicas. A token is single-use. Create a distinct enrollment for every independent Agent.
+
+Keep bootstrap Secrets while deployment manifests reference them. Once enrolled, the Agent uses its persisted identity and does not read the consumed token again. Removing a still-referenced Kubernetes/Swarm Secret can prevent redeployment. A native environment token can be removed after enrollment; always keep the pinned execution public key.
 
 ## Local policy
 
@@ -61,7 +64,8 @@ Create the enrollment Secret outside Helm, then enable the single-replica Agent:
 
 ```sh
 kubectl -n opsknight create secret generic opsknight-agent-enrollment \
-  --from-literal=OPSKNIGHT_AGENT_ENROLLMENT_TOKEN='<single-use-token>'
+  --from-literal=OPSKNIGHT_AGENT_ENROLLMENT_TOKEN='<single-use-token>' \
+  --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY='<public-key-from-Agents-page>'
 
 helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \
   --namespace opsknight -f values.production.yaml \
@@ -77,7 +81,8 @@ Use `profiles/integrated-agent` or `profiles/split-agent`. Create the externally
 
 ```sh
 kubectl -n opsknight create secret generic opsknight-agent-enrollment \
-  --from-literal=enrollment-token='<single-use-token>'
+  --from-literal=enrollment-token='<single-use-token>' \
+  --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY='<public-key-from-Agents-page>'
 kubectl kustomize deploy/kubernetes/kustomize/profiles/split-agent > /tmp/opsknight.yaml
 kubectl apply -f /tmp/opsknight.yaml
 ```
@@ -88,6 +93,7 @@ Create an external Raft secret and deploy the Agent overlay with the selected in
 
 ```sh
 printf '%s' '<single-use-token>' | docker secret create opsknight_agent_enrollment_token -
+export OPSKNIGHT_EXECUTION_PUBLIC_KEY='<public-key-from-Agents-page>'
 export OPSKNIGHT_AGENT_IMAGE='ghcr.io/opsknight-labs/opsknight-agent:2.0.0'
 docker stack deploy --with-registry-auth \
   -c deploy/swarm/docker-stack.yml \
@@ -106,10 +112,24 @@ Use **Runbooks → Health** and Prometheus metrics to watch Agent status, active
 
 Cancellation is cooperative: OpsKnight marks the request, the lease heartbeat observes it, and the Agent sends `SIGTERM` to the process group followed by `SIGKILL` after five seconds. A timed-out or lost write action can become `UNKNOWN`; verify the external target before retrying.
 
+The Agent maintains a monotonic local lease timer and stops the process group ten seconds before its last known authority expires. Failed renewals never extend that timer. Lease renewal and start acknowledgements are signed, and repeated `/start` calls acknowledge the same lease without extending it. Keep Agent and control-plane clocks synchronized. A durable dispatch marker prevents the same identity from executing a replayed attempt twice.
+
+Results and redacted full output are written and fsynced to the local spool before artifact upload or result submission. They are removed only after a signed server acknowledgement. Terminal rejections move to `spool/dead-letter`; transient network, rate-limit, and server failures remain pending. Review quarantined records locally and monitor `opsknight_runbook_agent_dead_letter_depth`; quarantine preserves evidence and does not automatically repeat remediation.
+
 Automatic retries are restricted to read-only failures. HTTP POST/PATCH, service or container restarts, and Kubernetes rollout restarts require non-idempotent risk classification. A command failure or timeout after a write starts is recorded as `UNKNOWN`, including results from older Agents that report these failures as `FAILED`. Do not start another remediation until you have checked the target's actual state.
 
 The Agent start fence checks the execution deadline, cancellation, and Agent revocation. Lease renewal requests cancellation immediately when the execution deadline passes. A bounded, signed result produced before the deadline can recover an expired lease's unknown outcome when no safe retry has superseded it.
 
 Incident suggestions start the exact version displayed, even after a newer version is published. Before approving a step, review its resolved action, resource, Agent or pool, version checksum, and timeout. Scoped secret values remain hidden. Secret metadata and grants are visible only to users with secret-management permission.
+
+Suggestions also freeze their normalized inputs and Agent/pool target. Binding edits do not change those snapshots. Suggestions created before the snapshot migration must be dismissed and regenerated. Only inputs referenced by the current step's templates or explicit `OPSKNIGHT_INPUT_*` environment names are delivered to its Agent process; unrelated secrets are never resolved for that step.
+
+## Upgrade and capacity verification
+
+Apply the database migrations before updating Web and Runbook Worker replicas. The execution signing private key is generated once and stored encrypted in PostgreSQL; keep the database and encryption-key backups together. Existing Agents must add the pinned public key shown on the Agents page before upgrading. Compose and Swarm use `OPSKNIGHT_EXECUTION_PUBLIC_KEY`; Helm and Kustomize read that key from their existing enrollment Secret. Every independent Agent needs its own identity volume; Helm enforces one replica per identity.
+
+The legacy all-job worker now reconciles Runbooks too. For production workload isolation, continue to use the dedicated Runbook lane: a rejected automatic binding is recorded independently and does not prevent other bindings from starting.
+
+Fault-injection tests cover Agent crash/restart during artifact upload, renewal connectivity loss, exact start retries, trigger isolation, frozen suggestions, and signed payload tampering. These tests establish correctness under those failures; they are not fleet load certification. Before sizing a large fleet, measure idle-Agent and reconnect QPS, concurrent Runbook backlog, paging latency, database connections, and artifact WAL/backup growth. Artifacts remain bounded to 1 MiB compressed each in PostgreSQL with retention cleanup; plan storage capacity accordingly.
 
 To replace a compromised Agent, revoke it in the UI, remove its identity volume, create a new enrollment, and review its secret grants. Revocation immediately prevents future signed claims. Output artifacts default to 30-day retention; set `RUNBOOK_ARTIFACT_RETENTION_DAYS` (1–3650) on the integrated runtime or dedicated Runbook Worker to match your incident-data retention policy.

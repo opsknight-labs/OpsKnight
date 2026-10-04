@@ -1,9 +1,13 @@
 #!/usr/bin/env node
+// Identity and policy paths come only from the local operator's environment, never API input.
+/* eslint-disable security/detect-non-literal-fs-filename */
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { AgentClient, enrollAgent } from './client';
+import { AgentApiError, AgentClient, enrollAgent } from './client';
+import { LeaseAuthority } from './lease';
+import { verifyExecutionEnvelope } from './envelope';
 import { executeAttempt } from './executor';
 import { assertPolicyAllows, loadPolicy } from './policy';
 import { ResultSpool } from './spool';
@@ -13,8 +17,13 @@ const baseUrl = process.env.OPSKNIGHT_URL?.trim();
 const dataDirectory = process.env.OPSKNIGHT_AGENT_DATA_DIR ?? '/var/lib/opsknight-agent';
 const identityPath = process.env.OPSKNIGHT_AGENT_IDENTITY_FILE ?? `${dataDirectory}/identity.json`;
 const policyPath = process.env.OPSKNIGHT_AGENT_POLICY_FILE ?? '/etc/opsknight-agent/policy.json';
+const executionPublicKey = process.env.OPSKNIGHT_EXECUTION_PUBLIC_KEY?.trim();
 
 if (!baseUrl) throw new Error('OPSKNIGHT_URL is required.');
+if (!executionPublicKey)
+  throw new Error(
+    'Pin OPSKNIGHT_EXECUTION_PUBLIC_KEY from Runbooks > Agents before starting the Agent.'
+  );
 
 async function saveIdentity(identity: AgentIdentity) {
   await mkdir(dirname(identityPath), { recursive: true, mode: 0o700 });
@@ -42,7 +51,7 @@ async function loadIdentity(): Promise<AgentIdentity> {
 
 async function uploadOutput(
   client: AgentClient,
-  attempt: ClaimedAttempt,
+  attempt: Pick<ClaimedAttempt, 'attemptId' | 'leaseToken'>,
   output: string
 ): Promise<string | undefined> {
   if (Buffer.byteLength(output) <= 32_768) return undefined;
@@ -63,7 +72,7 @@ async function uploadOutput(
 
 function redactSecretInputs(attempt: ClaimedAttempt, output: string): string {
   const secretValues = attempt.secretInputKeys
-    .map(key => attempt.inputValues[key])
+    .map(key => Object.entries(attempt.inputValues).find(([name]) => name === key)?.[1])
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .sort((left, right) => right.length - left.length);
   return secretValues.reduce((redacted, value) => redacted.split(value).join('[REDACTED]'), output);
@@ -72,7 +81,7 @@ function redactSecretInputs(attempt: ClaimedAttempt, output: string): string {
 async function run() {
   const identity = await loadIdentity();
   const { policy, hash: policyHash } = await loadPolicy(policyPath);
-  const client = new AgentClient(baseUrl!, identity);
+  const client = new AgentClient(baseUrl!, identity, executionPublicKey);
   const spool = new ResultSpool(`${dataDirectory}/spool`);
   await spool.initialize();
   let active = 0;
@@ -83,10 +92,23 @@ async function run() {
   const flushSpool = async () => {
     for (const record of await spool.list()) {
       try {
-        await client.submit(record);
+        const { localOutput, ...result } = record;
+        if (localOutput && !result.outputArtifactId) {
+          result.outputArtifactId = await uploadOutput(client, record, localOutput).catch(
+            () => undefined
+          );
+          if (result.outputArtifactId)
+            await spool.put({ ...record, outputArtifactId: result.outputArtifactId });
+        }
+        await client.submit(result);
         await spool.remove(record.attemptId);
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);
+        if (error instanceof AgentApiError && error.terminal) {
+          await spool.quarantine(record.attemptId);
+          process.stderr.write(`Result ${record.attemptId} quarantined: HTTP ${error.status}\n`);
+          continue;
+        }
         break;
       }
     }
@@ -97,6 +119,7 @@ async function run() {
       capabilities: policy.allowedStepTypes.map(type => `RUNBOOK_${type}`),
       policyHash,
       spoolDepth: await spool.depth(),
+      deadLetterDepth: await spool.deadLetterDepth(),
       activeAttemptCount: active,
       lastError,
     });
@@ -118,56 +141,91 @@ async function run() {
     let attempt: ClaimedAttempt | null = null;
     let started = false;
     let renewTimer: NodeJS.Timeout | null = null;
+    let authority: LeaseAuthority | null = null;
+    let resultPersisted = false;
     try {
       attempt = await client.claim();
       if (!attempt) continue;
-      await client.start(attempt.attemptId, attempt.leaseToken);
+      verifyExecutionEnvelope(attempt, executionPublicKey!, identity.agentId);
+      let startResult: Awaited<ReturnType<AgentClient['start']>> | null = null;
+      for (let retry = 0; retry < 3; retry++) {
+        try {
+          startResult = await client.start(attempt.attemptId, attempt.leaseToken);
+          break;
+        } catch (error) {
+          if (error instanceof AgentApiError || retry === 2) throw error;
+        }
+      }
+      if (!startResult) throw new Error('Missing start acknowledgement.');
       started = true;
       assertPolicyAllows(attempt, policy);
+      if (!(await spool.markStarted(attempt.attemptId))) {
+        lastError = 'A previously dispatched attempt was offered again.';
+        continue;
+      }
       active += 1;
       const controller = new AbortController();
       activeController = controller;
+      authority = new LeaseAuthority(controller);
+      authority.renew(startResult.leaseExpiresAt, attempt.executionDeadlineAt);
+      let renewing = false;
       renewTimer = setInterval(() => {
+        if (renewing || !authority?.valid) return;
+        renewing = true;
         void client
           .renew(attempt!.attemptId, attempt!.leaseToken)
           .then(result => {
             if (result?.cancelRequested) controller.abort();
+            else if (result && authority?.valid)
+              authority.renew(result.leaseExpiresAt, attempt!.executionDeadlineAt);
           })
-          .catch(() => undefined);
+          .catch(error => {
+            lastError = 'Execution lease renewal failed.';
+            if (error instanceof AgentApiError && [401, 403, 404, 409, 410].includes(error.status))
+              controller.abort('LEASE_LOST');
+          })
+          .finally(() => {
+            renewing = false;
+          });
       }, 10_000);
       const result = await executeAttempt(attempt, policy, controller.signal);
+      const producedAt = new Date().toISOString();
       clearInterval(renewTimer);
       renewTimer = null;
+      authority.dispose();
       activeController = null;
       active -= 1;
       const redactedOutput = redactSecretInputs(attempt, result.output);
       const record: SpoolRecord = {
         attemptId: attempt.attemptId,
         leaseToken: attempt.leaseToken,
-        producedAt: new Date().toISOString(),
+        producedAt,
         status: result.status,
         exitCode: result.exitCode,
         outputPreview: redactedOutput.slice(0, 32_768),
-        outputArtifactId: await uploadOutput(client, attempt, redactedOutput).catch(
-          () => undefined
-        ),
+        localOutput: redactedOutput,
         errorCode: result.errorCode,
-        errorMessage: result.errorMessage,
+        errorMessage: result.errorMessage
+          ? redactSecretInputs(attempt, result.errorMessage)
+          : undefined,
       };
+      // Once the outcome is known, an I/O failure must never overwrite it with UNKNOWN.
+      resultPersisted = true;
       await spool.put(record);
       await flushSpool();
       lastError = null;
     } catch (error) {
       if (renewTimer) clearInterval(renewTimer);
+      authority?.dispose();
       active = 0;
       lastError = error instanceof Error ? error.message : String(error);
       activeController = null;
-      if (attempt && started) {
+      if (attempt && started && !resultPersisted) {
         await spool.put({
           attemptId: attempt.attemptId,
           leaseToken: attempt.leaseToken,
           producedAt: new Date().toISOString(),
-          status: 'FAILED',
+          status: lastError.startsWith('LOCAL_POLICY_DENIED') ? 'FAILED' : 'UNKNOWN',
           errorCode: lastError.startsWith('LOCAL_POLICY_DENIED')
             ? 'LOCAL_POLICY_DENIED'
             : 'AGENT_FAILURE',

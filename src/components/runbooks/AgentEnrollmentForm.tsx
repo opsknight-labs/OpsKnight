@@ -46,7 +46,10 @@ export default function AgentEnrollmentForm() {
               The token cannot be displayed again.
             </p>
           </div>
-          <AgentSetupInstructions token={state.token} />
+          <AgentSetupInstructions
+            token={state.token}
+            executionPublicKey={state.executionPublicKey!}
+          />
         </div>
       )}
     </div>

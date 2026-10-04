@@ -107,6 +107,7 @@ export async function archiveRunbookAction(runbookId: string) {
 }
 
 export type AgentEnrollmentState = {
+  executionPublicKey?: string;
   token?: string;
   agentId?: string;
   expiresAt?: string;
@@ -142,6 +143,7 @@ export async function createAgentEnrollmentAction(
     revalidatePath('/runbooks/agents');
     return {
       token: enrollment.token,
+      executionPublicKey: enrollment.executionPublicKey,
       agentId: enrollment.agent.id,
       expiresAt: enrollment.enrollmentExpiresAt.toISOString(),
     };

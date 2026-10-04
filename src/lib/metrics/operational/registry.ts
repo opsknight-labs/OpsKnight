@@ -1029,6 +1029,14 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 1,
   },
   {
+    name: 'opsknight_runbook_agent_dead_letter_depth',
+    help: 'Quarantined result records across active runbook agents',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_runbook_oldest_pending_attempt_age_seconds',
     help: 'Age of the oldest pending runbook attempt',
     kind: 'gauge',

@@ -1,13 +1,35 @@
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { assertCapability } from '@/lib/rbac';
+import { assertCanViewIncident, assertCanViewService, getUserPermissions } from '@/lib/rbac';
 import { jsonError } from '@/lib/api-response';
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
+    const permissions = await getUserPermissions();
+    const canReadAll = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_ALL);
+    if (!canReadAll && !permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_SCOPED))
+      return jsonError('Runbook read permission required.', 403);
     const { id } = await context.params;
+    const boundary = await prisma.runbookArtifact.findUnique({
+      where: { id: z.string().cuid().parse(id) },
+      select: {
+        attempt: {
+          select: {
+            executionStep: {
+              select: { execution: { select: { incidentId: true, serviceId: true } } },
+            },
+          },
+        },
+      },
+    });
+    if (!boundary) return jsonError('Runbook artifact not found.', 404);
+    if (!canReadAll) {
+      const execution = boundary.attempt.executionStep.execution;
+      if (execution.incidentId) await assertCanViewIncident(execution.incidentId);
+      else if (execution.serviceId) await assertCanViewService(execution.serviceId);
+      else return jsonError('Runbook artifact has no scoped access boundary.', 403);
+    }
     const artifact = await prisma.runbookArtifact.findUnique({
       where: { id: z.string().cuid().parse(id) },
     });

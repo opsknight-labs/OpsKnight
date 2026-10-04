@@ -5,6 +5,7 @@ services:
     restart: unless-stopped
     environment:
       OPSKNIGHT_URL: ${OPSKNIGHT_AGENT_URL:-http://opsknight-app:3000}
+      OPSKNIGHT_EXECUTION_PUBLIC_KEY: ${OPSKNIGHT_EXECUTION_PUBLIC_KEY:?Copy the pinned execution public key from Runbooks > Agents}
       OPSKNIGHT_AGENT_ENROLLMENT_TOKEN: ${OPSKNIGHT_AGENT_ENROLLMENT_TOKEN:?Create a single-use token in Runbooks > Agents}
     volumes:
       - opsknight_agent_data:/var/lib/opsknight-agent

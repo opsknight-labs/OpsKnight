@@ -8,6 +8,7 @@ import { logAudit } from '@/lib/audit';
 import { safeOutboundFetch } from '@/lib/network-security';
 import {
   computePlanDigest,
+  computeDefinitionChecksum,
   containsSecretReference,
   flattenSteps,
   parseRunbookDefinition,
@@ -16,6 +17,7 @@ import {
 } from './definition';
 import { matchesCondition } from './matcher';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
+import { suggestionPlanSchema } from './suggestion-plan';
 import {
   DEFAULT_EXECUTION_TIMEOUT_SECONDS,
   DEFAULT_STEP_TIMEOUT_SECONDS,
@@ -135,6 +137,14 @@ export async function startRunbookExecution(input: {
     if (input.suggestionId && !suggestion) {
       throw new RunbookDefinitionError('Runbook suggestion is unavailable or already handled.');
     }
+    const suggestedPlan = suggestion
+      ? suggestionPlanSchema.safeParse(suggestion.planSnapshot)
+      : null;
+    if (suggestedPlan && !suggestedPlan.success)
+      throw new RunbookDefinitionError(
+        'Suggestion has no valid frozen plan. Dismiss it and generate a new suggestion.'
+      );
+    const planSnapshot = suggestedPlan?.success ? suggestedPlan.data : null;
     const resolvedServiceId = input.serviceId ?? binding?.serviceId;
     if (input.incidentId) {
       const incident = await tx.incident.findFirst({
@@ -175,9 +185,18 @@ export async function startRunbookExecution(input: {
       );
     }
     const definition = parseRunbookDefinition(version.definition);
+    if (computeDefinitionChecksum(definition) !== version.checksum) {
+      throw new RunbookDefinitionError('Published runbook checksum does not match its definition.');
+    }
+    if (planSnapshot && planSnapshot.definitionChecksum !== version.checksum)
+      throw new RunbookDefinitionError('Suggested definition checksum changed.');
     const steps = executionSteps(definition);
-    const resolvedTargetAgentId = binding?.defaultAgentId ?? null;
-    const resolvedTargetAgentPoolId = binding?.defaultAgentPoolId ?? null;
+    const resolvedTargetAgentId = planSnapshot
+      ? planSnapshot.agentId
+      : (binding?.defaultAgentId ?? null);
+    const resolvedTargetAgentPoolId = planSnapshot
+      ? planSnapshot.agentPoolId
+      : (binding?.defaultAgentPoolId ?? null);
     if (
       steps.some(step => requiresAgent(step.type)) &&
       !resolvedTargetAgentId &&
@@ -189,7 +208,11 @@ export async function startRunbookExecution(input: {
     }
     const resolvedInputs = applyRunbookInputDefaults(
       version.inputs,
-      binding ? (binding.inputValues as Record<string, unknown>) : (input.inputValues ?? {})
+      planSnapshot
+        ? planSnapshot.inputValues
+        : binding
+          ? (binding.inputValues as Record<string, unknown>)
+          : (input.inputValues ?? {})
     );
     validateBindingInputValues(version.inputs, resolvedInputs);
     for (const step of steps) {
@@ -260,7 +283,7 @@ export async function startRunbookExecution(input: {
         incidentId: input.incidentId,
         bindingId: input.bindingId,
         triggerFingerprint: input.triggerFingerprint ?? suggestion?.fingerprint,
-        triggerId: input.triggerId,
+        triggerId: input.triggerId ?? suggestion?.triggerId,
         triggeredByType: input.triggeredByUserId ? 'USER' : 'TRIGGER',
         triggeredByUserId: input.triggeredByUserId,
         inputValues: asJson(resolvedInputs),

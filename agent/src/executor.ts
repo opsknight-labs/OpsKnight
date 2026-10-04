@@ -126,13 +126,13 @@ export async function executeAttempt(
         // The process may have exited between the state check and signal.
       }
       setTimeout(() => {
-        if (!child.pid || child.exitCode !== null) return;
+        if (!child.pid) return;
         try {
           process.kill(process.platform === 'win32' ? child.pid : -child.pid, 'SIGKILL');
         } catch {
           // The process exited during the termination grace period.
         }
-      }, 5_000).unref();
+      }, 5_000);
     };
     const timeout = setTimeout(() => {
       timedOut = true;
@@ -154,7 +154,14 @@ export async function executeAttempt(
       const output =
         Buffer.concat(chunks).toString('utf8') + (truncated ? '\n[output truncated]' : '');
       if (signal.aborted)
-        return resolve({ status: 'CANCELLED', exitCode: code ?? undefined, output });
+        return resolve({
+          status: signal.reason === 'LEASE_LOST' ? 'UNKNOWN' : 'CANCELLED',
+          exitCode: code ?? undefined,
+          output,
+          ...(signal.reason === 'LEASE_LOST'
+            ? { errorCode: 'LEASE_LOST', errorMessage: 'Local execution authority expired.' }
+            : {}),
+        });
       if (timedOut) {
         return resolve({
           status: attempt.step.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN',

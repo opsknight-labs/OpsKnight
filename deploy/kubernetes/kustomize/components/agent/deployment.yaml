@@ -26,6 +26,10 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - { name: OPSKNIGHT_URL, value: 'http://opsknight-service:80' }
+            - name: OPSKNIGHT_EXECUTION_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  { name: opsknight-agent-enrollment, key: OPSKNIGHT_EXECUTION_PUBLIC_KEY }
             - {
                 name: OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE,
                 value: /run/secrets/opsknight-agent/enrollment-token,

@@ -400,6 +400,15 @@ async function runOnce(): Promise<void> {
     // recovery runs on every replica too.
     const notifications = await runCriticalNotificationCycle();
 
+    if (
+      !workerState.excludeRunbookJobs &&
+      Date.now() - workerState.lastRunbookReconciliationAt >= RUNBOOK_RECONCILIATION_INTERVAL_MS
+    ) {
+      const { reconcileRunbooks } = await import('./runbooks/reconciler');
+      await reconcileRunbooks(Math.min(workerState.workerConfig.batchSize, 100));
+      workerState.lastRunbookReconciliationAt = Date.now();
+    }
+
     // Operational background jobs (war-room, Jira, side effects, auto-unsnooze)
     // always continue; processPendingJobs automatically fences bulk fan-out when paused.
     const result = workerState.excludeRunbookJobs

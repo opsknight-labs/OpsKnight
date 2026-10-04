@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { getUserPermissions } from '@/lib/rbac';
+import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
 import { redactRunbookOutput } from '@/lib/runbooks/redaction';
 import { computePlanDigest, resolveInputTemplates } from '@/lib/runbooks/definition';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -38,8 +38,14 @@ export default async function IncidentRunbooks({
   incidentId: string;
   serviceId: string;
 }) {
-  const [permissions, bindings, executions, suggestions] = await Promise.all([
-    getUserPermissions(),
+  const permissions = await getUserPermissions();
+  if (
+    !permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_ALL) &&
+    !permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_SCOPED)
+  )
+    return null;
+  await assertCanViewIncident(incidentId);
+  const [bindings, executions, suggestions] = await Promise.all([
     prisma.serviceRunbookBinding.findMany({
       where: { serviceId, enabled: true },
       include: { runbook: true, runbookVersion: true },
@@ -103,10 +109,15 @@ export default async function IncidentRunbooks({
                         suggestion.id
                       )}
                     >
-                      <Button type="submit" size="sm">
+                      <Button type="submit" size="sm" disabled={!suggestion.planSnapshot}>
                         <Play /> Start suggestion
                       </Button>
                     </form>
+                    {!suggestion.planSnapshot && (
+                      <span className="text-xs text-muted-foreground">
+                        Generate a new suggestion to freeze its plan.
+                      </span>
+                    )}
                     <form
                       action={dismissIncidentRunbookSuggestionAction.bind(
                         null,

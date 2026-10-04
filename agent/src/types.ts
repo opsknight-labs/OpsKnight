@@ -20,6 +20,10 @@ export interface AgentIdentity {
 }
 
 export interface ClaimedAttempt {
+  signature?: string;
+  signingAgentId?: string;
+  executionDeadlineAt?: string;
+  definitionChecksum?: string;
   attemptId: string;
   leaseToken: string;
   leaseExpiresAt: string;
@@ -39,6 +43,7 @@ export interface ClaimedAttempt {
 }
 
 export interface SpoolRecord {
+  localOutput?: string;
   attemptId: string;
   leaseToken: string;
   producedAt: string;

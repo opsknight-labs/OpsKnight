@@ -392,6 +392,21 @@ export function requiresAnyApproval(definition: RunbookDefinition): boolean {
 const SECRET_REF_PREFIX = 'secret://';
 const INPUT_TEMPLATE_GLOBAL = /\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}/g;
 
+export function referencedStepInputKeys(value: unknown): Set<string> {
+  const keys = new Set<string>();
+  const visit = (entry: unknown) => {
+    if (typeof entry === 'string') {
+      for (const match of entry.matchAll(INPUT_TEMPLATE_GLOBAL)) keys.add(match[1]);
+      // Bash inputs can be consumed through the documented constrained environment.
+      for (const match of entry.matchAll(/\bOPSKNIGHT_INPUT_([A-Z0-9_]+)\b/g))
+        keys.add(match[1].toLowerCase());
+    } else if (Array.isArray(entry)) entry.forEach(visit);
+    else if (entry && typeof entry === 'object') Object.values(entry).forEach(visit);
+  };
+  visit(value);
+  return keys;
+}
+
 /**
  * Checks if a value is a secret reference (e.g., "secret://prod-db-password").
  */

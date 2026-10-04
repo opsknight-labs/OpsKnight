@@ -12,7 +12,7 @@ export type IncidentDetailTabsProps = {
   noteCount?: number;
   activityContent: ReactNode;
   timelineContent: ReactNode;
-  runbooksContent: ReactNode;
+  runbooksContent?: ReactNode;
   postmortemContent?: ReactNode;
   postmortemStatus?: string | null;
   className?: string;
@@ -41,13 +41,15 @@ export default function IncidentDetailTabs({
               <Settings2 className="h-4 w-4" />
               <span>Overview</span>
             </TabsTrigger>
-            <TabsTrigger
-              value="runbooks"
-              className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
-            >
-              <Workflow className="h-4 w-4" />
-              <span>Runbooks</span>
-            </TabsTrigger>
+            {runbooksContent && (
+              <TabsTrigger
+                value="runbooks"
+                className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
+              >
+                <Workflow className="h-4 w-4" />
+                <span>Runbooks</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger
               value="timeline"
               className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
@@ -94,9 +96,11 @@ export default function IncidentDetailTabs({
             {timelineContent}
           </TabsContent>
 
-          <TabsContent value="runbooks" className="mt-0 focus-visible:outline-none">
-            {runbooksContent}
-          </TabsContent>
+          {runbooksContent && (
+            <TabsContent value="runbooks" className="mt-0 focus-visible:outline-none">
+              {runbooksContent}
+            </TabsContent>
+          )}
 
           <TabsContent value="postmortem" className="mt-0 focus-visible:outline-none">
             {postmortemContent}

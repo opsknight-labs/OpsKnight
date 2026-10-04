@@ -60,7 +60,7 @@ export default async function RunbookAgentsPage() {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const permissions = await getUserPermissions();
   const canManageSecrets = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
-  const [agents, pools, secrets] = await Promise.all([
+  const [agents, pools, secrets, executionSigningKey] = await Promise.all([
     prisma.runbookAgent.findMany({
       include: {
         poolMemberships: { include: { pool: true } },
@@ -78,12 +78,28 @@ export default async function RunbookAgentsPage() {
           orderBy: { name: 'asc' },
         })
       : Promise.resolve([]),
+    prisma.runbookExecutionSigningKey.findUnique({
+      where: { id: 'default' },
+      select: { publicKey: true },
+    }),
   ]);
   const canManage = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const activeAgents = agents.filter(agent => agent.status !== 'REVOKED');
 
   return (
     <div className="mx-auto w-full max-w-[1180px] space-y-6 p-4 sm:p-6 lg:p-8">
+      {canManage && executionSigningKey && (
+        <div className="rounded-md border p-4 text-sm">
+          <p className="font-medium">Pinned execution public key</p>
+          <p className="mt-1 text-muted-foreground">
+            Set OPSKNIGHT_EXECUTION_PUBLIC_KEY on each Agent. Verify this value through your trusted
+            OpsKnight session.
+          </p>
+          <code className="mt-2 block break-all select-all text-xs">
+            {executionSigningKey.publicKey}
+          </code>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-3">
         <Link
           href="/runbooks"
@@ -189,8 +205,8 @@ export default async function RunbookAgentsPage() {
                   {agent._count.claimedAttempts} attempts
                 </div>
                 <div>
-                  Active {agent.activeAttemptCount} · Spool {agent.spoolDepth} · Policy{' '}
-                  {agent.policyHash?.slice(0, 12) || '—'}
+                  Active {agent.activeAttemptCount} · Spool {agent.spoolDepth} · Quarantined{' '}
+                  {agent.deadLetterDepth} · Policy {agent.policyHash?.slice(0, 12) || '—'}
                 </div>
                 <div>
                   {agent.poolMemberships.map(item => item.pool.name).join(', ') || 'No agent pool'}

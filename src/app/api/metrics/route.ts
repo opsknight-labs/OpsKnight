@@ -26,7 +26,7 @@ type MetricsSnapshot = {
   runbookExecutions: Array<{ status: string; count: number }> | null;
   runbookAttempts: Array<{ status: string; count: number }> | null;
   runbookAgents: Array<{ status: string; count: number }> | null;
-  runbookAgentWork: { spoolDepth: number; activeAttempts: number } | null;
+  runbookAgentWork: { spoolDepth: number; activeAttempts: number; deadLetterDepth: number } | null;
   runbookArtifactStorage: { count: number; bytes: number } | null;
   runbookOldestPendingAt: Date | null | undefined;
   runbookCircuitsOpen: number | null;
@@ -203,10 +203,11 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
       collectWithTimeout('runbook-agent-work', DB_COLLECTOR_TIMEOUT_MS, async () => {
         const result = await prisma.runbookAgent.aggregate({
           where: { status: { not: 'REVOKED' } },
-          _sum: { spoolDepth: true, activeAttemptCount: true },
+          _sum: { spoolDepth: true, activeAttemptCount: true, deadLetterDepth: true },
         });
         return {
           spoolDepth: result._sum.spoolDepth ?? 0,
+          deadLetterDepth: result._sum.deadLetterDepth ?? 0,
           activeAttempts: result._sum.activeAttemptCount ?? 0,
         };
       }),
@@ -452,6 +453,10 @@ async function getMetrics(req: Request) {
   }
   if (snapshot.runbookAgentWork) {
     metrics.set('opsknight_runbook_agent_spool_depth', snapshot.runbookAgentWork.spoolDepth);
+    metrics.set(
+      'opsknight_runbook_agent_dead_letter_depth',
+      snapshot.runbookAgentWork.deadLetterDepth
+    );
     metrics.set(
       'opsknight_runbook_agent_active_attempts',
       snapshot.runbookAgentWork.activeAttempts

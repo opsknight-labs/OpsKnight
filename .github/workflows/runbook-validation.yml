@@ -1,0 +1,77 @@
+name: Runbook protocol validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['feat/**', 'fix/**']
+    paths:
+      - 'agent/**'
+      - 'src/lib/runbooks/**'
+      - 'src/components/runbooks/**'
+      - 'src/components/incident/**'
+      - 'src/app/api/runbook*/**'
+      - 'src/app/(app)/runbooks/**'
+      - 'src/lib/job-worker.ts'
+      - 'prisma/**'
+      - 'deploy/**'
+      - 'tests/**/runbook*'
+      - 'tests/lib/runbooks/**'
+      - '.github/workflows/runbook-validation.yml'
+      - '.github/workflows/deployment-validation.yml'
+      - '.github/workflows/swarm-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runbook-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  execution-safety:
+    name: Runbook fault injection and database safety
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: opsknight
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: runbook_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U opsknight -d runbook_test"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://opsknight:test_password@localhost:5432/runbook_test
+      DIRECT_URL: postgresql://opsknight:test_password@localhost:5432/runbook_test
+      ENCRYPTION_KEY: 68112f544b2c8b0f84436ea34293f733c33e49b41e657b9db0275f5edf09c7ba
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+      - name: Apply all migrations
+        run: npx prisma migrate deploy
+      - name: Typecheck
+        run: npx tsc --noEmit --incremental false
+      - name: Agent runtime and authorization regressions
+        run: >-
+          npx vitest run --no-file-parallelism --maxWorkers=1
+          tests/lib/runbooks tests/lib/deployment-config-unit.test.ts
+          tests/api/runbook-artifacts.test.ts tests/api/metrics.test.ts
+          tests/lib/operational-metric-registry.test.ts
+          tests/integration/runbook-agent-runtime.test.ts
+      - name: Real PostgreSQL concurrency and execution fences
+        env: { VITEST_USE_REAL_DB: '1' }
+        run: >-
+          npx vitest run --no-file-parallelism --maxWorkers=1
+          tests/integration/runbook-execution-safety.test.ts
+
+  deployment-manifests:
+    uses: ./.github/workflows/deployment-validation.yml
+  swarm-manifests:
+    uses: ./.github/workflows/swarm-validation.yml

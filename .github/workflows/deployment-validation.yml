@@ -1,6 +1,7 @@
 name: Deployment manifests
 
 on:
+  workflow_call:
   pull_request:
     branches: [main]
     paths:
@@ -59,7 +60,7 @@ jobs:
           cp env.example .env
           docker compose -f deploy/compose/docker-compose.yml config > /tmp/opsknight-compose.yaml
           docker compose -f deploy/compose/docker-compose.dev.yml config > /tmp/opsknight-compose-dev.yaml
-          OPSKNIGHT_AGENT_ENROLLMENT_TOKEN='ci-single-use-token' OPSKNIGHT_PULL_POLICY=never \
+          OPSKNIGHT_EXECUTION_PUBLIC_KEY='ci-pinned-public-key' OPSKNIGHT_AGENT_ENROLLMENT_TOKEN='ci-single-use-token' OPSKNIGHT_PULL_POLICY=never \
             docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.agent.yml \
             config > /tmp/opsknight-compose-agent.yaml
           OPSKNIGHT_DATABASE_URL='postgresql://user:encoded%40password@db.example.com:6432/opsknight_db?sslmode=require' \

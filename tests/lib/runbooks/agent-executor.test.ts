@@ -79,4 +79,13 @@ describe('runbook Agent executor', () => {
     const result = await executeAttempt(writeAttempt, policy, new AbortController().signal);
     expect(result).toMatchObject({ status: 'UNKNOWN', errorCode: 'COMMAND_FAILED' });
   });
+
+  it('terminates active writes as UNKNOWN when local lease authority is lost', async () => {
+    const controller = new AbortController();
+    const write = attempt('sleep 30');
+    write.step.riskClass = 'IDEMPOTENT_WRITE';
+    const execution = executeAttempt(write, policy, controller.signal);
+    setTimeout(() => controller.abort('LEASE_LOST'), 50);
+    expect(await execution).toMatchObject({ status: 'UNKNOWN', errorCode: 'LEASE_LOST' });
+  });
 });

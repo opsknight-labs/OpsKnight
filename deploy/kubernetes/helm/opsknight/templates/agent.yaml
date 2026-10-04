@@ -83,6 +83,11 @@ spec:
               value: {{ default (printf "http://%s:%v" (include "opsknight.fullname" .) .Values.service.port) .Values.agent.url | quote }}
             - name: OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE
               value: /run/secrets/opsknight-agent/enrollment-token
+            - name: OPSKNIGHT_EXECUTION_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.agent.enrollmentToken.existingSecret }}
+                  key: OPSKNIGHT_EXECUTION_PUBLIC_KEY
           volumeMounts:
             - name: policy
               mountPath: /etc/opsknight-agent/policy.json

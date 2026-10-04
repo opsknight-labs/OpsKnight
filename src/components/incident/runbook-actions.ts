@@ -28,7 +28,7 @@ export async function dismissIncidentRunbookSuggestionAction(
       state: 'SUGGESTED',
       binding: { service: { incidents: { some: { id: incidentId } } } },
     },
-    data: { state: 'DISMISSED' },
+    data: { state: 'DISMISSED', dismissedAt: new Date() },
   });
   revalidatePath(`/incidents/${incidentId}`);
 }

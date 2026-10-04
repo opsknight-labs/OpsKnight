@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { CAPABILITIES } from '@/lib/authorization';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
@@ -107,6 +108,9 @@ export default async function IncidentDetailScreen({
   const incidentSla = projectIncidentSlaState(incident, { now: new Date() });
 
   const permissions = await getUserPermissions();
+  const canReadRunbooks =
+    permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_ALL) ||
+    permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_SCOPED);
   const canManageIncident = permissions.isResponderOrAbove;
   const canAcknowledgeIncident = permissions.capabilities.includes('incident.acknowledge.scoped');
   const canAddIncidentNote = permissions.capabilities.includes('incident.note.scoped');
@@ -541,7 +545,9 @@ export default async function IncidentDetailScreen({
             noteCount={totalNotesCount}
             activityContent={activityContent}
             runbooksContent={
-              <IncidentRunbooks incidentId={incident.id} serviceId={incident.serviceId} />
+              canReadRunbooks ? (
+                <IncidentRunbooks incidentId={incident.id} serviceId={incident.serviceId} />
+              ) : null
             }
             timelineContent={timelineContent}
             postmortemContent={postmortemContent}

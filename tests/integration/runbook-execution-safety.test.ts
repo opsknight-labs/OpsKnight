@@ -9,6 +9,10 @@ import {
   submitAgentResult,
 } from '@/lib/runbooks/agent-claims';
 import { reconcileRunbooks } from '@/lib/runbooks/reconciler';
+import { evaluateIncidentTriggers } from '@/lib/runbooks/triggers';
+import { encrypt } from '@/lib/encryption';
+import { getExecutionSigningKey } from '@/lib/runbooks/execution-signing';
+import { verifyExecutionEnvelope } from '../../agent/src/envelope';
 import type { RunbookDefinition } from '@/lib/runbooks/types';
 import {
   createTestIncident,
@@ -77,6 +81,198 @@ async function createAgentTarget(definition: RunbookDefinition) {
 describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   beforeEach(async () => resetDatabase());
   afterAll(async () => testPrisma.$disconnect());
+
+  it('creates one execution signing identity under concurrent initialization', async () => {
+    const keys = await Promise.all([
+      getExecutionSigningKey(),
+      getExecutionSigningKey(),
+      getExecutionSigningKey(),
+    ]);
+    expect(new Set(keys.map(key => key.publicKey)).size).toBe(1);
+    expect(await testPrisma.runbookExecutionSigningKey.count()).toBe(1);
+    expect(keys[0].privateKeyEncrypted).not.toContain('PRIVATE KEY');
+  });
+
+  it('acknowledges repeated starts for the same fence without extending authority', async () => {
+    const target = await createAgentTarget({
+      description: 'Start retries',
+      steps: [
+        {
+          key: 'status',
+          name: 'Status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: { action: 'status', unit: 'api.service' },
+        },
+      ],
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    await advanceExecution(execution.id);
+    const claim = (await claimAgentAttempt(target.agent.id))!;
+    const key = await getExecutionSigningKey();
+    expect(() => verifyExecutionEnvelope(claim, key.publicKey, target.agent.id)).not.toThrow();
+    const fence = {
+      attemptId: claim.attemptId,
+      agentId: target.agent.id,
+      leaseToken: claim.leaseToken,
+    };
+    const [first, second] = await Promise.all([fenceAgentAttempt(fence), fenceAgentAttempt(fence)]);
+    expect([first.alreadyStarted, second.alreadyStarted].sort()).toEqual([false, true]);
+    expect(first.startedAt).toBe(second.startedAt);
+    expect(first.leaseExpiresAt).toBe(second.leaseExpiresAt);
+    await expect(fenceAgentAttempt({ ...fence, leaseToken: 'incorrect' })).rejects.toThrow();
+  });
+
+  it('isolates a bad automatic binding from later valid Runbooks', async () => {
+    const service = await createTestService('Trigger isolation');
+    const incident = await createTestIncident('Trigger isolation', service.id);
+    for (const needsAgent of [true, false]) {
+      const { runbook, version } = await createPublishedRunbook({
+        description: 'Trigger',
+        steps: needsAgent
+          ? [
+              {
+                key: 'status',
+                name: 'Status',
+                type: 'SYSTEMD',
+                riskClass: 'READ_ONLY',
+                config: { action: 'status', unit: 'api.service' },
+              },
+            ]
+          : [
+              {
+                key: 'wait',
+                name: 'Wait',
+                type: 'WAIT',
+                riskClass: 'READ_ONLY',
+                config: { durationSeconds: 0 },
+              },
+            ],
+      });
+      await testPrisma.serviceRunbookBinding.create({
+        data: {
+          serviceId: service.id,
+          runbookId: runbook.id,
+          runbookVersionId: version.id,
+          versionStrategy: 'PINNED',
+          mode: 'AUTOMATIC',
+          triggers: { create: { event: 'INCIDENT_CREATED' } },
+        },
+      });
+    }
+    expect(await evaluateIncidentTriggers(incident.id, 'isolation-event')).toMatchObject({
+      matched: 2,
+      started: 1,
+      suppressed: 1,
+    });
+    expect(await testPrisma.runbookExecution.count({ where: { incidentId: incident.id } })).toBe(1);
+    expect(
+      await testPrisma.incidentEvent.count({
+        where: { incidentId: incident.id, type: 'RUNBOOK_FAILED' },
+      })
+    ).toBe(1);
+  });
+
+  it('delivers only inputs and secrets referenced by the claimed step', async () => {
+    const target = await createAgentTarget({
+      description: 'Step secrets',
+      steps: [
+        {
+          key: 'status',
+          name: 'Status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: {
+            action: 'status',
+            unit: 'api.service',
+            environment: { TOKEN: '${{ inputs.unit }}' },
+          },
+        },
+      ],
+    });
+    await testPrisma.runbookInput.createMany({
+      data: [
+        {
+          runbookVersionId: target.version.id,
+          key: 'unit',
+          label: 'Unit',
+          type: 'SECRET_REF',
+          required: true,
+        },
+        {
+          runbookVersionId: target.version.id,
+          key: 'unused',
+          label: 'Unused token',
+          type: 'SECRET_REF',
+          required: true,
+        },
+      ],
+    });
+    await testPrisma.runbookSecret.create({
+      data: {
+        name: 'unit-secret',
+        valueEncrypted: await encrypt('api.service'),
+        createdById: target.actor.id,
+        grants: { create: { agentPoolId: target.pool.id } },
+      },
+    });
+    await testPrisma.serviceRunbookBinding.update({
+      where: { id: target.binding.id },
+      data: { inputValues: { unit: 'secret://unit-secret', unused: 'secret://not-granted' } },
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    await advanceExecution(execution.id);
+    const claim = await claimAgentAttempt(target.agent.id);
+    expect(claim?.inputValues).toEqual({ unit: 'api.service' });
+    expect(claim?.secretInputKeys).toEqual(['unit']);
+  });
+
+  it('rejects a published definition with a corrupted checksum', async () => {
+    const target = await createAgentTarget({
+      description: 'Checksum',
+      steps: [
+        {
+          key: 'status',
+          name: 'Status',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: { action: 'status', unit: 'api.service' },
+        },
+      ],
+    });
+    const corrupted = await testPrisma.runbookVersion.create({
+      data: {
+        runbookId: target.runbook.id,
+        version: 2,
+        state: 'PUBLISHED',
+        definition: target.version.definition as Prisma.InputJsonValue,
+        checksum: '0'.repeat(64),
+      },
+    });
+    await testPrisma.runbook.update({
+      where: { id: target.runbook.id },
+      data: { publishedVersionId: corrupted.id },
+    });
+    await testPrisma.serviceRunbookBinding.update({
+      where: { id: target.binding.id },
+      data: { versionStrategy: 'LATEST_PUBLISHED', runbookVersionId: null },
+    });
+    await expect(
+      startRunbookExecution({
+        runbookId: target.runbook.id,
+        bindingId: target.binding.id,
+        serviceId: target.service.id,
+      })
+    ).rejects.toThrow(/checksum/);
+  });
 
   it('counts pending write steps in the Agent-pool concurrency guard', async () => {
     const definition: RunbookDefinition = {
@@ -391,6 +587,12 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         triggerId: trigger.id,
         sourceEventId: 'incident-created-v1',
         fingerprint: 'suggestion-v1',
+        planSnapshot: {
+          inputValues: {},
+          agentId: null,
+          agentPoolId: target.pool.id,
+          definitionChecksum: target.version.checksum,
+        },
       },
     });
     const version2 = await testPrisma.runbookVersion.create({
@@ -414,7 +616,13 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       }),
       testPrisma.serviceRunbookBinding.update({
         where: { id: target.binding.id },
-        data: { versionStrategy: 'LATEST_PUBLISHED', runbookVersionId: null },
+        data: {
+          versionStrategy: 'LATEST_PUBLISHED',
+          runbookVersionId: null,
+          inputValues: { changed: 'must-not-be-used' },
+          defaultAgentPoolId: null,
+          defaultAgentId: target.agent.id,
+        },
       }),
     ]);
 
@@ -428,6 +636,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       triggeredByUserId: target.actor.id,
     });
     expect(execution.runbookVersionId).toBe(target.version.id);
+    expect(execution.inputValues).toEqual({});
+    expect(execution.resolvedTargetAgentPoolId).toBe(target.pool.id);
+    expect(execution.resolvedTargetAgentId).toBeNull();
+    expect(execution.triggerId).toBe(trigger.id);
     expect(
       await testPrisma.runbookSuggestion.findUnique({
         where: { id: suggestion.id },

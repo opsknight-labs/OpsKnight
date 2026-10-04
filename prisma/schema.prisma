@@ -3514,6 +3514,13 @@ model RunbookTriggerCondition {
   @@index([triggerId])
 }
 
+model RunbookExecutionSigningKey {
+  id                  String   @id
+  publicKey           String
+  privateKeyEncrypted String
+  createdAt           DateTime @default(now())
+}
+
 model RunbookSuggestion {
   id               String                 @id @default(cuid())
   incidentId       String
@@ -3525,6 +3532,7 @@ model RunbookSuggestion {
   state            RunbookSuggestionState @default(SUGGESTED)
   startedAt        DateTime?
   dismissedAt      DateTime?
+  planSnapshot     Json?
 
   incident       Incident              @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   binding        ServiceRunbookBinding @relation(fields: [bindingId], references: [id], onDelete: Cascade)
@@ -3685,6 +3693,7 @@ model RunbookAgent {
   capabilities        Json               @default("[]")
   policyHash          String?
   spoolDepth          Int                @default(0)
+  deadLetterDepth     Int                @default(0)
   activeAttemptCount  Int                @default(0)
   lastError           String?
   revokedAt           DateTime?

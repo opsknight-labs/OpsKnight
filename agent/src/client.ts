@@ -1,13 +1,27 @@
 import { createHash, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
 import { hostname, platform } from 'node:os';
 import type { AgentIdentity, ClaimedAttempt, SpoolRecord } from './types';
+import { verifyLeaseAcknowledgement } from './envelope';
 
 type JsonObject = Record<string, unknown>;
+
+export class AgentApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+  }
+  get terminal() {
+    return [400, 403, 404, 409, 410, 422].includes(this.status);
+  }
+}
 
 export class AgentClient {
   constructor(
     private readonly baseUrl: string,
-    private readonly identity: AgentIdentity
+    private readonly identity: AgentIdentity,
+    private readonly executionPublicKey?: string
   ) {}
 
   private async request<T>(pathname: string, body: unknown): Promise<T | null> {
@@ -37,7 +51,10 @@ export class AgentClient {
     if (response.status === 204) return null;
     const json = (await response.json()) as JsonObject;
     if (!response.ok)
-      throw new Error(String(json.error ?? `Agent API returned ${response.status}.`));
+      throw new AgentApiError(
+        String(json.error ?? `Agent API returned ${response.status}.`),
+        response.status
+      );
     return (json.data ?? json) as T;
   }
 
@@ -45,6 +62,7 @@ export class AgentClient {
     capabilities: string[];
     policyHash: string;
     spoolDepth: number;
+    deadLetterDepth: number;
     activeAttemptCount: number;
     lastError: string | null;
   }) {
@@ -64,23 +82,59 @@ export class AgentClient {
     return result?.attempt ?? null;
   }
 
+  private async leaseRequest<T extends JsonObject>(
+    pathname: string,
+    attemptId: string,
+    leaseToken: string,
+    body: unknown = { leaseToken }
+  ): Promise<T> {
+    const value = await this.request<T>(pathname, body);
+    if (!value || !this.executionPublicKey)
+      throw new Error('Missing signed lease acknowledgement or pinned key.');
+    verifyLeaseAcknowledgement(
+      value,
+      this.executionPublicKey,
+      this.identity.agentId,
+      attemptId,
+      createHash('sha256').update(leaseToken).digest('hex')
+    );
+    return value;
+  }
+
   start(attemptId: string, leaseToken: string) {
-    return this.request(`/api/runbook-agent/v1/jobs/${attemptId}/start`, { leaseToken });
+    return this.leaseRequest<{
+      startedAt: string;
+      leaseExpiresAt: string;
+      alreadyStarted: boolean;
+    }>(`/api/runbook-agent/v1/jobs/${attemptId}/start`, attemptId, leaseToken);
   }
 
   renew(attemptId: string, leaseToken: string) {
-    return this.request<{ cancelRequested: boolean; leaseExpiresAt: string }>(
+    return this.leaseRequest<{ cancelRequested: boolean; leaseExpiresAt: string }>(
       `/api/runbook-agent/v1/jobs/${attemptId}/heartbeat`,
-      { leaseToken }
+      attemptId,
+      leaseToken
     );
   }
 
-  submit(record: SpoolRecord) {
-    return this.request(`/api/runbook-agent/v1/jobs/${record.attemptId}/result`, record);
+  async submit(record: SpoolRecord) {
+    const result = await this.leaseRequest<{ accepted: boolean }>(
+      `/api/runbook-agent/v1/jobs/${record.attemptId}/result`,
+      record.attemptId,
+      record.leaseToken,
+      record
+    );
+    if (result.accepted !== true) throw new Error('Result was not acknowledged.');
+    return result;
   }
 
   uploadArtifact(input: JsonObject) {
-    return this.request<{ id: string }>('/api/runbook-agent/v1/artifacts', input);
+    return this.leaseRequest<{ id: string }>(
+      '/api/runbook-agent/v1/artifacts',
+      String(input.attemptId),
+      String(input.leaseToken),
+      input
+    );
   }
 }
 
