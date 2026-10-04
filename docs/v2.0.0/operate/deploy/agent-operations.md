@@ -24,6 +24,10 @@ The Agent is separate from the Runbook Worker. The worker plans and reconciles d
 
 ## Runbook authoring and operations UI
 
+Advanced JSON edits are not saved implicitly. An unapplied-changes warning remains visible even when switching editor tabs, and draft saving is disabled until the JSON is applied to the builder or discarded with **Refresh JSON from builder**. Step editor identity remains stable during reordering and key edits.
+
+The dedicated browser suite covers publication, service attachment and target selection, trigger configuration, incident suggestions, exact-plan approval, and cancellation. A separate journey covers enrollment, pool membership, scoped secret grants, and rotation. These tests use an isolated database and seed asynchronous worker transitions; they never execute host remediation. First-class nested precheck/verification editing and server-side library/execution pagination remain follow-up product work.
+
 The Runbooks library supports search, published/draft filters, and creation templates. Edit a draft through the ordered step builder and each step's configuration panel; define typed inputs in the Inputs tab. Advanced JSON is an explicit alternative, not the primary editor. Save the draft before publishing: the publish confirmation publishes only the saved version. Published versions remain immutable.
 
 Service bindings show their selected version, target, inputs, and triggers together. Use **Configure** to change them. Machine-specific write actions cannot target a multi-member `LOCAL_HOSTS` pool; choose a specific Agent instead. Incident executions show ordered step progress and approvals for the exact frozen action and parameters. Cancellation, publication, revocation, and detach operations require confirmation.

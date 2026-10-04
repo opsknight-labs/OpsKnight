@@ -127,6 +127,10 @@ export default function RunbookBuilder({
   readOnly?: boolean;
 }) {
   const [definition, setDefinition] = useState(initialDefinition);
+  // Keep editor identity independent of editable keys and list positions.
+  const [stepIdentities, setStepIdentities] = useState(
+    initialDefinition.steps.map(step => step.key)
+  );
   const [inputs, setInputs] = useState(initialInputs);
   const [stepType, setStepType] = useState<RunbookStepType>('MANUAL');
   const [dirty, setDirty] = useState(false);
@@ -135,6 +139,7 @@ export default function RunbookBuilder({
   );
   const [advancedInputs, setAdvancedInputs] = useState(JSON.stringify(initialInputs, null, 2));
   const [jsonError, setJsonError] = useState('');
+  const [unappliedJson, setUnappliedJson] = useState(false);
   function changeStep(index: number, patch: Partial<RunbookStepDefinition>) {
     setDirty(true);
     setDefinition(current => ({
@@ -149,6 +154,10 @@ export default function RunbookBuilder({
     const item = steps.splice(index, 1)[0];
     if (!item) return;
     steps.splice(index + offset, 0, item);
+    const identities = [...stepIdentities];
+    const identity = identities.splice(index, 1)[0];
+    identities.splice(index + offset, 0, identity);
+    setStepIdentities(identities);
     setDefinition({ ...definition, steps });
     setDirty(true);
   }
@@ -161,7 +170,7 @@ export default function RunbookBuilder({
       <ol aria-label="Runbook steps" className="space-y-0">
         {definition.steps.map((step, index) => (
           <li
-            key={index}
+            key={stepIdentities.at(index)}
             className="relative ml-3 border-l-2 border-border pb-5 pl-6 last:border-transparent"
           >
             <span className="absolute -left-3 top-5 flex h-6 w-6 items-center justify-center rounded-full border bg-background text-xs font-semibold">
@@ -359,6 +368,7 @@ export default function RunbookBuilder({
                     aria-label={`Remove ${step.name}`}
                     disabled={definition.steps.length === 1}
                     onClick={() => {
+                      setStepIdentities(stepIdentities.filter((_, position) => position !== index));
                       setDefinition({
                         ...definition,
                         steps: definition.steps.filter((_, position) => position !== index),
@@ -394,6 +404,7 @@ export default function RunbookBuilder({
             onClick={() => {
               let sequence = definition.steps.length + 1;
               while (definition.steps.some(step => step.key === `step_${sequence}`)) sequence++;
+              setStepIdentities([...stepIdentities, crypto.randomUUID()]);
               setDefinition({
                 ...definition,
                 steps: [...definition.steps, newBuilderStep(stepType, `step_${sequence}`)],
@@ -543,6 +554,7 @@ export default function RunbookBuilder({
           setAdvancedDefinition(JSON.stringify(definition, null, 2));
           setAdvancedInputs(JSON.stringify(inputs, null, 2));
           setJsonError('');
+          setUnappliedJson(false);
         }}
       >
         Refresh JSON from builder
@@ -551,7 +563,10 @@ export default function RunbookBuilder({
         <Textarea
           aria-label="Definition JSON"
           value={advancedDefinition}
-          onChange={event => setAdvancedDefinition(event.target.value)}
+          onChange={event => {
+            setAdvancedDefinition(event.target.value);
+            setUnappliedJson(true);
+          }}
           readOnly={readOnly}
           className="min-h-72 font-mono text-xs"
           spellCheck={false}
@@ -561,7 +576,10 @@ export default function RunbookBuilder({
         <Textarea
           aria-label="Typed inputs JSON"
           value={advancedInputs}
-          onChange={event => setAdvancedInputs(event.target.value)}
+          onChange={event => {
+            setAdvancedInputs(event.target.value);
+            setUnappliedJson(true);
+          }}
           readOnly={readOnly}
           className="min-h-40 font-mono text-xs"
           spellCheck={false}
@@ -578,9 +596,11 @@ export default function RunbookBuilder({
               );
               const parsedInputs = runbookInputsSchema.parse(JSON.parse(advancedInputs));
               setDefinition(parsedDefinition as RunbookDefinition);
+              setStepIdentities(parsedDefinition.steps.map(() => crypto.randomUUID()));
               setInputs(parsedInputs);
               setDirty(true);
               setJsonError('');
+              setUnappliedJson(false);
             } catch {
               setJsonError(
                 'Invalid definition or inputs. Check JSON syntax, unique keys and supported fields.'
@@ -624,9 +644,15 @@ export default function RunbookBuilder({
           },
         ]}
       />
+      {unappliedJson && !readOnly && (
+        <p role="alert" className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
+          Advanced JSON has unapplied changes. Apply JSON to the builder before saving, or refresh
+          JSON from the builder to discard those edits.
+        </p>
+      )}
       {!readOnly && (
         <div className="flex flex-wrap items-center gap-3 border-t pt-4">
-          <SubmitButton pendingLabel="Saving draft…">
+          <SubmitButton pendingLabel="Saving draft…" disabled={unappliedJson}>
             <ShieldCheck className="h-4 w-4" />
             Save draft
           </SubmitButton>
