@@ -4,7 +4,7 @@
   "systemdUnits": ["opsknight.service", "payments-api.service"],
   "dockerContainers": [],
   "kubernetesNamespaces": [],
-  "bashCommandPatterns": [],
+  "bashCommandPatterns": ["journalctl -u opsknight.service --since -15min"],
   "maxRuntimeSeconds": 300,
   "maxOutputBytes": 1048576
 }

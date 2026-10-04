@@ -2,6 +2,14 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import type { AgentPolicy, ClaimedAttempt } from './types';
 
+const STEP_TYPES = new Set<AgentPolicy['allowedStepTypes'][number]>([
+  'LINUX_DIAGNOSTICS',
+  'SYSTEMD',
+  'DOCKER',
+  'KUBERNETES',
+  'BASH',
+]);
+
 export const DEFAULT_POLICY: AgentPolicy = {
   allowedStepTypes: ['LINUX_DIAGNOSTICS'],
   allowNonIdempotent: false,
@@ -20,20 +28,47 @@ function stringList(value: unknown): string[] {
   return value;
 }
 
+function boundedInteger(
+  value: unknown,
+  fallback: number,
+  minimum: number,
+  maximum: number
+): number {
+  const candidate = value ?? fallback;
+  if (
+    typeof candidate !== 'number' ||
+    !Number.isInteger(candidate) ||
+    !Number.isFinite(candidate)
+  ) {
+    throw new Error('Policy limits must be finite integers.');
+  }
+  return Math.min(maximum, Math.max(minimum, candidate));
+}
+
 export async function loadPolicy(path: string): Promise<{ policy: AgentPolicy; hash: string }> {
   const raw = await readFile(path, 'utf8');
-  const parsed = JSON.parse(raw) as Partial<AgentPolicy>;
+  const parsed = JSON.parse(raw) as Partial<AgentPolicy> | null;
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+    throw new Error('Policy must be a JSON object.');
+  }
+  const allowedStepTypes = stringList(parsed.allowedStepTypes ?? DEFAULT_POLICY.allowedStepTypes);
+  if (
+    allowedStepTypes.some(type => !STEP_TYPES.has(type as AgentPolicy['allowedStepTypes'][number]))
+  ) {
+    throw new Error('Policy contains an unsupported step type.');
+  }
+  if (parsed.allowNonIdempotent !== undefined && typeof parsed.allowNonIdempotent !== 'boolean') {
+    throw new Error('allowNonIdempotent must be a boolean.');
+  }
   const policy: AgentPolicy = {
-    allowedStepTypes: stringList(
-      parsed.allowedStepTypes ?? DEFAULT_POLICY.allowedStepTypes
-    ) as AgentPolicy['allowedStepTypes'],
+    allowedStepTypes: allowedStepTypes as AgentPolicy['allowedStepTypes'],
     allowNonIdempotent: parsed.allowNonIdempotent === true,
     systemdUnits: stringList(parsed.systemdUnits ?? []),
     dockerContainers: stringList(parsed.dockerContainers ?? []),
     kubernetesNamespaces: stringList(parsed.kubernetesNamespaces ?? []),
     bashCommandPatterns: stringList(parsed.bashCommandPatterns ?? []),
-    maxRuntimeSeconds: Math.min(3600, Math.max(1, parsed.maxRuntimeSeconds ?? 300)),
-    maxOutputBytes: Math.min(8_388_608, Math.max(1024, parsed.maxOutputBytes ?? 1_048_576)),
+    maxRuntimeSeconds: boundedInteger(parsed.maxRuntimeSeconds, 300, 1, 3600),
+    maxOutputBytes: boundedInteger(parsed.maxOutputBytes, 1_048_576, 1024, 8_388_608),
   };
   return { policy, hash: createHash('sha256').update(raw).digest('hex') };
 }
@@ -77,7 +112,10 @@ export function assertPolicyAllows(attempt: ClaimedAttempt, policy: AgentPolicy)
   }
   if (step.type === 'BASH') {
     const command = String(config.command ?? '');
-    if (!matchesAllowlist(command, policy.bashCommandPatterns)) {
+    // Shell commands are exact-match only. Prefix wildcards are safe for
+    // argv-based resource names above, but unsafe for `sh -c` because an
+    // otherwise allowed prefix could append a second command.
+    if (!policy.bashCommandPatterns.includes(command)) {
       throw new Error('LOCAL_POLICY_DENIED: shell command is not allowlisted.');
     }
   }

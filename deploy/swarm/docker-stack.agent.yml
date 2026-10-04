@@ -14,6 +14,9 @@ services:
         target: /etc/opsknight-agent/policy.json
     volumes:
       - opsknight_agent_data:/var/lib/opsknight-agent
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777,noexec,nosuid
     networks:
       - opsknight
     deploy:

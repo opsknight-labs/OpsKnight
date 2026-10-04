@@ -72,6 +72,8 @@ spec:
         runAsUser: 1001
         runAsGroup: 1001
         fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: agent
           image: {{ include "opsknight.agent.image" . }}
@@ -170,9 +172,15 @@ spec:
       ports:
         - { protocol: UDP, port: 53 }
         - { protocol: TCP, port: 53 }
-    # Kubernetes API and explicitly allowed HTTPS execution targets.
-    - to: []
+    {{- if .Values.agent.networkPolicy.kubernetesApiCIDRs }}
+    # Explicit Kubernetes API endpoints. Global HTTPS egress stays closed.
+    - to:
+        {{- range .Values.agent.networkPolicy.kubernetesApiCIDRs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
       ports:
         - { protocol: TCP, port: 443 }
+    {{- end }}
 {{- end }}
 {{- end }}

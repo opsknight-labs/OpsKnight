@@ -222,10 +222,10 @@ agent:
     existingSecret: ''
     key: OPSKNIGHT_AGENT_ENROLLMENT_TOKEN
   policy:
-    allowedStepTypes: [LINUX_DIAGNOSTICS, KUBERNETES]
+    allowedStepTypes: [LINUX_DIAGNOSTICS]
     systemdUnits: []
     dockerContainers: []
-    kubernetesNamespaces: [opsknight]
+    kubernetesNamespaces: []
     bashCommandPatterns: []
     allowNonIdempotent: false
     maxRuntimeSeconds: 300
@@ -241,6 +241,10 @@ agent:
   # Role rules only for the resource types the local Agent policy permits.
   rbac:
     rules: []
+  networkPolicy:
+    # Required only when KUBERNETES execution is enabled. Use the smallest
+    # control-plane CIDRs exposed by your cluster; global HTTPS is never opened.
+    kubernetesApiCIDRs: []
   resources:
     requests: { cpu: 50m, memory: 64Mi }
     limits: { cpu: 500m, memory: 512Mi }

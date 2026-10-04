@@ -129,6 +129,7 @@ jobs:
             --set agent.enabled=true \
             --set-string agent.enrollmentToken.existingSecret=opsknight-agent-enrollment \
             --set networkPolicy.enabled=true \
+            --set-string agent.networkPolicy.kubernetesApiCIDRs[0]=10.96.0.1/32 \
             > /tmp/opsknight-helm-agent.yaml
           if helm template opsknight deploy/kubernetes/helm/opsknight --set runtime.mode=invalid >/dev/null 2>&1; then
             echo 'invalid runtime.mode unexpectedly rendered'
@@ -259,6 +260,7 @@ jobs:
           grep -q 'name: opsknight-agent' /tmp/opsknight-helm-agent.yaml
           grep -q 'OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE' /tmp/opsknight-helm-agent.yaml
           grep -q 'kind: NetworkPolicy' /tmp/opsknight-helm-agent.yaml
+          grep -q 'cidr: "10.96.0.1/32"' /tmp/opsknight-helm-agent.yaml
           grep -q 'name: opsknight-agent' /tmp/opsknight-kustomize-integrated-agent.yaml
           grep -q 'name: opsknight-agent' /tmp/opsknight-kustomize-split-agent.yaml
           grep -q 'OPSKNIGHT_AGENT_ENROLLMENT_TOKEN' /tmp/opsknight-compose-agent.yaml

@@ -20,7 +20,7 @@ const policy: AgentPolicy = {
   systemdUnits: ['opsknight-*'],
   dockerContainers: [],
   kubernetesNamespaces: ['production'],
-  bashCommandPatterns: ['uptime', 'journalctl *'],
+  bashCommandPatterns: ['uptime', 'journalctl -u opsknight.service'],
   maxRuntimeSeconds: 300,
   maxOutputBytes: 1_048_576,
 };
@@ -75,6 +75,15 @@ describe('runbook Agent local policy', () => {
     ).toThrow('LOCAL_POLICY_DENIED');
   });
 
+  it('requires exact Bash commands and rejects appended shell operations', () => {
+    expect(() =>
+      assertPolicyAllows(attempt({ type: 'BASH', config: { command: 'uptime' } }), policy)
+    ).not.toThrow();
+    expect(() =>
+      assertPolicyAllows(attempt({ type: 'BASH', config: { command: 'uptime; id' } }), policy)
+    ).toThrow('LOCAL_POLICY_DENIED');
+  });
+
   it('normalizes bounds and produces a stable policy hash', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'opsknight-policy-'));
     temporaryDirectories.push(directory);
@@ -92,6 +101,18 @@ describe('runbook Agent local policy', () => {
     expect(first.policy.maxRuntimeSeconds).toBe(3600);
     expect(first.policy.maxOutputBytes).toBe(1024);
     expect(first.hash).toBe(second.hash);
+  });
+
+  it('rejects malformed limits, booleans, and unknown step types', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'opsknight-policy-'));
+    temporaryDirectories.push(directory);
+    const file = join(directory, 'policy.json');
+    await writeFile(file, JSON.stringify({ maxRuntimeSeconds: '300' }));
+    await expect(loadPolicy(file)).rejects.toThrow('finite integers');
+    await writeFile(file, JSON.stringify({ allowNonIdempotent: 'false' }));
+    await expect(loadPolicy(file)).rejects.toThrow('must be a boolean');
+    await writeFile(file, JSON.stringify({ allowedStepTypes: ['REMOTE_CODE'] }));
+    await expect(loadPolicy(file)).rejects.toThrow('unsupported step type');
   });
 });
 

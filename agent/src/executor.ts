@@ -80,6 +80,9 @@ export async function executeAttempt(
   policy: AgentPolicy,
   signal: AbortSignal
 ): Promise<ExecutionResult> {
+  if (signal.aborted) {
+    return { status: 'CANCELLED', output: '', errorCode: 'CANCELLED_BEFORE_START' };
+  }
   const spec = commandFor(attempt);
   const configuredTimeout = attempt.step.timeoutSeconds ?? policy.maxRuntimeSeconds;
   const timeoutMs = Math.min(configuredTimeout, policy.maxRuntimeSeconds) * 1000;

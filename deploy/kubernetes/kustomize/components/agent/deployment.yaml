@@ -14,7 +14,12 @@ spec:
       labels: { app: opsknight-agent }
     spec:
       serviceAccountName: opsknight-agent
-      securityContext: { runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, fsGroup: 1001 }
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: agent
           image: ghcr.io/opsknight-labs/opsknight-agent:2.0.0

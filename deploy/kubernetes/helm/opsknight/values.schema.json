@@ -59,6 +59,7 @@
         "persistence",
         "serviceAccount",
         "rbac",
+        "networkPolicy",
         "resources",
         "nodeSelector",
         "tolerations",
@@ -146,6 +147,21 @@
           "additionalProperties": false,
           "required": ["create", "name"],
           "properties": { "create": { "type": "boolean" }, "name": { "type": "string" } }
+        },
+        "networkPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kubernetesApiCIDRs"],
+          "properties": {
+            "kubernetesApiCIDRs": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9A-Fa-f:.]+/[0-9]{1,3}$"
+              }
+            }
+          }
         },
         "rbac": {
           "type": "object",

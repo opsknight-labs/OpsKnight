@@ -36,7 +36,7 @@ Do not share an identity volume between running replicas. A token is single-use.
 
 ## Local policy
 
-`agent/policy.example.json` is fail-closed. `allowedStepTypes` enables executors; the Systemd unit, Docker container, Kubernetes namespace, and Bash command lists further constrain targets. A trailing `*` is the only wildcard. Non-idempotent actions remain disabled unless `allowNonIdempotent` is explicitly enabled.
+`agent/policy.container.json` is the fail-closed diagnostics-only baseline; `agent/policy.example.json` demonstrates an explicitly allowlisted native service. `allowedStepTypes` enables executors; the Systemd unit, Docker container, Kubernetes namespace, and Bash command lists further constrain targets. A trailing `*` is the only wildcard for resource-name allowlists. Bash commands require an exact match so an allowed prefix cannot append another shell operation. Non-idempotent actions remain disabled unless `allowNonIdempotent` is explicitly enabled.
 
 Platform authorization is a second boundary. Kubernetes RBAC, Docker socket access, Unix permissions, sudoers, or polkit must grant only the operations the local policy allows. A policy entry never grants an operating-system permission by itself.
 
@@ -69,13 +69,15 @@ helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \
   --set agent.enrollmentToken.existingSecret=opsknight-agent-enrollment
 ```
 
-The chart grants no Kubernetes resource privileges by default. Add narrow namespaced `agent.rbac.rules` and align `agent.policy.kubernetesNamespaces`. Keep the Agent PVC across upgrades because it stores identity and queued results.
+The chart grants no Kubernetes resource privileges or global HTTPS egress by default. To enable Kubernetes actions, add narrow namespaced `agent.rbac.rules`, align `agent.policy.kubernetesNamespaces`, and allow only the cluster control-plane endpoint through `agent.networkPolicy.kubernetesApiCIDRs`. Keep the Agent PVC across upgrades because it stores identity and queued results.
 
 ## Kustomize
 
-Use `profiles/integrated-agent` or `profiles/split-agent`. Replace the generated placeholder enrollment Secret through your secret controller or an environment overlay before applying. Pin both application and Agent images by digest, and customize the policy ConfigMap and namespaced Role.
+Use `profiles/integrated-agent` or `profiles/split-agent`. Create the externally managed `opsknight-agent-enrollment` Secret before applying the profile; the component deliberately does not generate or commit token material. Pin both application and Agent images by digest. The component starts diagnostics-only with empty RBAC; an overlay enabling Kubernetes actions must also add narrow Role rules and an `ipBlock` egress rule for the cluster API endpoint.
 
 ```sh
+kubectl -n opsknight create secret generic opsknight-agent-enrollment \
+  --from-literal=enrollment-token='<single-use-token>'
 kubectl kustomize deploy/kubernetes/kustomize/profiles/split-agent > /tmp/opsknight.yaml
 kubectl apply -f /tmp/opsknight.yaml
 ```

@@ -1,0 +1,75 @@
+import { describe, expect, it } from 'vitest';
+import { executeAttempt } from '../../../agent/src/executor';
+import type { AgentPolicy, ClaimedAttempt } from '../../../agent/src/types';
+
+const policy: AgentPolicy = {
+  allowedStepTypes: ['BASH'],
+  allowNonIdempotent: false,
+  systemdUnits: [],
+  dockerContainers: [],
+  kubernetesNamespaces: [],
+  bashCommandPatterns: [],
+  maxRuntimeSeconds: 30,
+  maxOutputBytes: 1024,
+};
+
+function attempt(command: string, inputValues: Record<string, unknown> = {}): ClaimedAttempt {
+  return {
+    attemptId: 'attempt123',
+    leaseToken: 'lease',
+    leaseExpiresAt: new Date().toISOString(),
+    idempotencyKey: null,
+    planDigest: null,
+    executionId: 'execution123',
+    inputValues,
+    secretInputKeys: [],
+    step: {
+      key: 'shell',
+      name: 'Shell',
+      type: 'BASH',
+      riskClass: 'READ_ONLY',
+      config: { command },
+      timeoutSeconds: 10,
+    },
+  };
+}
+
+describe('runbook Agent executor', () => {
+  it('passes typed inputs through the constrained environment', async () => {
+    const result = await executeAttempt(
+      attempt('printf "%s|%s" "$OPSKNIGHT_INPUT_SERVICE" "$OPSKNIGHT_INPUT_REPLICAS"', {
+        service: 'payments',
+        replicas: 3,
+      }),
+      policy,
+      new AbortController().signal
+    );
+    expect(result).toMatchObject({ status: 'SUCCEEDED', exitCode: 0 });
+    expect(result.output).toBe('payments|3');
+  });
+
+  it('bounds captured output and marks truncation', async () => {
+    const result = await executeAttempt(
+      attempt("printf '0123456789'"),
+      { ...policy, maxOutputBytes: 5 },
+      new AbortController().signal
+    );
+    expect(result.status).toBe('SUCCEEDED');
+    expect(result.output).toBe('01234\n[output truncated]');
+  });
+
+  it('does not start work when cancellation is already requested', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const result = await executeAttempt(attempt('exit 99'), policy, controller.signal);
+    expect(result).toMatchObject({ status: 'CANCELLED', errorCode: 'CANCELLED_BEFORE_START' });
+  });
+
+  it('terminates an active process group after cancellation', async () => {
+    const controller = new AbortController();
+    const execution = executeAttempt(attempt('sleep 30'), policy, controller.signal);
+    setTimeout(() => controller.abort(), 50);
+    const result = await execution;
+    expect(result.status).toBe('CANCELLED');
+  });
+});

@@ -889,9 +889,26 @@ describe('deployment configuration invariants', () => {
       expect(artifact).toContain('policy.json');
     }
     expect(compose).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN');
+    expect(compose).toContain('read_only: true');
     expect(swarm).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE');
+    expect(swarm).toContain('read_only: true');
     expect(helm).toContain('agent.enrollmentToken.existingSecret is required');
+    expect(helm).toContain('agent.networkPolicy.kubernetesApiCIDRs');
+    expect(helm).toContain('seccompProfile:');
     expect(kustomize).toContain('readOnlyRootFilesystem: true');
+    expect(kustomize).toContain('seccompProfile: { type: RuntimeDefault }');
+    expect(read('deploy/kubernetes/kustomize/components/agent/kustomization.yaml')).not.toContain(
+      'REPLACE_WITH_SINGLE_USE_TOKEN'
+    );
+    expect(read('deploy/kubernetes/kustomize/components/agent/network-policy.yaml')).not.toContain(
+      'port: 443'
+    );
+    const setupUi = read('src/components/runbooks/AgentSetupInstructions.tsx');
+    for (const method of ['Compose', 'Swarm', 'Helm', 'Kustomize', 'Linux']) {
+      expect(setupUi).toContain(`>${method}<`);
+    }
+    expect(setupUi).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN');
+    expect(setupUi).toContain('OPSKNIGHT_AGENT_POLICY_PATH');
     expect(read('agent/Dockerfile')).toContain('USER opsknight-agent');
   });
 });

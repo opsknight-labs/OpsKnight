@@ -6,10 +6,10 @@ metadata:
 data:
   policy.json: |
     {
-      "allowedStepTypes": ["LINUX_DIAGNOSTICS", "KUBERNETES"],
+      "allowedStepTypes": ["LINUX_DIAGNOSTICS"],
       "systemdUnits": [],
       "dockerContainers": [],
-      "kubernetesNamespaces": ["opsknight"],
+      "kubernetesNamespaces": [],
       "bashCommandPatterns": [],
       "allowNonIdempotent": false,
       "maxRuntimeSeconds": 300,

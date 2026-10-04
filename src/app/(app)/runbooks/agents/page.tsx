@@ -104,7 +104,7 @@ export default async function RunbookAgentsPage() {
 
       {canManage && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
+          <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle className="text-lg">Add agent</CardTitle>
               <CardDescription>
