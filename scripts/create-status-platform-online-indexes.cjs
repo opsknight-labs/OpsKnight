@@ -1,6 +1,14 @@
 const { PrismaClient } = require('@prisma/client');
+const { resolveDatabaseUrl } = require('./db-connection-resolver.cjs');
 
-const databaseUrl = new URL(process.env.DATABASE_URL);
+const rawDatabaseUrl =
+  resolveDatabaseUrl({ preferDirect: true }) || process.env.DATABASE_URL;
+if (!rawDatabaseUrl) {
+  console.error('DATABASE_URL or DIRECT_DATABASE_URL is required to install online indexes.');
+  process.exit(1);
+}
+
+const databaseUrl = new URL(rawDatabaseUrl);
 // Session-level advisory locks require every statement to use the same backend.
 // A dedicated one-connection Prisma pool provides that guarantee during startup.
 databaseUrl.searchParams.set('connection_limit', '1');

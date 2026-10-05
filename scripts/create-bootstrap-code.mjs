@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
+import { resolveDatabaseUrl, getDatabaseDiagnostics } from './db-connection-resolver.mjs';
 
 const BOOTSTRAP_CONFIG_KEY = 'auth.bootstrap.authorization';
 const BOOTSTRAP_TTL_MS = 30 * 60 * 1000;
@@ -9,7 +10,30 @@ const BOOTSTRAP_LOCK_SQL = `
   FROM (SELECT pg_advisory_xact_lock(hashtext('auth.bootstrap.authorization'))) AS lock_result
 `;
 
-const prisma = new PrismaClient();
+let prismaInstance = null;
+
+function getPrisma() {
+  if (!prismaInstance) {
+    const databaseUrl = resolveDatabaseUrl();
+    if (!databaseUrl) {
+      const diagnostics = getDatabaseDiagnostics();
+      throw new Error(
+        'No database connection URL found.\n' +
+        'OpsKnight requires a PostgreSQL connection to issue bootstrap authorization.\n\n' +
+        diagnostics +
+        '\n\nTo resolve:\n' +
+        '  - If running in Docker Swarm: export DATABASE_URL="$(tr -d \'\\r\\n\' < "$DATABASE_URL_FILE")"\n' +
+        '  - Or set DATABASE_URL="postgresql://user:pass@host:5432/db" in your environment.'
+      );
+    }
+    process.env.DATABASE_URL = databaseUrl;
+    if (!process.env.DIRECT_DATABASE_URL) {
+      process.env.DIRECT_DATABASE_URL = databaseUrl;
+    }
+    prismaInstance = new PrismaClient({ datasourceUrl: databaseUrl });
+  }
+  return prismaInstance;
+}
 
 function hashBootstrapCode(code) {
   return createHash('sha256').update(code).digest('hex');
@@ -42,10 +66,10 @@ function isSerializationConflict(error) {
   return Boolean(error && typeof error === 'object' && error.code === 'P2034');
 }
 
-async function issueBootstrapAuthorization() {
+async function issueBootstrapAuthorization(prismaClient = getPrisma()) {
   for (let attempt = 1; attempt <= BOOTSTRAP_ISSUE_ATTEMPTS; attempt += 1) {
     try {
-      return await prisma.$transaction(async tx => {
+      return await prismaClient.$transaction(async tx => {
         // This explicit database lock makes issuance single-winner across every
         // application/container replica without relying on process-local state.
         // Return a supported boolean scalar instead of PostgreSQL's `void`
@@ -123,5 +147,7 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    if (prismaInstance) {
+      await prismaInstance.$disconnect();
+    }
   });

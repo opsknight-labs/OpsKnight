@@ -1,6 +1,14 @@
 const { PrismaClient } = require('@prisma/client');
+const { resolveDatabaseUrl } = require('./db-connection-resolver.cjs');
 
-const databaseUrl = new URL(process.env.DATABASE_URL);
+const rawDatabaseUrl =
+  resolveDatabaseUrl({ preferDirect: true }) || process.env.DATABASE_URL;
+if (!rawDatabaseUrl) {
+  console.error('DATABASE_URL or DIRECT_DATABASE_URL is required to install online indexes.');
+  process.exit(1);
+}
+
+const databaseUrl = new URL(rawDatabaseUrl);
 databaseUrl.searchParams.set('connection_limit', '1');
 const prisma = new PrismaClient({ datasourceUrl: databaseUrl.toString() });
 const LOCK_ID = 1762184301;
