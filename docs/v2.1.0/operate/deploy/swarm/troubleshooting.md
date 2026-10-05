@@ -68,8 +68,20 @@ Capture node/quorum, stack services/tasks, service inspect, recent task logs, im
 
 **Verify:** oldest age declines and synthetic incident completes.
 
+## Bootstrap code generation fails in interactive shell
+
+**Check:** when issuing a bootstrap authorization code inside an interactive container shell (`docker exec -it ... sh`), `DATABASE_URL` is not automatically exported into the shell session because Swarm injects credentials as secret files (`DATABASE_URL_FILE`). Running `node scripts/create-bootstrap-code.mjs` directly will fail to connect to the database.
+
+**Recovery:** If running inside an interactive shell (`docker exec -it ... sh`): Export the Swarm secret before running the script:
+
+```sh
+export DATABASE_URL="$(cat "$DATABASE_URL_FILE" | tr -d '\r\n')"
+node scripts/create-bootstrap-code.mjs
+```
+
+**Verify:** the script prints the one-time administrator setup code and its expiration timestamp.
+
 ## Next steps
 
 - [Swarm upgrade](./upgrade)
 - [Health and metrics](../../reliability/health-and-metrics)
-

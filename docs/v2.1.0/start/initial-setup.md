@@ -11,7 +11,13 @@ reader:
 verification:
   level: source
   verified_at: 2026-10-02
-  evidence: [src/app/setup/page.tsx, src/app/setup/actions.ts, src/components/BootstrapSetupForm.tsx, src/lib/passwords.ts]
+  evidence:
+    [
+      src/app/setup/page.tsx,
+      src/app/setup/actions.ts,
+      src/components/BootstrapSetupForm.tsx,
+      src/lib/passwords.ts,
+    ]
 ---
 
 # Complete the initial setup
@@ -48,13 +54,13 @@ OpsKnight initially derives the field from the authoritative incoming request. W
 
 The value must be an absolute HTTP or HTTPS origin. Use HTTPS in production and omit paths and a trailing slash.
 
-| Value | Production assessment |
-|---|---|
-| `https://opsknight.example.com` | Correct when this is the public browser origin |
-| `http://opsknight-app:3000` | Wrong: internal Compose/container address |
-| `http://opsknight-web.opsknight.svc:3000` | Wrong: internal Kubernetes Service |
-| `http://10.0.1.15:3000` | Wrong: internal node address |
-| `http://localhost:3000` | Only appropriate for a local evaluation |
+| Value                                     | Production assessment                          |
+| ----------------------------------------- | ---------------------------------------------- |
+| `https://opsknight.example.com`           | Correct when this is the public browser origin |
+| `http://opsknight-app:3000`               | Wrong: internal Compose/container address      |
+| `http://opsknight-web.opsknight.svc:3000` | Wrong: internal Kubernetes Service             |
+| `http://10.0.1.15:3000`                   | Wrong: internal node address                   |
+| `http://localhost:3000`                   | Only appropriate for a local evaluation        |
 
 If the field is wrong, stop. Correct proxy forwarding and `TRUST_PROXY_HEADERS`, or enter the intended public origin manually. Do not create the administrator merely to test whether routing works.
 
@@ -131,6 +137,13 @@ opsknight_opsknight-app` (Integrated) or `docker service ps
 opsknight_opsknight-web` (Split) to locate a running task and execute the
 matching command on that node. Never copy a database secret to the host merely
 to issue the code.
+
+If running inside an interactive shell (`docker exec -it ... sh`): Export the Swarm secret before running the script:
+
+```sh
+export DATABASE_URL="$(cat "$DATABASE_URL_FILE" | tr -d '\r\n')"
+node scripts/create-bootstrap-code.mjs
+```
 
 Treat the printed value like a password. Only its SHA-256 digest is stored, it expires after 30 minutes, only one can be active, and successful administrator creation consumes it atomically. Do not run the bare Node command on an unconfigured host: it needs the production dependencies and database environment supplied by the deployment. Enter the administrator name and email, the verified Application URL, the bootstrap code, and a strong unique password. Select **Create administrator** once. A configured environment setup secret is accepted for compatibility but is longer-lived and not preferred.
 
