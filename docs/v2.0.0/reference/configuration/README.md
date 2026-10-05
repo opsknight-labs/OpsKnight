@@ -114,14 +114,98 @@ Authenticates SCIM provisioning requests.
 - Apply behavior: restart required; overlap old and new clients only through an intentional rotation window
 - Sensitivity: secret
 
-### `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT`
+### `AUTH_LOCAL_LOGIN_ENABLED`
 
-Rejects OIDC identities whose provider does not assert a verified email.
+Controls admission of ordinary local email/password sign-in independently from OIDC.
 
 - Type and valid value: boolean
+- Default: `true`
+- Runtime role: web/integrated authentication runtime
+- Apply behavior: restart every authentication-serving replica
+- Sensitivity: non-secret
+- Enterprise use: set `false` only after real OIDC login and break-glass recovery have been tested
+
+When `false`, normal credential sign-in is rejected server-side and forgot/reset-password APIs are disabled. Existing password hashes are not erased. OpsKnight does not fail open to passwords when OIDC is unavailable.
+
+### `AUTH_BREAK_GLASS_ENABLED`
+
+Enables a single emergency local-credential exception when normal local login is disabled.
+
+- Type and valid value: boolean
+- Default: `false`
+- Runtime role: web/integrated authentication runtime
+- Apply behavior: restart every authentication-serving replica
+- Sensitivity: non-secret
+
+This setting has effect only when a valid `AUTH_BREAK_GLASS_EMAIL` is also configured. Prepare the emergency account's password before disabling local login.
+
+### `AUTH_BREAK_GLASS_EMAIL`
+
+Exact emergency-account email permitted to use local credentials when break-glass is enabled.
+
+- Type and valid value: normalized account email
+- Default: unset
+- Runtime role: web/integrated authentication runtime
+- Apply behavior: restart every authentication-serving replica
+- Sensitivity: non-secret identifier; the password remains secret
+
+Use a dedicated active administrator whose credential is stored outside the normal SSO dependency. Matching is case-normalized and exact; this is not a domain or role wildcard.
+
+### `AUTH_SSO_SESSION_MAX_AGE_SECONDS`
+
+Default OIDC maximum/renewal session window when the SSO UI does not override it.
+
+- Type and valid value: integer seconds, 900 to 2592000 (15 minutes to 30 days)
+- Built-in fallback: `43200` (12 hours)
+- Runtime role: web/integrated authentication runtime
+- Apply behavior: restart required for environment changes; UI override is stored in OIDC configuration
+- Sensitivity: non-secret
+
+### `AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS`
+
+Default maximum inactivity window for OIDC sessions.
+
+- Type and valid value: integer seconds, 300 to 604800 (5 minutes to 7 days)
+- Built-in fallback: `14400` (4 hours)
+- Invariant: effective idle timeout cannot exceed maximum session lifetime
+- Runtime role: web/integrated authentication runtime
+- Apply behavior: restart required for environment changes; UI override is stored in OIDC configuration
+- Sensitivity: non-secret
+
+### `AUTH_SSO_REAUTH_AFTER_SECONDS`
+
+Maximum age of the OpsKnight OIDC authentication before a new OIDC authentication cycle is required.
+
+- Type and valid value: integer seconds, 900 to 2592000 (15 minutes to 30 days)
+- Built-in fallback: `43200` (12 hours)
+- Runtime role: web/integrated authentication runtime
+- Apply behavior: restart required
+- Sensitivity: non-secret
+
+A new OpsKnight OIDC cycle does not guarantee an IdP password or MFA prompt; the provider can reuse its own SSO session.
+
+### `AUTH_SSO_SESSION_UPDATE_AGE_SECONDS`
+
+Controls the server-side OIDC session update interval.
+
+- Type and valid value: integer seconds, 60 to 86400 (1 minute to 24 hours)
+- Built-in fallback: `3600` (1 hour)
+- Runtime role: web/integrated authentication runtime
+- Apply behavior: restart required
+- Sensitivity: non-secret
+
+### `OIDC_REQUIRE_EMAIL_VERIFIED_STRICT`
+
+Controls verified-email assurance for first OIDC identity binding/provisioning on providers that support the standard claim.
+
+- Type and valid value: boolean
+- Default: `true`
 - Runtime role: web
 - Apply behavior: restart required
 - Sensitivity: non-secret
+
+An explicit `email_verified=false` is rejected for every provider. Validated Microsoft Entra workforce issuers use provider-aware handling when the standard claim is omitted; do not disable strict mode merely to work around a provider configuration error.
+
 
 ### `OIDC_CONFIG_CACHE_TTL_MS`
 
