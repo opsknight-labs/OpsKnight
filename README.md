@@ -50,18 +50,21 @@ See how OpsKnight connects alert ingestion, incident response, on-call, escalati
 <td width="33%" valign="top">
 
 ### 🚨 Detect & Route
+
 Authenticated inbound integrations with service-bound routing, provider-specific urgency mapping, deduplication and recovery handling.
 
 </td>
 <td width="33%" valign="top">
 
 ### ⚡ Respond
+
 Unified incident workspace with ownership handoffs, real-time activity timelines, response health SLA timers, action items, and 5-Whys postmortems.
 
 </td>
 <td width="33%" valign="top">
 
 ### 📅 On-call & Escalate
+
 Multi-layer rotation schedules with DST-safe handoffs, temporary overrides, and escalation policies targeting users, schedules, and teams.
 
 </td>
@@ -70,18 +73,21 @@ Multi-layer rotation schedules with DST-safe handoffs, temporary overrides, and 
 <td valign="top">
 
 ### 📣 Notify & Coordinate
+
 Multi-channel paging across Web Push, email, SMS, WhatsApp, and interactive Twilio voice with durable retries and delivery evidence.
 
 </td>
 <td valign="top">
 
 ### 🌐 Communicate
+
 One configurable public or private status page with service health, incidents, maintenance, subscriber notifications, uptime history and publishable postmortems.
 
 </td>
 <td valign="top">
 
 ### 📊 Analyze & Learn
+
 Actionable reliability metrics including MTTA, MTTR, SLA compliance tracking, configurable dashboards, NOC/TV mode, and browser print/PDF export.
 
 </td>
@@ -113,10 +119,10 @@ printf 'NEXTAUTH_SECRET=%s\n' "$(openssl rand -base64 32)" >> .env
 printf 'API_KEY_SECRET=%s\n' "$(openssl rand -base64 32)" >> .env
 printf 'ENCRYPTION_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
 
-docker compose -f deploy/compose/docker-compose.yml pull
-docker compose -f deploy/compose/docker-compose.yml up -d --wait
+docker compose --env-file .env -f deploy/compose/docker-compose.yml pull
+docker compose --env-file .env -f deploy/compose/docker-compose.yml up -d --wait
 
-docker compose -f deploy/compose/docker-compose.yml exec -T opsknight-app \
+docker compose --env-file .env -f deploy/compose/docker-compose.yml exec -T opsknight-app \
   node scripts/create-bootstrap-code.mjs
 ```
 
@@ -230,12 +236,12 @@ Monitoring, cloud, uptime, CI/CD, ChatOps, ticketing, notification and identity 
 
 ## 🏗️ Deploy anywhere
 
-| | Topology | Best for | Guide |
-| :-- | :-- | :-- | :-- |
-| <img src="https://img.shields.io/badge/-Compose-2496ED?style=flat&logo=docker&logoColor=white" alt=""> | Integrated or split, single host | Evaluation and small teams | [Docker Compose →](https://opsknight.com/docs/v2.0.0/operate/deploy/docker-compose/) |
-| <img src="https://img.shields.io/badge/-Swarm-2496ED?style=flat&logo=docker&logoColor=white" alt=""> | Integrated or split across nodes | Multi-node Docker estates | [Docker Swarm →](https://opsknight.com/docs/v2.0.0/operate/deploy/swarm/) |
-| <img src="https://img.shields.io/badge/-Helm-0F1689?style=flat&logo=helm&logoColor=white" alt=""> | Schema-validated chart | Production Kubernetes | [Helm →](https://opsknight.com/docs/v2.0.0/operate/deploy/helm/) |
-| <img src="https://img.shields.io/badge/-Kustomize-326CE5?style=flat&logo=kubernetes&logoColor=white" alt=""> | Bases and overlays | GitOps with Argo CD or Flux | [Kustomize →](https://opsknight.com/docs/v2.0.0/operate/deploy/kustomize/) |
+|                                                                                                              | Topology                         | Best for                    | Guide                                                                                |
+| :----------------------------------------------------------------------------------------------------------- | :------------------------------- | :-------------------------- | :----------------------------------------------------------------------------------- |
+| <img src="https://img.shields.io/badge/-Compose-2496ED?style=flat&logo=docker&logoColor=white" alt="">       | Integrated or split, single host | Evaluation and small teams  | [Docker Compose →](https://opsknight.com/docs/v2.0.0/operate/deploy/docker-compose/) |
+| <img src="https://img.shields.io/badge/-Swarm-2496ED?style=flat&logo=docker&logoColor=white" alt="">         | Integrated or split across nodes | Multi-node Docker estates   | [Docker Swarm →](https://opsknight.com/docs/v2.0.0/operate/deploy/swarm/)            |
+| <img src="https://img.shields.io/badge/-Helm-0F1689?style=flat&logo=helm&logoColor=white" alt="">            | Schema-validated chart           | Production Kubernetes       | [Helm →](https://opsknight.com/docs/v2.0.0/operate/deploy/helm/)                     |
+| <img src="https://img.shields.io/badge/-Kustomize-326CE5?style=flat&logo=kubernetes&logoColor=white" alt=""> | Bases and overlays               | GitOps with Argo CD or Flux | [Kustomize →](https://opsknight.com/docs/v2.0.0/operate/deploy/kustomize/)           |
 
 PostgreSQL 14 or later is required. For production, pin the tested multi-architecture image digest, size the database connection budget and complete the topology's acceptance checklist. [Choose a topology →](https://opsknight.com/docs/v2.0.0/operate/deploy/) · [Plan capacity →](https://opsknight.com/docs/v2.0.0/operate/capacity/choose-deployment/)
 
@@ -251,13 +257,13 @@ Integrated mode runs Web and background work in one process. Split mode gives We
 
 ## 🤔 Why OpsKnight?
 
-| | **OpsKnight** | Typical per-seat SaaS |
-| :-- | :-- | :-- |
-| **Where it runs** | Your infrastructure | Vendor cloud |
-| **Incident data** | Stays in your PostgreSQL | Stored by the vendor |
-| **Pricing** | No seat meter, no software fee | Per-user plans |
-| **Source** | Open under AGPL-3.0-only | Closed |
-| **Operations** | Source-visible runtime, health, metrics and delivery evidence | Vendor-operated runtime |
+|                   | **OpsKnight**                                                 | Typical per-seat SaaS   |
+| :---------------- | :------------------------------------------------------------ | :---------------------- |
+| **Where it runs** | Your infrastructure                                           | Vendor cloud            |
+| **Incident data** | Stays in your PostgreSQL                                      | Stored by the vendor    |
+| **Pricing**       | No seat meter, no software fee                                | Per-user plans          |
+| **Source**        | Open under AGPL-3.0-only                                      | Closed                  |
+| **Operations**    | Source-visible runtime, health, metrics and delivery evidence | Vendor-operated runtime |
 
 OpsKnight is an independent project and is not affiliated with PagerDuty, Opsgenie or other vendors.
 
@@ -276,8 +282,8 @@ Encrypted provider credentials with key rotation, independent session and API-ke
 The versioned 2.0 documentation is the source of truth for product behavior, configuration, deployment, integrations and operations.
 
 | [**Get started**](https://opsknight.com/docs/v2.0.0/start/) | [**Guides**](https://opsknight.com/docs/v2.0.0/guides/) | [**Operate**](https://opsknight.com/docs/v2.0.0/operate/) | [**API reference**](https://opsknight.com/docs/v2.0.0/reference/api/) | [**Troubleshooting**](https://opsknight.com/docs/v2.0.0/troubleshooting/) |
-| :-: | :-: | :-: | :-: | :-: |
-| Install and first incident | Day-to-day workflows | Deploy, scale, upgrade | REST API and keys | Diagnose and recover |
+| :---------------------------------------------------------: | :-----------------------------------------------------: | :-------------------------------------------------------: | :-------------------------------------------------------------------: | :-----------------------------------------------------------------------: |
+|                 Install and first incident                  |                  Day-to-day workflows                   |                  Deploy, scale, upgrade                   |                           REST API and keys                           |                           Diagnose and recover                            |
 
 ---
 
