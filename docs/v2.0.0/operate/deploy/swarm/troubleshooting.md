@@ -68,8 +68,20 @@ Capture node/quorum, stack services/tasks, service inspect, recent task logs, im
 
 **Verify:** oldest age declines and synthetic incident completes.
 
+## Bootstrap code generation fails with missing DATABASE_URL
+
+**Check:** whether `node scripts/create-bootstrap-code.mjs` was invoked inside an interactive container shell without `DATABASE_URL` exported. Swarm mounts database credentials as secret files (`DATABASE_URL_FILE`), which are not automatically exported to interactive shell sessions.
+
+**Recovery:** export `DATABASE_URL` directly from the mounted secret file before issuing the bootstrap capability:
+
+```sh
+export DATABASE_URL="$(tr -d '\r\n' < "$DATABASE_URL_FILE")"
+node scripts/create-bootstrap-code.mjs
+```
+
+**Verify:** the script prints the 30-minute setup capability and expiry timestamp.
+
 ## Next steps
 
 - [Swarm upgrade](./upgrade)
 - [Health and metrics](../../reliability/health-and-metrics)
-
