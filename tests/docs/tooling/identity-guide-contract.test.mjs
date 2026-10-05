@@ -17,7 +17,13 @@ test('OIDC guide covers every supported provider and session-policy control', ()
     'AUTH_SSO_REAUTH_AFTER_SECONDS',
     'AUTH_SSO_SESSION_UPDATE_AGE_SECONDS',
     'Existing users and first-time linking',
-    'Change the issuer or rotate the secret',
+    'Enforce SSO-only login',
+    'AUTH_LOCAL_LOGIN_ENABLED=false',
+    'AUTH_BREAK_GLASS_ENABLED=true',
+    'Runtime availability and performance behavior',
+    'Existing users and first-time linking',
+    'JIT provisioning',
+    'Change the issuer, client registration, or secret',
   ]) assert.ok(oidc.includes(required), `OIDC guide must cover ${required}`);
 });
 
