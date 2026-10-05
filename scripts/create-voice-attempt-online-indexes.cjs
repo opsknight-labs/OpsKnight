@@ -29,19 +29,29 @@
 'use strict';
 
 const { PrismaClient } = require('@prisma/client');
+const { resolveDatabaseUrl } = require('./db-connection-resolver.cjs');
 
-const databaseUrl = new URL(process.env.DATABASE_URL);
+const rawDatabaseUrl = resolveDatabaseUrl({ preferDirect: true });
+if (!rawDatabaseUrl) {
+  console.error('DATABASE_URL or DIRECT_DATABASE_URL is required to install online indexes.');
+  process.exit(1);
+}
+
+const databaseUrl = new URL(rawDatabaseUrl);
 databaseUrl.searchParams.set('connection_limit', '1');
 const prisma = new PrismaClient({ datasourceUrl: databaseUrl.toString() });
 const LOCK_ID = 1762184302;
 
 async function ensureIndex(name, ddl) {
   // Drop any previously failed (invalid) build of this index before retrying.
-  const existing = await prisma.$queryRawUnsafe(`
+  const existing = await prisma.$queryRawUnsafe(
+    `
     SELECT i.indisvalid AS valid
     FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
     WHERE c.relname = $1
-  `, name);
+  `,
+    name
+  );
 
   if (existing[0] && !existing[0].valid) {
     console.log(`⚠️  Dropping invalid index build: ${name}`);
@@ -50,11 +60,14 @@ async function ensureIndex(name, ddl) {
 
   await prisma.$executeRawUnsafe(ddl);
 
-  const rows = await prisma.$queryRawUnsafe(`
+  const rows = await prisma.$queryRawUnsafe(
+    `
     SELECT i.indisvalid AS valid
     FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
     WHERE c.relname = $1
-  `, name);
+  `,
+    name
+  );
 
   if (!rows[0]?.valid) {
     throw new Error(`Voice attempt online index is missing or invalid: ${name}`);

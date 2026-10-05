@@ -84,6 +84,43 @@ jobs:
           path: reports/junit-unit.xml
           if-no-files-found: error
 
+  database-secret-scripts:
+    name: Database secret operator scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pr847_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/pr847_test?schema=public
+      DB_SECRET_SCRIPTS_CERTIFICATION: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node & dependencies
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+
+      - name: Apply migrations to isolated operator-script database
+        run: npx prisma migrate deploy
+
+      - name: Verify secret-only bootstrap, CLI, indexes, and readiness
+        run: npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/db-secret-scripts.test.ts
+
   build:
     name: Application build & budgets (canonical E2E artifact)
     runs-on: ubuntu-latest
