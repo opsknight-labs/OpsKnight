@@ -21,7 +21,6 @@ test('OIDC guide covers every supported provider and session-policy control', ()
     'AUTH_LOCAL_LOGIN_ENABLED=false',
     'AUTH_BREAK_GLASS_ENABLED=true',
     'Runtime availability and performance behavior',
-    'Existing users and first-time linking',
     'JIT provisioning',
     'Change the issuer, client registration, or secret',
   ]) assert.ok(oidc.includes(required), `OIDC guide must cover ${required}`);
