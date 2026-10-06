@@ -127,6 +127,36 @@ jobs:
           tests/integration/runbook-execution-safety.test.ts
           tests/integration/encryption-migration.test.ts
 
+  native-agent-artifacts:
+    name: Native Linux Agent artifacts & installer verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+      - name: Build standalone native Agent artifacts with Node 24
+        run: bash scripts/build-agent-artifacts.sh
+      - name: Verify generated artifacts and SHA256SUMS
+        run: |
+          cd dist/agent
+          test -f opsknight-agent-linux-x64.tar.gz
+          test -f opsknight-agent-linux-arm64.tar.gz
+          test -f install.sh
+          test -f preflight.sh
+          test -f SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - name: Verify bundled x64 Node 24 runtime execution
+        run: |
+          mkdir -p /tmp/agent-test
+          tar -xzf dist/agent/opsknight-agent-linux-x64.tar.gz -C /tmp/agent-test
+          test -f /tmp/agent-test/runtime/bin/node
+          test -f /tmp/agent-test/preflight.sh
+          test -f /tmp/agent-test/VERSION
+          /tmp/agent-test/runtime/bin/node --version
+          /tmp/agent-test/runtime/bin/node -e "console.log('Node 24 runtime operational in tarball')"
+
   deployment-manifests:
     needs: changes
     if: needs.changes.outputs.deployment == 'true'

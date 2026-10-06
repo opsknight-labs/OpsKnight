@@ -918,7 +918,11 @@ jobs:
           if [ -f scripts/build-agent-artifacts.sh ]; then
             bash scripts/build-agent-artifacts.sh
             if [ -d dist/agent ]; then
-              gh release upload "$tag" dist/agent/opsknight-agent-linux-*.tar.gz dist/agent/SHA256SUMS --clobber || true
+              gh release upload "$tag" \
+                dist/agent/opsknight-agent-linux-*.tar.gz \
+                dist/agent/install.sh \
+                dist/agent/preflight.sh \
+                dist/agent/SHA256SUMS --clobber
             fi
           fi
 

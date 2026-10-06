@@ -9,7 +9,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DIST_DIR="${ROOT_DIR}/dist/agent"
 
-echo "=== Building OpsKnight Agent JS Bundle (Node 24 target) ==="
+# Resolve dynamic version from package.json or git tag
+PACKAGE_VERSION="$(node -p 'require("./package.json").version' 2>/dev/null || echo '2.0.0')"
+RELEASE_VERSION="${OPSKNIGHT_VERSION:-${PACKAGE_VERSION}}"
+
+echo "=== Building OpsKnight Agent JS Bundle v${RELEASE_VERSION} (Node 24 target) ==="
 mkdir -p "${DIST_DIR}"
 npx esbuild "${ROOT_DIR}/agent/src/index.ts" \
   --bundle \
@@ -22,30 +26,58 @@ npx esbuild "${ROOT_DIR}/agent/src/index.ts" \
 
 echo "=== Packaging Platform Tarballs with Bundled Node ==="
 
+# Fetch official Node SHASUMS256.txt once
+NODE_SHASUMS_URL="https://nodejs.org/dist/${NODE_VERSION}/SHASUMS256.txt"
+SHASUMS_FILE="${DIST_DIR}/NODE_SHASUMS256.txt"
+if ! curl -fsSL -o "${SHASUMS_FILE}" "${NODE_SHASUMS_URL}"; then
+  echo "ERROR: Failed to download Node SHASUMS from ${NODE_SHASUMS_URL}." >&2
+  exit 1
+fi
+
 for ARCH in "x64" "arm64"; do
   TARBALL_NAME="opsknight-agent-linux-${ARCH}.tar.gz"
   PACKAGE_DIR="${DIST_DIR}/opsknight-agent-linux-${ARCH}"
   rm -rf "${PACKAGE_DIR}"
   mkdir -p "${PACKAGE_DIR}/runtime/bin"
 
-  # Copy compiled agent code
+  # Copy compiled agent code, preflight, policy, service unit, and dynamic VERSION
   cp "${DIST_DIR}/opsknight-agent.mjs" "${PACKAGE_DIR}/"
   cp "${ROOT_DIR}/agent/opsknight-agent.service" "${PACKAGE_DIR}/"
   cp "${ROOT_DIR}/agent/policy.example.json" "${PACKAGE_DIR}/"
-  echo "2.0.0" > "${PACKAGE_DIR}/VERSION"
+  cp "${ROOT_DIR}/deploy/agent/preflight.sh" "${PACKAGE_DIR}/"
+  chmod +x "${PACKAGE_DIR}/preflight.sh"
+  echo "${RELEASE_VERSION}" > "${PACKAGE_DIR}/VERSION"
 
-  # Fetch or stage official pinned Node.js runtime if requested/available
+  # Fetch and cryptographically verify official pinned Node.js runtime archive
   NODE_DIST="node-${NODE_VERSION}-linux-${ARCH}"
-  NODE_URL="https://nodejs.org/dist/${NODE_VERSION}/${NODE_DIST}.tar.gz"
+  NODE_TAR="${NODE_DIST}.tar.gz"
+  NODE_URL="https://nodejs.org/dist/${NODE_VERSION}/${NODE_TAR}"
 
-  echo "Fetching and staging pinned Node ${NODE_VERSION} runtime for linux-${ARCH}..."
+  echo "Fetching and verifying pinned Node ${NODE_VERSION} for linux-${ARCH}..."
   TEMP_NODE_DIR=$(mktemp -d)
-  if ! curl -fsSL "${NODE_URL}" | tar -xz -C "${TEMP_NODE_DIR}" "${NODE_DIST}/bin/node"; then
+  if ! curl -fsSL -o "${TEMP_NODE_DIR}/${NODE_TAR}" "${NODE_URL}"; then
     echo "ERROR: Failed to download official Node runtime from ${NODE_URL}." >&2
-    echo "Failing closed to prevent building unbundled or incomplete agent artifacts." >&2
     rm -rf "${TEMP_NODE_DIR}"
     exit 1
   fi
+
+  # Verify Node official SHA256
+  EXPECTED_SHA="$(grep "${NODE_TAR}" "${SHASUMS_FILE}" | awk '{print $1}')"
+  if [[ -z "${EXPECTED_SHA}" ]]; then
+    echo "ERROR: Could not find expected checksum for ${NODE_TAR} in ${NODE_SHASUMS_URL}." >&2
+    rm -rf "${TEMP_NODE_DIR}"
+    exit 1
+  fi
+  ACTUAL_SHA="$(sha256sum "${TEMP_NODE_DIR}/${NODE_TAR}" 2>/dev/null | awk '{print $1}' || shasum -a 256 "${TEMP_NODE_DIR}/${NODE_TAR}" | awk '{print $1}')"
+  if [[ "${EXPECTED_SHA}" != "${ACTUAL_SHA}" ]]; then
+    echo "ERROR: Checksum mismatch for ${NODE_TAR}! Expected ${EXPECTED_SHA}, got ${ACTUAL_SHA}." >&2
+    rm -rf "${TEMP_NODE_DIR}"
+    exit 1
+  fi
+  echo "Node runtime ${NODE_TAR} cryptographically verified: [OK]"
+
+  # Extract verified node binary
+  tar -xzf "${TEMP_NODE_DIR}/${NODE_TAR}" -C "${TEMP_NODE_DIR}" "${NODE_DIST}/bin/node"
   cp "${TEMP_NODE_DIR}/${NODE_DIST}/bin/node" "${PACKAGE_DIR}/runtime/bin/node"
   chmod +x "${PACKAGE_DIR}/runtime/bin/node"
   rm -rf "${TEMP_NODE_DIR}"
@@ -54,9 +86,14 @@ for ARCH in "x64" "arm64"; do
   tar -czf "${DIST_DIR}/${TARBALL_NAME}" -C "${DIST_DIR}" "opsknight-agent-linux-${ARCH}"
   rm -rf "${PACKAGE_DIR}"
 done
+rm -f "${SHASUMS_FILE}"
+
+# Also copy install.sh to dist directory so it can be distributed as a standalone release asset
+cp "${ROOT_DIR}/deploy/agent/install.sh" "${DIST_DIR}/"
+cp "${ROOT_DIR}/deploy/agent/preflight.sh" "${DIST_DIR}/"
 
 echo "=== Generating SHA256SUMS ==="
-(cd "${DIST_DIR}" && shasum -a 256 opsknight-agent-linux-*.tar.gz > SHA256SUMS || sha256sum opsknight-agent-linux-*.tar.gz > SHA256SUMS)
+(cd "${DIST_DIR}" && shasum -a 256 opsknight-agent-linux-*.tar.gz install.sh preflight.sh > SHA256SUMS || sha256sum opsknight-agent-linux-*.tar.gz install.sh preflight.sh > SHA256SUMS)
 
 echo "=== Release Artifacts Generated Successfully in ${DIST_DIR} ==="
 ls -lh "${DIST_DIR}"

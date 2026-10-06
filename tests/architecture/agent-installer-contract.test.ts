@@ -63,7 +63,20 @@ describe('Installer logic and OS-release contract', () => {
     expect(installScript).not.toContain('OPSKNIGHT_ENROLLMENT_TOKEN=');
   });
 
-  it('fails closed when remote checksum cannot be retrieved', () => {
-    expect(installScript).toContain('Refusing to install unverified remote artifacts');
+  it('enforces root-owned agent.env with 0600 permissions', () => {
+    expect(installScript).toContain('chown root:root "${ENV_FILE}"');
+    expect(installScript).toContain('chmod 0600 "${ENV_FILE}"');
+  });
+
+  it('verifies bundled node runtime execution compatibility before service enablement', () => {
+    expect(installScript).toContain('The bundled Node 24 runtime cannot execute on this host');
+    expect(installScript).toContain('requires glibc >= 2.28 or musl');
+  });
+
+  it('fails preflight when bundled node execution fails or configuration is incomplete', () => {
+    const preflightScript = readFileSync('deploy/agent/preflight.sh', 'utf8');
+    expect(preflightScript).toContain('Bundled node binary at ${NODE_BIN} failed to execute');
+    expect(preflightScript).toContain('OPSKNIGHT_EXECUTION_PUBLIC_KEY missing in ${ENV_FILE}');
+    expect(preflightScript).toContain('Neither existing ${IDENTITY_FILE} nor OPSKNIGHT_AGENT_ENROLLMENT_TOKEN is present');
   });
 });

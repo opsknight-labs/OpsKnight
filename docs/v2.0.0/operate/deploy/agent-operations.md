@@ -131,11 +131,12 @@ OpsKnight provides an automated, self-contained enterprise installer that suppor
 
 ### One-Command Installation
 
-1. Generate a one-time enrollment token in **Runbooks → Agents → Enroll Agent**.
-2. Run the official installer on your target host:
+1. Generate a one-time enrollment token and note the execution signing public key in **Runbooks → Agents → Enroll Agent**.
+2. Run the official installer on your target host (tokens can also be passed via `--token-file` to avoid process table exposure):
    ```bash
    sudo ./deploy/agent/install.sh \
      --url https://opsknight.company.com \
+     --key "<BASE64_EXECUTION_PUBLIC_KEY>" \
      --token <ONE_TIME_ENROLLMENT_TOKEN>
    ```
 3. Run diagnostic preflight checks:
@@ -147,6 +148,19 @@ OpsKnight provides an automated, self-contained enterprise installer that suppor
    sudo systemctl enable --now opsknight-agent
    sudo systemctl status opsknight-agent
    ```
+
+### Systemd Executor & Polkit Privileges
+
+Because `opsknight-agent.service` runs under `NoNewPrivileges=true` and drops root privileges, remediations calling `systemctl` should **not** rely on `sudoers`. Instead, grant narrow Polkit authorization rules for the unprivileged `opsknight-agent` user (e.g. in `/etc/polkit-1/rules.d/50-opsknight-agent.rules`):
+```javascript
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        subject.user == "opsknight-agent" &&
+        action.lookup("unit") == "dummy-web.service") {
+        return polkit.Result.YES;
+    }
+});
+```
 
 ### Troubleshooting Matrix
 

@@ -145,16 +145,32 @@ async function run() {
     }
   };
 
-  const heartbeat = async () => {
-    let clockError: string | null = null;
+  let clockError: string | null = null;
+  let lastClockCheck = 0;
+  let cachedClockSkew = 0;
+
+  const checkClock = async (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastClockCheck < 30_000) {
+      return cachedClockSkew;
+    }
     try {
       const { skewSeconds } = await client.checkServerClock();
+      lastClockCheck = now;
+      cachedClockSkew = skewSeconds;
       if (skewSeconds > 60) {
         clockError = `Agent clock differs from OpsKnight by ${skewSeconds}s. Execution claims paused until clock is synchronized.`;
+      } else {
+        clockError = null; // Clear immediately when clock becomes healthy
       }
     } catch {
-      // Clock check warning only if unreachable
+      // Retain last known state on transient error
     }
+    return cachedClockSkew;
+  };
+
+  const heartbeat = async () => {
+    await checkClock(false);
     const effective = await probeCapabilities(policy);
     await client.heartbeat({
       capabilities: effective.capabilities,
@@ -210,15 +226,10 @@ async function run() {
       let resultPersisted = false;
       let outcomeKnown = false;
       try {
-        try {
-          const { skewSeconds } = await client.checkServerClock();
-          if (skewSeconds > 60) {
-            lastError = `Agent clock differs from OpsKnight by ${skewSeconds}s. Pausing claims.`;
-            await new Promise(resolve => setTimeout(resolve, 10_000));
-            continue;
-          }
-        } catch {
-          // Continue if clock endpoint transiently unavailable
+        const skew = await checkClock(false);
+        if (skew > 60) {
+          await new Promise(resolve => setTimeout(resolve, 10_000));
+          continue;
         }
         attempt = await client.claim();
         if (!attempt) continue;

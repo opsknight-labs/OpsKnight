@@ -63,14 +63,20 @@ case "${RAW_ARCH}" in
     ;;
 esac
 
-# 2. Runtime
+# 2. Runtime & libc compatibility
 NODE_BIN="${INSTALL_PREFIX}/runtime/bin/node"
 if [[ -x "${NODE_BIN}" ]]; then
-  NODE_VER="$("${NODE_BIN}" --version 2>/dev/null || echo 'unknown')"
-  report_pass "Runtime" "${NODE_VER} (bundled)"
+  if NODE_VER="$("${NODE_BIN}" -e 'console.log(process.version)' 2>/dev/null)" && [[ -n "${NODE_VER}" ]]; then
+    report_pass "Runtime" "${NODE_VER} (bundled Node 24 runtime, execution verified)"
+  else
+    report_fail "Runtime" "Bundled node binary at ${NODE_BIN} failed to execute (incompatible libc/glibc < 2.28?)"
+  fi
 elif command -v node >/dev/null 2>&1; then
-  NODE_VER="$(node --version)"
-  report_warn "Runtime" "${NODE_VER} (system node, prefer bundled runtime)"
+  if NODE_VER="$(node -e 'console.log(process.version)' 2>/dev/null)" && [[ -n "${NODE_VER}" ]]; then
+    report_warn "Runtime" "${NODE_VER} (system node; recommend bundled runtime in ${INSTALL_PREFIX})"
+  else
+    report_fail "Runtime" "System node binary failed to execute"
+  fi
 else
   report_fail "Runtime" "Node runtime not found at ${NODE_BIN}"
 fi
@@ -137,14 +143,46 @@ if [[ "${CLOCK_OK}" == "false" ]]; then
   report_warn "Clock sync" "NTP/chrony synchronization not verified"
 fi
 
-# 8. Control Plane Connectivity & Clock Skew Measurement
+# 8. Configuration & Security Key Requirements
 ENV_FILE="${CONFIG_DIR}/agent.env"
 OPSKNIGHT_URL=""
+EXECUTION_KEY=""
+ENROLLMENT_TOKEN=""
+
 if [[ -f "${ENV_FILE}" ]]; then
   OPSKNIGHT_URL="$(grep -E '^OPSKNIGHT_URL=' "${ENV_FILE}" | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)"
+  EXECUTION_KEY="$(grep -E '^OPSKNIGHT_EXECUTION_PUBLIC_KEY=' "${ENV_FILE}" | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)"
+  ENROLLMENT_TOKEN="$(grep -E '^OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=' "${ENV_FILE}" | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)"
 fi
 OPSKNIGHT_URL="${OPSKNIGHT_URL:-${OPSKNIGHT_AGENT_URL:-}}"
+EXECUTION_KEY="${EXECUTION_KEY:-${OPSKNIGHT_EXECUTION_PUBLIC_KEY:-}}"
+ENROLLMENT_TOKEN="${ENROLLMENT_TOKEN:-${OPSKNIGHT_AGENT_ENROLLMENT_TOKEN:-}}"
 
+# 8a. Control plane URL
+if [[ -n "${OPSKNIGHT_URL}" ]]; then
+  report_pass "Control plane URL" "${OPSKNIGHT_URL}"
+else
+  report_fail "Control plane URL" "OPSKNIGHT_URL missing in ${ENV_FILE}"
+fi
+
+# 8b. Execution public key pin
+if [[ -n "${EXECUTION_KEY}" ]]; then
+  report_pass "Execution signing key" "pinned (base64 SPKI DER)"
+else
+  report_fail "Execution signing key" "OPSKNIGHT_EXECUTION_PUBLIC_KEY missing in ${ENV_FILE}"
+fi
+
+# 8c. Identity or Enrollment Token
+IDENTITY_FILE="${STATE_DIR}/identity.json"
+if [[ -f "${IDENTITY_FILE}" ]]; then
+  report_pass "Agent identity" "enrolled (${IDENTITY_FILE} present)"
+elif [[ -n "${ENROLLMENT_TOKEN}" ]]; then
+  report_pass "Enrollment token" "provided (ready for initial enrollment)"
+else
+  report_fail "Agent identity" "Neither existing ${IDENTITY_FILE} nor OPSKNIGHT_AGENT_ENROLLMENT_TOKEN is present"
+fi
+
+# 9. Control Plane Connectivity & Clock Skew Measurement
 if [[ -n "${OPSKNIGHT_URL}" ]]; then
   TIME_ENDPOINT="${OPSKNIGHT_URL%/}/api/runbook-agent/v1/time"
   TIME_RESP="$(curl -fsSL -m 5 "${TIME_ENDPOINT}" 2>/dev/null || echo '')"
@@ -159,23 +197,23 @@ if [[ -n "${OPSKNIGHT_URL}" ]]; then
         if [[ ${SKEW_MS} -lt 0 ]]; then SKEW_MS=$(( -SKEW_MS )); fi
         SKEW_SEC=$(( SKEW_MS / 1000 ))
         if [[ ${SKEW_SEC} -le 30 ]]; then
-          report_pass "Control plane & clock" "reachable, clock skew ${SKEW_SEC}s (healthy <=30s)"
+          report_pass "Control plane clock" "skew ${SKEW_SEC}s (healthy <=30s)"
         elif [[ ${SKEW_SEC} -le 60 ]]; then
-          report_warn "Control plane & clock" "clock skew ${SKEW_SEC}s (warning >30s, max 60s)"
+          report_warn "Control plane clock" "skew ${SKEW_SEC}s (warning >30s, max 60s)"
         else
-          report_fail "Control plane & clock" "clock skew ${SKEW_SEC}s exceeds 60s limit"
+          report_fail "Control plane clock" "skew ${SKEW_SEC}s exceeds 60s limit"
         fi
       else
-        report_pass "Control plane" "HTTPS reachable (${OPSKNIGHT_URL})"
+        report_pass "Control plane clock" "connected (${OPSKNIGHT_URL})"
       fi
     else
-      report_pass "Control plane" "HTTPS reachable (${OPSKNIGHT_URL})"
+      report_pass "Control plane clock" "connected (${OPSKNIGHT_URL})"
     fi
   else
-    report_fail "Control plane" "Could not connect to ${TIME_ENDPOINT}"
+    report_fail "Control plane clock" "Could not connect to ${TIME_ENDPOINT}"
   fi
 else
-  report_skip "Control plane & clock" "OPSKNIGHT_URL not set in ${CONFIG_DIR}/agent.env"
+  report_fail "Control plane clock" "Cannot connect: OPSKNIGHT_URL not configured"
 fi
 
 echo "=========================================================="

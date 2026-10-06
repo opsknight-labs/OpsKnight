@@ -83,6 +83,25 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
+# Validate essential configuration arguments
+if [[ -z "${OPSKNIGHT_URL}" ]]; then
+  echo "ERROR: --url <control-plane-url> is required." >&2
+  echo "Example: sudo $0 --url https://opsknight.company.com --key <base64-spki-pin> --token <enrollment-token>" >&2
+  exit 1
+fi
+
+IDENTITY_FILE="${STATE_DIR}/identity.json"
+if [[ ! -f "${IDENTITY_FILE}" && -z "${ENROLLMENT_TOKEN}" ]]; then
+  echo "ERROR: --token <enrollment-token> (or --token-file <path>) is required for initial agent enrollment." >&2
+  exit 1
+fi
+
+if [[ -z "${EXECUTION_PUBLIC_KEY}" && ! -f "${CONFIG_DIR}/agent.env" ]]; then
+  echo "ERROR: --key <base64-spki-key> (or --key-file <path>) is required to verify execution envelopes." >&2
+  echo "Copy the execution signing key from OpsKnight: Runbooks -> Agents." >&2
+  exit 1
+fi
+
 echo "=========================================================="
 echo "      OpsKnight Native Linux Agent Enterprise Installer   "
 echo "=========================================================="
@@ -292,8 +311,18 @@ chown -R root:root "${INSTALL_PREFIX}"
 chmod -R u=rwX,go=rX "${INSTALL_PREFIX}"
 chmod 0755 "${INSTALL_PREFIX}/runtime/bin/node" 2>/dev/null || true
 
-# Copy preflight script to /opt/opsknight-agent if present
-if [[ -f "deploy/agent/preflight.sh" ]]; then
+# Verify bundled node compatibility with host libc (glibc >= 2.28)
+if ! "${INSTALL_PREFIX}/runtime/bin/node" -e 'process.exit(0)' 2>/dev/null; then
+  echo "ERROR: The bundled Node 24 runtime cannot execute on this host." >&2
+  echo "This host likely lacks a compatible C standard library (requires glibc >= 2.28 or musl)." >&2
+  exit 1
+fi
+echo "Bundled Node runtime verified compatible: [OK]"
+
+# Install preflight script to /opt/opsknight-agent if bundled or present
+if [[ -f "${INSTALL_PREFIX}/preflight.sh" ]]; then
+  chmod 0755 "${INSTALL_PREFIX}/preflight.sh"
+elif [[ -f "deploy/agent/preflight.sh" ]]; then
   cp "deploy/agent/preflight.sh" "${INSTALL_PREFIX}/preflight.sh"
   chmod 0755 "${INSTALL_PREFIX}/preflight.sh"
 fi
@@ -319,7 +348,7 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   touch "${ENV_FILE}"
 fi
 chmod 0600 "${ENV_FILE}"
-chown "${SERVICE_USER}:${SERVICE_GROUP}" "${ENV_FILE}"
+chown root:root "${ENV_FILE}"
 
 if [[ -n "${OPSKNIGHT_URL}" ]]; then
   sed -i '/^OPSKNIGHT_URL=/d' "${ENV_FILE}" 2>/dev/null || true
@@ -333,13 +362,9 @@ fi
 
 if [[ -n "${EXECUTION_PUBLIC_KEY}" ]]; then
   sed -i '/^OPSKNIGHT_EXECUTION_PUBLIC_KEY=/d' "${ENV_FILE}" 2>/dev/null || true
-  # Handle multi-line PEM format cleanly in env file
-  if [[ "${EXECUTION_PUBLIC_KEY}" == *"BEGIN PUBLIC KEY"* ]]; then
-    CLEAN_KEY="$(echo "${EXECUTION_PUBLIC_KEY}" | awk 'NF {sub(/\r/, ""); printf "%s\\n", $0}')"
-    echo "OPSKNIGHT_EXECUTION_PUBLIC_KEY=\"${CLEAN_KEY}\"" >> "${ENV_FILE}"
-  else
-    echo "OPSKNIGHT_EXECUTION_PUBLIC_KEY=${EXECUTION_PUBLIC_KEY}" >> "${ENV_FILE}"
-  fi
+  # Strip whitespace and normalize single-line base64 SPKI DER key
+  CLEAN_KEY="$(echo "${EXECUTION_PUBLIC_KEY}" | tr -d '\r\n ')"
+  echo "OPSKNIGHT_EXECUTION_PUBLIC_KEY=${CLEAN_KEY}" >> "${ENV_FILE}"
 fi
 
 echo "Installed successfully at ${INSTALL_PREFIX}."

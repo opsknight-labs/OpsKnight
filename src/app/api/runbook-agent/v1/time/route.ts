@@ -1,13 +1,11 @@
-import { NextResponse } from 'next/server';
+import { jsonOk } from '@/lib/api-response';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const now = new Date();
-  return NextResponse.json({
-    data: {
-      serverTime: now.toISOString(),
-      epochMs: now.getTime(),
-    },
+  return jsonOk({
+    serverTime: now.toISOString(),
+    epochMs: now.getTime(),
   });
 }
