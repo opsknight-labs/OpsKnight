@@ -9,10 +9,11 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import AgentSetupInstructions from './AgentSetupInstructions';
+import { formatDateTime } from '@/lib/timezone';
 
 const initialState: AgentEnrollmentState = {};
 
-export default function AgentEnrollmentForm() {
+export default function AgentEnrollmentForm({ userTimeZone }: { userTimeZone: string }) {
   const [state, action, pending] = useActionState(createAgentEnrollmentAction, initialState);
   return (
     <div className="space-y-4">
@@ -42,8 +43,9 @@ export default function AgentEnrollmentForm() {
               {state.token}
             </code>
             <p className="mt-2 text-xs">
-              Agent ID: {state.agentId}. Expires at {new Date(state.expiresAt!).toLocaleString()}.
-              The token cannot be displayed again.
+              Agent ID: {state.agentId}. Expires at{' '}
+              {formatDateTime(state.expiresAt!, userTimeZone, { format: 'datetime' })}. The token
+              cannot be displayed again.
             </p>
           </div>
           <AgentSetupInstructions
