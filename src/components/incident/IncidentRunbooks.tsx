@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { CheckCircle2, Circle, Clock3, Download, Lightbulb, Play, XCircle } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
+import { assertCanViewIncident, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { redactRunbookOutput } from '@/lib/runbooks/redaction';
 import {
   computePlanDigest,
@@ -12,6 +12,7 @@ import {
 } from '@/lib/runbooks/definition';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { compareEvidence, verificationResultSchema } from '@/lib/runbooks/evidence';
+import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import EmptyState from '@/components/ui/EmptyState';
 import {
   ActionForm,
@@ -41,7 +42,8 @@ export default async function IncidentRunbooks({
   incidentId: string;
   serviceId: string;
 }) {
-  const permissions = await getUserPermissions();
+  const [permissions, user] = await Promise.all([getUserPermissions(), getCurrentUser()]);
+  const userTimeZone = getUserTimeZone(user);
   if (
     !permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_ALL) &&
     !permissions.capabilities.includes(CAPABILITIES.RUNBOOK_READ_SCOPED)
@@ -225,7 +227,7 @@ export default async function IncidentRunbooks({
                 <CardTitle className="text-base">{execution.runbook.name}</CardTitle>
                 <CardDescription>
                   Version {execution.runbookVersion.version} · started{' '}
-                  {execution.createdAt.toLocaleString()}
+                  {formatDateTime(execution.createdAt, userTimeZone, { format: 'datetime' })}
                 </CardDescription>
               </div>
               <StatusBadge status={execution.status} />
