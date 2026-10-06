@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Play } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { assertCapability } from '@/lib/rbac';
+import { assertCapability, getCurrentUser } from '@/lib/rbac';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import EmptyState from '@/components/ui/EmptyState';
 import { RunbookNavigation, StatusBadge } from '@/components/runbooks/RunbookControls';
@@ -14,6 +14,7 @@ import {
 } from '@/components/runbooks/RunbookPagination';
 import { RunbookExecutionStatus, type Prisma } from '@prisma/client';
 import { runbookExecutionFilterSchema } from '@/lib/runbooks/schemas';
+import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 
 export const revalidate = 0;
 export default async function RunbookExecutionsPage({
@@ -22,6 +23,8 @@ export default async function RunbookExecutionsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
+  const user = await getCurrentUser();
+  const userTimeZone = getUserTimeZone(user);
   const { query, page: requestedPage } = runbookPageQuery(await searchParams);
   const status = Object.values(RunbookExecutionStatus).find(value => value === query.status);
   const from =
@@ -116,8 +119,8 @@ export default async function RunbookExecutionsPage({
               <p className="text-xs text-muted-foreground">
                 v{item.runbookVersion.version} ·{' '}
                 {item.startedAt
-                  ? `Started ${item.startedAt.toLocaleString()}`
-                  : `Queued ${item.createdAt.toLocaleString()}`}
+                  ? `Started ${formatDateTime(item.startedAt, userTimeZone, { format: 'datetime' })}`
+                  : `Queued ${formatDateTime(item.createdAt, userTimeZone, { format: 'datetime' })}`}
                 {' · '}
                 {item.service?.name || 'No service'} ·{' '}
                 {item.resolvedTargetAgent?.name || 'Control plane/pool'} ·{' '}
