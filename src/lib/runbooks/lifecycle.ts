@@ -59,8 +59,11 @@ export async function checkRunbookDeleteEligibility(
 
   const executionCount = runbook._count.executions;
   const bindingCount = runbook._count.bindings;
-  const publishedVersionCount =
-    runbook.versions.length + (runbook.publishedVersionId ? 1 : 0);
+  const publishedVersionIds = new Set(runbook.versions.map(v => v.id));
+  if (runbook.publishedVersionId) {
+    publishedVersionIds.add(runbook.publishedVersionId);
+  }
+  const publishedVersionCount = publishedVersionIds.size;
 
   const hasExecutions = executionCount > 0;
   const hasBindings = bindingCount > 0;
@@ -120,108 +123,119 @@ export async function checkRunbookDeleteEligibility(
 }
 
 /**
- * Permanently deletes an unused runbook draft after validating eligibility and typed confirmation.
+ * Permanently deletes an unused runbook draft.
+ * Invariants:
+ * - Typed confirmation matching the exact Runbook name or slug is MANDATORY.
+ * - Re-checks all eligibility conditions inside the same serializable transaction
+ *   to eliminate any race condition where a draft could be published or bound concurrently.
  */
 export async function deleteRunbook(
   runbookId: string,
   actorId: string,
-  options?: { typedConfirmation?: string }
+  confirmationText: string
 ) {
-  const runbook = await prisma.runbook.findUnique({
-    where: { id: runbookId },
-    include: {
-      _count: {
-        select: {
-          executions: true,
-          bindings: true,
+  const trimmedConfirmation = (confirmationText ?? '').trim();
+  if (!trimmedConfirmation) {
+    throw new RunbookCannotDeleteError(
+      'Typed confirmation matching the Runbook name or slug is required for permanent deletion.'
+    );
+  }
+
+  return prisma.$transaction(
+    async tx => {
+      const runbook = await tx.runbook.findUnique({
+        where: { id: runbookId },
+        include: {
+          _count: {
+            select: {
+              executions: true,
+              bindings: true,
+            },
+          },
+          versions: {
+            where: {
+              OR: [
+                { state: { in: ['PUBLISHED', 'RETIRED'] } },
+                { publishedAt: { not: null } },
+              ],
+            },
+            select: { id: true },
+          },
         },
-      },
-      versions: {
-        where: {
-          OR: [
-            { state: { in: ['PUBLISHED', 'RETIRED'] } },
-            { publishedAt: { not: null } },
-          ],
+      });
+
+      if (!runbook) {
+        throw new RunbookNotFoundError(runbookId);
+      }
+
+      const matchesName = trimmedConfirmation === runbook.name.trim();
+      const matchesSlug = trimmedConfirmation === runbook.slug.trim();
+      if (!matchesName && !matchesSlug) {
+        throw new RunbookCannotDeleteError(
+          `Confirmation text "${confirmationText}" did not match the Runbook name ("${runbook.name}") or slug ("${runbook.slug}").`
+        );
+      }
+
+      const executionCount = runbook._count.executions;
+      const bindingCount = runbook._count.bindings;
+      const publishedVersionIds = new Set(runbook.versions.map(v => v.id));
+      if (runbook.publishedVersionId) {
+        publishedVersionIds.add(runbook.publishedVersionId);
+      }
+
+      if (executionCount > 0) {
+        throw new RunbookCannotDeleteError(
+          'Cannot delete: Runbook has execution history. Archive the runbook instead to preserve incident response evidence.'
+        );
+      }
+      if (bindingCount > 0) {
+        throw new RunbookCannotDeleteError(
+          'Cannot delete: Runbook is attached to services. Remove all service bindings first.'
+        );
+      }
+      if (publishedVersionIds.size > 0) {
+        throw new RunbookCannotDeleteError(
+          'Cannot delete: Runbook has published versions. Only never-published drafts with zero executions and zero bindings can be permanently deleted. Archive the runbook instead.'
+        );
+      }
+
+      // Break cyclic self-referencing foreign keys on Runbook before deleting
+      await tx.runbook.update({
+        where: { id: runbookId },
+        data: { draftVersionId: null, publishedVersionId: null },
+      });
+
+      // Clean up draft versions and inputs
+      await tx.runbookVersion.deleteMany({
+        where: { runbookId },
+      });
+
+      // Delete the runbook entity
+      const deleted = await tx.runbook.delete({
+        where: { id: runbookId },
+      });
+
+      await logAudit(
+        {
+          action: 'runbook.deleted',
+          entityType: 'RUNBOOK',
+          entityId: runbookId,
+          actorId,
+          oldValue: { name: runbook.name, slug: runbook.slug, deletedAt: new Date().toISOString() },
         },
-        select: { id: true, version: true },
-      },
-    },
-  });
-
-  if (!runbook) {
-    throw new RunbookNotFoundError(runbookId);
-  }
-
-  const executionCount = runbook._count.executions;
-  const bindingCount = runbook._count.bindings;
-  const publishedVersionCount =
-    runbook.versions.length + (runbook.publishedVersionId ? 1 : 0);
-
-  if (executionCount > 0) {
-    throw new RunbookCannotDeleteError(
-      'Cannot delete: Runbook has execution history. Archive the runbook instead to preserve incident response evidence.'
-    );
-  }
-  if (bindingCount > 0) {
-    throw new RunbookCannotDeleteError(
-      'Cannot delete: Runbook is attached to services. Remove all service bindings first.'
-    );
-  }
-  if (publishedVersionCount > 0) {
-    throw new RunbookCannotDeleteError(
-      'Cannot delete: Runbook has published versions. Only never-published drafts with zero executions and zero bindings can be permanently deleted. Archive the runbook instead.'
-    );
-  }
-
-  if (options?.typedConfirmation !== undefined) {
-    const confirmation = options.typedConfirmation.trim().toLowerCase();
-    const nameMatch = confirmation === runbook.name.trim().toLowerCase();
-    const slugMatch = confirmation === runbook.slug.trim().toLowerCase();
-    const deleteMatch = confirmation === 'delete';
-    if (!nameMatch && !slugMatch && !deleteMatch) {
-      throw new RunbookCannotDeleteError(
-        `Confirmation text did not match runbook name ("${runbook.name}") or slug ("${runbook.slug}").`
+        tx
       );
-    }
-  }
 
-  return prisma.$transaction(async tx => {
-    // Break cyclic self-referencing foreign keys on Runbook before deleting
-    await tx.runbook.update({
-      where: { id: runbookId },
-      data: { draftVersionId: null, publishedVersionId: null },
-    });
-
-    // Clean up draft versions and inputs
-    await tx.runbookVersion.deleteMany({
-      where: { runbookId },
-    });
-
-    // Delete the runbook entity
-    const deleted = await tx.runbook.delete({
-      where: { id: runbookId },
-    });
-
-    await logAudit(
-      {
-        action: 'runbook.deleted',
-        entityType: 'RUNBOOK',
-        entityId: runbookId,
-        actorId,
-        oldValue: { name: runbook.name, slug: runbook.slug, deletedAt: new Date().toISOString() },
-      },
-      tx
-    );
-
-    return deleted;
-  });
+      return deleted;
+    },
+    { isolationLevel: 'Serializable' }
+  );
 }
 
 /**
  * Restores an archived runbook back to usable state.
- * Safety rule: Non-automatic (MANUAL / SUGGESTED) bindings are restored,
- * but AUTOMATIC mode bindings are explicitly kept disabled (`enabled: false`)
- * so dangerous unattended automation cannot silently re-trigger without explicit review.
+ * Safety rule: All service bindings remain disabled (`enabled: false`) upon restore,
+ * requiring explicit operator review and activation to prevent unintended automated actions.
  */
 export async function restoreRunbook(runbookId: string, actorId: string) {
   const runbook = await prisma.runbook.findUnique({
@@ -242,21 +256,10 @@ export async function restoreRunbook(runbookId: string, actorId: string) {
       data: { archivedAt: null },
     });
 
-    // Re-enable safe bindings (manual or suggested)
+    // Safety rule: All service bindings are explicitly kept disabled upon restoration.
+    // An operator must intentionally review and re-enable each binding.
     await tx.serviceRunbookBinding.updateMany({
-      where: {
-        runbookId,
-        mode: { in: ['MANUAL', 'SUGGESTED'] },
-      },
-      data: { enabled: true },
-    });
-
-    // Guardrail: AUTOMATIC bindings are strictly kept disabled to prevent dangerous silent execution
-    await tx.serviceRunbookBinding.updateMany({
-      where: {
-        runbookId,
-        mode: 'AUTOMATIC',
-      },
+      where: { runbookId },
       data: { enabled: false },
     });
 
@@ -268,7 +271,7 @@ export async function restoreRunbook(runbookId: string, actorId: string) {
         actorId,
         newValue: {
           archivedAt: null,
-          automaticBindingsKeptDisabled: true,
+          bindingsKeptDisabled: true,
         },
       },
       tx

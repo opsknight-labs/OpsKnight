@@ -11,7 +11,6 @@ import {
   runbookPageQuery,
   RUNBOOK_PAGE_SIZE,
 } from '@/components/runbooks/RunbookPagination';
-import type { Prisma } from '@prisma/client';
 import { runbookLibraryFilterSchema } from '@/lib/runbooks/schemas';
 import { buildRunbookLibraryWhere } from '@/lib/runbooks/lifecycle';
 import { getUserTimeZone } from '@/lib/timezone';
@@ -31,8 +30,8 @@ export default async function RunbooksPage({
     status: ['all', 'published', 'draft', 'archived'].includes(query.status)
       ? (query.status as 'all' | 'published' | 'draft' | 'archived')
       : undefined,
-    tab: ['all', 'published', 'drafts', 'archived', 'templates'].includes(query.tab)
-      ? (query.tab as 'all' | 'published' | 'drafts' | 'archived' | 'templates')
+    tab: ['all', 'published', 'drafts', 'archived'].includes(query.tab)
+      ? (query.tab as 'all' | 'published' | 'drafts' | 'archived')
       : undefined,
     ownerId: query.owner,
     serviceId: query.service,

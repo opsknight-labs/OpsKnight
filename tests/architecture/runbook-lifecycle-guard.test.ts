@@ -42,14 +42,22 @@ describe('Runbook Lifecycle Architecture Guard', () => {
     expect(files.schemaPrisma).toMatch(/model\s+RunbookExecution\s+\{[\s\S]*?runbook\s+Runbook\s+@relation\([\s\S]*?onDelete:\s*Restrict/);
   });
 
-  it('guarantees restore does not silently re-enable dangerous automatic bindings', () => {
-    // 1. restoreRunbook must explicitly keep AUTOMATIC bindings disabled
-    expect(files.lifecycle).toMatch(/mode:\s*['"]AUTOMATIC['"]/);
-    expect(files.lifecycle).toMatch(/enabled:\s*false/);
+  it('guarantees restore does not silently re-enable bindings and mandates typed confirmation', () => {
+    // 1. restoreRunbook must explicitly keep all service bindings disabled
+    expect(files.lifecycle).toMatch(/serviceRunbookBinding\.updateMany\([\s\S]*?enabled:\s*false/);
 
     // 2. restoreRunbookAction must exist in actions.ts
     expect(files.actions).toContain('restoreRunbookAction');
     expect(files.actions).toContain('restoreRunbook(');
+
+    // 3. deleteRunbook requires mandatory typed confirmation matching name or slug
+    expect(files.lifecycle).toContain('did not match the Runbook name');
+  });
+
+  it('prevents circular dependency between versioning and lifecycle modules', () => {
+    const versioning = readFileSync('src/lib/runbooks/versioning.ts', 'utf8');
+    expect(versioning).not.toContain("from './lifecycle'");
+    expect(versioning).not.toContain('restoreRunbook');
   });
 
   it('enforces bounded server pagination and schema limits', () => {

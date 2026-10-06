@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { Prisma, Runbook } from '@prisma/client';
 import {
   buildRunbookLibraryWhere,
   checkRunbookDeleteEligibility,
@@ -12,7 +13,20 @@ import {
   RunbookNotFoundError,
 } from '@/lib/runbooks/errors';
 import prisma from '@/lib/prisma';
-import { emitAuditEvent } from '@/lib/audit';
+
+type MockTx = {
+  runbook: {
+    findUnique: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+  };
+  runbookVersion: {
+    deleteMany: ReturnType<typeof vi.fn>;
+  };
+  serviceRunbookBinding: {
+    updateMany: ReturnType<typeof vi.fn>;
+  };
+};
 
 vi.mock('@/lib/prisma', () => ({
   default: {
@@ -27,9 +41,10 @@ vi.mock('@/lib/prisma', () => ({
     serviceRunbookBinding: {
       updateMany: vi.fn(),
     },
-    $transaction: vi.fn((callback: (tx: any) => Promise<any>) =>
+    $transaction: vi.fn((callback: (tx: MockTx) => Promise<unknown>) =>
       callback({
         runbook: {
+          findUnique: vi.fn(),
           update: vi.fn().mockResolvedValue({ id: 'rb_1', archivedAt: null }),
           delete: vi.fn().mockResolvedValue({ id: 'rb_1' }),
         },
@@ -46,7 +61,6 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/lib/audit', () => ({
   logAudit: vi.fn().mockResolvedValue(undefined),
-  emitAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/lib/runbooks/versioning', () => ({
@@ -135,7 +149,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
         publishedVersionId: null,
         _count: { executions: 5, bindings: 0 },
         versions: [],
-      } as any);
+      } as unknown as Runbook);
 
       const result = await checkRunbookDeleteEligibility('rb_1');
       expect(result.canDelete).toBe(false);
@@ -151,7 +165,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
         publishedVersionId: null,
         _count: { executions: 0, bindings: 2 },
         versions: [],
-      } as any);
+      } as unknown as Runbook);
 
       const result = await checkRunbookDeleteEligibility('rb_1');
       expect(result.canDelete).toBe(false);
@@ -166,13 +180,26 @@ describe('Runbook Lifecycle Unit Tests', () => {
         publishedVersionId: 'ver_pub_1',
         _count: { executions: 0, bindings: 0 },
         versions: [{ id: 'ver_pub_1', version: 1 }],
-      } as any);
+      } as unknown as Runbook);
 
       const result = await checkRunbookDeleteEligibility('rb_1');
       expect(result.canDelete).toBe(false);
       expect(result.hasPublishedVersions).toBe(true);
+      expect(result.publishedVersionCount).toBe(1);
       expect(result.reason).toContain('published versions');
       expect(result.reason).toContain('Archive the runbook instead');
+    });
+
+    it('does not double count publishedVersionId when version is in versions list', async () => {
+      vi.mocked(prisma.runbook.findUnique).mockResolvedValueOnce({
+        id: 'rb_1',
+        publishedVersionId: 'ver_pub_1',
+        _count: { executions: 0, bindings: 0 },
+        versions: [{ id: 'ver_pub_1', version: 1 }],
+      } as unknown as Runbook);
+
+      const result = await checkRunbookDeleteEligibility('rb_1');
+      expect(result.publishedVersionCount).toBe(1);
     });
 
     it('permits deletion for never-published draft with 0 executions and 0 bindings', async () => {
@@ -181,7 +208,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
         publishedVersionId: null,
         _count: { executions: 0, bindings: 0 },
         versions: [],
-      } as any);
+      } as unknown as Runbook);
 
       const result = await checkRunbookDeleteEligibility('rb_1');
       expect(result.canDelete).toBe(true);
@@ -193,48 +220,148 @@ describe('Runbook Lifecycle Unit Tests', () => {
   });
 
   describe('deleteRunbook', () => {
-    it('throws RunbookCannotDeleteError if runbook is not eligible', async () => {
-      vi.mocked(prisma.runbook.findUnique).mockResolvedValueOnce({
-        id: 'rb_1',
-        publishedVersionId: null,
-        _count: { executions: 1, bindings: 0 },
-        versions: [],
-      } as any);
-
-      await expect(deleteRunbook('rb_1', 'user_1')).rejects.toThrow(
+    it('requires non-empty confirmation text', async () => {
+      await expect(deleteRunbook('rb_1', 'user_1', '')).rejects.toThrow(
         RunbookCannotDeleteError
       );
     });
 
-    it('validates typed confirmation text against name or slug', async () => {
-      vi.mocked(prisma.runbook.findUnique).mockResolvedValueOnce({
-        id: 'rb_1',
-        name: 'Draft Diagnostics',
-        slug: 'draft-diagnostics',
-        publishedVersionId: null,
-        _count: { executions: 0, bindings: 0 },
-        versions: [],
-      } as any);
+    it('throws RunbookCannotDeleteError if runbook is not eligible', async () => {
+      vi.mocked(prisma.$transaction).mockImplementationOnce(
+        (async (callback: (tx: MockTx) => Promise<unknown>) => {
+          const tx: MockTx = {
+            runbook: {
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'rb_1',
+                name: 'Diagnostics',
+                slug: 'diagnostics',
+                publishedVersionId: null,
+                _count: { executions: 1, bindings: 0 },
+                versions: [],
+              }),
+              update: vi.fn(),
+              delete: vi.fn(),
+            },
+            runbookVersion: { deleteMany: vi.fn() },
+            serviceRunbookBinding: { updateMany: vi.fn() },
+          };
+          return callback(tx);
+        }) as never
+      );
 
-      await expect(
-        deleteRunbook('rb_1', 'user_1', { typedConfirmation: 'wrong-text' })
-      ).rejects.toThrow(RunbookCannotDeleteError);
+      await expect(deleteRunbook('rb_1', 'user_1', 'diagnostics')).rejects.toThrow(
+        RunbookCannotDeleteError
+      );
     });
 
-    it('successfully deletes an unused draft when confirmation matches', async () => {
-      vi.mocked(prisma.runbook.findUnique).mockResolvedValueOnce({
-        id: 'rb_1',
-        name: 'Draft Diagnostics',
-        slug: 'draft-diagnostics',
-        publishedVersionId: null,
-        _count: { executions: 0, bindings: 0 },
-        versions: [],
-      } as any);
+    it('rejects generic confirmation text like "delete"', async () => {
+      vi.mocked(prisma.$transaction).mockImplementationOnce(
+        (async (callback: (tx: MockTx) => Promise<unknown>) => {
+          const tx: MockTx = {
+            runbook: {
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'rb_1',
+                name: 'Draft Diagnostics',
+                slug: 'draft-diagnostics',
+                publishedVersionId: null,
+                _count: { executions: 0, bindings: 0 },
+                versions: [],
+              }),
+              update: vi.fn(),
+              delete: vi.fn(),
+            },
+            runbookVersion: { deleteMany: vi.fn() },
+            serviceRunbookBinding: { updateMany: vi.fn() },
+          };
+          return callback(tx);
+        }) as never
+      );
 
-      const result = await deleteRunbook('rb_1', 'user_1', {
-        typedConfirmation: 'draft-diagnostics',
-      });
-      expect(result.id).toBe('rb_1');
+      await expect(deleteRunbook('rb_1', 'user_1', 'delete')).rejects.toThrow(
+        RunbookCannotDeleteError
+      );
+    });
+
+    it('rejects confirmation text that does not match name or slug', async () => {
+      vi.mocked(prisma.$transaction).mockImplementationOnce(
+        (async (callback: (tx: MockTx) => Promise<unknown>) => {
+          const tx: MockTx = {
+            runbook: {
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'rb_1',
+                name: 'Draft Diagnostics',
+                slug: 'draft-diagnostics',
+                publishedVersionId: null,
+                _count: { executions: 0, bindings: 0 },
+                versions: [],
+              }),
+              update: vi.fn(),
+              delete: vi.fn(),
+            },
+            runbookVersion: { deleteMany: vi.fn() },
+            serviceRunbookBinding: { updateMany: vi.fn() },
+          };
+          return callback(tx);
+        }) as never
+      );
+
+      await expect(deleteRunbook('rb_1', 'user_1', 'random-name')).rejects.toThrow(
+        RunbookCannotDeleteError
+      );
+    });
+
+    it('successfully deletes an unused draft when confirmation matches slug', async () => {
+      vi.mocked(prisma.$transaction).mockImplementationOnce(
+        (async (callback: (tx: MockTx) => Promise<unknown>) => {
+          const tx: MockTx = {
+            runbook: {
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'rb_1',
+                name: 'Draft Diagnostics',
+                slug: 'draft-diagnostics',
+                publishedVersionId: null,
+                _count: { executions: 0, bindings: 0 },
+                versions: [],
+              }),
+              update: vi.fn().mockResolvedValue({ id: 'rb_1' }),
+              delete: vi.fn().mockResolvedValue({ id: 'rb_1' }),
+            },
+            runbookVersion: { deleteMany: vi.fn() },
+            serviceRunbookBinding: { updateMany: vi.fn() },
+          };
+          return callback(tx);
+        }) as never
+      );
+
+      const result = await deleteRunbook('rb_1', 'user_1', 'draft-diagnostics');
+      expect((result as { id: string }).id).toBe('rb_1');
+    });
+
+    it('successfully deletes an unused draft when confirmation matches name', async () => {
+      vi.mocked(prisma.$transaction).mockImplementationOnce(
+        (async (callback: (tx: MockTx) => Promise<unknown>) => {
+          const tx: MockTx = {
+            runbook: {
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'rb_1',
+                name: 'Draft Diagnostics',
+                slug: 'draft-diagnostics',
+                publishedVersionId: null,
+                _count: { executions: 0, bindings: 0 },
+                versions: [],
+              }),
+              update: vi.fn().mockResolvedValue({ id: 'rb_1' }),
+              delete: vi.fn().mockResolvedValue({ id: 'rb_1' }),
+            },
+            runbookVersion: { deleteMany: vi.fn() },
+            serviceRunbookBinding: { updateMany: vi.fn() },
+          };
+          return callback(tx);
+        }) as never
+      );
+
+      const result = await deleteRunbook('rb_1', 'user_1', 'Draft Diagnostics');
+      expect((result as { id: string }).id).toBe('rb_1');
     });
   });
 
@@ -243,51 +370,48 @@ describe('Runbook Lifecycle Unit Tests', () => {
       vi.mocked(prisma.runbook.findUnique).mockResolvedValueOnce({
         id: 'rb_1',
         archivedAt: null,
-      } as any);
+      } as unknown as Runbook);
 
       const result = await restoreRunbook('rb_1', 'user_1');
       expect(result.archivedAt).toBeNull();
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('restores archived runbook and keeps AUTOMATIC bindings disabled', async () => {
+    it('restores archived runbook and leaves all bindings disabled for safety', async () => {
       vi.mocked(prisma.runbook.findUnique).mockResolvedValueOnce({
         id: 'rb_1',
         archivedAt: new Date(),
-      } as any);
+      } as unknown as Runbook);
 
-      let txPassed: any;
-      vi.mocked(prisma.$transaction).mockImplementationOnce(async (cb: any) => {
-        txPassed = {
-          runbook: {
-            update: vi.fn().mockResolvedValue({ id: 'rb_1', archivedAt: null }),
-          },
-          serviceRunbookBinding: {
-            updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-          },
-        };
-        return cb(txPassed);
-      });
+      let txPassed: MockTx | undefined;
+      vi.mocked(prisma.$transaction).mockImplementationOnce(
+        (async (callback: (tx: MockTx) => Promise<unknown>) => {
+          txPassed = {
+            runbook: {
+              findUnique: vi.fn(),
+              update: vi.fn().mockResolvedValue({ id: 'rb_1', archivedAt: null }),
+              delete: vi.fn(),
+            },
+            runbookVersion: {
+              deleteMany: vi.fn(),
+            },
+            serviceRunbookBinding: {
+              updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+            },
+          };
+          return callback(txPassed);
+        }) as never
+      );
 
       const result = await restoreRunbook('rb_1', 'user_1');
       expect(result.archivedAt).toBeNull();
 
-      // Check binding safety: AUTOMATIC bindings are explicitly updated with enabled: false
-      expect(txPassed.serviceRunbookBinding.updateMany).toHaveBeenCalledWith({
+      // Invariant: All bindings must be explicitly set to enabled: false upon restore
+      expect(txPassed?.serviceRunbookBinding.updateMany).toHaveBeenCalledWith({
         where: {
           runbookId: 'rb_1',
-          mode: 'AUTOMATIC',
         },
         data: { enabled: false },
-      });
-
-      // Non-automatic bindings are enabled
-      expect(txPassed.serviceRunbookBinding.updateMany).toHaveBeenCalledWith({
-        where: {
-          runbookId: 'rb_1',
-          mode: { in: ['MANUAL', 'SUGGESTED'] },
-        },
-        data: { enabled: true },
       });
     });
   });
@@ -301,8 +425,8 @@ describe('Runbook Lifecycle Unit Tests', () => {
 
     it('suffixes incrementing counter if collision occurs', async () => {
       vi.mocked(prisma.runbook.findUnique)
-        .mockResolvedValueOnce({ id: 'existing_1' } as any)
-        .mockResolvedValueOnce({ id: 'existing_2' } as any)
+        .mockResolvedValueOnce({ id: 'existing_1' } as unknown as Runbook)
+        .mockResolvedValueOnce({ id: 'existing_2' } as unknown as Runbook)
         .mockResolvedValueOnce(null);
 
       const slug = await ensureUniqueSlug('my-workflow');
@@ -312,18 +436,20 @@ describe('Runbook Lifecycle Unit Tests', () => {
 
   describe('duplicateRunbook', () => {
     it('creates a cloned runbook with copy suffix and definition', async () => {
+      const mockSource = {
+        id: 'rb_orig',
+        name: 'Original Workflow',
+        slug: 'orig-workflow',
+        description: 'Original description',
+        draftVersion: {
+          definition: { steps: [{ key: 'step_1', type: 'MANUAL', riskClass: 'READ_ONLY' }] } as unknown as Prisma.JsonValue,
+          inputs: [{ key: 'env', label: 'Env', type: 'STRING', required: true, sequence: 0 }],
+        },
+        publishedVersion: null,
+      } as unknown as Runbook;
+
       vi.mocked(prisma.runbook.findUnique)
-        .mockResolvedValueOnce({
-          id: 'rb_orig',
-          name: 'Original Workflow',
-          slug: 'orig-workflow',
-          description: 'Original description',
-          draftVersion: {
-            definition: { steps: [{ key: 'step_1', type: 'MANUAL', riskClass: 'READ_ONLY' }] },
-            inputs: [{ key: 'env', label: 'Env', type: 'STRING', required: true, sequence: 0 }],
-          },
-          publishedVersion: null,
-        } as any)
+        .mockResolvedValueOnce(mockSource)
         .mockResolvedValueOnce(null); // for ensureUniqueSlug
 
       const duplicated = await duplicateRunbook('rb_orig', 'user_1');

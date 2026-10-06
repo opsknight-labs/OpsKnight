@@ -45,6 +45,8 @@ vi.mock('next/navigation', () => ({
   redirect: vi.fn(),
 }));
 
+import type { Runbook } from '@prisma/client';
+
 describe('Runbook Server Actions Unit Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -55,7 +57,7 @@ describe('Runbook Server Actions Unit Tests', () => {
       const validCuid = 'clh1234567890123456789012';
       vi.mocked(restoreRunbook).mockResolvedValueOnce({
         id: validCuid,
-      } as any);
+      } as unknown as Runbook);
 
       const result = await restoreRunbookAction(validCuid);
 
@@ -92,14 +94,12 @@ describe('Runbook Server Actions Unit Tests', () => {
   describe('deleteRunbookAction', () => {
     it('asserts capability and calls deleteRunbook with confirmation text', async () => {
       const validCuid = 'clh1234567890123456789012';
-      vi.mocked(deleteRunbook).mockResolvedValueOnce({ id: validCuid } as any);
+      vi.mocked(deleteRunbook).mockResolvedValueOnce({ id: validCuid } as unknown as Runbook);
 
       const result = await deleteRunbookAction(validCuid, 'draft-slug');
 
       expect(assertCapability).toHaveBeenCalled();
-      expect(deleteRunbook).toHaveBeenCalledWith(validCuid, 'user_1', {
-        typedConfirmation: 'draft-slug',
-      });
+      expect(deleteRunbook).toHaveBeenCalledWith(validCuid, 'user_1', 'draft-slug');
       expect(revalidatePath).toHaveBeenCalledWith('/runbooks');
       expect(result).toEqual({ success: true, id: validCuid });
     });
@@ -109,7 +109,7 @@ describe('Runbook Server Actions Unit Tests', () => {
     it('asserts capability, duplicates runbook, and redirects to new runbook', async () => {
       const validCuid = 'clh1234567890123456789012';
       const newCuid = 'clh9876543210987654321098';
-      vi.mocked(duplicateRunbook).mockResolvedValueOnce({ id: newCuid } as any);
+      vi.mocked(duplicateRunbook).mockResolvedValueOnce({ id: newCuid } as unknown as Awaited<ReturnType<typeof duplicateRunbook>>);
 
       await duplicateRunbookAction(validCuid);
 
@@ -123,7 +123,7 @@ describe('Runbook Server Actions Unit Tests', () => {
   describe('archiveRunbookAction', () => {
     it('asserts capability, archives runbook, and redirects to library', async () => {
       const validCuid = 'clh1234567890123456789012';
-      vi.mocked(archiveRunbook).mockResolvedValueOnce({ id: validCuid } as any);
+      vi.mocked(archiveRunbook).mockResolvedValueOnce({ id: validCuid } as unknown as Runbook);
 
       await archiveRunbookAction(validCuid);
 

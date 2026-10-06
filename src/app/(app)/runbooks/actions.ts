@@ -160,10 +160,15 @@ export async function checkRunbookDeleteEligibilityAction(runbookId: string) {
   return checkRunbookDeleteEligibility(id);
 }
 
-export async function deleteRunbookAction(runbookId: string, confirmationText?: string) {
+export async function deleteRunbookAction(runbookId: string, confirmationText: string) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
   const id = idSchema.parse(runbookId);
-  await deleteRunbook(id, actor.id, { typedConfirmation: confirmationText });
+  const validConfirmation = z
+    .string()
+    .trim()
+    .min(1, 'Confirmation text is required to delete a runbook.')
+    .parse(confirmationText);
+  await deleteRunbook(id, actor.id, validConfirmation);
   revalidatePath('/runbooks');
   return { success: true, id };
 }

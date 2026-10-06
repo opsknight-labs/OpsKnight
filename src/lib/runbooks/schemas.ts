@@ -460,7 +460,7 @@ export const runbookLibraryFilterSchema = z
   .object({
     q: z.string().max(200).optional(),
     status: z.enum(['all', 'published', 'draft', 'archived']).optional(),
-    tab: z.enum(['all', 'published', 'drafts', 'archived', 'templates']).optional(),
+    tab: z.enum(['all', 'published', 'drafts', 'archived']).optional(),
     ownerId: z.string().cuid().optional(),
     serviceId: z.string().cuid().optional(),
     page: z.coerce.number().int().positive().max(10000).default(1),
