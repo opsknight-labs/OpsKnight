@@ -19,6 +19,10 @@ STATE_DIR="/var/lib/opsknight-agent"
 SERVICE_USER="opsknight-agent"
 SERVICE_GROUP="opsknight-agent"
 
+EXECUTION_PUBLIC_KEY="${OPSKNIGHT_EXECUTION_PUBLIC_KEY:-}"
+TOKEN_FILE=""
+KEY_FILE=""
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --url)
@@ -29,12 +33,24 @@ while [[ $# -gt 0 ]]; do
       ENROLLMENT_TOKEN="$2"
       shift 2
       ;;
+    --token-file)
+      TOKEN_FILE="$2"
+      shift 2
+      ;;
+    --key|--execution-key)
+      EXECUTION_PUBLIC_KEY="$2"
+      shift 2
+      ;;
+    --key-file|--execution-key-file)
+      KEY_FILE="$2"
+      shift 2
+      ;;
     --tarball)
       TARBALL_OVERRIDE="$2"
       shift 2
       ;;
     -h|--help)
-      echo "Usage: sudo $0 [--url <control-plane-url>] [--token <enrollment-token>] [--tarball <local-tarball>]"
+      echo "Usage: sudo $0 --url <control-plane-url> [--token <enrollment-token> | --token-file <path>] [--key <public-key-pem> | --key-file <path>] [--tarball <local-tarball>]"
       exit 0
       ;;
     *)
@@ -43,6 +59,24 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Read token from file if provided
+if [[ -n "${TOKEN_FILE}" ]]; then
+  if [[ ! -f "${TOKEN_FILE}" ]]; then
+    echo "ERROR: Token file '${TOKEN_FILE}' not found." >&2
+    exit 1
+  fi
+  ENROLLMENT_TOKEN="$(cat "${TOKEN_FILE}" | tr -d '\r\n')"
+fi
+
+# Read key from file if provided
+if [[ -n "${KEY_FILE}" ]]; then
+  if [[ ! -f "${KEY_FILE}" ]]; then
+    echo "ERROR: Execution key file '${KEY_FILE}' not found." >&2
+    exit 1
+  fi
+  EXECUTION_PUBLIC_KEY="$(cat "${KEY_FILE}")"
+fi
 
 if [[ $EUID -ne 0 ]]; then
   echo "ERROR: OpsKnight Agent installer must be run as root (or with sudo)." >&2
@@ -235,13 +269,20 @@ else
   fi
   TARBALL_FILE="${TEMP_WORK_DIR}/${ARTIFACT_NAME}"
 
-  # Verify Checksum if SHA256SUMS is available
-  if curl -fsSL -o "${TEMP_WORK_DIR}/SHA256SUMS" "${CHECKSUM_URL}" 2>/dev/null || [[ -f "./dist/agent/SHA256SUMS" ]]; then
-    [[ -f "./dist/agent/SHA256SUMS" && ! -f "${TEMP_WORK_DIR}/SHA256SUMS" ]] && cp "./dist/agent/SHA256SUMS" "${TEMP_WORK_DIR}/"
-    echo "Verifying artifact checksum..."
-    (cd "${TEMP_WORK_DIR}" && grep "${ARTIFACT_NAME}" SHA256SUMS | sha256sum -c - || grep "${ARTIFACT_NAME}" SHA256SUMS | shasum -a 256 -c -)
-    echo "Artifact checksum verified: [OK]"
+  # Verify Checksum strictly for remote downloads
+  if [[ -f "./dist/agent/SHA256SUMS" ]]; then
+    cp "./dist/agent/SHA256SUMS" "${TEMP_WORK_DIR}/"
+  elif ! curl -fsSL -o "${TEMP_WORK_DIR}/SHA256SUMS" "${CHECKSUM_URL}"; then
+    echo "ERROR: Failed to download SHA256SUMS from ${CHECKSUM_URL}." >&2
+    echo "Refusing to install unverified remote artifacts." >&2
+    exit 1
   fi
+  echo "Verifying artifact checksum..."
+  if ! (cd "${TEMP_WORK_DIR}" && grep "${ARTIFACT_NAME}" SHA256SUMS | sha256sum -c - 2>/dev/null || (cd "${TEMP_WORK_DIR}" && grep "${ARTIFACT_NAME}" SHA256SUMS | shasum -a 256 -c - 2>/dev/null)); then
+    echo "ERROR: SHA256 checksum verification failed for ${ARTIFACT_NAME}." >&2
+    exit 1
+  fi
+  echo "Artifact checksum verified: [OK]"
 fi
 
 # Extract into /opt/opsknight-agent
@@ -250,6 +291,12 @@ tar -xzf "${TARBALL_FILE}" --strip-components=1 -C "${INSTALL_PREFIX}"
 chown -R root:root "${INSTALL_PREFIX}"
 chmod -R u=rwX,go=rX "${INSTALL_PREFIX}"
 chmod 0755 "${INSTALL_PREFIX}/runtime/bin/node" 2>/dev/null || true
+
+# Copy preflight script to /opt/opsknight-agent if present
+if [[ -f "deploy/agent/preflight.sh" ]]; then
+  cp "deploy/agent/preflight.sh" "${INSTALL_PREFIX}/preflight.sh"
+  chmod 0755 "${INSTALL_PREFIX}/preflight.sh"
+fi
 
 # Install systemd unit
 if [[ -f "${INSTALL_PREFIX}/opsknight-agent.service" ]]; then
@@ -280,8 +327,19 @@ if [[ -n "${OPSKNIGHT_URL}" ]]; then
 fi
 
 if [[ -n "${ENROLLMENT_TOKEN}" ]]; then
-  sed -i '/^OPSKNIGHT_ENROLLMENT_TOKEN=/d' "${ENV_FILE}" 2>/dev/null || true
-  echo "OPSKNIGHT_ENROLLMENT_TOKEN=${ENROLLMENT_TOKEN}" >> "${ENV_FILE}"
+  sed -i '/^OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=/d' "${ENV_FILE}" 2>/dev/null || true
+  echo "OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=${ENROLLMENT_TOKEN}" >> "${ENV_FILE}"
+fi
+
+if [[ -n "${EXECUTION_PUBLIC_KEY}" ]]; then
+  sed -i '/^OPSKNIGHT_EXECUTION_PUBLIC_KEY=/d' "${ENV_FILE}" 2>/dev/null || true
+  # Handle multi-line PEM format cleanly in env file
+  if [[ "${EXECUTION_PUBLIC_KEY}" == *"BEGIN PUBLIC KEY"* ]]; then
+    CLEAN_KEY="$(echo "${EXECUTION_PUBLIC_KEY}" | awk 'NF {sub(/\r/, ""); printf "%s\\n", $0}')"
+    echo "OPSKNIGHT_EXECUTION_PUBLIC_KEY=\"${CLEAN_KEY}\"" >> "${ENV_FILE}"
+  else
+    echo "OPSKNIGHT_EXECUTION_PUBLIC_KEY=${EXECUTION_PUBLIC_KEY}" >> "${ENV_FILE}"
+  fi
 fi
 
 echo "Installed successfully at ${INSTALL_PREFIX}."

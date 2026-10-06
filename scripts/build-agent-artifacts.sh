@@ -38,15 +38,16 @@ for ARCH in "x64" "arm64"; do
   NODE_DIST="node-${NODE_VERSION}-linux-${ARCH}"
   NODE_URL="https://nodejs.org/dist/${NODE_VERSION}/${NODE_DIST}.tar.gz"
 
-  echo "Staging Node ${NODE_VERSION} for linux-${ARCH}..."
+  echo "Fetching and staging pinned Node ${NODE_VERSION} runtime for linux-${ARCH}..."
   TEMP_NODE_DIR=$(mktemp -d)
-  if curl -fsSL "${NODE_URL}" | tar -xz -C "${TEMP_NODE_DIR}" "${NODE_DIST}/bin/node"; then
-    cp "${TEMP_NODE_DIR}/${NODE_DIST}/bin/node" "${PACKAGE_DIR}/runtime/bin/node"
-    chmod +x "${PACKAGE_DIR}/runtime/bin/node"
-  else
-    echo "Warning: Unable to fetch prebuilt node from ${NODE_URL}. Creating symlink placeholder."
-    ln -sf "/usr/bin/node" "${PACKAGE_DIR}/runtime/bin/node"
+  if ! curl -fsSL "${NODE_URL}" | tar -xz -C "${TEMP_NODE_DIR}" "${NODE_DIST}/bin/node"; then
+    echo "ERROR: Failed to download official Node runtime from ${NODE_URL}." >&2
+    echo "Failing closed to prevent building unbundled or incomplete agent artifacts." >&2
+    rm -rf "${TEMP_NODE_DIR}"
+    exit 1
   fi
+  cp "${TEMP_NODE_DIR}/${NODE_DIST}/bin/node" "${PACKAGE_DIR}/runtime/bin/node"
+  chmod +x "${PACKAGE_DIR}/runtime/bin/node"
   rm -rf "${TEMP_NODE_DIR}"
 
   echo "Creating archive: ${DIST_DIR}/${TARBALL_NAME}"

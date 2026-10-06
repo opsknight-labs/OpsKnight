@@ -137,7 +137,7 @@ if [[ "${CLOCK_OK}" == "false" ]]; then
   report_warn "Clock sync" "NTP/chrony synchronization not verified"
 fi
 
-# 8. Control Plane Connectivity & Skew Check
+# 8. Control Plane Connectivity & Clock Skew Measurement
 ENV_FILE="${CONFIG_DIR}/agent.env"
 OPSKNIGHT_URL=""
 if [[ -f "${ENV_FILE}" ]]; then
@@ -149,12 +149,33 @@ if [[ -n "${OPSKNIGHT_URL}" ]]; then
   TIME_ENDPOINT="${OPSKNIGHT_URL%/}/api/runbook-agent/v1/time"
   TIME_RESP="$(curl -fsSL -m 5 "${TIME_ENDPOINT}" 2>/dev/null || echo '')"
   if [[ -n "${TIME_RESP}" ]]; then
-    report_pass "Control plane" "HTTPS reachable (${OPSKNIGHT_URL})"
+    # Extract epochMs via python/node/awk
+    SERVER_EPOCH="$(echo "${TIME_RESP}" | grep -o '"epochMs":[0-9]*' | cut -d':' -f2 || echo '')"
+    if [[ -n "${SERVER_EPOCH}" ]]; then
+      LOCAL_EPOCH="$(date +%s000 2>/dev/null || node -e 'console.log(Date.now())' 2>/dev/null || echo '')"
+      if [[ -n "${LOCAL_EPOCH}" ]]; then
+        SKEW_MS=$(( LOCAL_EPOCH - SERVER_EPOCH ))
+        # Abs value
+        if [[ ${SKEW_MS} -lt 0 ]]; then SKEW_MS=$(( -SKEW_MS )); fi
+        SKEW_SEC=$(( SKEW_MS / 1000 ))
+        if [[ ${SKEW_SEC} -le 30 ]]; then
+          report_pass "Control plane & clock" "reachable, clock skew ${SKEW_SEC}s (healthy <=30s)"
+        elif [[ ${SKEW_SEC} -le 60 ]]; then
+          report_warn "Control plane & clock" "clock skew ${SKEW_SEC}s (warning >30s, max 60s)"
+        else
+          report_fail "Control plane & clock" "clock skew ${SKEW_SEC}s exceeds 60s limit"
+        fi
+      else
+        report_pass "Control plane" "HTTPS reachable (${OPSKNIGHT_URL})"
+      fi
+    else
+      report_pass "Control plane" "HTTPS reachable (${OPSKNIGHT_URL})"
+    fi
   else
-    report_warn "Control plane" "Could not query ${TIME_ENDPOINT}"
+    report_fail "Control plane" "Could not connect to ${TIME_ENDPOINT}"
   fi
 else
-  report_skip "Control plane" "OPSKNIGHT_URL not set in ${CONFIG_DIR}/agent.env"
+  report_skip "Control plane & clock" "OPSKNIGHT_URL not set in ${CONFIG_DIR}/agent.env"
 fi
 
 echo "=========================================================="

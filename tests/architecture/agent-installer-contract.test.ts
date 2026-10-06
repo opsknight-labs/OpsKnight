@@ -56,4 +56,14 @@ describe('Installer logic and OS-release contract', () => {
     expect(installScript).toContain('sha256sum -c');
     expect(installScript).toContain('Artifact checksum verified');
   });
+
+  it('writes correct agent enrollment and execution signing environment variables', () => {
+    expect(installScript).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=');
+    expect(installScript).toContain('OPSKNIGHT_EXECUTION_PUBLIC_KEY=');
+    expect(installScript).not.toContain('OPSKNIGHT_ENROLLMENT_TOKEN=');
+  });
+
+  it('fails closed when remote checksum cannot be retrieved', () => {
+    expect(installScript).toContain('Refusing to install unverified remote artifacts');
+  });
 });

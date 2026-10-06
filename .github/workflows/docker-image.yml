@@ -914,6 +914,14 @@ jobs:
             gh release upload "$tag" "$summary_asset" --clobber || true
           fi
 
+          echo "Building and uploading Native Linux Agent release tarballs..."
+          if [ -f scripts/build-agent-artifacts.sh ]; then
+            bash scripts/build-agent-artifacts.sh
+            if [ -d dist/agent ]; then
+              gh release upload "$tag" dist/agent/opsknight-agent-linux-*.tar.gz dist/agent/SHA256SUMS --clobber || true
+            fi
+          fi
+
           release_body="$(gh release view "$tag" --json body --jq .body)"
           updated_body_file="$(mktemp)"
           RELEASE_BODY="$release_body" UPDATED_BODY_FILE="$updated_body_file" node <<'NODE'
