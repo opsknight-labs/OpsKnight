@@ -254,7 +254,9 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
                     className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4"
                   >
                     <div>
-                      <p className="text-sm">{formatDateTime(execution.createdAt, userTimeZone, { format: 'datetime' })}</p>
+                      <p className="text-sm">
+                        {formatDateTime(execution.createdAt, userTimeZone, { format: 'datetime' })}
+                      </p>
                       {execution.incidentId && (
                         <Link
                           className="text-sm text-primary hover:underline"
