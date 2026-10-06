@@ -18,6 +18,7 @@ import {
   DialogDescription,
 } from '@/components/ui/shadcn/dialog';
 import { SubmitButton, FormSelect, StatusBadge } from './RunbookControls';
+import { formatDateTime } from '@/lib/timezone';
 
 export function CreateRunbookDialog() {
   const [name, setName] = useState('');
@@ -118,6 +119,7 @@ export function CreateRunbookDialog() {
 export default function RunbookLibrary({
   runbooks,
   canManage,
+  userTimeZone,
 }: {
   runbooks: Array<{
     id: string;
@@ -130,6 +132,7 @@ export default function RunbookLibrary({
     updatedAt: string;
   }>;
   canManage: boolean;
+  userTimeZone: string;
 }) {
   const filtered = runbooks;
   return (
@@ -157,7 +160,7 @@ export default function RunbookLibrary({
             <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
               <span>{item.bindings} services</span>
               <span>{item.executions} executions</span>
-              <span>Updated {new Date(item.updatedAt).toLocaleDateString()}</span>
+              <span>Updated {formatDateTime(item.updatedAt, userTimeZone, { format: 'date' })}</span>
               {item.draftVersion && <span>Draft v{item.draftVersion}</span>}
             </div>
           </div>
