@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   permissions: vi.fn(),
+  currentUser: vi.fn(),
   view: vi.fn(),
   bindings: vi.fn(),
   executions: vi.fn(),
@@ -9,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/rbac', () => ({
   getUserPermissions: mocks.permissions,
+  getCurrentUser: mocks.currentUser,
   assertCanViewIncident: mocks.view,
 }));
 vi.mock('@/lib/prisma', () => ({
@@ -30,6 +32,7 @@ import IncidentRunbooks from '@/components/incident/IncidentRunbooks';
 describe('Incident Runbook read boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.currentUser.mockResolvedValue({ id: 'user-1', timeZone: 'UTC' });
     mocks.bindings.mockResolvedValue([]);
     mocks.executions.mockResolvedValue([]);
     mocks.suggestions.mockResolvedValue([]);

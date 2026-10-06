@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { BookOpen, Copy, History, Settings2 } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { assertCapability, getUserPermissions } from '@/lib/rbac';
+import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { parseRunbookDefinition } from '@/lib/runbooks/definition';
 import {
   archiveRunbookAction,
@@ -28,13 +28,15 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Textarea } from '@/components/ui/shadcn/textarea';
+import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 
 export const revalidate = 0;
 export default async function RunbookDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const { id } = await params;
-  const [permissions, runbook] = await Promise.all([
+  const [permissions, user, runbook] = await Promise.all([
     getUserPermissions(),
+    getCurrentUser(),
     prisma.runbook.findUnique({
       where: { id },
       include: {
@@ -58,6 +60,7 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
     }),
   ]);
   if (!runbook) notFound();
+  const userTimeZone = getUserTimeZone(user);
   const canManage =
     permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE) && !runbook.archivedAt;
   const canPublish =
@@ -251,7 +254,9 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
                     className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4"
                   >
                     <div>
-                      <p className="text-sm">{execution.createdAt.toLocaleString()}</p>
+                      <p className="text-sm">
+                        {formatDateTime(execution.createdAt, userTimeZone, { format: 'datetime' })}
+                      </p>
                       {execution.incidentId && (
                         <Link
                           className="text-sm text-primary hover:underline"
