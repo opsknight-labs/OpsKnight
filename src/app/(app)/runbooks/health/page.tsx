@@ -2,16 +2,19 @@ import Link from 'next/link';
 import { Activity, Bot, ShieldCheck } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { assertCapability } from '@/lib/rbac';
+import { assertCapability, getCurrentUser } from '@/lib/rbac';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import EmptyState from '@/components/ui/EmptyState';
 import { RunbookNavigation, StatusBadge } from '@/components/runbooks/RunbookControls';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { getJobWorkerStatus } from '@/lib/job-worker';
+import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 
 export const revalidate = 0;
 export default async function RunbookHealthPage() {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
+  const user = await getCurrentUser();
+  const userTimeZone = getUserTimeZone(user);
   const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT NOW() AS now`;
   if (!clock) throw new Error('Database clock query returned no rows.');
   const now = clock.now;
@@ -118,7 +121,11 @@ export default async function RunbookHealthPage() {
             <Row label="Worker lane" value={localWorker.lane} />
             <Row
               label="Last successful cycle"
-              value={localWorker.lastSuccessAt?.toLocaleString() ?? 'Not observed'}
+              value={
+                localWorker.lastSuccessAt
+                  ? formatDateTime(localWorker.lastSuccessAt, userTimeZone, { format: 'datetime' })
+                  : 'Not observed'
+              }
             />
             <p className="text-xs text-muted-foreground">
               In split deployments this web process does not observe dedicated workers. Monitor each
@@ -176,7 +183,11 @@ export default async function RunbookHealthPage() {
               <div>
                 <h2 className="font-semibold">{agent.name}</h2>
                 <p className="text-xs text-muted-foreground">
-                  Heartbeat {agent.lastHeartbeatAt?.toLocaleString() ?? 'never'} ·{' '}
+                  Heartbeat{' '}
+                  {agent.lastHeartbeatAt
+                    ? formatDateTime(agent.lastHeartbeatAt, userTimeZone, { format: 'datetime' })
+                    : 'never'}{' '}
+                  ·{' '}
                   {agent.spoolDepth} pending · {agent.deadLetterDepth} dead letter
                 </p>
                 {agent.lastError && (
