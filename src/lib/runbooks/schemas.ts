@@ -459,10 +459,13 @@ export type RunbookAgentFilter = z.infer<typeof runbookAgentFilterSchema>;
 export const runbookLibraryFilterSchema = z
   .object({
     q: z.string().max(200).optional(),
-    status: z.enum(['published', 'draft']).optional(),
+    status: z.enum(['all', 'published', 'draft', 'archived']).optional(),
+    tab: z.enum(['all', 'published', 'drafts', 'archived', 'templates']).optional(),
     ownerId: z.string().cuid().optional(),
     serviceId: z.string().cuid().optional(),
     page: z.coerce.number().int().positive().max(10000).default(1),
     pageSize: z.coerce.number().int().positive().max(100).default(20),
   })
   .strict();
+
+export type RunbookLibraryFilter = z.infer<typeof runbookLibraryFilterSchema>;

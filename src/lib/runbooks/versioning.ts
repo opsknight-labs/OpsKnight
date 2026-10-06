@@ -335,3 +335,5 @@ export function summarizeVersionDiff(
       .map(step => step.key),
   };
 }
+
+export { restoreRunbook } from './lifecycle';

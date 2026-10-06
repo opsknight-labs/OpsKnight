@@ -36,6 +36,12 @@ import {
   updateDraftVersion,
   updateRunbookMetadata,
 } from '@/lib/runbooks/versioning';
+import {
+  checkRunbookDeleteEligibility,
+  deleteRunbook,
+  duplicateRunbook,
+  restoreRunbook,
+} from '@/lib/runbooks/lifecycle';
 
 const idSchema = z.string().cuid();
 
@@ -137,6 +143,37 @@ export async function archiveRunbookAction(runbookId: string) {
   await archiveRunbook(idSchema.parse(runbookId), actor.id);
   revalidatePath('/runbooks');
   redirect('/runbooks');
+}
+
+export async function restoreRunbookAction(runbookId: string) {
+  const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
+  const id = idSchema.parse(runbookId);
+  const restored = await restoreRunbook(id, actor.id);
+  revalidatePath('/runbooks');
+  revalidatePath(`/runbooks/${id}`);
+  return { success: true, id: restored.id };
+}
+
+export async function checkRunbookDeleteEligibilityAction(runbookId: string) {
+  await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
+  const id = idSchema.parse(runbookId);
+  return checkRunbookDeleteEligibility(id);
+}
+
+export async function deleteRunbookAction(runbookId: string, confirmationText?: string) {
+  const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
+  const id = idSchema.parse(runbookId);
+  await deleteRunbook(id, actor.id, { typedConfirmation: confirmationText });
+  revalidatePath('/runbooks');
+  return { success: true, id };
+}
+
+export async function duplicateRunbookAction(runbookId: string) {
+  const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
+  const id = idSchema.parse(runbookId);
+  const duplicated = await duplicateRunbook(id, actor.id);
+  revalidatePath('/runbooks');
+  redirect(`/runbooks/${duplicated.id}`);
 }
 
 export type AgentEnrollmentState = {

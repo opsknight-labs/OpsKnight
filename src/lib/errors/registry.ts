@@ -621,6 +621,29 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  RUNBOOK_NOT_FOUND: {
+    status: 404,
+    category: 'not_found',
+    userMessage: 'The specified runbook was not found.',
+    retryable: false,
+    exposure: 'public',
+  },
+  RUNBOOK_CANNOT_DELETE: {
+    status: 409,
+    category: 'conflict',
+    userMessage:
+      'This runbook cannot be permanently deleted. Only never-published drafts with zero executions and zero bindings can be deleted.',
+    action: 'Archive the runbook to preserve operational history and incident evidence.',
+    retryable: false,
+    exposure: 'public',
+  },
+  RUNBOOK_RESTORE_ERROR: {
+    status: 400,
+    category: 'validation',
+    userMessage: 'The runbook could not be restored.',
+    retryable: false,
+    exposure: 'public',
+  },
   RUNBOOK_VERSION_NOT_FOUND: {
     status: 404,
     category: 'not_found',
