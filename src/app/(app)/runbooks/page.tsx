@@ -1,7 +1,7 @@
 import { Workflow } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { assertCapability, getUserPermissions } from '@/lib/rbac';
+import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import RunbookLibrary, { CreateRunbookDialog } from '@/components/runbooks/RunbookLibrary';
 import { RunbookNavigation } from '@/components/runbooks/RunbookControls';
@@ -13,6 +13,7 @@ import {
 } from '@/components/runbooks/RunbookPagination';
 import type { Prisma } from '@prisma/client';
 import { runbookLibraryFilterSchema } from '@/lib/runbooks/schemas';
+import { getUserTimeZone } from '@/lib/timezone';
 
 export const revalidate = 0;
 export default async function RunbooksPage({
@@ -21,6 +22,8 @@ export default async function RunbooksPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
+  const user = await getCurrentUser();
+  const userTimeZone = getUserTimeZone(user);
   const { query, page: requestedPage } = runbookPageQuery(await searchParams);
   const filter = runbookLibraryFilterSchema.parse({
     q: query.q,
@@ -111,6 +114,7 @@ export default async function RunbooksPage({
       />
       <RunbookLibrary
         canManage={canManage}
+        userTimeZone={userTimeZone}
         runbooks={runbooks.map(item => ({
           id: item.id,
           name: item.name,
