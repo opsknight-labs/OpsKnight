@@ -1,7 +1,7 @@
 import { Bot, KeyRound, Network } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { assertCapability, getUserPermissions } from '@/lib/rbac';
+import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import AgentEnrollmentForm from '@/components/runbooks/AgentEnrollmentForm';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import DetailTabs from '@/components/ui/DetailTabs';
@@ -30,6 +30,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { RunbookAgentStatus, type Prisma } from '@prisma/client';
 import { runbookAgentFilterSchema } from '@/lib/runbooks/schemas';
 import { schedulingLabelsSchema } from '@/lib/runbooks/pool-labels';
+import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import {
   RunbookFilters,
   RunbookPagination,
@@ -57,7 +58,8 @@ export default async function RunbookAgentsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
-  const permissions = await getUserPermissions();
+  const [permissions, user] = await Promise.all([getUserPermissions(), getCurrentUser()]);
+  const userTimeZone = getUserTimeZone(user);
   const canManage = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const canManageSecrets = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
   const { query, page: requestedPage } = runbookPageQuery(await searchParams);
@@ -169,7 +171,7 @@ export default async function RunbookAgentsPage({
           description="Single-use enrollment tokens expire after 15 minutes. The private key never leaves the Agent."
           trigger={<Button>Add Agent</Button>}
         >
-          <AgentEnrollmentForm />
+          <AgentEnrollmentForm userTimeZone={userTimeZone} />
         </ConfigureSheet>
       )}
       {canManage && signingKey && (
@@ -209,7 +211,7 @@ export default async function RunbookAgentsPage({
                 <p className="mt-2 text-xs">
                   {key.state} · {key.id}
                   {key.state === 'RETIRING' && key.retiredAt
-                    ? ` · Grace ends ${key.retiredAt.toLocaleString()}`
+                    ? ` · Grace ends ${formatDateTime(key.retiredAt, userTimeZone, { format: 'datetime' })}`
                     : ''}
                 </p>
                 <SubmitButton>
@@ -255,7 +257,9 @@ export default async function RunbookAgentsPage({
                 <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
                   <dt className="text-muted-foreground">Heartbeat</dt>
                   <dd className="break-words">
-                    {agent.lastHeartbeatAt?.toLocaleString() || 'Never'}
+                    {agent.lastHeartbeatAt
+                      ? formatDateTime(agent.lastHeartbeatAt, userTimeZone, { format: 'datetime' })
+                      : 'Never'}
                   </dd>
                   <dt className="text-muted-foreground">Pools</dt>
                   <dd>{agent.poolMemberships.map(item => item.pool.name).join(', ') || 'None'}</dd>
@@ -500,8 +504,8 @@ export default async function RunbookAgentsPage({
                 ••••••••••••••••
               </p>
               <p className="text-xs text-muted-foreground">
-                Created {secret.createdAt.toLocaleDateString()} · Updated{' '}
-                {secret.updatedAt.toLocaleDateString()}
+                Created {formatDateTime(secret.createdAt, userTimeZone, { format: 'date' })} · Updated{' '}
+                {formatDateTime(secret.updatedAt, userTimeZone, { format: 'date' })}
               </p>
               <p className="text-sm text-muted-foreground">
                 Granted to{' '}
