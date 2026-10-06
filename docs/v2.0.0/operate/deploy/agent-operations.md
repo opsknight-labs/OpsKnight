@@ -118,7 +118,46 @@ Use `OPSKNIGHT_AGENT_URL=http://opsknight-app:3000` with the integrated stack. T
 
 ## Native Linux service
 
-Install the bundled module at `/usr/local/lib/opsknight-agent/opsknight-agent.mjs`, copy `agent/opsknight-agent.service`, create the `opsknight-agent` system user, and place configuration under `/etc/opsknight-agent`. The environment file needs `OPSKNIGHT_URL` and the enrollment token only for first start. Restrict both the environment file and identity directory to the service account.
+OpsKnight provides an automated, self-contained enterprise installer that supports Amazon Linux 2023, Ubuntu 22.04/24.04/26.04, Debian 12/13, RHEL 9/10, Rocky, AlmaLinux, and SLES 15 on both `x86_64` and `arm64/aarch64`. The installer provisions a bundled Node 24 LTS runtime, eliminating all host Node.js and external repository dependencies.
+
+### Standard Layout & File Permissions
+
+| Directory / File | Ownership | Permissions | Purpose |
+| :--- | :--- | :--- | :--- |
+| `/opt/opsknight-agent/` | `root:root` | `0755` | Standalone binary and bundled Node 24 runtime (`runtime/bin/node`) |
+| `/etc/opsknight-agent/policy.json` | `root:opsknight-agent` | `0644` | Local capability allowlist and action policy |
+| `/etc/opsknight-agent/agent.env` | `opsknight-agent:opsknight-agent` | `0600` | Sensitive enrollment tokens and control plane configuration |
+| `/var/lib/opsknight-agent/` | `opsknight-agent:opsknight-agent` | `0700` | Private identity (`identity.json`), leases, and durable spool |
+
+### One-Command Installation
+
+1. Generate a one-time enrollment token in **Runbooks → Agents → Enroll Agent**.
+2. Run the official installer on your target host:
+   ```bash
+   sudo ./deploy/agent/install.sh \
+     --url https://opsknight.company.com \
+     --token <ONE_TIME_ENROLLMENT_TOKEN>
+   ```
+3. Run diagnostic preflight checks:
+   ```bash
+   /opt/opsknight-agent/preflight.sh
+   ```
+4. Enable and start the systemd service:
+   ```bash
+   sudo systemctl enable --now opsknight-agent
+   sudo systemctl status opsknight-agent
+   ```
+
+### Troubleshooting Matrix
+
+| Symptom | Likely Cause | Resolution |
+| :--- | :--- | :--- |
+| `pgrep: command not found` | Missing `procps` / `procps-ng` | Run installer or install `procps-ng` (RHEL) / `procps` (Debian). |
+| `EACCES /var/lib/opsknight-agent` | Incorrect permissions on state directory | Verify `chown -R opsknight-agent:opsknight-agent /var/lib/opsknight-agent` and `chmod 0700`. |
+| `Agent request timestamp is outside allowed window` | Clock drift $>60\text{s}$ | Synchronize system clock via `chrony` (`chronyc tracking`) or `timedatectl`. |
+| `Unsupported architecture` | Host architecture other than `x86_64` or `arm64` | Deploy Agent on supported 64-bit x86 or ARM Graviton architecture. |
+| `Agent offline after reboot` | Unpersisted state directory or network delay | Verify `/var/lib/opsknight-agent` mounts across reboot; systemd unit waits for `network-online.target` and `time-sync.target`. |
+
 
 ## Monitoring and recovery
 

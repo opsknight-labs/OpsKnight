@@ -146,6 +146,15 @@ async function run() {
   };
 
   const heartbeat = async () => {
+    let clockError: string | null = null;
+    try {
+      const { skewSeconds } = await client.checkServerClock();
+      if (skewSeconds > 60) {
+        clockError = `Agent clock differs from OpsKnight by ${skewSeconds}s. Execution claims paused until clock is synchronized.`;
+      }
+    } catch {
+      // Clock check warning only if unreachable
+    }
     const effective = await probeCapabilities(policy);
     await client.heartbeat({
       capabilities: effective.capabilities,
@@ -156,7 +165,7 @@ async function run() {
       spoolDepth: await spool.depth(),
       deadLetterDepth: await spool.deadLetterDepth(),
       activeAttemptCount: active,
-      lastError,
+      lastError: clockError || lastError,
     });
   };
   await heartbeat();
@@ -201,6 +210,16 @@ async function run() {
       let resultPersisted = false;
       let outcomeKnown = false;
       try {
+        try {
+          const { skewSeconds } = await client.checkServerClock();
+          if (skewSeconds > 60) {
+            lastError = `Agent clock differs from OpsKnight by ${skewSeconds}s. Pausing claims.`;
+            await new Promise(resolve => setTimeout(resolve, 10_000));
+            continue;
+          }
+        } catch {
+          // Continue if clock endpoint transiently unavailable
+        }
         attempt = await client.claim();
         if (!attempt) continue;
         verifyExecutionEnvelope(attempt, executionPublicKey!, identity.agentId);

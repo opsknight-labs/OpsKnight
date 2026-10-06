@@ -144,9 +144,58 @@ export class AgentClient {
       input
     );
   }
+
+  async checkServerClock(): Promise<{ serverTime: string; skewSeconds: number }> {
+    const response = await fetch(new URL('/api/runbook-agent/v1/time', this.baseUrl), {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) {
+      throw new Error(`Clock check returned HTTP ${response.status}`);
+    }
+    const json = (await response.json()) as {
+      data?: { serverTime: string; epochMs: number };
+      serverTime?: string;
+      epochMs?: number;
+    };
+    const epochMs = json.data?.epochMs ?? json.epochMs;
+    const serverTime = json.data?.serverTime ?? json.serverTime ?? new Date(epochMs || Date.now()).toISOString();
+    if (!epochMs) throw new Error('Invalid clock check response');
+    const localMs = Date.now();
+    const skewSeconds = Math.round(Math.abs(localMs - epochMs) / 1000);
+    return { serverTime, skewSeconds };
+  }
 }
 
 export async function enrollAgent(baseUrl: string, token: string): Promise<AgentIdentity> {
+  try {
+    const timeRes = await fetch(new URL('/api/runbook-agent/v1/time', baseUrl), {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (timeRes.ok) {
+      const timeJson = (await timeRes.json()) as {
+        data?: { epochMs: number };
+        epochMs?: number;
+      };
+      const serverEpoch = timeJson.data?.epochMs ?? timeJson.epochMs;
+      if (serverEpoch) {
+        const skewSeconds = Math.round(Math.abs(Date.now() - serverEpoch) / 1000);
+        if (skewSeconds > 60) {
+          throw new Error(
+            `Local clock is out of sync with OpsKnight by ${skewSeconds}s (maximum allowed: 60s). Synchronize NTP/chrony before enrolling.`
+          );
+        }
+      }
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('out of sync')) {
+      throw err;
+    }
+  }
+
   const { privateKey, publicKey } = generateKeyPairSync('ed25519', {
     privateKeyEncoding: { format: 'pem', type: 'pkcs8' },
     publicKeyEncoding: { format: 'pem', type: 'spki' },
