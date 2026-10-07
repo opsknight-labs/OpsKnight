@@ -2,6 +2,7 @@ import { Bot, KeyRound, Network } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
+import { getAppUrl } from '@/lib/app-url';
 import AgentEnrollmentForm from '@/components/runbooks/AgentEnrollmentForm';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import DetailTabs from '@/components/ui/DetailTabs';
@@ -58,7 +59,11 @@ export default async function RunbookAgentsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
-  const [permissions, user] = await Promise.all([getUserPermissions(), getCurrentUser()]);
+  const [permissions, user, appUrl] = await Promise.all([
+    getUserPermissions(),
+    getCurrentUser(),
+    getAppUrl(),
+  ]);
   const userTimeZone = getUserTimeZone(user);
   const canManage = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const canManageSecrets = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
@@ -171,7 +176,7 @@ export default async function RunbookAgentsPage({
           description="Single-use enrollment tokens expire after 15 minutes. The private key never leaves the Agent."
           trigger={<Button>Add Agent</Button>}
         >
-          <AgentEnrollmentForm userTimeZone={userTimeZone} />
+          <AgentEnrollmentForm userTimeZone={userTimeZone} appUrl={appUrl} />
         </ConfigureSheet>
       )}
       {canManage && signingKey && (

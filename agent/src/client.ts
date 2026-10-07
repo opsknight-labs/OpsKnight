@@ -126,6 +126,18 @@ export class AgentClient {
     );
   }
 
+  async releaseClaim(attemptId: string, leaseToken: string): Promise<boolean> {
+    try {
+      const result = await this.request<{ released: boolean }>(
+        `/api/runbook-agent/v1/jobs/${attemptId}/release`,
+        { leaseToken }
+      );
+      return result?.released ?? false;
+    } catch {
+      return false;
+    }
+  }
+
   async submit(record: SpoolRecord) {
     const result = await this.leaseRequest<{ accepted: boolean }>(
       `/api/runbook-agent/v1/jobs/${record.attemptId}/result`,

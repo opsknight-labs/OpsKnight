@@ -276,7 +276,8 @@ async function run() {
         attempt = await client.claim();
         if (!attempt) continue;
         if (await checkDraining()) {
-          lastError = 'Execution claim skipped because Agent is draining.';
+          lastError = 'Execution claim released because Agent is draining.';
+          await client.releaseClaim(attempt.attemptId, attempt.leaseToken).catch(() => undefined);
           continue;
         }
         verifyExecutionEnvelope(attempt, executionPublicKey!, identity.agentId);

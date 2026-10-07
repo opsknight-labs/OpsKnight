@@ -106,6 +106,9 @@ describe('Installer logic and OS-release contract', () => {
     expect(installScript).toContain('rollback_and_fail');
     expect(installScript).toContain('trap \'rollback_and_fail');
     expect(installScript).toContain('Initiating transactional rollback to previous installation');
+    expect(installScript).toContain('health.json');
+    expect(installScript).toContain('CRITICAL: Restored service restart did not reach healthy active state');
+    expect(installScript).toContain('exit 2');
   });
 
   it('supports independent rollback for legacy /usr/local installation layout', () => {

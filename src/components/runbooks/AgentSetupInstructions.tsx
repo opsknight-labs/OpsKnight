@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, Copy, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -53,19 +53,15 @@ function SetupBlock({ value }: { value: string }) {
 export default function AgentSetupInstructions({
   token,
   executionPublicKey,
+  appUrl,
 }: {
   token: string;
   executionPublicKey: string;
+  appUrl?: string;
 }) {
   const [image, setImage] = useState('ghcr.io/opsknight-labs/opsknight-agent:2.0.0');
   const [url, setUrl] = useState('http://opsknight-app:3000');
-  const [nativeUrl, setNativeUrl] = useState('https://opsknight.company.com');
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.location?.origin) {
-      setNativeUrl(window.location.origin);
-    }
-  }, []);
+  const nativeUrl = appUrl || 'https://opsknight.company.com';
 
   const [policyPath, setPolicyPath] = useState('../../agent/policy.container.json');
   const snippets = useMemo(() => {

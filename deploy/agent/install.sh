@@ -613,12 +613,69 @@ rollback_and_fail() {
   # 5. Clean up drain flags
   rm -f "${STATE_DIR}/drain" "${STATE_DIR}/drain-ready"
 
-  # 6. Reload and restart previous service if it was active
+  # 6. Reload and restart previous service if it was active, then verify recovery health
   if command -v systemctl >/dev/null 2>&1; then
     systemctl daemon-reload 2>/dev/null || true
     if [[ "${SERVICE_WAS_ACTIVE}" == "true" ]]; then
-      echo "Restarting previous service..." >&2
-      systemctl restart opsknight-agent 2>/dev/null || true
+      echo "Restarting previous service and verifying recovery health..." >&2
+      local rollback_start_time
+      rollback_start_time="$(date +%s000 2>/dev/null || node -e 'console.log(Date.now())' 2>/dev/null || echo "0")"
+      systemctl restart opsknight-agent 2>/dev/null || systemctl start opsknight-agent 2>/dev/null || true
+
+      local node_exec="node"
+      if [[ -x "${INSTALL_PREFIX}/runtime/bin/node" ]]; then
+        node_exec="${INSTALL_PREFIX}/runtime/bin/node"
+      elif [[ -x "${LEGACY_DIR}/runtime/bin/node" ]]; then
+        node_exec="${LEGACY_DIR}/runtime/bin/node"
+      fi
+
+      local rollback_verified=false
+      local check_attempts=0
+      local restored_pid="0"
+
+      while [[ ${check_attempts} -lt 20 ]]; do
+        sleep 1
+        check_attempts=$((check_attempts + 1))
+
+        if ! systemctl is-active --quiet opsknight-agent 2>/dev/null; then
+          continue
+        fi
+
+        restored_pid="$(systemctl show opsknight-agent --property=MainPID --value 2>/dev/null || echo "0")"
+        if [[ -z "${restored_pid}" || "${restored_pid}" == "0" ]]; then
+          continue
+        fi
+
+        local health_file="${STATE_DIR}/health.json"
+        if [[ -f "${health_file}" ]]; then
+          if "${node_exec}" -e '
+            const fs = require("fs");
+            try {
+              const h = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              const targetPid = parseInt(process.argv[2], 10);
+              const minTime = parseInt(process.argv[3], 10);
+              if (h.pid === targetPid && h.ready === true && h.updatedAt >= (minTime - 10000)) {
+                process.exit(0);
+              }
+            } catch {}
+            process.exit(1);
+          ' "${health_file}" "${restored_pid}" "${rollback_start_time}" 2>/dev/null; then
+            rollback_verified=true
+            break
+          fi
+        fi
+      done
+
+      if [[ "${rollback_verified}" == "true" ]]; then
+        echo "Restored service successfully recovered and verified healthy (PID ${restored_pid}): [OK]" >&2
+        rm -rf "${BACKUP_DIR}" "${STAGE_DIR:-}"
+        echo "Rollback to previous installation completed." >&2
+        exit 1
+      else
+        echo "CRITICAL: Restored service restart did not reach healthy active state. Retaining backup directory at ${BACKUP_DIR}." >&2
+        rm -rf "${STAGE_DIR:-}"
+        exit 2
+      fi
     fi
   fi
 

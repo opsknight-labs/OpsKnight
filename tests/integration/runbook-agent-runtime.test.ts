@@ -134,6 +134,8 @@ async function exerciseRuntime(
         }
         resolveSubmitted(json);
         send(acknowledgement({ accepted: true }));
+      } else if (request.url?.endsWith('/release')) {
+        send({ released: true });
       } else send({});
     })().catch(error => {
       rejectSubmitted(error);

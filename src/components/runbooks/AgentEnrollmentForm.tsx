@@ -13,7 +13,13 @@ import { formatDateTime } from '@/lib/timezone';
 
 const initialState: AgentEnrollmentState = {};
 
-export default function AgentEnrollmentForm({ userTimeZone }: { userTimeZone: string }) {
+export default function AgentEnrollmentForm({
+  userTimeZone,
+  appUrl,
+}: {
+  userTimeZone: string;
+  appUrl?: string;
+}) {
   const [state, action, pending] = useActionState(createAgentEnrollmentAction, initialState);
   return (
     <div className="space-y-4">
@@ -51,6 +57,7 @@ export default function AgentEnrollmentForm({ userTimeZone }: { userTimeZone: st
           <AgentSetupInstructions
             token={state.token}
             executionPublicKey={state.executionPublicKey!}
+            appUrl={appUrl}
           />
         </div>
       )}

@@ -215,6 +215,10 @@ jobs:
                 res.writeHead(204);
                 return res.end();
               }
+              if (req.url.endsWith("/release") && req.method === "POST") {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                return res.end(JSON.stringify({ success: true, data: { released: true } }));
+              }
               res.writeHead(404);
               res.end();
             });
