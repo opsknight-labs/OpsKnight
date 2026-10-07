@@ -1,3 +1,5 @@
+import MobileAutomationPanel from '@/components/automation/MobileAutomationPanel';
+import { hasCapability } from '@/lib/authorization';
 import type { ReactNode } from 'react';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
@@ -20,9 +22,10 @@ export const dynamic = 'force-dynamic';
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ tab?: string }>;
 };
 
-export default async function MobileServiceDetailPage({ params }: PageProps) {
+export default async function MobileServiceDetailPage({ params, searchParams }: PageProps) {
   const context = await getRequestActorContext();
   if (!context) redirect(appRoutes.login('mobile', '/m/services'));
 
@@ -59,6 +62,7 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
   });
 
   if (!service) notFound();
+  const openAutomation = (await searchParams)?.tab === 'automation';
   const isOperational = service._count.incidents === 0;
 
   return (
@@ -71,6 +75,9 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
         <span>Back to services</span>
       </Link>
 
+      {hasCapability(context.actor.role, 'automation.read') && (
+        <MobileAutomationPanel serviceId={service.id} initialOpen={openAutomation} />
+      )}
       <section className="rounded-xl border border-border bg-card p-3.5 text-card-foreground">
         <div className="flex min-w-0 items-start gap-3">
           <span

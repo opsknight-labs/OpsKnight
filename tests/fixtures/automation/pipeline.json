@@ -1,0 +1,693 @@
+[
+  {
+    "name": "alias",
+    "kind": "normalize",
+    "field": {
+      "fieldId": "environment",
+      "key": "environment",
+      "label": "Environment",
+      "type": "ENUM",
+      "caseSensitive": false,
+      "allowedValues": [
+        "production",
+        "staging"
+      ],
+      "aliases": {
+        "prd": "production",
+        "stg": "staging"
+      },
+      "mappings": [
+        {
+          "source": "PROVIDER",
+          "path": "environment"
+        }
+      ]
+    },
+    "raw": " PRD ",
+    "expected": {
+      "state": "RECOGNIZED",
+      "value": "production"
+    }
+  },
+  {
+    "name": "blank",
+    "kind": "normalize",
+    "field": {
+      "fieldId": "environment",
+      "key": "environment",
+      "label": "Environment",
+      "type": "ENUM",
+      "caseSensitive": false,
+      "allowedValues": [
+        "production",
+        "staging"
+      ],
+      "aliases": {
+        "prd": "production",
+        "stg": "staging"
+      },
+      "mappings": [
+        {
+          "source": "PROVIDER",
+          "path": "environment"
+        }
+      ]
+    },
+    "raw": "  ",
+    "expected": {
+      "state": "MISSING"
+    }
+  },
+  {
+    "name": "unmapped",
+    "kind": "normalize",
+    "field": {
+      "fieldId": "environment",
+      "key": "environment",
+      "label": "Environment",
+      "type": "ENUM",
+      "caseSensitive": false,
+      "allowedValues": [
+        "production",
+        "staging"
+      ],
+      "aliases": {
+        "prd": "production",
+        "stg": "staging"
+      },
+      "mappings": [
+        {
+          "source": "PROVIDER",
+          "path": "environment"
+        }
+      ]
+    },
+    "raw": "stg-2",
+    "expected": {
+      "state": "UNMAPPED",
+      "raw": "stg-2"
+    }
+  },
+  {
+    "name": "null",
+    "kind": "normalize",
+    "field": {
+      "fieldId": "environment",
+      "key": "environment",
+      "label": "Environment",
+      "type": "ENUM",
+      "caseSensitive": false,
+      "allowedValues": [
+        "production",
+        "staging"
+      ],
+      "aliases": {
+        "prd": "production",
+        "stg": "staging"
+      },
+      "mappings": [
+        {
+          "source": "PROVIDER",
+          "path": "environment"
+        }
+      ]
+    },
+    "raw": null,
+    "expected": {
+      "state": "MISSING"
+    }
+  },
+  {
+    "name": "zero",
+    "kind": "normalize",
+    "field": {
+      "fieldId": "environment",
+      "key": "environment",
+      "label": "Environment",
+      "type": "NUMBER",
+      "caseSensitive": false,
+      "allowedValues": [
+        "production",
+        "staging"
+      ],
+      "aliases": {},
+      "mappings": [
+        {
+          "source": "PROVIDER",
+          "path": "environment"
+        }
+      ]
+    },
+    "raw": 0,
+    "expected": {
+      "state": "RECOGNIZED",
+      "value": 0
+    }
+  },
+  {
+    "name": "false",
+    "kind": "normalize",
+    "field": {
+      "fieldId": "environment",
+      "key": "environment",
+      "label": "Environment",
+      "type": "BOOLEAN",
+      "caseSensitive": false,
+      "allowedValues": [
+        "production",
+        "staging"
+      ],
+      "aliases": {},
+      "mappings": [
+        {
+          "source": "PROVIDER",
+          "path": "environment"
+        }
+      ]
+    },
+    "raw": false,
+    "expected": {
+      "state": "RECOGNIZED",
+      "value": false
+    }
+  },
+  {
+    "name": "number-coercion",
+    "kind": "normalize",
+    "field": {
+      "fieldId": "environment",
+      "key": "environment",
+      "label": "Environment",
+      "type": "NUMBER",
+      "caseSensitive": false,
+      "allowedValues": [
+        "production",
+        "staging"
+      ],
+      "aliases": {},
+      "mappings": [
+        {
+          "source": "PROVIDER",
+          "path": "environment"
+        }
+      ]
+    },
+    "raw": "12.5",
+    "expected": {
+      "state": "RECOGNIZED",
+      "value": 12.5
+    }
+  },
+  {
+    "name": "bad-number",
+    "kind": "normalize",
+    "field": {
+      "fieldId": "environment",
+      "key": "environment",
+      "label": "Environment",
+      "type": "NUMBER",
+      "caseSensitive": false,
+      "allowedValues": [
+        "production",
+        "staging"
+      ],
+      "aliases": {},
+      "mappings": [
+        {
+          "source": "PROVIDER",
+          "path": "environment"
+        }
+      ]
+    },
+    "raw": "bad",
+    "expected": {
+      "state": "UNMAPPED",
+      "raw": "bad"
+    }
+  },
+  {
+    "name": "case-sensitive",
+    "kind": "normalize",
+    "field": {
+      "fieldId": "environment",
+      "key": "environment",
+      "label": "Environment",
+      "type": "STRING",
+      "caseSensitive": true,
+      "allowedValues": [
+        "production",
+        "staging"
+      ],
+      "aliases": {},
+      "mappings": [
+        {
+          "source": "PROVIDER",
+          "path": "environment"
+        }
+      ]
+    },
+    "raw": " Prod ",
+    "expected": {
+      "state": "RECOGNIZED",
+      "value": "Prod"
+    }
+  },
+  {
+    "name": "no-route fallback",
+    "kind": "evaluate",
+    "snapshot": {
+      "schemaVersion": 1,
+      "fields": [
+        {
+          "fieldId": "environment",
+          "key": "environment",
+          "label": "Environment",
+          "type": "ENUM",
+          "caseSensitive": false,
+          "allowedValues": [
+            "production",
+            "staging"
+          ],
+          "aliases": {
+            "prd": "production",
+            "stg": "staging"
+          },
+          "mappings": [
+            {
+              "source": "PROVIDER",
+              "path": "environment"
+            }
+          ]
+        }
+      ],
+      "rules": []
+    },
+    "context": {
+      "environment": {
+        "state": "RECOGNIZED",
+        "value": "production"
+      },
+      "priority": {
+        "state": "RECOGNIZED",
+        "value": "P2"
+      }
+    },
+    "expected": {
+      "outcome": {
+        "type": "SERVICE_DEFAULT"
+      },
+      "tags": [],
+      "priority": "P2"
+    }
+  },
+  {
+    "name": "post-enrichment-selected-policy",
+    "kind": "evaluate",
+    "snapshot": {
+      "schemaVersion": 1,
+      "fields": [
+        {
+          "fieldId": "environment",
+          "key": "environment",
+          "label": "Environment",
+          "type": "ENUM",
+          "caseSensitive": false,
+          "allowedValues": [
+            "production",
+            "staging"
+          ],
+          "aliases": {
+            "prd": "production",
+            "stg": "staging"
+          },
+          "mappings": [
+            {
+              "source": "PROVIDER",
+              "path": "environment"
+            }
+          ]
+        }
+      ],
+      "rules": [
+        {
+          "id": "first",
+          "name": "first",
+          "phase": "ENRICH",
+          "enabled": true,
+          "conditions": [],
+          "actions": [
+            {
+              "type": "SET_PRIORITY",
+              "value": "P3"
+            },
+            {
+              "type": "ADD_TAG",
+              "value": "vip"
+            }
+          ]
+        },
+        {
+          "id": "second",
+          "name": "second",
+          "phase": "ENRICH",
+          "enabled": true,
+          "conditions": [
+            {
+              "fieldKey": "priority",
+              "operator": "EQ",
+              "value": "P3"
+            }
+          ],
+          "actions": [
+            {
+              "type": "SET_PRIORITY",
+              "value": "P1"
+            },
+            {
+              "type": "ADD_TAG",
+              "value": "vip"
+            }
+          ]
+        },
+        {
+          "id": "route",
+          "name": "route",
+          "phase": "ROUTE",
+          "enabled": true,
+          "conditions": [
+            {
+              "fieldKey": "environment",
+              "operator": "EQ",
+              "value": "production"
+            },
+            {
+              "fieldKey": "priority",
+              "operator": "EQ",
+              "value": "P1"
+            }
+          ],
+          "actions": [
+            {
+              "type": "USE_ESCALATION_POLICY",
+              "policyId": "policy-b"
+            }
+          ]
+        }
+      ]
+    },
+    "context": {
+      "environment": {
+        "state": "RECOGNIZED",
+        "value": "production"
+      },
+      "priority": {
+        "state": "RECOGNIZED",
+        "value": "P2"
+      }
+    },
+    "expected": {
+      "outcome": {
+        "type": "ESCALATION_POLICY",
+        "policyId": "policy-b"
+      },
+      "tags": [
+        "vip"
+      ],
+      "priority": "P1"
+    }
+  },
+  {
+    "name": "post-enrichment-no-escalation",
+    "kind": "evaluate",
+    "snapshot": {
+      "schemaVersion": 1,
+      "fields": [
+        {
+          "fieldId": "environment",
+          "key": "environment",
+          "label": "Environment",
+          "type": "ENUM",
+          "caseSensitive": false,
+          "allowedValues": [
+            "production",
+            "staging"
+          ],
+          "aliases": {
+            "prd": "production",
+            "stg": "staging"
+          },
+          "mappings": [
+            {
+              "source": "PROVIDER",
+              "path": "environment"
+            }
+          ]
+        }
+      ],
+      "rules": [
+        {
+          "id": "first",
+          "name": "first",
+          "phase": "ENRICH",
+          "enabled": true,
+          "conditions": [],
+          "actions": [
+            {
+              "type": "SET_PRIORITY",
+              "value": "P3"
+            },
+            {
+              "type": "ADD_TAG",
+              "value": "vip"
+            }
+          ]
+        },
+        {
+          "id": "second",
+          "name": "second",
+          "phase": "ENRICH",
+          "enabled": true,
+          "conditions": [
+            {
+              "fieldKey": "priority",
+              "operator": "EQ",
+              "value": "P3"
+            }
+          ],
+          "actions": [
+            {
+              "type": "SET_PRIORITY",
+              "value": "P1"
+            },
+            {
+              "type": "ADD_TAG",
+              "value": "vip"
+            }
+          ]
+        },
+        {
+          "id": "route",
+          "name": "route",
+          "phase": "ROUTE",
+          "enabled": true,
+          "conditions": [
+            {
+              "fieldKey": "environment",
+              "operator": "EQ",
+              "value": "production"
+            },
+            {
+              "fieldKey": "priority",
+              "operator": "EQ",
+              "value": "P1"
+            }
+          ],
+          "actions": [
+            {
+              "type": "NO_ESCALATION"
+            }
+          ]
+        }
+      ]
+    },
+    "context": {
+      "environment": {
+        "state": "RECOGNIZED",
+        "value": "production"
+      },
+      "priority": {
+        "state": "RECOGNIZED",
+        "value": "P2"
+      }
+    },
+    "expected": {
+      "outcome": {
+        "type": "NO_ESCALATION"
+      },
+      "tags": [
+        "vip"
+      ],
+      "priority": "P1"
+    }
+  },
+  {
+    "name": "catch-all-no-escalation-rejected",
+    "kind": "lint",
+    "snapshot": {
+      "schemaVersion": 1,
+      "fields": [
+        {
+          "fieldId": "environment",
+          "key": "environment",
+          "label": "Environment",
+          "type": "ENUM",
+          "caseSensitive": false,
+          "allowedValues": [
+            "production",
+            "staging"
+          ],
+          "aliases": {
+            "prd": "production",
+            "stg": "staging"
+          },
+          "mappings": [
+            {
+              "source": "PROVIDER",
+              "path": "environment"
+            }
+          ]
+        }
+      ],
+      "rules": [
+        {
+          "id": "none",
+          "name": "none",
+          "phase": "ROUTE",
+          "enabled": true,
+          "conditions": [],
+          "actions": [
+            {
+              "type": "NO_ESCALATION"
+            }
+          ]
+        }
+      ]
+    },
+    "expected": "CATCH_ALL_NO_ESCALATION"
+  },
+  {
+    "name": "alias-collision",
+    "kind": "lint",
+    "snapshot": {
+      "schemaVersion": 1,
+      "fields": [
+        {
+          "fieldId": "environment",
+          "key": "environment",
+          "label": "Environment",
+          "type": "ENUM",
+          "caseSensitive": false,
+          "allowedValues": [
+            "production",
+            "staging"
+          ],
+          "aliases": {
+            "Prod": "production",
+            "PROD": "staging"
+          },
+          "mappings": [
+            {
+              "source": "PROVIDER",
+              "path": "environment"
+            }
+          ]
+        }
+      ],
+      "rules": []
+    },
+    "expected": "ALIAS_COLLISION"
+  },
+  {
+    "name": "timeout-fallback",
+    "kind": "timeout",
+    "snapshot": {
+      "schemaVersion": 1,
+      "fields": [
+        {
+          "fieldId": "environment",
+          "key": "environment",
+          "label": "Environment",
+          "type": "ENUM",
+          "caseSensitive": false,
+          "allowedValues": [
+            "production",
+            "staging"
+          ],
+          "aliases": {
+            "prd": "production",
+            "stg": "staging"
+          },
+          "mappings": [
+            {
+              "source": "PROVIDER",
+              "path": "environment"
+            }
+          ]
+        }
+      ],
+      "rules": [
+        {
+          "id": "first",
+          "name": "first",
+          "phase": "ENRICH",
+          "enabled": true,
+          "conditions": [],
+          "actions": [
+            {
+              "type": "SET_PRIORITY",
+              "value": "P3"
+            },
+            {
+              "type": "ADD_TAG",
+              "value": "vip"
+            }
+          ]
+        },
+        {
+          "id": "second",
+          "name": "second",
+          "phase": "ENRICH",
+          "enabled": true,
+          "conditions": [
+            {
+              "fieldKey": "priority",
+              "operator": "EQ",
+              "value": "P3"
+            }
+          ],
+          "actions": [
+            {
+              "type": "SET_PRIORITY",
+              "value": "P1"
+            },
+            {
+              "type": "ADD_TAG",
+              "value": "vip"
+            }
+          ]
+        }
+      ]
+    },
+    "context": {
+      "environment": {
+        "state": "RECOGNIZED",
+        "value": "production"
+      },
+      "priority": {
+        "state": "RECOGNIZED",
+        "value": "P2"
+      }
+    },
+    "expected": "EVALUATION_TIMEOUT"
+  }
+]

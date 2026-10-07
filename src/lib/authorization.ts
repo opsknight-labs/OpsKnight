@@ -12,6 +12,9 @@ export const APP_ROLES = ['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'] as const;
 export type AppRole = (typeof APP_ROLES)[number];
 
 export const CAPABILITIES = {
+  AUTOMATION_READ: 'automation.read',
+  AUTOMATION_EDIT: 'automation.edit',
+  AUTOMATION_PUBLISH: 'automation.publish',
   ADMIN_MANAGE: 'admin.manage',
   OPERATIONS_MANAGE: 'operations.manage',
   INCIDENT_CREATE_ALL: 'incident.create.all',
@@ -85,6 +88,7 @@ export function isWriteApiScope(scope: ApiScope): boolean {
 
 const ADMIN_CAPABILITIES = new Set<Capability>(Object.values(CAPABILITIES));
 const RESPONDER_CAPABILITIES = new Set<Capability>([
+  CAPABILITIES.AUTOMATION_READ, CAPABILITIES.AUTOMATION_EDIT,
   CAPABILITIES.OPERATIONS_MANAGE,
   CAPABILITIES.INCIDENT_CREATE_ALL,
   CAPABILITIES.INCIDENT_READ_ALL,
@@ -104,6 +108,7 @@ const RESPONDER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.RUNBOOK_APPROVE,
 ]);
 const AUDITOR_CAPABILITIES = new Set<Capability>([
+  CAPABILITIES.AUTOMATION_READ,
   CAPABILITIES.INCIDENT_READ_ALL,
   CAPABILITIES.SERVICE_READ_ALL,
   CAPABILITIES.METRICS_READ_ALL,

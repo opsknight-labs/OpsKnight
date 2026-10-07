@@ -1,4 +1,5 @@
 import 'server-only';
+import { resolveIncidentResponderRouting } from '@/lib/escalation/routing';
 
 import type {
   IncidentEventType,
@@ -65,6 +66,7 @@ export interface IncidentLifecycleResult {
 }
 
 type IncidentLifecycleSnapshot = {
+  serviceId: string;
   status: IncidentStatus;
   createdAt: Date;
   acknowledgedAt: Date | null;
@@ -519,6 +521,7 @@ async function loadSnapshot(
   const incident = await tx.incident.findUnique({
     where: { id: incidentId },
     select: {
+      serviceId: true,
       status: true,
       createdAt: true,
       acknowledgedAt: true,
@@ -607,7 +610,18 @@ export async function applyIncidentLifecycleCommand(
     await assertRequiredCustomFieldsPresent(tx, input.incidentId);
   }
 
+  let responderRouteNone = false;
+  if (targetStatus === 'OPEN' && tx.incidentAutomationDecision) {
+    const routing = await resolveIncidentResponderRouting(input.incidentId, incident.serviceId, tx);
+    incident.service.policy = routing.policy;
+    responderRouteNone = routing.type === 'NO_ESCALATION';
+  }
   const updateData = updateDataForCommand(incident, input, now);
+  if (responderRouteNone) {
+    updateData.escalationStatus = 'COMPLETED';
+    updateData.nextEscalationAt = null;
+    updateData.currentEscalationStep = null;
+  }
   const lifecycleEvent = eventForCommand(input, resolutionNote);
 
   const updated = await tx.incident.update({

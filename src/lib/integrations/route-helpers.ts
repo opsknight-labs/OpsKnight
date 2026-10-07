@@ -1,5 +1,5 @@
 import { createIntegrationHandler } from './handler';
-import { processEvent, EventPayload } from '@/lib/events';
+import { processIntegrationEvent, EventPayload } from '@/lib/events';
 import { IntegrationSchemas } from './schemas';
 
 type SignatureProvider =
@@ -31,7 +31,14 @@ export function createIntegrationRoute<T>(
     },
     async ({ payload, integration }) => {
       const event = transform(payload);
-      const result = await processEvent(event, integration.serviceId, integration.id);
+      const result = await processIntegrationEvent({
+        event,
+        serviceId: integration.serviceId,
+        integrationId: integration.id,
+        integrationType,
+        providerPayload: payload,
+        receivedAt: new Date(),
+      });
       return { action: result.action, incident: result.incident };
     }
   );

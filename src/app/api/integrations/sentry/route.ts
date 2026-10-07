@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { processEvent } from '@/lib/events';
+import { processIntegrationEvent } from '@/lib/events';
 import { transformSentryToEvent, SentryEvent } from '@/lib/integrations/sentry';
 
 import { verifySentrySignature } from '@/lib/integrations/signature-verification';
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
       }
 
       const event = transformSentryToEvent(validation.data as SentryEvent);
-      const result = await processEvent(event, integration.serviceId, integration.id);
+      const result = await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'SENTRY', providerPayload: validation.data, receivedAt: new Date() });
       if (deliveryClaim) await completeInboundDelivery(deliveryClaim);
 
       logger.info('api.integration.sentry_success', {

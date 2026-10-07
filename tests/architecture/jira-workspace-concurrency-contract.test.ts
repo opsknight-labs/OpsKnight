@@ -45,7 +45,7 @@ describe('Jira workspace concurrency architecture', () => {
   });
 
   it('fences the complete inbound webhook mutation chain', () => {
-    const webhook = readFileSync('src/app/api/jira/webhook/route.ts', 'utf8');
+    const webhook = readFileSync('src/app/api/jira/webhook/handler.ts', 'utf8');
 
     expect(webhook).toContain('withJiraWorkspaceProviderFence(() =>');
     expect(webhook).toContain('processJiraWebhookEvent(');

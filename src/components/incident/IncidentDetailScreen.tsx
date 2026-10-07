@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
 import { CAPABILITIES } from '@/lib/authorization';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -522,6 +523,7 @@ export default async function IncidentDetailScreen({
         />
       )}
 
+      <IncidentAutomationCard incidentId={id} />
       <IncidentDescriptionCard
         incidentId={incident.id}
         description={incident.description}

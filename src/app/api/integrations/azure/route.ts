@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { processEvent } from '@/lib/events';
+import { processIntegrationEvent } from '@/lib/events';
 import { transformAzureToEvent, AzureAlertData } from '@/lib/integrations/azure';
 
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       const event = transformAzureToEvent(body as AzureAlertData);
 
       // Process the event
-      const result = await processEvent(event, integration.serviceId, integration.id);
+      const result = await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'AZURE', providerPayload: validation.data, receivedAt: new Date() });
 
       logger.info('api.integration.azure_success', {
         integrationId,

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { processEvent, EventPayload } from '@/lib/events';
+import { processIntegrationEvent, EventPayload } from '@/lib/events';
 import { authenticateApiKey } from '@/lib/api-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -28,6 +28,7 @@ async function postEvent(req: NextRequest) {
   try {
     const authHeader = req.headers.get('Authorization');
     let integrationId: string | null = null;
+    let integrationType = 'EVENTS_API';
     let serviceId: string | null = null;
     let apiKeyIdentity: Awaited<ReturnType<typeof authenticateApiKey>> = null;
     let apiKeyId: string | null = null;
@@ -36,7 +37,12 @@ async function postEvent(req: NextRequest) {
       const key = authHeader.split('Token token=')[1];
       const integration = await prisma.integration.findUnique({ where: { key } });
       if (!integration) {
-        return jsonError(new AppError({ code: 'INTEGRATION_KEY_INVALID', userMessage: LEGACY_INVALID_INPUT_MESSAGE }));
+        return jsonError(
+          new AppError({
+            code: 'INTEGRATION_KEY_INVALID',
+            userMessage: LEGACY_INVALID_INPUT_MESSAGE,
+          })
+        );
       }
       if (!integration.enabled) {
         return jsonError(
@@ -59,11 +65,14 @@ async function postEvent(req: NextRequest) {
         );
       }
       integrationId = integration.id;
+      integrationType = integration.type;
       serviceId = integration.serviceId;
     } else {
       const apiKey = await authenticateApiKey(req);
       if (!apiKey) {
-        return jsonError(new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE }));
+        return jsonError(
+          new AppError({ code: 'API_KEY_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE })
+        );
       }
       apiKeyIdentity = apiKey;
       apiKeyId = apiKey.id;
@@ -75,9 +84,13 @@ async function postEvent(req: NextRequest) {
       body = JSON.parse(rawBody);
     } catch (error) {
       if (error instanceof IntegrationBodyTooLargeError) {
-        return jsonError(new AppError({ code: 'PAYLOAD_TOO_LARGE', userMessage: 'Payload too large.' }));
+        return jsonError(
+          new AppError({ code: 'PAYLOAD_TOO_LARGE', userMessage: 'Payload too large.' })
+        );
       }
-      return jsonError(new AppError({ code: 'INVALID_JSON', userMessage: LEGACY_INVALID_INPUT_MESSAGE }));
+      return jsonError(
+        new AppError({ code: 'INVALID_JSON', userMessage: LEGACY_INVALID_INPUT_MESSAGE })
+      );
     }
 
     const parsed = EventSchema.safeParse(body);
@@ -93,7 +106,9 @@ async function postEvent(req: NextRequest) {
 
     if (!serviceId) {
       if (!apiKeyIdentity) {
-        return jsonError(new AppError({ code: 'API_KEY_USER_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE }));
+        return jsonError(
+          new AppError({ code: 'API_KEY_USER_INVALID', userMessage: LEGACY_UNAUTHORIZED_MESSAGE })
+        );
       }
       const actor = await resolveApiKeyActor(apiKeyIdentity);
       if (!actor) {
@@ -121,7 +136,13 @@ async function postEvent(req: NextRequest) {
           new AppError({
             code: 'VALIDATION_FAILED',
             userMessage: LEGACY_REQUIRED_MESSAGE,
-            fields: [{ field: 'service_id', code: 'required', message: 'service_id is required when using API keys.' }],
+            fields: [
+              {
+                field: 'service_id',
+                code: 'required',
+                message: 'service_id is required when using API keys.',
+              },
+            ],
           })
         );
       }
@@ -163,22 +184,29 @@ async function postEvent(req: NextRequest) {
     if (!rate.allowed) {
       const retryAfter = Math.ceil((rate.resetAt - Date.now()) / 1000);
       return jsonError(
-        new AppError({ code: 'RATE_LIMIT_EXCEEDED', userMessage: 'Rate limit exceeded.', details: { retryAfter } }),
+        new AppError({
+          code: 'RATE_LIMIT_EXCEEDED',
+          userMessage: 'Rate limit exceeded.',
+          details: { retryAfter },
+        }),
         undefined,
         undefined,
         { 'Retry-After': String(retryAfter) }
       );
     }
 
-    const result = await processEvent(
-      { ...parsed.data, event_action: eventAction, dedup_key: dedupKey } as EventPayload,
+    const result = await processIntegrationEvent({
+      event: { ...parsed.data, event_action: eventAction, dedup_key: dedupKey } as EventPayload,
       serviceId,
-      integrationId || 'api-key'
-    );
+      integrationId: integrationId || 'api-key',
+      integrationType,
+      providerPayload: parsed.data,
+      receivedAt: new Date(),
+    });
 
     logger.info('api.event.processed', { action: result.action, serviceId, integrationId });
     return jsonOk({ status: 'success', result }, 202);
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('api.event.error', {
       error: error instanceof Error ? error.message : String(error),
     });

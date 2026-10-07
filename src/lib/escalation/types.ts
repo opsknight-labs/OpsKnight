@@ -8,6 +8,7 @@
 
 export const ESCALATION_OUTCOMES = [
   /** A step ran: an audience was resolved and its pages were dispatched. */
+  'RESPONDER_ROUTE_NONE',
   'STEP_EXECUTED',
   /** Nothing to page yet; a later step (or the first delay) is durably scheduled. */
   'STEP_SCHEDULED',
@@ -60,6 +61,7 @@ export interface EscalationExecutionResult {
  * Fallback scanners must not overwrite these with a generic retry schedule.
  */
 const AUTHORITATIVE_STATE: ReadonlySet<EscalationOutcome> = new Set([
+  'RESPONDER_ROUTE_NONE',
   'STEP_EXECUTED',
   'STEP_SCHEDULED',
   'COMPLETED',
@@ -79,6 +81,7 @@ const AUTHORITATIVE_STATE: ReadonlySet<EscalationOutcome> = new Set([
  * incident trigger must not also fan out the default responder notification.
  */
 const POLICY_OWNS_RESPONDER_ROUTING: ReadonlySet<EscalationOutcome> = new Set([
+  'RESPONDER_ROUTE_NONE',
   'STEP_EXECUTED',
   'STEP_SCHEDULED',
   'COMPLETED',

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { ZodError } from 'zod';
 import prisma from '@/lib/prisma';
-import { processEvent } from '@/lib/events';
+import { processIntegrationEvent } from '@/lib/events';
 import { transformCloudWatchToEvent, CloudWatchAlarmMessage } from '@/lib/integrations/cloudwatch';
 
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
       const event = transformCloudWatchToEvent(alarmMessage);
 
       // Process the event
-      const result = await processEvent(event, integration.serviceId, integration.id);
+      const result = await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'CLOUDWATCH', providerPayload: alarmMessage, receivedAt: new Date() });
 
       logger.info('api.integration.cloudwatch_success', {
         integrationId,

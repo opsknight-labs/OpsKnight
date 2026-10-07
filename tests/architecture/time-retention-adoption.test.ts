@@ -16,8 +16,8 @@ const adoptedPaths = [
     readFileSync('src/app/api/analytics/export/route.ts', 'utf8'),
   ],
   [
-    'src/app/api/status/history/route.ts',
-    readFileSync('src/app/api/status/history/route.ts', 'utf8'),
+    'src/app/api/status/history/handler.ts',
+    readFileSync('src/app/api/status/history/handler.ts', 'utf8'),
   ],
   ['src/lib/status-pages/snapshot.ts', readFileSync('src/lib/status-pages/snapshot.ts', 'utf8')],
   ['src/lib/status-pages/snapshot.ts', readFileSync('src/lib/status-pages/snapshot.ts', 'utf8')],

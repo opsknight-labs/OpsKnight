@@ -8,6 +8,7 @@ import { ESCALATION_OUTCOMES, type EscalationOutcome } from '@/lib/escalation/ty
  * new one to the union forces a deliberate routing decision here.
  */
 const EXPECTED_ROUTE: Record<EscalationOutcome, 'service' | 'fallback'> = {
+  RESPONDER_ROUTE_NONE: 'service',
   STEP_EXECUTED: 'service',
   STEP_SCHEDULED: 'service',
   COMPLETED: 'service',

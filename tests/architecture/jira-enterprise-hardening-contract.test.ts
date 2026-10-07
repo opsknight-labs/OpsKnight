@@ -22,7 +22,7 @@ describe('Jira enterprise hardening architecture', () => {
   });
 
   it('durably claims and serializes Jira webhook deliveries', () => {
-    const route = readFileSync('src/app/api/jira/webhook/route.ts', 'utf8');
+    const route = readFileSync('src/app/api/jira/webhook/handler.ts', 'utf8');
     expect(route).toContain('claimInboundDelivery(');
     expect(route).toContain('completeInboundDelivery(');
     expect(route).toContain('failInboundDelivery(');

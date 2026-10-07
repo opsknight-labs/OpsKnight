@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
-import { processEvent } from '@/lib/events';
+import { processIntegrationEvent } from '@/lib/events';
 import { transformGrafanaToEvents, GrafanaAlert } from '@/lib/integrations/grafana';
 
 import { verifyGrafanaSignature } from '@/lib/integrations/signature-verification';
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       const events = transformGrafanaToEvents(validation.data as GrafanaAlert);
       const results = [];
       for (const event of events) {
-        const result = await processEvent(event, integration.serviceId, integration.id);
+        const result = await processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'GRAFANA', providerPayload: validation.data, receivedAt: new Date() });
         results.push(result);
       }
 

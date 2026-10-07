@@ -199,6 +199,10 @@ async function enqueueSideEffects(
   warRoom?: EventSideEffectPayload['warRoom'],
   notBeforeByEffect?: ReadonlyMap<EventSideEffect, Date>
 ): Promise<void> {
+  const decision = tx.incidentAutomationDecision ? await tx.incidentAutomationDecision.findUnique({ where: { incidentId }, select: { routeType: true, mode: true } }) : null;
+  if (decision?.mode === 'LIVE' && decision.routeType === 'NO_ESCALATION') {
+    effects = effects.filter(effect => !['TRIGGER_ESCALATION_NOTIFICATIONS', 'LIFECYCLE_USER_NOTIFICATION', 'INCIDENT_UPDATE_USER_NOTIFICATION', 'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION', 'INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION'].includes(effect));
+  }
   if (effects.length === 0) return;
   const [eventOrderAt, incidentSnapshot] = await Promise.all([
     databaseClock(tx),

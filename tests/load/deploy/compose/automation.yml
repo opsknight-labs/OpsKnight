@@ -1,0 +1,63 @@
+# Isolated automation certification: use project opsknight-automation-cert.
+x-app-environment: &app-env
+  NODE_ENV: production
+  PROMETHEUS_SCRAPE_TOKEN: automation-local-cert-metrics-token
+  DATABASE_URL: postgresql://automation:automation-cert-only@db:5432/automation_cert?connection_limit=12
+  DIRECT_DATABASE_URL: postgresql://automation:automation-cert-only@db:5432/automation_cert
+  NEXTAUTH_URL: http://127.0.0.1:3339
+  NEXT_PUBLIC_APP_URL: http://127.0.0.1:3339
+  NEXTAUTH_SECRET: automation-cert-nextauth-secret-at-least-32-characters
+  API_KEY_SECRET: automation-cert-independent-api-secret-at-least-32-characters
+  ENCRYPTION_KEY: 4e7d2b9c1a8f6e3d5c0b9a8f7e6d5c4b3a29180f7e6d5c4b3a2918f7e6d5c4b3
+  OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS: host.docker.internal,127.0.0.1
+  INTEGRATION_RATE_LIMIT: 'false'
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      {
+        POSTGRES_USER: automation,
+        POSTGRES_PASSWORD: automation-cert-only,
+        POSTGRES_DB: automation_cert,
+      }
+    healthcheck:
+      {
+        test: [CMD-SHELL, pg_isready -U automation -d automation_cert],
+        interval: 2s,
+        timeout: 2s,
+        retries: 30,
+      }
+    ports: ['127.0.0.1:55442:5432']
+  migration:
+    image: ${AUTOMATION_IMAGE:-opsknight-automation:local}
+    environment: { <<: *app-env, OPSKNIGHT_MIGRATION_ONLY: 'true' }
+    depends_on: { db: { condition: service_healthy } }
+  web:
+    image: ${AUTOMATION_IMAGE:-opsknight-automation:local}
+    environment:
+      {
+        <<: *app-env,
+        OPSKNIGHT_SKIP_MIGRATIONS: 'true',
+        OPSKNIGHT_PROCESS_ROLE: '${AUTOMATION_WEB_ROLE:-web}',
+      }
+    depends_on: { migration: { condition: service_completed_successfully } }
+  critical:
+    image: ${AUTOMATION_IMAGE:-opsknight-automation:local}
+    environment:
+      { <<: *app-env, OPSKNIGHT_SKIP_MIGRATIONS: 'true', OPSKNIGHT_PROCESS_ROLE: critical-worker }
+    depends_on: { migration: { condition: service_completed_successfully } }
+  general:
+    image: ${AUTOMATION_IMAGE:-opsknight-automation:local}
+    environment:
+      { <<: *app-env, OPSKNIGHT_SKIP_MIGRATIONS: 'true', OPSKNIGHT_PROCESS_ROLE: general-worker }
+    depends_on: { migration: { condition: service_completed_successfully } }
+  scheduler:
+    image: ${AUTOMATION_IMAGE:-opsknight-automation:local}
+    environment:
+      { <<: *app-env, OPSKNIGHT_SKIP_MIGRATIONS: 'true', OPSKNIGHT_PROCESS_ROLE: scheduler }
+    depends_on: { migration: { condition: service_completed_successfully } }
+  proxy:
+    image: nginx:1.27-alpine
+    ports: ['127.0.0.1:3339:3000']
+    volumes: ['./automation-nginx.conf:/etc/nginx/nginx.conf:ro']
+    depends_on: [web]

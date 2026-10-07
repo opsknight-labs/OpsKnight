@@ -1,3 +1,5 @@
+> Implementation update: the user subsequently requested UI management of global enablement and retention. Those controls now live in Settings → System → Automation and use shared SystemSettings rows; deployment environment flags in this original plan are superseded.
+
 Yes. Based on the current OpsKnight code at `ec1d8a1c`, this is the execution plan I would use. It is designed specifically around the existing incident transaction, dedup lock, classification engine, escalation engine, durable `BackgroundJob` outbox, RBAC model, split workers, and service UI—not as a separate workflow product bolted onto OpsKnight.
 
 ## Target architecture

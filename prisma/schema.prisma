@@ -616,6 +616,13 @@ model TeamMember {
 }
 
 model Service {
+  automationConfig                ServiceAutomationConfig?
+  automationDraft                 AutomationDraft?
+  automationVersions              AutomationVersion[]
+  automationDecisions             IncidentAutomationDecision[]
+  automationTraces                AutomationTrace[]
+  automationObservations          AutomationContextObservation[]
+  automationAggregates            AutomationShadowAggregate[]
   id                              String                          @id @default(cuid())
   name                            String                          @unique
   description                     String?
@@ -1154,6 +1161,8 @@ model Alert {
 }
 
 model Incident {
+  automationDecision                  IncidentAutomationDecision?
+  automationTraces                    AutomationTrace[]
   id                                  String                          @id @default(cuid())
   title                               String
   description                         String?
@@ -2454,10 +2463,13 @@ model MetricRollup {
 }
 
 model SystemSettings {
+  automationEnabled                    Boolean  @default(false)
+  automationTraceRetentionDays         Int      @default(90)
+  automationSettingsRevision           Int      @default(0)
   id                                   String   @id @default("default")
-  runbookAutoExecutionsPerIncident      Int      @default(3)
-  runbookAutoWritesPerIncident          Int      @default(3)
-  runbookAutoNonIdempotentPerIncident   Int      @default(0)
+  runbookAutoExecutionsPerIncident     Int      @default(3)
+  runbookAutoWritesPerIncident         Int      @default(3)
+  runbookAutoNonIdempotentPerIncident  Int      @default(0)
   appUrl                               String?
   encryptionKey                        String?
   incidentRetentionDays                Int      @default(730)
@@ -3828,4 +3840,154 @@ model RunbookArtifact {
 
   @@index([attemptId, createdAt])
   @@index([createdAt])
+}
+
+enum AutomationMode {
+  DISABLED
+  SHADOW
+  LIVE
+}
+
+enum AutomationRouteType {
+  SERVICE_DEFAULT
+  ESCALATION_POLICY
+  NO_ESCALATION
+}
+
+model ServiceAutomationConfig {
+  serviceId       String             @id
+  mode            AutomationMode     @default(DISABLED)
+  activeVersionId String?            @unique
+  draftId         String?            @unique
+  updatedBy       String?
+  updatedAt       DateTime           @updatedAt
+  service         Service            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  activeVersion   AutomationVersion? @relation("ActiveAutomationVersion", fields: [activeVersionId], references: [id], onDelete: Restrict)
+  draft           AutomationDraft?   @relation(fields: [draftId], references: [id], onDelete: SetNull)
+}
+
+model AutomationDraft {
+  id            String                   @id @default(cuid())
+  serviceId     String                   @unique
+  schemaVersion Int                      @default(1)
+  snapshot      Json
+  revision      Int                      @default(1)
+  updatedBy     String?
+  updatedAt     DateTime                 @updatedAt
+  service       Service                  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  config        ServiceAutomationConfig?
+}
+
+model AutomationVersion {
+  id               String                       @id @default(cuid())
+  serviceId        String
+  versionNumber    Int
+  schemaVersion    Int                          @default(1)
+  snapshot         Json
+  compiledSnapshot Json
+  checksum         String
+  sourceVersionId  String?
+  publishedBy      String
+  publishedAt      DateTime                     @default(now())
+  lintReport       Json
+  service          Service                      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  activeConfig     ServiceAutomationConfig?     @relation("ActiveAutomationVersion")
+  policyRefs       AutomationVersionPolicyRef[]
+  decisions        IncidentAutomationDecision[]
+  traces           AutomationTrace[]
+  aggregates       AutomationShadowAggregate[]
+
+  @@unique([serviceId, versionNumber])
+  @@index([serviceId, publishedAt])
+}
+
+model AutomationVersionPolicyRef {
+  versionId          String
+  escalationPolicyId String
+  policyNameSnapshot String
+  version            AutomationVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@id([versionId, escalationPolicyId])
+  @@index([escalationPolicyId])
+}
+
+model IncidentAutomationDecision {
+  incidentId                   String              @id
+  serviceId                    String
+  versionId                    String?
+  mode                         AutomationMode
+  routeType                    AutomationRouteType
+  escalationPolicyId           String?
+  escalationPolicyNameSnapshot String?
+  matchedRouteRuleId           String?
+  matchedRouteRuleName         String?
+  basePriority                 String?
+  finalPriority                String?
+  evaluationAt                 DateTime
+  fallbackReason               String?
+  summary                      Json
+  createdAt                    DateTime            @default(now())
+  incident                     Incident            @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  service                      Service             @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  version                      AutomationVersion?  @relation(fields: [versionId], references: [id], onDelete: Restrict)
+
+  @@index([escalationPolicyId])
+  @@index([serviceId, createdAt])
+}
+
+model AutomationTrace {
+  id             String             @id @default(cuid())
+  incidentId     String
+  serviceId      String
+  versionId      String?
+  mode           AutomationMode
+  phase          String             @default("INITIAL")
+  evaluationAt   DateTime
+  durationMs     Float
+  fallbackReason String?
+  detail         Json
+  incident       Incident           @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  service        Service            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  version        AutomationVersion? @relation(fields: [versionId], references: [id], onDelete: Restrict)
+
+  @@unique([incidentId, phase])
+  @@index([serviceId, evaluationAt])
+  @@index([evaluationAt])
+}
+
+model AutomationShadowAggregate {
+  serviceId             String
+  versionId             String
+  bucketDate            DateTime          @db.Date
+  evaluated             Int               @default(0)
+  same                  Int               @default(0)
+  routeDifferent        Int               @default(0)
+  priorityDifferent     Int               @default(0)
+  noEscalationDifferent Int               @default(0)
+  errors                Int               @default(0)
+  fallbacks             Int               @default(0)
+  service               Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  version               AutomationVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, versionId, bucketDate])
+}
+
+model AutomationContextObservation {
+  id                     String   @id @default(cuid())
+  serviceId              String
+  integrationId          String
+  integrationType        String
+  fieldKey               String
+  sourcePath             String
+  fieldType              String
+  normalizedRawValueHash String
+  rawValuePreview        String
+  unmapped               Boolean  @default(false)
+  count                  Int      @default(1)
+  firstSeenAt            DateTime @default(now())
+  lastSeenAt             DateTime @default(now())
+  service                Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, integrationId, fieldKey, normalizedRawValueHash])
+  @@index([serviceId, lastSeenAt])
 }

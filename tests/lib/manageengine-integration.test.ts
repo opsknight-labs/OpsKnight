@@ -18,7 +18,7 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 vi.mock('@/lib/events', () => ({
-  processEvent: vi.fn(),
+  processIntegrationEvent: vi.fn(),
 }));
 
 vi.mock('@/lib/integrations/rate-limiter', () => ({
@@ -329,9 +329,9 @@ describe('ManageEngine Integration — Comprehensive Real-World Suite', () => {
       vi.clearAllMocks();
     });
 
-    it('accepts valid OpManager webhook POST and invokes processEvent with normalized payload', async () => {
+    it('accepts valid OpManager webhook POST and invokes processIntegrationEvent with normalized payload', async () => {
       const prisma = (await import('@/lib/prisma')).default;
-      const { processEvent } = await import('@/lib/events');
+      const { processIntegrationEvent } = await import('@/lib/events');
       const { POST } = await import('@/app/api/integrations/manageengine/route');
 
       vi.mocked(prisma.integration.findUnique).mockResolvedValue({
@@ -343,7 +343,7 @@ describe('ManageEngine Integration — Comprehensive Real-World Suite', () => {
         key: 'secret_me_key_123',
       } as never);
 
-      vi.mocked(processEvent).mockResolvedValue({
+      vi.mocked(processIntegrationEvent).mockResolvedValue({
         action: 'triggered',
         incident: { id: 'inc_9001', status: 'OPEN', urgency: 'HIGH' },
       } as never);
@@ -372,25 +372,27 @@ describe('ManageEngine Integration — Comprehensive Real-World Suite', () => {
 
       const json = await res.json();
       expect(json.status).toBe('success');
-      expect(processEvent).toHaveBeenCalledTimes(1);
-      expect(processEvent).toHaveBeenCalledWith(
+      expect(processIntegrationEvent).toHaveBeenCalledTimes(1);
+      expect(processIntegrationEvent).toHaveBeenCalledWith(
         expect.objectContaining({
-          event_action: 'trigger',
-          dedup_key: 'manageengine-core-sw-01_port_gi0-1',
-          payload: expect.objectContaining({
-            source: 'ManageEngine',
-            severity: 'critical',
+          serviceId: 'svc_network_01',
+          integrationId: 'int_me_01',
+          integrationType: 'MANAGEENGINE',
+          event: expect.objectContaining({
+            event_action: 'trigger',
+            dedup_key: 'manageengine-core-sw-01_port_gi0-1',
+            payload: expect.objectContaining({ source: 'ManageEngine', severity: 'critical' }),
           }),
-        }),
-        'svc_network_01',
-        'int_me_01'
+          providerPayload: expect.objectContaining({ alarmid: expect.anything() }),
+          receivedAt: expect.any(Date),
+        })
       );
     });
 
     it('enforces HMAC-SHA256 signature verification when signatureSecret is configured and rejects invalid signatures or keys', async () => {
       const crypto = await import('crypto');
       const prisma = (await import('@/lib/prisma')).default;
-      const { processEvent } = await import('@/lib/events');
+      const { processIntegrationEvent } = await import('@/lib/events');
       const { POST } = await import('@/app/api/integrations/manageengine/route');
 
       const hmacSecret = 'me_hmac_prod_secret_999';
@@ -403,7 +405,7 @@ describe('ManageEngine Integration — Comprehensive Real-World Suite', () => {
         key: 'valid_me_key',
       } as never);
 
-      vi.mocked(processEvent).mockResolvedValue({
+      vi.mocked(processIntegrationEvent).mockResolvedValue({
         action: 'triggered',
         incident: { id: 'inc_9002', status: 'OPEN', urgency: 'HIGH' },
       } as never);

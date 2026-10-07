@@ -1,4 +1,4 @@
-import { processEvent } from '@/lib/events';
+import { processIntegrationEvent } from '@/lib/events';
 import { transformDatadogToEvent, DatadogEvent } from '@/lib/integrations/datadog';
 import { createIntegrationHandler } from '@/lib/integrations/handler';
 
@@ -23,7 +23,7 @@ export const POST = createIntegrationHandler<DatadogEvent>(
 
     // Process all events
     const results = await Promise.all(
-      events.map(event => processEvent(event, integration.serviceId, integration.id))
+      events.map(event => processIntegrationEvent({ event, serviceId: integration.serviceId, integrationId: integration.id, integrationType: 'DATADOG', providerPayload: payload, receivedAt: new Date() }))
     );
 
     return { action: results[0]?.action || 'acknowledge', incident: results[0]?.incident };

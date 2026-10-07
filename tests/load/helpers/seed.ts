@@ -1,3 +1,4 @@
+import { configureAutomationLoadProfile, parseAutomationLoadProfile } from './automation';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -340,13 +341,14 @@ export async function runLoadSeed(options?: {
     });
 
     // 7. Upsert SlackIntegration & Services & Integrations & WebhookIntegrations
+    const slackFixturesEnabled = process.env.LOAD_SLACK_ENABLED === 'true';
     const encryptedSlackBotToken = await encrypt('xoxb-load-cert-bot-token');
     await prisma.slackIntegration.upsert({
       where: { workspaceId: 'T_LOAD_CERT_01' },
       update: {
         workspaceName: 'OpsKnight Load Cert Workspace',
         botToken: encryptedSlackBotToken,
-        enabled: true,
+        enabled: slackFixturesEnabled,
       },
       create: {
         id: 'lt-slack-int-001',
@@ -354,7 +356,7 @@ export async function runLoadSeed(options?: {
         workspaceName: 'OpsKnight Load Cert Workspace',
         botToken: encryptedSlackBotToken,
         scopes: ['chat:write', 'channels:manage', 'commands'],
-        enabled: true,
+        enabled: slackFixturesEnabled,
         installedBy: users[0]?.id ?? null,
       },
     });
@@ -369,10 +371,12 @@ export async function runLoadSeed(options?: {
         teamId: s.teamId,
         escalationPolicyId: s.escalationPolicyId,
         slackWebhookUrl: s.slackWebhookUrl,
-        slackChannel: s.slackChannel,
-        slackIntegrationId: 'lt-slack-int-001',
+        slackChannel: slackFixturesEnabled ? s.slackChannel : null,
+        slackIntegrationId: slackFixturesEnabled ? 'lt-slack-int-001' : null,
         webhookUrl: s.webhookUrl,
-        serviceNotificationChannels: s.serviceNotificationChannels,
+        serviceNotificationChannels: slackFixturesEnabled
+          ? s.serviceNotificationChannels
+          : s.serviceNotificationChannels.filter(channel => channel !== 'SLACK'),
         serviceNotifyOnTriggered: s.serviceNotifyOnTriggered,
         serviceNotifyOnAck: s.serviceNotifyOnAck,
         serviceNotifyOnResolved: s.serviceNotifyOnResolved,
@@ -526,7 +530,12 @@ export async function runLoadSeed(options?: {
         statusPageId: statusPage.id,
         url: statusPage.webhookUrl,
         secret: statusPage.webhookSecret,
-        events: ['incident.created', 'incident.updated', 'incident.resolved', 'service.status_changed'],
+        events: [
+          'incident.created',
+          'incident.updated',
+          'incident.resolved',
+          'service.status_changed',
+        ],
         enabled: true,
       },
     });
@@ -662,9 +671,17 @@ export async function runLoadSeed(options?: {
     // 13. Publish initial StatusPageSnapshot so /api/status is immediately LIVE
     await publishStatusPageSnapshot(statusPage.id, { lockAttempts: 3, budgetMs: 15_000 });
 
-    const contractIntegration =
-      integrations.find(i => i.isContractKey) ?? integrations[0];
+    const contractIntegration = integrations.find(i => i.isContractKey) ?? integrations[0];
     const capacityIntegrations = integrations.filter(i => !i.isContractKey);
+
+    if (process.env.AUTOMATION_LOAD_PROFILE) {
+      await configureAutomationLoadProfile(
+        prisma,
+        services.map(s => s.id),
+        keyUsers[0].id,
+        parseAutomationLoadProfile(process.env.AUTOMATION_LOAD_PROFILE)
+      );
+    }
 
     const manifest: LoadSeedManifest = {
       generatedAt: new Date().toISOString(),

@@ -29,8 +29,8 @@ describe('public boundary contract', () => {
   it('uses the shared visibility policy for rendered and API status outputs', () => {
     const htmlEntry = readFileSync('src/app/(public)/status/page.tsx', 'utf8');
     const html = readFileSync('src/lib/status-pages/snapshot.ts', 'utf8');
-    const statusApi = readFileSync('src/app/api/status/route.ts', 'utf8');
-    const historyApi = readFileSync('src/app/api/status/history/route.ts', 'utf8');
+    const statusApi = readFileSync('src/app/api/status/handler.ts', 'utf8');
+    const historyApi = readFileSync('src/app/api/status/history/handler.ts', 'utf8');
     const rss = readFileSync('src/app/api/status/rss/route.ts', 'utf8');
 
     expect(html).toContain('publicStatusVisibility');
@@ -48,8 +48,8 @@ describe('public boundary contract', () => {
   it('requires edge revalidation for every cacheable public status response', () => {
     const sources = [
       readFileSync('src/middleware.ts', 'utf8'),
-      readFileSync('src/app/api/status/route.ts', 'utf8'),
-      readFileSync('src/app/api/status/history/route.ts', 'utf8'),
+      readFileSync('src/app/api/status/handler.ts', 'utf8'),
+      readFileSync('src/app/api/status/history/handler.ts', 'utf8'),
       readFileSync('src/app/api/status/rss/route.ts', 'utf8'),
     ];
     for (const source of sources) {

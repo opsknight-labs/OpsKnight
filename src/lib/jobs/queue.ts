@@ -1201,6 +1201,12 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
         return true;
       }
       case 'SCHEDULED_TASK': {
+        if (['AUTOMATION_NOTIFY', 'AUTOMATION_OBSERVE', 'AUTOMATION_RETENTION'].includes(String(payloadValue(job.payload, 'task')))) {
+          const { processAutomationJob } = await import('../automation/jobs');
+          await processAutomationJob(job.payload);
+          await markJobCompleted(job.id);
+          return true;
+        }
         if (payloadValue(job.payload, 'task') !== 'EVENT_SIDE_EFFECT') {
           await prisma.backgroundJob.update({
             where: { id: job.id },
