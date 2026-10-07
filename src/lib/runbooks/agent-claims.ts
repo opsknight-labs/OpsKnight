@@ -446,6 +446,30 @@ export async function fenceAgentAttempt(input: {
   });
 }
 
+export async function releaseAgentClaim(input: {
+  attemptId: string;
+  agentId: string;
+  leaseToken: string;
+}) {
+  return prisma.$transaction(async tx => {
+    const updated = await tx.runbookStepAttempt.updateMany({
+      where: {
+        id: input.attemptId,
+        claimedAgentId: input.agentId,
+        leaseToken: leaseHash(input.leaseToken),
+        status: 'CLAIMED',
+      },
+      data: {
+        status: 'PENDING',
+        claimedAgentId: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
+      },
+    });
+    return { released: updated.count > 0 };
+  });
+}
+
 export async function renewAgentAttemptLease(input: {
   attemptId: string;
   agentId: string;

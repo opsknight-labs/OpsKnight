@@ -1,5 +1,4 @@
 // Paths stay inside the operator-configured spool; attempt IDs and enumerated filenames are validated.
-/* eslint-disable security/detect-non-literal-fs-filename */
 import { mkdir, readdir, readFile, rename, unlink, open, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';

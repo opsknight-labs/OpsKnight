@@ -6,6 +6,7 @@ on:
     branches: [main]
   push:
     branches: [main, 'feat/**', 'fix/**']
+    tags: ['v*']
 
 permissions:
   contents: read
@@ -126,6 +127,349 @@ jobs:
           npx vitest run --no-file-parallelism --maxWorkers=1
           tests/integration/runbook-execution-safety.test.ts
           tests/integration/encryption-migration.test.ts
+
+  native-agent-artifacts:
+    name: Native Linux Agent artifacts & installer verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+      - name: Build standalone native Agent artifacts with Node 24
+        run: bash scripts/build-agent-artifacts.sh
+      - name: Verify generated artifacts and SHA256SUMS
+        run: |
+          cd dist/agent
+          test -f opsknight-agent-linux-x64.tar.gz
+          test -f opsknight-agent-linux-arm64.tar.gz
+          test -f install.sh
+          test -f preflight.sh
+          test -f SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - name: Verify bundled x64 Node 24 runtime execution
+        run: |
+          mkdir -p /tmp/agent-test
+          tar -xzf dist/agent/opsknight-agent-linux-x64.tar.gz --strip-components=1 -C /tmp/agent-test
+          test -f /tmp/agent-test/runtime/bin/node
+          test -f /tmp/agent-test/preflight.sh
+          test -f /tmp/agent-test/VERSION
+          /tmp/agent-test/runtime/bin/node --version
+          /tmp/agent-test/runtime/bin/node -e "console.log('Node 24 runtime operational in tarball')"
+
+      - name: Test installer failure modes (fail closed validation)
+        run: |
+          # Test non-root rejection
+          if ./dist/agent/install.sh --url https://example.com --key "test" --token "test" 2>/dev/null; then
+            echo "Expected non-root failure"
+            exit 1
+          fi
+          # Test missing URL
+          if sudo ./dist/agent/install.sh --key "test" --token "test" 2>/dev/null; then
+            echo "Expected missing URL failure"
+            exit 1
+          fi
+          # Test missing local tarball fails closed (no remote download fallback)
+          if sudo ./dist/agent/install.sh --url https://example.com --tarball /nonexistent/tarball.tar.gz --key "test" --token "test" 2>/dev/null; then
+            echo "Expected bad tarball failure"
+            exit 1
+          fi
+          # Test unverified local tarball fails closed without checksum
+          cp dist/agent/opsknight-agent-linux-x64.tar.gz /tmp/unverified-agent.tar.gz
+          if sudo ./dist/agent/install.sh --url https://example.com --tarball /tmp/unverified-agent.tar.gz --key "test" --token "test" 2>/dev/null; then
+            echo "Expected unverified tarball failure"
+            rm -f /tmp/unverified-agent.tar.gz
+            exit 1
+          fi
+          rm -f /tmp/unverified-agent.tar.gz
+
+      - name: Test end-to-end installation, service enrollment, and runtime health
+        run: |
+          # 1. Start mock OpsKnight control-plane server
+          node -e '
+            const http = require("http");
+            const server = http.createServer((req, res) => {
+              if (req.url === "/api/runbook-agent/v1/time") {
+                res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+                return res.end(JSON.stringify({
+                  success: true,
+                  data: { epochMs: Date.now(), serverTime: new Date().toISOString() }
+                }));
+              }
+              if (req.url === "/api/runbook-agent/v1/enroll" && req.method === "POST") {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                return res.end(JSON.stringify({
+                  success: true,
+                  data: { agent: { id: "agent-ci-test-uuid-001" } }
+                }));
+              }
+              if (req.url === "/api/runbook-agent/v1/heartbeat" && req.method === "POST") {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                return res.end(JSON.stringify({
+                  success: true,
+                  data: { acknowledged: true }
+                }));
+              }
+              if (req.url.startsWith("/api/runbook-agent/v1/claim")) {
+                res.writeHead(204);
+                return res.end();
+              }
+              if (req.url.endsWith("/release") && req.method === "POST") {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                return res.end(JSON.stringify({ success: true, data: { released: true } }));
+              }
+              res.writeHead(404);
+              res.end();
+            });
+            server.listen(3999, "127.0.0.1", () => {
+              console.log("Mock OpsKnight control-plane listening on 127.0.0.1:3999");
+            });
+          ' &
+          MOCK_PID=$!
+          sleep 1
+
+          TEST_KEY=$(node -e 'const { generateKeyPairSync } = require("crypto"); const { publicKey } = generateKeyPairSync("ed25519"); console.log(publicKey.export({ type: "spki", format: "der" }).toString("base64"));')
+          echo "Generated test Ed25519 key: $TEST_KEY"
+
+          # 2. Perform initial installation with one-time token
+          sudo ./dist/agent/install.sh \
+            --url http://127.0.0.1:3999 \
+            --key "$TEST_KEY" \
+            --token "test-token-123" \
+            --tarball dist/agent/opsknight-agent-linux-x64.tar.gz \
+            --no-restart
+
+          # 3. Verify file layout and strict permissions
+          test -d /opt/opsknight-agent
+          test -f /opt/opsknight-agent/opsknight-agent.mjs
+          test -x /opt/opsknight-agent/runtime/bin/node
+          test -x /opt/opsknight-agent/preflight.sh
+          test -f /opt/opsknight-agent/VERSION
+          test -f /etc/opsknight-agent/policy.json
+          test -f /etc/opsknight-agent/agent.env
+          test "$(sudo stat -c '%a' /etc/opsknight-agent/agent.env)" = "600"
+          test "$(sudo stat -c '%U:%G' /etc/opsknight-agent/agent.env)" = "root:root"
+          sudo grep -q "OPSKNIGHT_URL=http://127.0.0.1:3999" /etc/opsknight-agent/agent.env
+          sudo grep -q "OPSKNIGHT_EXECUTION_PUBLIC_KEY=$TEST_KEY" /etc/opsknight-agent/agent.env
+          sudo grep -q "OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=test-token-123" /etc/opsknight-agent/agent.env
+          test -f /etc/systemd/system/opsknight-agent.service
+          grep -q "EnvironmentFile=/etc/opsknight-agent/agent.env" /etc/systemd/system/opsknight-agent.service
+
+          # 4. Preflight before start - should pass with READY
+          sudo /opt/opsknight-agent/preflight.sh
+
+          # 5. Enable and start live systemd service - triggers real enrollment
+          sudo systemctl enable --now opsknight-agent
+          echo "Waiting for live agent enrollment and identity generation..."
+          ENROLLED=false
+          for i in $(seq 1 15); do
+            if sudo test -f /var/lib/opsknight-agent/identity.json && sudo test -f /var/lib/opsknight-agent/health.json; then
+              ENROLLED=true
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$ENROLLED" != "true" ]]; then
+            echo "Agent service failed to generate identity within 15s. Journal logs:"
+            sudo journalctl -u opsknight-agent -n 50 --no-pager
+            exit 1
+          fi
+
+          # 6. Verify enrolled identity and health state
+          sudo grep -q '"agentId":"agent-ci-test-uuid-001"' /var/lib/opsknight-agent/identity.json
+          sudo grep -q '"ready":true' /var/lib/opsknight-agent/health.json
+          INITIAL_PID=$(systemctl show opsknight-agent --property=MainPID --value)
+          test "$INITIAL_PID" -gt 0
+          echo "Live agent enrolled successfully with PID $INITIAL_PID: [OK]"
+
+          # 7. Preflight re-run on enrolled system
+          sudo /opt/opsknight-agent/preflight.sh
+
+      - name: Test live upgrade, claim drain, key rotation, and rollback
+        run: |
+          # 1. Generate bootstrap (default) and staged UUID keys
+          STAGED_KEY_ID="87ddce2f-34a1-4321-9876-abcdef012345"
+          node -e '
+            const { generateKeyPairSync, writeFileSync } = require("crypto");
+            const fs = require("fs");
+            const pairDefault = generateKeyPairSync("ed25519");
+            const pairStaged = generateKeyPairSync("ed25519");
+            const pubDefault = pairDefault.publicKey.export({ type: "spki", format: "der" }).toString("base64");
+            const pubStaged = pairStaged.publicKey.export({ type: "spki", format: "der" }).toString("base64");
+            
+            // Write multiline formatted JSON keys file
+            const keysObj = {
+              "default": pubDefault,
+              "87ddce2f-34a1-4321-9876-abcdef012345": pubStaged
+            };
+            fs.writeFileSync("/tmp/keys-staged.json", JSON.stringify(keysObj, null, 2));
+
+            // Save private keys for envelope verification test
+            fs.writeFileSync("/tmp/priv-default.pem", pairDefault.privateKey.export({ type: "pkcs8", format: "pem" }));
+            fs.writeFileSync("/tmp/priv-staged.pem", pairStaged.privateKey.export({ type: "pkcs8", format: "pem" }));
+          '
+
+          # 2. Re-run installer on the ACTIVE service WITHOUT --token (proves identity preservation & live drain/restart!)
+          sudo ./dist/agent/install.sh \
+            --url http://127.0.0.1:3999 \
+            --keys-file /tmp/keys-staged.json \
+            --tarball dist/agent/opsknight-agent-linux-x64.tar.gz
+
+          # 3. Verify identity was preserved across upgrade
+          sudo grep -q '"agentId":"agent-ci-test-uuid-001"' /var/lib/opsknight-agent/identity.json
+
+          # 4. Verify plural keys configured and singular key cleared
+          sudo grep -q 'OPSKNIGHT_EXECUTION_PUBLIC_KEYS={"default":' /etc/opsknight-agent/agent.env
+          sudo grep -q "87ddce2f-34a1-4321-9876-abcdef012345" /etc/opsknight-agent/agent.env
+          if sudo grep -q "OPSKNIGHT_EXECUTION_PUBLIC_KEY=" /etc/opsknight-agent/agent.env; then
+            echo "Singular key was not cleared after plural update"
+            exit 1
+          fi
+
+          # 5. Verify the service restarted and health.json was updated with new PID
+          NEW_PID=$(systemctl show opsknight-agent --property=MainPID --value)
+          test "$NEW_PID" -gt 0
+          sudo grep -q '"ready":true' /var/lib/opsknight-agent/health.json
+          echo "Upgraded agent healthy with new PID $NEW_PID: [OK]"
+
+          # 6. Test envelope signing and verification using the bundled agent node runtime
+          sudo /opt/opsknight-agent/runtime/bin/node -e '
+            const fs = require("fs");
+            const { createPrivateKey, createPublicKey, sign, verify } = require("crypto");
+
+            const envContent = fs.readFileSync("/etc/opsknight-agent/agent.env", "utf8");
+            const keysLine = envContent.split("\n").find(l => l.startsWith("OPSKNIGHT_EXECUTION_PUBLIC_KEYS="));
+            if (!keysLine) throw new Error("OPSKNIGHT_EXECUTION_PUBLIC_KEYS missing");
+            const keysMap = JSON.parse(keysLine.substring("OPSKNIGHT_EXECUTION_PUBLIC_KEYS=".length));
+
+            function canonical(val) {
+              const norm = (e) => {
+                if (Array.isArray(e)) return e.map(norm);
+                if (e && typeof e === "object") {
+                  return Object.fromEntries(Object.entries(e).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, norm(v)]));
+                }
+                return e;
+              };
+              return JSON.stringify(norm(val));
+            }
+
+            function makeAttempt(privPem, keyId) {
+              const priv = createPrivateKey(privPem);
+              const payload = {
+                attemptId: "att-cert-test",
+                signingAgentId: "agent-ci-test-uuid-001",
+                executionDeadlineAt: new Date(Date.now() + 60000).toISOString(),
+                leaseExpiresAt: new Date(Date.now() + 30000).toISOString(),
+                ...(keyId ? { signingKeyId: keyId } : {})
+              };
+              const sig = sign(null, Buffer.from(canonical(payload)), priv).toString("base64");
+              return { ...payload, signature: sig };
+            }
+
+            function verifyAttempt(att, keys) {
+              const { signature, ...payload } = att;
+              const pin = keys[att.signingKeyId || "default"];
+              if (!pin) throw new Error("Untrusted key id");
+              const pub = createPublicKey({ key: Buffer.from(pin, "base64"), type: "spki", format: "der" });
+              if (!verify(null, Buffer.from(canonical(payload)), pub, Buffer.from(signature, "base64"))) {
+                throw new Error("Invalid signature");
+              }
+            }
+
+            const privDefault = fs.readFileSync("/tmp/priv-default.pem", "utf8");
+            const privStaged = fs.readFileSync("/tmp/priv-staged.pem", "utf8");
+
+            // 1. Verify default bootstrap key envelope (legacy signingKeyId omitted)
+            verifyAttempt(makeAttempt(privDefault), keysMap);
+            // 2. Verify default key envelope with explicit "default" ID
+            verifyAttempt(makeAttempt(privDefault, "default"), keysMap);
+            // 3. Verify staged UUID key envelope
+            verifyAttempt(makeAttempt(privStaged, "87ddce2f-34a1-4321-9876-abcdef012345"), keysMap);
+
+            // 4. Untrusted key ID must fail
+            let failedAsExpected = false;
+            try {
+              verifyAttempt(makeAttempt(privDefault, "non-existent-uuid"), keysMap);
+            } catch {
+              failedAsExpected = true;
+            }
+            if (!failedAsExpected) throw new Error("Expected failure for non-existent key ID");
+
+            console.log("Envelope verification with plural key map PASSED");
+          '
+
+          # 7. Deliberate upgrade failure test: prove automatic rollback on activation failure
+          echo "Testing intentional failure and transactional rollback on /opt..."
+          mkdir -p /tmp/broken-staging
+          tar -xzf dist/agent/opsknight-agent-linux-x64.tar.gz -C /tmp/broken-staging
+          echo 'console.error("Deliberate startup failure for rollback testing"); process.exit(1);' > /tmp/broken-staging/opsknight-agent-linux-x64/opsknight-agent.mjs
+          tar -czf /tmp/broken-agent.tar.gz -C /tmp/broken-staging opsknight-agent-linux-x64
+          BROKEN_SHA=$(sha256sum /tmp/broken-agent.tar.gz | awk '{print $1}')
+          rm -rf /tmp/broken-staging
+
+          if sudo ./dist/agent/install.sh \
+            --url http://127.0.0.1:3999 \
+            --tarball /tmp/broken-agent.tar.gz \
+            --checksum "$BROKEN_SHA" 2>/dev/null; then
+            echo "Expected broken activation to fail"
+            exit 1
+          fi
+
+          # Prove rollback preserved the working installation and active service
+          test -d /opt/opsknight-agent
+          test -x /opt/opsknight-agent/runtime/bin/node
+          sudo systemctl is-active --quiet opsknight-agent
+          sudo grep -q '"ready":true' /var/lib/opsknight-agent/health.json
+          sudo grep -q '"agentId":"agent-ci-test-uuid-001"' /var/lib/opsknight-agent/identity.json
+          echo "Post-activation rollback restored working service on /opt: [OK]"
+
+          # 8. Deliberate rollback test from legacy /usr/local/lib/opsknight-agent layout
+          echo "Testing rollback from legacy /usr/local layout..."
+          sudo mkdir -p /usr/local/lib/opsknight-agent
+          sudo cp -a /opt/opsknight-agent/* /usr/local/lib/opsknight-agent/
+          sudo rm -rf /opt/opsknight-agent
+          sudo sed -i 's|/opt/opsknight-agent|/usr/local/lib/opsknight-agent|g' /etc/systemd/system/opsknight-agent.service
+          sudo systemctl daemon-reload
+          sudo systemctl restart opsknight-agent
+          sudo systemctl is-active --quiet opsknight-agent
+
+          # Attempt upgrade with broken tarball from legacy layout
+          if sudo ./dist/agent/install.sh \
+            --url http://127.0.0.1:3999 \
+            --tarball /tmp/broken-agent.tar.gz \
+            --checksum "$BROKEN_SHA" 2>/dev/null; then
+            echo "Expected broken legacy migration to fail"
+            exit 1
+          fi
+
+          # Verify legacy layout is preserved and service restarted from /usr/local
+          test -d /usr/local/lib/opsknight-agent
+          grep -q "/usr/local/lib/opsknight-agent" /etc/systemd/system/opsknight-agent.service
+          sudo systemctl is-active --quiet opsknight-agent
+          sudo grep -q '"ready":true' /var/lib/opsknight-agent/health.json
+          echo "Legacy layout rollback successfully restored /usr/local service: [OK]"
+
+          # 9. Successful migration from legacy layout to /opt/opsknight-agent
+          echo "Testing successful migration from legacy layout..."
+          sudo ./dist/agent/install.sh \
+            --url http://127.0.0.1:3999 \
+            --tarball dist/agent/opsknight-agent-linux-x64.tar.gz
+
+          # Verify new layout is active, and legacy layout is deleted
+          test -d /opt/opsknight-agent
+          test -x /opt/opsknight-agent/runtime/bin/node
+          test ! -d /usr/local/lib/opsknight-agent
+          grep -q "/opt/opsknight-agent" /etc/systemd/system/opsknight-agent.service
+          sudo systemctl is-active --quiet opsknight-agent
+          sudo grep -q '"ready":true' /var/lib/opsknight-agent/health.json
+          echo "Legacy migration to /opt/opsknight-agent completed and verified: [OK]"
+
+          # Clean up
+          sudo systemctl stop opsknight-agent
+          sudo systemctl disable opsknight-agent
+          pkill -f "Mock OpsKnight control-plane" || true
+          rm -rf /tmp/keys-staged.json /tmp/priv-default.pem /tmp/priv-staged.pem /tmp/broken-agent.tar.gz /tmp/broken-staging
 
   deployment-manifests:
     needs: changes

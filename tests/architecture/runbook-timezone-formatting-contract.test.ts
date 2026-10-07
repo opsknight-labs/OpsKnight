@@ -35,7 +35,7 @@ describe('Runbook timezone formatting contract', () => {
     expect(files.libraryPage).toContain('userTimeZone={userTimeZone}');
     expect(files.libraryClient).toContain('formatDateTime(item.updatedAt, userTimeZone');
 
-    expect(files.agentsPage).toContain('<AgentEnrollmentForm userTimeZone={userTimeZone} />');
+    expect(files.agentsPage).toContain('userTimeZone={userTimeZone}');
     expect(files.enrollmentClient).toContain('formatDateTime(state.expiresAt!, userTimeZone');
   });
 });

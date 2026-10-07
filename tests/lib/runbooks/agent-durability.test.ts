@@ -175,4 +175,138 @@ describe('Agent authority and durable recovery', () => {
       )
     ).toThrow();
   });
+
+  it('records pre-start shutdown abort as CANCELLED', async () => {
+    const { executeAttempt } = await import('../../../agent/src/executor');
+    const policy = {
+      allowedStepTypes: ['SYSTEMD', 'BASH'] as ('SYSTEMD' | 'BASH')[],
+      allowNonIdempotent: true,
+      maxRuntimeSeconds: 30,
+      maxOutputBytes: 1024,
+      systemdUnits: ['payments.service'],
+      dockerContainers: [],
+      kubernetesNamespaces: [],
+      bashCommandPatterns: ['sleep 2'],
+    };
+
+    const controllerWrite = new AbortController();
+    controllerWrite.abort('AGENT_SHUTDOWN');
+    const attemptWrite: ClaimedAttempt = {
+      attemptId: 'att-write-pre',
+      signingAgentId: 'agent1',
+      leaseToken: 'token',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      executionDeadlineAt: new Date(Date.now() + 60000).toISOString(),
+      step: {
+        key: 'step-1',
+        name: 'Restart service',
+        type: 'SYSTEMD',
+        riskClass: 'NON_IDEMPOTENT',
+        timeoutSeconds: 30,
+        config: { action: 'restart', unit: 'payments.service' },
+      },
+      inputValues: {},
+      secretInputKeys: [],
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-1',
+      signature: 'dummy',
+    };
+
+    const resultWrite = await executeAttempt(attemptWrite, policy, controllerWrite.signal);
+    expect(resultWrite.status).toBe('CANCELLED');
+    expect(resultWrite.errorCode).toBe('AGENT_INTERRUPTED_BY_SHUTDOWN');
+  });
+
+  it('records in-flight running write shutdown interrupt as UNKNOWN with AGENT_INTERRUPTED_BY_SHUTDOWN', async () => {
+    const { executeAttempt } = await import('../../../agent/src/executor');
+    const policy = {
+      allowedStepTypes: ['BASH'] as 'BASH'[],
+      allowNonIdempotent: true,
+      maxRuntimeSeconds: 30,
+      maxOutputBytes: 1024,
+      systemdUnits: [],
+      dockerContainers: [],
+      kubernetesNamespaces: [],
+      bashCommandPatterns: ['sleep 2'],
+    };
+
+    const controller = new AbortController();
+    const attempt: ClaimedAttempt = {
+      attemptId: 'att-write-running',
+      signingAgentId: 'agent1',
+      leaseToken: 'token',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      executionDeadlineAt: new Date(Date.now() + 60000).toISOString(),
+      step: {
+        key: 'step-write',
+        name: 'In-flight Write',
+        type: 'BASH',
+        riskClass: 'NON_IDEMPOTENT',
+        timeoutSeconds: 30,
+        config: { command: 'sleep 2' },
+      },
+      inputValues: {},
+      secretInputKeys: [],
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-2',
+      signature: 'dummy',
+    };
+
+    const executionPromise = executeAttempt(attempt, policy, controller.signal);
+    // Allow process to spawn and enter active execution
+    await new Promise(resolve => setTimeout(resolve, 80));
+    controller.abort('AGENT_SHUTDOWN');
+
+    const result = await executionPromise;
+    expect(result.status).toBe('UNKNOWN');
+    expect(result.errorCode).toBe('AGENT_INTERRUPTED_BY_SHUTDOWN');
+  });
+
+  it('records in-flight running read shutdown interrupt as CANCELLED with AGENT_SHUTDOWN', async () => {
+    const { executeAttempt } = await import('../../../agent/src/executor');
+    const policy = {
+      allowedStepTypes: ['BASH'] as 'BASH'[],
+      allowNonIdempotent: true,
+      maxRuntimeSeconds: 30,
+      maxOutputBytes: 1024,
+      systemdUnits: [],
+      dockerContainers: [],
+      kubernetesNamespaces: [],
+      bashCommandPatterns: ['sleep 2'],
+    };
+
+    const controller = new AbortController();
+    const attempt: ClaimedAttempt = {
+      attemptId: 'att-read-running',
+      signingAgentId: 'agent1',
+      leaseToken: 'token',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      executionDeadlineAt: new Date(Date.now() + 60000).toISOString(),
+      step: {
+        key: 'step-read',
+        name: 'In-flight Read',
+        type: 'BASH',
+        riskClass: 'READ_ONLY',
+        timeoutSeconds: 30,
+        config: { command: 'sleep 2' },
+      },
+      inputValues: {},
+      secretInputKeys: [],
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-3',
+      signature: 'dummy',
+    };
+
+    const executionPromise = executeAttempt(attempt, policy, controller.signal);
+    // Allow process to spawn and enter active execution
+    await new Promise(resolve => setTimeout(resolve, 80));
+    controller.abort('AGENT_SHUTDOWN');
+
+    const result = await executionPromise;
+    expect(result.status).toBe('CANCELLED');
+    expect(result.errorCode).toBe('AGENT_SHUTDOWN');
+  });
 });

@@ -1,21 +1,26 @@
 [Unit]
 Description=OpsKnight Runbook Agent
-After=network-online.target
-Wants=network-online.target
+After=network-online.target time-sync.target
+Wants=network-online.target time-sync.target
 
 [Service]
 Type=simple
 User=opsknight-agent
 Group=opsknight-agent
+UMask=0077
+StateDirectory=opsknight-agent
+StateDirectoryMode=0700
+ConfigurationDirectory=opsknight-agent
+ConfigurationDirectoryMode=0755
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
 EnvironmentFile=/etc/opsknight-agent/agent.env
-ExecStart=/usr/bin/node /usr/local/lib/opsknight-agent/opsknight-agent.mjs
+ExecStart=/opt/opsknight-agent/runtime/bin/node /opt/opsknight-agent/opsknight-agent.mjs
 Restart=always
 RestartSec=5
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectHome=true
-ProtectSystem=strict
-ReadWritePaths=/var/lib/opsknight-agent
 
 [Install]
 WantedBy=multi-user.target
+

@@ -53,12 +53,16 @@ function SetupBlock({ value }: { value: string }) {
 export default function AgentSetupInstructions({
   token,
   executionPublicKey,
+  appUrl,
 }: {
   token: string;
   executionPublicKey: string;
+  appUrl?: string;
 }) {
   const [image, setImage] = useState('ghcr.io/opsknight-labs/opsknight-agent:2.0.0');
   const [url, setUrl] = useState('http://opsknight-app:3000');
+  const nativeUrl = appUrl || 'https://opsknight.company.com';
+
   const [policyPath, setPolicyPath] = useState('../../agent/policy.container.json');
   const snippets = useMemo(() => {
     const helmImage = helmImageArguments(image);
@@ -93,16 +97,19 @@ helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \\
 
 # Choose integrated-agent or split-agent for your runtime.
 kubectl apply -k deploy/kubernetes/kustomize/profiles/integrated-agent`;
-    const linux = `# /etc/opsknight-agent/agent.env (mode 0600)
-OPSKNIGHT_URL=${url}
-OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=${token}
-OPSKNIGHT_EXECUTION_PUBLIC_KEY=${executionPublicKey}
-OPSKNIGHT_AGENT_POLICY_FILE=/etc/opsknight-agent/policy.json
-OPSKNIGHT_AGENT_DATA_DIR=/var/lib/opsknight-agent
+    const effectiveNativeUrl = url !== 'http://opsknight-app:3000' ? url : nativeUrl;
+    const linux = `# 1. Download official release installer (replace v2.0.0 with your release version tag if different)
+curl -fsSL https://github.com/opsknight-labs/OpsKnight/releases/download/v2.0.0/install.sh -o install.sh
+sudo bash install.sh \\
+  --url ${shellQuote(effectiveNativeUrl)} \\
+  --key ${shellQuote(executionPublicKey)} \\
+  --token ${shellQuote(token)}
 
+# 2. Run preflight diagnostics and verify service
+sudo /opt/opsknight-agent/preflight.sh
 sudo systemctl enable --now opsknight-agent`;
     return { compose, swarm, helm, kustomize, linux };
-  }, [image, policyPath, token, url, executionPublicKey]);
+  }, [image, policyPath, token, url, nativeUrl, executionPublicKey]);
 
   return (
     <div className="space-y-4 rounded-lg border bg-background p-4">

@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 // Identity and policy paths come only from the local operator's environment, never API input.
-/* eslint-disable security/detect-non-literal-fs-filename */
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { AgentApiError, AgentClient, enrollAgent } from './client';
 import { LeaseAuthority } from './lease';
@@ -12,6 +11,7 @@ import { executeAttempt } from './executor';
 import { probeCapabilities } from './capabilities';
 import { assertPolicyAllows, loadPolicy } from './policy';
 import { ResultSpool } from './spool';
+import { getAgentVersion } from './version';
 import type { AgentIdentity, ClaimedAttempt, SpoolRecord } from './types';
 
 const baseUrl = process.env.OPSKNIGHT_URL?.trim();
@@ -145,7 +145,35 @@ async function run() {
     }
   };
 
+  let clockError: string | null = null;
+  let lastClockCheck = 0;
+  let cachedClockSkew: number | null = null;
+
+  const checkClock = async (force = false): Promise<number | null> => {
+    const now = Date.now();
+    if (!force && lastClockCheck > 0 && now - lastClockCheck < 30_000) {
+      return cachedClockSkew;
+    }
+    try {
+      const { skewSeconds } = await client.checkServerClock();
+      lastClockCheck = now;
+      cachedClockSkew = skewSeconds;
+      if (skewSeconds > 60) {
+        clockError = `Agent clock differs from OpsKnight by ${skewSeconds}s. Execution claims paused until clock is synchronized.`;
+      } else {
+        clockError = null; // Clear immediately when clock becomes healthy
+      }
+    } catch {
+      if (lastClockCheck === 0 || cachedClockSkew === null) {
+        clockError =
+          'Initial clock synchronization check with control plane failed. Execution claims paused.';
+      }
+    }
+    return cachedClockSkew;
+  };
+
   const heartbeat = async () => {
+    await checkClock(false);
     const effective = await probeCapabilities(policy);
     await client.heartbeat({
       capabilities: effective.capabilities,
@@ -156,20 +184,41 @@ async function run() {
       spoolDepth: await spool.depth(),
       deadLetterDepth: await spool.deadLetterDepth(),
       activeAttemptCount: active,
-      lastError,
+      lastError: clockError || lastError,
     });
   };
   await heartbeat();
+
+  const drainFilePath = `${dataDirectory}/drain`;
+  const drainReadyFilePath = `${dataDirectory}/drain-ready`;
+
+  const checkDraining = async (): Promise<boolean> => {
+    try {
+      await access(drainFilePath);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   let publishingHealth = false;
   const publishHealth = async () => {
     if (publishingHealth) return;
     publishingHealth = true;
     try {
+      const draining = await checkDraining();
       await mkdir(dataDirectory, { recursive: true, mode: 0o700 });
       const temporary = `${dataDirectory}/health.${process.pid}.tmp`;
       await writeFile(
         temporary,
-        JSON.stringify({ pid: process.pid, updatedAt: Date.now(), ready: true }),
+        JSON.stringify({
+          pid: process.pid,
+          updatedAt: Date.now(),
+          ready: !draining && clockError === null,
+          draining,
+          activeAttemptCount: active,
+          version: getAgentVersion(),
+        }),
         { mode: 0o600 }
       );
       await rename(temporary, `${dataDirectory}/health.json`);
@@ -183,7 +232,7 @@ async function run() {
 
   const shutdown = () => {
     shuttingDown = true;
-    activeController?.abort();
+    activeController?.abort('AGENT_SHUTDOWN');
     clearInterval(heartbeatTimer);
     clearInterval(healthTimer);
     process.exitCode = 0;
@@ -194,6 +243,23 @@ async function run() {
   try {
     while (!shuttingDown) {
       await flushSpool();
+      const draining = await checkDraining();
+      if (draining) {
+        if (active === 0) {
+          try {
+            await writeFile(
+              drainReadyFilePath,
+              JSON.stringify({ draining: true, at: Date.now(), activeAttempts: 0 }),
+              { mode: 0o600 }
+            );
+          } catch {
+            // State directory write
+          }
+        }
+        await publishHealth();
+        await new Promise(resolve => setTimeout(resolve, 1_000));
+        continue;
+      }
       let attempt: ClaimedAttempt | null = null;
       let started = false;
       let renewTimer: NodeJS.Timeout | null = null;
@@ -201,15 +267,26 @@ async function run() {
       let resultPersisted = false;
       let outcomeKnown = false;
       try {
+        const skew = await checkClock(false);
+        if (skew === null || skew > 60) {
+          await new Promise(resolve => setTimeout(resolve, 5_000));
+          continue;
+        }
         attempt = await client.claim();
         if (!attempt) continue;
+        if (await checkDraining()) {
+          lastError = 'Execution claim released because Agent is draining.';
+          await client.releaseClaim(attempt.attemptId, attempt.leaseToken).catch(() => undefined);
+          continue;
+        }
         verifyExecutionEnvelope(attempt, executionPublicKey!, identity.agentId);
         if (
           attempt.secretInputKeys.length > 0 &&
           new URL(baseUrl!).protocol !== 'https:' &&
           !(
-            process.env.NODE_ENV === 'development' &&
-            process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true'
+            (process.env.NODE_ENV === 'development' &&
+              process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true') ||
+            process.env.OPSKNIGHT_ALLOW_INSECURE_HTTP === 'true'
           )
         ) {
           throw new Error('Secret-backed execution requires an HTTPS control-plane URL.');
@@ -295,18 +372,36 @@ async function run() {
         // Stop accepting work if a known outcome cannot reach durable storage.
         if (outcomeKnown && !resultPersisted) throw error;
         if (attempt && started && !resultPersisted) {
+          const isWrite = attempt.step.riskClass !== 'READ_ONLY';
           await spool.put({
             attemptId: attempt.attemptId,
             leaseToken: attempt.leaseToken,
             producedAt: new Date().toISOString(),
-            status: lastError.startsWith('LOCAL_POLICY_DENIED') ? 'FAILED' : 'UNKNOWN',
-            errorCode: lastError.startsWith('LOCAL_POLICY_DENIED')
-              ? 'LOCAL_POLICY_DENIED'
-              : 'AGENT_FAILURE',
-            errorMessage: lastError,
+            status: shuttingDown
+              ? isWrite
+                ? 'UNKNOWN'
+                : 'CANCELLED'
+              : lastError.startsWith('LOCAL_POLICY_DENIED')
+                ? 'FAILED'
+                : 'UNKNOWN',
+            errorCode: shuttingDown
+              ? isWrite
+                ? 'AGENT_INTERRUPTED_BY_SHUTDOWN'
+                : 'AGENT_SHUTDOWN'
+              : lastError.startsWith('LOCAL_POLICY_DENIED')
+                ? 'LOCAL_POLICY_DENIED'
+                : 'AGENT_FAILURE',
+            errorMessage: shuttingDown
+              ? isWrite
+                ? 'Execution was interrupted by process shutdown; target state is unknown.'
+                : 'Execution was cancelled by process shutdown.'
+              : lastError,
           });
         }
-        if (shuttingDown) break;
+        if (shuttingDown) {
+          await flushSpool().catch(() => undefined);
+          break;
+        }
         await new Promise(resolve => setTimeout(resolve, 2_000));
       }
     }
