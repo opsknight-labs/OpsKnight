@@ -44,6 +44,7 @@ import {
   RunbookExecutionInvalidTransitionError,
   RunbookExecutionNotFoundError,
 } from './errors';
+import { lockRunbookForShare } from './locking';
 
 const jobPayloadSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ADVANCE_EXECUTION'), executionId: z.string().cuid() }).strict(),
@@ -106,6 +107,7 @@ export async function startRunbookExecution(input: {
   triggerId?: string;
 }) {
   return prisma.$transaction(async tx => {
+    await lockRunbookForShare(tx, input.runbookId, { action: 'execute' });
     const runbook = await tx.runbook.findFirst({
       where: { id: input.runbookId, archivedAt: null },
       include: { publishedVersion: true },

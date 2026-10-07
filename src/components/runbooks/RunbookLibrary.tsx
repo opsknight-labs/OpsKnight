@@ -129,6 +129,7 @@ export default function RunbookLibrary({
     draftVersion: number | null;
     bindings: number;
     executions: number;
+    archivedAt?: string | null;
     updatedAt: string;
   }>;
   canManage: boolean;
@@ -149,7 +150,11 @@ export default function RunbookLibrary({
           <div className="min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-heading text-base font-semibold">{item.name}</h2>
-              <StatusBadge status={item.publishedVersion !== null ? 'PUBLISHED' : 'DRAFT'} />
+              <StatusBadge
+                status={
+                  item.archivedAt ? 'ARCHIVED' : item.publishedVersion !== null ? 'PUBLISHED' : 'DRAFT'
+                }
+              />
               {item.publishedVersion !== null && (
                 <span className="text-xs text-muted-foreground">v{item.publishedVersion}</span>
               )}

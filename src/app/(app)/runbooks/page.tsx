@@ -11,8 +11,8 @@ import {
   runbookPageQuery,
   RUNBOOK_PAGE_SIZE,
 } from '@/components/runbooks/RunbookPagination';
-import type { Prisma } from '@prisma/client';
 import { runbookLibraryFilterSchema } from '@/lib/runbooks/schemas';
+import { buildRunbookLibraryWhere } from '@/lib/runbooks/lifecycle';
 import { getUserTimeZone } from '@/lib/timezone';
 
 export const revalidate = 0;
@@ -27,34 +27,30 @@ export default async function RunbooksPage({
   const { query, page: requestedPage } = runbookPageQuery(await searchParams);
   const filter = runbookLibraryFilterSchema.parse({
     q: query.q,
-    status: ['published', 'draft'].includes(query.status) ? query.status : undefined,
+    status: ['all', 'published', 'draft', 'archived'].includes(query.status)
+      ? (query.status as 'all' | 'published' | 'draft' | 'archived')
+      : undefined,
+    tab: ['all', 'published', 'drafts', 'archived'].includes(query.tab)
+      ? (query.tab as 'all' | 'published' | 'drafts' | 'archived')
+      : undefined,
     ownerId: query.owner,
     serviceId: query.service,
     page: requestedPage,
   });
-  const where: Prisma.RunbookWhereInput = {
-    archivedAt: null,
-    ...(query.q
-      ? {
-          OR: [
-            { name: { contains: query.q, mode: 'insensitive' } },
-            { description: { contains: query.q, mode: 'insensitive' } },
-          ],
-        }
-      : {}),
-    ...(query.status === 'published'
-      ? { publishedVersionId: { not: null } }
-      : query.status === 'draft'
-        ? { draftVersionId: { not: null } }
-        : {}),
-    ...(filter.ownerId ? { createdById: filter.ownerId } : {}),
-    ...(filter.serviceId ? { bindings: { some: { serviceId: filter.serviceId } } } : {}),
-  };
+  const where = buildRunbookLibraryWhere(filter);
   const total = await prisma.runbook.count({ where });
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / RUNBOOK_PAGE_SIZE)));
-  const publishedCount = await prisma.runbook.count({
-    where: { archivedAt: null, publishedVersionId: { not: null } },
-  });
+  const [publishedCount, draftCount, archivedCount] = await Promise.all([
+    prisma.runbook.count({
+      where: { archivedAt: null, publishedVersionId: { not: null } },
+    }),
+    prisma.runbook.count({
+      where: { archivedAt: null, draftVersionId: { not: null } },
+    }),
+    prisma.runbook.count({
+      where: { archivedAt: { not: null } },
+    }),
+  ]);
   const [permissions, runbooks, executionCount, agents] = await Promise.all([
     getUserPermissions(),
     prisma.runbook.findMany({
@@ -84,17 +80,17 @@ export default async function RunbooksPage({
         statsPlacement="bottom"
         stats={[
           { label: 'Published', value: publishedCount },
+          { label: 'Drafts', value: draftCount },
           { label: 'Active executions', value: executionCount },
+          {
+            label: 'Archived',
+            value: archivedCount,
+            href: '/runbooks?status=archived',
+            active: filter.status === 'archived' || filter.tab === 'archived',
+          },
           {
             label: 'Online Agents',
             value: agents.find(row => row.status === 'ONLINE')?._count.id ?? 0,
-          },
-          {
-            label: 'Needs attention',
-            value: agents
-              .filter(row => ['OFFLINE', 'DEGRADED'].includes(row.status))
-              .reduce((sum, row) => sum + row._count.id, 0),
-            href: '/runbooks/health',
           },
         ]}
         actions={canManage ? <CreateRunbookDialog /> : undefined}
@@ -107,9 +103,11 @@ export default async function RunbooksPage({
           { name: 'owner', label: 'Owner ID' },
           { name: 'service', label: 'Service binding ID' },
         ]}
+        allStatusLabel="All Active"
         statusOptions={[
           { value: 'published', label: 'Published' },
           { value: 'draft', label: 'Draft' },
+          { value: 'archived', label: 'Archived' },
         ]}
       />
       <RunbookLibrary
@@ -123,6 +121,7 @@ export default async function RunbooksPage({
           draftVersion: item.draftVersion?.version ?? null,
           bindings: item._count.bindings,
           executions: item._count.executions,
+          archivedAt: item.archivedAt?.toISOString() ?? null,
           updatedAt: item.updatedAt.toISOString(),
         }))}
       />

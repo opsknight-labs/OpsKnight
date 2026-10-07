@@ -18,32 +18,57 @@ const TRANSACTION_MAX_WAIT_MS = Number(
 // Exponential backoff delays for retries (ms)
 const RETRY_DELAYS = [20, 50, 100, 200, 400];
 
-function isRetryableTransactionError(error: unknown): boolean {
+export function isRetryableTransactionError(error: unknown): boolean {
+  if (!error) return false;
+
   const code =
-    error && typeof error === 'object' && 'code' in error
+    typeof error === 'object' && 'code' in error && error.code != null
       ? String(error.code)
       : null;
-  if (error instanceof Prisma.PrismaClientKnownRequestError || code !== null) {
-    // 40P01 = PostgreSQL deadlock detected
-    // 40001 = PostgreSQL serialization failure
-    // P2034 = Transaction failed due to write conflict or deadlock
-    // P2002 = Unique constraint violation (can be retryable in race conditions)
-    // P2028 = Transaction API error
-    return (
-      code === '40P01' ||
-      code === '40001' ||
-      code === 'P2034' ||
-      code === 'P2002' ||
-      code === 'P2028'
-    );
+
+  const meta =
+    typeof error === 'object' && 'meta' in error && error.meta && typeof error.meta === 'object'
+      ? (error.meta as Record<string, unknown>)
+      : null;
+
+  const metaCode =
+    meta && meta.code != null
+      ? String(meta.code)
+      : meta && meta.database_code != null
+        ? String(meta.database_code)
+        : null;
+
+  const RETRYABLE_CODES = new Set([
+    '40001', // PostgreSQL serialization_failure
+    '40P01', // PostgreSQL deadlock_detected
+    'P2034', // Prisma transaction failed due to write conflict or deadlock
+    'P2002', // Prisma unique constraint violation (retryable in concurrent upsert/create races)
+    'P2028', // Prisma transaction API error
+  ]);
+
+  if (code && RETRYABLE_CODES.has(code)) {
+    return true;
   }
-  const message = error instanceof Error ? error.message : '';
+
+  if (metaCode && RETRYABLE_CODES.has(metaCode)) {
+    return true;
+  }
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' && error && 'message' in error && typeof error.message === 'string'
+        ? error.message
+        : '';
+  const metaMessage = meta && typeof meta.message === 'string' ? meta.message : '';
+  const combined = `${message} ${metaMessage}`.toLowerCase();
+
   return (
-    message.includes('Serialization') ||
-    message.includes('deadlock') ||
-    message.includes('write conflict') ||
-    message.includes('could not serialize') ||
-    message.includes('concurrent update')
+    combined.includes('serialization') ||
+    combined.includes('deadlock') ||
+    combined.includes('write conflict') ||
+    combined.includes('could not serialize') ||
+    combined.includes('concurrent update')
   );
 }
 

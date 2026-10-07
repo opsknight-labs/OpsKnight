@@ -62,6 +62,54 @@ export class RunbookInputKeyDuplicateError extends RunbookError {
 }
 
 // ---------------------------------------------------------------------------
+// Lifecycle Errors
+// ---------------------------------------------------------------------------
+
+export class RunbookNotFoundError extends RunbookError {
+  constructor(runbookId: string) {
+    super({
+      code: 'RUNBOOK_NOT_FOUND',
+      userMessage: 'The specified runbook was not found.',
+      details: { runbookId },
+    });
+    this.name = 'RunbookNotFoundError';
+  }
+}
+
+export class RunbookCannotDeleteError extends RunbookError {
+  constructor(reason: string, details?: Record<string, unknown>) {
+    super({
+      code: 'RUNBOOK_CANNOT_DELETE',
+      userMessage: reason,
+      details,
+    });
+    this.name = 'RunbookCannotDeleteError';
+  }
+}
+
+export class RunbookRestoreError extends RunbookError {
+  constructor(message: string, details?: Record<string, unknown>) {
+    super({
+      code: 'RUNBOOK_RESTORE_ERROR',
+      userMessage: message,
+      details,
+    });
+    this.name = 'RunbookRestoreError';
+  }
+}
+
+export class RunbookArchivedError extends RunbookError {
+  constructor(runbookId: string, action: string = 'modify') {
+    super({
+      code: 'RUNBOOK_ARCHIVED',
+      userMessage: `Cannot ${action} an archived runbook. Restore the runbook first.`,
+      details: { runbookId, action },
+    });
+    this.name = 'RunbookArchivedError';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Version Errors
 // ---------------------------------------------------------------------------
 

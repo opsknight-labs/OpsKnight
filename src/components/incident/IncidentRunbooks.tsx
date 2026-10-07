@@ -73,7 +73,13 @@ export default async function IncidentRunbooks({
       take: 20,
     }),
     prisma.runbookSuggestion.findMany({
-      where: { incidentId, state: 'SUGGESTED' },
+      where: {
+        incidentId,
+        state: 'SUGGESTED',
+        binding: {
+          runbook: { archivedAt: null },
+        },
+      },
       include: {
         binding: { include: { runbook: true } },
         runbookVersion: { select: { version: true } },

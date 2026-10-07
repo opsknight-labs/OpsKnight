@@ -13,6 +13,7 @@ import {
 } from './schemas';
 import { flattenSteps, isSecretReference, parseRunbookDefinition } from './definition';
 import { RunbookDefinitionError, RunbookVersionNotFoundError } from './errors';
+import { lockRunbookForUpdate } from './locking';
 import { requiresAgent } from './types';
 
 function isDuration(value: string): boolean {
@@ -173,6 +174,7 @@ export async function createServiceBinding(
 ) {
   const input = createServiceRunbookBindingSchema.parse(raw);
   return prisma.$transaction(async tx => {
+    await lockRunbookForUpdate(tx, input.runbookId, { action: 'bind' });
     const service = await tx.service.findUnique({ where: { id: serviceId }, select: { id: true } });
     if (!service) throw new RunbookDefinitionError('Service not found.');
     const version = await resolveBindingVersion(
@@ -237,6 +239,7 @@ export async function updateServiceBinding(
       where: { id: bindingId, serviceId },
     });
     if (!current) throw new RunbookDefinitionError('Service runbook binding not found.');
+    await lockRunbookForUpdate(tx, current.runbookId, { action: 'update binding for' });
     const strategy = input.versionStrategy ?? current.versionStrategy;
     const requestedVersionId =
       input.runbookVersionId === undefined ? current.runbookVersionId : input.runbookVersionId;
@@ -341,6 +344,7 @@ export async function replaceBindingTrigger(
       where: { id: bindingId, serviceId },
     });
     if (!binding) throw new RunbookDefinitionError('Service runbook binding not found.');
+    await lockRunbookForUpdate(tx, binding.runbookId, { action: 'configure triggers for' });
     await tx.runbookTrigger.deleteMany({ where: { bindingId, event: input.event } });
     const trigger = await tx.runbookTrigger.create({
       data: {
