@@ -6,11 +6,11 @@ WORKDIR /src
 RUN npm install --global esbuild@0.28.2
 COPY agent ./agent
 RUN esbuild agent/src/index.ts --bundle --platform=node --target=node24 --format=esm --packages=external --banner:js='import { createRequire as __cr } from "module"; const require = __cr(import.meta.url);' --outfile=/out/opsknight-agent.mjs \
-  && echo -n "${OPSKNIGHT_VERSION#v}" > /out/VERSION
+  && echo -n "${OPSKNIGHT_VERSION}" > /out/VERSION
 
 FROM node:24.21.0-alpine
 ARG OPSKNIGHT_VERSION
-ENV OPSKNIGHT_AGENT_VERSION=${OPSKNIGHT_VERSION#v}
+ENV OPSKNIGHT_AGENT_VERSION=${OPSKNIGHT_VERSION}
 RUN apk add --no-cache bash docker-cli podman iproute2 kubectl procps \
   && addgroup -S opsknight-agent && adduser -S -G opsknight-agent opsknight-agent \
   && mkdir -p /var/lib/opsknight-agent /etc/opsknight-agent \

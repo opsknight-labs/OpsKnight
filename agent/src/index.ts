@@ -12,6 +12,7 @@ import { executeAttempt } from './executor';
 import { probeCapabilities } from './capabilities';
 import { assertPolicyAllows, loadPolicy } from './policy';
 import { ResultSpool } from './spool';
+import { getAgentVersion } from './version';
 import type { AgentIdentity, ClaimedAttempt, SpoolRecord } from './types';
 
 const baseUrl = process.env.OPSKNIGHT_URL?.trim();
@@ -217,7 +218,7 @@ async function run() {
           ready: !draining && clockError === null,
           draining,
           activeAttemptCount: active,
-          version: process.env.OPSKNIGHT_AGENT_VERSION ?? '2.0.0',
+          version: getAgentVersion(),
         }),
         { mode: 0o600 }
       );
@@ -274,13 +275,18 @@ async function run() {
         }
         attempt = await client.claim();
         if (!attempt) continue;
+        if (await checkDraining()) {
+          lastError = 'Execution claim skipped because Agent is draining.';
+          continue;
+        }
         verifyExecutionEnvelope(attempt, executionPublicKey!, identity.agentId);
         if (
           attempt.secretInputKeys.length > 0 &&
           new URL(baseUrl!).protocol !== 'https:' &&
           !(
-            process.env.NODE_ENV === 'development' &&
-            process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true'
+            (process.env.NODE_ENV === 'development' &&
+              process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true') ||
+            process.env.OPSKNIGHT_ALLOW_INSECURE_HTTP === 'true'
           )
         ) {
           throw new Error('Secret-backed execution requires an HTTPS control-plane URL.');

@@ -75,6 +75,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --allow-insecure-http)
       ALLOW_INSECURE_HTTP=true
+      export OPSKNIGHT_ALLOW_INSECURE_HTTP=true
       shift 1
       ;;
     --version)
@@ -626,6 +627,39 @@ rollback_and_fail() {
   exit 1
 }
 
+# Prepare for directory swap: if service is currently active, drain and stop it first
+AGENT_PREVIOUS_PID="0"
+if [[ "${SERVICE_WAS_ACTIVE}" == "true" ]] && command -v systemctl >/dev/null 2>&1; then
+  if [[ "${NO_RESTART}" != "true" ]]; then
+    AGENT_PREVIOUS_PID="$(systemctl show opsknight-agent --property=MainPID --value 2>/dev/null || echo "0")"
+    if [[ "${AGENT_PREVIOUS_PID}" -gt 0 ]]; then
+      echo "Requesting Agent drain via ${STATE_DIR}/drain..."
+      touch "${STATE_DIR}/drain"
+      chown "${SERVICE_USER}:${SERVICE_USER}" "${STATE_DIR}/drain" 2>/dev/null || true
+      rm -f "${STATE_DIR}/drain-ready"
+
+      DRAIN_WAITED=0
+      DRAINED=false
+      while [[ ${DRAIN_WAITED} -lt 45 ]]; do
+        if [[ -f "${STATE_DIR}/drain-ready" ]]; then
+          DRAINED=true
+          echo "Agent execution drain complete: [OK]"
+          break
+        fi
+        sleep 1
+        DRAIN_WAITED=$((DRAIN_WAITED + 1))
+      done
+      if [[ "${DRAINED}" != "true" ]]; then
+        echo "WARNING: In-flight execution did not complete within 45s. Interruption will record target state as UNKNOWN." >&2
+      fi
+    fi
+
+    echo "Stopping opsknight-agent service for upgrade..."
+    systemctl stop opsknight-agent 2>/dev/null || true
+    rm -f "${STATE_DIR}/drain" "${STATE_DIR}/drain-ready"
+  fi
+fi
+
 # Arm transaction-wide error trap across staging activation, configuration, and restart
 trap 'rollback_and_fail "Command failed on line $LINENO (exit code $?)."' ERR
 
@@ -678,6 +712,11 @@ if [[ -n "${ENROLLMENT_TOKEN}" ]]; then
   echo "OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=${ENROLLMENT_TOKEN}" >> "${ENV_FILE}"
 fi
 
+if [[ "${ALLOW_INSECURE_HTTP}" == "true" ]]; then
+  sed -i '/^OPSKNIGHT_ALLOW_INSECURE_HTTP=/d' "${ENV_FILE}" 2>/dev/null || true
+  echo "OPSKNIGHT_ALLOW_INSECURE_HTTP=true" >> "${ENV_FILE}"
+fi
+
 # Prevent silent key shadowing:
 # If plural keys JSON is provided, set it and clear singular key.
 # If singular key is provided, set it and clear plural keys.
@@ -692,40 +731,17 @@ elif [[ -n "${EXECUTION_PUBLIC_KEY}" ]]; then
   echo "OPSKNIGHT_EXECUTION_PUBLIC_KEY=${CLEAN_KEY}" >> "${ENV_FILE}"
 fi
 
-# 9. Active service drain & restart on upgrade
+# 9. Start service and verify health on upgrade
 if [[ "${SERVICE_WAS_ACTIVE}" == "true" ]] && command -v systemctl >/dev/null 2>&1; then
   if [[ "${NO_RESTART}" == "true" ]]; then
-    echo "Notice: opsknight-agent service is currently running."
+    echo "Notice: opsknight-agent service was previously active."
     echo "Skipping automatic restart (--no-restart requested)."
-    echo "To restart manually: sudo systemctl restart opsknight-agent"
+    echo "To start service: sudo systemctl start opsknight-agent"
   else
-    AGENT_PID="$(systemctl show opsknight-agent --property=MainPID --value 2>/dev/null || echo "0")"
-    if [[ "${AGENT_PID}" -gt 0 ]]; then
-      echo "Requesting Agent drain via ${STATE_DIR}/drain..."
-      touch "${STATE_DIR}/drain"
-      chown "${SERVICE_USER}:${SERVICE_USER}" "${STATE_DIR}/drain" 2>/dev/null || true
-      rm -f "${STATE_DIR}/drain-ready"
-
-      DRAIN_WAITED=0
-      DRAINED=false
-      while [[ ${DRAIN_WAITED} -lt 30 ]]; do
-        if [[ -f "${STATE_DIR}/drain-ready" ]]; then
-          DRAINED=true
-          echo "Agent execution drain complete: [OK]"
-          break
-        fi
-        sleep 1
-        DRAIN_WAITED=$((DRAIN_WAITED + 1))
-      done
-      if [[ "${DRAINED}" != "true" ]]; then
-        echo "WARNING: In-flight execution did not complete within 30s. Interruption will record target state as UNKNOWN." >&2
-      fi
-    fi
-
     RESTART_START_TIME="$(date +%s000 2>/dev/null || node -e 'console.log(Date.now())' 2>/dev/null || echo "0")"
-    echo "Restarting opsknight-agent service..."
-    if ! systemctl restart opsknight-agent; then
-      rollback_and_fail "systemctl restart opsknight-agent failed."
+    echo "Starting opsknight-agent service..."
+    if ! systemctl start opsknight-agent; then
+      rollback_and_fail "systemctl start opsknight-agent failed."
     fi
 
     echo "Verifying service startup and runtime health..."
@@ -740,7 +756,7 @@ if [[ "${SERVICE_WAS_ACTIVE}" == "true" ]] && command -v systemctl >/dev/null 2>
       fi
 
       NEW_PID="$(systemctl show opsknight-agent --property=MainPID --value 2>/dev/null || echo "0")"
-      if [[ -z "${NEW_PID}" || "${NEW_PID}" == "0" || "${NEW_PID}" == "${AGENT_PID}" ]]; then
+      if [[ -z "${NEW_PID}" || "${NEW_PID}" == "0" || "${NEW_PID}" == "${AGENT_PREVIOUS_PID}" ]]; then
         continue
       fi
 
@@ -767,7 +783,7 @@ if [[ "${SERVICE_WAS_ACTIVE}" == "true" ]] && command -v systemctl >/dev/null 2>
     if [[ "${HEALTH_VERIFIED}" != "true" ]]; then
       rollback_and_fail "Agent service restart did not reach healthy active state with valid health.json. Check logs: sudo journalctl -u opsknight-agent -n 50"
     fi
-    echo "Agent service successfully restarted and verified healthy (PID ${NEW_PID}): [OK]"
+    echo "Agent service successfully started and verified healthy (PID ${NEW_PID}): [OK]"
   fi
 fi
 

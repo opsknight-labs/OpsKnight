@@ -176,8 +176,9 @@ export async function enrollAgent(baseUrl: string, token: string): Promise<Agent
     parsedUrl.protocol !== 'https:' &&
     !isLoopback &&
     !(
-      process.env.NODE_ENV === 'development' &&
-      process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true'
+      (process.env.NODE_ENV === 'development' &&
+        process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true') ||
+      process.env.OPSKNIGHT_ALLOW_INSECURE_HTTP === 'true'
     )
   ) {
     throw new Error('Enrollment token transport requires an HTTPS control-plane URL.');
