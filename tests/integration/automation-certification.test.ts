@@ -346,7 +346,7 @@ describe('service automation transaction certification', () => {
       })
     ).toBe(0);
   });
-  it('a deleted historical pinned policy cannot silently reroute a reopened incident', async () => {
+  it('historical pinned policies remain available for reopening after version deactivation', async () => {
     const pinned = await db.escalationPolicy.create({ data: { name: 'Pinned policy' } });
     const replacement = await db.escalationPolicy.create({ data: { name: 'New default' } });
     const { service, actor, draft, version } = await setup({
@@ -387,18 +387,19 @@ describe('service automation transaction certification', () => {
       where: { id: service.id },
       data: { escalationPolicyId: replacement.id },
     });
-    await db.escalationPolicy.delete({ where: { id: pinned.id } });
-    await expect(
-      db.$transaction(tx =>
-        applyIncidentLifecycleCommand(tx, {
-          incidentId: incident.id,
-          command: 'REOPEN',
-          source: 'SYSTEM',
-        })
-      )
-    ).rejects.toThrow('pinned to this incident was deleted');
+    await expect(db.escalationPolicy.delete({ where: { id: pinned.id } })).rejects.toThrow();
+    await db.$transaction(tx =>
+      applyIncidentLifecycleCommand(tx, {
+        incidentId: incident.id,
+        command: 'REOPEN',
+        source: 'SYSTEM',
+      })
+    );
     expect((await db.incident.findUniqueOrThrow({ where: { id: incident.id } })).status).toBe(
-      'RESOLVED'
+      'OPEN'
+    );
+    expect((await resolveIncidentResponderRouting(incident.id, service.id)).policy?.id).toBe(
+      pinned.id
     );
   });
   it('NO_ESCALATION stays closed through reopen', async () => {

@@ -242,12 +242,12 @@ export async function deletePolicy(policyId: string) {
     where: { escalationPolicyId: policyId, version: { activeConfig: { isNot: null } } },
     select: { version: { select: { service: { select: { name: true } } } } },
   });
-  const activeDecisions = await prisma.incidentAutomationDecision.count({
-    where: { escalationPolicyId: policyId, incident: { status: { not: 'RESOLVED' } } },
+  const pinnedDecisions = await prisma.incidentAutomationDecision.count({
+    where: { escalationPolicyId: policyId },
   });
-  if (automationReferences.length || activeDecisions)
+  if (automationReferences.length || pinnedDecisions)
     return {
-      error: `Cannot delete policy: published automation or ${activeDecisions} active incident(s) reference it. Publish a replacement route and resolve active incidents first.`,
+      error: `Cannot delete policy: published automation or ${pinnedDecisions} pinned incident(s) reference it. Historical incident routes must remain available for reopen. Publish a replacement route; policies referenced by incident decisions cannot be deleted.`,
     };
 
   // Check if policy is used by any services

@@ -40,28 +40,53 @@ const jobSchema = z.discriminatedUnion('task', [
       observations: z.array(observationSchema).max(64),
     })
     .strict(),
-  z.object({ task: z.literal('AUTOMATION_RETENTION') }).strict(),
+  z
+    .object({ task: z.literal('AUTOMATION_RETENTION'), cutoff: z.string().datetime().optional() })
+    .strict(),
 ]);
 export async function processAutomationJob(payload: unknown) {
   const job = jobSchema.parse(payload);
   if (job.task === 'AUTOMATION_RETENTION') {
     const requested = (await getAutomationSettings()).automationTraceRetentionDays;
     const days = Number.isFinite(requested) ? Math.max(1, Math.min(3650, requested)) : 90;
-    const before = new Date(Date.now() - days * 86400000);
-    const traces = await prisma.automationTrace.findMany({
-      where: { evaluationAt: { lt: before } },
-      select: { id: true },
-      take: 1000,
-    });
-    await prisma.automationTrace.deleteMany({ where: { id: { in: traces.map(t => t.id) } } });
-    const observations = await prisma.automationContextObservation.findMany({
-      where: { lastSeenAt: { lt: before } },
-      select: { id: true },
-      take: 1000,
-    });
-    await prisma.automationContextObservation.deleteMany({
-      where: { id: { in: observations.map(o => o.id) } },
-    });
+    const configuredCutoff = Date.now() - days * 86400000;
+    const before = new Date(
+      Math.min(job.cutoff ? Date.parse(job.cutoff) : configuredCutoff, configuredCutoff)
+    );
+    // Each job spends at most one bounded batch on maintenance. Deletion and
+    // continuation share a transaction: a crash cannot strand the expired backlog.
+    await prisma.$transaction(
+      async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('automation-retention', 0))`;
+        const traces = await tx.automationTrace.findMany({
+          where: { evaluationAt: { lt: before } },
+          select: { id: true },
+          orderBy: [{ evaluationAt: 'asc' }, { id: 'asc' }],
+          take: 1000,
+        });
+        await tx.automationTrace.deleteMany({ where: { id: { in: traces.map(t => t.id) } } });
+        const observations = await tx.automationContextObservation.findMany({
+          where: { lastSeenAt: { lt: before } },
+          select: { id: true },
+          orderBy: [{ lastSeenAt: 'asc' }, { id: 'asc' }],
+          take: 1000,
+        });
+        await tx.automationContextObservation.deleteMany({
+          where: { id: { in: observations.map(o => o.id) } },
+        });
+        if (traces.length === 1000 || observations.length === 1000) {
+          await tx.backgroundJob.create({
+            data: {
+              type: 'SCHEDULED_TASK',
+              scheduledAt: new Date(),
+              maxAttempts: 5,
+              payload: { task: 'AUTOMATION_RETENTION', cutoff: before.toISOString() },
+            },
+          });
+        }
+      },
+      { timeout: 10000 }
+    );
     return;
   }
   if (job.task === 'AUTOMATION_OBSERVE') {

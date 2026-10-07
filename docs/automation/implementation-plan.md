@@ -1664,25 +1664,25 @@ Freeze this in code and docs.
 
 # Phase 29 — Global kill switch
 
-Add environment control:
+Use the shared database-backed administrator control:
 
 ```text
-OPSKNIGHT_AUTOMATION_ENABLED=false
+System Settings → Automation → global OFF
 ```
 
 Evaluation order:
 
 ```text
-environment flag OFF
+shared global switch OFF
     ↓
 skip everything
 
-environment ON
+shared global switch ON
     ↓
 check service mode
 ```
 
-Optional UI-level emergency disable can exist in `SystemSettings`, but environment OFF must always have highest priority.
+The administrator UI writes `SystemSettings`. Every replica reads the shared switch before evaluation; changes require no environment files or restart. Retention is configured in the same UI.
 
 This gives deployment operators a true emergency stop.
 
@@ -2984,7 +2984,7 @@ Prisma schema
 Even after merge:
 
 ```text
-OPSKNIGHT_AUTOMATION_ENABLED=false
+System Settings → Automation → global OFF
 ```
 
 Deploy.
