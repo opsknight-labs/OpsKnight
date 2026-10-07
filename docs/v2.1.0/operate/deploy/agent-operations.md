@@ -175,7 +175,78 @@ Use `OPSKNIGHT_AGENT_URL=http://opsknight-app:3000` with the integrated stack. T
 
 ## Native Linux service
 
-Install the bundled module at `/usr/local/lib/opsknight-agent/opsknight-agent.mjs`, copy `agent/opsknight-agent.service`, create the `opsknight-agent` system user, and place configuration under `/etc/opsknight-agent`. The environment file needs `OPSKNIGHT_URL` and the enrollment token only for first start. Restrict both the environment file and identity directory to the service account.
+OpsKnight provides an automated, self-contained enterprise installer that supports Amazon Linux 2023, Ubuntu 22.04/24.04/26.04, Debian 12/13, RHEL 9/10, Rocky, AlmaLinux, and SLES 15 SP3+ (requires glibc ≥ 2.28; SLES 15 GA-SP2 with glibc 2.26 is unsupported) on both `x86_64` and `arm64/aarch64`. The installer provisions a bundled Node 24 LTS runtime (pinned v24.21.0), eliminating host Node.js and external repository dependencies.
+
+### Standard Layout & File Permissions
+
+| Directory / File | Ownership | Permissions | Purpose |
+| :--- | :--- | :--- | :--- |
+| `/opt/opsknight-agent/` | `root:root` | `0755` | Standalone binary and bundled Node 24 runtime (`runtime/bin/node`) |
+| `/etc/opsknight-agent/policy.json` | `root:opsknight-agent` | `0644` | Local capability allowlist and action policy |
+| `/etc/opsknight-agent/agent.env` | `root:root` | `0600` | Sensitive enrollment tokens, control plane configuration, and execution keys |
+| `/var/lib/opsknight-agent/` | `opsknight-agent:opsknight-agent` | `0700` | Private identity (`identity.json`), leases, and durable spool |
+
+### One-Command Installation
+
+1. Generate a one-time enrollment token and note the execution signing public key in **Runbooks → Agents → Enroll Agent**.
+2. Run the official installer on your target host (tokens can also be passed via `--token-file` to avoid process table exposure):
+   ```bash
+   sudo ./deploy/agent/install.sh \
+     --url https://opsknight.company.com \
+     --key "<BASE64_EXECUTION_PUBLIC_KEY>" \
+     --token <ONE_TIME_ENROLLMENT_TOKEN>
+   ```
+   For staged signing key rotation, pass the plural key map via `--keys-json`:
+   ```bash
+   sudo ./deploy/agent/install.sh \
+     --url https://opsknight.company.com \
+     --keys-json '{"active":"<KEY_1>","next":"<KEY_2>"}' \
+     --token <ONE_TIME_ENROLLMENT_TOKEN>
+   ```
+3. Run diagnostic preflight checks (must run as root to inspect `root:root 0600` `agent.env`):
+   ```bash
+   sudo /opt/opsknight-agent/preflight.sh
+   ```
+4. Enable and start the systemd service:
+   ```bash
+   sudo systemctl enable --now opsknight-agent
+   sudo systemctl status opsknight-agent
+   ```
+
+### Transactional Upgrades & Rotation
+
+To upgrade an existing native Agent installation, re-run `install.sh` pointing to the new release or artifact tarball:
+```bash
+sudo ./deploy/agent/install.sh \
+  --url https://opsknight.company.com \
+  --tarball /path/to/opsknight-agent-linux-x64.tar.gz
+```
+The installer executes transactionally:
+1. Validates the new bundle in an isolated staging directory.
+2. Preserves existing private identity in `/var/lib/opsknight-agent` and local policy in `/etc/opsknight-agent/policy.json`.
+3. Atomically replaces `/opt/opsknight-agent` with rollback on failure.
+4. Reloads systemd units (`systemctl daemon-reload`).
+5. Restarts the active service automatically if it was running. To defer the restart, supply `--no-restart`.
+
+### Host-Native Container & Kubernetes Privileges
+
+Because `opsknight-agent.service` runs unprivileged under `NoNewPrivileges=true` and `ProtectHome=true`:
+- **Systemd Executor**: Grant narrow Polkit authorization rules for the unprivileged `opsknight-agent` user (e.g. in `/etc/polkit-1/rules.d/50-opsknight-agent.rules`), rather than sudoers.
+- **Docker**: Add the service user to the host `docker` group (`sudo usermod -aG docker opsknight-agent`), or expose a scoped Unix socket with group read/write.
+- **Podman**: Configure rootless Podman socket access or system service connections; do not expose unauthenticated TCP sockets.
+- **Kubernetes**: Due to `ProtectHome=true`, store kubeconfig files in `/etc/opsknight-agent/kubeconfig` rather than home directories, and reference it via `KUBECONFIG` in `/etc/opsknight-agent/agent.env`. Narrow RBAC permissions to only allowlisted namespaces.
+
+### Troubleshooting Matrix
+
+| Symptom | Likely Cause | Resolution |
+| :--- | :--- | :--- |
+| `pgrep: command not found` | Missing `procps` / `procps-ng` | Run installer or install `procps-ng` (RHEL) / `procps` (Debian). |
+| `EACCES /var/lib/opsknight-agent` | Incorrect permissions on state directory | Verify `chown -R opsknight-agent:opsknight-agent /var/lib/opsknight-agent` and `chmod 0700`. |
+| `Permission denied reading agent.env` | Running preflight without root | Run `sudo /opt/opsknight-agent/preflight.sh` (`agent.env` is mode `0600 root:root`). |
+| `Agent request timestamp is outside allowed window` | Clock drift $>60\text{s}$ | Synchronize system clock via `chrony` (`chronyc tracking`) or `timedatectl`. |
+| `Unsupported architecture` | Host architecture other than `x86_64` or `arm64` | Deploy Agent on supported 64-bit x86 or ARM Graviton architecture. |
+| `Bundled node binary failed to execute` | Incompatible libc (glibc < 2.28) | Deploy on supported OS with glibc ≥ 2.28 (e.g. SLES 15 SP3+, RHEL 9+, AL2023, Ubuntu 22.04+). |
+| `Agent offline after reboot` | Unpersisted state directory or network delay | Verify `/var/lib/opsknight-agent` mounts across reboot; systemd unit waits for `network-online.target` and `time-sync.target`. |
 
 ## Monitoring and recovery
 

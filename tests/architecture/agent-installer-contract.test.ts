@@ -30,7 +30,7 @@ describe('Installer logic and OS-release contract', () => {
     expect(installScript).toContain('sles|opensuse*)');
   });
 
-  it('enforces mandatory non-root systemd service contract', () => {
+  it('enforces mandatory non-root systemd service contract with strict environment file', () => {
     const serviceUnit = readFileSync('agent/opsknight-agent.service', 'utf8');
     expect(serviceUnit).toContain('User=opsknight-agent');
     expect(serviceUnit).toContain('Group=opsknight-agent');
@@ -41,6 +41,8 @@ describe('Installer logic and OS-release contract', () => {
     expect(serviceUnit).toContain('ProtectHome=true');
     expect(serviceUnit).toContain('PrivateTmp=true');
     expect(serviceUnit).toContain('NoNewPrivileges=true');
+    expect(serviceUnit).toContain('EnvironmentFile=/etc/opsknight-agent/agent.env');
+    expect(serviceUnit).not.toContain('EnvironmentFile=-');
     expect(serviceUnit).toContain('ExecStart=/opt/opsknight-agent/runtime/bin/node /opt/opsknight-agent/opsknight-agent.mjs');
     expect(serviceUnit).toContain('After=network-online.target time-sync.target');
     expect(serviceUnit).toContain('Wants=network-online.target time-sync.target');
@@ -57,9 +59,17 @@ describe('Installer logic and OS-release contract', () => {
     expect(installScript).toContain('Artifact checksum verified');
   });
 
-  it('writes correct agent enrollment and execution signing environment variables', () => {
+  it('fails closed when local tarball is missing instead of falling back to remote download', () => {
+    expect(installScript).toContain('if [[ -n "${TARBALL_OVERRIDE}" ]]');
+    expect(installScript).toContain('ERROR: Specified local tarball \'${TARBALL_OVERRIDE}\' does not exist.');
+  });
+
+  it('writes correct agent enrollment and execution signing environment variables and supports rotation', () => {
     expect(installScript).toContain('OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=');
     expect(installScript).toContain('OPSKNIGHT_EXECUTION_PUBLIC_KEY=');
+    expect(installScript).toContain('OPSKNIGHT_EXECUTION_PUBLIC_KEYS=');
+    expect(installScript).toContain('--keys-json');
+    expect(installScript).toContain('--keys-file');
     expect(installScript).not.toContain('OPSKNIGHT_ENROLLMENT_TOKEN=');
   });
 
@@ -70,13 +80,22 @@ describe('Installer logic and OS-release contract', () => {
 
   it('verifies bundled node runtime execution compatibility before service enablement', () => {
     expect(installScript).toContain('The bundled Node 24 runtime cannot execute on this host');
-    expect(installScript).toContain('requires glibc >= 2.28 or musl');
+    expect(installScript).toContain('requires glibc >= 2.28');
   });
 
-  it('fails preflight when bundled node execution fails or configuration is incomplete', () => {
+  it('performs transactional staging and safe service restart on upgrade', () => {
+    expect(installScript).toContain('STAGE_DIR=');
+    expect(installScript).toContain('BACKUP_DIR=');
+    expect(installScript).toContain('SERVICE_WAS_ACTIVE=');
+    expect(installScript).toContain('systemctl restart opsknight-agent');
+    expect(installScript).toContain('--no-restart');
+  });
+
+  it('fails preflight when bundled node execution fails, keys are invalid, or configuration is incomplete', () => {
     const preflightScript = readFileSync('deploy/agent/preflight.sh', 'utf8');
     expect(preflightScript).toContain('Bundled node binary at ${NODE_BIN} failed to execute');
-    expect(preflightScript).toContain('OPSKNIGHT_EXECUTION_PUBLIC_KEY missing in ${ENV_FILE}');
+    expect(preflightScript).toContain('OPSKNIGHT_EXECUTION_PUBLIC_KEY or OPSKNIGHT_EXECUTION_PUBLIC_KEYS missing in ${ENV_FILE}');
     expect(preflightScript).toContain('Neither existing ${IDENTITY_FILE} nor OPSKNIGHT_AGENT_ENROLLMENT_TOKEN is present');
+    expect(preflightScript).toContain('sudo ${INSTALL_PREFIX}/preflight.sh');
   });
 });

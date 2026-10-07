@@ -9,6 +9,15 @@ CONFIG_DIR="${OPSKNIGHT_CONFIG_DIR:-/etc/opsknight-agent}"
 STATE_DIR="${OPSKNIGHT_STATE_DIR:-/var/lib/opsknight-agent}"
 SERVICE_USER="opsknight-agent"
 
+# Check if agent.env is unreadable due to 0600 permissions
+ENV_FILE="${CONFIG_DIR}/agent.env"
+if [[ -f "${ENV_FILE}" && ! -r "${ENV_FILE}" ]]; then
+  echo "ERROR: Cannot read ${ENV_FILE} (permission denied)." >&2
+  echo "Because ${ENV_FILE} is secured with mode 0600 (root:root), please run preflight with sudo:" >&2
+  echo "  sudo ${INSTALL_PREFIX}/preflight.sh" >&2
+  exit 1
+fi
+
 PASSED_COUNT=0
 FAILED_COUNT=0
 WARNING_COUNT=0
@@ -69,7 +78,7 @@ if [[ -x "${NODE_BIN}" ]]; then
   if NODE_VER="$("${NODE_BIN}" -e 'console.log(process.version)' 2>/dev/null)" && [[ -n "${NODE_VER}" ]]; then
     report_pass "Runtime" "${NODE_VER} (bundled Node 24 runtime, execution verified)"
   else
-    report_fail "Runtime" "Bundled node binary at ${NODE_BIN} failed to execute (incompatible libc/glibc < 2.28?)"
+    report_fail "Runtime" "Bundled node binary at ${NODE_BIN} failed to execute (requires glibc >= 2.28)"
   fi
 elif command -v node >/dev/null 2>&1; then
   if NODE_VER="$(node -e 'console.log(process.version)' 2>/dev/null)" && [[ -n "${NODE_VER}" ]]; then
@@ -132,8 +141,10 @@ fi
 # 7. Clock Synchronization
 CLOCK_OK=false
 if command -v chronyc >/dev/null 2>&1 && chronyc tracking >/dev/null 2>&1; then
-  report_pass "Clock sync" "chrony active & tracked"
-  CLOCK_OK=true
+  if ! chronyc tracking 2>/dev/null | grep -iE "Reference ID\s*:\s*0\.0\.0\.0|Leap status\s*:\s*Not synchronised" >/dev/null 2>&1; then
+    report_pass "Clock sync" "chrony active & synchronized"
+    CLOCK_OK=true
+  fi
 elif command -v timedatectl >/dev/null 2>&1 && timedatectl show 2>/dev/null | grep -E "NTPSynchronized=(yes|1)" >/dev/null 2>&1; then
   report_pass "Clock sync" "systemd-timesyncd synchronized"
   CLOCK_OK=true
@@ -144,18 +155,20 @@ if [[ "${CLOCK_OK}" == "false" ]]; then
 fi
 
 # 8. Configuration & Security Key Requirements
-ENV_FILE="${CONFIG_DIR}/agent.env"
 OPSKNIGHT_URL=""
 EXECUTION_KEY=""
+EXECUTION_KEYS=""
 ENROLLMENT_TOKEN=""
 
 if [[ -f "${ENV_FILE}" ]]; then
   OPSKNIGHT_URL="$(grep -E '^OPSKNIGHT_URL=' "${ENV_FILE}" | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)"
   EXECUTION_KEY="$(grep -E '^OPSKNIGHT_EXECUTION_PUBLIC_KEY=' "${ENV_FILE}" | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)"
+  EXECUTION_KEYS="$(grep -E '^OPSKNIGHT_EXECUTION_PUBLIC_KEYS=' "${ENV_FILE}" | cut -d'=' -f2- || true)"
   ENROLLMENT_TOKEN="$(grep -E '^OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=' "${ENV_FILE}" | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)"
 fi
 OPSKNIGHT_URL="${OPSKNIGHT_URL:-${OPSKNIGHT_AGENT_URL:-}}"
 EXECUTION_KEY="${EXECUTION_KEY:-${OPSKNIGHT_EXECUTION_PUBLIC_KEY:-}}"
+EXECUTION_KEYS="${EXECUTION_KEYS:-${OPSKNIGHT_EXECUTION_PUBLIC_KEYS:-}}"
 ENROLLMENT_TOKEN="${ENROLLMENT_TOKEN:-${OPSKNIGHT_AGENT_ENROLLMENT_TOKEN:-}}"
 
 # 8a. Control plane URL
@@ -165,11 +178,74 @@ else
   report_fail "Control plane URL" "OPSKNIGHT_URL missing in ${ENV_FILE}"
 fi
 
-# 8b. Execution public key pin
-if [[ -n "${EXECUTION_KEY}" ]]; then
-  report_pass "Execution signing key" "pinned (base64 SPKI DER)"
+# 8b. Execution public key pin & validation
+NODE_RUNNER=""
+if [[ -x "${NODE_BIN}" ]]; then
+  NODE_RUNNER="${NODE_BIN}"
+elif command -v node >/dev/null 2>&1; then
+  NODE_RUNNER="node"
+fi
+
+if [[ -n "${EXECUTION_KEYS}" ]]; then
+  if [[ -n "${EXECUTION_KEY}" ]]; then
+    report_warn "Execution key shadowing" "OPSKNIGHT_EXECUTION_PUBLIC_KEYS takes precedence over OPSKNIGHT_EXECUTION_PUBLIC_KEY"
+  fi
+  KEYS_VALID=false
+  if [[ -n "${NODE_RUNNER}" ]]; then
+    if "${NODE_RUNNER}" -e '
+      const { createPublicKey } = require("crypto");
+      const jsonStr = process.argv[1];
+      try {
+        const obj = JSON.parse(jsonStr);
+        if (!obj || typeof obj !== "object" || Array.isArray(obj)) process.exit(1);
+        const entries = Object.entries(obj);
+        if (entries.length === 0 || entries.length > 8) process.exit(1);
+        for (const [id, pin] of entries) {
+          if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id) || typeof pin !== "string" || pin.length > 200) process.exit(1);
+          const k = createPublicKey({ key: Buffer.from(pin, "base64"), type: "spki", format: "der" });
+          if (k.asymmetricKeyType !== "ed25519") process.exit(1);
+        }
+      } catch {
+        process.exit(1);
+      }
+    ' "${EXECUTION_KEYS}" 2>/dev/null; then
+      KEYS_VALID=true
+    fi
+  else
+    KEYS_VALID=true
+  fi
+  if [[ "${KEYS_VALID}" == "true" ]]; then
+    report_pass "Execution signing keys" "plural key map valid (Ed25519 SPKI DER)"
+  else
+    report_fail "Execution signing keys" "invalid JSON key map or invalid Ed25519 key in OPSKNIGHT_EXECUTION_PUBLIC_KEYS"
+  fi
+elif [[ -n "${EXECUTION_KEY}" ]]; then
+  KEY_VALID=false
+  CLEAN_KEY="$(echo "${EXECUTION_KEY}" | tr -d '\r\n ')"
+  if [[ -n "${NODE_RUNNER}" ]]; then
+    if "${NODE_RUNNER}" -e '
+      const { createPublicKey } = require("crypto");
+      const pin = process.argv[1];
+      if (!pin || pin.length > 200) process.exit(1);
+      try {
+        const k = createPublicKey({ key: Buffer.from(pin, "base64"), type: "spki", format: "der" });
+        if (k.asymmetricKeyType !== "ed25519") process.exit(1);
+      } catch {
+        process.exit(1);
+      }
+    ' "${CLEAN_KEY}" 2>/dev/null; then
+      KEY_VALID=true
+    fi
+  else
+    KEY_VALID=true
+  fi
+  if [[ "${KEY_VALID}" == "true" ]]; then
+    report_pass "Execution signing key" "pinned (base64 SPKI DER Ed25519)"
+  else
+    report_fail "Execution signing key" "invalid Ed25519 SPKI DER key in OPSKNIGHT_EXECUTION_PUBLIC_KEY"
+  fi
 else
-  report_fail "Execution signing key" "OPSKNIGHT_EXECUTION_PUBLIC_KEY missing in ${ENV_FILE}"
+  report_fail "Execution signing key" "OPSKNIGHT_EXECUTION_PUBLIC_KEY or OPSKNIGHT_EXECUTION_PUBLIC_KEYS missing in ${ENV_FILE}"
 fi
 
 # 8c. Identity or Enrollment Token
@@ -187,13 +263,11 @@ if [[ -n "${OPSKNIGHT_URL}" ]]; then
   TIME_ENDPOINT="${OPSKNIGHT_URL%/}/api/runbook-agent/v1/time"
   TIME_RESP="$(curl -fsSL -m 5 "${TIME_ENDPOINT}" 2>/dev/null || echo '')"
   if [[ -n "${TIME_RESP}" ]]; then
-    # Extract epochMs via python/node/awk
     SERVER_EPOCH="$(echo "${TIME_RESP}" | grep -o '"epochMs":[0-9]*' | cut -d':' -f2 || echo '')"
     if [[ -n "${SERVER_EPOCH}" ]]; then
       LOCAL_EPOCH="$(date +%s000 2>/dev/null || node -e 'console.log(Date.now())' 2>/dev/null || echo '')"
       if [[ -n "${LOCAL_EPOCH}" ]]; then
         SKEW_MS=$(( LOCAL_EPOCH - SERVER_EPOCH ))
-        # Abs value
         if [[ ${SKEW_MS} -lt 0 ]]; then SKEW_MS=$(( -SKEW_MS )); fi
         SKEW_SEC=$(( SKEW_MS / 1000 ))
         if [[ ${SKEW_SEC} -le 30 ]]; then

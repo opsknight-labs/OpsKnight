@@ -4,7 +4,7 @@ set -euo pipefail
 # scripts/build-agent-artifacts.sh
 # Packages OpsKnight Native Linux Agent with pinned Node 24 LTS runtime for x86_64 and arm64.
 
-NODE_VERSION="${NODE_VERSION:-v24.14.0}"
+NODE_VERSION="${NODE_VERSION:-v24.21.0}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DIST_DIR="${ROOT_DIR}/dist/agent"
@@ -48,6 +48,14 @@ for ARCH in "x64" "arm64"; do
   chmod +x "${PACKAGE_DIR}/preflight.sh"
   echo "${RELEASE_VERSION}" > "${PACKAGE_DIR}/VERSION"
 
+  # Copy licenses and notices if available
+  if [[ -f "${ROOT_DIR}/LICENSE" ]]; then
+    cp "${ROOT_DIR}/LICENSE" "${PACKAGE_DIR}/LICENSE"
+  fi
+  if [[ -f "${ROOT_DIR}/NOTICE" ]]; then
+    cp "${ROOT_DIR}/NOTICE" "${PACKAGE_DIR}/NOTICE"
+  fi
+
   # Fetch and cryptographically verify official pinned Node.js runtime archive
   NODE_DIST="node-${NODE_VERSION}-linux-${ARCH}"
   NODE_TAR="${NODE_DIST}.tar.gz"
@@ -76,10 +84,13 @@ for ARCH in "x64" "arm64"; do
   fi
   echo "Node runtime ${NODE_TAR} cryptographically verified: [OK]"
 
-  # Extract verified node binary
-  tar -xzf "${TEMP_NODE_DIR}/${NODE_TAR}" -C "${TEMP_NODE_DIR}" "${NODE_DIST}/bin/node"
+  # Extract verified node binary and official Node LICENSE
+  tar -xzf "${TEMP_NODE_DIR}/${NODE_TAR}" -C "${TEMP_NODE_DIR}" "${NODE_DIST}/bin/node" "${NODE_DIST}/LICENSE"
   cp "${TEMP_NODE_DIR}/${NODE_DIST}/bin/node" "${PACKAGE_DIR}/runtime/bin/node"
   chmod +x "${PACKAGE_DIR}/runtime/bin/node"
+  if [[ -f "${TEMP_NODE_DIR}/${NODE_DIST}/LICENSE" ]]; then
+    cp "${TEMP_NODE_DIR}/${NODE_DIST}/LICENSE" "${PACKAGE_DIR}/runtime/LICENSE-NODE"
+  fi
   rm -rf "${TEMP_NODE_DIR}"
 
   echo "Creating archive: ${DIST_DIR}/${TARBALL_NAME}"
@@ -88,8 +99,9 @@ for ARCH in "x64" "arm64"; do
 done
 rm -f "${SHASUMS_FILE}"
 
-# Also copy install.sh to dist directory so it can be distributed as a standalone release asset
+# Also copy install.sh and preflight.sh to dist directory for release distribution
 cp "${ROOT_DIR}/deploy/agent/install.sh" "${DIST_DIR}/"
+sed -i.bak "s/RELEASE_TAG=\"\${OPSKNIGHT_VERSION:-2.0.0}\"/RELEASE_TAG=\"\${OPSKNIGHT_VERSION:-${RELEASE_VERSION}}\"/" "${DIST_DIR}/install.sh" && rm -f "${DIST_DIR}/install.sh.bak"
 cp "${ROOT_DIR}/deploy/agent/preflight.sh" "${DIST_DIR}/"
 
 echo "=== Generating SHA256SUMS ==="

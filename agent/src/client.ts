@@ -2,6 +2,7 @@ import { createHash, generateKeyPairSync, randomBytes, sign } from 'node:crypto'
 import { hostname, platform } from 'node:os';
 import type { AgentIdentity, ClaimedAttempt, SpoolRecord } from './types';
 import { verifyLeaseAcknowledgement } from './envelope';
+import { getAgentVersion } from './version';
 
 type JsonObject = Record<string, unknown>;
 
@@ -76,7 +77,7 @@ export class AgentClient {
   }) {
     return this.request('/api/runbook-agent/v1/heartbeat', {
       hostname: hostname(),
-      version: process.env.npm_package_version ?? '2.0.0',
+      version: getAgentVersion(),
       platform: platform(),
       ...input,
     });
@@ -207,7 +208,7 @@ export async function enrollAgent(baseUrl: string, token: string): Promise<Agent
       token,
       publicKey,
       hostname: hostname(),
-      version: process.env.npm_package_version ?? '2.0.0',
+      version: getAgentVersion(),
       platform: platform(),
     }),
   });

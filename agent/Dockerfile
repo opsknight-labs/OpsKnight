@@ -1,10 +1,10 @@
-FROM node:24-alpine AS build
+FROM node:24.21.0-alpine AS build
 WORKDIR /src
 RUN npm install --global esbuild@0.28.2
 COPY agent ./agent
 RUN esbuild agent/src/index.ts --bundle --platform=node --target=node24 --format=esm --packages=external --banner:js='import { createRequire as __cr } from "module"; const require = __cr(import.meta.url);' --outfile=/out/opsknight-agent.mjs
 
-FROM node:24-alpine
+FROM node:24.21.0-alpine
 RUN apk add --no-cache bash docker-cli podman iproute2 kubectl procps \
   && addgroup -S opsknight-agent && adduser -S -G opsknight-agent opsknight-agent \
   && mkdir -p /var/lib/opsknight-agent /etc/opsknight-agent \

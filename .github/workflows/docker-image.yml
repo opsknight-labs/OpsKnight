@@ -799,20 +799,73 @@ jobs:
           $PROMOTED_TAGS
           EOF
 
+  native-agent-release-artifacts:
+    needs: validate-release-tag
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        env:
+          HUSKY: '0'
+        run: npm ci --legacy-peer-deps
+      - name: Build native Agent release artifacts
+        env:
+          OPSKNIGHT_VERSION: ${{ github.ref_name }}
+        run: bash scripts/build-agent-artifacts.sh
+      - name: Verify generated artifacts and SHA256SUMS
+        run: |
+          cd dist/agent
+          test -f opsknight-agent-linux-x64.tar.gz
+          test -f opsknight-agent-linux-arm64.tar.gz
+          test -f install.sh
+          test -f preflight.sh
+          test -f SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - name: Upload native agent artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-agent-release-artifacts-${{ github.ref_name }}
+          path: dist/agent/
+          retention-days: 7
+
   publish-github-release:
-    needs: [build, sbom-provenance, pgbouncer-image, agent-image, promote-release-tags]
+    needs: [build, sbom-provenance, pgbouncer-image, agent-image, promote-release-tags, native-agent-release-artifacts]
     if: >-
       startsWith(github.ref, 'refs/tags/v') &&
       needs.build.result == 'success' &&
       needs.sbom-provenance.result == 'success' &&
       needs.pgbouncer-image.result == 'success' &&
-      needs.promote-release-tags.result == 'success'
+      needs.promote-release-tags.result == 'success' &&
+      needs.native-agent-release-artifacts.result == 'success'
     runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Download native agent release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: native-agent-release-artifacts-${{ github.ref_name }}
+          path: dist/agent
+
+      - name: Verify certified native agent artifacts before publishing
+        run: |
+          cd dist/agent
+          test -f opsknight-agent-linux-x64.tar.gz
+          test -f opsknight-agent-linux-arm64.tar.gz
+          test -f install.sh
+          test -f preflight.sh
+          test -f SHA256SUMS
+          sha256sum -c SHA256SUMS
 
       - name: Download tag release certification evidence
         uses: actions/download-artifact@v4
@@ -914,16 +967,13 @@ jobs:
             gh release upload "$tag" "$summary_asset" --clobber || true
           fi
 
-          echo "Building and uploading Native Linux Agent release tarballs..."
-          if [ -f scripts/build-agent-artifacts.sh ]; then
-            bash scripts/build-agent-artifacts.sh
-            if [ -d dist/agent ]; then
-              gh release upload "$tag" \
-                dist/agent/opsknight-agent-linux-*.tar.gz \
-                dist/agent/install.sh \
-                dist/agent/preflight.sh \
-                dist/agent/SHA256SUMS --clobber
-            fi
+          echo "Uploading certified Native Linux Agent release assets..."
+          if [ -d dist/agent ]; then
+            gh release upload "$tag" \
+              dist/agent/opsknight-agent-linux-*.tar.gz \
+              dist/agent/install.sh \
+              dist/agent/preflight.sh \
+              dist/agent/SHA256SUMS --clobber
           fi
 
           release_body="$(gh release view "$tag" --json body --jq .body)"

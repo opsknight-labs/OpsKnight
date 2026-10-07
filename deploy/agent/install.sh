@@ -5,13 +5,15 @@ set -euo pipefail
 # Enterprise installer for OpsKnight Runbook Native Linux Agent
 #
 # Usage:
-#   sudo ./install.sh [--url <https://opsknight.company.com>] [--token <one-time-token>] [--tarball <path-to-tarball>]
+#   sudo ./install.sh --url <https://opsknight.company.com> [--token <one-time-token>] [--key <base64-spki-pin>] [options]
 
 OPSKNIGHT_URL="${OPSKNIGHT_URL:-}"
 ENROLLMENT_TOKEN="${ENROLLMENT_TOKEN:-}"
 TARBALL_OVERRIDE=""
+CHECKSUM_OVERRIDE=""
 RELEASE_TAG="${OPSKNIGHT_VERSION:-2.0.0}"
 BASE_DOWNLOAD_URL="${OPSKNIGHT_DOWNLOAD_BASE:-https://github.com/opsknight-labs/OpsKnight/releases/download/v${RELEASE_TAG}}"
+NO_RESTART=false
 
 INSTALL_PREFIX="/opt/opsknight-agent"
 CONFIG_DIR="/etc/opsknight-agent"
@@ -20,8 +22,10 @@ SERVICE_USER="opsknight-agent"
 SERVICE_GROUP="opsknight-agent"
 
 EXECUTION_PUBLIC_KEY="${OPSKNIGHT_EXECUTION_PUBLIC_KEY:-}"
+EXECUTION_PUBLIC_KEYS_JSON="${OPSKNIGHT_EXECUTION_PUBLIC_KEYS:-}"
 TOKEN_FILE=""
 KEY_FILE=""
+KEYS_FILE=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -45,12 +49,45 @@ while [[ $# -gt 0 ]]; do
       KEY_FILE="$2"
       shift 2
       ;;
+    --keys-json|--execution-keys-json)
+      EXECUTION_PUBLIC_KEYS_JSON="$2"
+      shift 2
+      ;;
+    --keys-file|--execution-keys-file)
+      KEYS_FILE="$2"
+      shift 2
+      ;;
     --tarball)
       TARBALL_OVERRIDE="$2"
       shift 2
       ;;
+    --checksum)
+      CHECKSUM_OVERRIDE="$2"
+      shift 2
+      ;;
+    --version)
+      RELEASE_TAG="$2"
+      BASE_DOWNLOAD_URL="${OPSKNIGHT_DOWNLOAD_BASE:-https://github.com/opsknight-labs/OpsKnight/releases/download/v${RELEASE_TAG}}"
+      shift 2
+      ;;
+    --no-restart)
+      NO_RESTART=true
+      shift 1
+      ;;
     -h|--help)
-      echo "Usage: sudo $0 --url <control-plane-url> [--token <enrollment-token> | --token-file <path>] [--key <public-key-pem> | --key-file <path>] [--tarball <local-tarball>]"
+      echo "Usage: sudo $0 --url <control-plane-url> [options]"
+      echo ""
+      echo "Options:"
+      echo "  --token <token>                  Single-use enrollment token"
+      echo "  --token-file <path>              Read enrollment token from file"
+      echo "  --key <base64-spki-pin>          Execution public key (Ed25519 SPKI DER base64)"
+      echo "  --key-file <path>                Read execution public key from file"
+      echo "  --keys-json <json-map>           Plural signing keys JSON (e.g. '{\"default\":\"...\"}')"
+      echo "  --keys-file <path>               Read plural signing keys JSON from file"
+      echo "  --tarball <path>                 Local artifact archive to install"
+      echo "  --checksum <sha256>              Expected SHA256 checksum for local tarball"
+      echo "  --version <tag>                  Release version tag (default: ${RELEASE_TAG})"
+      echo "  --no-restart                     Do not restart service if already running"
       exit 0
       ;;
     *)
@@ -66,7 +103,7 @@ if [[ -n "${TOKEN_FILE}" ]]; then
     echo "ERROR: Token file '${TOKEN_FILE}' not found." >&2
     exit 1
   fi
-  ENROLLMENT_TOKEN="$(cat "${TOKEN_FILE}" | tr -d '\r\n')"
+  ENROLLMENT_TOKEN="$(tr -d '\r\n' < "${TOKEN_FILE}")"
 fi
 
 # Read key from file if provided
@@ -75,7 +112,24 @@ if [[ -n "${KEY_FILE}" ]]; then
     echo "ERROR: Execution key file '${KEY_FILE}' not found." >&2
     exit 1
   fi
-  EXECUTION_PUBLIC_KEY="$(cat "${KEY_FILE}")"
+  EXECUTION_PUBLIC_KEY="$(tr -d '\r\n ' < "${KEY_FILE}")"
+fi
+
+# Read keys JSON from file if provided
+if [[ -n "${KEYS_FILE}" ]]; then
+  if [[ ! -f "${KEYS_FILE}" ]]; then
+    echo "ERROR: Execution keys file '${KEYS_FILE}' not found." >&2
+    exit 1
+  fi
+  EXECUTION_PUBLIC_KEYS_JSON="$(cat "${KEYS_FILE}")"
+fi
+
+# Validate local tarball explicitly (fail closed, do not fall back to remote download)
+if [[ -n "${TARBALL_OVERRIDE}" ]]; then
+  if [[ ! -f "${TARBALL_OVERRIDE}" ]]; then
+    echo "ERROR: Specified local tarball '${TARBALL_OVERRIDE}' does not exist." >&2
+    exit 1
+  fi
 fi
 
 if [[ $EUID -ne 0 ]]; then
@@ -96,11 +150,64 @@ if [[ ! -f "${IDENTITY_FILE}" && -z "${ENROLLMENT_TOKEN}" ]]; then
   exit 1
 fi
 
-if [[ -z "${EXECUTION_PUBLIC_KEY}" && ! -f "${CONFIG_DIR}/agent.env" ]]; then
-  echo "ERROR: --key <base64-spki-key> (or --key-file <path>) is required to verify execution envelopes." >&2
+if [[ -z "${EXECUTION_PUBLIC_KEY}" && -z "${EXECUTION_PUBLIC_KEYS_JSON}" && ! -f "${CONFIG_DIR}/agent.env" ]]; then
+  echo "ERROR: --key <base64-spki-key> or --keys-json <json-map> is required to verify execution envelopes." >&2
   echo "Copy the execution signing key from OpsKnight: Runbooks -> Agents." >&2
   exit 1
 fi
+
+# Early cryptographic validation of keys if node is present on host
+validate_keys_early() {
+  local node_cmd=""
+  if command -v node >/dev/null 2>&1; then
+    node_cmd="node"
+  elif [[ -x "${INSTALL_PREFIX}/runtime/bin/node" ]]; then
+    node_cmd="${INSTALL_PREFIX}/runtime/bin/node"
+  fi
+  if [[ -n "${node_cmd}" ]]; then
+    if [[ -n "${EXECUTION_PUBLIC_KEY}" ]]; then
+      local clean_k
+      clean_k="$(echo "${EXECUTION_PUBLIC_KEY}" | tr -d '\r\n ')"
+      if ! "${node_cmd}" -e '
+        const { createPublicKey } = require("crypto");
+        const pin = process.argv[1];
+        if (!pin || pin.length > 200) process.exit(1);
+        try {
+          const k = createPublicKey({ key: Buffer.from(pin, "base64"), type: "spki", format: "der" });
+          if (k.asymmetricKeyType !== "ed25519") process.exit(1);
+        } catch {
+          process.exit(1);
+        }
+      ' "${clean_k}" 2>/dev/null; then
+        echo "ERROR: Execution key is not a valid base64-encoded Ed25519 SPKI DER public key." >&2
+        exit 1
+      fi
+    fi
+    if [[ -n "${EXECUTION_PUBLIC_KEYS_JSON}" ]]; then
+      if ! "${node_cmd}" -e '
+        const { createPublicKey } = require("crypto");
+        const jsonStr = process.argv[1];
+        try {
+          const obj = JSON.parse(jsonStr);
+          if (!obj || typeof obj !== "object" || Array.isArray(obj)) process.exit(1);
+          const entries = Object.entries(obj);
+          if (entries.length === 0 || entries.length > 8) process.exit(1);
+          for (const [id, pin] of entries) {
+            if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id) || typeof pin !== "string" || pin.length > 200) process.exit(1);
+            const k = createPublicKey({ key: Buffer.from(pin, "base64"), type: "spki", format: "der" });
+            if (k.asymmetricKeyType !== "ed25519") process.exit(1);
+          }
+        } catch {
+          process.exit(1);
+        }
+      ' "${EXECUTION_PUBLIC_KEYS_JSON}" 2>/dev/null; then
+        echo "ERROR: Execution keys JSON is invalid. Must be a JSON object mapping 1-8 key IDs to valid Ed25519 SPKI DER keys." >&2
+        exit 1
+      fi
+    fi
+  fi
+}
+validate_keys_early
 
 echo "=========================================================="
 echo "      OpsKnight Native Linux Agent Enterprise Installer   "
@@ -196,13 +303,15 @@ echo "=== 2/6 Verifying Clock Synchronization ==="
 CLOCK_SYNCED=false
 if command -v chronyc >/dev/null 2>&1; then
   if chronyc tracking >/dev/null 2>&1; then
-    echo "NTP Status: chrony synchronized [OK]"
-    CLOCK_SYNCED=true
+    if ! chronyc tracking 2>/dev/null | grep -iE "Reference ID\s*:\s*0\.0\.0\.0|Leap status\s*:\s*Not synchronised" >/dev/null 2>&1; then
+      echo "NTP Status: chrony synchronized [OK]"
+      CLOCK_SYNCED=true
+    fi
   fi
 fi
 
 if [[ "${CLOCK_SYNCED}" == "false" ]] && command -v timedatectl >/dev/null 2>&1; then
-  if timedatectl show 2>/dev/null | grep -E "NTPSynchronized=(yes|1)|NTP=yes" >/dev/null 2>&1; then
+  if timedatectl show 2>/dev/null | grep -E "NTPSynchronized=(yes|1)" >/dev/null 2>&1; then
     echo "NTP Status: systemd-timesyncd/timedatectl synchronized [OK]"
     CLOCK_SYNCED=true
   fi
@@ -210,7 +319,16 @@ fi
 
 if [[ "${CLOCK_SYNCED}" == "false" ]]; then
   echo "WARNING: Clock synchronization could not be explicitly confirmed."
-  echo "Ensure chrony or systemd-timesyncd is running to prevent temporal signature verification errors."
+  echo "Ensure chrony or systemd-timesyncd is synchronized to prevent temporal signature verification errors."
+fi
+
+# Check if agent service was already active before replacing
+SERVICE_WAS_ACTIVE=false
+if command -v systemctl >/dev/null 2>&1; then
+  if systemctl is-active --quiet opsknight-agent 2>/dev/null; then
+    SERVICE_WAS_ACTIVE=true
+    echo "Notice: Active opsknight-agent service detected. Preparing safe upgrade."
+  fi
 fi
 
 # 5. Service User & Directory Creation
@@ -268,9 +386,27 @@ TEMP_WORK_DIR=$(mktemp -d)
 trap 'rm -rf "${TEMP_WORK_DIR}"' EXIT
 
 TARBALL_FILE=""
-if [[ -n "${TARBALL_OVERRIDE}" && -f "${TARBALL_OVERRIDE}" ]]; then
+if [[ -n "${TARBALL_OVERRIDE}" ]]; then
   echo "Using local override artifact: ${TARBALL_OVERRIDE}"
   TARBALL_FILE="${TARBALL_OVERRIDE}"
+  if [[ -n "${CHECKSUM_OVERRIDE}" ]]; then
+    echo "Verifying local tarball against provided checksum..."
+    ACTUAL_SHA="$(sha256sum "${TARBALL_FILE}" 2>/dev/null | awk '{print $1}' || shasum -a 256 "${TARBALL_FILE}" | awk '{print $1}')"
+    if [[ "${CHECKSUM_OVERRIDE}" != "${ACTUAL_SHA}" ]]; then
+      echo "ERROR: Local artifact checksum mismatch! Expected ${CHECKSUM_OVERRIDE}, got ${ACTUAL_SHA}." >&2
+      exit 1
+    fi
+    echo "Local artifact checksum verified: [OK]"
+  elif [[ -f "${TARBALL_OVERRIDE}.sha256" ]]; then
+    echo "Verifying local tarball with ${TARBALL_OVERRIDE}.sha256..."
+    EXPECTED_SHA="$(awk '{print $1}' "${TARBALL_OVERRIDE}.sha256" | head -n 1)"
+    ACTUAL_SHA="$(sha256sum "${TARBALL_FILE}" 2>/dev/null | awk '{print $1}' || shasum -a 256 "${TARBALL_FILE}" | awk '{print $1}')"
+    if [[ "${EXPECTED_SHA}" != "${ACTUAL_SHA}" ]]; then
+      echo "ERROR: Local artifact checksum mismatch! Expected ${EXPECTED_SHA}, got ${ACTUAL_SHA}." >&2
+      exit 1
+    fi
+    echo "Local artifact checksum verified: [OK]"
+  fi
 else
   ARTIFACT_NAME="opsknight-agent-linux-${ARCH}.tar.gz"
   ARTIFACT_URL="${BASE_DOWNLOAD_URL}/${ARTIFACT_NAME}"
@@ -304,20 +440,89 @@ else
   echo "Artifact checksum verified: [OK]"
 fi
 
-# Extract into /opt/opsknight-agent
-echo "Extracting bundle to ${INSTALL_PREFIX}..."
-tar -xzf "${TARBALL_FILE}" --strip-components=1 -C "${INSTALL_PREFIX}"
-chown -R root:root "${INSTALL_PREFIX}"
-chmod -R u=rwX,go=rX "${INSTALL_PREFIX}"
-chmod 0755 "${INSTALL_PREFIX}/runtime/bin/node" 2>/dev/null || true
+# Stage extraction in a temporary location for transactional upgrade
+STAGE_DIR=$(mktemp -d "${INSTALL_PREFIX}.staging.XXXXXX" 2>/dev/null || mktemp -d "/tmp/opsknight-agent.staging.XXXXXX")
+echo "Staging bundle extraction into ${STAGE_DIR}..."
+tar -xzf "${TARBALL_FILE}" --strip-components=1 -C "${STAGE_DIR}"
+chown -R root:root "${STAGE_DIR}"
+chmod -R u=rwX,go=rX "${STAGE_DIR}"
+chmod 0755 "${STAGE_DIR}/runtime/bin/node" 2>/dev/null || true
 
 # Verify bundled node compatibility with host libc (glibc >= 2.28)
-if ! "${INSTALL_PREFIX}/runtime/bin/node" -e 'process.exit(0)' 2>/dev/null; then
+if ! "${STAGE_DIR}/runtime/bin/node" -e 'process.exit(0)' 2>/dev/null; then
   echo "ERROR: The bundled Node 24 runtime cannot execute on this host." >&2
-  echo "This host likely lacks a compatible C standard library (requires glibc >= 2.28 or musl)." >&2
+  echo "This host lacks a compatible C standard library (requires glibc >= 2.28)." >&2
+  rm -rf "${STAGE_DIR}"
   exit 1
 fi
 echo "Bundled Node runtime verified compatible: [OK]"
+
+# Cryptographic key verification using staged Node runtime
+if [[ -n "${EXECUTION_PUBLIC_KEY}" ]]; then
+  CLEAN_KEY="$(echo "${EXECUTION_PUBLIC_KEY}" | tr -d '\r\n ')"
+  if ! "${STAGE_DIR}/runtime/bin/node" -e '
+    const { createPublicKey } = require("crypto");
+    const pin = process.argv[1];
+    if (!pin || pin.length > 200) process.exit(1);
+    try {
+      const k = createPublicKey({ key: Buffer.from(pin, "base64"), type: "spki", format: "der" });
+      if (k.asymmetricKeyType !== "ed25519") process.exit(1);
+    } catch {
+      process.exit(1);
+    }
+  ' "${CLEAN_KEY}" 2>/dev/null; then
+    echo "ERROR: Execution key is not a valid base64-encoded Ed25519 SPKI DER public key." >&2
+    rm -rf "${STAGE_DIR}"
+    exit 1
+  fi
+fi
+
+if [[ -n "${EXECUTION_PUBLIC_KEYS_JSON}" ]]; then
+  if ! "${STAGE_DIR}/runtime/bin/node" -e '
+    const { createPublicKey } = require("crypto");
+    const jsonStr = process.argv[1];
+    try {
+      const obj = JSON.parse(jsonStr);
+      if (!obj || typeof obj !== "object" || Array.isArray(obj)) process.exit(1);
+      const entries = Object.entries(obj);
+      if (entries.length === 0 || entries.length > 8) process.exit(1);
+      for (const [id, pin] of entries) {
+        if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id) || typeof pin !== "string" || pin.length > 200) process.exit(1);
+        const k = createPublicKey({ key: Buffer.from(pin, "base64"), type: "spki", format: "der" });
+        if (k.asymmetricKeyType !== "ed25519") process.exit(1);
+      }
+    } catch {
+      process.exit(1);
+    }
+  ' "${EXECUTION_PUBLIC_KEYS_JSON}" 2>/dev/null; then
+    echo "ERROR: Execution keys JSON is invalid. Must be a JSON object mapping 1-8 key IDs to valid Ed25519 SPKI DER keys." >&2
+    rm -rf "${STAGE_DIR}"
+    exit 1
+  fi
+fi
+
+# Atomic directory swap with rollback safety
+BACKUP_DIR=""
+if [[ -d "${INSTALL_PREFIX}" && -n "$(ls -A "${INSTALL_PREFIX}" 2>/dev/null)" ]]; then
+  BACKUP_DIR="${INSTALL_PREFIX}.bak.$$"
+  mv "${INSTALL_PREFIX}" "${BACKUP_DIR}"
+else
+  rm -rf "${INSTALL_PREFIX}"
+fi
+
+if ! mv "${STAGE_DIR}" "${INSTALL_PREFIX}"; then
+  echo "ERROR: Failed to activate staged installation directory." >&2
+  if [[ -n "${BACKUP_DIR}" && -d "${BACKUP_DIR}" ]]; then
+    mv "${BACKUP_DIR}" "${INSTALL_PREFIX}"
+    echo "Rolled back to previous installation." >&2
+  fi
+  rm -rf "${STAGE_DIR}"
+  exit 1
+fi
+
+if [[ -n "${BACKUP_DIR}" && -d "${BACKUP_DIR}" ]]; then
+  rm -rf "${BACKUP_DIR}"
+fi
 
 # Install preflight script to /opt/opsknight-agent if bundled or present
 if [[ -f "${INSTALL_PREFIX}/preflight.sh" ]]; then
@@ -331,7 +536,9 @@ fi
 if [[ -f "${INSTALL_PREFIX}/opsknight-agent.service" ]]; then
   cp "${INSTALL_PREFIX}/opsknight-agent.service" /etc/systemd/system/opsknight-agent.service
   chmod 0644 /etc/systemd/system/opsknight-agent.service
-  systemctl daemon-reload
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload
+  fi
 fi
 
 # Seed policy.json if not present
@@ -360,11 +567,36 @@ if [[ -n "${ENROLLMENT_TOKEN}" ]]; then
   echo "OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=${ENROLLMENT_TOKEN}" >> "${ENV_FILE}"
 fi
 
-if [[ -n "${EXECUTION_PUBLIC_KEY}" ]]; then
+# Prevent silent key shadowing:
+# If plural keys JSON is provided, set it and clear singular key.
+# If singular key is provided, set it and clear plural keys.
+if [[ -n "${EXECUTION_PUBLIC_KEYS_JSON}" ]]; then
+  sed -i '/^OPSKNIGHT_EXECUTION_PUBLIC_KEYS=/d' "${ENV_FILE}" 2>/dev/null || true
   sed -i '/^OPSKNIGHT_EXECUTION_PUBLIC_KEY=/d' "${ENV_FILE}" 2>/dev/null || true
-  # Strip whitespace and normalize single-line base64 SPKI DER key
+  echo "OPSKNIGHT_EXECUTION_PUBLIC_KEYS=${EXECUTION_PUBLIC_KEYS_JSON}" >> "${ENV_FILE}"
+elif [[ -n "${EXECUTION_PUBLIC_KEY}" ]]; then
+  sed -i '/^OPSKNIGHT_EXECUTION_PUBLIC_KEY=/d' "${ENV_FILE}" 2>/dev/null || true
+  sed -i '/^OPSKNIGHT_EXECUTION_PUBLIC_KEYS=/d' "${ENV_FILE}" 2>/dev/null || true
   CLEAN_KEY="$(echo "${EXECUTION_PUBLIC_KEY}" | tr -d '\r\n ')"
   echo "OPSKNIGHT_EXECUTION_PUBLIC_KEY=${CLEAN_KEY}" >> "${ENV_FILE}"
+fi
+
+# 9. Service restart on upgrade
+if [[ "${SERVICE_WAS_ACTIVE}" == "true" ]] && command -v systemctl >/dev/null 2>&1; then
+  if [[ "${NO_RESTART}" == "true" ]]; then
+    echo "Notice: opsknight-agent service is currently running."
+    echo "Skipping automatic restart (--no-restart requested)."
+    echo "To restart manually: sudo systemctl restart opsknight-agent"
+  else
+    echo "Restarting opsknight-agent service..."
+    systemctl restart opsknight-agent
+    sleep 2
+    if systemctl is-active --quiet opsknight-agent 2>/dev/null; then
+      echo "Agent service successfully restarted: [OK]"
+    else
+      echo "WARNING: Agent service restart did not reach active state. Check logs: sudo journalctl -u opsknight-agent -n 50" >&2
+    fi
+  fi
 fi
 
 echo "Installed successfully at ${INSTALL_PREFIX}."
@@ -375,6 +607,6 @@ echo "=========================================================="
 echo "Next steps:"
 echo "  1. Review policy:   ${CONFIG_DIR}/policy.json"
 echo "  2. Review config:   ${CONFIG_DIR}/agent.env"
-echo "  3. Run preflight:   ${INSTALL_PREFIX}/preflight.sh (or deploy/agent/preflight.sh)"
+echo "  3. Run preflight:   sudo ${INSTALL_PREFIX}/preflight.sh"
 echo "  4. Start service:   sudo systemctl enable --now opsknight-agent"
 echo "=========================================================="

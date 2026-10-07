@@ -150,12 +150,68 @@ jobs:
       - name: Verify bundled x64 Node 24 runtime execution
         run: |
           mkdir -p /tmp/agent-test
-          tar -xzf dist/agent/opsknight-agent-linux-x64.tar.gz -C /tmp/agent-test
+          tar -xzf dist/agent/opsknight-agent-linux-x64.tar.gz --strip-components=1 -C /tmp/agent-test
           test -f /tmp/agent-test/runtime/bin/node
           test -f /tmp/agent-test/preflight.sh
           test -f /tmp/agent-test/VERSION
           /tmp/agent-test/runtime/bin/node --version
           /tmp/agent-test/runtime/bin/node -e "console.log('Node 24 runtime operational in tarball')"
+
+      - name: Test installer failure modes (fail closed validation)
+        run: |
+          # Test non-root rejection
+          ! ./dist/agent/install.sh --url https://example.com --key "test" --token "test" 2>/dev/null || (echo "Expected non-root failure" && exit 1)
+          # Test missing URL
+          sudo ./dist/agent/install.sh --key "test" --token "test" 2>/dev/null && (echo "Expected missing URL failure" && exit 1) || true
+          # Test missing local tarball fails closed (no remote download fallback)
+          sudo ./dist/agent/install.sh --url https://example.com --tarball /nonexistent/tarball.tar.gz --key "test" --token "test" 2>/dev/null && (echo "Expected bad tarball failure" && exit 1) || true
+
+      - name: Test end-to-end installation and preflight journey
+        run: |
+          TEST_KEY=$(node -e 'const { generateKeyPairSync } = require("crypto"); const { publicKey } = generateKeyPairSync("ed25519"); console.log(publicKey.export({ type: "spki", format: "der" }).toString("base64"));')
+          echo "Generated test Ed25519 key: $TEST_KEY"
+
+          # Perform initial installation
+          sudo ./dist/agent/install.sh \
+            --url https://opsknight.company.test \
+            --key "$TEST_KEY" \
+            --token "test-token-123" \
+            --tarball dist/agent/opsknight-agent-linux-x64.tar.gz
+
+          # Verify layout and permissions
+          test -d /opt/opsknight-agent
+          test -f /opt/opsknight-agent/opsknight-agent.mjs
+          test -x /opt/opsknight-agent/runtime/bin/node
+          test -x /opt/opsknight-agent/preflight.sh
+          test -f /opt/opsknight-agent/VERSION
+          test -f /etc/opsknight-agent/policy.json
+          test -f /etc/opsknight-agent/agent.env
+          test "$(stat -c '%a' /etc/opsknight-agent/agent.env)" = "600"
+          test "$(stat -c '%U:%G' /etc/opsknight-agent/agent.env)" = "root:root"
+          grep -q "OPSKNIGHT_URL=https://opsknight.company.test" /etc/opsknight-agent/agent.env
+          grep -q "OPSKNIGHT_EXECUTION_PUBLIC_KEY=$TEST_KEY" /etc/opsknight-agent/agent.env
+          grep -q "OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=test-token-123" /etc/opsknight-agent/agent.env
+          test -f /etc/systemd/system/opsknight-agent.service
+          grep -q "EnvironmentFile=/etc/opsknight-agent/agent.env" /etc/systemd/system/opsknight-agent.service
+
+          # Test preflight
+          sudo /opt/opsknight-agent/preflight.sh || true
+
+      - name: Test key rotation and upgrade journey
+        run: |
+          ROTATED_KEY_1=$(node -e 'const { generateKeyPairSync } = require("crypto"); const { publicKey } = generateKeyPairSync("ed25519"); console.log(publicKey.export({ type: "spki", format: "der" }).toString("base64"));')
+          ROTATED_KEY_2=$(node -e 'const { generateKeyPairSync } = require("crypto"); const { publicKey } = generateKeyPairSync("ed25519"); console.log(publicKey.export({ type: "spki", format: "der" }).toString("base64"));')
+          KEYS_JSON="{\"active\":\"$ROTATED_KEY_1\",\"next\":\"$ROTATED_KEY_2\"}"
+
+          # Re-run installer with plural keys JSON and --no-restart
+          sudo ./dist/agent/install.sh \
+            --url https://opsknight.company.test \
+            --keys-json "$KEYS_JSON" \
+            --tarball dist/agent/opsknight-agent-linux-x64.tar.gz \
+            --no-restart
+
+          grep -q "OPSKNIGHT_EXECUTION_PUBLIC_KEYS=$KEYS_JSON" /etc/opsknight-agent/agent.env
+          ! grep -q "OPSKNIGHT_EXECUTION_PUBLIC_KEY=" /etc/opsknight-agent/agent.env || (echo "Singular key was not cleared after plural update" && exit 1)
 
   deployment-manifests:
     needs: changes
