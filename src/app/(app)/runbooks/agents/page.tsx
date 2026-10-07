@@ -252,6 +252,49 @@ export default async function RunbookAgentsPage({
 
   const securityPanel = (
     <section className="space-y-4">
+      {permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE) && (
+        <details className="rounded-xl border bg-card/60 p-4 shadow-2xs">
+          <summary className="cursor-pointer font-semibold text-sm">
+            Automatic remediation budgets
+          </summary>
+          <ActionForm
+            action={updateIncidentRemediationBudgetAction}
+            className="mt-3 grid gap-3 sm:grid-cols-3"
+          >
+            <Field label="Automatic executions per incident">
+              <Input
+                name="executions"
+                aria-label="Automatic executions per incident"
+                type="number"
+                min={0}
+                max={100}
+                defaultValue={budget?.runbookAutoExecutionsPerIncident ?? 3}
+              />
+            </Field>
+            <Field label="Automatic writes per incident">
+              <Input
+                name="writes"
+                aria-label="Automatic writes per incident"
+                type="number"
+                min={0}
+                max={100}
+                defaultValue={budget?.runbookAutoWritesPerIncident ?? 3}
+              />
+            </Field>
+            <Field label="Automatic non-idempotent actions per incident">
+              <Input
+                name="nonIdempotent"
+                aria-label="Automatic non-idempotent actions per incident"
+                type="number"
+                min={0}
+                max={100}
+                defaultValue={budget?.runbookAutoNonIdempotentPerIncident ?? 0}
+              />
+            </Field>
+            <SubmitButton>Save remediation budgets</SubmitButton>
+          </ActionForm>
+        </details>
+      )}
       {canManage && signingKey && (
         <details className="rounded-xl border bg-card p-4">
           <summary className="cursor-pointer text-sm font-semibold">
@@ -608,52 +651,7 @@ export default async function RunbookAgentsPage({
       <RunbookModuleNav summary={navigation} />
 
       {/* Search & Attribute Filters */}
-      {tab === 'agents' && <AgentFilterBar query={query} />}
-
-      {/* Automatic Remediation Budgets Policy */}
-      {tab === 'security' && permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE) && (
-        <details className="rounded-xl border bg-card/60 p-4 shadow-2xs">
-          <summary className="cursor-pointer font-semibold text-sm">
-            Automatic remediation budgets
-          </summary>
-          <ActionForm
-            action={updateIncidentRemediationBudgetAction}
-            className="mt-3 grid gap-3 sm:grid-cols-3"
-          >
-            <Field label="Automatic executions per incident">
-              <Input
-                name="executions"
-                aria-label="Automatic executions per incident"
-                type="number"
-                min={0}
-                max={100}
-                defaultValue={budget?.runbookAutoExecutionsPerIncident ?? 3}
-              />
-            </Field>
-            <Field label="Automatic writes per incident">
-              <Input
-                name="writes"
-                aria-label="Automatic writes per incident"
-                type="number"
-                min={0}
-                max={100}
-                defaultValue={budget?.runbookAutoWritesPerIncident ?? 3}
-              />
-            </Field>
-            <Field label="Automatic non-idempotent actions per incident">
-              <Input
-                name="nonIdempotent"
-                aria-label="Automatic non-idempotent actions per incident"
-                type="number"
-                min={0}
-                max={100}
-                defaultValue={budget?.runbookAutoNonIdempotentPerIncident ?? 0}
-              />
-            </Field>
-            <SubmitButton>Save remediation budgets</SubmitButton>
-          </ActionForm>
-        </details>
-      )}
+      {tab === 'agents' && <AgentFilterBar key={JSON.stringify(query)} query={query} />}
 
       {/* Tabbed Infrastructure Modules */}
       <nav aria-label="Infrastructure sections" className="flex gap-2 overflow-x-auto">

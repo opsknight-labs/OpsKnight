@@ -177,7 +177,7 @@ export function LibraryFilterBar({ query }: LibraryFilterBarProps) {
                 id="advanced-owner-id"
                 value={ownerId}
                 onChange={e => setOwnerId(e.target.value)}
-                placeholder="UUID of runbook creator"
+                placeholder="User ID of runbook creator"
                 className="h-8 text-xs bg-background font-mono"
               />
             </div>

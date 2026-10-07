@@ -10,6 +10,7 @@ import {
   ExecutionDetailDrawer,
   type ExecutionItemData,
 } from './ExecutionDetailDrawer';
+import { ACTIVE_EXECUTION_STATUSES } from '@/lib/runbooks/presentation/contracts';
 
 export type ExecutionListProps = {
   executions: ExecutionItemData[];
@@ -18,6 +19,7 @@ export type ExecutionListProps = {
   runningCount?: number;
   waitingApprovalCount?: number;
   failedCount?: number;
+  activeCount?: number;
 };
 
 export function ExecutionList({
@@ -27,6 +29,7 @@ export function ExecutionList({
   runningCount: propRunningCount,
   waitingApprovalCount: propWaitingApprovalCount,
   failedCount: propFailedCount,
+  activeCount: propActiveCount,
 }: ExecutionListProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedExecution = executions.find(item => item.id === selectedId) ?? null;
@@ -39,8 +42,14 @@ export function ExecutionList({
   const failedCount =
     propFailedCount ??
     executions.filter(e => e.status === 'FAILED' || e.status === 'TIMED_OUT').length;
+  const activeCount =
+    propActiveCount ??
+    executions.filter(e => (ACTIVE_EXECUTION_STATUSES as readonly string[]).includes(e.status)).length;
 
-  const hasActive = runningCount > 0 || waitingApprovalCount > 0 || Boolean(selectedId);
+  const isSelectedActive = selectedExecution
+    ? (ACTIVE_EXECUTION_STATUSES as readonly string[]).includes(selectedExecution.status)
+    : false;
+  const hasActive = activeCount > 0 || isSelectedActive;
   useRunbookRefresh(router, { enabled: hasActive, refreshOnFocus: true });
 
   return (

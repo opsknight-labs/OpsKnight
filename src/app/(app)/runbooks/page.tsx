@@ -140,7 +140,7 @@ export default async function RunbooksPage({
       <RunbookModuleNav summary={navigation} />
 
       {/* Search & Filter Toolbar */}
-      <LibraryFilterBar query={query} />
+      <LibraryFilterBar key={JSON.stringify(query)} query={query} />
 
       {/* Library Operational Cards */}
       <RunbookLibrary

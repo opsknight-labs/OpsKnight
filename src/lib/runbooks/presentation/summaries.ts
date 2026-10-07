@@ -3,6 +3,7 @@ import { cache } from 'react';
 import prisma from '@/lib/prisma';
 import { ACTIVE_EXECUTION_STATUSES, getSuccessRate, type NavigationSummary } from './contracts';
 import { CIRCUIT_BREAKER_FAIL_THRESHOLD } from '../types';
+import { getJobWorkerStatus } from '@/lib/job-worker';
 
 export const getRunbookDatabaseNow = cache(async () => {
   const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT NOW() AS now`;
@@ -50,8 +51,10 @@ export const getRunbookHealthSummary = cache(async () => {
   ]);
   const oldest = oldestPending ? Math.max(0, Math.round((now.getTime() - oldestPending.availableAt.getTime()) / 1000)) : 0;
   const circuitCount = circuits[0]?.count ?? 0;
-  const health = fleet.unhealthy || unknown || expiredLeases || circuitCount || oldest > 300 ? 'DEGRADED' : fleet.enrolled ? 'HEALTHY' : 'UNKNOWN';
-  return { fleet, unknown, expiredLeases, oldest, circuits: circuitCount, health } as const;
+  const localWorker = getJobWorkerStatus();
+  const workerHasError = Boolean(localWorker.running && localWorker.lastError);
+  const health = fleet.unhealthy || unknown || expiredLeases || circuitCount || oldest > 300 || workerHasError ? 'DEGRADED' : fleet.enrolled ? 'HEALTHY' : 'UNKNOWN';
+  return { fleet, unknown, expiredLeases, oldest, circuits: circuitCount, health, workerLastError: workerHasError ? localWorker.lastError : null } as const;
 });
 export const getRunbookNavigationSummary = cache(async (): Promise<NavigationSummary> => {
   try {

@@ -84,10 +84,27 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
     ? await checkRunbookDeleteEligibility(id)
     : null;
 
+  const runbookSlug = runbook.slug;
+  const runbookName = runbook.name;
+
   async function handleDeleteRunbook(formData: FormData) {
     'use server';
-    const confirmation = String(formData.get('confirmation') || '');
-    await deleteRunbookAction(id, confirmation);
+    const confirmation = String(formData.get('confirmation') || '').trim();
+    if (!confirmation) {
+      return { error: 'Confirmation text is required to permanently delete this runbook.' };
+    }
+    if (confirmation !== runbookSlug.trim() && confirmation !== runbookName.trim()) {
+      return {
+        error: `Confirmation text "${confirmation}" did not match the Runbook name ("${runbookName}") or slug ("${runbookSlug}").`,
+      };
+    }
+    try {
+      await deleteRunbookAction(id, confirmation);
+    } catch (err) {
+      return {
+        error: err instanceof Error ? err.message : 'Could not delete runbook.',
+      };
+    }
     redirect('/runbooks');
   }
 

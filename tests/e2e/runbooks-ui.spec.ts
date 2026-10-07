@@ -468,6 +468,11 @@ test('server pagination, administrator labels, effective capabilities and budget
       async () => (await prisma.runbookAgent.findUniqueOrThrow({ where: { id: agent.id } })).labels
     )
     .toEqual({ env: 'prod', host: 'node-a' });
+  await page.keyboard.press('Escape');
+  await page
+    .getByRole('navigation', { name: 'Infrastructure sections' })
+    .getByRole('link', { name: /^security/i })
+    .click();
   await page
     .getByText('Automatic remediation budgets', { exact: true })
     .filter({ visible: true })

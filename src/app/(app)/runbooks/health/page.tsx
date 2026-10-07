@@ -114,6 +114,18 @@ export default async function RunbookHealthPage() {
     });
   }
 
+  if (localWorker.running && localWorker.lastError) {
+    issues.push({
+      id: 'local-worker-error',
+      type: 'queue',
+      severity: 'danger',
+      title: 'Local Execution Worker Error',
+      description: `In-process runbook worker reported a fault: ${localWorker.lastError}`,
+      actionHref: '/api/health?mode=readiness',
+      actionLabel: 'Inspect Worker',
+    });
+  }
+
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6">
       <RunbookLiveRefresh enabled={true} intervalMs={20000} />
@@ -147,9 +159,9 @@ export default async function RunbookHealthPage() {
           },
           {
             label: 'Safety Controls',
-            value: attention ? `${issues.length} Alert` : health.health === 'UNKNOWN' ? 'Unknown' : 'Nominal',
+            value: attention ? `${issues.length} ${issues.length === 1 ? 'Alert' : 'Alerts'}` : health.health === 'UNKNOWN' ? 'Unknown' : 'Nominal',
             tone: attention ? 'warning' : health.health === 'UNKNOWN' ? 'default' : 'success',
-            subtext: attention ? 'Action required' : 'Zero tripped',
+            subtext: attention ? 'Action required' : health.health === 'UNKNOWN' ? 'Status unknown' : 'Zero tripped',
           },
         ]}
       />

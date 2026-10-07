@@ -1,5 +1,5 @@
 import { getRunbookDatabaseNow, getRunbookExecutionSummary, getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
-import { getExecutionDateRange, getExecutionProgress, getUnknownOutcomeWhere, TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
+import { ACTIVE_EXECUTION_STATUSES, getExecutionDateRange, getExecutionProgress, getUnknownOutcomeWhere, TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser } from '@/lib/rbac';
@@ -78,6 +78,9 @@ export default async function RunbookExecutionsPage({
   const waitingApprovalCount = statusCounts.find(r => r.status === 'WAITING_APPROVAL')?._count.id ?? 0;
   const failedCount = statusCounts
     .filter(r => r.status === 'FAILED' || r.status === 'TIMED_OUT')
+    .reduce((acc, r) => acc + r._count.id, 0);
+  const activeCount = statusCounts
+    .filter(r => (ACTIVE_EXECUTION_STATUSES as readonly string[]).includes(r.status))
     .reduce((acc, r) => acc + r._count.id, 0);
 
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / RUNBOOK_PAGE_SIZE)));
@@ -190,6 +193,7 @@ export default async function RunbookExecutionsPage({
         runningCount={runningCount}
         waitingApprovalCount={waitingApprovalCount}
         failedCount={failedCount}
+        activeCount={activeCount}
       />
 
       {/* Bounded Server Pagination */}
