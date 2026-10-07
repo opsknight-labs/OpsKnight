@@ -3,7 +3,7 @@
 /* eslint-disable security/detect-non-literal-fs-filename */
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { AgentApiError, AgentClient, enrollAgent } from './client';
 import { LeaseAuthority } from './lease';
@@ -147,11 +147,11 @@ async function run() {
 
   let clockError: string | null = null;
   let lastClockCheck = 0;
-  let cachedClockSkew = 0;
+  let cachedClockSkew: number | null = null;
 
-  const checkClock = async (force = false) => {
+  const checkClock = async (force = false): Promise<number | null> => {
     const now = Date.now();
-    if (!force && now - lastClockCheck < 30_000) {
+    if (!force && lastClockCheck > 0 && now - lastClockCheck < 30_000) {
       return cachedClockSkew;
     }
     try {
@@ -164,7 +164,10 @@ async function run() {
         clockError = null; // Clear immediately when clock becomes healthy
       }
     } catch {
-      // Retain last known state on transient error
+      if (lastClockCheck === 0 || cachedClockSkew === null) {
+        clockError =
+          'Initial clock synchronization check with control plane failed. Execution claims paused.';
+      }
     }
     return cachedClockSkew;
   };
@@ -185,16 +188,37 @@ async function run() {
     });
   };
   await heartbeat();
+
+  const drainFilePath = `${dataDirectory}/drain`;
+  const drainReadyFilePath = `${dataDirectory}/drain-ready`;
+
+  const checkDraining = async (): Promise<boolean> => {
+    try {
+      await access(drainFilePath);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   let publishingHealth = false;
   const publishHealth = async () => {
     if (publishingHealth) return;
     publishingHealth = true;
     try {
+      const draining = await checkDraining();
       await mkdir(dataDirectory, { recursive: true, mode: 0o700 });
       const temporary = `${dataDirectory}/health.${process.pid}.tmp`;
       await writeFile(
         temporary,
-        JSON.stringify({ pid: process.pid, updatedAt: Date.now(), ready: true }),
+        JSON.stringify({
+          pid: process.pid,
+          updatedAt: Date.now(),
+          ready: !draining && clockError === null,
+          draining,
+          activeAttemptCount: active,
+          version: process.env.OPSKNIGHT_AGENT_VERSION ?? '2.0.0',
+        }),
         { mode: 0o600 }
       );
       await rename(temporary, `${dataDirectory}/health.json`);
@@ -208,7 +232,7 @@ async function run() {
 
   const shutdown = () => {
     shuttingDown = true;
-    activeController?.abort();
+    activeController?.abort('AGENT_SHUTDOWN');
     clearInterval(heartbeatTimer);
     clearInterval(healthTimer);
     process.exitCode = 0;
@@ -219,6 +243,23 @@ async function run() {
   try {
     while (!shuttingDown) {
       await flushSpool();
+      const draining = await checkDraining();
+      if (draining) {
+        if (active === 0) {
+          try {
+            await writeFile(
+              drainReadyFilePath,
+              JSON.stringify({ draining: true, at: Date.now(), activeAttempts: 0 }),
+              { mode: 0o600 }
+            );
+          } catch {
+            // State directory write
+          }
+        }
+        await publishHealth();
+        await new Promise(resolve => setTimeout(resolve, 1_000));
+        continue;
+      }
       let attempt: ClaimedAttempt | null = null;
       let started = false;
       let renewTimer: NodeJS.Timeout | null = null;
@@ -227,8 +268,8 @@ async function run() {
       let outcomeKnown = false;
       try {
         const skew = await checkClock(false);
-        if (skew > 60) {
-          await new Promise(resolve => setTimeout(resolve, 10_000));
+        if (skew === null || skew > 60) {
+          await new Promise(resolve => setTimeout(resolve, 5_000));
           continue;
         }
         attempt = await client.claim();
@@ -325,18 +366,29 @@ async function run() {
         // Stop accepting work if a known outcome cannot reach durable storage.
         if (outcomeKnown && !resultPersisted) throw error;
         if (attempt && started && !resultPersisted) {
+          const isWrite = attempt.step.riskClass !== 'READ_ONLY';
           await spool.put({
             attemptId: attempt.attemptId,
             leaseToken: attempt.leaseToken,
             producedAt: new Date().toISOString(),
-            status: shuttingDown ? 'UNKNOWN' : lastError.startsWith('LOCAL_POLICY_DENIED') ? 'FAILED' : 'UNKNOWN',
+            status: shuttingDown
+              ? isWrite
+                ? 'UNKNOWN'
+                : 'CANCELLED'
+              : lastError.startsWith('LOCAL_POLICY_DENIED')
+                ? 'FAILED'
+                : 'UNKNOWN',
             errorCode: shuttingDown
-              ? 'AGENT_INTERRUPTED_BY_SHUTDOWN'
+              ? isWrite
+                ? 'AGENT_INTERRUPTED_BY_SHUTDOWN'
+                : 'AGENT_SHUTDOWN'
               : lastError.startsWith('LOCAL_POLICY_DENIED')
                 ? 'LOCAL_POLICY_DENIED'
                 : 'AGENT_FAILURE',
             errorMessage: shuttingDown
-              ? 'Execution was interrupted by process shutdown; target state is unknown.'
+              ? isWrite
+                ? 'Execution was interrupted by process shutdown; target state is unknown.'
+                : 'Execution was cancelled by process shutdown.'
               : lastError,
           });
         }

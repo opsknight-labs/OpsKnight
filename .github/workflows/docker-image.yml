@@ -299,6 +299,8 @@ jobs:
           platforms: linux/amd64
           push: false
           tags: opsknight-agent-pr-validation:${{ github.sha }}
+          build-args: |
+            OPSKNIGHT_VERSION=${{ github.ref_name }}
           cache-from: type=gha,scope=opsknight-agent-main-amd64
           provenance: false
           sbom: false
@@ -597,6 +599,8 @@ jobs:
           tags: |
             ${{ env.IMAGE_NAME_AGENT }}:latest
             ${{ env.IMAGE_NAME_AGENT }}:sha-${{ github.sha }}
+          build-args: |
+            OPSKNIGHT_VERSION=${{ github.ref_name }}
           cache-from: type=gha,scope=opsknight-agent-main-amd64
           cache-to: type=gha,scope=opsknight-agent-main-amd64,mode=max
           provenance: false
@@ -747,6 +751,8 @@ jobs:
           push: true
           tags: ${{ steps.agent_meta.outputs.tags }}
           labels: ${{ steps.agent_meta.outputs.labels }}
+          build-args: |
+            OPSKNIGHT_VERSION=${{ github.ref_name }}
           cache-from: type=gha,scope=opsknight-agent-release
           cache-to: type=gha,scope=opsknight-agent-release,mode=max
           provenance: mode=max

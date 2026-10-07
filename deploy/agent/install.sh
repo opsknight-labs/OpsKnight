@@ -12,6 +12,7 @@ ENROLLMENT_TOKEN="${ENROLLMENT_TOKEN:-}"
 TARBALL_OVERRIDE=""
 CHECKSUM_OVERRIDE=""
 ALLOW_UNVERIFIED_TARBALL=false
+ALLOW_INSECURE_HTTP=false
 RELEASE_TAG="${OPSKNIGHT_VERSION:-2.0.0}"
 CLEAN_VERSION="${RELEASE_TAG#v}"
 CLEAN_TAG="v${CLEAN_VERSION}"
@@ -72,6 +73,10 @@ while [[ $# -gt 0 ]]; do
       ALLOW_UNVERIFIED_TARBALL=true
       shift 1
       ;;
+    --allow-insecure-http)
+      ALLOW_INSECURE_HTTP=true
+      shift 1
+      ;;
     --version)
       RELEASE_TAG="$2"
       CLEAN_VERSION="${RELEASE_TAG#v}"
@@ -96,6 +101,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --tarball <path>                 Local artifact archive to install"
       echo "  --checksum <sha256>              Expected SHA256 checksum for local tarball"
       echo "  --allow-unverified-tarball       Allow local tarball without checksum verification"
+      echo "  --allow-insecure-http            Allow plain http:// control plane URL (insecure)"
       echo "  --version <tag>                  Release version tag (default: ${RELEASE_TAG})"
       echo "  --no-restart                     Do not restart service if already running"
       exit 0
@@ -164,6 +170,22 @@ if [[ -z "${OPSKNIGHT_URL}" ]]; then
   echo "ERROR: --url <control-plane-url> is required." >&2
   echo "Example: sudo $0 --url https://opsknight.company.com --key <base64-spki-pin> --token <enrollment-token>" >&2
   exit 1
+fi
+
+URL_PROTO="$(echo "${OPSKNIGHT_URL}" | grep -o '^[a-zA-Z]*://' || echo '')"
+URL_HOST="$(echo "${OPSKNIGHT_URL}" | sed -E 's|^[a-zA-Z]+://([^:/]+).*|\1|')"
+
+IS_LOOPBACK=false
+if [[ "${URL_HOST}" == "localhost" || "${URL_HOST}" == "127.0.0.1" || "${URL_HOST}" == "::1" || "${URL_HOST}" == "0.0.0.0" ]]; then
+  IS_LOOPBACK=true
+fi
+
+if [[ "${URL_PROTO}" != "https://" ]]; then
+  if [[ "${IS_LOOPBACK}" != "true" && "${ALLOW_INSECURE_HTTP}" != "true" ]]; then
+    echo "ERROR: OPSKNIGHT_URL must use https:// for secure credential transport." >&2
+    echo "Plain http:// is only permitted for loopback testing (127.0.0.1/localhost) or with --allow-insecure-http." >&2
+    exit 1
+  fi
 fi
 
 IDENTITY_FILE="${STATE_DIR}/identity.json"
@@ -537,6 +559,12 @@ fi
 
 # Prepare transactional backup for rollback on any failure
 BACKUP_DIR=$(mktemp -d "/opt/opsknight-agent.backup.XXXXXX" 2>/dev/null || mktemp -d "/tmp/opsknight-agent.backup.XXXXXX")
+LEGACY_DIR="/usr/local/lib/opsknight-agent"
+LEGACY_LAYOUT=false
+if [[ -d "${LEGACY_DIR}" ]]; then
+  LEGACY_LAYOUT=true
+fi
+
 if [[ -d "${INSTALL_PREFIX}" && -n "$(ls -A "${INSTALL_PREFIX}" 2>/dev/null)" ]]; then
   cp -a "${INSTALL_PREFIX}" "${BACKUP_DIR}/opt"
 fi
@@ -551,29 +579,55 @@ if [[ -f "${CONFIG_DIR}/policy.json" ]]; then
 fi
 
 rollback_and_fail() {
-  local error_msg="$1"
+  local error_msg="${1:-Installation failed.}"
+  trap - ERR
   echo "ERROR: ${error_msg}" >&2
+  echo "Initiating transactional rollback to previous installation..." >&2
+
+  # 1. Restore /opt independently
   if [[ -d "${BACKUP_DIR}/opt" ]]; then
-    echo "Initiating transactional rollback to previous installation..." >&2
     rm -rf "${INSTALL_PREFIX}"
     mv "${BACKUP_DIR}/opt" "${INSTALL_PREFIX}"
-    if [[ -f "${BACKUP_DIR}/agent.env" ]]; then
-      cp -a "${BACKUP_DIR}/agent.env" "${CONFIG_DIR}/agent.env"
-    fi
-    if [[ -f "${BACKUP_DIR}/opsknight-agent.service" ]]; then
-      cp -a "${BACKUP_DIR}/opsknight-agent.service" /etc/systemd/system/opsknight-agent.service
-    fi
-    if command -v systemctl >/dev/null 2>&1; then
-      systemctl daemon-reload 2>/dev/null || true
-      if [[ "${SERVICE_WAS_ACTIVE}" == "true" ]]; then
-        systemctl restart opsknight-agent 2>/dev/null || true
-      fi
-    fi
-    echo "Rollback to previous installation completed." >&2
+  else
+    rm -rf "${INSTALL_PREFIX}"
   fi
+
+  # 2. Restore systemd service unit independently
+  if [[ -f "${BACKUP_DIR}/opsknight-agent.service" ]]; then
+    cp -a "${BACKUP_DIR}/opsknight-agent.service" /etc/systemd/system/opsknight-agent.service
+  elif [[ -f "/etc/systemd/system/opsknight-agent.service" ]]; then
+    rm -f /etc/systemd/system/opsknight-agent.service
+  fi
+
+  # 3. Restore agent.env independently
+  if [[ -f "${BACKUP_DIR}/agent.env" ]]; then
+    cp -a "${BACKUP_DIR}/agent.env" "${CONFIG_DIR}/agent.env"
+  fi
+
+  # 4. Restore policy.json independently
+  if [[ -f "${BACKUP_DIR}/policy.json" ]]; then
+    cp -a "${BACKUP_DIR}/policy.json" "${CONFIG_DIR}/policy.json"
+  fi
+
+  # 5. Clean up drain flags
+  rm -f "${STATE_DIR}/drain" "${STATE_DIR}/drain-ready"
+
+  # 6. Reload and restart previous service if it was active
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload 2>/dev/null || true
+    if [[ "${SERVICE_WAS_ACTIVE}" == "true" ]]; then
+      echo "Restarting previous service..." >&2
+      systemctl restart opsknight-agent 2>/dev/null || true
+    fi
+  fi
+
   rm -rf "${BACKUP_DIR}" "${STAGE_DIR:-}"
+  echo "Rollback to previous installation completed." >&2
   exit 1
 }
+
+# Arm transaction-wide error trap across staging activation, configuration, and restart
+trap 'rollback_and_fail "Command failed on line $LINENO (exit code $?)."' ERR
 
 # Swap staged directory into target
 rm -rf "${INSTALL_PREFIX}"
@@ -645,40 +699,85 @@ if [[ "${SERVICE_WAS_ACTIVE}" == "true" ]] && command -v systemctl >/dev/null 2>
     echo "Skipping automatic restart (--no-restart requested)."
     echo "To restart manually: sudo systemctl restart opsknight-agent"
   else
-    # Check if active work is executing before restarting
     AGENT_PID="$(systemctl show opsknight-agent --property=MainPID --value 2>/dev/null || echo "0")"
-    if [[ "${AGENT_PID}" -gt 0 ]] && command -v pgrep >/dev/null 2>&1; then
-      if pgrep -P "${AGENT_PID}" >/dev/null 2>&1; then
-        echo "Notice: Active execution in progress under Agent PID ${AGENT_PID}. Waiting up to 30s to drain..."
-        DRAIN_WAITED=0
-        while [[ ${DRAIN_WAITED} -lt 30 ]]; do
-          if ! pgrep -P "${AGENT_PID}" >/dev/null 2>&1; then
-            echo "In-flight execution drained successfully: [OK]"
-            break
-          fi
-          sleep 2
-          DRAIN_WAITED=$((DRAIN_WAITED + 2))
-        done
-        if [[ ${DRAIN_WAITED} -ge 30 ]]; then
-          echo "WARNING: In-flight execution did not complete within 30s. Interruption will record target state as UNKNOWN." >&2
+    if [[ "${AGENT_PID}" -gt 0 ]]; then
+      echo "Requesting Agent drain via ${STATE_DIR}/drain..."
+      touch "${STATE_DIR}/drain"
+      chown "${SERVICE_USER}:${SERVICE_USER}" "${STATE_DIR}/drain" 2>/dev/null || true
+      rm -f "${STATE_DIR}/drain-ready"
+
+      DRAIN_WAITED=0
+      DRAINED=false
+      while [[ ${DRAIN_WAITED} -lt 30 ]]; do
+        if [[ -f "${STATE_DIR}/drain-ready" ]]; then
+          DRAINED=true
+          echo "Agent execution drain complete: [OK]"
+          break
         fi
+        sleep 1
+        DRAIN_WAITED=$((DRAIN_WAITED + 1))
+      done
+      if [[ "${DRAINED}" != "true" ]]; then
+        echo "WARNING: In-flight execution did not complete within 30s. Interruption will record target state as UNKNOWN." >&2
       fi
     fi
 
+    RESTART_START_TIME="$(date +%s000 2>/dev/null || node -e 'console.log(Date.now())' 2>/dev/null || echo "0")"
     echo "Restarting opsknight-agent service..."
     if ! systemctl restart opsknight-agent; then
       rollback_and_fail "systemctl restart opsknight-agent failed."
     fi
-    sleep 2
-    if systemctl is-active --quiet opsknight-agent 2>/dev/null; then
-      echo "Agent service successfully restarted: [OK]"
-    else
-      rollback_and_fail "Agent service restart did not reach active state. Check logs: sudo journalctl -u opsknight-agent -n 50"
+
+    echo "Verifying service startup and runtime health..."
+    HEALTH_VERIFIED=false
+    CHECK_ATTEMPTS=0
+    while [[ ${CHECK_ATTEMPTS} -lt 15 ]]; do
+      sleep 1
+      CHECK_ATTEMPTS=$((CHECK_ATTEMPTS + 1))
+
+      if ! systemctl is-active --quiet opsknight-agent 2>/dev/null; then
+        continue
+      fi
+
+      NEW_PID="$(systemctl show opsknight-agent --property=MainPID --value 2>/dev/null || echo "0")"
+      if [[ -z "${NEW_PID}" || "${NEW_PID}" == "0" || "${NEW_PID}" == "${AGENT_PID}" ]]; then
+        continue
+      fi
+
+      HEALTH_FILE="${STATE_DIR}/health.json"
+      if [[ -f "${HEALTH_FILE}" ]]; then
+        if "${INSTALL_PREFIX}/runtime/bin/node" -e '
+          const fs = require("fs");
+          try {
+            const h = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const targetPid = parseInt(process.argv[2], 10);
+            const minTime = parseInt(process.argv[3], 10);
+            if (h.pid === targetPid && h.ready === true && h.updatedAt >= (minTime - 10000)) {
+              process.exit(0);
+            }
+          } catch {}
+          process.exit(1);
+        ' "${HEALTH_FILE}" "${NEW_PID}" "${RESTART_START_TIME}" 2>/dev/null; then
+          HEALTH_VERIFIED=true
+          break
+        fi
+      fi
+    done
+
+    if [[ "${HEALTH_VERIFIED}" != "true" ]]; then
+      rollback_and_fail "Agent service restart did not reach healthy active state with valid health.json. Check logs: sudo journalctl -u opsknight-agent -n 50"
     fi
+    echo "Agent service successfully restarted and verified healthy (PID ${NEW_PID}): [OK]"
   fi
 fi
 
-# Installation and health verification succeeded; clean up backup
+# Health verification succeeded; disarm trap and clean up
+trap - ERR
+rm -f "${STATE_DIR}/drain" "${STATE_DIR}/drain-ready"
+if [[ "${LEGACY_LAYOUT}" == "true" && -d "${LEGACY_DIR}" ]]; then
+  echo "Cleaning up legacy layout at ${LEGACY_DIR}..."
+  rm -rf "${LEGACY_DIR}"
+fi
 rm -rf "${BACKUP_DIR}"
 
 echo "Installed successfully at ${INSTALL_PREFIX}."

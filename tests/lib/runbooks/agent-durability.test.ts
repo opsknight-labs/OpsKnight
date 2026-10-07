@@ -175,4 +175,46 @@ describe('Agent authority and durable recovery', () => {
       )
     ).toThrow();
   });
+
+  it('records in-flight shutdown interrupts as UNKNOWN for WRITE and CANCELLED for READ_ONLY', async () => {
+    const { executeAttempt } = await import('../../../agent/src/executor');
+    const policy = {
+      allowedStepTypes: ['SYSTEMD', 'BASH'] as ('SYSTEMD' | 'BASH')[],
+      allowNonIdempotent: true,
+      maxRuntimeSeconds: 30,
+      maxOutputBytes: 1024,
+      systemdUnits: ['payments.service'],
+      dockerContainers: [],
+      kubernetesNamespaces: [],
+      bashCommandPatterns: [],
+    };
+
+    const controllerWrite = new AbortController();
+    controllerWrite.abort('AGENT_SHUTDOWN');
+    const attemptWrite: ClaimedAttempt = {
+      attemptId: 'att-write',
+      signingAgentId: 'agent1',
+      leaseToken: 'token',
+      leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      executionDeadlineAt: new Date(Date.now() + 60000).toISOString(),
+      step: {
+        key: 'step-1',
+        name: 'Restart service',
+        type: 'SYSTEMD',
+        riskClass: 'NON_IDEMPOTENT',
+        timeoutSeconds: 30,
+        config: { action: 'restart', unit: 'payments.service' },
+      },
+      inputValues: {},
+      secretInputKeys: [],
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec-1',
+      signature: 'dummy',
+    };
+
+    const resultWrite = await executeAttempt(attemptWrite, policy, controllerWrite.signal);
+    expect(resultWrite.status).toBe('CANCELLED');
+    expect(resultWrite.errorCode).toBe('AGENT_INTERRUPTED_BY_SHUTDOWN');
+  });
 });

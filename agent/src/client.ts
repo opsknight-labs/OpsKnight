@@ -170,6 +170,19 @@ export class AgentClient {
 }
 
 export async function enrollAgent(baseUrl: string, token: string): Promise<AgentIdentity> {
+  const parsedUrl = new URL(baseUrl);
+  const isLoopback = ['localhost', '127.0.0.1', '::1'].includes(parsedUrl.hostname);
+  if (
+    parsedUrl.protocol !== 'https:' &&
+    !isLoopback &&
+    !(
+      process.env.NODE_ENV === 'development' &&
+      process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true'
+    )
+  ) {
+    throw new Error('Enrollment token transport requires an HTTPS control-plane URL.');
+  }
+
   try {
     const timeRes = await fetch(new URL('/api/runbook-agent/v1/time', baseUrl), {
       method: 'GET',

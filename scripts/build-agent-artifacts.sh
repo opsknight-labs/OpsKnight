@@ -17,7 +17,7 @@ RELEASE_TAG="v${RELEASE_VERSION}"
 
 echo "=== Building OpsKnight Agent JS Bundle v${RELEASE_VERSION} (Node 24 target) ==="
 mkdir -p "${DIST_DIR}"
-npx esbuild "${ROOT_DIR}/agent/src/index.ts" \
+npx --yes esbuild@0.28.2 "${ROOT_DIR}/agent/src/index.ts" \
   --bundle \
   --platform=node \
   --target=node24 \

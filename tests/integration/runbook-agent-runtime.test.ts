@@ -59,6 +59,10 @@ async function exerciseRuntime(
         response.writeHead(200, { 'content-type': 'application/json' });
         response.end(JSON.stringify({ data }));
       };
+      if (request.url?.includes('/time')) {
+        send({ serverTime: new Date().toISOString(), epochMs: Date.now() });
+        return;
+      }
       if (request.url?.includes('/claim')) {
         claimCount++;
         if (claimed) {

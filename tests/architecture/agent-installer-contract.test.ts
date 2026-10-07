@@ -96,14 +96,26 @@ describe('Installer logic and OS-release contract', () => {
     expect(installScript).toContain('CLEAN_TAG="v${CLEAN_VERSION}"');
   });
 
-  it('drains active executions before restarting active agent process', () => {
-    expect(installScript).toContain('pgrep -P "${AGENT_PID}"');
-    expect(installScript).toContain('Waiting up to 30s to drain');
+  it('drains active executions using state directory drain protocol before restart', () => {
+    expect(installScript).toContain('touch "${STATE_DIR}/drain"');
+    expect(installScript).toContain('${STATE_DIR}/drain-ready');
+    expect(installScript).toContain('Agent execution drain complete');
   });
 
-  it('initiates transactional rollback on activation or restart failure', () => {
+  it('initiates transactional rollback on activation or restart failure with ERR trap', () => {
     expect(installScript).toContain('rollback_and_fail');
+    expect(installScript).toContain('trap \'rollback_and_fail');
     expect(installScript).toContain('Initiating transactional rollback to previous installation');
+  });
+
+  it('supports independent rollback for legacy /usr/local installation layout', () => {
+    expect(installScript).toContain('LEGACY_DIR="/usr/local/lib/opsknight-agent"');
+    expect(installScript).toContain('LEGACY_LAYOUT=true');
+  });
+
+  it('enforces https:// protocol unless loopback or --allow-insecure-http', () => {
+    expect(installScript).toContain('OPSKNIGHT_URL must use https://');
+    expect(installScript).toContain('--allow-insecure-http');
   });
 
   it('enforces local tarball integrity verification unless explicitly bypassed', () => {
