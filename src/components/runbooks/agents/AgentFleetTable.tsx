@@ -6,7 +6,6 @@ import { useRunbookRefresh } from '../useRunbookRefresh';
 import { Bot, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Textarea } from '@/components/ui/shadcn/textarea';
 import EmptyState from '@/components/ui/EmptyState';
 import { RunbookStatusBadge } from '../RunbookStatusBadge';
 import { AgentCapabilitySummary } from './AgentCapabilitySummary';
@@ -14,16 +13,7 @@ import {
   AgentDetailDrawer,
   type AgentItemData,
 } from './AgentDetailDrawer';
-import {
-  ActionForm,
-  ConfirmAction,
-  SubmitButton,
-} from '../RunbookControls';
 import { formatDateTime } from '@/lib/timezone';
-import {
-  revokeAgentAction,
-  updateSchedulingLabelsAction,
-} from '@/app/(app)/runbooks/actions';
 
 export type AgentFleetTableProps = {
   agents: AgentItemData[];
@@ -35,7 +25,7 @@ export function AgentFleetTable({ agents, userTimeZone, canManage }: AgentFleetT
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedAgent = agents.find(agent => agent.id === selectedId) ?? null;
   const router = useRouter();
-  useRunbookRefresh(router, Boolean(selectedId));
+  useRunbookRefresh(router, { enabled: true, refreshOnFocus: true });
 
   return (
     <div className="space-y-4">
@@ -59,21 +49,18 @@ export function AgentFleetTable({ agents, userTimeZone, canManage }: AgentFleetT
             <td className="px-3 py-2"><RunbookStatusBadge status={agent.effectiveStatus} size="sm" /></td>
             <td className="px-3 py-2">{agent.hostname || 'Not reported'}</td><td className="px-3 py-2">{agent.version || 'Not reported'}</td><td className="px-3 py-2">{agent.platform || 'Not reported'}</td>
             <td className="px-3 py-2 whitespace-nowrap">{agent.lastHeartbeatAt ? formatDateTime(agent.lastHeartbeatAt, userTimeZone, { format: 'datetime' }) : 'Never'}</td>
-            <td className="px-3 py-2">{agent.activeAttemptCount}</td><td className="px-3 py-2">{agent.spoolDepth}</td><td className="px-3 py-2">{agent.deadLetterDepth}</td><td className="px-3 py-2">{agent.poolMemberships.map(member => member.pool.name).join(', ') || 'None'}</td>
+            <td className="px-3 py-2">{agent.activeAttemptCount}</td><td className="px-3 py-2">{agent.spoolDepth}</td><td className="px-3 py-2">{agent.deadLetterDepth}</td><td className="px-3 py-2">{agent.poolMemberships.map(member => member.pool.name).join(', ') || 'None'}{agent.totalPoolCount && agent.totalPoolCount > agent.poolMemberships.length ? ` (+${agent.totalPoolCount - agent.poolMemberships.length} more)` : ''}</td>
             <td className="px-3 py-2 text-right" onClick={e => e.stopPropagation()}><Button variant="outline" size="sm" onClick={() => setSelectedId(agent.id)} className="h-7 text-xs">Inspect Agent</Button></td>
           </tr>)}</tbody>
         </table>
       </div>
       {/* High-density fleet list/cards */}
       <div className="grid gap-3 lg:hidden">
-        {agents.map(agent => {
-          const isRevoked = agent.status === 'REVOKED';
-
-          return (
-            <div
-              key={agent.id}
-              className="flex flex-col justify-between rounded-xl border bg-card/80 p-4 shadow-2xs transition-all hover:bg-card hover:border-primary/40 space-y-3.5"
-            >
+        {agents.map(agent => (
+          <div
+            key={agent.id}
+            className="flex flex-col justify-between rounded-xl border bg-card/80 p-4 shadow-2xs transition-all hover:bg-card hover:border-primary/40 space-y-3.5"
+          >
               {/* Header: Name, Host, Status */}
               <div className="flex items-start justify-between gap-2.5">
                 <div className="space-y-0.5 min-w-0">
@@ -111,7 +98,7 @@ export function AgentFleetTable({ agents, userTimeZone, canManage }: AgentFleetT
                 <div>
                   <span className="text-[11px] block">Pools</span>
                   <span className="font-medium text-foreground truncate block">
-                    {agent.poolMemberships.map(p => p.pool.name).join(', ') || 'None'}
+                    {agent.poolMemberships.map(p => p.pool.name).join(', ') || 'None'}{agent.totalPoolCount && agent.totalPoolCount > agent.poolMemberships.length ? ` (+${agent.totalPoolCount - agent.poolMemberships.length} more)` : ''}
                   </span>
                 </div>
                 <div>
@@ -128,27 +115,6 @@ export function AgentFleetTable({ agents, userTimeZone, canManage }: AgentFleetT
                 <AgentCapabilitySummary capabilities={agent.capabilities} />
               </div>
 
-              {/* Granular capability diagnostics report (if present) */}
-              {Array.isArray(agent.capabilityReport) && agent.capabilityReport.length > 0 && (
-                <div className="rounded-lg border bg-muted/40 p-2.5 space-y-1 text-xs">
-                  {agent.capabilityReport.map((entry, index) => {
-                    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
-                    const e = entry as {
-                      name?: string;
-                      configured?: boolean;
-                      available?: boolean;
-                      reason?: string;
-                    };
-                    return (
-                      <p key={index} className="text-xs font-mono text-muted-foreground">
-                        {String(e.name || 'Runtime')} · configured {e.configured ? '✓' : '—'} · available{' '}
-                        {e.available ? '✓' : '—'} {e.reason ? `· ${e.reason}` : ''}
-                      </p>
-                    );
-                  })}
-                </div>
-              )}
-
               {/* Error indicator */}
               {agent.lastError && (
                 <p className="break-words rounded-lg bg-destructive/10 p-2.5 text-xs text-destructive font-mono">
@@ -156,56 +122,21 @@ export function AgentFleetTable({ agents, userTimeZone, canManage }: AgentFleetT
                 </p>
               )}
 
-              {/* Scheduling labels accordion */}
-              {canManage && (
-                <details className="rounded-lg border bg-card p-2.5 text-xs">
-                  <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
-                    Scheduling labels
-                  </summary>
-                  <div className="pt-2">
-                    <ActionForm action={updateSchedulingLabelsAction}>
-                      <input type="hidden" name="id" value={agent.id} />
-                      <input type="hidden" name="kind" value="agent" />
-                      <Textarea
-                        name="labels"
-                        aria-label={`Labels for ${agent.name}`}
-                        defaultValue={JSON.stringify(agent.labels)}
-                        className="font-mono text-xs min-h-[60px]"
-                      />
-                      <div className="mt-2 flex justify-end">
-                        <SubmitButton size="sm">Save scheduling labels</SubmitButton>
-                      </div>
-                    </ActionForm>
-                  </div>
-                </details>
-              )}
-
-              {/* Actions Footer */}
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/40">
+              {/* Inspect Agent Primary Action */}
+              <div className="pt-2 border-t border-border/40">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setSelectedId(agent.id)}
-                  className="h-8 text-xs gap-1"
+                  className="w-full h-8 text-xs gap-1.5"
                 >
                   <ExternalLink className="h-3 w-3" />
                   <span>Inspect Agent</span>
                 </Button>
-
-                {canManage && !isRevoked && (
-                  <ConfirmAction
-                    action={revokeAgentAction.bind(null, agent.id)}
-                    title={`Revoke ${agent.name}?`}
-                    description="The Agent immediately loses execution authority. Running actions can no longer renew their lease and will self-fence."
-                    label="Revoke Agent"
-                    variant="destructive"
-                  />
-                )}
               </div>
             </div>
-          );
-        })}
+        ))}
       </div>
 
       {agents.length === 0 && (

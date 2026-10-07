@@ -39,6 +39,7 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const { id } = await params;
   const { query, page: versionPage } = runbookPageQuery(await searchParams);
+  const bindingPage = Math.max(1, Math.min(10000, Number(query.bindingPage) || 1));
   const navigation = await getRunbookNavigationSummary();
   const [permissions, user, runbook] = await Promise.all([
     getUserPermissions(),
@@ -56,6 +57,8 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
         bindings: {
           include: { service: { select: { id: true, name: true } } },
           orderBy: { createdAt: 'desc' },
+          skip: (bindingPage - 1) * 20,
+          take: 20,
         },
         executions: {
           orderBy: { createdAt: 'desc' },
@@ -232,9 +235,28 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
           {
             id: 'bindings',
             label: 'Service Bindings',
-            count: runbook.bindings.length,
+            count: runbook._count.bindings,
             content: (
               <section className="space-y-3">
+                {runbook._count.bindings > 20 && (
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pb-2">
+                    <span>
+                      Showing {(bindingPage - 1) * 20 + 1}–{Math.min(bindingPage * 20, runbook._count.bindings)} of {runbook._count.bindings} bindings
+                    </span>
+                    <div className="flex gap-2">
+                      {bindingPage > 1 && (
+                        <Link className="text-primary hover:underline" href={`/runbooks/${id}?tab=bindings&bindingPage=${bindingPage - 1}`}>
+                          Previous
+                        </Link>
+                      )}
+                      {bindingPage * 20 < runbook._count.bindings && (
+                        <Link className="text-primary hover:underline" href={`/runbooks/${id}?tab=bindings&bindingPage=${bindingPage + 1}`}>
+                          Next
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {runbook.bindings.map(binding => (
                   <Link
                     key={binding.id}

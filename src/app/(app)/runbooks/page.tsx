@@ -6,8 +6,8 @@ import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
 import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import RunbookLibrary, { CreateRunbookDialog } from '@/components/runbooks/RunbookLibrary';
+import { LibraryFilterBar } from '@/components/runbooks/library/LibraryFilterBar';
 import {
-  RunbookFilters,
   RunbookPagination,
   runbookPageQuery,
   RUNBOOK_PAGE_SIZE,
@@ -140,20 +140,7 @@ export default async function RunbooksPage({
       <RunbookModuleNav summary={navigation} />
 
       {/* Search & Filter Toolbar */}
-      <RunbookFilters
-        query={query}
-        fields={[
-          { name: 'q', label: 'Search runbooks' },
-          { name: 'owner', label: 'Owner ID' },
-          { name: 'service', label: 'Service binding ID' },
-        ]}
-        allStatusLabel="All Active"
-        statusOptions={[
-          { value: 'published', label: 'Published' },
-          { value: 'draft', label: 'Draft' },
-          { value: 'archived', label: 'Archived' },
-        ]}
-      />
+      <LibraryFilterBar query={query} />
 
       {/* Library Operational Cards */}
       <RunbookLibrary

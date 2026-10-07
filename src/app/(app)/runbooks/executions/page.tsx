@@ -67,44 +67,52 @@ export default async function RunbookExecutionsPage({
     ...(dateRange.gte || dateRange.lt ? { createdAt: dateRange } : {}),
   };
 
-  const total = await prisma.runbookExecution.count({ where });
-  const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / RUNBOOK_PAGE_SIZE)));
-
-  const [summary, navigation, executions] = await Promise.all([
+  const [statusCounts, summary, navigation] = await Promise.all([
+    prisma.runbookExecution.groupBy({ by: ['status'], where, _count: { id: true } }),
     getRunbookExecutionSummary(),
     getRunbookNavigationSummary(),
-    prisma.runbookExecution.findMany({
-      where,
-      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-      skip: (page - 1) * RUNBOOK_PAGE_SIZE,
-      take: RUNBOOK_PAGE_SIZE,
-      select: {
-        id: true,
-        status: true,
-        triggeredByType: true,
-        createdAt: true,
-        startedAt: true,
-        completedAt: true,
-        service: { select: { id: true, name: true } },
-        resolvedTargetAgent: { select: { name: true } },
-        triggeredByUser: { select: { name: true } },
-        incidentId: true,
-        incident: { select: { id: true, title: true } },
-        runbook: { select: { id: true, name: true } },
-        runbookVersion: { select: { version: true } },
-        steps: {
-          select: {
-            id: true,
-            stepKey: true,
-            status: true,
-            startedAt: true,
-            completedAt: true,
-          },
-          orderBy: { sequence: 'asc' },
-        },
-      },
-    }),
   ]);
+
+  const total = statusCounts.reduce((acc, row) => acc + row._count.id, 0);
+  const runningCount = statusCounts.find(r => r.status === 'RUNNING')?._count.id ?? 0;
+  const waitingApprovalCount = statusCounts.find(r => r.status === 'WAITING_APPROVAL')?._count.id ?? 0;
+  const failedCount = statusCounts
+    .filter(r => r.status === 'FAILED' || r.status === 'TIMED_OUT')
+    .reduce((acc, r) => acc + r._count.id, 0);
+
+  const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / RUNBOOK_PAGE_SIZE)));
+
+  const executions = await prisma.runbookExecution.findMany({
+    where,
+    orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+    skip: (page - 1) * RUNBOOK_PAGE_SIZE,
+    take: RUNBOOK_PAGE_SIZE,
+    select: {
+      id: true,
+      status: true,
+      triggeredByType: true,
+      createdAt: true,
+      startedAt: true,
+      completedAt: true,
+      service: { select: { id: true, name: true } },
+      resolvedTargetAgent: { select: { name: true } },
+      triggeredByUser: { select: { name: true } },
+      incidentId: true,
+      incident: { select: { id: true, title: true } },
+      runbook: { select: { id: true, name: true } },
+      runbookVersion: { select: { version: true } },
+      steps: {
+        select: {
+          id: true,
+          stepKey: true,
+          status: true,
+          startedAt: true,
+          completedAt: true,
+        },
+        orderBy: { sequence: 'asc' },
+      },
+    },
+  });
   const successRate = summary.successRate.percent === null ? 'No outcomes' : `${summary.successRate.percent}%`;
 
   const executionListData = executions.map(item => {
@@ -179,6 +187,9 @@ export default async function RunbookExecutionsPage({
         executions={executionListData}
         userTimeZone={userTimeZone}
         totalCount={total}
+        runningCount={runningCount}
+        waitingApprovalCount={waitingApprovalCount}
+        failedCount={failedCount}
       />
 
       {/* Bounded Server Pagination */}

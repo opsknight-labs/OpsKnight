@@ -52,7 +52,7 @@ export function RunbookModuleNav({ summary, className }: RunbookModuleNavProps) 
     <nav
       aria-label="Runbook navigation"
       className={cn(
-        'sticky top-0 z-20 flex items-center gap-1 overflow-x-auto border-b border-border/80 bg-background/95 backdrop-blur-sm px-1 py-1 sm:px-2 no-scrollbar',
+        'sticky top-14 z-20 flex items-center gap-1 overflow-x-auto border-b border-border/80 bg-background/95 backdrop-blur-sm px-1 py-1 sm:px-2 no-scrollbar',
         className
       )}
     >

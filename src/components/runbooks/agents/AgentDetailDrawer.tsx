@@ -41,6 +41,7 @@ export type AgentItemData = {
   deadLetterDepth: number;
   trustedSigningKeys: unknown;
   lastError: string | null;
+  totalPoolCount?: number;
 };
 
 export type AgentDetailDrawerProps = {
@@ -109,6 +110,11 @@ export function AgentDetailDrawer({
             <span className="text-muted-foreground block text-[11px]">Pool Memberships</span>
             <span className="font-medium text-foreground">
               {agent.poolMemberships.map(p => p.pool.name).join(', ') || 'No pools'}
+              {agent.totalPoolCount && agent.totalPoolCount > agent.poolMemberships.length ? (
+                <span className="text-muted-foreground text-[10px] ml-1">
+                  (+{agent.totalPoolCount - agent.poolMemberships.length} more)
+                </span>
+              ) : null}
             </span>
           </div>
         </div>

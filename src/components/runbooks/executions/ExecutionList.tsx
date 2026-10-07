@@ -15,17 +15,33 @@ export type ExecutionListProps = {
   executions: ExecutionItemData[];
   userTimeZone: string;
   totalCount: number;
+  runningCount?: number;
+  waitingApprovalCount?: number;
+  failedCount?: number;
 };
 
-export function ExecutionList({ executions, userTimeZone, totalCount }: ExecutionListProps) {
+export function ExecutionList({
+  executions,
+  userTimeZone,
+  totalCount,
+  runningCount: propRunningCount,
+  waitingApprovalCount: propWaitingApprovalCount,
+  failedCount: propFailedCount,
+}: ExecutionListProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedExecution = executions.find(item => item.id === selectedId) ?? null;
   const router = useRouter();
-  useRunbookRefresh(router, Boolean(selectedId));
 
-  const runningCount = executions.filter(e => e.status === 'RUNNING').length;
-  const waitingApprovalCount = executions.filter(e => e.status === 'WAITING_APPROVAL').length;
-  const failedCount = executions.filter(e => e.status === 'FAILED' || e.status === 'TIMED_OUT').length;
+  const runningCount =
+    propRunningCount ?? executions.filter(e => e.status === 'RUNNING').length;
+  const waitingApprovalCount =
+    propWaitingApprovalCount ?? executions.filter(e => e.status === 'WAITING_APPROVAL').length;
+  const failedCount =
+    propFailedCount ??
+    executions.filter(e => e.status === 'FAILED' || e.status === 'TIMED_OUT').length;
+
+  const hasActive = runningCount > 0 || waitingApprovalCount > 0 || Boolean(selectedId);
+  useRunbookRefresh(router, { enabled: hasActive, refreshOnFocus: true });
 
   return (
     <section className="space-y-3" aria-label="Recent executions">

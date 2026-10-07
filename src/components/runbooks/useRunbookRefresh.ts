@@ -1,13 +1,40 @@
 'use client';
+
 import { useEffect } from 'react';
 import type { useRouter } from 'next/navigation';
-// Refresh server-authoritative props while inspecting; mutations also refresh through ActionForm.
-export function useRunbookRefresh(router: ReturnType<typeof useRouter>, enabled: boolean) {
+
+export type RunbookRefreshOptions = {
+  enabled?: boolean;
+  intervalMs?: number;
+  refreshOnFocus?: boolean;
+};
+
+export function useRunbookRefresh(
+  router: ReturnType<typeof useRouter>,
+  options: boolean | RunbookRefreshOptions = true
+) {
+  const config = typeof options === 'boolean' ? { enabled: options } : options;
+  const { enabled = true, intervalMs = 15000, refreshOnFocus = true } = config;
+
   useEffect(() => {
-    if (!enabled) return;
-    const refresh = () => { if (document.visibilityState === 'visible') router.refresh(); };
-    const timer = window.setInterval(refresh, 15000);
-    window.addEventListener('focus', refresh);
-    return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh); };
-  }, [enabled, router]);
+    const refresh = () => {
+      if (document.visibilityState === 'visible') {
+        router.refresh();
+      }
+    };
+
+    let timer: number | undefined;
+    if (enabled && intervalMs > 0) {
+      timer = window.setInterval(refresh, intervalMs);
+    }
+
+    if (refreshOnFocus) {
+      window.addEventListener('focus', refresh);
+    }
+
+    return () => {
+      if (timer) window.clearInterval(timer);
+      if (refreshOnFocus) window.removeEventListener('focus', refresh);
+    };
+  }, [enabled, intervalMs, refreshOnFocus, router]);
 }

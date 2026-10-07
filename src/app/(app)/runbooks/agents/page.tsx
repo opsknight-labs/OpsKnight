@@ -12,6 +12,7 @@ import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
 import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import { AgentFleetTable } from '@/components/runbooks/agents/AgentFleetTable';
+import { AgentFilterBar } from '@/components/runbooks/agents/AgentFilterBar';
 import EmptyState from '@/components/ui/EmptyState';
 import {
   ActionForm,
@@ -37,7 +38,6 @@ import { runbookAgentFilterSchema } from '@/lib/runbooks/schemas';
 import { schedulingLabelsSchema } from '@/lib/runbooks/pool-labels';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 import {
-  RunbookFilters,
   RunbookPagination,
   runbookPageQuery,
   RUNBOOK_PAGE_SIZE,
@@ -75,7 +75,9 @@ export default async function RunbookAgentsPage({
   const [now, fleet, navigation, poolTotal, secretTotal] = await Promise.all([getRunbookDatabaseNow(), getRunbookFleetSummary(), getRunbookNavigationSummary(), prisma.runbookAgentPool.count(), canManageSecrets ? prisma.runbookSecret.count() : Promise.resolve(0)]);
   const tab = ['agents', 'pools', 'secrets', 'security'].includes(query.tab) && (query.tab !== 'secrets' || canManageSecrets) ? query.tab : 'agents';
   const onlineSince = new Date(now.getTime() - 90000);
+  const activePoolId = typeof query.poolId === 'string' ? query.poolId : '';
   const memberPage = Math.max(1, Math.min(10000, Number(query.memberPage) || 1));
+  const activeSecretId = typeof query.secretId === 'string' ? query.secretId : '';
   const grantPage = Math.max(1, Math.min(10000, Number(query.grantPage) || 1));
   const statusFilter = Object.values(RunbookAgentStatus).find(status => status === query.status);
   const label = query.label ?? '';
@@ -133,18 +135,21 @@ export default async function RunbookAgentsPage({
       })
     : [];
   const budget = tab === 'security' ? await prisma.systemSettings.findUnique({ where: { id: 'default' } }) : null;
-  const [agents, pools, secrets, signingKey] = await Promise.all([
+  const [agents, pools, secrets, signingKey, activePoolMembers, activeSecretGrants] = await Promise.all([
     tab === 'agents' ? prisma.runbookAgent.findMany({
       where: agentWhere,
       skip: (page - 1) * RUNBOOK_PAGE_SIZE,
       take: RUNBOOK_PAGE_SIZE,
-      include: { poolMemberships: { include: { pool: true }, take: 20 } },
+      include: {
+        poolMemberships: { include: { pool: true }, take: 20 },
+        _count: { select: { poolMemberships: true } },
+      },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
     }) : Promise.resolve([]),
     tab === 'pools' ? prisma.runbookAgentPool.findMany({
       skip: (page - 1) * RUNBOOK_PAGE_SIZE, take: RUNBOOK_PAGE_SIZE,
       include: {
-        members: { skip: (memberPage - 1) * 20, take: 20, orderBy: { id: 'asc' }, include: { agent: { select: { id: true, name: true } } } },
+        members: { take: 20, orderBy: { id: 'asc' }, include: { agent: { select: { id: true, name: true } } } },
         _count: { select: { bindings: true, members: true } },
       },
       orderBy: { name: 'asc' },
@@ -160,7 +165,7 @@ export default async function RunbookAgentsPage({
             updatedAt: true,
             _count: { select: { grants: true } },
             grants: {
-              skip: (grantPage - 1) * 20, take: 20, orderBy: { id: 'asc' },
+              take: 20, orderBy: { id: 'asc' },
               include: { agent: { select: { name: true } }, agentPool: { select: { name: true } } },
             },
           },
@@ -171,6 +176,24 @@ export default async function RunbookAgentsPage({
       ? prisma.runbookExecutionSigningKey.findFirst({
           where: { state: 'ACTIVE' },
           select: { publicKey: true },
+        })
+      : Promise.resolve(null),
+    tab === 'pools' && activePoolId && memberPage > 1
+      ? prisma.runbookAgentPoolMember.findMany({
+          where: { poolId: activePoolId },
+          skip: (memberPage - 1) * 20,
+          take: 20,
+          orderBy: { id: 'asc' },
+          include: { agent: { select: { id: true, name: true } } },
+        })
+      : Promise.resolve(null),
+    canManageSecrets && tab === 'secrets' && activeSecretId && grantPage > 1
+      ? prisma.runbookSecretGrant.findMany({
+          where: { secretId: activeSecretId },
+          skip: (grantPage - 1) * 20,
+          take: 20,
+          orderBy: { id: 'asc' },
+          include: { agent: { select: { name: true } }, agentPool: { select: { name: true } } },
         })
       : Promise.resolve(null),
   ]);
@@ -196,6 +219,7 @@ export default async function RunbookAgentsPage({
       deadLetterDepth: agent.deadLetterDepth,
       trustedSigningKeys: agent.trustedSigningKeys,
       lastError: agent.lastError,
+      totalPoolCount: agent._count?.poolMemberships ?? agent.poolMemberships.length,
     };
   });
 
@@ -299,80 +323,84 @@ export default async function RunbookAgentsPage({
         </ConfigureSheet>
       )}
       <div className="grid gap-4 md:grid-cols-2">
-        {pools.map(pool => (
-          <Card key={pool.id} className="rounded-xl">
-            <CardHeader>
-              <CardTitle className="text-base">{pool.name}</CardTitle>
-              {canManage && (
-                <details>
-                  <summary className="cursor-pointer text-xs">Dynamic label selector</summary>
-                  <ActionForm action={updateSchedulingLabelsAction}>
-                    <input type="hidden" name="id" value={pool.id} />
-                    <input type="hidden" name="kind" value="pool" />
-                    <Textarea
-                      name="labels"
-                      aria-label={`Selector for ${pool.name}`}
-                      defaultValue={JSON.stringify(pool.matchLabels)}
-                    />
-                    <SubmitButton>Save pool selector</SubmitButton>
-                  </ActionForm>
-                </details>
-              )}
-              <CardDescription>{pool.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline">{pool.mode.replaceAll('_', ' ')}</Badge>
-                <Badge variant="secondary">
-                  {pool._count.members} Agents · {pool._count.bindings} bindings
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {pool.mode === 'SHARED_TARGET'
-                  ? 'Any healthy member can operate the same target.'
-                  : 'Each Agent represents a different machine. Select a specific Agent for writes.'}
-              </p>
-              <ConfigureSheet
-                title={`Manage ${pool.name}`}
-                description="Membership changes affect future claims and write-target validation."
-                trigger={
-                  <Button variant="outline" size="sm">
-                    Manage pool
-                  </Button>
-                }
-              >
-                {pool.members.map(member => (
-                  <div
-                    key={member.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
-                  >
-                    <span className="text-sm">
-                      {member.agent.name} · {member.source.toLowerCase()}
-                    </span>
-                    {canManage && member.source === 'EXPLICIT' && (
-                      <ConfirmAction
-                        action={removeAgentFromPoolAction.bind(null, member.id)}
-                        title={`Remove ${member.agent.name}?`}
-                        description="This Agent will no longer receive new work targeted to this pool."
-                        label="Remove"
-                        variant="outline"
+        {pools.map(pool => {
+          const members = pool.id === activePoolId && activePoolMembers ? activePoolMembers : pool.members;
+          const currentMemberPage = pool.id === activePoolId ? memberPage : 1;
+          return (
+            <Card key={pool.id} className="rounded-xl">
+              <CardHeader>
+                <CardTitle className="text-base">{pool.name}</CardTitle>
+                {canManage && (
+                  <details>
+                    <summary className="cursor-pointer text-xs">Dynamic label selector</summary>
+                    <ActionForm action={updateSchedulingLabelsAction}>
+                      <input type="hidden" name="id" value={pool.id} />
+                      <input type="hidden" name="kind" value="pool" />
+                      <Textarea
+                        name="labels"
+                        aria-label={`Selector for ${pool.name}`}
+                        defaultValue={JSON.stringify(pool.matchLabels)}
                       />
-                    )}
-                  </div>
-                ))}
-                {canManage && <ActionForm action={addAgentToPoolAction} className="space-y-3">
-                  <input type="hidden" name="poolId" value={pool.id} />
-                  <SearchableRunbookSelect kind="agent" name="agentId" label="Agent to add" required />
-                  <SubmitButton>Add Agent</SubmitButton>
-                </ActionForm>}
-                <p className="text-xs text-muted-foreground">Members {pool.members.length} of {pool._count.members}</p>
-                {memberPage > 1 && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=pools&page=${page}&memberPage=${memberPage - 1}`}>Previous members</Link>}
-                {memberPage * 20 < pool._count.members && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=pools&page=${page}&memberPage=${memberPage + 1}`}>Next members</Link>}
-                {pool.members.length === 0 && <EmptyState title="No members" size="sm" />}
-              </ConfigureSheet>
-            </CardContent>
-          </Card>
-        ))}
+                      <SubmitButton>Save pool selector</SubmitButton>
+                    </ActionForm>
+                  </details>
+                )}
+                <CardDescription>{pool.description}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="outline">{pool.mode.replaceAll('_', ' ')}</Badge>
+                  <Badge variant="secondary">
+                    {pool._count.members} Agents · {pool._count.bindings} bindings
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {pool.mode === 'SHARED_TARGET'
+                    ? 'Any healthy member can operate the same target.'
+                    : 'Each Agent represents a different machine. Select a specific Agent for writes.'}
+                </p>
+                <ConfigureSheet
+                  title={`Manage ${pool.name}`}
+                  description="Membership changes affect future claims and write-target validation."
+                  trigger={
+                    <Button variant="outline" size="sm">
+                      Manage pool
+                    </Button>
+                  }
+                >
+                  {members.map(member => (
+                    <div
+                      key={member.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+                    >
+                      <span className="text-sm">
+                        {member.agent.name} · {member.source.toLowerCase()}
+                      </span>
+                      {canManage && member.source === 'EXPLICIT' && (
+                        <ConfirmAction
+                          action={removeAgentFromPoolAction.bind(null, member.id)}
+                          title={`Remove ${member.agent.name}?`}
+                          description="This Agent will no longer receive new work targeted to this pool."
+                          label="Remove"
+                          variant="outline"
+                        />
+                      )}
+                    </div>
+                  ))}
+                  {canManage && <ActionForm action={addAgentToPoolAction} className="space-y-3">
+                    <input type="hidden" name="poolId" value={pool.id} />
+                    <SearchableRunbookSelect kind="agent" name="agentId" label="Agent to add" required />
+                    <SubmitButton>Add Agent</SubmitButton>
+                  </ActionForm>}
+                  <p className="text-xs text-muted-foreground">Members {members.length} of {pool._count.members}</p>
+                  {currentMemberPage > 1 && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=pools&page=${page}&poolId=${pool.id}&memberPage=${currentMemberPage - 1}`}>Previous members</Link>}
+                  {currentMemberPage * 20 < pool._count.members && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=pools&page=${page}&poolId=${pool.id}&memberPage=${currentMemberPage + 1}`}>Next members</Link>}
+                  {pool._count.members === 0 && <EmptyState title="No members" size="sm" />}
+                </ConfigureSheet>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
       {pools.length === 0 && (
         <EmptyState
@@ -418,85 +446,89 @@ export default async function RunbookAgentsPage({
         </ConfigureSheet>
       )}
       <div className="grid gap-4 md:grid-cols-2">
-        {secrets.map(secret => (
-          <Card key={secret.id} className="rounded-xl">
-            <CardHeader>
-              <CardTitle className="text-base">{secret.name}</CardTitle>
-              <CardDescription>{secret.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="font-mono text-muted-foreground" aria-label="Secret value hidden">
-                ••••••••••••••••
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Created {formatDateTime(secret.createdAt, userTimeZone, { format: 'date' })} · Updated{' '}
-                {formatDateTime(secret.updatedAt, userTimeZone, { format: 'date' })}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Granted to{' '}
-                {secret.grants
-                  .map(grant => grant.agentPool?.name ?? grant.agent?.name ?? 'Deleted target')
-                  .join(', ') || 'no targets'}
-              </p>
-              <ConfigureSheet
-                title={`Manage ${secret.name}`}
-                description="Values stay hidden. Review grants and rotate credentials when needed."
-                trigger={
-                  <Button variant="outline" size="sm">
-                    Manage grants / Rotate
-                  </Button>
-                }
-              >
-                <p className="text-xs text-muted-foreground">Grants {secret.grants.length} of {secret._count.grants}</p>
-                {grantPage > 1 && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=secrets&page=${page}&grantPage=${grantPage - 1}`}>Previous grants</Link>}
-                {grantPage * 20 < secret._count.grants && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=secrets&page=${page}&grantPage=${grantPage + 1}`}>Next grants</Link>}
-                {secret.grants.map(grant => (
-                  <div
-                    key={grant.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
-                  >
-                    <span className="text-sm">
-                      {grant.agentPool?.name ?? grant.agent?.name ?? 'Deleted target'}
-                    </span>
-                    <ConfirmAction
-                      action={revokeRunbookSecretGrantAction.bind(null, grant.id)}
-                      title="Revoke this secret grant?"
-                      description="The target can no longer resolve this credential for new steps. Previously resolved values cannot be recalled."
-                      label="Revoke grant"
-                      variant="outline"
-                    />
-                  </div>
-                ))}
-                {canManageSecrets && (
-                  <ActionForm
-                    action={grantRunbookSecretAction.bind(null, secret.id)}
-                    className="space-y-3"
-                  >
-                    <SearchableRunbookSelect kind="target" name="target" label="Grant to target" required />
-                    <SubmitButton>Grant access</SubmitButton>
-                  </ActionForm>
-                )}
-                <ActionForm
-                  action={rotateRunbookSecretAction.bind(null, secret.id)}
-                  className="space-y-3 border-t pt-4"
+        {secrets.map(secret => {
+          const grants = secret.id === activeSecretId && activeSecretGrants ? activeSecretGrants : secret.grants;
+          const currentGrantPage = secret.id === activeSecretId ? grantPage : 1;
+          return (
+            <Card key={secret.id} className="rounded-xl">
+              <CardHeader>
+                <CardTitle className="text-base">{secret.name}</CardTitle>
+                <CardDescription>{secret.description}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="font-mono text-muted-foreground" aria-label="Secret value hidden">
+                  ••••••••••••••••
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Created {formatDateTime(secret.createdAt, userTimeZone, { format: 'date' })} · Updated{' '}
+                  {formatDateTime(secret.updatedAt, userTimeZone, { format: 'date' })}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Granted to{' '}
+                  {secret.grants
+                    .map(grant => grant.agentPool?.name ?? grant.agent?.name ?? 'Deleted target')
+                    .join(', ') || 'no targets'}
+                </p>
+                <ConfigureSheet
+                  title={`Manage ${secret.name}`}
+                  description="Values stay hidden. Review grants and rotate credentials when needed."
+                  trigger={
+                    <Button variant="outline" size="sm">
+                      Manage grants / Rotate
+                    </Button>
+                  }
                 >
-                  <Field label="New secret value">
-                    <Input
-                      name="value"
-                      aria-label="New secret value"
-                      type="password"
-                      required
-                      autoComplete="new-password"
-                    />
-                  </Field>
-                  <SubmitButton pendingLabel="Rotating…" variant="outline">
-                    Rotate secret
-                  </SubmitButton>
-                </ActionForm>
-              </ConfigureSheet>
-            </CardContent>
-          </Card>
-        ))}
+                  <p className="text-xs text-muted-foreground">Grants {grants.length} of {secret._count.grants}</p>
+                  {currentGrantPage > 1 && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=secrets&page=${page}&secretId=${secret.id}&grantPage=${currentGrantPage - 1}`}>Previous grants</Link>}
+                  {currentGrantPage * 20 < secret._count.grants && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=secrets&page=${page}&secretId=${secret.id}&grantPage=${currentGrantPage + 1}`}>Next grants</Link>}
+                  {grants.map(grant => (
+                    <div
+                      key={grant.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+                    >
+                      <span className="text-sm">
+                        {grant.agentPool?.name ?? grant.agent?.name ?? 'Deleted target'}
+                      </span>
+                      <ConfirmAction
+                        action={revokeRunbookSecretGrantAction.bind(null, grant.id)}
+                        title="Revoke this secret grant?"
+                        description="The target can no longer resolve this credential for new steps. Previously resolved values cannot be recalled."
+                        label="Revoke grant"
+                        variant="outline"
+                      />
+                    </div>
+                  ))}
+                  {canManageSecrets && (
+                    <ActionForm
+                      action={grantRunbookSecretAction.bind(null, secret.id)}
+                      className="space-y-3"
+                    >
+                      <SearchableRunbookSelect kind="target" name="target" label="Grant to target" required />
+                      <SubmitButton>Grant access</SubmitButton>
+                    </ActionForm>
+                  )}
+                  <ActionForm
+                    action={rotateRunbookSecretAction.bind(null, secret.id)}
+                    className="space-y-3 border-t pt-4"
+                  >
+                    <Field label="New secret value">
+                      <Input
+                        name="value"
+                        aria-label="New secret value"
+                        type="password"
+                        required
+                        autoComplete="new-password"
+                      />
+                    </Field>
+                    <SubmitButton pendingLabel="Rotating…" variant="outline">
+                      Rotate secret
+                    </SubmitButton>
+                  </ActionForm>
+                </ConfigureSheet>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
       {secrets.length === 0 && (
         <EmptyState
@@ -559,17 +591,7 @@ export default async function RunbookAgentsPage({
       <RunbookModuleNav summary={navigation} />
 
       {/* Search & Attribute Filters */}
-      {tab === 'agents' && <RunbookFilters
-        query={query}
-        fields={[
-          { name: 'q', label: 'Search Agents' },
-          { name: 'pool', label: 'Pool ID' },
-          { name: 'platform', label: 'Platform' },
-          { name: 'capability', label: 'Capability' },
-          { name: 'label', label: 'Label (key=value)' },
-        ]}
-        statusOptions={Object.values(RunbookAgentStatus).map(value => ({ value, label: value }))}
-      />}
+      {tab === 'agents' && <AgentFilterBar query={query} />}
 
       {/* Automatic Remediation Budgets Policy */}
       {tab === 'security' && permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE) && (
