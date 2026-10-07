@@ -69,12 +69,14 @@ export function RunbookCard({ runbook, userTimeZone }: RunbookCardProps) {
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5">
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <Link
-                href={`/runbooks/${runbook.id}`}
-                className="font-heading text-base sm:text-lg font-bold tracking-tight text-foreground group-hover:text-primary transition-colors underline-offset-4 hover:underline"
-              >
-                {runbook.name}
-              </Link>
+              <h2 className="font-heading text-base sm:text-lg font-bold tracking-tight">
+                <Link
+                  href={`/runbooks/${runbook.id}`}
+                  className="text-foreground group-hover:text-primary transition-colors underline-offset-4 hover:underline"
+                >
+                  {runbook.name}
+                </Link>
+              </h2>
             </div>
           </div>
 
