@@ -1,58 +1,58 @@
 {
   "kind": "Local PostgreSQL full transaction ingestion; 8 concurrent clients; not HTTP capacity certification",
-  "generatedAt": "2026-10-07T16:04:15.525Z",
+  "generatedAt": "2026-10-07T16:15:59.053Z",
   "results": [
     {
       "profile": "disabled",
       "events": 96,
       "concurrency": 8,
-      "elapsedMs": 659.4276669999999,
-      "p50Ms": 43.3112500000002,
-      "p95Ms": 125.2527500000001,
-      "p99Ms": 125.79224999999997
+      "elapsedMs": 641.6470410000002,
+      "p50Ms": 40.97595900000033,
+      "p95Ms": 122.33979099999988,
+      "p99Ms": 128.62820799999963
     },
     {
       "profile": "shadow-small",
       "events": 96,
       "concurrency": 8,
-      "elapsedMs": 1500.3595839999998,
-      "p50Ms": 87.01358299999993,
-      "p95Ms": 131.26200000000017,
-      "p99Ms": 170.90020800000002
+      "elapsedMs": 1436.3913750000002,
+      "p50Ms": 81.77737499999967,
+      "p95Ms": 160.97554100000025,
+      "p99Ms": 198.14679199999955
     },
     {
       "profile": "live-small",
       "events": 96,
       "concurrency": 8,
-      "elapsedMs": 726.7562089999997,
-      "p50Ms": 48.97529200000008,
-      "p95Ms": 118.58337500000016,
-      "p99Ms": 119.0958329999994
+      "elapsedMs": 646.6585409999998,
+      "p50Ms": 48.94654199999968,
+      "p95Ms": 61.88774999999987,
+      "p99Ms": 63.52741700000024
     },
     {
       "profile": "live-medium",
       "events": 96,
       "concurrency": 8,
-      "elapsedMs": 652.5004580000004,
-      "p50Ms": 50.89195800000016,
-      "p95Ms": 54.97654199999943,
-      "p99Ms": 56.248999999999796
+      "elapsedMs": 670.8341659999996,
+      "p50Ms": 51.54774999999972,
+      "p95Ms": 58.3260420000006,
+      "p99Ms": 60.106957999999395
     },
     {
       "profile": "live-worst",
       "events": 96,
       "concurrency": 8,
-      "elapsedMs": 933.9376659999998,
-      "p50Ms": 62.904209000000264,
-      "p95Ms": 117.12112499999967,
-      "p99Ms": 117.52854200000002
+      "elapsedMs": 920.804709,
+      "p50Ms": 66.45266700000047,
+      "p95Ms": 103.15554200000042,
+      "p99Ms": 105.74204199999986
     }
   ],
   "postgres": [
     {
       "numbackends": 9,
-      "xact_commit": "35078",
-      "xact_rollback": "394",
+      "xact_commit": "41615",
+      "xact_rollback": "439",
       "deadlocks": "4",
       "temp_bytes": "0"
     }

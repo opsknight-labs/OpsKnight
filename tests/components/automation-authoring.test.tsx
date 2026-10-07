@@ -77,3 +77,29 @@ it('publication awaits an autosave in flight and clears recovery only after pers
   );
   expect(localStorage.getItem('automation-draft:service')).toBeNull();
 });
+it('loads Shadow readiness before LIVE and keeps the mode unchanged when review is cancelled', async () => {
+  api.area.mockResolvedValue({
+    ...data,
+    activeVersionId: 'version-1',
+    activeVersion: { id: 'version-1', versionNumber: 1, snapshot: emptySnapshot },
+  });
+  api.action.mockResolvedValue({ ok: true, data: {} });
+  render(<AutomationWorkspace serviceId="service" />);
+  fireEvent.change(await screen.findByLabelText('Automation mode'), { target: { value: 'LIVE' } });
+  expect(await screen.findByRole('dialog')).toHaveTextContent('Shadow readiness');
+  expect(api.area).toHaveBeenCalledWith('service', 'rules', 1);
+  fireEvent.click(screen.getByRole('button', { name: 'Keep unchanged' }));
+  expect(api.action).not.toHaveBeenCalled();
+  expect(screen.getByLabelText('Automation mode')).toHaveValue('SHADOW');
+  fireEvent.change(screen.getByLabelText('Automation mode'), { target: { value: 'LIVE' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Confirm LIVE' }));
+  await waitFor(() =>
+    expect(api.action).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'mode',
+        mode: 'LIVE',
+        expectedActiveVersionId: 'version-1',
+      })
+    )
+  );
+});

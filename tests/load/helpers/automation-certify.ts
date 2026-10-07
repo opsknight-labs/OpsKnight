@@ -190,6 +190,7 @@ async function main() {
       await new Promise(resolve => setTimeout(resolve, 1000));
     } while (Date.now() < drainDeadline);
 
+    const recoveryDrainMs = Date.now() - drainStarted;
     const telemetry = await collectSingleTelemetrySample({
       prisma: db,
       topology,
@@ -278,7 +279,7 @@ async function main() {
       ),
       pendingAfterDrain: pending,
       transactionRetryCount,
-      recoveryDrainMs: Date.now() - drainStarted,
+      recoveryDrainMs,
       criticalNotificationLatency: {
         p95Ms: notificationLatency.p95,
         p99Ms: notificationLatency.p99,
@@ -316,6 +317,26 @@ async function main() {
     pendingAfterDrain: result.pendingAfterDrain,
     recoveryDrainMs: result.recoveryDrainMs,
     transactionRetryCount: result.transactionRetryCount,
+    peakDatabaseConnections: Math.max(
+      ...result.telemetrySamples.map(
+        sample =>
+          sample.postgres.activeConnections +
+          sample.postgres.idleConnections +
+          sample.postgres.idleInTxConnections
+      )
+    ),
+    peakDatabaseLockWaits: Math.max(
+      ...result.telemetrySamples.map(sample => sample.postgres.waitingOnLockCount)
+    ),
+    peakDatabaseCpuPercent: topology.startsWith('compose-')
+      ? Math.max(
+          ...result.telemetrySamples.flatMap(sample =>
+            sample.containers
+              .filter(container => container.name === 'opsknight-automation-cert-db-1')
+              .map(container => Number.parseFloat(container.cpuPercent))
+          )
+        )
+      : null,
     criticalNotificationLatency: result.criticalNotificationLatency,
     deadlocksDelta: result.deadlocksDelta,
   }));
@@ -326,6 +347,9 @@ async function main() {
   };
   const failures = results
     .flatMap(result => [
+      ...(result.fallbackCount > 0
+        ? [`${result.profile}: ${result.fallbackCount} automation fallbacks`]
+        : []),
       ...(result.pendingAfterDrain > 0
         ? [`${result.profile}: queue did not drain (${result.pendingAfterDrain})`]
         : []),

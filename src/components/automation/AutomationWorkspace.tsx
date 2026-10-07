@@ -121,6 +121,7 @@ export default function AutomationWorkspace({ serviceId }: { serviceId: string }
           revision.current = next.draft.revision;
           initialized.current = true;
         }
+        return next;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not load automation');
       }
@@ -460,7 +461,7 @@ export default function AutomationWorkspace({ serviceId }: { serviceId: string }
                 disabled={busy || conflict || issues.some(i => i.level === 'ERROR')}
                 onClick={() => {
                   void (async () => {
-                    if (!initialized.current) await load('rules');
+                    if (!initialized.current && !(await load('rules'))) return;
                     setReview('publish');
                   })();
                 }}
@@ -473,8 +474,14 @@ export default function AutomationWorkspace({ serviceId }: { serviceId: string }
                 value={data.mode}
                 disabled={busy}
                 onChange={e => {
-                  if (e.target.value === 'LIVE') setReview('LIVE');
-                  else void command({ action: 'mode', mode: e.target.value });
+                  if (e.target.value === 'LIVE') {
+                    setBusy(true);
+                    void load('rules')
+                      .then(loaded => {
+                        if (loaded) setReview('LIVE');
+                      })
+                      .finally(() => setBusy(false));
+                  } else void command({ action: 'mode', mode: e.target.value });
                 }}
               >
                 <option>DISABLED</option>

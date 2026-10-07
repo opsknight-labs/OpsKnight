@@ -402,6 +402,36 @@ describe('service automation transaction certification', () => {
       pinned.id
     );
   });
+  it('concurrent decision insertion and policy deletion cannot leave a dangling route', async () => {
+    const service = await db.service.create({ data: { name: 'Deletion race' } });
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const policy = await db.escalationPolicy.create({ data: { name: `Race ${attempt}` } });
+      const incident = await db.incident.create({
+        data: { serviceId: service.id, title: 'Race', status: 'RESOLVED' },
+      });
+      const outcomes = await Promise.allSettled([
+        db.incidentAutomationDecision.create({
+          data: {
+            incidentId: incident.id,
+            serviceId: service.id,
+            mode: 'LIVE',
+            routeType: 'ESCALATION_POLICY',
+            escalationPolicyId: policy.id,
+            evaluationAt: new Date(),
+            summary: {},
+          },
+        }),
+        db.escalationPolicy.delete({ where: { id: policy.id } }),
+      ]);
+      expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1);
+      const decision = await db.incidentAutomationDecision.findUnique({
+        where: { incidentId: incident.id },
+      });
+      const retainedPolicy = await db.escalationPolicy.findUnique({ where: { id: policy.id } });
+      expect(Boolean(decision)).toBe(Boolean(retainedPolicy));
+      if (decision) expect(decision.escalationPolicyId).toBe(retainedPolicy!.id);
+    }
+  });
   it('NO_ESCALATION stays closed through reopen', async () => {
     const { service } = await setup();
     await ingest(service.id);
