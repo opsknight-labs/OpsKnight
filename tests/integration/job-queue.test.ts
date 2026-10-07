@@ -180,7 +180,7 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
       // 1. Create 5 pending SCHEDULED_TASK jobs
       const scheduledIds: string[] = [];
       for (let i = 0; i < 5; i++) {
-        const id = await scheduleJob('SCHEDULED_TASK', new Date(), { task: `isolated-task-${i}` });
+        const id = await scheduleJob('SCHEDULED_TASK', new Date(Date.now() - 1000), { task: `isolated-task-${i}` });
         scheduledIds.push(id);
       }
 

@@ -56,19 +56,42 @@ test('operator authors, tests, publishes, and enables shadow on desktop and mobi
   await expect(workspace.getByRole('heading', { name: /Automation/ })).toBeVisible();
   await workspace.getByRole('button', { name: 'Edit automation', exact: true }).click();
   await workspace.getByRole('button', { name: 'Route production alerts', exact: true }).click();
+  await workspace.getByRole('button', { name: 'Configure Production alerts', exact: true }).click();
   await expect(workspace.getByLabel('Rule name')).toHaveValue('Production alerts');
   await expect(workspace.getByText(/· Saved/)).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(id => localStorage.getItem(`automation-draft:${id}`), serviceId))
+    .toBeNull();
   await workspace.getByRole('button', { name: 'Test', exact: true }).click();
   await workspace.getByRole('button', { name: 'Test sample', exact: true }).click();
   await expect(workspace.getByText(/semantic fixtures passed/)).toBeVisible();
   await workspace.getByRole('button', { name: 'Publish', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('Review automation publication');
+  await page.getByRole('button', { name: 'Confirm publication', exact: true }).click();
   await expect(workspace.getByText(/Version 1 ·/)).toBeVisible();
   await workspace.getByLabel('Automation mode').selectOption('SHADOW');
   await expect(workspace.getByLabel('Automation mode')).toHaveValue('SHADOW');
+  await workspace.getByLabel('Automation mode').selectOption('LIVE');
+  await expect(page.getByRole('dialog')).toContainText('Shadow readiness');
+  await page.getByRole('button', { name: 'Keep unchanged', exact: true }).click();
+  await expect(workspace.getByLabel('Automation mode')).toHaveValue('SHADOW');
+  await workspace.getByLabel('Automation mode').selectOption('LIVE');
+  await page.getByRole('button', { name: 'Confirm LIVE', exact: true }).click();
+  await expect(workspace.getByLabel('Automation mode')).toHaveValue('LIVE');
+  await workspace.getByLabel('Automation mode').selectOption('SHADOW');
   await workspace.getByRole('button', { name: 'Context', exact: true }).click();
   await expect(workspace.getByText('Recognized: production, staging, development')).toBeVisible();
   await workspace.getByRole('button', { name: 'Rules', exact: true }).click();
   await expect(workspace.getByText(/Fallback: service default/)).toBeVisible();
+  await expect(workspace.getByLabel('Rule name')).toHaveCount(0);
+  await workspace.getByLabel('Search rules').fill('no-match');
+  await expect(
+    workspace.getByRole('button', { name: 'Configure Production alerts', exact: true })
+  ).toHaveCount(0);
+  await workspace.getByLabel('Search rules').fill('Production');
+  await expect(
+    workspace.getByRole('button', { name: 'Configure Production alerts', exact: true })
+  ).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2))
     .toBe(true);

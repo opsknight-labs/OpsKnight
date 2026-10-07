@@ -18,6 +18,7 @@ afterAll(async () => {
 });
 it('certifies five profiles against real PostgreSQL ingestion with concurrent fresh and duplicate events', async () => {
   const actor = await createTestUser({ role: 'ADMIN' });
+  const [before] = await db.$queryRaw<Array<{ deadlocks: bigint }>>`SELECT deadlocks FROM pg_stat_database WHERE datname = current_database()`;
   const results = [];
   for (const profile of AUTOMATION_LOAD_PROFILES) {
     const service = await db.service.create({ data: { name: `Load ${profile}` } });
@@ -89,6 +90,7 @@ it('certifies five profiles against real PostgreSQL ingestion with concurrent fr
         generatedAt: new Date().toISOString(),
         results,
         postgres,
+        deadlocksDelta: Number((postgres as Array<{ deadlocks: bigint }>)[0].deadlocks) - Number(before.deadlocks),
       },
       (_key, value) => (typeof value === 'bigint' ? value.toString() : value),
       2

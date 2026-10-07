@@ -681,6 +681,7 @@ model EscalationPolicy {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   services    Service[]
+  automationDecisions IncidentAutomationDecision[]
 }
 
 model EscalationRule {
@@ -3930,6 +3931,7 @@ model IncidentAutomationDecision {
   incident                     Incident            @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   service                      Service             @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   version                      AutomationVersion?  @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  escalationPolicy             EscalationPolicy? @relation(fields: [escalationPolicyId], references: [id], onDelete: Restrict)
 
   @@index([escalationPolicyId])
   @@index([serviceId, createdAt])

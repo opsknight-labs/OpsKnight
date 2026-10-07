@@ -19,6 +19,7 @@ export interface PostgresTelemetrySnapshot {
   pendingJobsByType: Record<string, number>;
   processingJobsByType: Record<string, number>;
   oldestPendingJobAgeMs: number;
+  oldestPendingAutomationObservationAgeMs: number;
   pendingNotificationsByTrafficClass: Record<string, number>;
   oldestPendingCriticalNotificationAgeMs: number;
   statusPageSnapshotLagSeconds: number;
@@ -47,9 +48,10 @@ export function parsePrometheusText(raw: string): Record<string, number> {
   for (const line of raw.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
-    const match = /^([a-zA-Z_:][a-zA-Z0-9_:]*(?:\{[^}]*\})?)\s+(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)$/.exec(
-      trimmed
-    );
+    const match =
+      /^([a-zA-Z_:][a-zA-Z0-9_:]*(?:\{[^}]*\})?)\s+(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)$/.exec(
+        trimmed
+      );
     if (match) {
       const val = Number(match[2]);
       if (Number.isFinite(val)) {
@@ -94,6 +96,7 @@ export async function collectPostgresTelemetry(
     pendingNotifications,
     oldestCriticalNotif,
     statusSnapshot,
+    oldestObservationJob,
   ] = await Promise.all([
     prisma.$queryRaw<Array<{ state: string | null; wait_event_type: string | null; cnt: bigint }>>`
       SELECT state, wait_event_type, COUNT(*)::bigint AS cnt
@@ -106,9 +109,7 @@ export async function collectPostgresTelemetry(
       FROM pg_locks
       GROUP BY locktype, granted
     `,
-    prisma.$queryRaw<
-      Array<{ xact_commit: bigint; xact_rollback: bigint; deadlocks: bigint }>
-    >`
+    prisma.$queryRaw<Array<{ xact_commit: bigint; xact_rollback: bigint; deadlocks: bigint }>>`
       SELECT xact_commit, xact_rollback, deadlocks
       FROM pg_stat_database
       WHERE datname = current_database()
@@ -141,6 +142,15 @@ export async function collectPostgresTelemetry(
     prisma.statusPageSnapshot.findFirst({
       where: { statusPageId: 'lt-status-page-001' },
       select: { generatedAt: true },
+    }),
+    prisma.backgroundJob.findFirst({
+      where: {
+        type: 'SCHEDULED_TASK',
+        status: { in: ['PENDING', 'PENDING_V2'] },
+        payload: { path: ['task'], equals: 'AUTOMATION_OBSERVE' },
+      },
+      orderBy: { scheduledAt: 'asc' },
+      select: { scheduledAt: true },
     }),
   ]);
 
@@ -181,9 +191,7 @@ export async function collectPostgresTelemetry(
   }
 
   const now = Date.now();
-  const oldestPendingJobAgeMs = oldestJob
-    ? Math.max(0, now - oldestJob.scheduledAt.getTime())
-    : 0;
+  const oldestPendingJobAgeMs = oldestJob ? Math.max(0, now - oldestJob.scheduledAt.getTime()) : 0;
   const oldestPendingCriticalNotificationAgeMs = oldestCriticalNotif
     ? Math.max(0, now - oldestCriticalNotif.createdAt.getTime())
     : 0;
@@ -203,6 +211,9 @@ export async function collectPostgresTelemetry(
     pendingJobsByType,
     processingJobsByType,
     oldestPendingJobAgeMs,
+    oldestPendingAutomationObservationAgeMs: oldestObservationJob
+      ? Math.max(0, now - oldestObservationJob.scheduledAt.getTime())
+      : 0,
     pendingNotificationsByTrafficClass,
     oldestPendingCriticalNotificationAgeMs,
     statusPageSnapshotLagSeconds,

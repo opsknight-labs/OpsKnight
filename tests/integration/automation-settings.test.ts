@@ -107,3 +107,79 @@ it('cleanup uses the retention period saved through the UI', async () => {
   expect(await db.automationTrace.count()).toBe(1);
   expect(await db.incident.count()).toBe(2);
 });
+
+it('retention drains multiple batches through durable general-lane continuations', async () => {
+  const service = await db.service.create({ data: { name: 'Retention backlog' } });
+  const incidentIds = Array.from({ length: 2501 }, (_, index) => `retention-incident-${index}`);
+  await db.incident.createMany({
+    data: incidentIds.map(id => ({ id, serviceId: service.id, title: 'Historical' })),
+  });
+  const old = new Date(Date.now() - 100 * 86400000);
+  await db.automationTrace.createMany({
+    data: incidentIds.map(incidentId => ({
+      incidentId,
+      serviceId: service.id,
+      mode: 'SHADOW' as const,
+      evaluationAt: old,
+      durationMs: 0,
+      detail: {},
+    })),
+  });
+  await db.automationContextObservation.createMany({
+    data: Array.from({ length: 2101 }, (_, index) => ({
+      serviceId: service.id,
+      integrationId: 'fixture',
+      integrationType: 'EVENTS_API',
+      fieldKey: 'environment',
+      sourcePath: 'environment',
+      fieldType: 'ENUM',
+      normalizedRawValueHash: String(index),
+      rawValuePreview: 'old',
+      firstSeenAt: old,
+      lastSeenAt: old,
+    })),
+  });
+  await processAutomationJob({ task: 'AUTOMATION_RETENTION' });
+  expect(await db.automationTrace.count()).toBe(1501);
+  const continuations = [];
+  for (let batch = 0; batch < 4; batch++) {
+    const next = await db.backgroundJob.findFirst({
+      where: { status: 'PENDING', payload: { path: ['task'], equals: 'AUTOMATION_RETENTION' } },
+    });
+    if (!next) break;
+    continuations.push(next);
+    await processAutomationJob(next.payload);
+    await db.backgroundJob.update({ where: { id: next.id }, data: { status: 'COMPLETED' } });
+  }
+  expect(continuations).toHaveLength(2);
+  expect(await db.automationTrace.count()).toBe(0);
+  expect(await db.automationContextObservation.count()).toBe(0);
+  expect(await db.incident.count()).toBe(2501);
+});
+
+it('an in-flight continuation respects an administrator increasing retention', async () => {
+  await saveAutomationSettings({
+    automationEnabled: false,
+    automationTraceRetentionDays: 180,
+    expectedRevision: 0,
+  });
+  const service = await db.service.create({ data: { name: 'Retention increase' } });
+  const incident = await db.incident.create({
+    data: { serviceId: service.id, title: 'Keep historical trace' },
+  });
+  await db.automationTrace.create({
+    data: {
+      serviceId: service.id,
+      incidentId: incident.id,
+      mode: 'SHADOW',
+      evaluationAt: new Date(Date.now() - 100 * 86400000),
+      durationMs: 0,
+      detail: {},
+    },
+  });
+  await processAutomationJob({
+    task: 'AUTOMATION_RETENTION',
+    cutoff: new Date(Date.now() - 90 * 86400000).toISOString(),
+  });
+  expect(await db.automationTrace.count()).toBe(1);
+});

@@ -18,7 +18,10 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['Pixel 5'] } },
   ],
   webServer: {
-    command: 'npm run dev -- --hostname 127.0.0.1 --port 3193',
+    command:
+      process.env.PLAYWRIGHT_PRODUCTION_SERVER === 'true'
+        ? 'npm run start:dev -- --hostname 127.0.0.1 --port 3193'
+        : 'npm run dev -- --hostname 127.0.0.1 --port 3193',
     url: 'http://127.0.0.1:3193/login',
     reuseExistingServer: false,
     timeout: 120000,

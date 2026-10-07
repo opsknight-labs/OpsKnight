@@ -1,4 +1,10 @@
 import { check, sleep } from 'k6';
+import { Counter, Trend } from 'k6/metrics';
+import { runInteractiveUserSession } from './user-workload.js';
+import { runResponderLifecycle } from './incident-lifecycle.js';
+export { runInteractiveUserSession, runResponderLifecycle };
+const acceptedEvents = new Counter('automation_accepted_events');
+const ingestionLatency = new Trend('automation_ingestion_latency_ms');
 import {
   loadSeedManifest,
   getBaseUrl,
@@ -9,6 +15,18 @@ const manifest = loadSeedManifest();
 export const options = {
   summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(50)', 'p(95)', 'p(99)'],
   scenarios: {
+    interactive_users: {
+      executor: 'constant-vus',
+      vus: 2,
+      duration: __ENV.AUTOMATION_DURATION || '30s',
+      exec: 'runInteractiveUserSession',
+    },
+    responder_lifecycle: {
+      executor: 'constant-vus',
+      vus: 2,
+      duration: __ENV.AUTOMATION_DURATION || '30s',
+      exec: 'runResponderLifecycle',
+    },
     automation_ingestion: {
       executor: 'constant-arrival-rate',
       rate: Number(__ENV.AUTOMATION_RPS || 20),
@@ -19,7 +37,9 @@ export const options = {
     },
   },
   thresholds: {
-    checks: ['rate==1'],
+    'checks{scenario:automation_ingestion}': ['rate==1'],
+    opsknight_user_workload_success_rate: ['rate>0.95'],
+    opsknight_lifecycle_success_rate: ['rate>0.90'],
     http_req_failed: [__ENV.AUTOMATION_RECOVERY_DRILL === 'true' ? 'rate<0.25' : 'rate<0.01'],
     dropped_iterations: ['count==0'],
   },
@@ -54,6 +74,8 @@ export default function () {
       { profile: __ENV.AUTOMATION_LOAD_PROFILE || 'disabled' }
     );
   }
+  ingestionLatency.add(response.timings.duration);
+  if (response.status === 202 || response.status === 200) acceptedEvents.add(1);
   check(response, {
     'accepted automation event': result => result.status === 202 || result.status === 200,
   });

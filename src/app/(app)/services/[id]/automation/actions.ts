@@ -56,6 +56,7 @@ const actionSchema = z.discriminatedUnion('action', [
     .strict(),
   z.object({ action: z.literal('lint'), serviceId: id, snapshot: snapshotSchema }).strict(),
   z.object({ action: z.literal('discover'), serviceId: id, sample: z.unknown() }).strict(),
+  z.object({ action: z.literal('discoverRecent'), serviceId: id }).strict(),
   z
     .object({
       action: z.literal('test'),
@@ -88,6 +89,45 @@ export async function automationAction(raw: unknown) {
       return { ok: true as const, data: await changeMode({ ...input, actorId: user.id }) };
     if (input.action === 'lint')
       return { ok: true as const, data: compileAutomation(input.snapshot) };
+    if (input.action === 'discoverRecent') {
+      const alerts = await prisma.alert.findMany({
+        where: { serviceId: input.serviceId },
+        select: { payload: true },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      });
+      const suggestions = new Map<
+        string,
+        {
+          key: string;
+          path: string;
+          value: string;
+          type: string;
+          unmapped: boolean;
+          frequency: number;
+          source: 'EVENT';
+        }
+      >();
+      for (const alert of alerts) {
+        for (const field of discoverFields({ payload: alert.payload })) {
+          const prior = suggestions.get(field.path);
+          suggestions.set(field.path, {
+            ...field,
+            source: 'EVENT' as const,
+            frequency: (prior?.frequency ?? 0) + 1,
+          });
+        }
+      }
+      const ranked = [...suggestions.values()]
+        .sort(
+          (a, b) =>
+            Number(/environment|service|team|region|account|cluster|namespace/i.test(b.path)) -
+              Number(/environment|service|team|region|account|cluster|namespace/i.test(a.path)) ||
+            b.frequency - a.frequency
+        )
+        .slice(0, 64);
+      return { ok: true as const, data: ranked };
+    }
     if (input.action === 'discover')
       return { ok: true as const, data: discoverFields(input.sample) };
     if (
@@ -116,9 +156,14 @@ export async function automationAction(raw: unknown) {
     };
   }
 }
-export async function getAutomationArea(serviceIdRaw: string, areaRaw: string = 'overview') {
+export async function getAutomationArea(
+  serviceIdRaw: string,
+  areaRaw: string = 'overview',
+  pageRaw: number = 1
+) {
   const serviceId = id.parse(serviceIdRaw),
     area = z.enum(['overview', 'context', 'rules', 'test', 'activity', 'trace']).parse(areaRaw);
+  const page = z.number().int().min(1).max(10000).parse(pageRaw);
   const user = await assertAutomationAccess(serviceId, 'automation.read');
   let canEdit = false;
   try {
@@ -143,9 +188,12 @@ export async function getAutomationArea(serviceIdRaw: string, areaRaw: string = 
       ? await prisma.automationVersion.findMany({
           where: { serviceId },
           orderBy: { versionNumber: 'desc' },
-          take: 50,
+          take: 20,
+          skip: (page - 1) * 20,
         })
       : [];
+  const versionTotal =
+    area === 'activity' ? await prisma.automationVersion.count({ where: { serviceId } }) : 0;
   const observations =
     area === 'context'
       ? await prisma.automationContextObservation.findMany({
@@ -154,14 +202,13 @@ export async function getAutomationArea(serviceIdRaw: string, areaRaw: string = 
           take: 200,
         })
       : [];
-  const aggregates =
-    area === 'overview'
-      ? await prisma.automationShadowAggregate.findMany({
-          where: { serviceId, bucketDate: { gte: new Date(Date.now() - 7 * 86400000) } },
-          take: 100,
-          orderBy: { bucketDate: 'desc' },
-        })
-      : [];
+  const aggregates = ['overview', 'rules'].includes(area)
+    ? await prisma.automationShadowAggregate.findMany({
+        where: { serviceId, bucketDate: { gte: new Date(Date.now() - 7 * 86400000) } },
+        take: 100,
+        orderBy: { bucketDate: 'desc' },
+      })
+    : [];
   const traces = ['overview', 'trace'].includes(area)
     ? await prisma.automationTrace.findMany({
         where: { serviceId },
@@ -232,6 +279,7 @@ export async function getAutomationArea(serviceIdRaw: string, areaRaw: string = 
         },
     activeVersion,
     versions,
+    versionTotal,
     observations,
     aggregates,
     traces,
