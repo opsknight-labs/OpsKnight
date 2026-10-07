@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // Identity and policy paths come only from the local operator's environment, never API input.
-/* eslint-disable security/detect-non-literal-fs-filename */
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
