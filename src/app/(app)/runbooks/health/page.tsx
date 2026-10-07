@@ -1,3 +1,4 @@
+import { getRunbookDatabaseNow, getRunbookHealthSummary, getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser } from '@/lib/rbac';
@@ -19,53 +20,19 @@ export default async function RunbookHealthPage() {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const user = await getCurrentUser();
   const userTimeZone = getUserTimeZone(user);
-  const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT NOW() AS now`;
-  if (!clock) throw new Error('Database clock query returned no rows.');
-  const now = clock.now;
-
-  const [
-    executionStates,
-    attemptStates,
-    agents,
-    oldestPending,
-    artifacts,
-    recentFailures,
-    expiredLeases,
-  ] = await Promise.all([
-    prisma.runbookExecution.groupBy({ by: ['status'], _count: { id: true } }),
-    prisma.runbookStepAttempt.groupBy({ by: ['status'], _count: { id: true } }),
+  const [now, health, navigation] = await Promise.all([getRunbookDatabaseNow(), getRunbookHealthSummary(), getRunbookNavigationSummary()]);
+  const [pending, agents, artifacts] = await Promise.all([
+    prisma.runbookStepAttempt.count({ where: { status: 'PENDING' } }),
     prisma.runbookAgent.findMany({
-      where: { status: { not: 'REVOKED' } },
-      select: {
-        id: true,
-        name: true,
-        status: true,
-        lastHeartbeatAt: true,
-        lastError: true,
-        spoolDepth: true,
-        deadLetterDepth: true,
-      },
+      take: 20,
+      where: { status: { not: 'REVOKED' }, OR: [{ status: { not: 'ONLINE' } }, { lastHeartbeatAt: null }, { lastHeartbeatAt: { lt: new Date(now.getTime() - 90000) } }, { lastError: { not: '' } }, { deadLetterDepth: { gt: 0 } }] },
+      select: { id: true, name: true, status: true, lastHeartbeatAt: true, lastError: true, spoolDepth: true, deadLetterDepth: true },
       orderBy: { name: 'asc' },
     }),
-    prisma.runbookStepAttempt.findFirst({
-      where: { status: 'PENDING' },
-      orderBy: { availableAt: 'asc' },
-      select: { availableAt: true },
-    }),
     prisma.runbookArtifact.aggregate({ _count: { id: true }, _sum: { sizeBytes: true } }),
-    prisma.runbookExecution.groupBy({
-      by: ['serviceId'],
-      where: {
-        serviceId: { not: null },
-        status: 'FAILED',
-        completedAt: { gte: new Date(now.getTime() - 15 * 60 * 1000) },
-      },
-      _count: { id: true },
-    }),
-    prisma.runbookStepAttempt.count({
-      where: { status: { in: ['CLAIMED', 'RUNNING'] }, leaseExpiresAt: { lt: now } },
-    }),
   ]);
+  const { oldest, unknown, expiredLeases, circuits } = health;
+  const activeExecutions = navigation.activeExecutions ?? 'Unknown';
 
   const unhealthyAgents = agents.filter(
     agent =>
@@ -76,33 +43,22 @@ export default async function RunbookHealthPage() {
       agent.deadLetterDepth > 0
   );
 
-  const activeExecutions = executionStates
-    .filter(row => ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'].includes(row.status))
-    .reduce((sum, row) => sum + row._count.id, 0);
-
-  const pending = attemptStates.find(row => row.status === 'PENDING')?._count.id ?? 0;
-  const oldest = oldestPending
-    ? Math.max(0, Math.round((now.getTime() - oldestPending.availableAt.getTime()) / 1000))
-    : 0;
-
-  const unknown = attemptStates.find(row => row.status === 'UNKNOWN')?._count.id ?? 0;
-  const deadLetters = agents.reduce((sum, agent) => sum + agent.deadLetterDepth, 0);
-  const circuits = recentFailures.filter(row => row._count.id >= 3).length;
+  const deadLetters = health.fleet.deadLetterDepth;
 
   const attention =
-    unhealthyAgents.length > 0 || unknown > 0 || expiredLeases > 0 || circuits > 0 || oldest > 300;
+    health.health === 'DEGRADED';
 
   const localWorker = getJobWorkerStatus();
 
   // Synthesize actionable issues for first-order operator review
   const issues: HealthIssue[] = [];
 
-  if (unhealthyAgents.length > 0) {
+  if (health.fleet.unhealthy > 0) {
     issues.push({
       id: 'unhealthy-agents',
       type: 'agent',
       severity: 'danger',
-      title: `${unhealthyAgents.length} ${unhealthyAgents.length === 1 ? 'Agent' : 'Agents'} Requiring Attention`,
+      title: `${health.fleet.unhealthy} ${health.fleet.unhealthy === 1 ? 'Agent' : 'Agents'} Requiring Attention`,
       description: `Unresponsive heartbeats or dead-letter queue build-ups detected on: ${unhealthyAgents.map(a => a.name).join(', ')}.`,
       actionHref: '/runbooks/agents',
       actionLabel: 'Inspect Fleet',
@@ -128,7 +84,7 @@ export default async function RunbookHealthPage() {
       severity: 'warning',
       title: `${unknown} Historical Unknown ${unknown === 1 ? 'Outcome' : 'Outcomes'}`,
       description: 'Host disconnects or ambiguous terminations require operator reconciliation.',
-      actionHref: '/runbooks/executions?status=UNKNOWN',
+      actionHref: '/runbooks/executions?attemptStatus=UNKNOWN',
       actionLabel: 'Review Outcomes',
     });
   }
@@ -163,7 +119,7 @@ export default async function RunbookHealthPage() {
       <RunbookPageHeader
         title="Automation Health"
         description={`Continuous health surveillance across execution workers, queues and agents. Last evaluated at ${formatDateTime(now, userTimeZone, { format: 'time' })}.`}
-        badge={<RunbookStatusBadge status={attention ? 'DEGRADED' : 'HEALTHY'} />}
+        badge={<RunbookStatusBadge status={health.health} />}
       />
 
       {/* Modern Metric Strip */}
@@ -172,14 +128,14 @@ export default async function RunbookHealthPage() {
           {
             label: 'Active Executions',
             value: activeExecutions,
-            tone: activeExecutions > 0 ? 'info' : 'default',
+            tone: typeof activeExecutions === 'number' && activeExecutions > 0 ? 'info' : 'default',
             subtext: `${activeExecutions} in-flight`,
           },
           {
             label: 'Healthy Fleet',
-            value: `${agents.length - unhealthyAgents.length}/${agents.length}`,
-            tone: unhealthyAgents.length === 0 ? 'success' : 'danger',
-            subtext: `${unhealthyAgents.length} degraded`,
+            value: `${health.fleet.enrolled - health.fleet.unhealthy}/${health.fleet.enrolled}`,
+            tone: !health.fleet.enrolled ? 'default' : health.fleet.unhealthy === 0 ? 'success' : 'danger',
+            subtext: health.fleet.enrolled ? `${health.fleet.unhealthy} require attention` : 'No Agents configured',
           },
           {
             label: 'Queue Pending',
@@ -189,26 +145,20 @@ export default async function RunbookHealthPage() {
           },
           {
             label: 'Safety Controls',
-            value: attention ? `${issues.length} Alert` : 'Nominal',
-            tone: attention ? 'warning' : 'success',
+            value: attention ? `${issues.length} Alert` : health.health === 'UNKNOWN' ? 'Unknown' : 'Nominal',
+            tone: attention ? 'warning' : health.health === 'UNKNOWN' ? 'default' : 'success',
             subtext: attention ? 'Action required' : 'Zero tripped',
           },
         ]}
       />
 
       {/* Persistent Module Navigation */}
-      <RunbookModuleNav
-        counts={{
-          healthDegraded: attention,
-          agents: agents.length,
-          executions: activeExecutions,
-        }}
-      />
+      <RunbookModuleNav summary={navigation} />
 
       {/* 1. What Needs Attention? */}
       <HealthAttentionPanel
         issues={issues}
-        agentsCount={agents.length}
+        agentsCount={health.fleet.enrolled}
       />
 
       {/* 2. Technical Detail Cards */}
@@ -222,7 +172,7 @@ export default async function RunbookHealthPage() {
         circuits={circuits}
         deadLetters={deadLetters}
         unhealthyAgents={unhealthyAgents}
-        totalAgentsCount={agents.length}
+        totalAgentsCount={health.fleet.enrolled}
         now={now}
         userTimeZone={userTimeZone}
       />

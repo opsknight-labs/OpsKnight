@@ -1,3 +1,4 @@
+import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
@@ -52,7 +53,7 @@ export default async function RunbooksPage({
       where: { archivedAt: { not: null } },
     }),
   ]);
-  const [permissions, runbooks, executionCount, agents] = await Promise.all([
+  const [permissions, runbooks, navigation] = await Promise.all([
     getUserPermissions(),
     prisma.runbook.findMany({
       where,
@@ -83,13 +84,11 @@ export default async function RunbooksPage({
         _count: { select: { bindings: true, executions: true } },
       },
     }),
-    prisma.runbookExecution.count({
-      where: { status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] } },
-    }),
-    prisma.runbookAgent.groupBy({ by: ['status'], _count: { id: true } }),
+    getRunbookNavigationSummary(),
   ]);
   const canManage = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE);
-  const onlineAgents = agents.find(row => row.status === 'ONLINE')?._count.id ?? 0;
+  const onlineAgents = navigation.onlineAgents ?? 'Unknown';
+  const executionCount = navigation.activeExecutions ?? 'Unknown';
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6">
@@ -119,7 +118,7 @@ export default async function RunbooksPage({
             label: 'Active Executions',
             value: executionCount,
             subtext: 'In-flight',
-            tone: executionCount > 0 ? 'info' : 'default',
+            tone: typeof executionCount === 'number' && executionCount > 0 ? 'info' : 'default',
           },
           {
             label: 'Archived',
@@ -132,18 +131,13 @@ export default async function RunbooksPage({
             label: 'Online Agents',
             value: onlineAgents,
             subtext: 'Fleet ready',
-            tone: onlineAgents > 0 ? 'success' : 'default',
+            tone: typeof onlineAgents === 'number' && onlineAgents > 0 ? 'success' : 'default',
           },
         ]}
       />
 
       {/* Persistent Module Navigation */}
-      <RunbookModuleNav
-        counts={{
-          executions: executionCount,
-          agents: onlineAgents,
-        }}
-      />
+      <RunbookModuleNav summary={navigation} />
 
       {/* Search & Filter Toolbar */}
       <RunbookFilters

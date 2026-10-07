@@ -437,6 +437,7 @@ export const runbookExecutionFilterSchema = z.object({
   from: z.date().optional(),
   to: z.date().optional(),
   trigger: z.enum(['automatic', 'responder']).optional(),
+  triggeredByType: z.enum(['USER', 'TRIGGER', 'API', 'CHATOPS', 'SCHEDULE']).optional(),
   page: z.coerce.number().int().positive().max(10000).default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
 });

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { RUNBOOK_EXECUTION_STATUSES, TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
+import { SearchableRunbookSelect } from '../SearchableRunbookSelect';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Calendar,
@@ -35,30 +37,10 @@ import { Label } from '@/components/ui/shadcn/label';
 
 export type ExecutionFilterBarProps = {
   query: Record<string, string>;
-  services: Array<{ id: string; name: string }>;
-  runbooks: Array<{ id: string; name: string }>;
-  agents: Array<{ id: string; name: string }>;
 };
 
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'All statuses' },
-  { value: 'RUNNING', label: 'Running' },
-  { value: 'WAITING_APPROVAL', label: 'Waiting Approval' },
-  { value: 'WAITING_AGENT', label: 'Waiting Agent' },
-  { value: 'SUCCEEDED', label: 'Succeeded' },
-  { value: 'FAILED', label: 'Failed' },
-  { value: 'QUEUED', label: 'Queued' },
-  { value: 'CLAIMED', label: 'Claimed' },
-  { value: 'UNKNOWN', label: 'Unknown Outcome' },
-  { value: 'CANCELLED', label: 'Cancelled' },
-  { value: 'TIMED_OUT', label: 'Timed Out' },
-];
-
-const TRIGGER_OPTIONS = [
-  { value: 'all', label: 'All triggers' },
-  { value: 'automatic', label: 'Automatic (Trigger)' },
-  { value: 'responder', label: 'Responder (Manual)' },
-];
+export const STATUS_OPTIONS = [{ value: 'all', label: 'All statuses' }, ...RUNBOOK_EXECUTION_STATUSES.map(value => ({ value, label: value.replaceAll('_', ' ') }))];
+const TRIGGER_OPTIONS = [{ value: 'all', label: 'All triggers' }, ...Object.entries(TRIGGER_LABELS).map(([value, label]) => ({ value, label }))];
 
 const TIME_RANGE_OPTIONS = [
   { value: 'all', label: 'All time' },
@@ -70,9 +52,6 @@ const TIME_RANGE_OPTIONS = [
 
 export function ExecutionFilterBar({
   query,
-  services,
-  runbooks,
-  agents,
 }: ExecutionFilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -96,6 +75,7 @@ export function ExecutionFilterBar({
 
   // Active filter count calculation
   const activeFiltersCount = [
+    query.attemptStatus === 'UNKNOWN',
     status !== 'all',
     trigger !== 'all',
     selectedRunbook !== 'all',
@@ -112,6 +92,7 @@ export function ExecutionFilterBar({
     const params = new URLSearchParams();
 
     const merged = {
+      attemptStatus: query.attemptStatus,
       q: searchTerm,
       status,
       trigger,
@@ -125,6 +106,7 @@ export function ExecutionFilterBar({
       ...overrides,
     };
 
+    if (merged.attemptStatus === 'UNKNOWN') params.set('attemptStatus', 'UNKNOWN');
     if (merged.q?.trim()) params.set('q', merged.q.trim());
     if (merged.status && merged.status !== 'all') params.set('status', merged.status);
     if (merged.trigger && merged.trigger !== 'all') params.set('trigger', merged.trigger);
@@ -272,77 +254,9 @@ export function ExecutionFilterBar({
           <PopoverContent className="w-80 space-y-4 p-4 text-xs" align="end">
             <div className="font-semibold text-sm">Entity Filters</div>
 
-            {/* Runbook Selector */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Runbook</Label>
-              <Select
-                value={selectedRunbook}
-                onValueChange={val => {
-                  setSelectedRunbook(val);
-                  applyFilters({ runbook: val });
-                }}
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Select runbook" />
-                </SelectTrigger>
-                <SelectContent className="max-h-60">
-                  <SelectItem value="all">All Runbooks</SelectItem>
-                  {runbooks.map(rb => (
-                    <SelectItem key={rb.id} value={rb.id} className="text-xs">
-                      {rb.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Service Selector */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Service</Label>
-              <Select
-                value={selectedService}
-                onValueChange={val => {
-                  setSelectedService(val);
-                  applyFilters({ service: val });
-                }}
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Select service" />
-                </SelectTrigger>
-                <SelectContent className="max-h-60">
-                  <SelectItem value="all">All Services</SelectItem>
-                  {services.map(svc => (
-                    <SelectItem key={svc.id} value={svc.id} className="text-xs">
-                      {svc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Agent Selector */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Agent Target</Label>
-              <Select
-                value={selectedAgent}
-                onValueChange={val => {
-                  setSelectedAgent(val);
-                  applyFilters({ agent: val });
-                }}
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Select target agent" />
-                </SelectTrigger>
-                <SelectContent className="max-h-60">
-                  <SelectItem value="all">All Agents</SelectItem>
-                  {agents.map(ag => (
-                    <SelectItem key={ag.id} value={ag.id} className="text-xs">
-                      {ag.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <SearchableRunbookSelect kind="runbook" label="Runbook" value={selectedRunbook} onChange={val => { setSelectedRunbook(val); applyFilters({ runbook: val }); }} />
+            <SearchableRunbookSelect kind="service" label="Service" value={selectedService} onChange={val => { setSelectedService(val); applyFilters({ service: val }); }} />
+            <SearchableRunbookSelect kind="agent" label="Agent Target" value={selectedAgent} onChange={val => { setSelectedAgent(val); applyFilters({ agent: val }); }} />
           </PopoverContent>
         </Popover>
 
@@ -364,6 +278,7 @@ export function ExecutionFilterBar({
         )}
       </form>
 
+      {query.attemptStatus === 'UNKNOWN' && <Button variant="outline" size="sm" onClick={() => { const params = new URLSearchParams(query); params.delete('attemptStatus'); params.delete('page'); router.push(`${pathname}?${params}`); }}>Unknown outcomes ×</Button>}
       {/* Custom Date Range Row when selected */}
       {timeRange === 'custom' && (
         <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-border/60">

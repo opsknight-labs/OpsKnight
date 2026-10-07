@@ -3,20 +3,16 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Activity, BookOpen, Bot, CheckCircle2, Play } from 'lucide-react';
+import { Activity, BookOpen, Bot, CheckCircle2, CircleHelp, Play } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/shadcn/badge';
 
 export type RunbookModuleNavProps = {
-  counts?: {
-    executions?: number;
-    agents?: number;
-    healthDegraded?: boolean;
-  };
+  summary?: import('@/lib/runbooks/presentation/contracts').NavigationSummary;
   className?: string;
 };
 
-export function RunbookModuleNav({ counts, className }: RunbookModuleNavProps) {
+export function RunbookModuleNav({ summary, className }: RunbookModuleNavProps) {
   const pathname = usePathname();
 
   const items = [
@@ -32,15 +28,15 @@ export function RunbookModuleNav({ counts, className }: RunbookModuleNavProps) {
       label: 'Executions',
       icon: Play,
       matchExact: false,
-      count: counts?.executions,
-      countTone: counts?.executions && counts.executions > 0 ? 'info' : 'secondary',
+      count: summary?.activeExecutions,
+      countTone: summary?.activeExecutions && summary.activeExecutions > 0 ? 'info' : 'secondary',
     },
     {
       href: '/runbooks/agents',
       label: 'Agents',
       icon: Bot,
       matchExact: false,
-      count: counts?.agents,
+      count: summary?.onlineAgents,
       countTone: 'secondary',
     },
     {
@@ -48,7 +44,7 @@ export function RunbookModuleNav({ counts, className }: RunbookModuleNavProps) {
       label: 'Health',
       icon: Activity,
       matchExact: false,
-      healthIndicator: counts?.healthDegraded ? 'degraded' : 'healthy',
+      healthIndicator: summary?.health ?? 'UNKNOWN',
     },
   ];
 
@@ -100,9 +96,11 @@ export function RunbookModuleNav({ counts, className }: RunbookModuleNavProps) {
               )}
 
               {item.healthIndicator && (
-                <span className="flex items-center gap-1 shrink-0">
-                  {item.healthIndicator === 'healthy' ? (
+                <span aria-label={`Health: ${item.healthIndicator.toLowerCase()}`} className="flex items-center gap-1 shrink-0">
+                  {item.healthIndicator === 'HEALTHY' ? (
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                  ) : item.healthIndicator === 'UNKNOWN' ? (
+                    <CircleHelp className="h-3.5 w-3.5 text-muted-foreground" />
                   ) : (
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />

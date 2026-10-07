@@ -1,3 +1,7 @@
+import Link from 'next/link';
+import { getRunbookDatabaseNow, getRunbookFleetSummary, getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
+import { resolveEffectiveAgentStatus } from '@/lib/runbooks/presentation/contracts';
+import { SearchableRunbookSelect } from '@/components/runbooks/SearchableRunbookSelect';
 import { KeyRound, Network } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
@@ -7,7 +11,6 @@ import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
 import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import { AgentFleetTable } from '@/components/runbooks/agents/AgentFleetTable';
-import DetailTabs from '@/components/ui/DetailTabs';
 import EmptyState from '@/components/ui/EmptyState';
 import {
   ActionForm,
@@ -59,14 +62,19 @@ export default async function RunbookAgentsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
-  const [permissions, user] = await Promise.all([getUserPermissions(), getCurrentUser()]);
+  const [permissions, user] = await Promise.all([
+    getUserPermissions(),
+    getCurrentUser(),
+  ]);
   const userTimeZone = getUserTimeZone(user);
   const canManage = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
   const canManageSecrets = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
   const { query, page: requestedPage } = runbookPageQuery(await searchParams);
-  const [databaseClock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT NOW() AS now`;
-  if (!databaseClock) throw new Error('Database clock query returned no rows.');
-  const onlineSince = new Date(databaseClock.now.getTime() - 90000);
+  const [now, fleet, navigation, poolTotal, secretTotal] = await Promise.all([getRunbookDatabaseNow(), getRunbookFleetSummary(), getRunbookNavigationSummary(), prisma.runbookAgentPool.count(), canManageSecrets ? prisma.runbookSecret.count() : Promise.resolve(0)]);
+  const tab = ['agents', 'pools', 'secrets', 'security'].includes(query.tab) && (query.tab !== 'secrets' || canManageSecrets) ? query.tab : 'agents';
+  const onlineSince = new Date(now.getTime() - 90000);
+  const memberPage = Math.max(1, Math.min(10000, Number(query.memberPage) || 1));
+  const grantPage = Math.max(1, Math.min(10000, Number(query.grantPage) || 1));
   const statusFilter = Object.values(RunbookAgentStatus).find(status => status === query.status);
   const label = query.label ?? '';
   const split = label.indexOf('=');
@@ -113,46 +121,51 @@ export default async function RunbookAgentsPage({
       : {}),
   };
   const agentTotal = await prisma.runbookAgent.count({ where: agentWhere });
-  const page = Math.min(requestedPage, Math.max(1, Math.ceil(agentTotal / RUNBOOK_PAGE_SIZE)));
-  const signingKeys = canManage
+  const panelTotal = tab === 'pools' ? poolTotal : tab === 'secrets' ? secretTotal : agentTotal;
+  const page = Math.min(requestedPage, Math.max(1, Math.ceil(panelTotal / RUNBOOK_PAGE_SIZE)));
+  const signingKeys = canManage && tab === 'security'
     ? await prisma.runbookExecutionSigningKey.findMany({
         where: { state: { not: 'RETIRED' } },
         select: { id: true, publicKey: true, state: true, retiredAt: true },
         orderBy: { createdAt: 'asc' },
       })
     : [];
-  const budget = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
+  const budget = tab === 'security' ? await prisma.systemSettings.findUnique({ where: { id: 'default' } }) : null;
   const [agents, pools, secrets, signingKey] = await Promise.all([
-    prisma.runbookAgent.findMany({
+    tab === 'agents' ? prisma.runbookAgent.findMany({
       where: agentWhere,
       skip: (page - 1) * RUNBOOK_PAGE_SIZE,
       take: RUNBOOK_PAGE_SIZE,
-      include: { poolMemberships: { include: { pool: true } } },
+      include: { poolMemberships: { include: { pool: true }, take: 20 } },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
-    }),
-    prisma.runbookAgentPool.findMany({
+    }) : Promise.resolve([]),
+    tab === 'pools' ? prisma.runbookAgentPool.findMany({
+      skip: (page - 1) * RUNBOOK_PAGE_SIZE, take: RUNBOOK_PAGE_SIZE,
       include: {
-        members: { include: { agent: { select: { id: true, name: true } } } },
-        _count: { select: { bindings: true } },
+        members: { skip: (memberPage - 1) * 20, take: 20, orderBy: { id: 'asc' }, include: { agent: { select: { id: true, name: true } } } },
+        _count: { select: { bindings: true, members: true } },
       },
       orderBy: { name: 'asc' },
-    }),
-    canManageSecrets
+    }) : Promise.resolve([]),
+    canManageSecrets && tab === 'secrets'
       ? prisma.runbookSecret.findMany({
+          skip: (page - 1) * RUNBOOK_PAGE_SIZE, take: RUNBOOK_PAGE_SIZE,
           select: {
             id: true,
             name: true,
             description: true,
             createdAt: true,
             updatedAt: true,
+            _count: { select: { grants: true } },
             grants: {
+              skip: (grantPage - 1) * 20, take: 20, orderBy: { id: 'asc' },
               include: { agent: { select: { name: true } }, agentPool: { select: { name: true } } },
             },
           },
           orderBy: { name: 'asc' },
         })
       : Promise.resolve([]),
-    canManage
+    canManage && tab === 'security'
       ? prisma.runbookExecutionSigningKey.findFirst({
           where: { state: 'ACTIVE' },
           select: { publicKey: true },
@@ -160,23 +173,8 @@ export default async function RunbookAgentsPage({
       : Promise.resolve(null),
   ]);
 
-  const activeAgents = agents.filter(agent => agent.status !== 'REVOKED');
-  const onlineAgentsCount = agents.filter(
-    a => a.status === 'ONLINE' && a.lastHeartbeatAt && a.lastHeartbeatAt >= onlineSince
-  ).length;
-
-  const targetOptions = [
-    ...pools.map(pool => ({ value: `pool:${pool.id}`, label: `Pool · ${pool.name}` })),
-    ...activeAgents.map(agent => ({ value: `agent:${agent.id}`, label: `Agent · ${agent.name}` })),
-  ];
-
   const agentListData = agents.map(agent => {
-    const effectiveStatus =
-      agent.status === 'ONLINE' &&
-      (!agent.lastHeartbeatAt ||
-        databaseClock.now.getTime() - agent.lastHeartbeatAt.getTime() > 90000)
-        ? 'OFFLINE'
-        : agent.status;
+    const effectiveStatus = resolveEffectiveAgentStatus(agent, now);
 
     return {
       id: agent.id,
@@ -201,6 +199,15 @@ export default async function RunbookAgentsPage({
 
   const agentPanel = (
     <section className="space-y-4">
+      <AgentFleetTable
+        agents={agentListData}
+        userTimeZone={userTimeZone}
+        canManage={canManage}
+      />
+    </section>
+  );
+
+  const securityPanel = <section className="space-y-4">
       {canManage && signingKey && (
         <details className="rounded-xl border bg-card p-4">
           <summary className="cursor-pointer text-sm font-semibold">
@@ -252,13 +259,7 @@ export default async function RunbookAgentsPage({
       )}
 
       {/* High-Density Fleet Table / Card View */}
-      <AgentFleetTable
-        agents={agentListData}
-        userTimeZone={userTimeZone}
-        canManage={canManage}
-      />
-    </section>
-  );
+  </section>;
 
   const poolPanel = (
     <section className="space-y-4">
@@ -320,7 +321,7 @@ export default async function RunbookAgentsPage({
               <div className="flex flex-wrap gap-2">
                 <Badge variant="outline">{pool.mode.replaceAll('_', ' ')}</Badge>
                 <Badge variant="secondary">
-                  {pool.members.length} Agents · {pool._count.bindings} bindings
+                  {pool._count.members} Agents · {pool._count.bindings} bindings
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground">
@@ -356,24 +357,14 @@ export default async function RunbookAgentsPage({
                     )}
                   </div>
                 ))}
-                {canManage &&
-                  activeAgents.some(
-                    agent => !pool.members.some(member => member.agentId === agent.id)
-                  ) && (
-                    <ActionForm action={addAgentToPoolAction} className="space-y-3">
-                      <input type="hidden" name="poolId" value={pool.id} />
-                      <FormSelect
-                        name="agentId"
-                        label="Agent to add"
-                        options={activeAgents
-                          .filter(
-                            agent => !pool.members.some(member => member.agentId === agent.id)
-                          )
-                          .map(agent => ({ value: agent.id, label: agent.name }))}
-                      />
-                      <SubmitButton>Add Agent</SubmitButton>
-                    </ActionForm>
-                  )}
+                {canManage && <ActionForm action={addAgentToPoolAction} className="space-y-3">
+                  <input type="hidden" name="poolId" value={pool.id} />
+                  <SearchableRunbookSelect kind="agent" name="agentId" label="Agent to add" required />
+                  <SubmitButton>Add Agent</SubmitButton>
+                </ActionForm>}
+                <p className="text-xs text-muted-foreground">Members {pool.members.length} of {pool._count.members}</p>
+                {memberPage > 1 && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=pools&page=${page}&memberPage=${memberPage - 1}`}>Previous members</Link>}
+                {memberPage * 20 < pool._count.members && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=pools&page=${page}&memberPage=${memberPage + 1}`}>Next members</Link>}
                 {pool.members.length === 0 && <EmptyState title="No members" size="sm" />}
               </ConfigureSheet>
             </CardContent>
@@ -396,7 +387,7 @@ export default async function RunbookAgentsPage({
         Credentials are encrypted at rest. Values are never displayed; secret-backed Agent steps
         require HTTPS.
       </p>
-      {targetOptions.length > 0 && (
+      {canManageSecrets && (
         <ConfigureSheet
           title="Create scoped secret"
           description="Grant the credential only to the Agent or pool that requires it."
@@ -418,7 +409,7 @@ export default async function RunbookAgentsPage({
             <Field label="Description">
               <Input name="description" aria-label="Secret description" />
             </Field>
-            <FormSelect name="target" label="Initial secret grant" options={targetOptions} />
+            <SearchableRunbookSelect kind="target" name="target" label="Initial secret grant" required />
             <SubmitButton>Create encrypted secret</SubmitButton>
           </ActionForm>
         </ConfigureSheet>
@@ -453,6 +444,9 @@ export default async function RunbookAgentsPage({
                   </Button>
                 }
               >
+                <p className="text-xs text-muted-foreground">Grants {secret.grants.length} of {secret._count.grants}</p>
+                {grantPage > 1 && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=secrets&page=${page}&grantPage=${grantPage - 1}`}>Previous grants</Link>}
+                {grantPage * 20 < secret._count.grants && <Link className="text-primary text-xs" href={`/runbooks/agents?tab=secrets&page=${page}&grantPage=${grantPage + 1}`}>Next grants</Link>}
                 {secret.grants.map(grant => (
                   <div
                     key={grant.id}
@@ -470,12 +464,12 @@ export default async function RunbookAgentsPage({
                     />
                   </div>
                 ))}
-                {targetOptions.length > 0 && (
+                {canManageSecrets && (
                   <ActionForm
                     action={grantRunbookSecretAction.bind(null, secret.id)}
                     className="space-y-3"
                   >
-                    <FormSelect name="target" label="Grant to target" options={targetOptions} />
+                    <SearchableRunbookSelect kind="target" name="target" label="Grant to target" required />
                     <SubmitButton>Grant access</SubmitButton>
                   </ActionForm>
                 )}
@@ -535,38 +529,34 @@ export default async function RunbookAgentsPage({
         stats={[
           {
             label: 'Enrolled Agents',
-            value: activeAgents.length,
-            subtext: `${onlineAgentsCount} online`,
-            tone: onlineAgentsCount > 0 ? 'success' : 'default',
+            value: fleet.enrolled,
+            subtext: `${fleet.online} online · ${fleet.offline} offline · ${fleet.enrolling} enrolling`,
+            tone: fleet.online > 0 ? 'success' : 'default',
           },
           {
             label: 'Worker Pools',
-            value: pools.length,
+            value: poolTotal,
             subtext: 'Target pools',
           },
           {
             label: 'Pending Results',
-            value: agents.reduce((sum, agent) => sum + agent.spoolDepth, 0),
+            value: fleet.spoolDepth,
             subtext: 'Spool depth',
           },
           {
             label: 'Dead Letters',
-            value: agents.reduce((sum, agent) => sum + agent.deadLetterDepth, 0),
-            tone: agents.some(a => a.deadLetterDepth > 0) ? 'warning' : 'default',
+            value: fleet.deadLetterDepth,
+            tone: fleet.deadLetterDepth > 0 ? 'warning' : 'default',
             subtext: 'Unclaimed events',
           },
         ]}
       />
 
       {/* Persistent Module Navigation */}
-      <RunbookModuleNav
-        counts={{
-          agents: activeAgents.length,
-        }}
-      />
+      <RunbookModuleNav summary={navigation} />
 
       {/* Search & Attribute Filters */}
-      <RunbookFilters
+      {tab === 'agents' && <RunbookFilters
         query={query}
         fields={[
           { name: 'q', label: 'Search Agents' },
@@ -576,10 +566,10 @@ export default async function RunbookAgentsPage({
           { name: 'label', label: 'Label (key=value)' },
         ]}
         statusOptions={Object.values(RunbookAgentStatus).map(value => ({ value, label: value }))}
-      />
+      />}
 
       {/* Automatic Remediation Budgets Policy */}
-      {permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE) && (
+      {tab === 'security' && permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE) && (
         <details className="rounded-xl border bg-card/60 p-4 shadow-2xs">
           <summary className="cursor-pointer font-semibold text-sm">
             Automatic remediation budgets
@@ -624,17 +614,12 @@ export default async function RunbookAgentsPage({
       )}
 
       {/* Tabbed Infrastructure Modules */}
-      <DetailTabs
-        tabs={[
-          { id: 'agents', label: 'Agents', count: agents.length, content: agentPanel },
-          { id: 'pools', label: 'Pools', count: pools.length, content: poolPanel },
-          ...(canManageSecrets
-            ? [{ id: 'secrets', label: 'Secrets', count: secrets.length, content: secretPanel }]
-            : []),
-        ]}
-      />
+      <nav aria-label="Infrastructure sections" className="flex gap-2 overflow-x-auto">
+        {['agents', 'pools', ...(canManageSecrets ? ['secrets'] : []), 'security'].map(section => <Link key={section} href={`/runbooks/agents?tab=${section}`} aria-current={tab === section ? 'page' : undefined} className={`rounded-md px-4 py-2 text-sm capitalize ${tab === section ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>{section}</Link>)}
+      </nav>
+      {tab === 'agents' ? agentPanel : tab === 'pools' ? poolPanel : tab === 'secrets' ? secretPanel : securityPanel}
+      {tab !== 'security' && <RunbookPagination page={page} total={panelTotal} query={query} />}
 
-      <RunbookPagination page={page} total={agentTotal} query={query} />
     </div>
   );
 }

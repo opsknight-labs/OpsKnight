@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
 import Link from 'next/link';
 import { ArrowUpRight, ExternalLink, Layers } from 'lucide-react';
 import {
@@ -18,6 +19,7 @@ import { formatDateTime } from '@/lib/timezone';
 export type ExecutionItemData = {
   id: string;
   status: string;
+  triggeredByType?: keyof typeof TRIGGER_LABELS;
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
@@ -92,6 +94,7 @@ export function ExecutionDetailDrawer({
           </SheetDescription>
         </SheetHeader>
 
+        <Button asChild className="w-full"><Link href={`/runbooks/executions/${execution.id}`}>Open full execution <ArrowUpRight className="ml-2 h-4 w-4" /></Link></Button>
         {/* Primary Operational Meta */}
         <div className="grid grid-cols-2 gap-3 rounded-lg border bg-card p-3.5 text-xs">
           <div>
@@ -103,7 +106,7 @@ export function ExecutionDetailDrawer({
           <div>
             <span className="text-muted-foreground block text-[11px]">Trigger Source</span>
             <span className="font-medium text-foreground">
-              {execution.triggeredByUser ? `Responder (${execution.triggeredByUser.name})` : 'Automatic event trigger'}
+              {execution.triggeredByType ? TRIGGER_LABELS[execution.triggeredByType] : 'Not reported'}{execution.triggeredByUser ? ` (${execution.triggeredByUser.name})` : ''}
             </span>
           </div>
           <div>
@@ -158,7 +161,7 @@ export function ExecutionDetailDrawer({
 
           {execution.failedStepName && (
             <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-600 dark:text-rose-400">
-              <span className="font-semibold block">Failed Step:</span>
+              <span className="font-semibold block">Step requires attention:</span>
               <span>{execution.failedStepName}</span>
             </div>
           )}

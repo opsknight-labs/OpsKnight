@@ -1,3 +1,6 @@
+import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
+import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
+import { RunbookPagination, runbookPageQuery } from '@/components/runbooks/RunbookPagination';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Copy, History, Settings2 } from 'lucide-react';
@@ -32,9 +35,11 @@ import { Textarea } from '@/components/ui/shadcn/textarea';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 
 export const revalidate = 0;
-export default async function RunbookDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function RunbookDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const { id } = await params;
+  const { query, page: versionPage } = runbookPageQuery(await searchParams);
+  const navigation = await getRunbookNavigationSummary();
   const [permissions, user, runbook] = await Promise.all([
     getUserPermissions(),
     getCurrentUser(),
@@ -45,7 +50,8 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
         publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
         versions: {
           orderBy: { version: 'desc' },
-          include: { inputs: true, _count: { select: { executions: true } } },
+          skip: (versionPage - 1) * 20, take: 20,
+          select: { id: true, version: true, state: true, publishedAt: true, createdAt: true, checksum: true, _count: { select: { executions: true } } },
         },
         bindings: {
           include: { service: { select: { id: true, name: true } } },
@@ -56,7 +62,7 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
           take: 30,
           select: { id: true, status: true, incidentId: true, createdAt: true },
         },
-        _count: { select: { executions: true, bindings: true } },
+        _count: { select: { executions: true, bindings: true, versions: true } },
       },
     }),
   ]);
@@ -66,7 +72,8 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
     permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE) && !runbook.archivedAt;
   const canPublish =
     permissions.capabilities.includes(CAPABILITIES.RUNBOOK_PUBLISH) && !runbook.archivedAt;
-  const source = runbook.draftVersion ?? runbook.publishedVersion ?? runbook.versions[0];
+  const selectedVersion = query.version ? await prisma.runbookVersion.findFirst({ where: { id: query.version, runbookId: id }, include: { inputs: { orderBy: { sequence: 'asc' } } } }) : null;
+  const source = selectedVersion ?? runbook.draftVersion ?? runbook.publishedVersion;
   const builder = source ? (
     <div className="space-y-4">
       {!runbook.draftVersion && canManage && (
@@ -189,9 +196,10 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
         stats={[
           { label: 'Services', value: runbook._count.bindings },
           { label: 'Executions', value: runbook._count.executions },
-          { label: 'Versions', value: runbook.versions.length },
+          { label: 'Versions', value: runbook._count.versions },
         ]}
       />
+      <RunbookModuleNav summary={navigation} />
       <DetailTabs
         tabs={[
           { id: 'builder', label: 'Builder & Inputs', content: builder },
@@ -199,16 +207,17 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
             id: 'versions',
             label: 'Versions',
             icon: <History className="h-4 w-4" />,
-            count: runbook.versions.length,
+            count: runbook._count.versions,
             content: (
               <section className="space-y-3">
+                <RunbookPagination page={versionPage} total={runbook._count.versions} query={query} />
                 {runbook.versions.map(version => (
                   <div
                     key={version.id}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4"
                   >
                     <div className="space-y-1">
-                      <h2 className="font-semibold">Version {version.version}</h2>
+                      <h2 className="font-semibold"><Link className="text-primary hover:underline" href={`/runbooks/${id}?version=${version.id}&tab=builder`}>Version {version.version}</Link></h2>
                       <p className="break-all text-xs text-muted-foreground">
                         {version._count.executions} executions · checksum{' '}
                         {version.checksum.slice(0, 12)}
@@ -251,6 +260,7 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
             count: runbook._count.executions,
             content: (
               <section className="space-y-3">
+                <Link className="text-sm text-primary hover:underline" href={`/runbooks/executions?runbook=${runbook.id}`}>View all executions</Link>
                 {runbook.executions.map(execution => (
                   <div
                     key={execution.id}
@@ -260,6 +270,7 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
                       <p className="text-sm">
                         {formatDateTime(execution.createdAt, userTimeZone, { format: 'datetime' })}
                       </p>
+                      <Link className="block text-sm text-primary hover:underline" href={`/runbooks/executions/${execution.id}`}>Open full execution</Link>
                       {execution.incidentId && (
                         <Link
                           className="text-sm text-primary hover:underline"

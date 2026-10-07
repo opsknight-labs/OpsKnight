@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useRunbookRefresh } from '../useRunbookRefresh';
 import { Bot, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -30,12 +32,40 @@ export type AgentFleetTableProps = {
 };
 
 export function AgentFleetTable({ agents, userTimeZone, canManage }: AgentFleetTableProps) {
-  const [selectedAgent, setSelectedAgent] = useState<AgentItemData | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedAgent = agents.find(agent => agent.id === selectedId) ?? null;
+  const router = useRouter();
+  useRunbookRefresh(router, Boolean(selectedId));
 
   return (
     <div className="space-y-4">
+      <div className="hidden lg:block overflow-x-auto rounded-lg border">
+        <table className="w-full text-left text-xs"><caption className="sr-only">Agent fleet</caption>
+          <thead className="bg-muted/50"><tr>{['Agent', 'Health', 'Host', 'Version', 'Platform', 'Last heartbeat', 'Jobs', 'Spool', 'Dead letters', 'Pools', 'Actions'].map(title => <th className="px-3 py-2 font-medium" key={title}>{title}</th>)}</tr></thead>
+          <tbody>{agents.map(agent => <tr key={agent.id} onClick={() => setSelectedId(agent.id)} className="border-t hover:bg-muted/30 cursor-pointer">
+            <td className="px-3 py-2">
+              <button type="button" onClick={() => setSelectedId(agent.id)} className="text-primary font-semibold hover:underline focus-visible:ring-2 focus-visible:ring-primary block">{agent.name}</button>
+              {Array.isArray(agent.capabilityReport) &&
+                agent.capabilityReport.map((entry, idx) => {
+                  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+                  const e = entry as { available?: boolean; reason?: string };
+                  return !e.available && e.reason ? (
+                    <span key={idx} className="text-[11px] text-amber-600 block">
+                      {e.reason}
+                    </span>
+                  ) : null;
+                })}
+            </td>
+            <td className="px-3 py-2"><RunbookStatusBadge status={agent.effectiveStatus} size="sm" /></td>
+            <td className="px-3 py-2">{agent.hostname || 'Not reported'}</td><td className="px-3 py-2">{agent.version || 'Not reported'}</td><td className="px-3 py-2">{agent.platform || 'Not reported'}</td>
+            <td className="px-3 py-2 whitespace-nowrap">{agent.lastHeartbeatAt ? formatDateTime(agent.lastHeartbeatAt, userTimeZone, { format: 'datetime' }) : 'Never'}</td>
+            <td className="px-3 py-2">{agent.activeAttemptCount}</td><td className="px-3 py-2">{agent.spoolDepth}</td><td className="px-3 py-2">{agent.deadLetterDepth}</td><td className="px-3 py-2">{agent.poolMemberships.map(member => member.pool.name).join(', ') || 'None'}</td>
+            <td className="px-3 py-2 text-right" onClick={e => e.stopPropagation()}><Button variant="outline" size="sm" onClick={() => setSelectedId(agent.id)} className="h-7 text-xs">Inspect Agent</Button></td>
+          </tr>)}</tbody>
+        </table>
+      </div>
       {/* High-density fleet list/cards */}
-      <div className="grid gap-3 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 lg:hidden">
         {agents.map(agent => {
           const isRevoked = agent.status === 'REVOKED';
 
@@ -52,7 +82,7 @@ export function AgentFleetTable({ agents, userTimeZone, canManage }: AgentFleetT
                       {agent.name}
                     </h3>
                     <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
-                      v{agent.version || '2.0.0'}
+                      {agent.version ? `v${agent.version}` : 'Not reported'}
                     </Badge>
                   </div>
                   <p className="text-xs font-mono text-muted-foreground truncate">
@@ -67,7 +97,7 @@ export function AgentFleetTable({ agents, userTimeZone, canManage }: AgentFleetT
                 <div>
                   <span className="text-[11px] block">Platform / Host</span>
                   <span className="font-medium text-foreground truncate block">
-                    {agent.platform || 'Linux'}
+                    {agent.platform || 'Not reported'}
                   </span>
                 </div>
                 <div>
@@ -156,7 +186,7 @@ export function AgentFleetTable({ agents, userTimeZone, canManage }: AgentFleetT
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setSelectedAgent(agent)}
+                  onClick={() => setSelectedId(agent.id)}
                   className="h-8 text-xs gap-1"
                 >
                   <ExternalLink className="h-3 w-3" />
@@ -190,7 +220,7 @@ export function AgentFleetTable({ agents, userTimeZone, canManage }: AgentFleetT
       <AgentDetailDrawer
         agent={selectedAgent}
         open={Boolean(selectedAgent)}
-        onOpenChange={open => !open && setSelectedAgent(null)}
+        onOpenChange={open => !open && setSelectedId(null)}
         userTimeZone={userTimeZone}
         canManage={canManage}
       />

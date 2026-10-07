@@ -97,6 +97,9 @@ export function RunbookStatusBadge({
       icon = <Hourglass className="h-3 w-3 text-rose-500 shrink-0" />;
       break;
 
+    case 'PAUSED':
+      variant = 'warning'; label = 'Paused'; icon = <Clock className="h-3 w-3 shrink-0" />; break;
+
     // Agent Fleet
     case 'ONLINE':
       variant = 'success';

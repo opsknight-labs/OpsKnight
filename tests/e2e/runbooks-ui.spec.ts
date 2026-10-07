@@ -459,6 +459,7 @@ test('server pagination, administrator labels, effective capabilities and budget
   await expect(
     page.getByText('Runtime access unavailable.', { exact: false }).filter({ visible: true })
   ).toBeVisible();
+  await page.getByRole('button', { name: 'Inspect Agent' }).first().click();
   await page.getByText('Scheduling labels', { exact: true }).filter({ visible: true }).click();
   await page
     .getByRole('textbox', { name: `Labels for ${agent.name}` })

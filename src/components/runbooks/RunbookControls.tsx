@@ -34,10 +34,10 @@ import { RunbookModuleNav } from './RunbookModuleNav';
 import { RunbookStatusBadge } from './RunbookStatusBadge';
 
 export function RunbookNavigation(props: {
-  counts?: { executions?: number; agents?: number; healthDegraded?: boolean };
+  summary?: import('@/lib/runbooks/presentation/contracts').NavigationSummary;
   className?: string;
 }) {
-  return <RunbookModuleNav counts={props.counts} className={props.className} />;
+  return <RunbookModuleNav summary={props.summary} className={props.className} />;
 }
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useRunbookRefresh } from '../useRunbookRefresh';
 import { Play } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import { ExecutionRow } from './ExecutionRow';
@@ -16,7 +18,10 @@ export type ExecutionListProps = {
 };
 
 export function ExecutionList({ executions, userTimeZone, totalCount }: ExecutionListProps) {
-  const [selectedExecution, setSelectedExecution] = useState<ExecutionItemData | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedExecution = executions.find(item => item.id === selectedId) ?? null;
+  const router = useRouter();
+  useRunbookRefresh(router, Boolean(selectedId));
 
   const runningCount = executions.filter(e => e.status === 'RUNNING').length;
   const waitingApprovalCount = executions.filter(e => e.status === 'WAITING_APPROVAL').length;
@@ -46,14 +51,15 @@ export function ExecutionList({ executions, userTimeZone, totalCount }: Executio
         </div>
       </div>
 
+      <div aria-hidden="true" className="hidden lg:grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr] gap-2 px-3 text-xs text-muted-foreground"><span>Runbook / Incident</span><span>State</span><span>Progress</span><span>Target</span><span>Trigger</span><span>Started / Duration</span></div>
       {/* Execution Rows */}
-      <div className="space-y-2.5">
+      <div className="space-y-1.5">
         {executions.map(execution => (
           <ExecutionRow
             key={execution.id}
             execution={execution}
             userTimeZone={userTimeZone}
-            onSelect={setSelectedExecution}
+            onSelect={item => setSelectedId(item.id)}
           />
         ))}
       </div>
@@ -71,7 +77,7 @@ export function ExecutionList({ executions, userTimeZone, totalCount }: Executio
       <ExecutionDetailDrawer
         execution={selectedExecution}
         open={Boolean(selectedExecution)}
-        onOpenChange={open => !open && setSelectedExecution(null)}
+        onOpenChange={open => !open && setSelectedId(null)}
         userTimeZone={userTimeZone}
       />
     </section>

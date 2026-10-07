@@ -1,3 +1,5 @@
+import { getRunbookDatabaseNow, getRunbookExecutionSummary, getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
+import { getExecutionDateRange, getExecutionProgress, getUnknownOutcomeWhere, TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser } from '@/lib/rbac';
@@ -27,24 +29,9 @@ export default async function RunbookExecutionsPage({
   const userTimeZone = getUserTimeZone(user);
   const { query, page: requestedPage } = runbookPageQuery(await searchParams);
 
-  // Time range calculation
-  const now = new Date();
-  let computedFrom: Date | undefined;
-  if (query.timeRange === '1h') {
-    computedFrom = new Date(now.getTime() - 60 * 60 * 1000);
-  } else if (query.timeRange === '24h') {
-    computedFrom = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  } else if (query.timeRange === '7d') {
-    computedFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  } else if (query.from && Number.isFinite(Date.parse(query.from))) {
-    computedFrom = new Date(query.from);
-  }
-
-  const computedTo =
-    query.to && Number.isFinite(Date.parse(query.to))
-      ? new Date(`${query.to}T23:59:59.999Z`)
-      : undefined;
-
+  const now = await getRunbookDatabaseNow();
+  const dateRange = getExecutionDateRange(query, userTimeZone, now);
+  const trigger = Object.keys(TRIGGER_LABELS).find(value => value === query.trigger) as keyof typeof TRIGGER_LABELS | undefined;
   const status = Object.values(RunbookExecutionStatus).find(value => value === query.status);
 
   const filter = runbookExecutionFilterSchema.parse({
@@ -53,9 +40,9 @@ export default async function RunbookExecutionsPage({
     serviceId: query.service,
     incidentId: query.incident,
     agentId: query.agent,
-    from: computedFrom,
-    to: computedTo,
-    trigger: ['automatic', 'responder'].includes(query.trigger) ? query.trigger : undefined,
+    from: dateRange.gte,
+    to: dateRange.lt,
+    triggeredByType: trigger,
     page: requestedPage,
   });
 
@@ -75,36 +62,17 @@ export default async function RunbookExecutionsPage({
     ...(filter.serviceId ? { serviceId: filter.serviceId } : {}),
     ...(filter.incidentId ? { incidentId: filter.incidentId } : {}),
     ...(filter.agentId ? { resolvedTargetAgentId: filter.agentId } : {}),
-    ...(query.trigger === 'automatic'
-      ? { triggeredByUserId: null }
-      : query.trigger === 'responder'
-        ? { triggeredByUserId: { not: null } }
-        : {}),
-    ...(computedFrom || computedTo ? { createdAt: { gte: computedFrom, lte: computedTo } } : {}),
+    ...(trigger ? { triggeredByType: trigger } : {}),
+    ...(query.attemptStatus === 'UNKNOWN' ? getUnknownOutcomeWhere() : {}),
+    ...(dateRange.gte || dateRange.lt ? { createdAt: dateRange } : {}),
   };
 
   const total = await prisma.runbookExecution.count({ where });
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / RUNBOOK_PAGE_SIZE)));
 
-  // Concurrent metrics & entity selectors fetch
-  const [
-    runningCount,
-    waitingApprovalCount,
-    todayCount,
-    totalExecutionsCount,
-    succeededCount,
-    executions,
-    services,
-    runbooks,
-    agents,
-  ] = await Promise.all([
-    prisma.runbookExecution.count({ where: { status: 'RUNNING' } }),
-    prisma.runbookExecution.count({ where: { status: 'WAITING_APPROVAL' } }),
-    prisma.runbookExecution.count({
-      where: { createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
-    }),
-    prisma.runbookExecution.count(),
-    prisma.runbookExecution.count({ where: { status: 'SUCCEEDED' } }),
+  const [summary, navigation, executions] = await Promise.all([
+    getRunbookExecutionSummary(),
+    getRunbookNavigationSummary(),
     prisma.runbookExecution.findMany({
       where,
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
@@ -113,6 +81,7 @@ export default async function RunbookExecutionsPage({
       select: {
         id: true,
         status: true,
+        triggeredByType: true,
         createdAt: true,
         startedAt: true,
         completedAt: true,
@@ -135,28 +104,14 @@ export default async function RunbookExecutionsPage({
         },
       },
     }),
-    prisma.service.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-    prisma.runbook.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-    prisma.runbookAgent.findMany({
-      where: { status: { not: 'REVOKED' } },
-      select: { id: true, name: true },
-      orderBy: { name: 'asc' },
-    }),
   ]);
-
-  const successRate =
-    totalExecutionsCount > 0
-      ? `${Math.round((succeededCount / totalExecutionsCount) * 100)}%`
-      : '100%';
+  const successRate = summary.successRate.percent === null ? 'No outcomes' : `${summary.successRate.percent}%`;
 
   const executionListData = executions.map(item => {
-    const totalSteps = item.steps.length;
-    const completedSteps = item.steps.filter(st => st.status === 'SUCCEEDED').length;
-    const failedStep = item.steps.find(st => st.status === 'FAILED');
-
     return {
       id: item.id,
       status: item.status,
+      triggeredByType: item.triggeredByType,
       createdAt: item.createdAt.toISOString(),
       startedAt: item.startedAt?.toISOString() ?? null,
       completedAt: item.completedAt?.toISOString() ?? null,
@@ -167,9 +122,7 @@ export default async function RunbookExecutionsPage({
       runbookVersion: item.runbookVersion,
       resolvedTargetAgent: item.resolvedTargetAgent,
       triggeredByUser: item.triggeredByUser,
-      totalSteps,
-      completedSteps,
-      failedStepName: failedStep?.stepKey ?? null,
+      ...getExecutionProgress(item.steps),
       steps: item.steps.map(st => ({
         id: st.id,
         stepKey: st.stepKey,
@@ -193,45 +146,33 @@ export default async function RunbookExecutionsPage({
         stats={[
           {
             label: 'Running',
-            value: runningCount,
-            tone: runningCount > 0 ? 'info' : 'default',
-            subtext: runningCount > 0 ? 'Active on agents' : 'Idle',
+            value: summary.running,
+            tone: summary.running > 0 ? 'info' : 'default',
+            subtext: summary.running > 0 ? 'Active on agents' : 'Idle',
           },
           {
             label: 'Waiting Approval',
-            value: waitingApprovalCount,
-            tone: waitingApprovalCount > 0 ? 'warning' : 'default',
-            subtext: waitingApprovalCount > 0 ? 'Action required' : 'Clear',
+            value: summary.waitingApproval,
+            tone: summary.waitingApproval > 0 ? 'warning' : 'default',
+            subtext: summary.waitingApproval > 0 ? 'Action required' : 'Clear',
           },
           {
-            label: 'Executions Today',
-            value: todayCount,
+            label: 'Last 24h',
+            value: summary.last24h,
             subtext: 'Last 24 hours',
           },
           {
-            label: 'Success Rate',
+            label: '7-day success rate',
             value: successRate,
-            tone: 'success',
-            subtext: `${totalExecutionsCount} total runs`,
+            tone: summary.successRate.percent === null ? 'default' : summary.successRate.percent >= 95 ? 'success' : 'warning',
+            subtext: `${summary.successRate.total} completed outcomes; cancellations excluded`,
           },
         ]}
       />
 
       {/* Persistent Module Navigation */}
-      <RunbookModuleNav
-        counts={{
-          executions: runningCount + waitingApprovalCount,
-          agents: agents.length,
-        }}
-      />
-
-      {/* Human-Friendly Entity Filter Bar */}
-      <ExecutionFilterBar
-        query={query}
-        services={services}
-        runbooks={runbooks}
-        agents={agents}
-      />
+      <RunbookModuleNav summary={navigation} />
+      <ExecutionFilterBar key={JSON.stringify(query)} query={query} />
 
       {/* High-Density Hybrid List / Drawer Experience */}
       <ExecutionList

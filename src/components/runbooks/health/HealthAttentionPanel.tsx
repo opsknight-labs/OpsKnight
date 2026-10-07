@@ -29,6 +29,7 @@ export function HealthAttentionPanel({
   issues,
   agentsCount,
 }: HealthAttentionPanelProps) {
+  if (!agentsCount && !issues.length) return <div className="rounded-lg border bg-muted/30 p-4 text-sm"><h3 className="font-semibold">No Agents configured</h3><p className="text-muted-foreground">Fleet health is unknown until an Agent reports a heartbeat.</p><Link className="text-primary hover:underline" href="/runbooks/agents">Enroll an Agent</Link></div>;
   const hasIssues = issues.length > 0;
 
   return (

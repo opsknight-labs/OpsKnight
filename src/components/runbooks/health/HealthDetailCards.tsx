@@ -1,4 +1,6 @@
 import React from 'react';
+import { resolveEffectiveAgentStatus } from '@/lib/runbooks/presentation/contracts';
+import type { RunbookAgentStatus } from '@prisma/client';
 import Link from 'next/link';
 import { Bot, HardDrive, ShieldCheck, Terminal } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
@@ -23,7 +25,7 @@ export type HealthDetailCardsProps = {
   unhealthyAgents: Array<{
     id: string;
     name: string;
-    status: string;
+    status: RunbookAgentStatus;
     lastHeartbeatAt: Date | null;
     lastError: string | null;
     spoolDepth: number;
@@ -99,7 +101,7 @@ export function HealthDetailCards({
           <CardContent className="space-y-2 text-xs">
             <DetailRow label="Pending step attempts" value={pending} attention={pending > 50} />
             <DetailRow
-              label="Oldest pending lease"
+              label="Oldest pending attempt"
               value={`${oldest}s`}
               attention={oldest > 300}
             />
@@ -177,11 +179,7 @@ export function HealthDetailCards({
                 )}
               </div>
               <RunbookStatusBadge
-                status={
-                  !agent.lastHeartbeatAt || now.getTime() - agent.lastHeartbeatAt.getTime() > 90000
-                    ? 'OFFLINE'
-                    : agent.status
-                }
+                status={resolveEffectiveAgentStatus(agent, now)}
               />
             </Link>
           ))}
