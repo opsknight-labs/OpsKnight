@@ -16,7 +16,7 @@ export default async function TeamsPage({
   searchParams,
 }: {
   searchParams?: Promise<{ page?: string; q?: string; search?: string; status?: string }>;
-} = {}) {
+}) {
   const params = await searchParams;
   const requestedPage = parsePageParam(params?.page);
   const searchQuery = (params?.q || params?.search || '').trim();

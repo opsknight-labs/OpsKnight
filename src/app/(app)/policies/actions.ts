@@ -238,6 +238,18 @@ export async function deletePolicy(policyId: string) {
     };
   }
 
+  const automationReferences = await prisma.automationVersionPolicyRef.findMany({
+    where: { escalationPolicyId: policyId, version: { activeConfig: { isNot: null } } },
+    select: { version: { select: { service: { select: { name: true } } } } },
+  });
+  const activeDecisions = await prisma.incidentAutomationDecision.count({
+    where: { escalationPolicyId: policyId, incident: { status: { not: 'RESOLVED' } } },
+  });
+  if (automationReferences.length || activeDecisions)
+    return {
+      error: `Cannot delete policy: published automation or ${activeDecisions} active incident(s) reference it. Publish a replacement route and resolve active incidents first.`,
+    };
+
   // Check if policy is used by any services
   const servicesUsingPolicy = await prisma.service.findMany({
     where: { escalationPolicyId: policyId },

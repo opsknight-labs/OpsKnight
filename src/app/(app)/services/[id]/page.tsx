@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import AutomationShell from '@/components/automation/AutomationShell';
 import type { WebhookIntegration, Prisma } from '@prisma/client';
 
 type ClassificationPolicyWithRules = Prisma.IncidentClassificationPolicyGetPayload<{
@@ -1247,6 +1248,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         integrationCount={service.integrations?.length || 0}
         notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}
+        automationContent={<AutomationShell serviceId={service.id} />}
         escalationContent={escalationContent}
         runbooksContent={
           <ServiceRunbooks

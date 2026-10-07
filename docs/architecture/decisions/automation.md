@@ -38,8 +38,8 @@ roll back and retry using existing transaction semantics rather than attempting
 queries in an aborted PostgreSQL transaction. Supplemental failures retry
 independently without changing responder routing.
 
-OPSKNIGHT_AUTOMATION_ENABLED defaults false and has highest priority for new
-evaluations. Every service begins DISABLED. SHADOW writes only traces,
+The shared SystemSettings.automationEnabled switch defaults false and has highest priority for new
+evaluations. Administrators manage it under Settings → System → Automation. Every service begins DISABLED. SHADOW writes only traces,
 aggregates, observations, and metrics: incident fields, SLA, tags, escalation,
 and operational outbox are identical to DISABLED. Existing LIVE decisions stay
 pinned when configuration changes or evaluation is disabled; changing the

@@ -1,3 +1,4 @@
+import { resolveIncidentResponderRouting } from './routing';
 import prisma from '../prisma';
 import { logger } from '../logger';
 import { ESCALATION_LOCK_TIMEOUT_MS } from '../config';
@@ -115,7 +116,9 @@ export async function executeEscalation(
     return { outcome: 'NO_INCIDENT', escalated: false, reason: 'Incident not found' };
   }
 
-  const policy = incident.service.policy;
+  const routing = await resolveIncidentResponderRouting(incidentId, incident.serviceId, prisma, incident.service.policy);
+  if (routing.type === 'NO_ESCALATION') return { outcome: 'RESPONDER_ROUTE_NONE', escalated: false, reason: 'Automation intentionally disables responder paging' };
+  const policy = routing.policy;
   const policySteps = (policy?.steps ?? []) as unknown as PolicyStepRow[];
   const generation = incident.escalationGeneration ?? 0;
   const currentStepIndex = stepIndex ?? incident.currentEscalationStep ?? 0;

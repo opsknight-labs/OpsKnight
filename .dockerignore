@@ -6,6 +6,7 @@ yarn-error.log*
 
 # Next.js
 .next
+.next-*
 out
 build
 dist

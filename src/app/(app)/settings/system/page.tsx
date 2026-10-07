@@ -1,3 +1,5 @@
+import AutomationSettings from '@/components/settings/AutomationSettings';
+import { getAutomationSettings } from '@/lib/automation/settings';
 import { getUserPermissions } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
@@ -172,6 +174,7 @@ export default async function SystemSettingsPage() {
     );
 
     const retentionTab = <RetentionPolicySettings />;
+    const automationTab = <AutomationSettings initialSettings={await getAutomationSettings()} />;
 
     const envRows = [
       {
@@ -473,6 +476,7 @@ export default async function SystemSettingsPage() {
           appUrlTab={appUrlTab}
           ssoTab={ssoTab}
           retentionTab={retentionTab}
+          automationTab={automationTab}
           envTab={envTab}
           ssoEnabled={ssoEnabled}
           scimEnabled={scimConfig.enabled && scimConfig.hasSecretToken}

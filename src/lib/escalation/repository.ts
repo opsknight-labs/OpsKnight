@@ -1,3 +1,4 @@
+import { resolveIncidentResponderRouting } from './routing';
 /**
  * Durable persistence for the escalation engine.
  *
@@ -429,18 +430,9 @@ export async function initializeEscalationExecution(
   tx: Prisma.TransactionClient,
   input: { incidentId: string; serviceId: string; now?: Date; notBefore?: Date }
 ): Promise<{ initialized: boolean; dueAt: Date | null }> {
-  const service = await tx.service.findUnique({
-    where: { id: input.serviceId },
-    select: {
-      policy: {
-        select: {
-          steps: { orderBy: { stepOrder: 'asc' }, take: 1, select: { delayMinutes: true } },
-        },
-      },
-    },
-  });
-
-  const firstStep = service?.policy?.steps[0];
+  const routing = await resolveIncidentResponderRouting(input.incidentId, input.serviceId, tx);
+  if (routing.type === 'NO_ESCALATION') return { initialized: false, dueAt: null };
+  const firstStep = routing.policy?.steps[0];
   if (!firstStep) return { initialized: false, dueAt: null };
 
   const policyDueAt = escalationDueAt(input.now ?? new Date(), firstStep.delayMinutes);

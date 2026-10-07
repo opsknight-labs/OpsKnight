@@ -5,6 +5,7 @@ import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
 import { Flame, ShieldAlert, Zap, Bell, Settings, Workflow } from 'lucide-react';
 
 export type ServiceDetailTab =
+  | 'automation'
   | 'incidents'
   | 'escalation'
   | 'runbooks'
@@ -18,6 +19,7 @@ export type ServiceDetailTabsProps = {
   integrationCount: number;
   notificationsCount?: number | string;
   incidentsContent: ReactNode;
+  automationContent?: ReactNode;
   escalationContent: ReactNode;
   runbooksContent: ReactNode;
   integrationsContent: ReactNode;
@@ -32,6 +34,7 @@ export default function ServiceDetailTabs({
   integrationCount,
   notificationsCount,
   incidentsContent,
+  automationContent,
   escalationContent,
   runbooksContent,
   integrationsContent,
@@ -46,6 +49,7 @@ export default function ServiceDetailTabs({
       icon: <Flame className="h-4 w-4" />,
       count: activeIncidentCount > 0 ? `${activeIncidentCount} Active` : '0',
     },
+    ...(automationContent ? [{ id: 'automation', label: 'Automation', icon: <Workflow className="h-4 w-4" /> }] : []),
     {
       id: 'escalation',
       label: 'Escalation Policy',
@@ -76,10 +80,11 @@ export default function ServiceDetailTabs({
   ];
 
   return (
-    <DetailTabs tabs={tabItems} defaultTab={defaultTab} actions={actions} className="space-y-6">
+    <DetailTabs layout="auto" tabs={tabItems} defaultTab={defaultTab} actions={actions} className="space-y-6">
       <DetailTabContent value="incidents" className="mt-0 space-y-6">
         {incidentsContent}
       </DetailTabContent>
+      <DetailTabContent value="automation" className="mt-0 space-y-6">{automationContent}</DetailTabContent>
       <DetailTabContent value="escalation" className="mt-0 space-y-6">
         {escalationContent}
       </DetailTabContent>

@@ -103,3 +103,5 @@ test-results/
 
 # TypeScript incremental build cache
 tsconfig.tsbuildinfo
+
+/.next-automation-build/

@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 
 interface Props {
+  automationTab?: ReactNode;
   appUrlTab: ReactNode;
   ssoTab: ReactNode;
   retentionTab: ReactNode;
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export default function SystemSettingsTabs({
+  automationTab,
   appUrlTab,
   ssoTab,
   retentionTab,
@@ -30,6 +32,16 @@ export default function SystemSettingsTabs({
   missingCount,
 }: Props) {
   const tabs = [
+    ...(automationTab
+      ? [
+          {
+            id: 'automation',
+            label: 'Automation',
+            icon: <Shield className="h-3.5 w-3.5" />,
+            content: automationTab,
+          },
+        ]
+      : []),
     {
       id: 'app-url',
       label: 'App URL',
