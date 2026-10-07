@@ -9,6 +9,7 @@ import {
   validateInputKeyUniqueness,
 } from './definition';
 import {
+  RunbookArchivedError,
   RunbookDefinitionError,
   RunbookVersionImmutableError,
   RunbookVersionNotFoundError,
@@ -39,7 +40,7 @@ const EMPTY_DEFINITION: RunbookDefinition = {
 
 export type VersioningClient = Prisma.TransactionClient;
 
-function toInputCreateMany(inputs: RunbookInputInput[]) {
+export function toInputCreateMany(inputs: RunbookInputInput[]) {
   return inputs.map((input, index) => ({
     key: input.key,
     label: input.label,
@@ -110,6 +111,9 @@ export async function updateRunbookMetadata(
   const data = updateRunbookSchema.parse(input);
   return prisma.$transaction(async tx => {
     const current = await tx.runbook.findUniqueOrThrow({ where: { id: runbookId } });
+    if (current.archivedAt !== null) {
+      throw new RunbookArchivedError(runbookId, 'update');
+    }
     const updated = await tx.runbook.update({ where: { id: runbookId }, data });
     await logAudit(
       {
@@ -137,8 +141,14 @@ export async function updateDraftVersion(
   const checksum = computeDefinitionChecksum(definition);
 
   return prisma.$transaction(async tx => {
-    const current = await tx.runbookVersion.findUnique({ where: { id: versionId } });
+    const current = await tx.runbookVersion.findUnique({
+      where: { id: versionId },
+      include: { runbook: { select: { archivedAt: true } } },
+    });
     if (!current) throw new RunbookVersionNotFoundError(versionId);
+    if (current.runbook.archivedAt !== null) {
+      throw new RunbookArchivedError(current.runbookId, 'edit draft for');
+    }
     if (current.state !== 'DRAFT') {
       throw new RunbookVersionImmutableError(versionId, current.state);
     }
@@ -183,6 +193,9 @@ export async function publishDraftVersion(versionId: string, actorId: string) {
       include: { runbook: true, inputs: true },
     });
     if (!draft) throw new RunbookVersionNotFoundError(versionId);
+    if (draft.runbook.archivedAt !== null) {
+      throw new RunbookArchivedError(draft.runbookId, 'publish');
+    }
     if (draft.state !== 'DRAFT') throw new RunbookVersionImmutableError(versionId, draft.state);
 
     const parsed = parseRunbookDefinition(draft.definition, draft.inputs);
@@ -232,6 +245,9 @@ export async function cloneVersionToDraft(versionId: string, actorId: string) {
         include: { inputs: { orderBy: { sequence: 'asc' } }, runbook: true },
       });
       if (!source) throw new RunbookVersionNotFoundError(versionId);
+      if (source.runbook.archivedAt !== null) {
+        throw new RunbookArchivedError(source.runbookId, 'clone draft for');
+      }
       if (source.runbook.draftVersionId) {
         const existing = await tx.runbookVersion.findUnique({
           where: { id: source.runbook.draftVersionId },

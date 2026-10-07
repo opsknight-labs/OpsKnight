@@ -98,6 +98,17 @@ export class RunbookRestoreError extends RunbookError {
   }
 }
 
+export class RunbookArchivedError extends RunbookError {
+  constructor(runbookId: string, action: string = 'modify') {
+    super({
+      code: 'RUNBOOK_ARCHIVED',
+      userMessage: `Cannot ${action} an archived runbook. Restore the runbook first.`,
+      details: { runbookId, action },
+    });
+    this.name = 'RunbookArchivedError';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Version Errors
 // ---------------------------------------------------------------------------

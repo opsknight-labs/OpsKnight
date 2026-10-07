@@ -644,6 +644,14 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  RUNBOOK_ARCHIVED: {
+    status: 409,
+    category: 'conflict',
+    userMessage: 'Cannot modify an archived runbook. Restore the runbook before making changes.',
+    action: 'Restore the runbook to resume authoring or updates.',
+    retryable: false,
+    exposure: 'public',
+  },
   RUNBOOK_VERSION_NOT_FOUND: {
     status: 404,
     category: 'not_found',

@@ -103,8 +103,8 @@ export default async function RunbooksPage({
           { name: 'owner', label: 'Owner ID' },
           { name: 'service', label: 'Service binding ID' },
         ]}
+        allStatusLabel="All Active"
         statusOptions={[
-          { value: 'all', label: 'All Active' },
           { value: 'published', label: 'Published' },
           { value: 'draft', label: 'Draft' },
           { value: 'archived', label: 'Archived' },

@@ -37,11 +37,17 @@ export function RunbookFilters({
   query,
   fields,
   statusOptions = [],
+  allStatusLabel = 'All statuses',
 }: {
   query: Record<string, string>;
   fields: { name: string; label: string; type?: string }[];
   statusOptions?: { value: string; label: string }[];
+  allStatusLabel?: string;
 }) {
+  const options = statusOptions.some(opt => opt.value === 'all')
+    ? statusOptions
+    : [{ value: 'all', label: allStatusLabel }, ...statusOptions];
+
   return (
     <form method="get" className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
       {fields.map(field => (
@@ -56,12 +62,12 @@ export function RunbookFilters({
           />
         </label>
       ))}
-      {statusOptions.length > 0 && (
+      {options.length > 0 && (
         <FormSelect
           name="status"
           label="Status filter"
           defaultValue={query.status || 'all'}
-          options={[{ value: 'all', label: 'All statuses' }, ...statusOptions]}
+          options={options}
         />
       )}
       <Button type="submit">Apply filters</Button>

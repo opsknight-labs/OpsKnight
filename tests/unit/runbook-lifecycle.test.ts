@@ -9,19 +9,31 @@ import {
   duplicateRunbook,
 } from '@/lib/runbooks/lifecycle';
 import {
+  RunbookArchivedError,
   RunbookCannotDeleteError,
+  RunbookDefinitionError,
   RunbookNotFoundError,
 } from '@/lib/runbooks/errors';
+import {
+  updateRunbookMetadata,
+  updateDraftVersion,
+  publishDraftVersion,
+  cloneVersionToDraft,
+} from '@/lib/runbooks/versioning';
 import prisma from '@/lib/prisma';
 
 type MockTx = {
   runbook: {
     findUnique: ReturnType<typeof vi.fn>;
+    findUniqueOrThrow?: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
+    create?: ReturnType<typeof vi.fn>;
   };
   runbookVersion: {
+    findUnique?: ReturnType<typeof vi.fn>;
     deleteMany: ReturnType<typeof vi.fn>;
+    create?: ReturnType<typeof vi.fn>;
   };
   serviceRunbookBinding: {
     updateMany: ReturnType<typeof vi.fn>;
@@ -34,9 +46,11 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      create: vi.fn(),
     },
     runbookVersion: {
       deleteMany: vi.fn(),
+      create: vi.fn(),
     },
     serviceRunbookBinding: {
       updateMany: vi.fn(),
@@ -47,9 +61,11 @@ vi.mock('@/lib/prisma', () => ({
           findUnique: vi.fn(),
           update: vi.fn().mockResolvedValue({ id: 'rb_1', archivedAt: null }),
           delete: vi.fn().mockResolvedValue({ id: 'rb_1' }),
+          create: vi.fn().mockResolvedValue({ id: 'rb_dup_1', name: 'Original Workflow (Copy)', slug: 'orig-workflow-copy' }),
         },
         runbookVersion: {
           deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+          create: vi.fn().mockResolvedValue({ id: 'ver_dup_1', version: 1 }),
         },
         serviceRunbookBinding: {
           updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -61,10 +77,6 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/lib/audit', () => ({
   logAudit: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('@/lib/runbooks/versioning', () => ({
-  createRunbook: vi.fn().mockResolvedValue({ id: 'rb_dup_1', slug: 'test-runbook-copy' }),
 }));
 
 describe('Runbook Lifecycle Unit Tests', () => {
@@ -112,6 +124,28 @@ describe('Runbook Lifecycle Unit Tests', () => {
       const where = buildRunbookLibraryWhere({ tab: 'drafts', page: 1, pageSize: 20 });
       expect(where.archivedAt).toBeNull();
       expect(where.draftVersionId).toEqual({ not: null });
+    });
+
+    it('gives tab precedence over conflicting status dropdown', () => {
+      // tab=archived with status=published shows archived runbooks that had a published version
+      const archivedPublished = buildRunbookLibraryWhere({
+        tab: 'archived',
+        status: 'published',
+        page: 1,
+        pageSize: 20,
+      });
+      expect(archivedPublished.archivedAt).toEqual({ not: null });
+      expect(archivedPublished.publishedVersionId).toEqual({ not: null });
+
+      // tab=published with status=archived keeps active scope because tab takes primary precedence
+      const publishedArchived = buildRunbookLibraryWhere({
+        tab: 'published',
+        status: 'archived',
+        page: 1,
+        pageSize: 20,
+      });
+      expect(publishedArchived.archivedAt).toBeNull();
+      expect(publishedArchived.publishedVersionId).toEqual({ not: null });
     });
 
     it('builds search query across name, description, and slug', () => {
@@ -442,7 +476,9 @@ describe('Runbook Lifecycle Unit Tests', () => {
         slug: 'orig-workflow',
         description: 'Original description',
         draftVersion: {
-          definition: { steps: [{ key: 'step_1', type: 'MANUAL', riskClass: 'READ_ONLY' }] } as unknown as Prisma.JsonValue,
+          definition: {
+            steps: [{ key: 'step_1', name: 'First Step', type: 'MANUAL', riskClass: 'READ_ONLY' }],
+          } as unknown as Prisma.JsonValue,
           inputs: [{ key: 'env', label: 'Env', type: 'STRING', required: true, sequence: 0 }],
         },
         publishedVersion: null,
@@ -454,6 +490,147 @@ describe('Runbook Lifecycle Unit Tests', () => {
 
       const duplicated = await duplicateRunbook('rb_orig', 'user_1');
       expect(duplicated.id).toBe('rb_dup_1');
+    });
+
+    it('throws RunbookDefinitionError if source runbook has no versions', async () => {
+      const mockEmptySource = {
+        id: 'rb_empty',
+        name: 'Empty Workflow',
+        slug: 'empty-workflow',
+        description: 'No versions',
+        draftVersion: null,
+        publishedVersion: null,
+      } as unknown as Runbook;
+
+      vi.mocked(prisma.runbook.findUnique).mockResolvedValueOnce(mockEmptySource);
+
+      await expect(duplicateRunbook('rb_empty', 'user_1')).rejects.toThrow(
+        RunbookDefinitionError
+      );
+    });
+  });
+
+  describe('Archived authoring mutation guards', () => {
+    it('rejects updateRunbookMetadata on archived runbooks', async () => {
+      vi.mocked(prisma.$transaction).mockImplementationOnce(
+        (async (callback: (tx: MockTx) => Promise<unknown>) => {
+          const tx: MockTx = {
+            runbook: {
+              findUniqueOrThrow: vi.fn().mockResolvedValue({
+                id: 'rb_archived',
+                archivedAt: new Date(),
+              }),
+              findUnique: vi.fn(),
+              update: vi.fn(),
+              delete: vi.fn(),
+            },
+            runbookVersion: { deleteMany: vi.fn() },
+            serviceRunbookBinding: { updateMany: vi.fn() },
+          };
+          return callback(tx);
+        }) as never
+      );
+
+      await expect(
+        updateRunbookMetadata('rb_archived', { name: 'New Name' }, 'user_1')
+      ).rejects.toThrow(RunbookArchivedError);
+    });
+
+    it('rejects updateDraftVersion on archived runbooks', async () => {
+      vi.mocked(prisma.$transaction).mockImplementationOnce(
+        (async (callback: (tx: MockTx) => Promise<unknown>) => {
+          const tx: MockTx = {
+            runbook: {
+              findUnique: vi.fn(),
+              update: vi.fn(),
+              delete: vi.fn(),
+            },
+            runbookVersion: {
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'ver_1',
+                runbookId: 'rb_archived',
+                state: 'DRAFT',
+                runbook: { archivedAt: new Date() },
+              }),
+              deleteMany: vi.fn(),
+            },
+            serviceRunbookBinding: { updateMany: vi.fn() },
+          };
+          return callback(tx);
+        }) as never
+      );
+
+      await expect(
+        updateDraftVersion(
+          'ver_1',
+          {
+            definition: {
+              description: '',
+              steps: [{ key: 'step_1', name: 'Step 1', type: 'MANUAL', riskClass: 'READ_ONLY' }],
+            },
+          },
+          'user_1'
+        )
+      ).rejects.toThrow(RunbookArchivedError);
+    });
+
+    it('rejects publishDraftVersion on archived runbooks', async () => {
+      vi.mocked(prisma.$transaction).mockImplementationOnce(
+        (async (callback: (tx: MockTx) => Promise<unknown>) => {
+          const tx: MockTx = {
+            runbook: {
+              findUnique: vi.fn(),
+              update: vi.fn(),
+              delete: vi.fn(),
+            },
+            runbookVersion: {
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'ver_1',
+                runbookId: 'rb_archived',
+                state: 'DRAFT',
+                runbook: { id: 'rb_archived', archivedAt: new Date() },
+                inputs: [],
+              }),
+              deleteMany: vi.fn(),
+            },
+            serviceRunbookBinding: { updateMany: vi.fn() },
+          };
+          return callback(tx);
+        }) as never
+      );
+
+      await expect(publishDraftVersion('ver_1', 'user_1')).rejects.toThrow(
+        RunbookArchivedError
+      );
+    });
+
+    it('rejects cloneVersionToDraft on archived runbooks', async () => {
+      vi.mocked(prisma.$transaction).mockImplementationOnce(
+        (async (callback: (tx: MockTx) => Promise<unknown>) => {
+          const tx: MockTx = {
+            runbook: {
+              findUnique: vi.fn(),
+              update: vi.fn(),
+              delete: vi.fn(),
+            },
+            runbookVersion: {
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'ver_1',
+                runbookId: 'rb_archived',
+                inputs: [],
+                runbook: { id: 'rb_archived', archivedAt: new Date() },
+              }),
+              deleteMany: vi.fn(),
+            },
+            serviceRunbookBinding: { updateMany: vi.fn() },
+          };
+          return callback(tx);
+        }) as never
+      );
+
+      await expect(cloneVersionToDraft('ver_1', 'user_1')).rejects.toThrow(
+        RunbookArchivedError
+      );
     });
   });
 });

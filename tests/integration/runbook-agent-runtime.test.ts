@@ -2,7 +2,6 @@
 // Test paths are confined to fresh temporary directories.
 /* eslint-disable security/detect-non-literal-fs-filename */
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error esbuild is invoked in offline runtime integration test
 import { build } from 'esbuild';
 import { createServer } from 'node:http';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
