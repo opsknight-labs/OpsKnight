@@ -4,9 +4,10 @@ import prisma from '@/lib/prisma';
 import { computeTriggerFingerprint } from './definition';
 import { matchesTrigger } from './matcher';
 import { startRunbookExecution } from './orchestrator';
-import { RunbookDefinitionError, RunbookError } from './errors';
+import { RunbookArchivedError, RunbookDefinitionError, RunbookError } from './errors';
 import { conditionContextFieldSchema, conditionOperatorSchema } from './conditions';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
+import { lockRunbookForShare } from './locking';
 import type { Prisma } from '@prisma/client';
 
 export async function evaluateIncidentTriggers(incidentId: string, sourceEventId: string) {
@@ -93,6 +94,7 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
       if (binding.mode === 'SUGGESTED') {
         try {
           await prisma.$transaction(async tx => {
+            await lockRunbookForShare(tx, binding.runbookId, { action: 'suggest' });
             const version = await tx.runbookVersion.findUniqueOrThrow({
               where: { id: versionId },
               include: { inputs: true },
@@ -129,6 +131,7 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
           });
           suggested++;
         } catch (error) {
+          if (error instanceof RunbookArchivedError) continue;
           if ((error as { code?: string })?.code !== 'P2002') throw error;
         }
         continue;
@@ -174,51 +177,57 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
             version.inputs,
             binding.inputValues as Record<string, unknown>
           );
-          const createdSuggestion = await prisma.$transaction(async tx => {
-            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-incident-budget:${incidentId}`}))`;
-            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${fingerprint}))`;
-            if (
-              await tx.runbookExecution.findUnique({
-                where: { triggerFingerprint: fingerprint },
+          try {
+            const createdSuggestion = await prisma.$transaction(async tx => {
+              await lockRunbookForShare(tx, binding.runbookId, { action: 'suggest' });
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-incident-budget:${incidentId}`}))`;
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${fingerprint}))`;
+              if (
+                await tx.runbookExecution.findUnique({
+                  where: { triggerFingerprint: fingerprint },
+                  select: { id: true },
+                })
+              )
+                return false;
+              const existing = await tx.runbookSuggestion.findUnique({
+                where: { fingerprint },
                 select: { id: true },
-              })
-            )
-              return false;
-            const existing = await tx.runbookSuggestion.findUnique({
-              where: { fingerprint },
-              select: { id: true },
+              });
+              if (existing) return false;
+              await tx.runbookSuggestion.upsert({
+                where: { fingerprint },
+                update: {},
+                create: {
+                  incidentId,
+                  bindingId: binding.id,
+                  runbookVersionId: versionId,
+                  triggerId: trigger.id,
+                  sourceEventId,
+                  fingerprint,
+                  planSnapshot: {
+                    inputValues,
+                    agentId: binding.defaultAgentId,
+                    agentPoolId: binding.defaultAgentPoolId,
+                    agentSelector: binding.agentSelector,
+                    definitionChecksum: version.checksum,
+                  } as Prisma.InputJsonValue,
+                },
+              });
+              await tx.incidentEvent.create({
+                data: {
+                  incidentId,
+                  type: 'RUNBOOK_SUGGESTED',
+                  message:
+                    'AUTO_REMEDIATION_BUDGET_EXHAUSTED: remaining remediation requires responder approval.',
+                },
+              });
+              return true;
             });
-            if (existing) return false;
-            await tx.runbookSuggestion.upsert({
-              where: { fingerprint },
-              update: {},
-              create: {
-                incidentId,
-                bindingId: binding.id,
-                runbookVersionId: versionId,
-                triggerId: trigger.id,
-                sourceEventId,
-                fingerprint,
-                planSnapshot: {
-                  inputValues,
-                  agentId: binding.defaultAgentId,
-                  agentPoolId: binding.defaultAgentPoolId,
-                  agentSelector: binding.agentSelector,
-                  definitionChecksum: version.checksum,
-                } as Prisma.InputJsonValue,
-              },
-            });
-            await tx.incidentEvent.create({
-              data: {
-                incidentId,
-                type: 'RUNBOOK_SUGGESTED',
-                message:
-                  'AUTO_REMEDIATION_BUDGET_EXHAUSTED: remaining remediation requires responder approval.',
-              },
-            });
-            return true;
-          });
-          if (createdSuggestion) suggested++;
+            if (createdSuggestion) suggested++;
+          } catch (error) {
+            if (error instanceof RunbookArchivedError) continue;
+            throw error;
+          }
           continue;
         }
       }

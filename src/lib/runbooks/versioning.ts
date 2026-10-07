@@ -306,6 +306,17 @@ export async function archiveRunbook(runbookId: string, actorId: string) {
       where: { runbookId, enabled: true },
       data: { enabled: false },
     });
+    // Dismiss outstanding suggestions for this runbook
+    await tx.runbookSuggestion.updateMany({
+      where: {
+        binding: { runbookId },
+        state: 'SUGGESTED',
+      },
+      data: {
+        state: 'DISMISSED',
+        dismissedAt: archivedAt,
+      },
+    });
     await logAudit(
       {
         action: 'runbook.archived',

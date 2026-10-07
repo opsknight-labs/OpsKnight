@@ -17,11 +17,13 @@ import {
   createServiceBinding,
   replaceBindingTrigger,
 } from '@/lib/runbooks/bindings';
+import { startRunbookExecution } from '@/lib/runbooks/orchestrator';
 import {
   RunbookArchivedError,
   RunbookCannotDeleteError,
 } from '@/lib/runbooks/errors';
 import {
+  createTestIncident,
   createTestService,
   createTestUser,
   testPrisma,
@@ -288,9 +290,9 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
           enabled: true,
           conditions: [
             {
-              field: 'incident.severity',
+              field: 'incident.priority',
               operator: 'EQUALS',
-              value: 'CRITICAL',
+              value: 'P1',
               sequence: 0,
             },
           ],
@@ -316,6 +318,139 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     const duplicated = await duplicateRunbook(runbook.id, actor.id);
     expect(duplicated.name.length).toBeLessThanOrEqual(200);
     expect(duplicated.name).toBe(`${'A'.repeat(193)} (Copy)`);
+  });
+
+  it('certifies concurrent archive-vs-execution-start race protection via FOR SHARE locking', async () => {
+    const actor = await createTestUser();
+    const service = await createTestService('Execution Target Service');
+    const slug = `race-arch-exec-${crypto.randomUUID().slice(0, 8)}`;
+    const runbook = await createRunbook(
+      {
+        name: 'Archive vs Execution Race',
+        slug,
+        description: 'Testing archive vs execution serialization',
+      },
+      actor.id
+    );
+
+    await publishDraftVersion(runbook.draftVersionId!, actor.id);
+    const binding = await createServiceBinding(
+      service.id,
+      {
+        runbookId: runbook.id,
+        mode: 'MANUAL',
+        versionStrategy: 'LATEST_PUBLISHED',
+        enabled: true,
+        inputValues: {},
+      },
+      actor.id
+    );
+
+    // Concurrently trigger archive and startRunbookExecution
+    const [archiveResult, execResult] = await Promise.allSettled([
+      archiveRunbook(runbook.id, actor.id),
+      startRunbookExecution({
+        runbookId: runbook.id,
+        serviceId: service.id,
+        bindingId: binding.id,
+        triggeredByUserId: actor.id,
+      }),
+    ]);
+
+    expect(archiveResult.status).toBe('fulfilled');
+
+    // If execution won the lock before archive, it succeeded.
+    // If archive won the lock first, execution was blocked and rejected.
+    if (execResult.status === 'rejected') {
+      const err = (execResult as PromiseRejectedResult).reason;
+      expect(
+        err instanceof RunbookArchivedError ||
+        (err instanceof Error && err.message.includes('archived'))
+      ).toBe(true);
+    } else {
+      expect(execResult.status).toBe('fulfilled');
+    }
+
+    // After archive, any subsequent execution MUST be rejected
+    await expect(
+      startRunbookExecution({
+        runbookId: runbook.id,
+        serviceId: service.id,
+        bindingId: binding.id,
+        triggeredByUserId: actor.id,
+      })
+    ).rejects.toThrow();
+  });
+
+  it('certifies archiveRunbook transitions outstanding suggestions to DISMISSED', async () => {
+    const actor = await createTestUser();
+    const service = await createTestService('Suggestion Dismiss Service');
+    const slug = `arch-dismiss-${crypto.randomUUID().slice(0, 8)}`;
+    const runbook = await createRunbook(
+      {
+        name: 'Suggestion Dismissal Runbook',
+        slug,
+        description: 'Verifying suggestions are dismissed on archive',
+      },
+      actor.id
+    );
+
+    await publishDraftVersion(runbook.draftVersionId!, actor.id);
+    const binding = await createServiceBinding(
+      service.id,
+      {
+        runbookId: runbook.id,
+        mode: 'SUGGESTED',
+        versionStrategy: 'LATEST_PUBLISHED',
+        enabled: true,
+        inputValues: {},
+      },
+      actor.id
+    );
+
+    // Create an incident and trigger to attach a suggestion
+    const incident = await createTestIncident('Incident for Suggestion', service.id);
+
+    const trigger = await replaceBindingTrigger(
+      service.id,
+      binding.id,
+      {
+        event: 'INCIDENT_CREATED',
+        conditionLogic: 'AND',
+        enabled: true,
+        conditions: [
+          {
+            field: 'incident.priority',
+            operator: 'EQUALS',
+            value: 'P1',
+            sequence: 0,
+          },
+        ],
+      },
+      actor.id
+    );
+
+    const suggestion = await testPrisma.runbookSuggestion.create({
+      data: {
+        incidentId: incident.id,
+        bindingId: binding.id,
+        runbookVersionId: runbook.draftVersionId!,
+        triggerId: trigger.id,
+        sourceEventId: 'evt_1',
+        fingerprint: `sug-${crypto.randomUUID()}`,
+        state: 'SUGGESTED',
+      },
+    });
+
+    // Archive the runbook
+    await archiveRunbook(runbook.id, actor.id);
+
+    // The suggestion must now be DISMISSED with dismissedAt set
+    const afterArchive = await testPrisma.runbookSuggestion.findUnique({
+      where: { id: suggestion.id },
+    });
+    expect(afterArchive?.state).toBe('DISMISSED');
+    expect(afterArchive?.dismissedAt).not.toBeNull();
   });
 
   it('certifies foreign key protection on executions preventing hard delete', async () => {
