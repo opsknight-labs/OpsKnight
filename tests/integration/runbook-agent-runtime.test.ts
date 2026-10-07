@@ -1,6 +1,5 @@
 // @vitest-environment node
 // Test paths are confined to fresh temporary directories.
-/* eslint-disable security/detect-non-literal-fs-filename */
 import { describe, expect, it } from 'vitest';
 import { build } from 'esbuild';
 import { createServer } from 'node:http';
@@ -59,6 +58,10 @@ async function exerciseRuntime(
         response.writeHead(200, { 'content-type': 'application/json' });
         response.end(JSON.stringify({ data }));
       };
+      if (request.url?.includes('/time')) {
+        send({ serverTime: new Date().toISOString(), epochMs: Date.now() });
+        return;
+      }
       if (request.url?.includes('/claim')) {
         claimCount++;
         if (claimed) {
@@ -130,6 +133,8 @@ async function exerciseRuntime(
         }
         resolveSubmitted(json);
         send(acknowledgement({ accepted: true }));
+      } else if (request.url?.endsWith('/release')) {
+        send({ released: true });
       } else send({});
     })().catch(error => {
       rejectSubmitted(error);

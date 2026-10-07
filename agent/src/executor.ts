@@ -218,7 +218,13 @@ async function executeCommand(
   signal: AbortSignal
 ): Promise<ExecutionResult> {
   if (signal.aborted) {
-    return { status: 'CANCELLED', output: '', errorCode: 'CANCELLED_BEFORE_START' };
+    const isShutdown = signal.reason === 'AGENT_SHUTDOWN';
+    return {
+      status: 'CANCELLED',
+      output: '',
+      errorCode: isShutdown ? 'AGENT_INTERRUPTED_BY_SHUTDOWN' : 'CANCELLED_BEFORE_START',
+      errorMessage: isShutdown ? 'Execution interrupted by shutdown before start.' : undefined,
+    };
   }
   if (
     attempt.step.type === 'LINUX_DIAGNOSTICS' &&
@@ -297,15 +303,33 @@ async function executeCommand(
       signal.removeEventListener('abort', killGroup);
       const output =
         Buffer.concat(chunks).toString('utf8') + (truncated ? '\n[output truncated]' : '');
-      if (signal.aborted)
+      if (signal.aborted) {
+        const isShutdown = signal.reason === 'AGENT_SHUTDOWN';
+        const isLeaseLost = signal.reason === 'LEASE_LOST';
+        const isWrite = attempt.step.riskClass !== 'READ_ONLY';
+        const status = isLeaseLost || (isShutdown && isWrite) ? 'UNKNOWN' : 'CANCELLED';
+        const errorCode = isShutdown
+          ? isWrite
+            ? 'AGENT_INTERRUPTED_BY_SHUTDOWN'
+            : 'AGENT_SHUTDOWN'
+          : isLeaseLost
+            ? 'LEASE_LOST'
+            : undefined;
+        const errorMessage = isShutdown
+          ? isWrite
+            ? 'Execution was interrupted by process shutdown; target state is unknown.'
+            : 'Execution was cancelled by process shutdown.'
+          : isLeaseLost
+            ? 'Local execution authority expired.'
+            : undefined;
+
         return resolve({
-          status: signal.reason === 'LEASE_LOST' ? 'UNKNOWN' : 'CANCELLED',
+          status,
           exitCode: code ?? undefined,
           output,
-          ...(signal.reason === 'LEASE_LOST'
-            ? { errorCode: 'LEASE_LOST', errorMessage: 'Local execution authority expired.' }
-            : {}),
+          ...(errorCode ? { errorCode, errorMessage } : {}),
         });
+      }
       if (timedOut) {
         return resolve({
           status: attempt.step.riskClass === 'READ_ONLY' ? 'FAILED' : 'UNKNOWN',

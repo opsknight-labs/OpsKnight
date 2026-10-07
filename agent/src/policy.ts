@@ -47,7 +47,6 @@ function boundedInteger(
 
 export async function loadPolicy(path: string): Promise<{ policy: AgentPolicy; hash: string }> {
   // Only the operator's local startup configuration supplies this path, never a claim.
-  // eslint-disable-next-line security/detect-non-literal-fs-filename
   const raw = await readFile(path, 'utf8');
   const parsed = JSON.parse(raw) as Partial<AgentPolicy> | null;
   if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {

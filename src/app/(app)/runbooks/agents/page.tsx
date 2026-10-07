@@ -6,6 +6,7 @@ import { KeyRound, Network } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
+import { getAppUrl } from '@/lib/app-url';
 import AgentEnrollmentForm from '@/components/runbooks/AgentEnrollmentForm';
 import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
 import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
@@ -62,9 +63,10 @@ export default async function RunbookAgentsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
-  const [permissions, user] = await Promise.all([
+  const [permissions, user, appUrl] = await Promise.all([
     getUserPermissions(),
     getCurrentUser(),
+    getAppUrl(),
   ]);
   const userTimeZone = getUserTimeZone(user);
   const canManage = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_AGENT_MANAGE);
@@ -207,7 +209,8 @@ export default async function RunbookAgentsPage({
     </section>
   );
 
-  const securityPanel = <section className="space-y-4">
+  const securityPanel = (
+    <section className="space-y-4">
       {canManage && signingKey && (
         <details className="rounded-xl border bg-card p-4">
           <summary className="cursor-pointer text-sm font-semibold">
@@ -258,8 +261,8 @@ export default async function RunbookAgentsPage({
         </details>
       )}
 
-      {/* High-Density Fleet Table / Card View */}
-  </section>;
+    </section>
+  );
 
   const poolPanel = (
     <section className="space-y-4">
@@ -518,7 +521,7 @@ export default async function RunbookAgentsPage({
               description="Single-use enrollment tokens expire after 15 minutes. The private key never leaves the Agent."
               trigger={<Button>Add Agent</Button>}
             >
-              <AgentEnrollmentForm userTimeZone={userTimeZone} />
+              <AgentEnrollmentForm userTimeZone={userTimeZone} appUrl={appUrl} />
             </ConfigureSheet>
           ) : undefined
         }

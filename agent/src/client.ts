@@ -2,6 +2,7 @@ import { createHash, generateKeyPairSync, randomBytes, sign } from 'node:crypto'
 import { hostname, platform } from 'node:os';
 import type { AgentIdentity, ClaimedAttempt, SpoolRecord } from './types';
 import { verifyLeaseAcknowledgement } from './envelope';
+import { getAgentVersion } from './version';
 
 type JsonObject = Record<string, unknown>;
 
@@ -76,7 +77,7 @@ export class AgentClient {
   }) {
     return this.request('/api/runbook-agent/v1/heartbeat', {
       hostname: hostname(),
-      version: process.env.npm_package_version ?? '2.0.0',
+      version: getAgentVersion(),
       platform: platform(),
       ...input,
     });
@@ -125,6 +126,18 @@ export class AgentClient {
     );
   }
 
+  async releaseClaim(attemptId: string, leaseToken: string): Promise<boolean> {
+    try {
+      const result = await this.request<{ released: boolean }>(
+        `/api/runbook-agent/v1/jobs/${attemptId}/release`,
+        { leaseToken }
+      );
+      return result?.released ?? false;
+    } catch {
+      return false;
+    }
+  }
+
   async submit(record: SpoolRecord) {
     const result = await this.leaseRequest<{ accepted: boolean }>(
       `/api/runbook-agent/v1/jobs/${record.attemptId}/result`,
@@ -144,9 +157,72 @@ export class AgentClient {
       input
     );
   }
+
+  async checkServerClock(): Promise<{ serverTime: string; skewSeconds: number }> {
+    const response = await fetch(new URL('/api/runbook-agent/v1/time', this.baseUrl), {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) {
+      throw new Error(`Clock check returned HTTP ${response.status}`);
+    }
+    const json = (await response.json()) as {
+      data?: { serverTime: string; epochMs: number };
+      serverTime?: string;
+      epochMs?: number;
+    };
+    const epochMs = json.data?.epochMs ?? json.epochMs;
+    const serverTime = json.data?.serverTime ?? json.serverTime ?? new Date(epochMs || Date.now()).toISOString();
+    if (!epochMs) throw new Error('Invalid clock check response');
+    const localMs = Date.now();
+    const skewSeconds = Math.round(Math.abs(localMs - epochMs) / 1000);
+    return { serverTime, skewSeconds };
+  }
 }
 
 export async function enrollAgent(baseUrl: string, token: string): Promise<AgentIdentity> {
+  const parsedUrl = new URL(baseUrl);
+  const isLoopback = ['localhost', '127.0.0.1', '::1'].includes(parsedUrl.hostname);
+  if (
+    parsedUrl.protocol !== 'https:' &&
+    !isLoopback &&
+    !(
+      (process.env.NODE_ENV === 'development' &&
+        process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true') ||
+      process.env.OPSKNIGHT_ALLOW_INSECURE_HTTP === 'true'
+    )
+  ) {
+    throw new Error('Enrollment token transport requires an HTTPS control-plane URL.');
+  }
+
+  try {
+    const timeRes = await fetch(new URL('/api/runbook-agent/v1/time', baseUrl), {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (timeRes.ok) {
+      const timeJson = (await timeRes.json()) as {
+        data?: { epochMs: number };
+        epochMs?: number;
+      };
+      const serverEpoch = timeJson.data?.epochMs ?? timeJson.epochMs;
+      if (serverEpoch) {
+        const skewSeconds = Math.round(Math.abs(Date.now() - serverEpoch) / 1000);
+        if (skewSeconds > 60) {
+          throw new Error(
+            `Local clock is out of sync with OpsKnight by ${skewSeconds}s (maximum allowed: 60s). Synchronize NTP/chrony before enrolling.`
+          );
+        }
+      }
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('out of sync')) {
+      throw err;
+    }
+  }
+
   const { privateKey, publicKey } = generateKeyPairSync('ed25519', {
     privateKeyEncoding: { format: 'pem', type: 'pkcs8' },
     publicKeyEncoding: { format: 'pem', type: 'spki' },
@@ -158,7 +234,7 @@ export async function enrollAgent(baseUrl: string, token: string): Promise<Agent
       token,
       publicKey,
       hostname: hostname(),
-      version: process.env.npm_package_version ?? '2.0.0',
+      version: getAgentVersion(),
       platform: platform(),
     }),
   });

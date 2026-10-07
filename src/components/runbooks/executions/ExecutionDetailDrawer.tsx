@@ -212,13 +212,21 @@ export function ExecutionDetailDrawer({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between gap-3 pt-4 border-t">
-          <Button asChild variant="outline" size="sm" className="gap-1 text-xs">
-            <Link href={`/runbooks/${execution.runbook.id}`}>
-              <span>Inspect Runbook</span>
-              <ExternalLink className="h-3 w-3" />
-            </Link>
-          </Button>
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t">
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm" className="gap-1 text-xs">
+              <Link href={`/runbooks/${execution.runbook.id}`}>
+                <span>Inspect Runbook</span>
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </Button>
+            <Button asChild variant="secondary" size="sm" className="gap-1 text-xs">
+              <Link href={`/runbooks/executions/${execution.id}`}>
+                <span>Diagnostics</span>
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
 
           {execution.incidentId && (
             <Button asChild size="sm" className="gap-1 text-xs">
