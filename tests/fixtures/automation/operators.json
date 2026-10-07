@@ -1,0 +1,11 @@
+[
+  {"name":"unmapped negation","field":{"state":"UNMAPPED","raw":"stg-2"},"condition":{"fieldKey":"environment","operator":"NOT_IN","value":["production"]},"expected":"UNKNOWN"},
+  {"name":"missing negation","field":{"state":"MISSING"},"condition":{"fieldKey":"environment","operator":"NE","value":"production"},"expected":"UNKNOWN"},
+  {"name":"unmapped equality","field":{"state":"UNMAPPED","raw":"stg-2"},"condition":{"fieldKey":"environment","operator":"EQ","value":"production"},"expected":"FALSE"},
+  {"name":"recognized equality","field":{"state":"RECOGNIZED","value":"production"},"condition":{"fieldKey":"environment","operator":"EQ","value":"production"},"expected":"TRUE"},
+  {"name":"zero recognized","field":{"state":"RECOGNIZED","value":0},"condition":{"fieldKey":"environment","operator":"IS_SET"},"expected":"TRUE"},
+  {"name":"false recognized","field":{"state":"RECOGNIZED","value":false},"condition":{"fieldKey":"environment","operator":"EQ","value":false},"expected":"TRUE"},
+  {"name":"numeric comparison","field":{"state":"RECOGNIZED","value":0},"condition":{"fieldKey":"environment","operator":"LT","value":1},"expected":"TRUE"},
+  {"name":"missing","field":{"state":"MISSING"},"condition":{"fieldKey":"environment","operator":"IS_MISSING"},"expected":"TRUE"},
+  {"name":"unmapped present","field":{"state":"UNMAPPED","raw":"other"},"condition":{"fieldKey":"environment","operator":"IS_SET"},"expected":"TRUE"}
+]
