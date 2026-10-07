@@ -33,10 +33,12 @@ const { mockPrisma, mockAssertCapability } = vi.hoisted(() => {
     runbookAgent: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       count: vi.fn(),
     },
     runbookAgentPool: {
       findMany: vi.fn(),
+      findUnique: vi.fn(),
       count: vi.fn(),
     },
     runbookExecution: {
@@ -396,7 +398,9 @@ describe('/api/runbooks/options route handler', () => {
     expect(mockPrisma.runbookAgentPool.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         take: 30,
-        where: { name: { contains: 'prod', mode: 'insensitive' } },
+        where: {
+          OR: [{ name: { contains: 'prod', mode: 'insensitive' } }],
+        },
       })
     );
   });
@@ -480,6 +484,65 @@ describe('/api/runbooks/options route handler', () => {
     expect(body.options).toEqual([
       { value: 'srv-99', label: 'Old Service Out Of View' },
       { value: 'srv-1', label: 'Auth API' },
+    ]);
+  });
+
+  it('fetches historical agents including revoked agents with indicator', async () => {
+    mockPrisma.runbookAgent.findMany.mockResolvedValueOnce([
+      { id: 'ag-1', name: 'worker-01', status: 'ONLINE' },
+      { id: 'ag-2', name: 'decommissioned-02', status: 'REVOKED' },
+    ]);
+
+    const req = new NextRequest('http://localhost/api/runbooks/options?kind=agent-history&q=decom');
+    const res = await optionsRouteHandler(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.options).toEqual([
+      { value: 'ag-1', label: 'worker-01' },
+      { value: 'ag-2', label: 'decommissioned-02 (revoked)' },
+    ]);
+  });
+
+  it('resolves selected pool if not present in search results', async () => {
+    mockPrisma.runbookAgentPool.findMany.mockResolvedValueOnce([
+      { id: 'pool-1', name: 'US-East Production' },
+    ]);
+    mockPrisma.runbookAgentPool.findUnique.mockResolvedValueOnce({
+      id: 'pool-99',
+      name: 'EU-Central Legacy',
+    });
+
+    const req = new NextRequest('http://localhost/api/runbooks/options?kind=pool&q=prod&selected=pool-99');
+    const res = await optionsRouteHandler(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.options).toEqual([
+      { value: 'pool-99', label: 'EU-Central Legacy' },
+      { value: 'pool-1', label: 'US-East Production' },
+    ]);
+    expect(mockPrisma.runbookAgentPool.findUnique).toHaveBeenCalledWith({
+      where: { id: 'pool-99' },
+      select: { id: true, name: true },
+    });
+  });
+
+  it('resolves selected agent if not present in search results', async () => {
+    mockPrisma.runbookAgent.findMany.mockResolvedValueOnce([
+      { id: 'ag-1', name: 'worker-01', status: 'ONLINE' },
+    ]);
+    mockPrisma.runbookAgent.findUnique.mockResolvedValueOnce({
+      id: 'ag-99',
+      name: 'worker-99',
+      status: 'REVOKED',
+    });
+
+    const req = new NextRequest('http://localhost/api/runbooks/options?kind=agent-history&q=worker&selected=ag-99');
+    const res = await optionsRouteHandler(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.options).toEqual([
+      { value: 'ag-99', label: 'worker-99 (revoked)' },
+      { value: 'ag-1', label: 'worker-01' },
     ]);
   });
 });

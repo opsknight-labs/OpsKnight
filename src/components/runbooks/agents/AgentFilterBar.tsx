@@ -96,6 +96,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="Search agents by name or hostname…"
+            aria-label="Search agents"
             className="h-9 w-full bg-background text-xs pl-3 pr-8"
           />
         </form>
@@ -109,11 +110,11 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
               applyFilters({ status: val });
             }}
           >
-            <SelectTrigger className="h-9 w-[130px] text-xs bg-background">
+            <SelectTrigger className="h-9 w-[130px] text-xs bg-background" aria-label="Filter by status">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all" className="text-xs">All statuses</SelectItem>
+              <SelectItem value="all" className="text-xs">All active</SelectItem>
               <SelectItem value="ONLINE" className="text-xs">Online</SelectItem>
               <SelectItem value="DEGRADED" className="text-xs">Degraded</SelectItem>
               <SelectItem value="OFFLINE" className="text-xs">Offline</SelectItem>
@@ -127,6 +128,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
             <SearchableRunbookSelect
               kind="pool"
               label=""
+              ariaLabel="Filter by pool"
               placeholder="All pools"
               value={selectedPool}
               onChange={val => {
@@ -144,7 +146,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
               applyFilters({ platform: val });
             }}
           >
-            <SelectTrigger className="h-9 w-[130px] text-xs bg-background">
+            <SelectTrigger className="h-9 w-[130px] text-xs bg-background" aria-label="Filter by platform">
               <SelectValue placeholder="Platform" />
             </SelectTrigger>
             <SelectContent>
@@ -186,9 +188,14 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
             </Button>
           )}
 
-          <Button size="sm" onClick={() => applyFilters()} className="h-9 text-xs gap-1.5">
+          <Button
+            size="sm"
+            aria-label="Apply filters"
+            onClick={() => applyFilters()}
+            className="h-9 text-xs gap-1.5"
+          >
             <Filter className="h-3.5 w-3.5" />
-            <span>Apply</span>
+            <span>Apply filters</span>
           </Button>
         </div>
       </div>

@@ -83,6 +83,7 @@ export function LibraryFilterBar({ query }: LibraryFilterBarProps) {
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="Search runbooks by name, slug, or purpose…"
+            aria-label="Search runbooks"
             className="h-9 w-full bg-background text-xs pl-3 pr-8"
           />
         </form>
@@ -96,7 +97,7 @@ export function LibraryFilterBar({ query }: LibraryFilterBarProps) {
               applyFilters({ status: val });
             }}
           >
-            <SelectTrigger className="h-9 w-[130px] text-xs bg-background">
+            <SelectTrigger className="h-9 w-[130px] text-xs bg-background" aria-label="Filter by status">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -112,6 +113,7 @@ export function LibraryFilterBar({ query }: LibraryFilterBarProps) {
             <SearchableRunbookSelect
               kind="service"
               label=""
+              ariaLabel="Filter by service"
               placeholder="All services"
               value={selectedService}
               onChange={val => {
@@ -152,9 +154,14 @@ export function LibraryFilterBar({ query }: LibraryFilterBarProps) {
             </Button>
           )}
 
-          <Button size="sm" onClick={() => applyFilters()} className="h-9 text-xs gap-1.5">
+          <Button
+            size="sm"
+            aria-label="Apply filters"
+            onClick={() => applyFilters()}
+            className="h-9 text-xs gap-1.5"
+          >
             <Filter className="h-3.5 w-3.5" />
-            <span>Apply</span>
+            <span>Apply filters</span>
           </Button>
         </div>
       </div>

@@ -120,18 +120,24 @@ export default function RunbookLibrary({
   runbooks,
   canManage,
   userTimeZone,
+  total,
 }: {
   runbooks: Array<RunbookCardData>;
   canManage: boolean;
   userTimeZone: string;
+  total?: number;
 }) {
   const filtered = runbooks;
+  const countDisplay =
+    total !== undefined && total !== filtered.length
+      ? `${filtered.length} of ${total} runbooks`
+      : `${filtered.length} ${filtered.length === 1 ? 'runbook' : 'runbooks'}`;
 
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between px-1">
         <p aria-live="polite" className="text-xs text-muted-foreground font-medium">
-          {filtered.length} {filtered.length === 1 ? 'runbook' : 'runbooks'}
+          {countDisplay}
         </p>
       </div>
 

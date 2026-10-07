@@ -12,6 +12,8 @@ import { assertCapability, getCurrentUser } from '@/lib/rbac';
 import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
 import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
 import { ExecutionProgressBar } from '@/components/runbooks/executions/ExecutionProgressBar';
+import { RunbookLiveRefresh } from '@/components/runbooks/RunbookLiveRefresh';
+import { isActiveExecutionStatus } from '@/lib/runbooks/types';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
@@ -95,6 +97,7 @@ export default async function ExecutionDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-6 p-4 md:p-6">
+      <RunbookLiveRefresh enabled={isActiveExecutionStatus(execution.status)} intervalMs={6000} />
       <RunbookPageHeader
         breadcrumbs={[
           { label: 'Runbooks', href: '/runbooks' },

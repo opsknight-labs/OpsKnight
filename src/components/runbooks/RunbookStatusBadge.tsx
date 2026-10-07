@@ -18,6 +18,7 @@ export type RunbookStatusBadgeProps = {
   className?: string;
   showIcon?: boolean;
   size?: 'sm' | 'default';
+  context?: 'execution' | 'agent' | 'health' | 'lifecycle' | 'default';
 };
 
 export function RunbookStatusBadge({
@@ -25,6 +26,7 @@ export function RunbookStatusBadge({
   className,
   showIcon = true,
   size = 'default',
+  context = 'default',
 }: RunbookStatusBadgeProps) {
   const normalized = (status || '').toUpperCase();
 
@@ -80,10 +82,17 @@ export function RunbookStatusBadge({
       icon = <XCircle className="h-3 w-3 text-rose-500 shrink-0" />;
       break;
     case 'UNKNOWN':
-      variant = 'danger';
-      label = 'Unknown Outcome';
-      icon = <AlertTriangle className="h-3 w-3 text-orange-500 shrink-0" />;
-      customStyle = 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30';
+      if (context === 'health') {
+        variant = 'secondary';
+        label = 'Health Unknown';
+        icon = <Clock className="h-3 w-3 text-muted-foreground shrink-0" />;
+        customStyle = 'bg-muted text-muted-foreground border-border';
+      } else {
+        variant = 'danger';
+        label = 'Unknown Outcome';
+        icon = <AlertTriangle className="h-3 w-3 text-orange-500 shrink-0" />;
+        customStyle = 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30';
+      }
       break;
     case 'CANCELLED':
     case 'CANCEL_REQUESTED':

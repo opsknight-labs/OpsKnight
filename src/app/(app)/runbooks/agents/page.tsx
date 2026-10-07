@@ -96,34 +96,51 @@ export default async function RunbookAgentsPage({
     labels: labels.success ? labels.data : undefined,
     page: requestedPage,
   });
-  const agentWhere: Prisma.RunbookAgentWhereInput = {
-    ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
-    ...(statusFilter === 'OFFLINE'
-      ? {
-          OR: [
-            { status: 'OFFLINE' },
-            {
-              status: { in: ['ONLINE', 'DEGRADED'] },
-              OR: [{ lastHeartbeatAt: null }, { lastHeartbeatAt: { lt: onlineSince } }],
-            },
-          ],
-        }
-      : statusFilter === 'ONLINE' || statusFilter === 'DEGRADED'
-        ? { status: statusFilter, lastHeartbeatAt: { gte: onlineSince } }
-        : statusFilter
-          ? { status: statusFilter }
-          : {}),
-    ...(filter.poolId ? { poolMemberships: { some: { poolId: filter.poolId } } } : {}),
-    ...(filter.platform ? { platform: filter.platform } : {}),
-    ...(filter.capability ? { capabilities: { array_contains: [filter.capability] } } : {}),
-    ...(filter.labels
-      ? {
-          AND: Object.entries(filter.labels).map(([key, value]) => ({
-            labels: { path: [key], equals: value },
-          })),
-        }
-      : {}),
-  };
+  const conditions: Prisma.RunbookAgentWhereInput[] = [];
+
+  if (query.q) {
+    conditions.push({
+      OR: [
+        { name: { contains: query.q, mode: 'insensitive' } },
+        { hostname: { contains: query.q, mode: 'insensitive' } },
+      ],
+    });
+  }
+
+  if (!statusFilter) {
+    conditions.push({ status: { not: 'REVOKED' } });
+  } else if (statusFilter === 'OFFLINE') {
+    conditions.push({
+      OR: [
+        { status: 'OFFLINE' },
+        {
+          status: { in: ['ONLINE', 'DEGRADED'] },
+          OR: [{ lastHeartbeatAt: null }, { lastHeartbeatAt: { lt: onlineSince } }],
+        },
+      ],
+    });
+  } else if (statusFilter === 'ONLINE' || statusFilter === 'DEGRADED') {
+    conditions.push({ status: statusFilter, lastHeartbeatAt: { gte: onlineSince } });
+  } else {
+    conditions.push({ status: statusFilter });
+  }
+
+  if (filter.poolId) {
+    conditions.push({ poolMemberships: { some: { poolId: filter.poolId } } });
+  }
+  if (filter.platform) {
+    conditions.push({ platform: filter.platform });
+  }
+  if (filter.capability) {
+    conditions.push({ capabilities: { array_contains: [filter.capability] } });
+  }
+  if (filter.labels) {
+    for (const [key, value] of Object.entries(filter.labels)) {
+      conditions.push({ labels: { path: [key], equals: value } });
+    }
+  }
+
+  const agentWhere: Prisma.RunbookAgentWhereInput = conditions.length > 0 ? { AND: conditions } : {};
   const agentTotal = await prisma.runbookAgent.count({ where: agentWhere });
   const panelTotal = tab === 'pools' ? poolTotal : tab === 'secrets' ? secretTotal : agentTotal;
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(panelTotal / RUNBOOK_PAGE_SIZE)));

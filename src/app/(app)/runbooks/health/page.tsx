@@ -6,6 +6,7 @@ import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
 import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import { RunbookStatusBadge } from '@/components/runbooks/RunbookStatusBadge';
+import { RunbookLiveRefresh } from '@/components/runbooks/RunbookLiveRefresh';
 import {
   HealthAttentionPanel,
   type HealthIssue,
@@ -70,7 +71,7 @@ export default async function RunbookHealthPage() {
       id: 'circuits',
       type: 'circuit',
       severity: 'danger',
-      title: `${circuits} Service Circuit ${circuits === 1 ? 'Breaker' : 'Breakers'} Tripped`,
+      title: `${circuits} ${circuits === 1 ? 'Service' : 'Services'} at Circuit Threshold`,
       description: 'Multiple automated runs failed within 15 minutes. Execution halted to prevent cascading failure.',
       actionHref: '/runbooks/executions?status=FAILED',
       actionLabel: 'Inspect Failures',
@@ -115,11 +116,12 @@ export default async function RunbookHealthPage() {
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6">
+      <RunbookLiveRefresh enabled={true} intervalMs={20000} />
       {/* Compact Header */}
       <RunbookPageHeader
         title="Automation Health"
         description={`Continuous health surveillance across execution workers, queues and agents. Last evaluated at ${formatDateTime(now, userTimeZone, { format: 'time' })}.`}
-        badge={<RunbookStatusBadge status={health.health} />}
+        badge={<RunbookStatusBadge status={health.health} context="health" />}
       />
 
       {/* Modern Metric Strip */}

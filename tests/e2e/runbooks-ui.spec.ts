@@ -148,7 +148,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   const agent = await prisma.runbookAgent.findFirstOrThrow({ where: { name: agentName } });
   expect(agent.enrollmentTokenHash).toBeTruthy();
   await page.keyboard.press('Escape');
-  await page.getByRole('tab', { name: /^Pools/ }).click();
+  await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^pools/i }).click();
   await page.getByRole('button', { name: 'Create pool', exact: true }).click();
   await page.getByLabel('Pool name', { exact: true }).fill(poolName);
   await page.getByRole('dialog').getByRole('button', { name: 'Create pool', exact: true }).click();
@@ -165,7 +165,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
     .poll(async () => prisma.runbookAgentPoolMember.count({ where: { agentId: agent.id } }))
     .toBe(1);
   await page.keyboard.press('Escape');
-  await page.getByRole('tab', { name: /^Secrets/ }).click();
+  await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^secrets/i }).click();
   await page.getByRole('button', { name: 'Create secret', exact: true }).click();
   await page.getByLabel('Secret name', { exact: true }).fill(secretName);
   await page.getByLabel('Secret value', { exact: true }).fill('ui-credential-initial');
@@ -403,11 +403,9 @@ test('390px infrastructure, health and builder have no horizontal overflow', asy
       await page.screenshot({ path: 'test-results/runbooks-builder-mobile.png', fullPage: true });
     }
     if (route === '/runbooks/agents') {
-      await page.getByRole('tab', { name: /^Pools/ }).click();
-      await expect(page.getByRole('tabpanel')).toBeVisible();
+      await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^pools/i }).click();
       await noOverflow(page);
-      await page.getByRole('tab', { name: /^Secrets/ }).click();
-      await expect(page.getByRole('tabpanel')).toBeVisible();
+      await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^secrets/i }).click();
       await noOverflow(page);
     }
   }

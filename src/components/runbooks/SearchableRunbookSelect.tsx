@@ -20,7 +20,7 @@ import { Check, ChevronsUpDown, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type SearchableRunbookSelectProps = {
-  kind: 'service' | 'runbook' | 'agent' | 'target' | 'pool';
+  kind: 'service' | 'runbook' | 'agent' | 'target' | 'pool' | 'agent-history';
   label: string;
   name?: string;
   value?: string;
@@ -28,6 +28,7 @@ export type SearchableRunbookSelectProps = {
   required?: boolean;
   className?: string;
   placeholder?: string;
+  ariaLabel?: string;
 };
 
 type Option = { value: string; label: string };
@@ -41,6 +42,7 @@ export function SearchableRunbookSelect({
   required = false,
   className,
   placeholder,
+  ariaLabel,
 }: SearchableRunbookSelectProps) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -80,12 +82,13 @@ export function SearchableRunbookSelect({
     };
   }, [kind, search, selectedValue]);
 
+  const fallbackLabel = label.toLowerCase();
   const selectedOption = options.find(o => o.value === selectedValue);
   const displayLabel = selectedOption
     ? selectedOption.label
     : selectedValue
       ? selectedValue
-      : (placeholder ?? (required ? `Select ${label.toLowerCase()}…` : `All ${label.toLowerCase()}`));
+      : (placeholder ?? (required ? (label ? `Select ${fallbackLabel}…` : 'Select…') : (label ? `All ${fallbackLabel}` : 'All')));
 
   const handleSelect = (val: string) => {
     const nextVal = val === selectedValue ? '' : val;
@@ -102,51 +105,48 @@ export function SearchableRunbookSelect({
 
   return (
     <div className={cn('space-y-1.5 min-w-0', className)}>
-      <Label htmlFor={id} className="text-xs font-medium">
-        {label}
-      </Label>
+      {label ? (
+        <Label htmlFor={id} className="text-xs font-medium">
+          {label}
+        </Label>
+      ) : null}
       {name && <input type="hidden" name={name} value={selectedValue} />}
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            id={id}
-            type="button"
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            aria-label={`Select ${label.toLowerCase()}`}
-            className={cn(
-              'h-9 w-full justify-between text-xs font-normal px-2.5',
-              !selectedValue && 'text-muted-foreground'
-            )}
-          >
-            <span className="truncate">{displayLabel}</span>
-            <div className="flex items-center gap-1 shrink-0 ml-1.5">
-              {!required && selectedValue && (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={handleClear}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleClear(e as unknown as React.MouseEvent);
-                    }
-                  }}
-                  className="rounded-full p-0.5 hover:bg-muted text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-3 w-3" />
-                </span>
+        <div className="relative flex items-center w-full">
+          <PopoverTrigger asChild>
+            <Button
+              id={id}
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-expanded={open}
+              aria-label={ariaLabel ?? (label ? `Select ${fallbackLabel}` : placeholder ?? 'Select option')}
+              className={cn(
+                'h-9 w-full justify-between text-xs font-normal px-2.5',
+                !required && selectedValue ? 'pr-12' : 'pr-2.5',
+                !selectedValue && 'text-muted-foreground'
               )}
-              <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
-            </div>
-          </Button>
-        </PopoverTrigger>
+            >
+              <span className="truncate">{displayLabel}</span>
+              <ChevronsUpDown className="h-3.5 w-3.5 opacity-50 shrink-0 ml-1.5" />
+            </Button>
+          </PopoverTrigger>
+          {!required && selectedValue && (
+            <button
+              type="button"
+              onClick={handleClear}
+              aria-label={label ? `Clear ${fallbackLabel} selection` : 'Clear selection'}
+              className="absolute right-7 top-1/2 -translate-y-1/2 rounded-full p-0.5 hover:bg-muted text-muted-foreground hover:text-foreground z-10"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
         <PopoverContent className="w-[280px] sm:w-[320px] p-0" align="start">
           <Command shouldFilter={false}>
             <div className="relative border-b">
               <CommandInput
-                placeholder={`Search ${label.toLowerCase()}…`}
+                placeholder={label ? `Search ${fallbackLabel}…` : placeholder ? `Search ${placeholder.toLowerCase()}…` : 'Search…'}
                 value={search}
                 onValueChange={setSearch}
                 className="h-9 text-xs"
@@ -162,7 +162,7 @@ export function SearchableRunbookSelect({
                 </div>
               ) : options.length === 0 && !loading ? (
                 <CommandEmpty className="py-3 text-xs text-center text-muted-foreground">
-                  No matching {label.toLowerCase()} found.
+                  No matching {label ? fallbackLabel : 'options'} found.
                 </CommandEmpty>
               ) : (
                 <CommandGroup>

@@ -133,7 +133,7 @@ export function HealthDetailCards({
               attention={expiredLeases > 0}
             />
             <DetailRow
-              label="Open service circuits"
+              label="Services at circuit threshold"
               value={circuits}
               attention={circuits > 0}
             />

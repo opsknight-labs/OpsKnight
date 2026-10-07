@@ -256,7 +256,7 @@ export function ExecutionFilterBar({
 
             <SearchableRunbookSelect kind="runbook" label="Runbook" value={selectedRunbook} onChange={val => { setSelectedRunbook(val); applyFilters({ runbook: val }); }} />
             <SearchableRunbookSelect kind="service" label="Service" value={selectedService} onChange={val => { setSelectedService(val); applyFilters({ service: val }); }} />
-            <SearchableRunbookSelect kind="agent" label="Agent Target" value={selectedAgent} onChange={val => { setSelectedAgent(val); applyFilters({ agent: val }); }} />
+            <SearchableRunbookSelect kind="agent-history" label="Agent Target" value={selectedAgent} onChange={val => { setSelectedAgent(val); applyFilters({ agent: val }); }} />
           </PopoverContent>
         </Popover>
 

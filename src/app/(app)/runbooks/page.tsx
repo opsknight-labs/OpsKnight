@@ -144,6 +144,7 @@ export default async function RunbooksPage({
 
       {/* Library Operational Cards */}
       <RunbookLibrary
+        total={total}
         canManage={canManage}
         userTimeZone={userTimeZone}
         runbooks={runbooks.map(item => ({

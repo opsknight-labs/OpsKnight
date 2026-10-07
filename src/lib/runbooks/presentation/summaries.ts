@@ -2,6 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 import prisma from '@/lib/prisma';
 import { ACTIVE_EXECUTION_STATUSES, getSuccessRate, type NavigationSummary } from './contracts';
+import { CIRCUIT_BREAKER_FAIL_THRESHOLD } from '../types';
 
 export const getRunbookDatabaseNow = cache(async () => {
   const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT NOW() AS now`;
@@ -45,7 +46,7 @@ export const getRunbookHealthSummary = cache(async () => {
     prisma.runbookStepAttempt.count({ where: { status: 'UNKNOWN' } }),
     prisma.runbookStepAttempt.count({ where: { status: { in: ['CLAIMED', 'RUNNING'] }, leaseExpiresAt: { lt: now } } }),
     prisma.runbookStepAttempt.findFirst({ where: { status: 'PENDING' }, orderBy: { availableAt: 'asc' }, select: { availableAt: true } }),
-    prisma.$queryRaw<Array<{ count: number }>>`SELECT COUNT(*)::int AS count FROM (SELECT "serviceId" FROM "RunbookExecution" WHERE "serviceId" IS NOT NULL AND status = 'FAILED' AND "completedAt" >= ${new Date(now.getTime() - 15 * 60000)} GROUP BY "serviceId" HAVING COUNT(*) >= 3) tripped`,
+    prisma.$queryRaw<Array<{ count: number }>>`SELECT COUNT(*)::int AS count FROM (SELECT "serviceId" FROM "RunbookExecution" WHERE "serviceId" IS NOT NULL AND status = 'FAILED' AND "completedAt" >= ${new Date(now.getTime() - 15 * 60000)} GROUP BY "serviceId" HAVING COUNT(*) >= ${CIRCUIT_BREAKER_FAIL_THRESHOLD}) tripped`,
   ]);
   const oldest = oldestPending ? Math.max(0, Math.round((now.getTime() - oldestPending.availableAt.getTime()) / 1000)) : 0;
   const circuitCount = circuits[0]?.count ?? 0;

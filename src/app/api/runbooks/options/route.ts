@@ -5,7 +5,14 @@ import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 
-const schema = z.object({ kind: z.enum(['service', 'runbook', 'agent', 'target', 'pool']), q: z.string().trim().max(100).default(''), selected: z.string().max(160).optional() }).strict();
+const schema = z
+  .object({
+    kind: z.enum(['service', 'runbook', 'agent', 'agent-history', 'target', 'pool']),
+    q: z.string().trim().max(100).default(''),
+    selected: z.string().max(160).optional(),
+  })
+  .strict();
+
 export async function GET(request: NextRequest) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const parsed = schema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
@@ -13,24 +20,67 @@ export async function GET(request: NextRequest) {
   const { kind, q, selected } = parsed.data;
   const name = { contains: q, mode: 'insensitive' as const };
   const select = { id: true, name: true };
+  const agentSelect = { id: true, name: true, status: true };
   const orderBy = [{ name: 'asc' as const }, { id: 'asc' as const }];
+
   if (kind === 'target') {
     await assertCapability(CAPABILITIES.RUNBOOK_SECRET_MANAGE);
     const [agents, pools] = await Promise.all([
       prisma.runbookAgent.findMany({ where: { status: { not: 'REVOKED' }, name }, select, take: 15, orderBy }),
       prisma.runbookAgentPool.findMany({ where: { name }, select, take: 15, orderBy }),
     ]);
-    return jsonOk({ options: [...pools.map(item => ({ value: `pool:${item.id}`, label: `Pool · ${item.name}` })), ...agents.map(item => ({ value: `agent:${item.id}`, label: `Agent · ${item.name}` }))] });
+    return jsonOk({
+      options: [
+        ...pools.map(item => ({ value: `pool:${item.id}`, label: `Pool · ${item.name}` })),
+        ...agents.map(item => ({ value: `agent:${item.id}`, label: `Agent · ${item.name}` })),
+      ],
+    });
   }
+
   if (kind === 'pool') {
-    const pools = await prisma.runbookAgentPool.findMany({ where: { name }, select, take: 30, orderBy });
-    return jsonOk({ options: pools.map(p => ({ value: p.id, label: p.name })) });
+    const where = { OR: [{ name }, ...(selected ? [{ id: selected }] : [])] };
+    const pools = await prisma.runbookAgentPool.findMany({ where, select, take: 30, orderBy });
+    const selectedPool =
+      selected && !pools.some(p => p.id === selected)
+        ? await prisma.runbookAgentPool.findUnique({ where: { id: selected }, select })
+        : null;
+    return jsonOk({
+      options: [...(selectedPool ? [selectedPool] : []), ...pools].map(p => ({
+        value: p.id,
+        label: p.name,
+      })),
+    });
   }
+
   const where = { OR: [{ name }, ...(selected ? [{ id: selected }] : [])] };
-  const rows = kind === 'service' ? await prisma.service.findMany({ where, select, take: 30, orderBy }) : kind === 'runbook' ? await prisma.runbook.findMany({ where, select, take: 30, orderBy }) : await prisma.runbookAgent.findMany({ where: { ...where, status: { not: 'REVOKED' } }, select, take: 30, orderBy });
+  const rows =
+    kind === 'service'
+      ? await prisma.service.findMany({ where, select, take: 30, orderBy })
+      : kind === 'runbook'
+        ? await prisma.runbook.findMany({ where, select, take: 30, orderBy })
+        : kind === 'agent-history'
+          ? await prisma.runbookAgent.findMany({ where, select: agentSelect, take: 30, orderBy })
+          : await prisma.runbookAgent.findMany({ where: { ...where, status: { not: 'REVOKED' } }, select: agentSelect, take: 30, orderBy });
+
   // Resolve the selected label even when it lies outside the search page.
-  const selectedRow = selected && !rows.some(row => row.id === selected)
-    ? kind === 'service' ? await prisma.service.findUnique({ where: { id: selected }, select }) : kind === 'runbook' ? await prisma.runbook.findUnique({ where: { id: selected }, select }) : await prisma.runbookAgent.findFirst({ where: { id: selected, status: { not: 'REVOKED' } }, select })
-    : null;
-  return jsonOk({ options: [...(selectedRow ? [selectedRow] : []), ...rows].map(item => ({ value: item.id, label: item.name })) });
+  const selectedRow =
+    selected && !rows.some(row => row.id === selected)
+      ? kind === 'service'
+        ? await prisma.service.findUnique({ where: { id: selected }, select })
+        : kind === 'runbook'
+          ? await prisma.runbook.findUnique({ where: { id: selected }, select })
+          : kind === 'agent-history'
+            ? await prisma.runbookAgent.findUnique({ where: { id: selected }, select: agentSelect })
+            : await prisma.runbookAgent.findFirst({ where: { id: selected, status: { not: 'REVOKED' } }, select: agentSelect })
+      : null;
+
+  return jsonOk({
+    options: [...(selectedRow ? [selectedRow] : []), ...rows].map(item => {
+      const isRevoked = 'status' in item && item.status === 'REVOKED';
+      return {
+        value: item.id,
+        label: isRevoked ? `${item.name} (revoked)` : item.name,
+      };
+    }),
+  });
 }
