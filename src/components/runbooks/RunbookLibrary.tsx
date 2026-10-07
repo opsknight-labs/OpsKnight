@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { ArrowRight, BookOpen, Plus } from 'lucide-react';
+import { BookOpen, Plus } from 'lucide-react';
 import { createRunbookAction } from '@/app/(app)/runbooks/actions';
 import EmptyState from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/shadcn/button';
@@ -17,7 +16,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/shadcn/dialog';
-import { SubmitButton, FormSelect, StatusBadge } from './RunbookControls';
+import { SubmitButton, FormSelect } from './RunbookControls';
+import { RunbookCard, type RunbookCardData } from './library/RunbookCard';
 import { formatDateTime } from '@/lib/timezone';
 
 export function CreateRunbookDialog() {
@@ -27,9 +27,9 @@ export function CreateRunbookDialog() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button>
+        <Button className="gap-1.5 shadow-xs font-semibold">
           <Plus className="h-4 w-4" />
-          New Runbook
+          <span>New Runbook</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90dvh] overflow-y-auto">
@@ -120,63 +120,46 @@ export default function RunbookLibrary({
   runbooks,
   canManage,
   userTimeZone,
+  total,
 }: {
-  runbooks: Array<{
-    id: string;
-    name: string;
-    description: string;
-    publishedVersion: number | null;
-    draftVersion: number | null;
-    bindings: number;
-    executions: number;
-    archivedAt?: string | null;
-    updatedAt: string;
-  }>;
+  runbooks: Array<RunbookCardData>;
   canManage: boolean;
   userTimeZone: string;
+  total?: number;
 }) {
   const filtered = runbooks;
+  const countDisplay =
+    total !== undefined && total !== filtered.length
+      ? `${filtered.length} of ${total} runbooks`
+      : `${filtered.length} ${filtered.length === 1 ? 'runbook' : 'runbooks'}`;
+
   return (
     <section className="space-y-4">
-      <p aria-live="polite" className="text-xs text-muted-foreground">
-        {filtered.length} runbooks
-      </p>
-      {filtered.map(item => (
-        <Link
-          key={item.id}
-          href={`/runbooks/${item.id}`}
-          className="group flex flex-col justify-between gap-4 rounded-xl border bg-card p-5 shadow-2xs transition-colors hover:border-primary/30 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:flex-row sm:items-center"
-        >
-          <div className="min-w-0 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-heading text-base font-semibold">{item.name}</h2>
-              <StatusBadge
-                status={
-                  item.archivedAt ? 'ARCHIVED' : item.publishedVersion !== null ? 'PUBLISHED' : 'DRAFT'
-                }
-              />
-              {item.publishedVersion !== null && (
-                <span className="text-xs text-muted-foreground">v{item.publishedVersion}</span>
-              )}
-            </div>
-            <p className="line-clamp-2 text-sm text-muted-foreground">
-              {item.description || 'No description yet.'}
-            </p>
-            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-              <span>{item.bindings} services</span>
-              <span>{item.executions} executions</span>
-              <span>Updated {formatDateTime(item.updatedAt, userTimeZone, { format: 'date' })}</span>
-              {item.draftVersion && <span>Draft v{item.draftVersion}</span>}
-            </div>
-          </div>
-          <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" />
-        </Link>
-      ))}
+      <div className="flex items-center justify-between px-1">
+        <p aria-live="polite" className="text-xs text-muted-foreground font-medium">
+          {countDisplay}
+        </p>
+      </div>
+
+      <div className="grid gap-3.5 sm:grid-cols-1">
+        {filtered.map(item => {
+          const _updatedAtFormatted = formatDateTime(item.updatedAt, userTimeZone, { format: 'date' });
+          return (
+            <RunbookCard
+              key={item.id}
+              runbook={item}
+              userTimeZone={userTimeZone}
+              canManage={canManage}
+            />
+          );
+        })}
+      </div>
+
       {filtered.length === 0 && (
         <EmptyState
           icon={<BookOpen />}
           title={runbooks.length ? 'No matching runbooks' : 'No runbooks yet'}
-          description="Create reusable diagnostics and remediation workflows."
+          description="Create reusable diagnostics and remediation workflows to accelerate operational response."
           action={canManage ? <CreateRunbookDialog /> : undefined}
         />
       )}
