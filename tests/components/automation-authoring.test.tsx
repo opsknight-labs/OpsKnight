@@ -103,3 +103,47 @@ it('loads Shadow readiness before LIVE and keeps the mode unchanged when review 
     )
   );
 });
+it('shows recent-field frequency/examples and authors an EVENT mapping from the suggestion', async () => {
+  api.action.mockImplementation((input: { action: string }) =>
+    Promise.resolve({
+      ok: true,
+      data:
+        input.action === 'discoverRecent'
+          ? [
+              {
+                key: 'payload_custom_details_environment',
+                path: 'payload.custom_details.environment',
+                value: 'stg',
+                examples: ['prd', 'stg'],
+                frequency: 2,
+                type: 'STRING',
+                unmapped: false,
+                source: 'EVENT',
+              },
+            ]
+          : { revision: 1 },
+    })
+  );
+  render(<AutomationWorkspace serviceId="service" />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Context' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Discover from recent alerts' }));
+  expect(await screen.findByText('Examples: prd, stg')).toBeInTheDocument();
+  expect(screen.getByText(/2 recent alerts/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Choose field' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add field' }));
+  await waitFor(() =>
+    expect(api.action).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'save',
+        snapshot: expect.objectContaining({
+          fields: expect.arrayContaining([
+            expect.objectContaining({
+              key: 'environment',
+              mappings: [{ source: 'EVENT', path: 'payload.custom_details.environment' }],
+            }),
+          ]),
+        }),
+      })
+    )
+  );
+});

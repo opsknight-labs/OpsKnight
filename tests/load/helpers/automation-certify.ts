@@ -84,7 +84,7 @@ async function runK6(profile: string, output: string) {
   if (fault) clearTimeout(fault);
   if (faultWork) await faultWork;
   await fs.writeFile(output.replace('.json', '.log'), chunks.join(''));
-  if (code !== 0) throw new Error(`k6 ${profile} failed (${code}); inspect ${output}`);
+  return code;
 }
 async function main() {
   if (process.env.OPSKNIGHT_LOAD_CERT_DB !== 'true')
@@ -93,6 +93,27 @@ async function main() {
     process.env.LOAD_SEED_MANIFEST || 'artifacts/load-certification/automation/seed-manifest.json'
   );
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as LoadSeedManifest;
+  // Keep the 10,000-subscriber public fan-out fixture in its dedicated suite.
+  // Comparative ingestion rotates evenly across internal service integrations.
+  const publicServices = await db.statusPageService.findMany({ select: { serviceId: true } });
+  const publicIds = publicServices.map(service => service.serviceId);
+  const internal = await db.integration.findMany({
+    where: { serviceId: { in: manifest.capacityServiceIds, notIn: publicIds } },
+    select: { key: true },
+  });
+  manifest.capacityIntegrationKeys = internal
+    .map(integration => integration.key)
+    .filter(key => key !== manifest.contractIntegrationKey);
+  manifest.capacityServiceIds = manifest.capacityServiceIds.filter(id => !publicIds.includes(id));
+  manifest.baselineIncidentIds = (
+    await db.incident.findMany({
+      where: { id: { in: manifest.baselineIncidentIds }, serviceId: { notIn: publicIds } },
+      select: { id: true },
+    })
+  ).map(incident => incident.id);
+  if (!manifest.capacityIntegrationKeys.length) throw new Error('No internal integration keys');
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+  process.env.LOAD_SEED_MANIFEST = manifestPath;
   const actor = await db.user.findFirstOrThrow({
     where: { id: { in: manifest.userIds }, role: 'ADMIN' },
   });
@@ -138,8 +159,9 @@ async function main() {
     const timer = setInterval(() => {
       if (!sampling) inFlightSample = sample();
     }, 5000);
+    let k6ExitCode: number | null = null;
     try {
-      await runK6(profile, summaryPath);
+      k6ExitCode = await runK6(profile, summaryPath);
     } finally {
       clearInterval(timer);
       await inFlightSample;
@@ -269,6 +291,7 @@ async function main() {
     `;
     results.push({
       profile,
+      k6ExitCode,
       acceptedEvents: incidents,
       duplicateGroups: 0,
       fallbackCount: traces.filter(trace => trace.fallbackReason).length,
@@ -292,7 +315,13 @@ async function main() {
       telemetry,
       deadlocksDelta: telemetry.postgres.deadlocks - Number(before.deadlocks),
     });
-    process.stdout.write(`Certified ${topology} ${profile}: ${incidents} accepted incidents\n`);
+    await fs.writeFile(
+      path.join(outputDir, 'profiles.json'),
+      JSON.stringify({ topology, results }, null, 2) + '\n'
+    );
+    process.stdout.write(
+      `Recorded ${topology} ${profile}: ${incidents} accepted incidents; k6 exit ${k6ExitCode}\n`
+    );
   }
   const baseline = results[0];
   const comparisons = results.slice(1).map(result => ({
@@ -347,6 +376,9 @@ async function main() {
   };
   const failures = results
     .flatMap(result => [
+      ...(result.k6ExitCode !== 0
+        ? [`${result.profile}: k6 gate failed (${result.k6ExitCode})`]
+        : []),
       ...(result.fallbackCount > 0
         ? [`${result.profile}: ${result.fallbackCount} automation fallbacks`]
         : []),
