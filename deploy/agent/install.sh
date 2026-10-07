@@ -11,8 +11,11 @@ OPSKNIGHT_URL="${OPSKNIGHT_URL:-}"
 ENROLLMENT_TOKEN="${ENROLLMENT_TOKEN:-}"
 TARBALL_OVERRIDE=""
 CHECKSUM_OVERRIDE=""
+ALLOW_UNVERIFIED_TARBALL=false
 RELEASE_TAG="${OPSKNIGHT_VERSION:-2.0.0}"
-BASE_DOWNLOAD_URL="${OPSKNIGHT_DOWNLOAD_BASE:-https://github.com/opsknight-labs/OpsKnight/releases/download/v${RELEASE_TAG}}"
+CLEAN_VERSION="${RELEASE_TAG#v}"
+CLEAN_TAG="v${CLEAN_VERSION}"
+BASE_DOWNLOAD_URL="${OPSKNIGHT_DOWNLOAD_BASE:-https://github.com/opsknight-labs/OpsKnight/releases/download/${CLEAN_TAG}}"
 NO_RESTART=false
 
 INSTALL_PREFIX="/opt/opsknight-agent"
@@ -65,9 +68,15 @@ while [[ $# -gt 0 ]]; do
       CHECKSUM_OVERRIDE="$2"
       shift 2
       ;;
+    --allow-unverified-tarball)
+      ALLOW_UNVERIFIED_TARBALL=true
+      shift 1
+      ;;
     --version)
       RELEASE_TAG="$2"
-      BASE_DOWNLOAD_URL="${OPSKNIGHT_DOWNLOAD_BASE:-https://github.com/opsknight-labs/OpsKnight/releases/download/v${RELEASE_TAG}}"
+      CLEAN_VERSION="${RELEASE_TAG#v}"
+      CLEAN_TAG="v${CLEAN_VERSION}"
+      BASE_DOWNLOAD_URL="${OPSKNIGHT_DOWNLOAD_BASE:-https://github.com/opsknight-labs/OpsKnight/releases/download/${CLEAN_TAG}}"
       shift 2
       ;;
     --no-restart)
@@ -86,6 +95,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --keys-file <path>               Read plural signing keys JSON from file"
       echo "  --tarball <path>                 Local artifact archive to install"
       echo "  --checksum <sha256>              Expected SHA256 checksum for local tarball"
+      echo "  --allow-unverified-tarball       Allow local tarball without checksum verification"
       echo "  --version <tag>                  Release version tag (default: ${RELEASE_TAG})"
       echo "  --no-restart                     Do not restart service if already running"
       exit 0
@@ -122,6 +132,18 @@ if [[ -n "${KEYS_FILE}" ]]; then
     exit 1
   fi
   EXECUTION_PUBLIC_KEYS_JSON="$(cat "${KEYS_FILE}")"
+fi
+
+# Canonicalize multiline/formatted keys JSON to single line
+if [[ -n "${EXECUTION_PUBLIC_KEYS_JSON}" ]]; then
+  if command -v node >/dev/null 2>&1; then
+    CANONICAL_JSON="$(node -e 'try { process.stdout.write(JSON.stringify(JSON.parse(process.argv[1]))); } catch(e) { process.exit(1); }' "${EXECUTION_PUBLIC_KEYS_JSON}" 2>/dev/null || echo '')"
+    if [[ -n "${CANONICAL_JSON}" ]]; then
+      EXECUTION_PUBLIC_KEYS_JSON="${CANONICAL_JSON}"
+    fi
+  else
+    EXECUTION_PUBLIC_KEYS_JSON="$(echo "${EXECUTION_PUBLIC_KEYS_JSON}" | tr -d '\r\n')"
+  fi
 fi
 
 # Validate local tarball explicitly (fail closed, do not fall back to remote download)
@@ -389,6 +411,9 @@ TARBALL_FILE=""
 if [[ -n "${TARBALL_OVERRIDE}" ]]; then
   echo "Using local override artifact: ${TARBALL_OVERRIDE}"
   TARBALL_FILE="${TARBALL_OVERRIDE}"
+  TARBALL_DIR="$(cd "$(dirname "${TARBALL_OVERRIDE}")" && pwd)"
+  TARBALL_BASE="$(basename "${TARBALL_OVERRIDE}")"
+
   if [[ -n "${CHECKSUM_OVERRIDE}" ]]; then
     echo "Verifying local tarball against provided checksum..."
     ACTUAL_SHA="$(sha256sum "${TARBALL_FILE}" 2>/dev/null | awk '{print $1}' || shasum -a 256 "${TARBALL_FILE}" | awk '{print $1}')"
@@ -406,6 +431,19 @@ if [[ -n "${TARBALL_OVERRIDE}" ]]; then
       exit 1
     fi
     echo "Local artifact checksum verified: [OK]"
+  elif [[ -f "${TARBALL_DIR}/SHA256SUMS" ]] && grep -q "${TARBALL_BASE}" "${TARBALL_DIR}/SHA256SUMS" 2>/dev/null; then
+    echo "Verifying local tarball against ${TARBALL_DIR}/SHA256SUMS..."
+    if ! (cd "${TARBALL_DIR}" && grep "${TARBALL_BASE}" SHA256SUMS | sha256sum -c - 2>/dev/null || (cd "${TARBALL_DIR}" && grep "${TARBALL_BASE}" SHA256SUMS | shasum -a 256 -c - 2>/dev/null)); then
+      echo "ERROR: SHA256 checksum verification failed for ${TARBALL_BASE}." >&2
+      exit 1
+    fi
+    echo "Local artifact checksum verified: [OK]"
+  elif [[ "${ALLOW_UNVERIFIED_TARBALL}" == "true" ]]; then
+    echo "Notice: Installing unverified local artifact (--allow-unverified-tarball specified)."
+  else
+    echo "ERROR: Integrity verification required for local tarball '${TARBALL_OVERRIDE}'." >&2
+    echo "Provide --checksum <sha256>, place a checksum in '${TARBALL_OVERRIDE}.sha256', provide SHA256SUMS alongside, or pass --allow-unverified-tarball." >&2
+    exit 1
   fi
 else
   ARTIFACT_NAME="opsknight-agent-linux-${ARCH}.tar.gz"
@@ -414,20 +452,13 @@ else
 
   echo "Downloading ${ARTIFACT_URL}..."
   if ! curl -fsSL -o "${TEMP_WORK_DIR}/${ARTIFACT_NAME}" "${ARTIFACT_URL}"; then
-    echo "Warning: Direct release download not reachable. Checking local repository build..."
-    if [[ -f "./dist/agent/${ARTIFACT_NAME}" ]]; then
-      cp "./dist/agent/${ARTIFACT_NAME}" "${TEMP_WORK_DIR}/${ARTIFACT_NAME}"
-    else
-      echo "ERROR: Could not download or locate ${ARTIFACT_NAME}." >&2
-      exit 1
-    fi
+    echo "ERROR: Failed to download official release artifact from ${ARTIFACT_URL}." >&2
+    exit 1
   fi
   TARBALL_FILE="${TEMP_WORK_DIR}/${ARTIFACT_NAME}"
 
   # Verify Checksum strictly for remote downloads
-  if [[ -f "./dist/agent/SHA256SUMS" ]]; then
-    cp "./dist/agent/SHA256SUMS" "${TEMP_WORK_DIR}/"
-  elif ! curl -fsSL -o "${TEMP_WORK_DIR}/SHA256SUMS" "${CHECKSUM_URL}"; then
+  if ! curl -fsSL -o "${TEMP_WORK_DIR}/SHA256SUMS" "${CHECKSUM_URL}"; then
     echo "ERROR: Failed to download SHA256SUMS from ${CHECKSUM_URL}." >&2
     echo "Refusing to install unverified remote artifacts." >&2
     exit 1
@@ -478,7 +509,7 @@ if [[ -n "${EXECUTION_PUBLIC_KEY}" ]]; then
 fi
 
 if [[ -n "${EXECUTION_PUBLIC_KEYS_JSON}" ]]; then
-  if ! "${STAGE_DIR}/runtime/bin/node" -e '
+  CANONICAL_JSON="$("${STAGE_DIR}/runtime/bin/node" -e '
     const { createPublicKey } = require("crypto");
     const jsonStr = process.argv[1];
     try {
@@ -491,37 +522,63 @@ if [[ -n "${EXECUTION_PUBLIC_KEYS_JSON}" ]]; then
         const k = createPublicKey({ key: Buffer.from(pin, "base64"), type: "spki", format: "der" });
         if (k.asymmetricKeyType !== "ed25519") process.exit(1);
       }
+      process.stdout.write(JSON.stringify(obj));
     } catch {
       process.exit(1);
     }
-  ' "${EXECUTION_PUBLIC_KEYS_JSON}" 2>/dev/null; then
+  ' "${EXECUTION_PUBLIC_KEYS_JSON}" 2>/dev/null || echo '')"
+  if [[ -z "${CANONICAL_JSON}" ]]; then
     echo "ERROR: Execution keys JSON is invalid. Must be a JSON object mapping 1-8 key IDs to valid Ed25519 SPKI DER keys." >&2
     rm -rf "${STAGE_DIR}"
     exit 1
   fi
+  EXECUTION_PUBLIC_KEYS_JSON="${CANONICAL_JSON}"
 fi
 
-# Atomic directory swap with rollback safety
-BACKUP_DIR=""
+# Prepare transactional backup for rollback on any failure
+BACKUP_DIR=$(mktemp -d "/opt/opsknight-agent.backup.XXXXXX" 2>/dev/null || mktemp -d "/tmp/opsknight-agent.backup.XXXXXX")
 if [[ -d "${INSTALL_PREFIX}" && -n "$(ls -A "${INSTALL_PREFIX}" 2>/dev/null)" ]]; then
-  BACKUP_DIR="${INSTALL_PREFIX}.bak.$$"
-  mv "${INSTALL_PREFIX}" "${BACKUP_DIR}"
-else
-  rm -rf "${INSTALL_PREFIX}"
+  cp -a "${INSTALL_PREFIX}" "${BACKUP_DIR}/opt"
+fi
+if [[ -f "${CONFIG_DIR}/agent.env" ]]; then
+  cp -a "${CONFIG_DIR}/agent.env" "${BACKUP_DIR}/agent.env"
+fi
+if [[ -f "/etc/systemd/system/opsknight-agent.service" ]]; then
+  cp -a "/etc/systemd/system/opsknight-agent.service" "${BACKUP_DIR}/opsknight-agent.service"
+fi
+if [[ -f "${CONFIG_DIR}/policy.json" ]]; then
+  cp -a "${CONFIG_DIR}/policy.json" "${BACKUP_DIR}/policy.json"
 fi
 
-if ! mv "${STAGE_DIR}" "${INSTALL_PREFIX}"; then
-  echo "ERROR: Failed to activate staged installation directory." >&2
-  if [[ -n "${BACKUP_DIR}" && -d "${BACKUP_DIR}" ]]; then
-    mv "${BACKUP_DIR}" "${INSTALL_PREFIX}"
-    echo "Rolled back to previous installation." >&2
+rollback_and_fail() {
+  local error_msg="$1"
+  echo "ERROR: ${error_msg}" >&2
+  if [[ -d "${BACKUP_DIR}/opt" ]]; then
+    echo "Initiating transactional rollback to previous installation..." >&2
+    rm -rf "${INSTALL_PREFIX}"
+    mv "${BACKUP_DIR}/opt" "${INSTALL_PREFIX}"
+    if [[ -f "${BACKUP_DIR}/agent.env" ]]; then
+      cp -a "${BACKUP_DIR}/agent.env" "${CONFIG_DIR}/agent.env"
+    fi
+    if [[ -f "${BACKUP_DIR}/opsknight-agent.service" ]]; then
+      cp -a "${BACKUP_DIR}/opsknight-agent.service" /etc/systemd/system/opsknight-agent.service
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+      systemctl daemon-reload 2>/dev/null || true
+      if [[ "${SERVICE_WAS_ACTIVE}" == "true" ]]; then
+        systemctl restart opsknight-agent 2>/dev/null || true
+      fi
+    fi
+    echo "Rollback to previous installation completed." >&2
   fi
-  rm -rf "${STAGE_DIR}"
+  rm -rf "${BACKUP_DIR}" "${STAGE_DIR:-}"
   exit 1
-fi
+}
 
-if [[ -n "${BACKUP_DIR}" && -d "${BACKUP_DIR}" ]]; then
-  rm -rf "${BACKUP_DIR}"
+# Swap staged directory into target
+rm -rf "${INSTALL_PREFIX}"
+if ! mv "${STAGE_DIR}" "${INSTALL_PREFIX}"; then
+  rollback_and_fail "Failed to activate staged installation directory."
 fi
 
 # Install preflight script to /opt/opsknight-agent if bundled or present
@@ -581,23 +638,48 @@ elif [[ -n "${EXECUTION_PUBLIC_KEY}" ]]; then
   echo "OPSKNIGHT_EXECUTION_PUBLIC_KEY=${CLEAN_KEY}" >> "${ENV_FILE}"
 fi
 
-# 9. Service restart on upgrade
+# 9. Active service drain & restart on upgrade
 if [[ "${SERVICE_WAS_ACTIVE}" == "true" ]] && command -v systemctl >/dev/null 2>&1; then
   if [[ "${NO_RESTART}" == "true" ]]; then
     echo "Notice: opsknight-agent service is currently running."
     echo "Skipping automatic restart (--no-restart requested)."
     echo "To restart manually: sudo systemctl restart opsknight-agent"
   else
+    # Check if active work is executing before restarting
+    AGENT_PID="$(systemctl show opsknight-agent --property=MainPID --value 2>/dev/null || echo "0")"
+    if [[ "${AGENT_PID}" -gt 0 ]] && command -v pgrep >/dev/null 2>&1; then
+      if pgrep -P "${AGENT_PID}" >/dev/null 2>&1; then
+        echo "Notice: Active execution in progress under Agent PID ${AGENT_PID}. Waiting up to 30s to drain..."
+        DRAIN_WAITED=0
+        while [[ ${DRAIN_WAITED} -lt 30 ]]; do
+          if ! pgrep -P "${AGENT_PID}" >/dev/null 2>&1; then
+            echo "In-flight execution drained successfully: [OK]"
+            break
+          fi
+          sleep 2
+          DRAIN_WAITED=$((DRAIN_WAITED + 2))
+        done
+        if [[ ${DRAIN_WAITED} -ge 30 ]]; then
+          echo "WARNING: In-flight execution did not complete within 30s. Interruption will record target state as UNKNOWN." >&2
+        fi
+      fi
+    fi
+
     echo "Restarting opsknight-agent service..."
-    systemctl restart opsknight-agent
+    if ! systemctl restart opsknight-agent; then
+      rollback_and_fail "systemctl restart opsknight-agent failed."
+    fi
     sleep 2
     if systemctl is-active --quiet opsknight-agent 2>/dev/null; then
       echo "Agent service successfully restarted: [OK]"
     else
-      echo "WARNING: Agent service restart did not reach active state. Check logs: sudo journalctl -u opsknight-agent -n 50" >&2
+      rollback_and_fail "Agent service restart did not reach active state. Check logs: sudo journalctl -u opsknight-agent -n 50"
     fi
   fi
 fi
+
+# Installation and health verification succeeded; clean up backup
+rm -rf "${BACKUP_DIR}"
 
 echo "Installed successfully at ${INSTALL_PREFIX}."
 echo ""

@@ -160,20 +160,62 @@ jobs:
       - name: Test installer failure modes (fail closed validation)
         run: |
           # Test non-root rejection
-          ! ./dist/agent/install.sh --url https://example.com --key "test" --token "test" 2>/dev/null || (echo "Expected non-root failure" && exit 1)
+          if ./dist/agent/install.sh --url https://example.com --key "test" --token "test" 2>/dev/null; then
+            echo "Expected non-root failure"
+            exit 1
+          fi
           # Test missing URL
-          sudo ./dist/agent/install.sh --key "test" --token "test" 2>/dev/null && (echo "Expected missing URL failure" && exit 1) || true
+          if sudo ./dist/agent/install.sh --key "test" --token "test" 2>/dev/null; then
+            echo "Expected missing URL failure"
+            exit 1
+          fi
           # Test missing local tarball fails closed (no remote download fallback)
-          sudo ./dist/agent/install.sh --url https://example.com --tarball /nonexistent/tarball.tar.gz --key "test" --token "test" 2>/dev/null && (echo "Expected bad tarball failure" && exit 1) || true
+          if sudo ./dist/agent/install.sh --url https://example.com --tarball /nonexistent/tarball.tar.gz --key "test" --token "test" 2>/dev/null; then
+            echo "Expected bad tarball failure"
+            exit 1
+          fi
+          # Test unverified local tarball fails closed without checksum
+          cp dist/agent/opsknight-agent-linux-x64.tar.gz /tmp/unverified-agent.tar.gz
+          if sudo ./dist/agent/install.sh --url https://example.com --tarball /tmp/unverified-agent.tar.gz --key "test" --token "test" 2>/dev/null; then
+            echo "Expected unverified tarball failure"
+            rm -f /tmp/unverified-agent.tar.gz
+            exit 1
+          fi
+          rm -f /tmp/unverified-agent.tar.gz
 
       - name: Test end-to-end installation and preflight journey
         run: |
+          # Start mock control-plane time endpoint for live clock skew verification
+          node -e '
+            const http = require("http");
+            const server = http.createServer((req, res) => {
+              if (req.url === "/api/runbook-agent/v1/time") {
+                res.writeHead(200, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({
+                  success: true,
+                  data: {
+                    epochMs: Date.now(),
+                    serverTime: new Date().toISOString()
+                  }
+                }));
+                return;
+              }
+              res.writeHead(404);
+              res.end();
+            });
+            server.listen(3999, "127.0.0.1", () => {
+              console.log("Mock OpsKnight time server listening on 127.0.0.1:3999");
+            });
+          ' &
+          MOCK_PID=$!
+          sleep 1
+
           TEST_KEY=$(node -e 'const { generateKeyPairSync } = require("crypto"); const { publicKey } = generateKeyPairSync("ed25519"); console.log(publicKey.export({ type: "spki", format: "der" }).toString("base64"));')
           echo "Generated test Ed25519 key: $TEST_KEY"
 
           # Perform initial installation
           sudo ./dist/agent/install.sh \
-            --url https://opsknight.company.test \
+            --url http://127.0.0.1:3999 \
             --key "$TEST_KEY" \
             --token "test-token-123" \
             --tarball dist/agent/opsknight-agent-linux-x64.tar.gz
@@ -186,32 +228,124 @@ jobs:
           test -f /opt/opsknight-agent/VERSION
           test -f /etc/opsknight-agent/policy.json
           test -f /etc/opsknight-agent/agent.env
-          test "$(stat -c '%a' /etc/opsknight-agent/agent.env)" = "600"
-          test "$(stat -c '%U:%G' /etc/opsknight-agent/agent.env)" = "root:root"
-          grep -q "OPSKNIGHT_URL=https://opsknight.company.test" /etc/opsknight-agent/agent.env
-          grep -q "OPSKNIGHT_EXECUTION_PUBLIC_KEY=$TEST_KEY" /etc/opsknight-agent/agent.env
-          grep -q "OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=test-token-123" /etc/opsknight-agent/agent.env
+          test "$(sudo stat -c '%a' /etc/opsknight-agent/agent.env)" = "600"
+          test "$(sudo stat -c '%U:%G' /etc/opsknight-agent/agent.env)" = "root:root"
+          sudo grep -q "OPSKNIGHT_URL=http://127.0.0.1:3999" /etc/opsknight-agent/agent.env
+          sudo grep -q "OPSKNIGHT_EXECUTION_PUBLIC_KEY=$TEST_KEY" /etc/opsknight-agent/agent.env
+          sudo grep -q "OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=test-token-123" /etc/opsknight-agent/agent.env
           test -f /etc/systemd/system/opsknight-agent.service
           grep -q "EnvironmentFile=/etc/opsknight-agent/agent.env" /etc/systemd/system/opsknight-agent.service
 
-          # Test preflight
-          sudo /opt/opsknight-agent/preflight.sh || true
+          # Test preflight - must pass with READY and exit 0 without || true
+          sudo /opt/opsknight-agent/preflight.sh
 
-      - name: Test key rotation and upgrade journey
+          kill $MOCK_PID 2>/dev/null || true
+
+      - name: Test key rotation, multiline config, and signed envelope verification
         run: |
-          ROTATED_KEY_1=$(node -e 'const { generateKeyPairSync } = require("crypto"); const { publicKey } = generateKeyPairSync("ed25519"); console.log(publicKey.export({ type: "spki", format: "der" }).toString("base64"));')
-          ROTATED_KEY_2=$(node -e 'const { generateKeyPairSync } = require("crypto"); const { publicKey } = generateKeyPairSync("ed25519"); console.log(publicKey.export({ type: "spki", format: "der" }).toString("base64"));')
-          KEYS_JSON="{\"active\":\"$ROTATED_KEY_1\",\"next\":\"$ROTATED_KEY_2\"}"
+          # Generate bootstrap (default) and staged UUID keys
+          STAGED_KEY_ID="87ddce2f-34a1-4321-9876-abcdef012345"
+          node -e '
+            const { generateKeyPairSync, writeFileSync } = require("crypto");
+            const fs = require("fs");
+            const pairDefault = generateKeyPairSync("ed25519");
+            const pairStaged = generateKeyPairSync("ed25519");
+            const pubDefault = pairDefault.publicKey.export({ type: "spki", format: "der" }).toString("base64");
+            const pubStaged = pairStaged.publicKey.export({ type: "spki", format: "der" }).toString("base64");
+            
+            // Write multiline formatted JSON keys file
+            const keysObj = {
+              "default": pubDefault,
+              "87ddce2f-34a1-4321-9876-abcdef012345": pubStaged
+            };
+            fs.writeFileSync("/tmp/keys-staged.json", JSON.stringify(keysObj, null, 2));
 
-          # Re-run installer with plural keys JSON and --no-restart
+            // Save private keys for envelope verification test
+            fs.writeFileSync("/tmp/priv-default.pem", pairDefault.privateKey.export({ type: "pkcs8", format: "pem" }));
+            fs.writeFileSync("/tmp/priv-staged.pem", pairStaged.privateKey.export({ type: "pkcs8", format: "pem" }));
+          '
+
+          # Re-run installer with multiline --keys-file, verified tarball, and --no-restart
           sudo ./dist/agent/install.sh \
-            --url https://opsknight.company.test \
-            --keys-json "$KEYS_JSON" \
+            --url http://127.0.0.1:3999 \
+            --keys-file /tmp/keys-staged.json \
             --tarball dist/agent/opsknight-agent-linux-x64.tar.gz \
             --no-restart
 
-          grep -q "OPSKNIGHT_EXECUTION_PUBLIC_KEYS=$KEYS_JSON" /etc/opsknight-agent/agent.env
-          ! grep -q "OPSKNIGHT_EXECUTION_PUBLIC_KEY=" /etc/opsknight-agent/agent.env || (echo "Singular key was not cleared after plural update" && exit 1)
+          # Verify singular key cleared and plural key map stored in agent.env
+          sudo grep -q 'OPSKNIGHT_EXECUTION_PUBLIC_KEYS={"default":' /etc/opsknight-agent/agent.env
+          sudo grep -q "87ddce2f-34a1-4321-9876-abcdef012345" /etc/opsknight-agent/agent.env
+          if sudo grep -q "OPSKNIGHT_EXECUTION_PUBLIC_KEY=" /etc/opsknight-agent/agent.env; then
+            echo "Singular key was not cleared after plural update"
+            exit 1
+          fi
+
+          # Test envelope signing and verification using the bundled agent node runtime
+          sudo /opt/opsknight-agent/runtime/bin/node -e '
+            const fs = require("fs");
+            const { createPrivateKey, createPublicKey, sign, verify } = require("crypto");
+
+            const envContent = fs.readFileSync("/etc/opsknight-agent/agent.env", "utf8");
+            const keysLine = envContent.split("\n").find(l => l.startsWith("OPSKNIGHT_EXECUTION_PUBLIC_KEYS="));
+            if (!keysLine) throw new Error("OPSKNIGHT_EXECUTION_PUBLIC_KEYS missing");
+            const keysMap = JSON.parse(keysLine.substring("OPSKNIGHT_EXECUTION_PUBLIC_KEYS=".length));
+
+            function canonical(val) {
+              const norm = (e) => {
+                if (Array.isArray(e)) return e.map(norm);
+                if (e && typeof e === "object") {
+                  return Object.fromEntries(Object.entries(e).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => [k, norm(v)]));
+                }
+                return e;
+              };
+              return JSON.stringify(norm(val));
+            }
+
+            function makeAttempt(privPem, keyId) {
+              const priv = createPrivateKey(privPem);
+              const payload = {
+                attemptId: "att-cert-test",
+                signingAgentId: "agent-cert-test",
+                executionDeadlineAt: new Date(Date.now() + 60000).toISOString(),
+                leaseExpiresAt: new Date(Date.now() + 30000).toISOString(),
+                ...(keyId ? { signingKeyId: keyId } : {})
+              };
+              const sig = sign(null, Buffer.from(canonical(payload)), priv).toString("base64");
+              return { ...payload, signature: sig };
+            }
+
+            function verifyAttempt(att, keys) {
+              const { signature, ...payload } = att;
+              const pin = keys[att.signingKeyId || "default"];
+              if (!pin) throw new Error("Untrusted key id");
+              const pub = createPublicKey({ key: Buffer.from(pin, "base64"), type: "spki", format: "der" });
+              if (!verify(null, Buffer.from(canonical(payload)), pub, Buffer.from(signature, "base64"))) {
+                throw new Error("Invalid signature");
+              }
+            }
+
+            const privDefault = fs.readFileSync("/tmp/priv-default.pem", "utf8");
+            const privStaged = fs.readFileSync("/tmp/priv-staged.pem", "utf8");
+
+            // 1. Verify default bootstrap key envelope (legacy signingKeyId omitted)
+            verifyAttempt(makeAttempt(privDefault), keysMap);
+            // 2. Verify default key envelope with explicit "default" ID
+            verifyAttempt(makeAttempt(privDefault, "default"), keysMap);
+            // 3. Verify staged UUID key envelope
+            verifyAttempt(makeAttempt(privStaged, "87ddce2f-34a1-4321-9876-abcdef012345"), keysMap);
+
+            // 4. Untrusted key ID must fail
+            let failedAsExpected = false;
+            try {
+              verifyAttempt(makeAttempt(privDefault, "non-existent-uuid"), keysMap);
+            } catch {
+              failedAsExpected = true;
+            }
+            if (!failedAsExpected) throw new Error("Expected failure for non-existent key ID");
+
+            console.log("Envelope verification with plural key map PASSED");
+          '
+          rm -f /tmp/keys-staged.json /tmp/priv-default.pem /tmp/priv-staged.pem
 
   deployment-manifests:
     needs: changes

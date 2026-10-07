@@ -329,14 +329,21 @@ async function run() {
             attemptId: attempt.attemptId,
             leaseToken: attempt.leaseToken,
             producedAt: new Date().toISOString(),
-            status: lastError.startsWith('LOCAL_POLICY_DENIED') ? 'FAILED' : 'UNKNOWN',
-            errorCode: lastError.startsWith('LOCAL_POLICY_DENIED')
-              ? 'LOCAL_POLICY_DENIED'
-              : 'AGENT_FAILURE',
-            errorMessage: lastError,
+            status: shuttingDown ? 'UNKNOWN' : lastError.startsWith('LOCAL_POLICY_DENIED') ? 'FAILED' : 'UNKNOWN',
+            errorCode: shuttingDown
+              ? 'AGENT_INTERRUPTED_BY_SHUTDOWN'
+              : lastError.startsWith('LOCAL_POLICY_DENIED')
+                ? 'LOCAL_POLICY_DENIED'
+                : 'AGENT_FAILURE',
+            errorMessage: shuttingDown
+              ? 'Execution was interrupted by process shutdown; target state is unknown.'
+              : lastError,
           });
         }
-        if (shuttingDown) break;
+        if (shuttingDown) {
+          await flushSpool().catch(() => undefined);
+          break;
+        }
         await new Promise(resolve => setTimeout(resolve, 2_000));
       }
     }

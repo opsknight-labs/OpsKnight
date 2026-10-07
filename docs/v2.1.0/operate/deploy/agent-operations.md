@@ -196,18 +196,18 @@ OpsKnight provides an automated, self-contained enterprise installer that suppor
      --key "<BASE64_EXECUTION_PUBLIC_KEY>" \
      --token <ONE_TIME_ENROLLMENT_TOKEN>
    ```
-   For staged signing key rotation, pass the plural key map via `--keys-json`:
+   For staged signing key rotation, pass the plural key map via `--keys-json` (copy the exact JSON displayed in **Runbooks → Agents → Pinned execution public key**; key IDs are `"default"` and stage UUIDs, not `"active"`/`"next"`):
    ```bash
    sudo ./deploy/agent/install.sh \
      --url https://opsknight.company.com \
-     --keys-json '{"active":"<KEY_1>","next":"<KEY_2>"}' \
+     --keys-json '{"default":"<BASE64_SPKI_KEY>","87ddce2f-34a1-4321-9876-abcdef012345":"<BASE64_NEXT_KEY>"}' \
      --token <ONE_TIME_ENROLLMENT_TOKEN>
    ```
-3. Run diagnostic preflight checks (must run as root to inspect `root:root 0600` `agent.env`):
+ 3. Run diagnostic preflight checks (must run as root to inspect `root:root 0600` `agent.env`):
    ```bash
    sudo /opt/opsknight-agent/preflight.sh
    ```
-4. Enable and start the systemd service:
+ 4. Enable and start the systemd service:
    ```bash
    sudo systemctl enable --now opsknight-agent
    sudo systemctl status opsknight-agent
@@ -215,24 +215,26 @@ OpsKnight provides an automated, self-contained enterprise installer that suppor
 
 ### Transactional Upgrades & Rotation
 
-To upgrade an existing native Agent installation, re-run `install.sh` pointing to the new release or artifact tarball:
+To upgrade an existing native Agent installation, re-run `install.sh` pointing to the new release or artifact tarball with verified checksum:
 ```bash
 sudo ./deploy/agent/install.sh \
   --url https://opsknight.company.com \
-  --tarball /path/to/opsknight-agent-linux-x64.tar.gz
+  --tarball /path/to/opsknight-agent-linux-x64.tar.gz \
+  --checksum "<SHA256_HASH>"
 ```
 The installer executes transactionally:
-1. Validates the new bundle in an isolated staging directory.
-2. Preserves existing private identity in `/var/lib/opsknight-agent` and local policy in `/etc/opsknight-agent/policy.json`.
-3. Atomically replaces `/opt/opsknight-agent` with rollback on failure.
-4. Reloads systemd units (`systemctl daemon-reload`).
-5. Restarts the active service automatically if it was running. To defer the restart, supply `--no-restart`.
+1. Validates the new bundle in an isolated staging directory and enforces SHA256 integrity.
+2. Drains in-flight executions before restarting an active process.
+3. Preserves existing private identity in `/var/lib/opsknight-agent` and local policy in `/etc/opsknight-agent/policy.json`.
+4. Atomically replaces `/opt/opsknight-agent` with full backup and automatic rollback on activation failure.
+5. Reloads systemd units (`systemctl daemon-reload`).
+6. Restarts the active service automatically if it was running. To defer the restart, supply `--no-restart`.
 
 ### Host-Native Container & Kubernetes Privileges
 
 Because `opsknight-agent.service` runs unprivileged under `NoNewPrivileges=true` and `ProtectHome=true`:
 - **Systemd Executor**: Grant narrow Polkit authorization rules for the unprivileged `opsknight-agent` user (e.g. in `/etc/polkit-1/rules.d/50-opsknight-agent.rules`), rather than sudoers.
-- **Docker**: Add the service user to the host `docker` group (`sudo usermod -aG docker opsknight-agent`), or expose a scoped Unix socket with group read/write.
+- **Docker**: Adding `opsknight-agent` to the host `docker` group (`sudo usermod -aG docker opsknight-agent`) grants root-equivalent control over the host. If your security policy prohibits Docker socket access for non-root services, prefer rootless Podman or narrow Polkit rules.
 - **Podman**: Configure rootless Podman socket access or system service connections; do not expose unauthenticated TCP sockets.
 - **Kubernetes**: Due to `ProtectHome=true`, store kubeconfig files in `/etc/opsknight-agent/kubeconfig` rather than home directories, and reference it via `KUBECONFIG` in `/etc/opsknight-agent/agent.env`. Narrow RBAC permissions to only allowlisted namespaces.
 

@@ -93,13 +93,15 @@ helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \\
 
 # Choose integrated-agent or split-agent for your runtime.
 kubectl apply -k deploy/kubernetes/kustomize/profiles/integrated-agent`;
-    const linux = `# /etc/opsknight-agent/agent.env (mode 0600)
-OPSKNIGHT_URL=${url}
-OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=${token}
-OPSKNIGHT_EXECUTION_PUBLIC_KEY=${executionPublicKey}
-OPSKNIGHT_AGENT_POLICY_FILE=/etc/opsknight-agent/policy.json
-OPSKNIGHT_AGENT_DATA_DIR=/var/lib/opsknight-agent
+    const linux = `# 1. Download and run official OpsKnight Native Agent installer
+curl -fsSL https://raw.githubusercontent.com/opsknight-labs/OpsKnight/main/deploy/agent/install.sh -o install.sh
+sudo bash install.sh \\
+  --url ${shellQuote(url)} \\
+  --key ${shellQuote(executionPublicKey)} \\
+  --token ${shellQuote(token)}
 
+# 2. Run preflight diagnostics and verify service
+sudo /opt/opsknight-agent/preflight.sh
 sudo systemctl enable --now opsknight-agent`;
     return { compose, swarm, helm, kustomize, linux };
   }, [image, policyPath, token, url, executionPublicKey]);

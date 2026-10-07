@@ -91,6 +91,31 @@ describe('Installer logic and OS-release contract', () => {
     expect(installScript).toContain('--no-restart');
   });
 
+  it('normalizes release tag version preventing vv2.0.0 URLs', () => {
+    expect(installScript).toContain('CLEAN_VERSION="${RELEASE_TAG#v}"');
+    expect(installScript).toContain('CLEAN_TAG="v${CLEAN_VERSION}"');
+  });
+
+  it('drains active executions before restarting active agent process', () => {
+    expect(installScript).toContain('pgrep -P "${AGENT_PID}"');
+    expect(installScript).toContain('Waiting up to 30s to drain');
+  });
+
+  it('initiates transactional rollback on activation or restart failure', () => {
+    expect(installScript).toContain('rollback_and_fail');
+    expect(installScript).toContain('Initiating transactional rollback to previous installation');
+  });
+
+  it('enforces local tarball integrity verification unless explicitly bypassed', () => {
+    expect(installScript).toContain('--allow-unverified-tarball');
+    expect(installScript).toContain('Integrity verification required for local tarball');
+  });
+
+  it('canonicalizes multiline JSON when reading from keys file', () => {
+    expect(installScript).toContain('JSON.stringify(JSON.parse');
+    expect(installScript).toContain('--keys-file');
+  });
+
   it('fails preflight when bundled node execution fails, keys are invalid, or configuration is incomplete', () => {
     const preflightScript = readFileSync('deploy/agent/preflight.sh', 'utf8');
     expect(preflightScript).toContain('Bundled node binary at ${NODE_BIN} failed to execute');
