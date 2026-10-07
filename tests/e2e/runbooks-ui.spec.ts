@@ -378,7 +378,7 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   await expect(page.getByRole('alertdialog')).not.toBeVisible();
   await expect(
     page
-      .getByText(/^(CANCEL REQUESTED|CANCELLED)$/)
+      .getByText(/^(CANCEL REQUESTED|CANCELLED)$/i)
       .filter({ visible: true })
       .first()
   ).toBeVisible();
