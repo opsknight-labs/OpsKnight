@@ -3,7 +3,9 @@
 import { ActionEditor } from './ActionEditor';
 import { AutomationReviewDialog } from './AutomationReviewDialog';
 import { AliasEditor } from './AliasEditor';
-import { TypedValueInput } from './TypedValueInput';
+import { RuleConditionsEditor } from './RuleConditionsEditor';
+import { TraceDetail } from './TraceDetail';
+import { ManualSample } from './ManualSample';
 import { compareSnapshots } from '@/lib/automation/diff';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -29,15 +31,6 @@ type Area = 'overview' | 'context' | 'rules' | 'test' | 'activity';
 type Data = Awaited<ReturnType<typeof getAutomationArea>>;
 type TestResult = Awaited<ReturnType<typeof testAutomation>>;
 const controlClass = 'rounded-md border border-input bg-background px-3 py-2 text-sm max-w-full';
-const formatState = (state: unknown) => {
-  if (!state || typeof state !== 'object') return 'Missing';
-  const value = state as { state?: string; value?: unknown; raw?: unknown };
-  return value.state === 'RECOGNIZED'
-    ? String(value.value)
-    : value.state === 'UNMAPPED'
-      ? `${String(value.raw)} (unmapped)`
-      : 'Missing';
-};
 const defaultSample = JSON.stringify(
   {
     event_action: 'trigger',
@@ -1193,118 +1186,12 @@ export default function AutomationWorkspace({ serviceId }: { serviceId: string }
                                 />
                                 Enabled
                               </label>
-                              <p className="text-sm font-medium">
-                                IF{' '}
-                                {rule.conditions.length === 0
-                                  ? 'any alert arrives'
-                                  : 'all conditions match'}
-                              </p>
-                              {rule.conditions.map((condition, n) => (
-                                <div key={n} className="flex flex-wrap gap-2">
-                                  <select
-                                    aria-label="Condition field"
-                                    className={controlClass}
-                                    disabled={!data.canEdit}
-                                    value={condition.fieldKey}
-                                    onChange={e => {
-                                      const conditions = [...rule.conditions];
-                                      conditions[n] = {
-                                        fieldKey: e.target.value,
-                                        operator: 'IS_SET',
-                                      };
-                                      updateRule(rule.id, { conditions });
-                                    }}
-                                  >
-                                    {fields.map(f => (
-                                      <option key={f.key} value={f.key}>
-                                        {f.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <select
-                                    aria-label="Condition operator"
-                                    className={controlClass}
-                                    disabled={!data.canEdit}
-                                    value={condition.operator}
-                                    onChange={e => {
-                                      const conditions = [...rule.conditions];
-                                      const operator = e.target.value as Condition['operator'];
-                                      conditions[n] = {
-                                        ...condition,
-                                        operator,
-                                        value: operator.startsWith('IS_')
-                                          ? undefined
-                                          : ['IN', 'NOT_IN'].includes(operator)
-                                            ? []
-                                            : '',
-                                      };
-                                      updateRule(rule.id, { conditions });
-                                    }}
-                                  >
-                                    {Object.entries({
-                                      EQ: 'is',
-                                      NE: 'is not',
-                                      IN: 'is one of',
-                                      NOT_IN: 'is not one of',
-                                      LT: 'less than',
-                                      LTE: 'at most',
-                                      GT: 'greater than',
-                                      GTE: 'at least',
-                                      IS_SET: 'is set',
-                                      IS_MISSING: 'is missing',
-                                      IS_UNMAPPED: 'is unmapped',
-                                    }).map(([key, label]) => (
-                                      <option key={key} value={key}>
-                                        {label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  {!condition.operator.startsWith('IS_') && (
-                                    <TypedValueInput
-                                      label="Condition value"
-                                      type={fields.find(f => f.key === condition.fieldKey)?.type}
-                                      disabled={!data.canEdit}
-                                      value={condition.value}
-                                      list={['IN', 'NOT_IN'].includes(condition.operator)}
-                                      onChange={value => {
-                                        const conditions = [...rule.conditions];
-                                        conditions[n] = { ...condition, value };
-                                        updateRule(rule.id, { conditions });
-                                      }}
-                                    />
-                                  )}
-                                  {data.canEdit && (
-                                    <Button
-                                      aria-label="Remove condition"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() =>
-                                        updateRule(rule.id, {
-                                          conditions: rule.conditions.filter((_, i) => i !== n),
-                                        })
-                                      }
-                                    >
-                                      Remove
-                                    </Button>
-                                  )}
-                                </div>
-                              ))}
-                              {data.canEdit && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    updateRule(rule.id, {
-                                      conditions: [
-                                        ...rule.conditions,
-                                        { fieldKey: fields[0].key, operator: 'IS_SET' },
-                                      ],
-                                    })
-                                  }
-                                >
-                                  Add condition
-                                </Button>
-                              )}
+                              <RuleConditionsEditor
+                                rule={rule}
+                                fields={fields}
+                                canEdit={data.canEdit}
+                                onChange={update => updateRule(rule.id, update)}
+                              />
                               <p className="text-sm font-medium">
                                 {phase === 'ENRICH' ? 'Set' : 'Route to'}
                               </p>
@@ -1603,134 +1490,5 @@ export default function AutomationWorkspace({ serviceId }: { serviceId: string }
         )}
       </fieldset>
     </section>
-  );
-}
-
-function TraceDetail({ detail }: { detail: unknown }) {
-  const trace = detail as {
-    result?: {
-      inputContext?: Record<string, unknown>;
-      enrichedContext?: Record<string, unknown>;
-      writes?: Array<{ ruleId: string; fieldKey: string; value: unknown }>;
-      enrichmentRuleResults?: Array<{ ruleName: string; result: string }>;
-      routingRuleResults?: Array<{ ruleName: string; result: string }>;
-      outcome?: { type: string; policyId?: string };
-      supplementalActions?: Array<{ provider: string; destinationId: string }>;
-    };
-    actual?: { priority?: string; route?: string };
-    fallbackReason?: string;
-    normalization?: Array<{ fieldKey: string; raw: unknown; canonical: unknown }>;
-  };
-  const result = trace.result;
-  return (
-    <div className="mt-3 space-y-3 text-sm">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <h4 className="font-medium">Current behavior</h4>
-          <p>
-            Priority {trace.actual?.priority ?? 'Unset'} ·{' '}
-            {trace.actual?.route ?? 'Service default'}
-          </p>
-        </div>
-        <div>
-          <h4 className="font-medium">Automation outcome</h4>
-          <p>
-            {trace.fallbackReason ??
-              result?.outcome?.type.replaceAll('_', ' ').toLowerCase() ??
-              'Service default'}
-            {result?.outcome?.policyId ? ` · ${result.outcome.policyId}` : ''}
-          </p>
-          <p>Final priority: {formatState(result?.enrichedContext?.priority)}</p>
-        </div>
-      </div>
-      <h4 className="font-medium">Extraction → canonical context</h4>
-      {trace.normalization?.map(n => (
-        <p key={n.fieldKey}>
-          {n.fieldKey}: {String(n.raw ?? 'Missing')} → {formatState(n.canonical)}
-        </p>
-      ))}
-      {Object.entries(result?.inputContext ?? {}).map(([key, value]) => (
-        <p key={key}>
-          {key}: {formatState(value)}
-        </p>
-      ))}
-      <h4 className="font-medium">Enrichment</h4>
-      {result?.enrichmentRuleResults?.map((r, i) => (
-        <p key={i}>
-          {r.ruleName}: {r.result}
-        </p>
-      ))}
-      {result?.writes?.map((w, i) => (
-        <p key={i}>
-          {w.fieldKey} → {String(w.value)}
-        </p>
-      ))}
-      <h4 className="font-medium">Routing</h4>
-      {result?.routingRuleResults?.map((r, i) => (
-        <p key={i}>
-          {r.ruleName}: {r.result}
-        </p>
-      ))}
-      {result?.supplementalActions?.map((a, i) => (
-        <p key={i}>
-          Also notify {a.provider} · {a.destinationId}
-        </p>
-      ))}
-    </div>
-  );
-}
-
-function ManualSample({ onBuild }: { onBuild: (sample: string) => void }) {
-  const [summary, setSummary] = useState('Sample incident');
-  const [severity, setSeverity] = useState('critical');
-  const [environment, setEnvironment] = useState('production');
-  return (
-    <details className="rounded-lg border p-3">
-      <summary className="cursor-pointer text-sm">Build sample manually</summary>
-      <div className="grid gap-3 mt-3 sm:grid-cols-3">
-        <label className="text-sm">
-          Summary
-          <Input value={summary} onChange={event => setSummary(event.target.value)} />
-        </label>
-        <label className="text-sm">
-          Severity
-          <select
-            className={`${controlClass} block w-full`}
-            value={severity}
-            onChange={event => setSeverity(event.target.value)}
-          >
-            {['critical', 'error', 'warning', 'info'].map(value => (
-              <option key={value}>{value}</option>
-            ))}
-          </select>
-        </label>
-        <label className="text-sm">
-          Environment
-          <Input value={environment} onChange={event => setEnvironment(event.target.value)} />
-        </label>
-        <Button
-          onClick={() =>
-            onBuild(
-              JSON.stringify(
-                {
-                  event_action: 'trigger',
-                  dedup_key: 'manual-sample',
-                  payload: {
-                    summary,
-                    severity,
-                    source: 'manual-sample',
-                    custom_details: { environment },
-                  },
-                },
-                null,
-                2
-              )
-            )
-          }
-        >
-          Use manual sample
-        </Button>
-      </div>
-    </details>
   );
 }

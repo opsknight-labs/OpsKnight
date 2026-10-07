@@ -45,6 +45,22 @@ spec:
               if [ -n "${DIRECT_DATABASE_URL:-}" ]; then
                 export DATABASE_URL="$DIRECT_DATABASE_URL"
               fi
+              # A fresh bundled PostgreSQL image may still be pulling on install.
+              # Probe connectivity before consuming the migration retry budget.
+              node -e '
+                const { PrismaClient } = require("@prisma/client");
+                const db = new PrismaClient();
+                (async () => {
+                  const deadline = Date.now() + 180000;
+                  for (;;) {
+                    try { await db.$queryRawUnsafe("SELECT 1"); break; }
+                    catch (error) {
+                      if (Date.now() >= deadline) throw error;
+                      await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
+                  }
+                })().finally(() => db.$disconnect()).catch(() => process.exit(1));
+              '
               node node_modules/prisma/build/index.js migrate deploy
               node scripts/create-status-platform-online-indexes.cjs
               node scripts/create-sla-scheduler-online-index.cjs
