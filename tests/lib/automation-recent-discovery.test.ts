@@ -29,6 +29,7 @@ it('discovers bounded service-owned recent fields as event mappings without cred
           path: 'payload.custom_details.environment',
           source: 'EVENT',
           frequency: 2,
+          examples: ['prd', 'stg'],
         }),
       ])
     );

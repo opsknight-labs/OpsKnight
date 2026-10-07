@@ -1,16 +1,12 @@
 import { check, sleep } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
+import execution from 'k6/execution';
 import { runInteractiveUserSession } from './user-workload.js';
 import { runResponderLifecycle } from './incident-lifecycle.js';
 export { runInteractiveUserSession, runResponderLifecycle };
 const acceptedEvents = new Counter('automation_accepted_events');
 const ingestionLatency = new Trend('automation_ingestion_latency_ms');
-import {
-  loadSeedManifest,
-  getBaseUrl,
-  pickCapacityIntegrationKey,
-  postEventApi,
-} from './_shared.js';
+import { loadSeedManifest, getBaseUrl, postEventApi } from './_shared.js';
 const manifest = loadSeedManifest();
 export const options = {
   summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(50)', 'p(95)', 'p(99)'],
@@ -55,24 +51,20 @@ export default function () {
       custom_details: { value: 1, environment: 'production' },
     },
   };
-  let response = postEventApi(
-    getBaseUrl(),
-    pickCapacityIntegrationKey(manifest, __VU, __ITER),
-    event,
-    { profile: __ENV.AUTOMATION_LOAD_PROFILE || 'disabled' }
-  );
+  const keys = manifest.capacityIntegrationKeys;
+  const integrationKey = keys[execution.scenario.iterationInTest % keys.length];
+  let response = postEventApi(getBaseUrl(), integrationKey, event, {
+    profile: __ENV.AUTOMATION_LOAD_PROFILE || 'disabled',
+  });
   for (
     let retry = 0;
     retry < 8 && (response.status === 0 || response.status === 429 || response.status >= 500);
     retry++
   ) {
     sleep(Math.min(0.2 * (retry + 1), 1));
-    response = postEventApi(
-      getBaseUrl(),
-      pickCapacityIntegrationKey(manifest, __VU, __ITER),
-      event,
-      { profile: __ENV.AUTOMATION_LOAD_PROFILE || 'disabled' }
-    );
+    response = postEventApi(getBaseUrl(), integrationKey, event, {
+      profile: __ENV.AUTOMATION_LOAD_PROFILE || 'disabled',
+    });
   }
   ingestionLatency.add(response.timings.duration);
   if (response.status === 202 || response.status === 200) acceptedEvents.add(1);

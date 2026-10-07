@@ -90,7 +90,7 @@ export default function AutomationWorkspace({ serviceId }: { serviceId: string }
   const [integrationId, setIntegrationId] = useState('');
   const [result, setResult] = useState<TestResult | null>(null);
   const [discoveries, setDiscoveries] = useState<
-    Array<Observation & { source?: 'EVENT' | 'PROVIDER'; frequency?: number }>
+    Array<Observation & { source?: 'EVENT' | 'PROVIDER'; frequency?: number; examples?: string[] }>
   >([]);
   const [fieldLabel, setFieldLabel] = useState('Environment');
   const [fieldType, setFieldType] = useState<Field['type']>('ENUM');
@@ -926,6 +926,43 @@ export default function AutomationWorkspace({ serviceId }: { serviceId: string }
                     >
                       Discover from recent alerts
                     </Button>
+                    {discoveries.length > 0 && (
+                      <div aria-label="Discovered context fields" className="my-3 space-y-2">
+                        {discoveries.map(field => (
+                          <div key={field.path} className="rounded-md border p-3 text-sm space-y-1">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-medium">
+                                {field.path.split('.').at(-1)?.replace(/_/g, ' ')}
+                              </span>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setObservedPath(field.path);
+                                  setFieldLabel(
+                                    field.path.split('.').at(-1)?.replace(/_/g, ' ') ?? field.key
+                                  );
+                                  setFieldType(
+                                    field.type === 'NUMBER' || field.type === 'BOOLEAN'
+                                      ? field.type
+                                      : 'STRING'
+                                  );
+                                }}
+                              >
+                                Choose field
+                              </Button>
+                            </div>
+                            <p className="break-all text-muted-foreground">
+                              {field.path} · {field.type}
+                              {field.frequency ? ` · ${field.frequency} recent alerts` : ''}
+                            </p>
+                            <p className="break-words">
+                              Examples: {(field.examples ?? [field.value]).join(', ')}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <textarea
                       aria-label="Discovery sample"
                       className={`${controlClass} w-full min-h-32`}

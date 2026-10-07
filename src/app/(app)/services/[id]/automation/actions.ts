@@ -105,6 +105,7 @@ export async function automationAction(raw: unknown) {
           type: string;
           unmapped: boolean;
           frequency: number;
+          examples: string[];
           source: 'EVENT';
         }
       >();
@@ -115,6 +116,7 @@ export async function automationAction(raw: unknown) {
             ...field,
             source: 'EVENT' as const,
             frequency: (prior?.frequency ?? 0) + 1,
+            examples: [...new Set([...(prior?.examples ?? []), field.value])].slice(0, 3),
           });
         }
       }
