@@ -422,7 +422,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
         (async (callback: (tx: MockTx) => Promise<unknown>) => {
           txPassed = {
             runbook: {
-              findUnique: vi.fn(),
+              findUnique: vi.fn().mockResolvedValue({ id: 'rb_1', archivedAt: new Date() }),
               update: vi.fn().mockResolvedValue({ id: 'rb_1', archivedAt: null }),
               delete: vi.fn(),
             },
@@ -520,7 +520,10 @@ describe('Runbook Lifecycle Unit Tests', () => {
                 id: 'rb_archived',
                 archivedAt: new Date(),
               }),
-              findUnique: vi.fn(),
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'rb_archived',
+                archivedAt: new Date(),
+              }),
               update: vi.fn(),
               delete: vi.fn(),
             },
@@ -541,7 +544,10 @@ describe('Runbook Lifecycle Unit Tests', () => {
         (async (callback: (tx: MockTx) => Promise<unknown>) => {
           const tx: MockTx = {
             runbook: {
-              findUnique: vi.fn(),
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'rb_archived',
+                archivedAt: new Date(),
+              }),
               update: vi.fn(),
               delete: vi.fn(),
             },
@@ -579,7 +585,10 @@ describe('Runbook Lifecycle Unit Tests', () => {
         (async (callback: (tx: MockTx) => Promise<unknown>) => {
           const tx: MockTx = {
             runbook: {
-              findUnique: vi.fn(),
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'rb_archived',
+                archivedAt: new Date(),
+              }),
               update: vi.fn(),
               delete: vi.fn(),
             },
@@ -609,7 +618,10 @@ describe('Runbook Lifecycle Unit Tests', () => {
         (async (callback: (tx: MockTx) => Promise<unknown>) => {
           const tx: MockTx = {
             runbook: {
-              findUnique: vi.fn(),
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'rb_archived',
+                archivedAt: new Date(),
+              }),
               update: vi.fn(),
               delete: vi.fn(),
             },

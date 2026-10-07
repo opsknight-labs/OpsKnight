@@ -14,6 +14,10 @@ import {
   buildRunbookLibraryWhere,
 } from '@/lib/runbooks/lifecycle';
 import {
+  createServiceBinding,
+  replaceBindingTrigger,
+} from '@/lib/runbooks/bindings';
+import {
   RunbookArchivedError,
   RunbookCannotDeleteError,
 } from '@/lib/runbooks/errors';
@@ -93,16 +97,225 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
       deleteRunbook(runbook.id, actor.id, slug),
     ]);
 
-    if (bindResult.status === 'fulfilled') {
-      // If binding succeeded, delete MUST have failed or runbook was already deleted before binding
+    // Safety property: Strict mutual exclusion
+    if (deleteResult.status === 'fulfilled') {
+      expect(bindResult.status).toBe('rejected');
+      const record = await testPrisma.runbook.findUnique({ where: { id: runbook.id } });
+      expect(record).toBeNull();
       const binding = await testPrisma.serviceRunbookBinding.findFirst({
         where: { runbookId: runbook.id },
       });
-      if (binding) {
-        expect(deleteResult.status).toBe('rejected');
-        expect((deleteResult as PromiseRejectedResult).reason).toBeInstanceOf(RunbookCannotDeleteError);
-      }
+      expect(binding).toBeNull();
+    } else {
+      expect(bindResult.status).toBe('fulfilled');
+      expect(deleteResult.status).toBe('rejected');
+      const err = (deleteResult as PromiseRejectedResult).reason;
+      expect(err).toBeInstanceOf(RunbookCannotDeleteError);
+      const record = await testPrisma.runbook.findUnique({
+        where: { id: runbook.id },
+        include: { bindings: true },
+      });
+      expect(record).not.toBeNull();
+      expect(record?.bindings.length).toBeGreaterThan(0);
     }
+  });
+
+  it('certifies concurrent archive-vs-publish race protection via exclusive row locking', async () => {
+    const actor = await createTestUser();
+    const slug = `race-arch-pub-${crypto.randomUUID().slice(0, 8)}`;
+    const runbook = await createRunbook(
+      {
+        name: 'Archive vs Publish Race',
+        slug,
+        description: 'Testing archive vs publish serialization',
+      },
+      actor.id
+    );
+
+    const draftId = runbook.draftVersionId!;
+
+    // Concurrently trigger archive and publish
+    const [archiveResult, publishResult] = await Promise.allSettled([
+      archiveRunbook(runbook.id, actor.id),
+      publishDraftVersion(draftId, actor.id),
+    ]);
+
+    // Archive always succeeds
+    expect(archiveResult.status).toBe('fulfilled');
+
+    const record = await testPrisma.runbook.findUnique({
+      where: { id: runbook.id },
+    });
+    expect(record).not.toBeNull();
+    expect(record?.archivedAt).not.toBeNull();
+
+    // Mutual exclusion:
+    // If archive won the lock first, publish MUST have rejected with RunbookArchivedError,
+    // and publishedVersionId MUST remain null.
+    // If publish won the lock first, publish succeeded and then archive archived it.
+    if (publishResult.status === 'rejected') {
+      const err = (publishResult as PromiseRejectedResult).reason;
+      expect(err).toBeInstanceOf(RunbookArchivedError);
+      expect(record?.publishedVersionId).toBeNull();
+    } else {
+      expect(publishResult.status).toBe('fulfilled');
+      expect(record?.publishedVersionId).toBe(draftId);
+    }
+  });
+
+  it('certifies concurrent archive-vs-draft-edit race protection', async () => {
+    const actor = await createTestUser();
+    const slug = `race-arch-edit-${crypto.randomUUID().slice(0, 8)}`;
+    const runbook = await createRunbook(
+      {
+        name: 'Archive vs Edit Race',
+        slug,
+        description: 'Testing archive vs draft edit serialization',
+      },
+      actor.id
+    );
+
+    const draftId = runbook.draftVersionId!;
+
+    // Concurrently trigger archive and draft update
+    const [archiveResult, editResult] = await Promise.allSettled([
+      archiveRunbook(runbook.id, actor.id),
+      updateDraftVersion(
+        draftId,
+        {
+          definition: {
+            description: 'concurrent modification',
+            steps: [{ key: 'step_concurrent', name: 'Concurrent Step', type: 'MANUAL', riskClass: 'READ_ONLY' }],
+          },
+        },
+        actor.id
+      ),
+    ]);
+
+    expect(archiveResult.status).toBe('fulfilled');
+
+    const record = await testPrisma.runbook.findUnique({
+      where: { id: runbook.id },
+    });
+    expect(record?.archivedAt).not.toBeNull();
+
+    if (editResult.status === 'rejected') {
+      const err = (editResult as PromiseRejectedResult).reason;
+      expect(err).toBeInstanceOf(RunbookArchivedError);
+    } else {
+      expect(editResult.status).toBe('fulfilled');
+    }
+  });
+
+  it('certifies concurrent archive-vs-binding-create race protection', async () => {
+    const actor = await createTestUser();
+    const service = await createTestService('Archive Race Service');
+    const slug = `race-arch-bind-${crypto.randomUUID().slice(0, 8)}`;
+    const runbook = await createRunbook(
+      {
+        name: 'Archive vs Binding Race',
+        slug,
+        description: 'Testing archive vs service binding serialization',
+      },
+      actor.id
+    );
+
+    // Publish first so runbook has an active published version
+    await publishDraftVersion(runbook.draftVersionId!, actor.id);
+
+    // Concurrently trigger archive and createServiceBinding
+    const [archiveResult] = await Promise.allSettled([
+      archiveRunbook(runbook.id, actor.id),
+      createServiceBinding(
+        service.id,
+        {
+          runbookId: runbook.id,
+          mode: 'MANUAL',
+          versionStrategy: 'LATEST_PUBLISHED',
+          enabled: true,
+          inputValues: {},
+        },
+        actor.id
+      ),
+    ]);
+
+    expect(archiveResult.status).toBe('fulfilled');
+
+    // Invariant: An active binding MUST NEVER be left enabled on an archived runbook!
+    const bindings = await testPrisma.serviceRunbookBinding.findMany({
+      where: { runbookId: runbook.id },
+    });
+    expect(bindings.every(b => !b.enabled)).toBe(true);
+  });
+
+  it('certifies replaceBindingTrigger rejects on archived runbook', async () => {
+    const actor = await createTestUser();
+    const service = await createTestService('Trigger Test Service');
+    const slug = `trigger-archived-${crypto.randomUUID().slice(0, 8)}`;
+    const runbook = await createRunbook(
+      {
+        name: 'Trigger Guard Runbook',
+        slug,
+        description: 'Testing trigger configuration guard',
+      },
+      actor.id
+    );
+
+    await publishDraftVersion(runbook.draftVersionId!, actor.id);
+    const binding = await createServiceBinding(
+      service.id,
+      {
+        runbookId: runbook.id,
+        mode: 'MANUAL',
+        versionStrategy: 'LATEST_PUBLISHED',
+        enabled: true,
+        inputValues: {},
+      },
+      actor.id
+    );
+
+    // Archive the runbook
+    await archiveRunbook(runbook.id, actor.id);
+
+    // Attempting to configure triggers on an archived runbook MUST reject with RunbookArchivedError
+    await expect(
+      replaceBindingTrigger(
+        service.id,
+        binding.id,
+        {
+          event: 'INCIDENT_CREATED',
+          conditionLogic: 'AND',
+          enabled: true,
+          conditions: [
+            {
+              field: 'incident.severity',
+              operator: 'EQUALS',
+              value: 'CRITICAL',
+              sequence: 0,
+            },
+          ],
+        },
+        actor.id
+      )
+    ).rejects.toThrow(RunbookArchivedError);
+  });
+
+  it('certifies duplicateRunbook safely truncates long names to adhere to schema limit', async () => {
+    const actor = await createTestUser();
+    const longName = 'A'.repeat(200);
+    const slug = `dup-len-${crypto.randomUUID().slice(0, 8)}`;
+    const runbook = await createRunbook(
+      {
+        name: longName,
+        slug,
+        description: 'Testing name length truncation during duplicate',
+      },
+      actor.id
+    );
+
+    const duplicated = await duplicateRunbook(runbook.id, actor.id);
+    expect(duplicated.name.length).toBeLessThanOrEqual(200);
+    expect(duplicated.name).toBe(`${'A'.repeat(193)} (Copy)`);
   });
 
   it('certifies foreign key protection on executions preventing hard delete', async () => {

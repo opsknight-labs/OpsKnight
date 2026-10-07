@@ -3,17 +3,18 @@ import 'server-only';
 import type { Prisma, RunbookInput, RunbookVersion } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
+import { runSerializableTransaction } from '@/lib/db-utils';
 import {
   computeDefinitionChecksum,
   parseRunbookDefinition,
   validateInputKeyUniqueness,
 } from './definition';
 import {
-  RunbookArchivedError,
   RunbookDefinitionError,
   RunbookVersionImmutableError,
   RunbookVersionNotFoundError,
 } from './errors';
+import { lockRunbookForUpdate } from './locking';
 import {
   createRunbookSchema,
   runbookInputsSchema,
@@ -110,10 +111,8 @@ export async function updateRunbookMetadata(
 ) {
   const data = updateRunbookSchema.parse(input);
   return prisma.$transaction(async tx => {
+    await lockRunbookForUpdate(tx, runbookId, { action: 'update' });
     const current = await tx.runbook.findUniqueOrThrow({ where: { id: runbookId } });
-    if (current.archivedAt !== null) {
-      throw new RunbookArchivedError(runbookId, 'update');
-    }
     const updated = await tx.runbook.update({ where: { id: runbookId }, data });
     await logAudit(
       {
@@ -146,9 +145,7 @@ export async function updateDraftVersion(
       include: { runbook: { select: { archivedAt: true } } },
     });
     if (!current) throw new RunbookVersionNotFoundError(versionId);
-    if (current.runbook.archivedAt !== null) {
-      throw new RunbookArchivedError(current.runbookId, 'edit draft for');
-    }
+    await lockRunbookForUpdate(tx, current.runbookId, { action: 'edit draft for' });
     if (current.state !== 'DRAFT') {
       throw new RunbookVersionImmutableError(versionId, current.state);
     }
@@ -193,9 +190,7 @@ export async function publishDraftVersion(versionId: string, actorId: string) {
       include: { runbook: true, inputs: true },
     });
     if (!draft) throw new RunbookVersionNotFoundError(versionId);
-    if (draft.runbook.archivedAt !== null) {
-      throw new RunbookArchivedError(draft.runbookId, 'publish');
-    }
+    await lockRunbookForUpdate(tx, draft.runbookId, { action: 'publish' });
     if (draft.state !== 'DRAFT') throw new RunbookVersionImmutableError(versionId, draft.state);
 
     const parsed = parseRunbookDefinition(draft.definition, draft.inputs);
@@ -238,74 +233,70 @@ export async function publishDraftVersion(versionId: string, actorId: string) {
 
 /** Clones any immutable version into the next numbered editable draft. */
 export async function cloneVersionToDraft(versionId: string, actorId: string) {
-  return prisma.$transaction(
-    async tx => {
-      const source = await tx.runbookVersion.findUnique({
-        where: { id: versionId },
-        include: { inputs: { orderBy: { sequence: 'asc' } }, runbook: true },
+  return runSerializableTransaction(async tx => {
+    const source = await tx.runbookVersion.findUnique({
+      where: { id: versionId },
+      include: { inputs: { orderBy: { sequence: 'asc' } }, runbook: true },
+    });
+    if (!source) throw new RunbookVersionNotFoundError(versionId);
+    await lockRunbookForUpdate(tx, source.runbookId, { action: 'clone draft for' });
+    if (source.runbook.draftVersionId) {
+      const existing = await tx.runbookVersion.findUnique({
+        where: { id: source.runbook.draftVersionId },
       });
-      if (!source) throw new RunbookVersionNotFoundError(versionId);
-      if (source.runbook.archivedAt !== null) {
-        throw new RunbookArchivedError(source.runbookId, 'clone draft for');
-      }
-      if (source.runbook.draftVersionId) {
-        const existing = await tx.runbookVersion.findUnique({
-          where: { id: source.runbook.draftVersionId },
-        });
-        if (existing) return existing;
-      }
-      const latest = await tx.runbookVersion.aggregate({
-        where: { runbookId: source.runbookId },
-        _max: { version: true },
-      });
-      const next = await tx.runbookVersion.create({
-        data: {
-          runbookId: source.runbookId,
-          version: (latest._max.version ?? 0) + 1,
-          state: 'DRAFT',
-          definition: source.definition as Prisma.InputJsonValue,
-          schemaVersion: source.schemaVersion,
-          checksum: source.checksum,
-          createdById: actorId,
-          inputs: source.inputs.length
-            ? {
-                createMany: {
-                  data: source.inputs.map((item: RunbookInput) => ({
-                    key: item.key,
-                    label: item.label,
-                    type: item.type,
-                    required: item.required,
-                    defaultValue: item.defaultValue,
-                    description: item.description,
-                    sequence: item.sequence,
-                  })),
-                },
-              }
-            : undefined,
-        },
-      });
-      await tx.runbook.update({
-        where: { id: source.runbookId },
-        data: { draftVersionId: next.id },
-      });
-      await logAudit(
-        {
-          action: 'runbook.version.cloned',
-          entityType: 'RUNBOOK_VERSION',
-          entityId: next.id,
-          actorId,
-          details: { sourceVersionId: source.id, version: next.version },
-        },
-        tx
-      );
-      return next;
-    },
-    { isolationLevel: 'Serializable' }
-  );
+      if (existing) return existing;
+    }
+    const latest = await tx.runbookVersion.aggregate({
+      where: { runbookId: source.runbookId },
+      _max: { version: true },
+    });
+    const next = await tx.runbookVersion.create({
+      data: {
+        runbookId: source.runbookId,
+        version: (latest._max.version ?? 0) + 1,
+        state: 'DRAFT',
+        definition: source.definition as Prisma.InputJsonValue,
+        schemaVersion: source.schemaVersion,
+        checksum: source.checksum,
+        createdById: actorId,
+        inputs: source.inputs.length
+          ? {
+              createMany: {
+                data: source.inputs.map((item: RunbookInput) => ({
+                  key: item.key,
+                  label: item.label,
+                  type: item.type,
+                  required: item.required,
+                  defaultValue: item.defaultValue,
+                  description: item.description,
+                  sequence: item.sequence,
+                })),
+              },
+            }
+          : undefined,
+      },
+    });
+    await tx.runbook.update({
+      where: { id: source.runbookId },
+      data: { draftVersionId: next.id },
+    });
+    await logAudit(
+      {
+        action: 'runbook.version.cloned',
+        entityType: 'RUNBOOK_VERSION',
+        entityId: next.id,
+        actorId,
+        details: { sourceVersionId: source.id, version: next.version },
+      },
+      tx
+    );
+    return next;
+  });
 }
 
 export async function archiveRunbook(runbookId: string, actorId: string) {
   return prisma.$transaction(async tx => {
+    await lockRunbookForUpdate(tx, runbookId, { allowArchived: true, action: 'archive' });
     const archivedAt = new Date();
     const runbook = await tx.runbook.update({
       where: { id: runbookId },

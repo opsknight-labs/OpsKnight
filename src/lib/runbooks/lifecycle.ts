@@ -3,6 +3,8 @@ import 'server-only';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
+import { runSerializableTransaction } from '@/lib/db-utils';
+import { lockRunbookForUpdate } from './locking';
 import {
   RunbookCannotDeleteError,
   RunbookDefinitionError,
@@ -162,95 +164,93 @@ export async function deleteRunbook(
     );
   }
 
-  return prisma.$transaction(
-    async tx => {
-      const runbook = await tx.runbook.findUnique({
-        where: { id: runbookId },
-        include: {
-          _count: {
-            select: {
-              executions: true,
-              bindings: true,
-            },
-          },
-          versions: {
-            where: {
-              OR: [
-                { state: { in: ['PUBLISHED', 'RETIRED'] } },
-                { publishedAt: { not: null } },
-              ],
-            },
-            select: { id: true },
+  return runSerializableTransaction(async tx => {
+    await lockRunbookForUpdate(tx, runbookId, { allowArchived: true, action: 'delete' });
+    const runbook = await tx.runbook.findUnique({
+      where: { id: runbookId },
+      include: {
+        _count: {
+          select: {
+            executions: true,
+            bindings: true,
           },
         },
-      });
-
-      if (!runbook) {
-        throw new RunbookNotFoundError(runbookId);
-      }
-
-      const matchesName = trimmedConfirmation === runbook.name.trim();
-      const matchesSlug = trimmedConfirmation === runbook.slug.trim();
-      if (!matchesName && !matchesSlug) {
-        throw new RunbookCannotDeleteError(
-          `Confirmation text "${confirmationText}" did not match the Runbook name ("${runbook.name}") or slug ("${runbook.slug}").`
-        );
-      }
-
-      const executionCount = runbook._count.executions;
-      const bindingCount = runbook._count.bindings;
-      const publishedVersionIds = new Set(runbook.versions.map(v => v.id));
-      if (runbook.publishedVersionId) {
-        publishedVersionIds.add(runbook.publishedVersionId);
-      }
-
-      if (executionCount > 0) {
-        throw new RunbookCannotDeleteError(
-          'Cannot delete: Runbook has execution history. Archive the runbook instead to preserve incident response evidence.'
-        );
-      }
-      if (bindingCount > 0) {
-        throw new RunbookCannotDeleteError(
-          'Cannot delete: Runbook is attached to services. Remove all service bindings first.'
-        );
-      }
-      if (publishedVersionIds.size > 0) {
-        throw new RunbookCannotDeleteError(
-          'Cannot delete: Runbook has published versions. Only never-published drafts with zero executions and zero bindings can be permanently deleted. Archive the runbook instead.'
-        );
-      }
-
-      // Break cyclic self-referencing foreign keys on Runbook before deleting
-      await tx.runbook.update({
-        where: { id: runbookId },
-        data: { draftVersionId: null, publishedVersionId: null },
-      });
-
-      // Clean up draft versions and inputs
-      await tx.runbookVersion.deleteMany({
-        where: { runbookId },
-      });
-
-      // Delete the runbook entity
-      const deleted = await tx.runbook.delete({
-        where: { id: runbookId },
-      });
-
-      await logAudit(
-        {
-          action: 'runbook.deleted',
-          entityType: 'RUNBOOK',
-          entityId: runbookId,
-          actorId,
-          oldValue: { name: runbook.name, slug: runbook.slug, deletedAt: new Date().toISOString() },
+        versions: {
+          where: {
+            OR: [
+              { state: { in: ['PUBLISHED', 'RETIRED'] } },
+              { publishedAt: { not: null } },
+            ],
+          },
+          select: { id: true },
         },
-        tx
+      },
+    });
+
+    if (!runbook) {
+      throw new RunbookNotFoundError(runbookId);
+    }
+
+    const matchesName = trimmedConfirmation === runbook.name.trim();
+    const matchesSlug = trimmedConfirmation === runbook.slug.trim();
+    if (!matchesName && !matchesSlug) {
+      throw new RunbookCannotDeleteError(
+        `Confirmation text "${confirmationText}" did not match the Runbook name ("${runbook.name}") or slug ("${runbook.slug}").`
       );
+    }
 
-      return deleted;
-    },
-    { isolationLevel: 'Serializable' }
-  );
+    const executionCount = runbook._count.executions;
+    const bindingCount = runbook._count.bindings;
+    const publishedVersionIds = new Set(runbook.versions.map(v => v.id));
+    if (runbook.publishedVersionId) {
+      publishedVersionIds.add(runbook.publishedVersionId);
+    }
+
+    if (executionCount > 0) {
+      throw new RunbookCannotDeleteError(
+        'Cannot delete: Runbook has execution history. Archive the runbook instead to preserve incident response evidence.'
+      );
+    }
+    if (bindingCount > 0) {
+      throw new RunbookCannotDeleteError(
+        'Cannot delete: Runbook is attached to services. Remove all service bindings first.'
+      );
+    }
+    if (publishedVersionIds.size > 0) {
+      throw new RunbookCannotDeleteError(
+        'Cannot delete: Runbook has published versions. Only never-published drafts with zero executions and zero bindings can be permanently deleted. Archive the runbook instead.'
+      );
+    }
+
+    // Break cyclic self-referencing foreign keys on Runbook before deleting
+    await tx.runbook.update({
+      where: { id: runbookId },
+      data: { draftVersionId: null, publishedVersionId: null },
+    });
+
+    // Clean up draft versions and inputs
+    await tx.runbookVersion.deleteMany({
+      where: { runbookId },
+    });
+
+    // Delete the runbook entity
+    const deleted = await tx.runbook.delete({
+      where: { id: runbookId },
+    });
+
+    await logAudit(
+      {
+        action: 'runbook.deleted',
+        entityType: 'RUNBOOK',
+        entityId: runbookId,
+        actorId,
+        oldValue: { name: runbook.name, slug: runbook.slug, deletedAt: new Date().toISOString() },
+      },
+      tx
+    );
+
+    return deleted;
+  });
 }
 
 /**
@@ -272,6 +272,19 @@ export async function restoreRunbook(runbookId: string, actorId: string) {
   }
 
   return prisma.$transaction(async tx => {
+    await lockRunbookForUpdate(tx, runbookId, { allowArchived: true, action: 'restore' });
+    const current = await tx.runbook.findUnique({
+      where: { id: runbookId },
+    });
+
+    if (!current) {
+      throw new RunbookNotFoundError(runbookId);
+    }
+
+    if (!current.archivedAt) {
+      return current;
+    }
+
     const restored = await tx.runbook.update({
       where: { id: runbookId },
       data: { archivedAt: null },
@@ -353,7 +366,8 @@ export async function duplicateRunbook(runbookId: string, actorId: string) {
   }
 
   const baseSlugCandidate = `${source.slug}-copy`;
-  const name = `${source.name} (Copy)`;
+  const baseName = source.name.slice(0, 193).trimEnd();
+  const name = `${baseName} (Copy)`;
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const slug = await ensureUniqueSlug(
