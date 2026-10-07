@@ -413,6 +413,18 @@ async function main() {
         topology,
         generatedAt: new Date().toISOString(),
         rps: Number(process.env.AUTOMATION_RPS || 20),
+        drainBudgetMs: Number(process.env.AUTOMATION_DRAIN_TIMEOUT_MS || 180000),
+        workload: {
+          seedProfile: manifest.scaleProfile,
+          internalServices: manifest.capacityServiceIds.length,
+          integrationKeys: manifest.capacityIntegrationKeys.length,
+          interactiveUsers: 2,
+          responderUsers: 2,
+          publicFanout: 'Dedicated status-fanout suite',
+          comparisonValidity: results.some(result => result.pendingAfterDrain > 0)
+            ? 'FAILED: undrained work can carry over between profiles; latency ratios are diagnostic'
+            : 'Queues drained between profiles',
+        },
         durationPerProfile: process.env.AUTOMATION_DURATION || '30s',
         comparisonGate: { passed: failures.length === 0, limits, failures },
         comparisons,
