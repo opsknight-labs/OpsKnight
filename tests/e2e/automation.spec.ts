@@ -83,6 +83,7 @@ test('operator authors, tests, publishes, and enables shadow on desktop and mobi
   await expect(workspace.getByText('Recognized: production, staging, development')).toBeVisible();
   await workspace.getByRole('button', { name: 'Rules', exact: true }).click();
   await expect(workspace.getByText(/Fallback: service default/)).toBeVisible();
+  await workspace.getByRole('button', { name: 'Collapse all', exact: true }).click();
   await expect(workspace.getByLabel('Rule name')).toHaveCount(0);
   await workspace.getByLabel('Search rules').fill('no-match');
   await expect(
