@@ -2,11 +2,9 @@
 
 import { useActionState, useState, type ReactNode, type ComponentProps } from 'react';
 import { useFormStatus } from 'react-dom';
-import Link from 'next/link';
-import { usePathname, useRouter, unstable_rethrow } from 'next/navigation';
-import { Activity, BookOpen, Bot, Loader2, Play } from 'lucide-react';
+import { useRouter, unstable_rethrow } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
-import { Badge } from '@/components/ui/shadcn/badge';
 import {
   Sheet,
   SheetContent,
@@ -32,53 +30,18 @@ import {
   SelectItem,
 } from '@/components/ui/shadcn/select';
 
-export function RunbookNavigation() {
-  const path = usePathname();
-  return (
-    <nav
-      aria-label="Runbook navigation"
-      className="flex gap-1 overflow-x-auto rounded-xl border bg-muted/40 p-1"
-    >
-      {[
-        ['/runbooks', 'Library', BookOpen],
-        ['/runbooks/executions', 'Executions', Play],
-        ['/runbooks/agents', 'Agents', Bot],
-        ['/runbooks/health', 'Health', Activity],
-      ].map(([href, label, Icon]) => {
-        const active =
-          typeof href === 'string' &&
-          (href === '/runbooks' ? path === href : path.startsWith(href));
-        const TabIcon = Icon as typeof BookOpen;
-        return (
-          <Button
-            key={String(href)}
-            asChild
-            variant={active ? 'secondary' : 'ghost'}
-            size="sm"
-            className="shrink-0"
-          >
-            <Link href={String(href)} aria-current={active ? 'page' : undefined}>
-              <TabIcon className="h-4 w-4" />
-              {String(label)}
-            </Link>
-          </Button>
-        );
-      })}
-    </nav>
-  );
+import { RunbookModuleNav } from './RunbookModuleNav';
+import { RunbookStatusBadge } from './RunbookStatusBadge';
+
+export function RunbookNavigation(props: {
+  counts?: { executions?: number; agents?: number; healthDegraded?: boolean };
+  className?: string;
+}) {
+  return <RunbookModuleNav counts={props.counts} className={props.className} />;
 }
 
-export function StatusBadge({ status }: { status: string }) {
-  const variant = ['ONLINE', 'SUCCEEDED', 'PUBLISHED', 'HEALTHY'].includes(status)
-    ? 'success'
-    : ['FAILED', 'UNKNOWN', 'OFFLINE', 'TIMED_OUT'].includes(status)
-      ? 'danger'
-      : ['DEGRADED', 'WAITING_APPROVAL', 'WAITING_AGENT', 'DRAFT'].includes(status)
-        ? 'warning'
-        : ['RUNNING', 'QUEUED', 'CLAIMED'].includes(status)
-          ? 'info'
-          : 'secondary';
-  return <Badge variant={variant}>{status.replaceAll('_', ' ')}</Badge>;
+export function StatusBadge({ status, className }: { status: string; className?: string }) {
+  return <RunbookStatusBadge status={status} className={className} />;
 }
 
 export function SubmitButton({

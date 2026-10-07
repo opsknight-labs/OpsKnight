@@ -1,9 +1,12 @@
-import { Bot, KeyRound, Network } from 'lucide-react';
+import { KeyRound, Network } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import AgentEnrollmentForm from '@/components/runbooks/AgentEnrollmentForm';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
+import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
+import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
+import { AgentFleetTable } from '@/components/runbooks/agents/AgentFleetTable';
 import DetailTabs from '@/components/ui/DetailTabs';
 import EmptyState from '@/components/ui/EmptyState';
 import {
@@ -11,8 +14,6 @@ import {
   ConfigureSheet,
   ConfirmAction,
   FormSelect,
-  RunbookNavigation,
-  StatusBadge,
   SubmitButton,
 } from '@/components/runbooks/RunbookControls';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -43,7 +44,6 @@ import {
   createRunbookSecretAction,
   grantRunbookSecretAction,
   removeAgentFromPoolAction,
-  revokeAgentAction,
   revokeRunbookSecretGrantAction,
   rotateRunbookSecretAction,
   updateSchedulingLabelsAction,
@@ -52,6 +52,7 @@ import {
 } from '../actions';
 
 export const revalidate = 0;
+
 export default async function RunbookAgentsPage({
   searchParams,
 }: {
@@ -158,22 +159,48 @@ export default async function RunbookAgentsPage({
         })
       : Promise.resolve(null),
   ]);
+
   const activeAgents = agents.filter(agent => agent.status !== 'REVOKED');
+  const onlineAgentsCount = agents.filter(
+    a => a.status === 'ONLINE' && a.lastHeartbeatAt && a.lastHeartbeatAt >= onlineSince
+  ).length;
+
   const targetOptions = [
     ...pools.map(pool => ({ value: `pool:${pool.id}`, label: `Pool · ${pool.name}` })),
     ...activeAgents.map(agent => ({ value: `agent:${agent.id}`, label: `Agent · ${agent.name}` })),
   ];
+
+  const agentListData = agents.map(agent => {
+    const effectiveStatus =
+      agent.status === 'ONLINE' &&
+      (!agent.lastHeartbeatAt ||
+        databaseClock.now.getTime() - agent.lastHeartbeatAt.getTime() > 90000)
+        ? 'OFFLINE'
+        : agent.status;
+
+    return {
+      id: agent.id,
+      name: agent.name,
+      hostname: agent.hostname,
+      status: agent.status,
+      effectiveStatus,
+      platform: agent.platform,
+      version: agent.version,
+      lastHeartbeatAt: agent.lastHeartbeatAt?.toISOString() ?? null,
+      capabilities: agent.capabilities,
+      capabilityReport: agent.capabilityReport,
+      labels: agent.labels,
+      poolMemberships: agent.poolMemberships,
+      activeAttemptCount: agent.activeAttemptCount,
+      spoolDepth: agent.spoolDepth,
+      deadLetterDepth: agent.deadLetterDepth,
+      trustedSigningKeys: agent.trustedSigningKeys,
+      lastError: agent.lastError,
+    };
+  });
+
   const agentPanel = (
     <section className="space-y-4">
-      {canManage && (
-        <ConfigureSheet
-          title="Enroll an Agent"
-          description="Single-use enrollment tokens expire after 15 minutes. The private key never leaves the Agent."
-          trigger={<Button>Add Agent</Button>}
-        >
-          <AgentEnrollmentForm userTimeZone={userTimeZone} />
-        </ConfigureSheet>
-      )}
       {canManage && signingKey && (
         <details className="rounded-xl border bg-card p-4">
           <summary className="cursor-pointer text-sm font-semibold">
@@ -223,113 +250,16 @@ export default async function RunbookAgentsPage({
             ))}
         </details>
       )}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {agents.map(agent => {
-          const status =
-            agent.status === 'ONLINE' &&
-            (!agent.lastHeartbeatAt ||
-              databaseClock.now.getTime() - agent.lastHeartbeatAt.getTime() > 90000)
-              ? 'OFFLINE'
-              : agent.status;
-          return (
-            <Card key={agent.id} className="rounded-xl">
-              <CardHeader>
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <CardTitle className="text-base">{agent.name}</CardTitle>
-                  <StatusBadge status={status} />
-                </div>
-                <CardDescription>{agent.hostname || 'Awaiting enrollment'}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 text-sm">
-                <p className="text-muted-foreground">
-                  {agent.platform || 'Platform pending'} · v{agent.version || '—'}
-                </p>
-                <div className="flex flex-wrap gap-1" aria-label="Configured capabilities">
-                  {Array.isArray(agent.capabilities) &&
-                    agent.capabilities
-                      .filter((value): value is string => typeof value === 'string')
-                      .map(value => (
-                        <Badge key={value} variant="outline">
-                          {value.replace('RUNBOOK_', '').replaceAll('_', ' ')}
-                        </Badge>
-                      ))}
-                </div>
-                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
-                  <dt className="text-muted-foreground">Heartbeat</dt>
-                  <dd className="break-words">
-                    {agent.lastHeartbeatAt
-                      ? formatDateTime(agent.lastHeartbeatAt, userTimeZone, { format: 'datetime' })
-                      : 'Never'}
-                  </dd>
-                  <dt className="text-muted-foreground">Pools</dt>
-                  <dd>{agent.poolMemberships.map(item => item.pool.name).join(', ') || 'None'}</dd>
-                  <dt className="text-muted-foreground">Jobs</dt>
-                  <dd>{agent.activeAttemptCount} running</dd>
-                  <dt className="text-muted-foreground">Trusted signing identities</dt>
-                  <dd className="break-all">
-                    {Array.isArray(agent.trustedSigningKeys)
-                      ? agent.trustedSigningKeys
-                          .filter((key): key is string => typeof key === 'string')
-                          .join(', ') || 'No rotation acknowledgement'
-                      : 'No rotation acknowledgement'}
-                  </dd>
-                  <dt className="text-muted-foreground">Spool</dt>
-                  <dd>
-                    {agent.spoolDepth} pending · {agent.deadLetterDepth} dead letter
-                  </dd>
-                </dl>
-                {Array.isArray(agent.capabilityReport) &&
-                  agent.capabilityReport.map((entry, index) => {
-                    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
-                    return (
-                      <p key={index} className="text-xs">
-                        {String(entry.name)} · configured {entry.configured ? '✓' : '—'} · available{' '}
-                        {entry.available ? '✓' : '—'} {entry.reason ? `· ${entry.reason}` : ''}
-                      </p>
-                    );
-                  })}
-                {canManage && (
-                  <details>
-                    <summary className="cursor-pointer text-xs">Scheduling labels</summary>
-                    <ActionForm action={updateSchedulingLabelsAction}>
-                      <input type="hidden" name="id" value={agent.id} />
-                      <input type="hidden" name="kind" value="agent" />
-                      <Textarea
-                        name="labels"
-                        aria-label={`Labels for ${agent.name}`}
-                        defaultValue={JSON.stringify(agent.labels)}
-                      />
-                      <SubmitButton>Save scheduling labels</SubmitButton>
-                    </ActionForm>
-                  </details>
-                )}
-                {agent.lastError && (
-                  <p className="break-words rounded-lg bg-destructive/10 p-3 text-xs text-destructive">
-                    {agent.lastError}
-                  </p>
-                )}
-                {canManage && agent.status !== 'REVOKED' && (
-                  <ConfirmAction
-                    action={revokeAgentAction.bind(null, agent.id)}
-                    title={`Revoke ${agent.name}?`}
-                    description="The Agent immediately loses execution authority. Running actions can no longer renew their lease and will self-fence."
-                    label="Revoke Agent"
-                  />
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-      {agents.length === 0 && (
-        <EmptyState
-          icon={<Bot />}
-          title="No Agents enrolled"
-          description="Enroll an outbound Agent for diagnostics and approved remediation."
-        />
-      )}
+
+      {/* High-Density Fleet Table / Card View */}
+      <AgentFleetTable
+        agents={agentListData}
+        userTimeZone={userTimeZone}
+        canManage={canManage}
+      />
     </section>
   );
+
   const poolPanel = (
     <section className="space-y-4">
       {canManage && (
@@ -459,6 +389,7 @@ export default async function RunbookAgentsPage({
       )}
     </section>
   );
+
   const secretPanel = (
     <section className="space-y-4">
       <p className="text-sm text-muted-foreground">
@@ -579,28 +510,62 @@ export default async function RunbookAgentsPage({
       )}
     </section>
   );
+
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
-      <DetailHeroBanner
-        tag="RUNBOOK AUTOMATION"
-        title="Execution infrastructure"
-        subtitle="Outbound-only Agents, explicit execution pools and least-privilege credentials."
-        icon={<Bot className="h-8 w-8" />}
-        statsPlacement="bottom"
+    <div className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6">
+      {/* Compact Page Header */}
+      <RunbookPageHeader
+        title="Execution Infrastructure"
+        description="Outbound-only native Agents, explicit worker pools, and cryptographically isolated credentials."
+        actions={
+          canManage ? (
+            <ConfigureSheet
+              title="Enroll an Agent"
+              description="Single-use enrollment tokens expire after 15 minutes. The private key never leaves the Agent."
+              trigger={<Button>Add Agent</Button>}
+            >
+              <AgentEnrollmentForm userTimeZone={userTimeZone} />
+            </ConfigureSheet>
+          ) : undefined
+        }
+      />
+
+      {/* Modern Metric Strip */}
+      <RunbookMetricStrip
         stats={[
-          { label: 'Agents', value: activeAgents.length },
-          { label: 'Pools', value: pools.length },
           {
-            label: 'Pending results',
-            value: agents.reduce((sum, agent) => sum + agent.spoolDepth, 0),
+            label: 'Enrolled Agents',
+            value: activeAgents.length,
+            subtext: `${onlineAgentsCount} online`,
+            tone: onlineAgentsCount > 0 ? 'success' : 'default',
           },
           {
-            label: 'Dead letters',
+            label: 'Worker Pools',
+            value: pools.length,
+            subtext: 'Target pools',
+          },
+          {
+            label: 'Pending Results',
+            value: agents.reduce((sum, agent) => sum + agent.spoolDepth, 0),
+            subtext: 'Spool depth',
+          },
+          {
+            label: 'Dead Letters',
             value: agents.reduce((sum, agent) => sum + agent.deadLetterDepth, 0),
+            tone: agents.some(a => a.deadLetterDepth > 0) ? 'warning' : 'default',
+            subtext: 'Unclaimed events',
           },
         ]}
       />
-      <RunbookNavigation />
+
+      {/* Persistent Module Navigation */}
+      <RunbookModuleNav
+        counts={{
+          agents: activeAgents.length,
+        }}
+      />
+
+      {/* Search & Attribute Filters */}
       <RunbookFilters
         query={query}
         fields={[
@@ -612,10 +577,13 @@ export default async function RunbookAgentsPage({
         ]}
         statusOptions={Object.values(RunbookAgentStatus).map(value => ({ value, label: value }))}
       />
-      <RunbookPagination page={page} total={agentTotal} query={query} />
+
+      {/* Automatic Remediation Budgets Policy */}
       {permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE) && (
-        <details className="rounded-xl border p-4">
-          <summary className="cursor-pointer font-semibold">Automatic remediation budgets</summary>
+        <details className="rounded-xl border bg-card/60 p-4 shadow-2xs">
+          <summary className="cursor-pointer font-semibold text-sm">
+            Automatic remediation budgets
+          </summary>
           <ActionForm
             action={updateIncidentRemediationBudgetAction}
             className="mt-3 grid gap-3 sm:grid-cols-3"
@@ -654,6 +622,8 @@ export default async function RunbookAgentsPage({
           </ActionForm>
         </details>
       )}
+
+      {/* Tabbed Infrastructure Modules */}
       <DetailTabs
         tabs={[
           { id: 'agents', label: 'Agents', count: agents.length, content: agentPanel },
@@ -663,14 +633,16 @@ export default async function RunbookAgentsPage({
             : []),
         ]}
       />
+
+      <RunbookPagination page={page} total={agentTotal} query={query} />
     </div>
   );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
       {children}
     </div>
   );

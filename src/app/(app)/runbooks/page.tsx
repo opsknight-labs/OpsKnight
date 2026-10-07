@@ -1,10 +1,10 @@
-import { Workflow } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
+import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
+import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import RunbookLibrary, { CreateRunbookDialog } from '@/components/runbooks/RunbookLibrary';
-import { RunbookNavigation } from '@/components/runbooks/RunbookControls';
 import {
   RunbookFilters,
   RunbookPagination,
@@ -16,6 +16,7 @@ import { buildRunbookLibraryWhere } from '@/lib/runbooks/lifecycle';
 import { getUserTimeZone } from '@/lib/timezone';
 
 export const revalidate = 0;
+
 export default async function RunbooksPage({
   searchParams,
 }: {
@@ -61,6 +62,24 @@ export default async function RunbooksPage({
       include: {
         publishedVersion: { select: { version: true } },
         draftVersion: { select: { version: true } },
+        bindings: {
+          select: {
+            id: true,
+            service: { select: { name: true } },
+          },
+          take: 3,
+        },
+        executions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            startedAt: true,
+            completedAt: true,
+          },
+        },
         _count: { select: { bindings: true, executions: true } },
       },
     }),
@@ -70,32 +89,63 @@ export default async function RunbooksPage({
     prisma.runbookAgent.groupBy({ by: ['status'], _count: { id: true } }),
   ]);
   const canManage = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE);
+  const onlineAgents = agents.find(row => row.status === 'ONLINE')?._count.id ?? 0;
+
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
-      <DetailHeroBanner
-        tag="RUNBOOK AUTOMATION"
+    <div className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6">
+      {/* Compact Page Header with primary action */}
+      <RunbookPageHeader
         title="Runbooks"
-        icon={<Workflow className="h-8 w-8" />}
-        subtitle="Build, version and automate operational recovery. Execution stays isolated from critical paging."
-        statsPlacement="bottom"
+        description="Build, version, and safely execute operational recovery workflows. Execution operates under fail-closed guarantees."
+        actions={canManage ? <CreateRunbookDialog /> : undefined}
+      />
+
+      {/* Modern High-Density Metric Strip */}
+      <RunbookMetricStrip
         stats={[
-          { label: 'Published', value: publishedCount },
-          { label: 'Drafts', value: draftCount },
-          { label: 'Active executions', value: executionCount },
+          {
+            label: 'Published',
+            value: publishedCount,
+            subtext: 'Live workflows',
+            tone: 'success',
+          },
+          {
+            label: 'Drafts',
+            value: draftCount,
+            subtext: 'In progress',
+            tone: draftCount > 0 ? 'warning' : 'default',
+          },
+          {
+            label: 'Active Executions',
+            value: executionCount,
+            subtext: 'In-flight',
+            tone: executionCount > 0 ? 'info' : 'default',
+          },
           {
             label: 'Archived',
             value: archivedCount,
+            subtext: 'Disabled bindings',
             href: '/runbooks?status=archived',
             active: filter.status === 'archived' || filter.tab === 'archived',
           },
           {
             label: 'Online Agents',
-            value: agents.find(row => row.status === 'ONLINE')?._count.id ?? 0,
+            value: onlineAgents,
+            subtext: 'Fleet ready',
+            tone: onlineAgents > 0 ? 'success' : 'default',
           },
         ]}
-        actions={canManage ? <CreateRunbookDialog /> : undefined}
       />
-      <RunbookNavigation />
+
+      {/* Persistent Module Navigation */}
+      <RunbookModuleNav
+        counts={{
+          executions: executionCount,
+          agents: onlineAgents,
+        }}
+      />
+
+      {/* Search & Filter Toolbar */}
       <RunbookFilters
         query={query}
         fields={[
@@ -110,6 +160,8 @@ export default async function RunbooksPage({
           { value: 'archived', label: 'Archived' },
         ]}
       />
+
+      {/* Library Operational Cards */}
       <RunbookLibrary
         canManage={canManage}
         userTimeZone={userTimeZone}
@@ -121,10 +173,22 @@ export default async function RunbooksPage({
           draftVersion: item.draftVersion?.version ?? null,
           bindings: item._count.bindings,
           executions: item._count.executions,
+          sampleServices: item.bindings.map(b => b.service?.name).filter((n): n is string => Boolean(n)),
+          lastExecution: item.executions[0]
+            ? {
+                id: item.executions[0].id,
+                status: item.executions[0].status,
+                createdAt: item.executions[0].createdAt.toISOString(),
+                startedAt: item.executions[0].startedAt?.toISOString() ?? null,
+                completedAt: item.executions[0].completedAt?.toISOString() ?? null,
+              }
+            : null,
           archivedAt: item.archivedAt?.toISOString() ?? null,
           updatedAt: item.updatedAt.toISOString(),
         }))}
       />
+
+      {/* Bounded Server Pagination */}
       <RunbookPagination page={page} total={total} query={query} />
     </div>
   );

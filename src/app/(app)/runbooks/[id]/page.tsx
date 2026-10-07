@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { BookOpen, Copy, History, Settings2 } from 'lucide-react';
+import { Copy, History, Settings2 } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
@@ -12,7 +12,8 @@ import {
   saveDraftAction,
   updateRunbookMetadataAction,
 } from '../actions';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
+import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
+import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
 import DetailTabs from '@/components/ui/DetailTabs';
 import EmptyState from '@/components/ui/EmptyState';
 import RunbookBuilder from '@/components/runbooks/RunbookBuilder';
@@ -99,15 +100,15 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
   );
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
-      <DetailHeroBanner
-        breadcrumb={{ label: 'Runbooks', href: '/runbooks', current: runbook.name }}
-        tag="RUNBOOK"
+      <RunbookPageHeader
+        breadcrumbs={[
+          { label: 'Runbooks', href: '/runbooks' },
+          { label: runbook.name },
+        ]}
         title={runbook.name}
-        subtitle={runbook.description || runbook.slug}
-        icon={<BookOpen className="h-8 w-8" />}
-        statsPlacement="bottom"
-        badges={
-          <>
+        description={runbook.description || runbook.slug}
+        badge={
+          <div className="flex items-center gap-1.5">
             {runbook.publishedVersion && (
               <Badge variant="success">Published v{runbook.publishedVersion.version}</Badge>
             )}
@@ -115,13 +116,8 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
               <Badge variant="warning">Draft v{runbook.draftVersion.version}</Badge>
             )}
             {runbook.archivedAt && <Badge variant="secondary">Archived</Badge>}
-          </>
+          </div>
         }
-        stats={[
-          { label: 'Services', value: runbook._count.bindings },
-          { label: 'Executions', value: runbook._count.executions },
-          { label: 'Versions', value: runbook.versions.length },
-        ]}
         actions={
           <div className="flex flex-wrap gap-2">
             {canPublish && runbook.draftVersion && (
@@ -188,6 +184,13 @@ export default async function RunbookDetailPage({ params }: { params: Promise<{ 
             )}
           </div>
         }
+      />
+      <RunbookMetricStrip
+        stats={[
+          { label: 'Services', value: runbook._count.bindings },
+          { label: 'Executions', value: runbook._count.executions },
+          { label: 'Versions', value: runbook.versions.length },
+        ]}
       />
       <DetailTabs
         tabs={[
