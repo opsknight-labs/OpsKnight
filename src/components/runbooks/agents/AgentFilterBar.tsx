@@ -37,6 +37,8 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
   const [label, setLabel] = useState(query.label ?? '');
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
+  const isAttention = query.attention === '1';
+
   const activeFiltersCount = [
     status !== 'all',
     selectedPool !== 'all',
@@ -44,6 +46,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
     Boolean(capability),
     Boolean(label),
     Boolean(searchTerm),
+    isAttention,
   ].filter(Boolean).length;
 
   const applyFilters = (overrides: Partial<Record<string, string>> = {}) => {
@@ -56,6 +59,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
       capability,
       label,
       tab: query.tab || 'agents',
+      ...(isAttention ? { attention: '1' } : {}),
       ...overrides,
     };
 
@@ -66,6 +70,7 @@ export function AgentFilterBar({ query }: AgentFilterBarProps) {
     if (merged.platform && merged.platform !== 'all') params.set('platform', merged.platform);
     if (merged.capability?.trim()) params.set('capability', merged.capability.trim());
     if (merged.label?.trim()) params.set('label', merged.label.trim());
+    if (merged.attention) params.set('attention', merged.attention);
 
     const queryString = params.toString();
     router.push(queryString ? `${pathname}?${queryString}` : pathname);

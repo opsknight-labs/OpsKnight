@@ -55,14 +55,18 @@ export default async function RunbookHealthPage() {
   const issues: HealthIssue[] = [];
 
   if (health.fleet.unhealthy > 0) {
+    const total = health.fleet.unhealthy;
     issues.push({
       id: 'unhealthy-agents',
       type: 'agent',
       severity: 'danger',
-      title: `${health.fleet.unhealthy} ${health.fleet.unhealthy === 1 ? 'Agent' : 'Agents'} Requiring Attention`,
-      description: `Unresponsive heartbeats or dead-letter queue build-ups detected on: ${unhealthyAgents.map(a => a.name).join(', ')}.`,
-      actionHref: '/runbooks/agents',
-      actionLabel: 'Inspect Fleet',
+      title: `${total} ${total === 1 ? 'Agent' : 'Agents'} Requiring Attention`,
+      description:
+        total > 20
+          ? `Showing first 20 of ${total} agents requiring attention: ${unhealthyAgents.map(a => a.name).join(', ')}...`
+          : `Unresponsive heartbeats or dead-letter queue build-ups detected on: ${unhealthyAgents.map(a => a.name).join(', ')}.`,
+      actionHref: '/runbooks/agents?attention=1',
+      actionLabel: total > 20 ? `View all ${total} agents` : 'Inspect Agents',
     });
   }
 
@@ -114,13 +118,20 @@ export default async function RunbookHealthPage() {
     });
   }
 
-  if (localWorker.running && localWorker.lastError) {
+  const runbookWorkerError =
+    localWorker.running
+      ? (localWorker.lane === 'runbook'
+          ? localWorker.lastError
+          : localWorker.lastRunbookError)
+      : null;
+
+  if (runbookWorkerError) {
     issues.push({
       id: 'local-worker-error',
       type: 'queue',
       severity: 'danger',
       title: 'Local Execution Worker Error',
-      description: `In-process runbook worker reported a fault: ${localWorker.lastError}`,
+      description: `In-process runbook worker reported a fault: ${runbookWorkerError}`,
       actionHref: '/api/health?mode=readiness',
       actionLabel: 'Inspect Worker',
     });
@@ -173,6 +184,7 @@ export default async function RunbookHealthPage() {
       <HealthAttentionPanel
         issues={issues}
         agentsCount={health.fleet.enrolled}
+        totalUnhealthy={health.fleet.unhealthy}
       />
 
       {/* 2. Technical Detail Cards */}
@@ -187,6 +199,7 @@ export default async function RunbookHealthPage() {
         deadLetters={deadLetters}
         unhealthyAgents={unhealthyAgents}
         totalAgentsCount={health.fleet.enrolled}
+        totalUnhealthy={health.fleet.unhealthy}
         now={now}
         userTimeZone={userTimeZone}
       />

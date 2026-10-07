@@ -211,7 +211,7 @@ describe('Runbook Presentation Contracts & Helpers', () => {
       expect(ACTIVE_EXECUTION_STATUSES).not.toContain('SUCCEEDED');
       expect(ACTIVE_EXECUTION_STATUSES).not.toContain('FAILED');
       expect(ACTIVE_EXECUTION_STATUSES).not.toContain('TIMED_OUT');
-      expect(ACTIVE_EXECUTION_STATUSES).not.toContain('CANCELED');
+      expect(ACTIVE_EXECUTION_STATUSES).not.toContain('CANCELLED');
     });
   });
 });

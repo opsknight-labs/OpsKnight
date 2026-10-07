@@ -12,6 +12,7 @@ export type HealthDetailCardsProps = {
   localWorker: {
     running: boolean;
     lastError?: string | null;
+    lastRunbookError?: string | null;
     lane: string;
     lastSuccessAt?: Date | null;
   };
@@ -32,6 +33,7 @@ export type HealthDetailCardsProps = {
     deadLetterDepth: number;
   }>;
   totalAgentsCount: number;
+  totalUnhealthy?: number;
   now: Date;
   userTimeZone: string;
 };
@@ -47,6 +49,7 @@ export function HealthDetailCards({
   deadLetters,
   unhealthyAgents,
   totalAgentsCount,
+  totalUnhealthy,
   now,
   userTimeZone,
 }: HealthDetailCardsProps) {
@@ -63,17 +66,24 @@ export function HealthDetailCards({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-xs">
-            <DetailRow
-              label="Local worker"
-              value={
-                localWorker.running
-                  ? localWorker.lastError
-                    ? 'Needs attention'
-                    : 'Running'
-                  : 'Not observed in this process'
-              }
-              attention={Boolean(localWorker.lastError)}
-            />
+            {(() => {
+              const runbookWorkerError =
+                localWorker.running &&
+                (localWorker.lane === 'runbook' ? localWorker.lastError : localWorker.lastRunbookError);
+              return (
+                <DetailRow
+                  label="Local worker"
+                  value={
+                    localWorker.running
+                      ? runbookWorkerError
+                        ? 'Needs attention'
+                        : 'Running'
+                      : 'Not observed in this process'
+                  }
+                  attention={Boolean(runbookWorkerError)}
+                />
+              );
+            })()}
             <DetailRow label="Worker lane" value={localWorker.lane} />
             <DetailRow
               label="Last successful cycle"
@@ -149,16 +159,36 @@ export function HealthDetailCards({
       {/* Agents Requiring Attention Card */}
       <Card className="rounded-xl border bg-card/80 shadow-2xs">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Bot className="h-4 w-4 text-primary" />
-            <span>Agents Requiring Operator Attention</span>
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Bot className="h-4 w-4 text-primary" />
+              <span>Agents Requiring Operator Attention</span>
+            </CardTitle>
+            {totalUnhealthy && totalUnhealthy > 20 ? (
+              <span className="text-xs text-muted-foreground font-normal">
+                Showing first 20 of {totalUnhealthy}
+              </span>
+            ) : null}
+          </div>
         </CardHeader>
         <CardContent className="space-y-2.5">
+          {totalUnhealthy && totalUnhealthy > 20 ? (
+            <div className="flex items-center justify-between rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs">
+              <span className="text-muted-foreground">
+                Showing first 20 of {totalUnhealthy} agents requiring attention
+              </span>
+              <Link
+                href="/runbooks/agents?attention=1"
+                className="font-medium text-primary hover:underline"
+              >
+                View all {totalUnhealthy} →
+              </Link>
+            </div>
+          ) : null}
           {unhealthyAgents.map(agent => (
             <Link
               key={agent.id}
-              href="/runbooks/agents"
+              href={`/runbooks/agents?attention=1&q=${encodeURIComponent(agent.name)}`}
               className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-border/80 bg-muted/20 p-3 text-xs transition-colors hover:bg-muted/40 hover:border-primary/40"
             >
               <div className="space-y-1">

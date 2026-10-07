@@ -52,9 +52,15 @@ export const getRunbookHealthSummary = cache(async () => {
   const oldest = oldestPending ? Math.max(0, Math.round((now.getTime() - oldestPending.availableAt.getTime()) / 1000)) : 0;
   const circuitCount = circuits[0]?.count ?? 0;
   const localWorker = getJobWorkerStatus();
-  const workerHasError = Boolean(localWorker.running && localWorker.lastError);
+  const runbookWorkerError =
+    localWorker.running
+      ? (localWorker.lane === 'runbook'
+          ? localWorker.lastError
+          : localWorker.lastRunbookError)
+      : null;
+  const workerHasError = Boolean(runbookWorkerError);
   const health = fleet.unhealthy || unknown || expiredLeases || circuitCount || oldest > 300 || workerHasError ? 'DEGRADED' : fleet.enrolled ? 'HEALTHY' : 'UNKNOWN';
-  return { fleet, unknown, expiredLeases, oldest, circuits: circuitCount, health, workerLastError: workerHasError ? localWorker.lastError : null } as const;
+  return { fleet, unknown, expiredLeases, oldest, circuits: circuitCount, health, workerLastError: runbookWorkerError } as const;
 });
 export const getRunbookNavigationSummary = cache(async (): Promise<NavigationSummary> => {
   try {

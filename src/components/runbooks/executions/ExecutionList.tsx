@@ -50,7 +50,7 @@ export function ExecutionList({
     ? (ACTIVE_EXECUTION_STATUSES as readonly string[]).includes(selectedExecution.status)
     : false;
   const hasActive = activeCount > 0 || isSelectedActive;
-  useRunbookRefresh(router, { enabled: hasActive, refreshOnFocus: true });
+  useRunbookRefresh(router, { enabled: true, intervalMs: hasActive ? 5000 : 15000, refreshOnFocus: true });
 
   return (
     <section className="space-y-3" aria-label="Recent executions">

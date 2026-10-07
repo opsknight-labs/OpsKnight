@@ -23,11 +23,13 @@ export type HealthIssue = {
 export type HealthAttentionPanelProps = {
   issues: HealthIssue[];
   agentsCount: number;
+  totalUnhealthy?: number;
 };
 
 export function HealthAttentionPanel({
   issues,
   agentsCount,
+  totalUnhealthy,
 }: HealthAttentionPanelProps) {
   if (!agentsCount && !issues.length) return <div className="rounded-lg border bg-muted/30 p-4 text-sm"><h3 className="font-semibold">No Agents configured</h3><p className="text-muted-foreground">Fleet health is unknown until an Agent reports a heartbeat.</p><Link className="text-primary hover:underline" href="/runbooks/agents">Enroll an Agent</Link></div>;
   const hasIssues = issues.length > 0;
@@ -94,7 +96,14 @@ export function HealthAttentionPanel({
                   )}
                 </div>
                 <div className="space-y-0.5">
-                  <h4 className="font-semibold text-foreground text-sm">{issue.title}</h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-semibold text-foreground text-sm">{issue.title}</h4>
+                    {issue.type === 'agent' && totalUnhealthy && totalUnhealthy > 20 ? (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                        Showing first 20 of {totalUnhealthy}
+                      </Badge>
+                    ) : null}
+                  </div>
                   <p className="text-muted-foreground">{issue.description}</p>
                 </div>
               </div>

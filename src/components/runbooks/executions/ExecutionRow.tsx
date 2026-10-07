@@ -13,7 +13,13 @@ export function ExecutionRow({ execution, userTimeZone, onSelect }: ExecutionRow
       <span className="min-w-0"><strong className="block truncate text-sm">{execution.runbook.name} · v{execution.runbookVersion.version}</strong><span className="block truncate text-muted-foreground">{execution.incidentTitle || 'Ad-hoc run'} · {execution.service?.name || 'No service'}</span></span>
       <span><RunbookStatusBadge status={execution.status} size="sm" /></span>
       <span><ExecutionProgressBar totalSteps={execution.totalSteps} completedSteps={execution.completedSteps} status={execution.status} /></span>
-      <span className="truncate">{execution.resolvedTargetAgent?.name || 'Unassigned / control plane'}</span>
+      <span className="truncate">
+        {execution.resolvedTargetAgent
+          ? `Agent · ${execution.resolvedTargetAgent.name}`
+          : execution.resolvedTargetAgentPool
+          ? `Pool · ${execution.resolvedTargetAgentPool.name}`
+          : 'Control plane'}
+      </span>
       <span>{execution.triggeredByType ? TRIGGER_LABELS[execution.triggeredByType] : 'Not reported'}</span>
       <span>{formatDateTime(execution.startedAt ?? execution.createdAt, userTimeZone, { format: 'datetime' })}<span className="block text-muted-foreground">{duration === null ? 'Not started' : `${duration}s`}</span></span>
       {execution.failedStepName && <span className="text-destructive lg:col-span-6">Step requires attention: {execution.failedStepName}</span>}

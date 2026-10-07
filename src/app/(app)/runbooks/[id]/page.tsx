@@ -9,6 +9,7 @@ import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser, getUserPermissions } from '@/lib/rbac';
 import { parseRunbookDefinition } from '@/lib/runbooks/definition';
 import { checkRunbookDeleteEligibility } from '@/lib/runbooks/lifecycle';
+import { RunbookCannotDeleteError } from '@/lib/runbooks/errors';
 import {
   archiveRunbookAction,
   cloneVersionAction,
@@ -42,12 +43,26 @@ export const revalidate = 0;
 export default async function RunbookDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const { id } = await params;
-  const { query, page: versionPage } = runbookPageQuery(await searchParams);
-  const bindingPage = Math.max(1, Math.min(10000, Number(query.bindingPage) || 1));
-  const navigation = await getRunbookNavigationSummary();
-  const [permissions, user, runbook] = await Promise.all([
-    getUserPermissions(),
-    getCurrentUser(),
+  const { query, page: rawVersionPage } = runbookPageQuery(await searchParams);
+  const rawBindingPage = Math.max(1, Math.min(10000, Number(query.bindingPage) || 1));
+  const navigationPromise = getRunbookNavigationSummary();
+  const permissionsPromise = getUserPermissions();
+  const userPromise = getCurrentUser();
+
+  const runbookMeta = await prisma.runbook.findUnique({
+    where: { id },
+    select: {
+      _count: { select: { versions: true, bindings: true } },
+    },
+  });
+  if (!runbookMeta) notFound();
+
+  const versionPage = Math.min(rawVersionPage, Math.max(1, Math.ceil(runbookMeta._count.versions / 20)));
+  const bindingPage = Math.min(rawBindingPage, Math.max(1, Math.ceil(runbookMeta._count.bindings / 20)));
+
+  const [permissions, user, runbook, navigation] = await Promise.all([
+    permissionsPromise,
+    userPromise,
     prisma.runbook.findUnique({
       where: { id },
       include: {
@@ -55,8 +70,17 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
         publishedVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
         versions: {
           orderBy: { version: 'desc' },
-          skip: (versionPage - 1) * 20, take: 20,
-          select: { id: true, version: true, state: true, publishedAt: true, createdAt: true, checksum: true, _count: { select: { executions: true } } },
+          skip: (versionPage - 1) * 20,
+          take: 20,
+          select: {
+            id: true,
+            version: true,
+            state: true,
+            publishedAt: true,
+            createdAt: true,
+            checksum: true,
+            _count: { select: { executions: true } },
+          },
         },
         bindings: {
           include: { service: { select: { id: true, name: true } } },
@@ -72,6 +96,7 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
         _count: { select: { executions: true, bindings: true, versions: true } },
       },
     }),
+    navigationPromise,
   ]);
   if (!runbook) notFound();
   const userTimeZone = getUserTimeZone(user);
@@ -101,8 +126,11 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
     try {
       await deleteRunbookAction(id, confirmation);
     } catch (err) {
+      if (err instanceof RunbookCannotDeleteError) {
+        return { error: err.message };
+      }
       return {
-        error: err instanceof Error ? err.message : 'Could not delete runbook.',
+        error: 'This runbook cannot be deleted. Check its execution history and published versions, then try again.',
       };
     }
     redirect('/runbooks');
@@ -182,7 +210,13 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
                 label="Duplicate"
                 variant="outline"
                 title={`Duplicate ${runbook.name}?`}
-                description="Creates a new draft copy of this runbook with identical metadata and definition."
+                description={
+                  runbook.draftVersion
+                    ? `Creates a new draft copy of this runbook based on its current draft (v${runbook.draftVersion.version}).`
+                    : runbook.publishedVersion
+                    ? `Creates a new draft copy of this runbook based on its published version (v${runbook.publishedVersion.version}).`
+                    : 'Creates a new draft copy of this runbook with identical metadata.'
+                }
               />
             )}
             {isArchived && hasManageCapability && (

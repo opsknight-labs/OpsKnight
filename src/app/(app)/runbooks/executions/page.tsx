@@ -99,6 +99,7 @@ export default async function RunbookExecutionsPage({
       completedAt: true,
       service: { select: { id: true, name: true } },
       resolvedTargetAgent: { select: { name: true } },
+      resolvedTargetAgentPool: { select: { id: true, name: true } },
       triggeredByUser: { select: { name: true } },
       incidentId: true,
       incident: { select: { id: true, title: true } },
@@ -132,6 +133,7 @@ export default async function RunbookExecutionsPage({
       runbook: item.runbook,
       runbookVersion: item.runbookVersion,
       resolvedTargetAgent: item.resolvedTargetAgent,
+      resolvedTargetAgentPool: item.resolvedTargetAgentPool,
       triggeredByUser: item.triggeredByUser,
       ...getExecutionProgress(item.steps),
       steps: item.steps.map(st => ({

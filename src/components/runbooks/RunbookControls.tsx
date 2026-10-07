@@ -89,9 +89,7 @@ export function ActionForm({
         unstable_rethrow(error);
         return {
           error:
-            error instanceof Error && error.message
-              ? error.message
-              : 'Could not complete this action. Check your configuration and permissions, then try again.',
+            'Could not complete this action. Check your configuration and permissions, then try again.',
         };
       }
     },

@@ -159,7 +159,11 @@ export default async function ExecutionDetailPage({
           <CardHeader className="pb-2">
             <span className="text-xs text-muted-foreground">Target Host / Agent</span>
             <CardTitle className="text-lg font-bold">
-              {execution.resolvedTargetAgent?.name || 'Control plane'}
+              {execution.resolvedTargetAgent
+                ? `Agent · ${execution.resolvedTargetAgent.name}`
+                : execution.resolvedTargetAgentPool
+                ? `Pool · ${execution.resolvedTargetAgentPool.name}`
+                : 'Control plane'}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground font-mono">

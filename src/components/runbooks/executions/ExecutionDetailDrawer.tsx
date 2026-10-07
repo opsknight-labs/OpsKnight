@@ -29,6 +29,7 @@ export type ExecutionItemData = {
   runbook: { id: string; name: string };
   runbookVersion: { version: number };
   resolvedTargetAgent: { name: string } | null;
+  resolvedTargetAgentPool?: { id?: string; name: string } | null;
   triggeredByUser: { name: string } | null;
   totalSteps: number;
   completedSteps: number;
@@ -110,9 +111,13 @@ export function ExecutionDetailDrawer({
             </span>
           </div>
           <div>
-            <span className="text-muted-foreground block text-[11px]">Target Agent</span>
+            <span className="text-muted-foreground block text-[11px]">Execution Target</span>
             <span className="font-medium text-foreground">
-              {execution.resolvedTargetAgent?.name || 'Local worker / pool'}
+              {execution.resolvedTargetAgent
+                ? `Agent · ${execution.resolvedTargetAgent.name}`
+                : execution.resolvedTargetAgentPool
+                ? `Pool · ${execution.resolvedTargetAgentPool.name}`
+                : 'Control plane'}
             </span>
           </div>
           <div>

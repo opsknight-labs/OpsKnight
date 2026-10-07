@@ -98,6 +98,8 @@ export default async function RunbookAgentsPage({
   });
   const conditions: Prisma.RunbookAgentWhereInput[] = [];
 
+  const attentionFilter = query.attention === '1';
+
   if (query.q) {
     conditions.push({
       OR: [
@@ -107,7 +109,35 @@ export default async function RunbookAgentsPage({
     });
   }
 
-  if (!statusFilter) {
+  if (attentionFilter) {
+    conditions.push({
+      status: { not: 'REVOKED' },
+      OR: [
+        { status: { not: 'ONLINE' } },
+        { lastHeartbeatAt: null },
+        { lastHeartbeatAt: { lt: onlineSince } },
+        { lastError: { not: '' } },
+        { deadLetterDepth: { gt: 0 } },
+      ],
+    });
+    if (statusFilter) {
+      if (statusFilter === 'OFFLINE') {
+        conditions.push({
+          OR: [
+            { status: 'OFFLINE' },
+            {
+              status: { in: ['ONLINE', 'DEGRADED'] },
+              OR: [{ lastHeartbeatAt: null }, { lastHeartbeatAt: { lt: onlineSince } }],
+            },
+          ],
+        });
+      } else if (statusFilter === 'ONLINE' || statusFilter === 'DEGRADED') {
+        conditions.push({ status: statusFilter, lastHeartbeatAt: { gte: onlineSince } });
+      } else {
+        conditions.push({ status: statusFilter });
+      }
+    }
+  } else if (!statusFilter) {
     conditions.push({ status: { not: 'REVOKED' } });
   } else if (statusFilter === 'OFFLINE') {
     conditions.push({
@@ -169,7 +199,7 @@ export default async function RunbookAgentsPage({
         members: { take: 20, orderBy: { id: 'asc' }, include: { agent: { select: { id: true, name: true } } } },
         _count: { select: { bindings: true, members: true } },
       },
-      orderBy: { name: 'asc' },
+      orderBy: [{ name: 'asc' }, { id: 'asc' }],
     }) : Promise.resolve([]),
     canManageSecrets && tab === 'secrets'
       ? prisma.runbookSecret.findMany({
@@ -652,6 +682,23 @@ export default async function RunbookAgentsPage({
 
       {/* Search & Attribute Filters */}
       {tab === 'agents' && <AgentFilterBar key={JSON.stringify(query)} query={query} />}
+
+      {tab === 'agents' && query.attention === '1' && (
+        <div className="flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">Filtered by Health: Agents requiring operator attention</span>
+            <span className="text-amber-700 dark:text-amber-300">
+              ({agentTotal} matching)
+            </span>
+          </div>
+          <Link
+            href="/runbooks/agents"
+            className="font-medium text-primary hover:underline ml-2"
+          >
+            Show all agents
+          </Link>
+        </div>
+      )}
 
       {/* Tabbed Infrastructure Modules */}
       <nav aria-label="Infrastructure sections" className="flex gap-2 overflow-x-auto">
