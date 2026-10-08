@@ -30,6 +30,7 @@ import {
   MAX_CONCURRENT_WRITE_ACTIONS_PER_POOL,
   MAX_OUTPUT_PREVIEW_BYTES,
   isRetryable,
+  isTerminalStepStatus,
   requiresAgent,
 } from './types';
 import {
@@ -57,8 +58,6 @@ const jobPayloadSchema = z.discriminatedUnion('kind', [
     })
     .strict(),
 ]);
-
-const TERMINAL_STEP = new Set(['SUCCEEDED', 'FAILED', 'SKIPPED', 'CANCELLED']);
 
 function asJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -371,6 +370,7 @@ export async function startRunbookExecution(input: {
           },
         },
       });
+      // Concurrency slot accounting: sequential executions reserve 1 workflow slot while holding active write steps.
       if (activeServiceWrites + newServiceWriteSlot > MAX_AUTO_WRITE_ACTIONS_PER_SERVICE) {
         throw new RunbookDefinitionError(
           'AUTOMATION_BLAST_RADIUS_LIMIT: too many automatic write runbooks are active for this service.'
@@ -458,6 +458,7 @@ export async function startRunbookExecution(input: {
           },
         },
       });
+      // Concurrency slot accounting: sequential executions reserve 1 workflow slot while holding active write steps in this pool.
       if (activePoolWrites + newPoolWriteSlot > MAX_CONCURRENT_WRITE_ACTIONS_PER_POOL) {
         throw new RunbookDefinitionError(
           'AGENT_POOL_CONCURRENCY_LIMIT: too many write actions are active for this Agent pool.'
@@ -565,10 +566,19 @@ function resolvedPlanDigest(
   });
 }
 
-async function readBoundedResponseBody(response: Response, maxBytes: number): Promise<string> {
+export async function readBoundedResponseBody(response: Response, maxBytes: number): Promise<string> {
   if (!response.body) return '';
   if (typeof response.body.getReader !== 'function') {
-    return (await response.text()).slice(0, maxBytes);
+    const contentLength = response.headers?.get?.('content-length');
+    if (contentLength !== null && contentLength !== undefined) {
+      const parsedLength = parseInt(contentLength, 10);
+      if (!Number.isNaN(parsedLength) && parsedLength >= 0 && parsedLength <= maxBytes) {
+        return (await response.text()).slice(0, maxBytes);
+      }
+    }
+    throw new Error(
+      `Streaming response reader is unavailable and content size exceeds or cannot verify preview limit of ${maxBytes} bytes.`
+    );
   }
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -1123,7 +1133,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
     });
     return;
   }
-  const current = execution.steps.find(step => !TERMINAL_STEP.has(step.status));
+  const current = execution.steps.find(step => !isTerminalStepStatus(step.status));
   if (!current) {
     await prisma.$transaction(async tx => {
       const changed = await tx.runbookExecution.updateMany({

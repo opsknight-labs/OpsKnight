@@ -1625,18 +1625,17 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { id: executionId },
       include: { steps: { include: { attempts: true } } },
     });
-    if (['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'].includes(execution.status)) {
-      for (const step of execution.steps) {
-        expect(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'SKIPPED', 'UNKNOWN']).toContain(
-          step.status
-        );
-        expect(['PENDING', 'READY', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL']).not.toContain(
-          step.status
-        );
-        for (const attempt of step.attempts) {
-          expect(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT']).toContain(attempt.status);
-          expect(['PENDING', 'CLAIMED', 'RUNNING']).not.toContain(attempt.status);
-        }
+    expect(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'UNKNOWN']).toContain(execution.status);
+    for (const step of execution.steps) {
+      expect(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'SKIPPED', 'UNKNOWN']).toContain(
+        step.status
+      );
+      expect(['PENDING', 'READY', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL']).not.toContain(
+        step.status
+      );
+      for (const attempt of step.attempts) {
+        expect(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'UNKNOWN']).toContain(attempt.status);
+        expect(['PENDING', 'CLAIMED', 'RUNNING']).not.toContain(attempt.status);
       }
     }
   }
@@ -1849,6 +1848,16 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { executionId: execution.id, stepKey: 'step1' },
     });
 
+    // Advance execution and put step into RUNNING to test genuine race on an in-flight active step
+    await testPrisma.runbookExecution.update({
+      where: { id: execution.id },
+      data: { status: 'RUNNING' },
+    });
+    await testPrisma.runbookExecutionStep.update({
+      where: { id: step.id },
+      data: { status: 'RUNNING', startedAt: new Date() },
+    });
+
     // Fire completeStep and cancelExecution simultaneously in parallel against real PostgreSQL
     await Promise.allSettled([
       completeStep(execution.id, step.id, 'SUCCEEDED', 'concurrent output'),
@@ -1856,6 +1865,10 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     ]);
     await advanceExecution(execution.id);
 
+    const finalExecution = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: execution.id },
+    });
+    expect(['CANCELLED', 'SUCCEEDED']).toContain(finalExecution.status);
     await assertTerminalExecutionInvariants(execution.id);
   });
 
@@ -1907,6 +1920,146 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     ]);
     await advanceExecution(execution.id);
 
+    const finalExecution = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: execution.id },
+    });
+    expect(['CANCELLED', 'SUCCEEDED']).toContain(finalExecution.status);
+    await assertTerminalExecutionInvariants(execution.id);
+  });
+
+  it('terminalizes attempt, step, and execution when source pool authority is revoked', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'diag',
+          name: 'Diagnostics',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: { action: 'status', unit: 'app.service' },
+        },
+      ],
+    });
+    await testPrisma.runbookAgent.update({
+      where: { id: target.agent.id },
+      data: { labels: { host: 'node-a' } },
+    });
+    await testPrisma.serviceRunbookBinding.update({
+      where: { id: target.binding.id },
+      data: { agentSelector: { host: 'node-a' } },
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    await advanceExecution(execution.id);
+
+    const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id, stepKey: 'diag' },
+    });
+    expect(step.status).toBe('WAITING_AGENT');
+
+    // Simulate deleting the source pool while step attempt is pending
+    await testPrisma.runbookAgentPoolMember.deleteMany({
+      where: { poolId: target.pool.id },
+    });
+    await testPrisma.runbookAgentPool.delete({
+      where: { id: target.pool.id },
+    });
+
+    // Agent attempts to claim: should detect pool is gone, terminalize attempt + step as FAILED
+    const claim = await claimAgentAttempt(target.agent.id);
+    expect(claim).toBeNull();
+
+    // Verify attempt and step were atomically terminalized
+    const updatedAttempt = await testPrisma.runbookStepAttempt.findFirstOrThrow({
+      where: { executionStepId: step.id },
+    });
+    expect(updatedAttempt.status).toBe('FAILED');
+    expect(updatedAttempt.errorCode).toBe('TARGET_AUTHORITY_REVOKED');
+    expect(updatedAttempt.completedAt).not.toBeNull();
+
+    const updatedStep = await testPrisma.runbookExecutionStep.findUniqueOrThrow({
+      where: { id: step.id },
+    });
+    expect(updatedStep.status).toBe('FAILED');
+    expect(updatedStep.errorCode).toBe('TARGET_AUTHORITY_REVOKED');
+    expect(updatedStep.completedAt).not.toBeNull();
+
+    // Advance execution: should transition parent execution to FAILED, not strand in WAITING_AGENT
+    await advanceExecution(execution.id);
+
+    const finalExecution = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: execution.id },
+    });
+    expect(finalExecution.status).toBe('FAILED');
+    expect(finalExecution.failureCode).toBe('TARGET_AUTHORITY_REVOKED');
+    expect(finalExecution.completedAt).not.toBeNull();
+
+    await assertTerminalExecutionInvariants(execution.id);
+  });
+
+  it('terminalizes pinned attempt, step, and execution when agent loses source pool membership', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'diag_pinned',
+          name: 'Pinned Diagnostics',
+          type: 'SYSTEMD',
+          riskClass: 'READ_ONLY',
+          config: { action: 'status', unit: 'app.service' },
+        },
+      ],
+    });
+    await testPrisma.runbookAgent.update({
+      where: { id: target.agent.id },
+      data: { labels: { host: 'node-b' } },
+    });
+    await testPrisma.serviceRunbookBinding.update({
+      where: { id: target.binding.id },
+      data: { agentSelector: { host: 'node-b' } },
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    await advanceExecution(execution.id);
+
+    const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id, stepKey: 'diag_pinned' },
+    });
+    expect(step.status).toBe('WAITING_AGENT');
+
+    // Remove agent from the source pool
+    await testPrisma.runbookAgentPoolMember.deleteMany({
+      where: { poolId: target.pool.id, agentId: target.agent.id },
+    });
+
+    // Pinned agent attempts to claim: detects lost membership, terminalizes attempt + step as FAILED
+    const claim = await claimAgentAttempt(target.agent.id);
+    expect(claim).toBeNull();
+
+    const updatedAttempt = await testPrisma.runbookStepAttempt.findFirstOrThrow({
+      where: { executionStepId: step.id },
+    });
+    expect(updatedAttempt.status).toBe('FAILED');
+    expect(updatedAttempt.errorCode).toBe('TARGET_AUTHORITY_REVOKED');
+    expect(updatedAttempt.completedAt).not.toBeNull();
+
+    const updatedStep = await testPrisma.runbookExecutionStep.findUniqueOrThrow({
+      where: { id: step.id },
+    });
+    expect(updatedStep.status).toBe('FAILED');
+    expect(updatedStep.errorCode).toBe('TARGET_AUTHORITY_REVOKED');
+
+    await advanceExecution(execution.id);
+
+    const finalExecution = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: execution.id },
+    });
+    expect(finalExecution.status).toBe('FAILED');
+    expect(finalExecution.failureCode).toBe('TARGET_AUTHORITY_REVOKED');
     await assertTerminalExecutionInvariants(execution.id);
   });
 });

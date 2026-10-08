@@ -76,6 +76,51 @@ export async function recordAgentHeartbeat(input: {
   return { serverTime: new Date().toISOString() };
 }
 
+async function terminalizeRevokedAuthorityAttempt(
+  tx: Prisma.TransactionClient,
+  candidate: {
+    id: string;
+    executionStepId: string;
+    executionStep: {
+      executionId: string;
+      execution: { id: string };
+    };
+  },
+  errorMessage: string
+) {
+  const now = new Date();
+  await tx.runbookStepAttempt.updateMany({
+    where: { id: candidate.id, status: 'PENDING' },
+    data: {
+      status: 'FAILED',
+      completedAt: now,
+      errorCode: 'TARGET_AUTHORITY_REVOKED',
+      errorMessage,
+    },
+  });
+  await tx.runbookExecutionStep.updateMany({
+    where: { id: candidate.executionStepId, status: { in: ['READY', 'WAITING_AGENT', 'RUNNING'] } },
+    data: {
+      status: 'FAILED',
+      completedAt: now,
+      errorCode: 'TARGET_AUTHORITY_REVOKED',
+      errorMessage,
+    },
+  });
+  await tx.backgroundJob.create({
+    data: {
+      type: 'RUNBOOK',
+      status: 'PENDING',
+      scheduledAt: now,
+      maxAttempts: 8,
+      payload: {
+        kind: 'ADVANCE_EXECUTION',
+        executionId: candidate.executionStep.executionId ?? candidate.executionStep.execution.id,
+      },
+    },
+  });
+}
+
 export async function claimAgentAttempt(
   agentId: string,
   confidentialTransport = false,
@@ -166,10 +211,10 @@ export async function claimAgentAttempt(
             };
           }>;
 
-          let eligible: CandidateAttempt[] = [];
+          const eligible: CandidateAttempt[] = [];
 
           const CANDIDATE_BATCH_SIZE = 50;
-          const MAX_BATCHES = 10;
+          const MAX_BATCHES = 50;
           let cursorId: string | undefined = undefined;
 
           for (let batch = 0; batch < MAX_BATCHES; batch++) {
@@ -202,6 +247,40 @@ export async function claimAgentAttempt(
             if (candidates.length === 0) break;
             cursorId = candidates[candidates.length - 1].id;
 
+            const poolIdsToInspect = Array.from(
+              new Set(
+                candidates
+                  .map(c => {
+                    const sel = c.executionStep.execution.targetSelection;
+                    return sel &&
+                      typeof sel === 'object' &&
+                      !Array.isArray(sel) &&
+                      typeof sel.sourcePoolId === 'string'
+                      ? (sel.sourcePoolId as string)
+                      : null;
+                  })
+                  .filter((id): id is string => Boolean(id))
+              )
+            );
+
+            const [existingPools, poolMemberCounts] =
+              poolIdsToInspect.length > 0
+                ? await Promise.all([
+                    tx.runbookAgentPool.findMany({
+                      where: { id: { in: poolIdsToInspect } },
+                      select: { id: true },
+                    }),
+                    tx.runbookAgentPoolMember.groupBy({
+                      by: ['poolId'],
+                      where: { poolId: { in: poolIdsToInspect } },
+                      _count: { agentId: true },
+                    }),
+                  ])
+                : [[], []];
+
+            const existingPoolIdSet = new Set(existingPools.map(p => p.id));
+            const memberCountMap = new Map(poolMemberCounts.map(m => [m.poolId, m._count.agentId]));
+
             for (const candidate of candidates) {
               if (!agentSupportsStep(capabilities, candidate.executionStep.type)) continue;
               if (
@@ -220,30 +299,44 @@ export async function claimAgentAttempt(
                 typeof selection.sourcePoolId === 'string'
                   ? selection.sourcePoolId
                   : null;
-              if (sourcePoolId && !memberPoolIds.has(sourcePoolId)) {
-                const sourcePoolCount = await tx.runbookAgentPool.count({ where: { id: sourcePoolId } });
-                if (sourcePoolCount === 0) {
-                  await tx.runbookStepAttempt.updateMany({
-                    where: { id: candidate.id, status: 'PENDING' },
-                    data: {
-                      status: 'FAILED',
-                      errorCode: 'TARGET_AUTHORITY_REVOKED',
-                      errorMessage: 'Target authority revoked: source pool no longer exists.',
-                    },
-                  });
+
+              if (sourcePoolId) {
+                const poolExists = existingPoolIdSet.has(sourcePoolId);
+                const agentIsMember = memberPoolIds.has(sourcePoolId);
+
+                if (!poolExists) {
+                  await terminalizeRevokedAuthorityAttempt(
+                    tx,
+                    candidate,
+                    'Target authority revoked: source pool no longer exists.'
+                  );
+                  continue;
                 }
-                continue;
+
+                if (candidate.targetAgentId && !agentIsMember) {
+                  await terminalizeRevokedAuthorityAttempt(
+                    tx,
+                    candidate,
+                    'Target authority revoked: target agent is no longer a member of source pool.'
+                  );
+                  continue;
+                }
+
+                if (!agentIsMember) {
+                  continue;
+                }
+
+                if (
+                  selection &&
+                  typeof selection === 'object' &&
+                  !Array.isArray(selection) &&
+                  selection.implicitLocalHost === true &&
+                  (memberCountMap.get(sourcePoolId) ?? 0) !== 1
+                ) {
+                  continue;
+                }
               }
-              if (
-                sourcePoolId &&
-                selection &&
-                typeof selection === 'object' &&
-                !Array.isArray(selection) &&
-                selection.implicitLocalHost === true &&
-                (await tx.runbookAgentPoolMember.count({ where: { poolId: sourcePoolId } })) !== 1
-              ) {
-                continue;
-              }
+
               const keys = referencedStepInputKeys(candidate.executionStep.config);
               const inputs = candidate.executionStep.execution.inputValues as Record<string, unknown>;
               const hasSecrets = Object.entries(inputs).some(

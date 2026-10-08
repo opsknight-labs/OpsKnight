@@ -37,9 +37,11 @@ vi.mock('@/lib/prisma', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       count: vi.fn(),
+      groupBy: vi.fn().mockResolvedValue([]),
     },
     runbookAgentPool: {
       findUnique: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([{ id: 'pool_stale' }, { id: 'pool_1' }]),
       count: vi.fn().mockResolvedValue(1),
     },
     runbookExecutionSigningKey: {
