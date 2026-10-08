@@ -343,7 +343,12 @@ test.describe('mobile PWA browser contract', () => {
     await loginToMobile(page);
     await page.goto('/m/services');
 
-    const serviceLink = page.locator('a[href*="/m/services/"]', { hasText: 'Mobile PWA Service' });
+    // More than one rendered link can point to the same fixture service.
+    // Select a visible service entry; detail and incident assertions below
+    // still verify that the intended fixture is reached.
+    const serviceLink = page
+      .locator('a[href*="/m/services/"]:visible', { hasText: 'Mobile PWA Service' })
+      .first();
     await expect(serviceLink).toBeVisible();
     await serviceLink.click();
 
