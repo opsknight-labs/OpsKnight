@@ -23,7 +23,9 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
     <Card>
       <CardHeader>
         <CardTitle className="text-base">
-          Why was I paged?{' '}
+          {decision.routeType === 'NO_ESCALATION'
+            ? 'How was this incident routed?'
+            : 'Why was I paged?'}{' '}
           <Badge variant="outline">Automation · v{decision.version?.versionNumber ?? '—'}</Badge>
         </CardTitle>
       </CardHeader>

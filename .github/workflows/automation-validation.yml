@@ -60,7 +60,7 @@ jobs:
       - name: Production build
         run: npm run build
       - name: Install browser
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
       - name: Desktop and mobile authoring
         env:
           PLAYWRIGHT_PRODUCTION_SERVER: 'true'
@@ -72,4 +72,5 @@ jobs:
           name: service-automation-validation
           path: |
             test-results/
+            artifacts/automation-ui/
             docs/automation/load-results.json

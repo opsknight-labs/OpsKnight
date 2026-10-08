@@ -36,8 +36,11 @@ export async function configureAutomationLoadProfile(
           lintReport: asJson(issues),
         },
       });
-      const mode =
-        profile === 'disabled' ? 'DISABLED' : profile === 'shadow-small' ? 'SHADOW' : 'LIVE';
+      const mode = ['global-off', 'service-disabled', 'disabled'].includes(profile)
+        ? 'DISABLED'
+        : profile === 'shadow-small'
+          ? 'SHADOW'
+          : 'LIVE';
       await tx.serviceAutomationConfig.upsert({
         where: { serviceId },
         create: { serviceId, mode, activeVersionId: version.id },

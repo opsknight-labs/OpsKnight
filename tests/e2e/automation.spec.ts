@@ -1,11 +1,14 @@
 import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { automationLoadSnapshot } from '../load/fixtures/automation';
 const db = new PrismaClient();
-const email = 'automation-e2e@example.com',
-  password = 'Automation-Local-Test-938!';
+let email: string;
+const password = 'Automation-Local-Test-938!';
 let serviceId: string;
-test.beforeAll(async () => {
+test.beforeAll(async ({}, testInfo) => {
+  email = `automation-e2e-${testInfo.project.name}-${Date.now()}@example.com`;
   const passwordHash = await bcrypt.hash(password, 12);
   await db.user.upsert({
     where: { email },
@@ -17,6 +20,7 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => {
   await db.service.delete({ where: { id: serviceId } }).catch(() => {});
+  await db.user.delete({ where: { email } }).catch(() => {});
   await db.$disconnect();
 });
 test('operator authors, tests, publishes, and enables shadow on desktop and mobile', async ({
@@ -51,7 +55,11 @@ test('operator authors, tests, publishes, and enables shadow on desktop and mobi
   await page.reload();
   await expect(settings.getByLabel('Enable service automation globally')).toBeChecked();
   await expect(settings.getByLabel('Trace and observation retention (days)')).toHaveValue('120');
-  await page.goto(`/services/${serviceId}?tab=automation`);
+  await page.goto(
+    testInfo.project.name === 'desktop'
+      ? `/services/${serviceId}?tab=automation`
+      : `/m/services/${serviceId}/automation`
+  );
   const workspace = page.getByRole('region', { name: 'Service automation' });
   await expect(workspace.getByRole('heading', { name: /Automation/ })).toBeVisible();
   await workspace.getByRole('button', { name: 'Edit automation', exact: true }).click();
@@ -76,6 +84,7 @@ test('operator authors, tests, publishes, and enables shadow on desktop and mobi
   await page.getByRole('button', { name: 'Keep unchanged', exact: true }).click();
   await expect(workspace.getByLabel('Automation mode')).toHaveValue('SHADOW');
   await workspace.getByLabel('Automation mode').selectOption('LIVE');
+  await page.getByRole('checkbox', { name: /I understand this version/ }).check();
   await page.getByRole('button', { name: 'Confirm LIVE', exact: true }).click();
   await expect(workspace.getByLabel('Automation mode')).toHaveValue('LIVE');
   await workspace.getByLabel('Automation mode').selectOption('SHADOW');
@@ -105,5 +114,92 @@ test('operator authors, tests, publishes, and enables shadow on desktop and mobi
   await workspace.getByRole('button', { name: 'Activity', exact: true }).click();
   await expect(workspace.getByText('Version 1', { exact: false }).first()).toBeVisible();
   await workspace.getByRole('button', { name: 'Restore as new version', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('Review version restore');
+  await page.getByRole('button', { name: 'Confirm publication', exact: true }).click();
   await expect(workspace.getByText(/Version 2 ·/)).toBeVisible();
+});
+
+test('100-rule policy remains bounded, keyboard editable, searchable and recoverable', async ({
+  page,
+}, testInfo) => {
+  const csrf = await (await page.request.get('/api/auth/csrf')).json();
+  await page.request.post('/api/auth/callback/credentials', {
+    form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
+  });
+  const snapshot = automationLoadSnapshot('live-worst');
+  await db.automationDraft.upsert({
+    where: { serviceId },
+    create: { serviceId, snapshot, revision: 1, updatedBy: 'automation-ui-fixture' },
+    update: { snapshot, revision: { increment: 1 } },
+  });
+  const timing: Record<string, number | null> = {};
+  let start = Date.now();
+  await page.goto(
+    testInfo.project.name === 'desktop'
+      ? `/services/${serviceId}?tab=automation`
+      : `/m/services/${serviceId}/automation`
+  );
+  const workspace = page.getByRole('region', { name: 'Service automation' });
+  await workspace.getByRole('button', { name: 'Rules', exact: true }).click();
+  await expect(workspace.getByRole('button', { name: /^Configure Rule / })).toHaveCount(100);
+  timing.initialRulesMs = Date.now() - start;
+  await expect(workspace.getByLabel('Rule name')).toHaveCount(0);
+  start = Date.now();
+  await workspace.getByLabel('Search rules').fill('Rule 99');
+  await expect(workspace.getByRole('button', { name: /^Configure Rule / })).toHaveCount(1);
+  timing.searchMs = Date.now() - start;
+  expect(timing.searchMs).toBeLessThan(1500);
+  start = Date.now();
+  const configure = workspace.getByRole('button', { name: 'Configure Rule 99', exact: true });
+  await configure.focus();
+  await page.keyboard.press('Enter');
+  await expect(workspace.getByLabel('Condition field')).toHaveCount(20);
+  timing.expandMs = Date.now() - start;
+  expect(timing.expandMs).toBeLessThan(2000);
+  start = Date.now();
+  await workspace.getByLabel('Rule name').fill('Rule 99 edited');
+  timing.typingMs = Date.now() - start;
+  expect(timing.typingMs).toBeLessThan(1500);
+  const accessibility = await new AxeBuilder({ page })
+    .include('[aria-label="Service automation"]')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+    .analyze();
+  await testInfo.attach('automation-accessibility', {
+    body: JSON.stringify(accessibility.violations, null, 2),
+    contentType: 'application/json',
+  });
+  expect(accessibility.violations).toEqual([]);
+  await workspace.getByRole('button', { name: 'Move rule up', exact: true }).click();
+  await expect
+    .poll(
+      async () => {
+        const saved = await db.automationDraft.findUniqueOrThrow({ where: { serviceId } });
+        return (saved.snapshot as { rules: Array<{ name: string }> }).rules[98].name;
+      },
+      { timeout: 15000 }
+    )
+    .toBe('Rule 99 edited');
+  await workspace.getByRole('button', { name: 'Delete rule', exact: true }).click();
+  await workspace.getByRole('button', { name: 'Undo', exact: true }).click();
+  await workspace.getByRole('button', { name: 'Collapse all', exact: true }).click();
+  await workspace.getByLabel('Search rules').fill('');
+  await expect(workspace.getByRole('button', { name: /^Configure Rule / })).toHaveCount(100);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2))
+    .toBe(true);
+  timing.domNodes = await workspace.locator('*').count();
+  expect(timing.domNodes).toBeLessThan(6000);
+  timing.heapBytes = await page.evaluate(
+    () =>
+      (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory
+        ?.usedJSHeapSize ?? null
+  );
+  await testInfo.attach('large-policy-performance', {
+    body: JSON.stringify(timing, null, 2),
+    contentType: 'application/json',
+  });
+  await testInfo.attach('large-policy-viewport', {
+    body: await page.screenshot(),
+    contentType: 'image/png',
+  });
 });

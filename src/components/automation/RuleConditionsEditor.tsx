@@ -3,6 +3,14 @@
 import { Button } from '@/components/ui/shadcn/button';
 import { TypedValueInput } from './TypedValueInput';
 import type { Rule, Field, Condition } from '@/lib/automation/contract';
+export function conditionOperators(type?: Field['type']) {
+  const common = { EQ: 'is', NE: 'is not', IS_SET: 'is set', IS_MISSING: 'is missing' };
+  if (type === 'BOOLEAN') return common;
+  const lists = { ...common, IN: 'is one of', NOT_IN: 'is not one of' };
+  if (type === 'NUMBER')
+    return { ...lists, LT: 'less than', LTE: 'at most', GT: 'greater than', GTE: 'at least' };
+  return type === 'ENUM' ? { ...lists, IS_UNMAPPED: 'is unmapped' } : lists;
+}
 const controlClass = 'rounded-md border border-input bg-background px-3 py-2 text-sm max-w-full';
 export function RuleConditionsEditor({
   rule,
@@ -21,7 +29,12 @@ export function RuleConditionsEditor({
         IF {rule.conditions.length === 0 ? 'any alert arrives' : 'all conditions match'}
       </p>
       {rule.conditions.map((condition, n) => (
-        <div key={n} className="flex flex-wrap gap-2">
+        <div
+          key={n}
+          role="group"
+          aria-label={`Condition ${n + 1}`}
+          className="flex flex-wrap gap-2"
+        >
           <select
             aria-label="Condition field"
             className={controlClass}
@@ -62,19 +75,9 @@ export function RuleConditionsEditor({
               onChange({ conditions });
             }}
           >
-            {Object.entries({
-              EQ: 'is',
-              NE: 'is not',
-              IN: 'is one of',
-              NOT_IN: 'is not one of',
-              LT: 'less than',
-              LTE: 'at most',
-              GT: 'greater than',
-              GTE: 'at least',
-              IS_SET: 'is set',
-              IS_MISSING: 'is missing',
-              IS_UNMAPPED: 'is unmapped',
-            }).map(([key, label]) => (
+            {Object.entries(
+              conditionOperators(fields.find(f => f.key === condition.fieldKey)?.type)
+            ).map(([key, label]) => (
               <option key={key} value={key}>
                 {label}
               </option>
@@ -84,6 +87,7 @@ export function RuleConditionsEditor({
             <TypedValueInput
               label="Condition value"
               type={fields.find(f => f.key === condition.fieldKey)?.type}
+              canonicalValues={fields.find(f => f.key === condition.fieldKey)?.allowedValues}
               disabled={!canEdit}
               value={condition.value}
               list={['IN', 'NOT_IN'].includes(condition.operator)}
@@ -114,6 +118,7 @@ export function RuleConditionsEditor({
         <Button
           size="sm"
           variant="outline"
+          disabled={rule.conditions.length >= 20 || !fields.length}
           onClick={() =>
             onChange({
               conditions: [...rule.conditions, { fieldKey: fields[0].key, operator: 'IS_SET' }],

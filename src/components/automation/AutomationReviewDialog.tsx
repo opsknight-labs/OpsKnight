@@ -1,4 +1,6 @@
 'use client';
+import { useMemo, useState } from 'react';
+import { semanticSnapshotChanges } from '@/lib/automation/diff';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +14,10 @@ import { compileAutomation } from '@/lib/automation/compiler';
 export function AutomationReviewDialog({
   action,
   snapshot,
+  before,
+  mode,
+  policies,
+  destinations,
   version,
   enabled,
   counts,
@@ -20,16 +26,26 @@ export function AutomationReviewDialog({
   onCancel,
   onConfirm,
 }: {
-  action: 'publish' | 'LIVE' | null;
+  action: 'publish' | 'restore' | 'LIVE' | null;
   snapshot: Snapshot;
+  before?: Snapshot;
+  mode?: string;
+  policies?: Array<{ id: string; name: string }>;
+  destinations?: Array<{ id: string; channelName?: string | null; provider: string }>;
   version: number | null;
   enabled: boolean;
   counts?: { evaluated: number; routes: number; priorities: number; skips: number; errors: number };
   busy: boolean;
   error?: string;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: (acknowledgeNoShadow: boolean) => void;
 }) {
+  const [acknowledge, setAcknowledge] = useState(false);
+
+  const changes = useMemo(
+    () => (before ? semanticSnapshotChanges(before, snapshot, { policies, destinations }) : []),
+    [before, snapshot, policies, destinations]
+  );
   let issues: ReturnType<typeof compileAutomation>['issues'];
   try {
     issues = compileAutomation(snapshot).issues;
@@ -52,7 +68,11 @@ export function AutomationReviewDialog({
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
-            {action === 'LIVE' ? 'Review impact before LIVE' : 'Review automation publication'}
+            {action === 'LIVE'
+              ? 'Review impact before LIVE'
+              : action === 'restore'
+                ? 'Review version restore'
+                : 'Review automation publication'}
           </DialogTitle>
           <DialogDescription>
             {action === 'LIVE'
@@ -66,24 +86,50 @@ export function AutomationReviewDialog({
           </p>
         )}
         <div className="space-y-3 text-sm">
+          {action !== 'LIVE' && mode === 'LIVE' && (
+            <p role="alert" className="rounded-lg border border-amber-500 p-3">
+              This service is LIVE. Publishing immediately changes automation behavior for new
+              incidents. Existing incidents remain pinned to their previous routing decision.
+            </p>
+          )}
+          {action !== 'LIVE' && (
+            <div>
+              <h3 className="font-semibold">Changes from the active version · {changes.length}</h3>
+              {changes.length ? (
+                changes.map((change, index) => (
+                  <p className="border-b py-2" key={index}>
+                    {change}
+                  </p>
+                ))
+              ) : (
+                <p>No semantic changes.</p>
+              )}
+            </div>
+          )}
           <p>
             {action === 'LIVE'
               ? `Published version ${version ?? 'unavailable'}`
               : `${snapshot.fields.length} context fields · ${snapshot.rules.length} rules`}
           </p>
-          <h3 className="font-semibold">Ordered behavior</h3>
-          {snapshot.rules.map((rule, index) => (
-            <p key={rule.id} className="rounded-md border p-2">
-              {index + 1}. {rule.name} · {rule.phase} · {rule.enabled ? 'Enabled' : 'Disabled'}
-              <span className="block text-muted-foreground">
-                {rule.conditions.length
-                  ? `${rule.conditions.length} conditions must match`
-                  : 'Matches every alert'}{' '}
-                →{' '}
-                {rule.actions.map(item => item.type.replaceAll('_', ' ').toLowerCase()).join(', ')}
-              </span>
-            </p>
-          ))}
+          <details>
+            <summary className="cursor-pointer font-semibold">
+              Inspect complete ordered behavior
+            </summary>
+            {snapshot.rules.map((rule, index) => (
+              <p key={rule.id} className="rounded-md border p-2">
+                {index + 1}. {rule.name} · {rule.phase} · {rule.enabled ? 'Enabled' : 'Disabled'}
+                <span className="block text-muted-foreground">
+                  {rule.conditions.length
+                    ? `${rule.conditions.length} conditions must match`
+                    : 'Matches every alert'}{' '}
+                  →{' '}
+                  {rule.actions
+                    .map(item => item.type.replaceAll('_', ' ').toLowerCase())
+                    .join(', ')}
+                </span>
+              </p>
+            ))}
+          </details>
           {issues.map((issue, index) => (
             <p
               key={index}
@@ -111,6 +157,14 @@ export function AutomationReviewDialog({
               {!counts?.evaluated && (
                 <p className="text-amber-700 dark:text-amber-300">
                   No Shadow evidence is available yet.
+                  <label className="block mt-2">
+                    <input
+                      type="checkbox"
+                      checked={acknowledge}
+                      onChange={event => setAcknowledge(event.target.checked)}
+                    />{' '}
+                    I understand this version has not been observed against real Shadow traffic.
+                  </label>
                 </p>
               )}
             </div>
@@ -130,9 +184,9 @@ export function AutomationReviewDialog({
             disabled={
               busy ||
               issues.some(issue => issue.level === 'ERROR') ||
-              (action === 'LIVE' && !version)
+              (action === 'LIVE' && (!version || !enabled || (!counts?.evaluated && !acknowledge)))
             }
-            onClick={onConfirm}
+            onClick={() => onConfirm(acknowledge)}
           >
             {busy ? 'Saving…' : action === 'LIVE' ? 'Confirm LIVE' : 'Confirm publication'}
           </Button>

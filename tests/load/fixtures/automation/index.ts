@@ -1,5 +1,7 @@
 import { emptySnapshot, type Snapshot } from '@/lib/automation/contract';
 export const AUTOMATION_LOAD_PROFILES = [
+  'global-off',
+  'service-disabled',
   'disabled',
   'shadow-small',
   'live-small',
@@ -8,7 +10,7 @@ export const AUTOMATION_LOAD_PROFILES = [
 ] as const;
 export type AutomationLoadProfile = (typeof AUTOMATION_LOAD_PROFILES)[number];
 export function automationLoadSnapshot(profile: AutomationLoadProfile): Snapshot {
-  if (profile === 'disabled') return emptySnapshot;
+  if (['global-off', 'service-disabled', 'disabled'].includes(profile)) return emptySnapshot;
   const count = profile === 'live-worst' ? 100 : profile === 'live-medium' ? 50 : 25;
   const worst = profile === 'live-worst';
   return {

@@ -586,8 +586,8 @@ async function runOnce() {
     let jobsCleaned = false;
     if (Date.now() - lastJobCleanup > 24 * 60 * 60 * 1000) {
       const { default: automationStore } = await import('./prisma');
-      const cleanupDate = new Date().toISOString().slice(0, 10);
-      await automationStore.backgroundJob.upsert({ where: { id: `AUTOMATION_RETENTION:${cleanupDate}` }, create: { id: `AUTOMATION_RETENTION:${cleanupDate}`, type: 'SCHEDULED_TASK', scheduledAt: new Date(), maxAttempts: 3, payload: { task: 'AUTOMATION_RETENTION' } }, update: {} });
+      const { scheduleAutomationRetention } = await import('./automation/jobs');
+      await scheduleAutomationRetention(automationStore);
       await cleanupOldJobs(7);
       lastJobCleanup = Date.now();
       jobsCleaned = true;

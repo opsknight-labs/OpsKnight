@@ -1,21 +1,27 @@
-'use client';
-import { useState } from 'react';
-import AutomationShell from './AutomationShell';
-import { Button } from '@/components/ui/shadcn/button';
+import Link from 'next/link';
 export default function MobileAutomationPanel({
   serviceId,
-  initialOpen,
+  mode,
+  version,
 }: {
   serviceId: string;
-  initialOpen: boolean;
+  mode: string;
+  version: number | null;
 }) {
-  const [open, setOpen] = useState(initialOpen);
   return (
-    <div className="rounded-xl border bg-card p-3 space-y-3">
-      <Button variant="outline" aria-expanded={open} onClick={() => setOpen(!open)}>
-        Automation
-      </Button>
-      {open && <AutomationShell serviceId={serviceId} />}
-    </div>
+    <section aria-label="Automation status" className="rounded-xl border bg-card p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">Automation</h2>
+        <span className="text-xs text-muted-foreground">
+          {mode} · v{version ?? '—'}
+        </span>
+      </div>
+      <Link
+        className="inline-flex min-h-11 items-center text-sm font-semibold underline"
+        href={`/m/services/${serviceId}/automation`}
+      >
+        View automation →
+      </Link>
+    </section>
   );
 }

@@ -51,6 +51,7 @@ const actionSchema = z.discriminatedUnion('action', [
       action: z.literal('mode'),
       serviceId: id,
       mode: z.enum(['DISABLED', 'SHADOW', 'LIVE']),
+      acknowledgeNoShadow: z.boolean().optional(),
       expectedActiveVersionId: id.nullable(),
     })
     .strict(),
@@ -204,9 +205,17 @@ export async function getAutomationArea(
           take: 200,
         })
       : [];
+  const unmappedCount =
+    area === 'overview'
+      ? await prisma.automationContextObservation.count({ where: { serviceId, unmapped: true } })
+      : 0;
   const aggregates = ['overview', 'rules'].includes(area)
     ? await prisma.automationShadowAggregate.findMany({
-        where: { serviceId, bucketDate: { gte: new Date(Date.now() - 7 * 86400000) } },
+        where: {
+          serviceId,
+          versionId: config?.activeVersionId ?? '__no_active_version__',
+          bucketDate: { gte: new Date(Date.now() - 7 * 86400000) },
+        },
         take: 100,
         orderBy: { bucketDate: 'desc' },
       })
@@ -218,27 +227,24 @@ export async function getAutomationArea(
         take: 25,
       })
     : [];
-  const policies =
-    area === 'rules'
-      ? await prisma.escalationPolicy.findMany({
-          select: { id: true, name: true },
-          orderBy: { name: 'asc' },
-        })
-      : [];
-  const slack =
-    area === 'rules'
-      ? await prisma.slackDestination.findMany({
-          where: { serviceId, enabled: true },
-          select: { id: true, channelName: true },
-        })
-      : [];
-  const teams =
-    area === 'rules'
-      ? await prisma.microsoftTeamsDestination.findMany({
-          where: { serviceId, enabled: true },
-          select: { id: true, channelName: true },
-        })
-      : [];
+  const policies = ['rules', 'test'].includes(area)
+    ? await prisma.escalationPolicy.findMany({
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      })
+    : [];
+  const slack = ['rules', 'test'].includes(area)
+    ? await prisma.slackDestination.findMany({
+        where: { serviceId, enabled: true },
+        select: { id: true, channelName: true },
+      })
+    : [];
+  const teams = ['rules', 'test'].includes(area)
+    ? await prisma.microsoftTeamsDestination.findMany({
+        where: { serviceId, enabled: true },
+        select: { id: true, channelName: true },
+      })
+    : [];
   const integrations = ['context', 'test'].includes(area)
     ? await prisma.integration.findMany({
         where: { serviceId },
@@ -263,10 +269,16 @@ export async function getAutomationArea(
           publishedAt: true,
           publishedBy: true,
           lintReport: true,
-          snapshot: true,
+          snapshot: area !== 'overview',
         },
       })
     : null;
+  const publishers = versions.length
+    ? await prisma.user.findMany({
+        where: { id: { in: [...new Set(versions.map(version => version.publishedBy))] } },
+        select: { id: true, name: true },
+      })
+    : [];
   return {
     enabled: await automationEnabled(),
     mode: config?.mode ?? 'DISABLED',
@@ -280,9 +292,15 @@ export async function getAutomationArea(
           revision: draftRevision?.revision ?? 0,
         },
     activeVersion,
-    versions,
+    versions: versions.map(version => ({
+      ...version,
+      publisherName:
+        publishers.find(publisher => publisher.id === version.publishedBy)?.name ??
+        'Former administrator',
+    })),
     versionTotal,
     observations,
+    unmappedCount,
     aggregates,
     traces,
     policies,

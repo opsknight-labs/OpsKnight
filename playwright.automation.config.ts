@@ -6,7 +6,7 @@ export default defineConfig({
   workers: 1,
   timeout: 180000,
   expect: { timeout: 30000 },
-  reporter: 'line',
+  reporter: [['line'], ['json', { outputFile: 'artifacts/automation-ui/results.json' }]],
   use: {
     baseURL: 'http://127.0.0.1:3193',
     trace: 'retain-on-failure',
@@ -16,6 +16,8 @@ export default defineConfig({
   projects: [
     { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
     { name: 'mobile', use: { ...devices['Pixel 5'] } },
+    { name: 'iphone', use: { ...devices['iPhone 13'] } },
+    { name: 'tablet', use: { ...devices['iPad Pro 11'] } },
   ],
   webServer: {
     command:

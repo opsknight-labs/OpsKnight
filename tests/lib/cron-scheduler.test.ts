@@ -96,6 +96,8 @@ vi.mock('@/lib/prisma', () => ({
       update: vi.fn().mockResolvedValue({}),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    automationTrace: { findFirst: vi.fn().mockResolvedValue(null) },
+    automationContextObservation: { findFirst: vi.fn().mockResolvedValue(null) },
     incident: { findFirst: vi.fn().mockResolvedValue(null) },
     backgroundJob: { findFirst: vi.fn().mockResolvedValue(null) },
     $executeRaw: vi.fn().mockResolvedValue(1),

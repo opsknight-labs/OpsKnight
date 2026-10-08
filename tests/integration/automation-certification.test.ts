@@ -12,8 +12,9 @@ import { resolveIncidentResponderRouting } from '@/lib/escalation/routing';
 import { executeEscalation } from '@/lib/escalation';
 import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 import { claimPendingJobs, processJob, GENERAL_WORKER_EXCLUDED_JOB_TYPES } from '@/lib/jobs/queue';
+import * as automationRuntime from '@/lib/automation/runtime';
 import { prepareAutomation, persistAutomation } from '@/lib/automation/runtime';
-import { processAutomationJob } from '@/lib/automation/jobs';
+import { processAutomationJob, scheduleAutomationRetention } from '@/lib/automation/jobs';
 import { emptySnapshot, type Snapshot } from '@/lib/automation/contract';
 import { checksum } from '@/lib/automation/cache';
 vi.mock('@/lib/slack', () => ({ sendSlackMessageToChannel: vi.fn() }));
@@ -87,6 +88,7 @@ async function setup(policy: Snapshot = snapshot, mode: 'SHADOW' | 'LIVE' = 'LIV
     serviceId: service.id,
     actorId: actor.id,
     mode,
+    acknowledgeNoShadow: true,
     expectedActiveVersionId: version.id,
   });
   return { service, actor, draft, version };
@@ -151,6 +153,51 @@ describe('service automation transaction certification', () => {
     const decisions = await db.incidentAutomationDecision.findMany();
     expect(decisions.map(d => d.routeType)).toEqual(['SERVICE_DEFAULT', 'SERVICE_DEFAULT']);
   });
+  it('keeps clean successes compact while retaining complete unmapped diagnostics', async () => {
+    const { service } = await setup();
+    for (const [id, environment] of [
+      ['clean-a', 'staging'],
+      ['unmapped-a', 'stg-unknown'],
+    ] as const) {
+      const incoming = { ...event, payload: { ...event.payload, custom_details: { environment } } };
+      const envelope = {
+        serviceId: service.id,
+        integrationId: 'cert',
+        integrationType: 'EVENTS_API',
+        event: incoming,
+        providerPayload: incoming,
+        receivedAt: new Date(),
+      };
+      await db.$transaction(async tx => {
+        await tx.incident.create({
+          data: {
+            id,
+            title: 'Trace certification',
+            serviceId: service.id,
+            priority: 'P2',
+            urgency: 'HIGH',
+          },
+        });
+        const runtime = await prepareAutomation(tx, envelope, { priority: 'P2', urgency: 'HIGH' });
+        await persistAutomation(tx, id, envelope, runtime);
+      });
+    }
+    const clean = await db.automationTrace.findFirstOrThrow({ where: { incidentId: 'clean-a' } });
+    const unmapped = await db.automationTrace.findFirstOrThrow({
+      where: { incidentId: 'unmapped-a' },
+    });
+    expect(clean.detail).toMatchObject({
+      diagnosticLevel: 'COMPACT',
+      result: {
+        outcome: { type: 'NO_ESCALATION' },
+        enrichedContext: { priority: { state: 'RECOGNIZED', value: 'P1' } },
+      },
+    });
+    expect(unmapped.detail).toMatchObject({ diagnosticLevel: 'FULL' });
+    expect(JSON.stringify(clean.detail).length).toBeLessThan(
+      JSON.stringify(unmapped.detail).length
+    );
+  });
   it('shadow is operationally equivalent to globally disabled', async () => {
     const { service } = await setup(snapshot, 'SHADOW');
     await db.systemSettings.upsert({
@@ -190,6 +237,12 @@ describe('service automation transaction certification', () => {
     expect(await db.incidentAutomationDecision.count()).toBe(0);
     expect(await db.incidentTag.count()).toBe(0);
     expect(await db.automationTrace.count()).toBe(1);
+    expect(await db.automationShadowAggregate.count()).toBe(0);
+    const observation = await db.backgroundJob.findFirstOrThrow({
+      where: { payload: { path: ['task'], equals: 'AUTOMATION_OBSERVE' } },
+    });
+    await processAutomationJob(observation.payload);
+    await processAutomationJob(observation.payload);
     expect((await db.automationShadowAggregate.findFirstOrThrow()).priorityDifferent).toBe(1);
   });
   it('pins policy B through default changes, resume, reopen, and emergency disable', async () => {
@@ -255,6 +308,7 @@ describe('service automation transaction certification', () => {
       serviceId: service.id,
       actorId: actor.id,
       mode: 'LIVE',
+      acknowledgeNoShadow: true,
       expectedActiveVersionId: version.id,
     });
     await ingest(service.id);
@@ -518,6 +572,15 @@ describe('service automation transaction certification', () => {
     const incidents = await db.incident.findMany();
     expect(incidents[0].priority).toBe(incidents[1].priority);
     expect(await db.incidentAutomationDecision.count()).toBe(0);
+    expect(await scheduleAutomationRetention(db)).toBe(false);
+    expect(
+      await db.backgroundJob.count({
+        where: {
+          type: 'SCHEDULED_TASK',
+          payload: { path: ['task'], string_starts_with: 'AUTOMATION_' },
+        },
+      })
+    ).toBe(0);
     expect((await resolveIncidentResponderRouting(incidents[0].id, service.id)).type).toBe(
       'DEFAULT_FANOUT'
     );
@@ -678,15 +741,101 @@ describe('service automation transaction certification', () => {
       expectedActiveVersionId: version.id,
     });
     await ingest(service.id);
-    const job = await db.backgroundJob.findFirstOrThrow({
-      where: { payload: { path: ['task'], equals: 'AUTOMATION_NOTIFY' } },
-    });
-    await Promise.all(Array.from({ length: 10 }, () => processAutomationJob(job.payload)));
+    expect(
+      await db.backgroundJob.count({
+        where: { payload: { path: ['task'], equals: 'AUTOMATION_NOTIFY' } },
+      })
+    ).toBe(0);
     const notifications = await db.notification.findMany();
     expect(notifications).toHaveLength(1);
     expect(notifications[0].channel).toBe('SLACK');
     expect(notifications[0].recipientType).toBe('SLACK_CHANNEL');
     expect(await db.backgroundJob.count({ where: { type: 'ESCALATION' } })).toBe(0);
+  });
+  it('recovers an actual database connection termination during ingestion without losing or changing routing', async () => {
+    const { service } = await setup();
+    let terminate = true;
+    const original = automationRuntime.persistAutomation;
+    const interception = vi
+      .spyOn(automationRuntime, 'persistAutomation')
+      .mockImplementation(async (...args) => {
+        await original(...args);
+        if (terminate) {
+          terminate = false;
+          await args[0].$queryRaw`SELECT pg_terminate_backend(pg_backend_pid())`;
+        }
+      });
+    try {
+      await Promise.allSettled([ingest(service.id)]);
+    } finally {
+      interception.mockRestore();
+    }
+    expect(terminate).toBe(false);
+    await ingest(service.id);
+    expect(await db.incident.count()).toBe(1);
+    expect(await db.incidentAutomationDecision.count()).toBe(1);
+    expect(await db.automationTrace.count()).toBe(1);
+    expect((await db.incidentAutomationDecision.findFirstOrThrow()).routeType).toBe(
+      'NO_ESCALATION'
+    );
+    expect(await db.backgroundJob.count({ where: { type: 'ESCALATION' } })).toBe(0);
+    const observe = await db.backgroundJob.findFirstOrThrow({
+      where: { payload: { path: ['task'], equals: 'AUTOMATION_OBSERVE' } },
+    });
+    await processAutomationJob(observe.payload);
+    await processAutomationJob(observe.payload);
+    expect(
+      await db.backgroundJob.count({
+        where: { id: { startsWith: 'AUTOMATION_OBSERVATION_RECEIPT:' } },
+      })
+    ).toBe(1);
+  });
+  it('coalesces durable observation jobs and Shadow rollups without double counting on replay', async () => {
+    const { service, version } = await setup(snapshot, 'SHADOW');
+    const jobs = Array.from({ length: 16 }, (_, index) => ({
+      task: 'AUTOMATION_OBSERVE' as const,
+      logicalKey: `coalesce-${index}`,
+      serviceId: service.id,
+      integrationId: 'batch',
+      integrationType: 'EVENTS_API',
+      observations: [
+        { key: 'environment', path: 'environment', value: 'prd', type: 'ENUM', unmapped: false },
+      ],
+      shadow: {
+        versionId: version.id,
+        bucketDate: new Date('2026-10-08').toISOString(),
+        evaluated: 1,
+        same: 1,
+        priorityDifferent: 0,
+        routeDifferent: 0,
+        noEscalationDifferent: 0,
+        errors: 0,
+        fallbacks: 0,
+      },
+    }));
+    await db.backgroundJob.createMany({
+      data: jobs.map((payload, index) => ({
+        id: `batch-${index}`,
+        type: 'SCHEDULED_TASK',
+        payload,
+        scheduledAt: new Date(Date.now() - 1000),
+      })),
+    });
+    await processAutomationJob(jobs[0]);
+    for (const job of jobs) await processAutomationJob(job);
+    expect(
+      (await db.automationContextObservation.findFirstOrThrow({ where: { serviceId: service.id } }))
+        .count
+    ).toBe(16);
+    expect((await db.automationShadowAggregate.findFirstOrThrow()).evaluated).toBe(16);
+    expect(
+      await db.backgroundJob.count({ where: { id: { startsWith: 'batch-' }, status: 'COMPLETED' } })
+    ).toBe(16);
+    expect(
+      await db.backgroundJob.count({
+        where: { id: { startsWith: 'AUTOMATION_OBSERVATION_RECEIPT:' } },
+      })
+    ).toBe(16);
   });
   it('bounds observation cardinality per field while continuing existing-value counts', async () => {
     const { service } = await setup();
