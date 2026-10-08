@@ -1,4 +1,5 @@
 import 'server-only';
+import { getAutomationSettings } from './settings';
 import type { Prisma } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { emitAuditEvent } from '@/lib/audit';
@@ -203,6 +204,7 @@ export async function changeMode(input: {
   actorId: string;
   mode: 'DISABLED' | 'SHADOW' | 'LIVE';
   expectedActiveVersionId: string | null;
+  acknowledgeNoShadow?: boolean;
 }) {
   return runSerializableTransaction(async tx => {
     await lock(tx, input.serviceId);
@@ -213,12 +215,34 @@ export async function changeMode(input: {
     if ((config?.activeVersionId ?? null) !== input.expectedActiveVersionId)
       throw new AutomationConflict();
     if (input.mode !== 'DISABLED') {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('automation-system-settings', 0))`;
+      // A row lock fences a Serializable snapshot taken before an admin toggle.
+      // PostgreSQL aborts/retries stale snapshots instead of staging LIVE behind OFF.
+      await tx.$queryRaw`SELECT id FROM "SystemSettings" WHERE id = 'default' FOR UPDATE`;
+      if (!(await getAutomationSettings(tx)).automationEnabled)
+        throw new Error(
+          'Enable global automation before selecting SHADOW or LIVE. Drafts and publication remain available.'
+        );
       if (!config?.activeVersion) throw new Error('Publish a version before enabling automation');
       loadCompiledVersion(config.activeVersion);
       const { compiled, issues } = compileAutomation(config.activeVersion.snapshot);
       if (issues.some(i => i.level === 'ERROR'))
         throw new Error('Active version has blocking lint errors');
       await validateReferences(tx, input.serviceId, compiled);
+      if (input.mode === 'LIVE' && !input.acknowledgeNoShadow) {
+        const evidence = await tx.automationShadowAggregate.aggregate({
+          where: {
+            serviceId: input.serviceId,
+            versionId: config.activeVersion.id,
+            bucketDate: { gte: new Date(Date.now() - 7 * 86400000) },
+          },
+          _sum: { evaluated: true },
+        });
+        if (!evidence._sum.evaluated)
+          throw new Error(
+            'Acknowledge activation without Shadow traffic for this published version.'
+          );
+      }
     }
     const updated = await tx.serviceAutomationConfig.upsert({
       where: { serviceId: input.serviceId },

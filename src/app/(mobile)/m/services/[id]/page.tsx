@@ -35,6 +35,9 @@ export default async function MobileServiceDetailPage({ params, searchParams }: 
     where: { AND: [serviceReadWhere(context.actor), { id }] },
     include: {
       policy: true,
+      automationConfig: {
+        select: { mode: true, activeVersion: { select: { versionNumber: true } } },
+      },
       incidents: {
         where: {
           AND: [incidentAccess, { status: { in: activeIncidentStatuses() } }],
@@ -62,7 +65,7 @@ export default async function MobileServiceDetailPage({ params, searchParams }: 
   });
 
   if (!service) notFound();
-  const openAutomation = (await searchParams)?.tab === 'automation';
+  if ((await searchParams)?.tab === 'automation') redirect(`/m/services/${service.id}/automation`);
   const isOperational = service._count.incidents === 0;
 
   return (
@@ -75,9 +78,6 @@ export default async function MobileServiceDetailPage({ params, searchParams }: 
         <span>Back to services</span>
       </Link>
 
-      {hasCapability(context.actor.role, 'automation.read') && (
-        <MobileAutomationPanel serviceId={service.id} initialOpen={openAutomation} />
-      )}
       <section className="rounded-xl border border-border bg-card p-3.5 text-card-foreground">
         <div className="flex min-w-0 items-start gap-3">
           <span
@@ -117,6 +117,13 @@ export default async function MobileServiceDetailPage({ params, searchParams }: 
           <Detail label="Escalation policy" value={service.policy?.name || 'None'} />
         </div>
       </section>
+      {hasCapability(context.actor.role, 'automation.read') && (
+        <MobileAutomationPanel
+          serviceId={service.id}
+          mode={service.automationConfig?.mode ?? 'DISABLED'}
+          version={service.automationConfig?.activeVersion?.versionNumber ?? null}
+        />
+      )}
 
       <Button asChild className="h-11 w-full rounded-xl">
         <Link href={`/m/incidents/create?serviceId=${service.id}`}>

@@ -2,6 +2,8 @@ import { beforeEach, afterAll, expect, it, vi } from 'vitest';
 import { testPrisma as db, resetDatabase, createTestUser } from '../helpers/test-db';
 import { getAutomationSettings } from '@/lib/automation/settings';
 import { processAutomationJob } from '@/lib/automation/jobs';
+import { saveDraft, publishVersion, changeMode } from '@/lib/automation/versioning';
+import { emptySnapshot } from '@/lib/automation/contract';
 import { automationEnabled } from '@/lib/automation/runtime';
 import { saveAutomationSettings } from '@/app/(app)/settings/system/automation-actions';
 const auth = vi.hoisted(() => ({ actorId: '', denied: false }));
@@ -182,4 +184,57 @@ it('an in-flight continuation respects an administrator increasing retention', a
     cutoff: new Date(Date.now() - 90 * 86400000).toISOString(),
   });
   expect(await db.automationTrace.count()).toBe(1);
+});
+
+it('global OFF locks operational modes, resets staged services and fences a concurrent LIVE request', async () => {
+  await saveAutomationSettings({
+    automationEnabled: true,
+    automationTraceRetentionDays: 90,
+    expectedRevision: 0,
+  });
+  const service = await db.service.create({ data: { name: 'Global safety' } });
+  const draft = await saveDraft({
+    serviceId: service.id,
+    actorId: auth.actorId,
+    snapshot: emptySnapshot,
+    expectedRevision: 0,
+  });
+  const version = await publishVersion({
+    serviceId: service.id,
+    actorId: auth.actorId,
+    expectedRevision: draft.revision,
+    expectedActiveVersionId: null,
+  });
+  const mode = {
+    serviceId: service.id,
+    actorId: auth.actorId,
+    expectedActiveVersionId: version.id,
+  };
+  await expect(changeMode({ ...mode, mode: 'LIVE' })).rejects.toThrow('Acknowledge activation');
+  await changeMode({ ...mode, mode: 'SHADOW' });
+  await Promise.allSettled([
+    changeMode({ ...mode, mode: 'LIVE', acknowledgeNoShadow: true }),
+    saveAutomationSettings({
+      automationEnabled: false,
+      automationTraceRetentionDays: 90,
+      expectedRevision: 1,
+    }),
+  ]);
+  expect((await getAutomationSettings()).automationEnabled).toBe(false);
+  expect(
+    (await db.serviceAutomationConfig.findUniqueOrThrow({ where: { serviceId: service.id } })).mode
+  ).toBe('DISABLED');
+  await expect(changeMode({ ...mode, mode: 'SHADOW' })).rejects.toThrow('Enable global automation');
+  await expect(changeMode({ ...mode, mode: 'LIVE', acknowledgeNoShadow: true })).rejects.toThrow(
+    'Enable global automation'
+  );
+  await saveAutomationSettings({
+    automationEnabled: true,
+    automationTraceRetentionDays: 90,
+    expectedRevision: 2,
+  });
+  expect(
+    (await db.serviceAutomationConfig.findUniqueOrThrow({ where: { serviceId: service.id } })).mode
+  ).toBe('DISABLED');
+  await changeMode({ ...mode, mode: 'LIVE', acknowledgeNoShadow: true });
 });

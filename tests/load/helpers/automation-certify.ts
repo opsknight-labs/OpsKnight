@@ -89,6 +89,16 @@ async function runK6(profile: string, output: string) {
 async function main() {
   if (process.env.OPSKNIGHT_LOAD_CERT_DB !== 'true')
     throw new Error('Use an explicitly isolated load database with OPSKNIGHT_LOAD_CERT_DB=true');
+  const outstanding = await db.backgroundJob.count({
+    where: {
+      status: { in: ['PENDING', 'PROCESSING', 'PENDING_V2', 'PROCESSING_V2'] },
+      scheduledAt: { lte: new Date() },
+      NOT: { type: { in: ['ESCALATION', 'AUTO_UNSNOOZE'] } },
+    },
+  });
+  const outstandingNotifications = await db.notification.count({ where: { status: 'PENDING' } });
+  if (outstanding || outstandingNotifications)
+    throw new Error('Certification requires a drained database before the first profile');
   const manifestPath = path.resolve(
     process.env.LOAD_SEED_MANIFEST || 'artifacts/load-certification/automation/seed-manifest.json'
   );
@@ -120,13 +130,19 @@ async function main() {
   const topology = process.env.AUTOMATION_TOPOLOGY || 'compose-split';
   const outputDir = path.resolve('artifacts/load-certification/automation', topology);
   await fs.mkdir(outputDir, { recursive: true });
-  await db.systemSettings.upsert({
-    where: { id: 'default' },
-    create: { automationEnabled: true },
-    update: { automationEnabled: true },
-  });
   const results = [];
-  for (const profile of AUTOMATION_LOAD_PROFILES) {
+  for (const profile of AUTOMATION_LOAD_PROFILES.filter(profile => profile !== 'disabled')) {
+    if (results.length && results.at(-1)!.pendingAfterDrain > 0) {
+      process.stderr.write(
+        'Stopped: previous profile did not drain; refusing a contaminated comparison.\n'
+      );
+      break;
+    }
+    await db.systemSettings.upsert({
+      where: { id: 'default' },
+      create: { automationEnabled: profile !== 'global-off' },
+      update: { automationEnabled: profile !== 'global-off' },
+    });
     await configureAutomationLoadProfile(db, manifest.allServiceIds, actor.id, profile);
     const [before] = await db.$queryRaw<
       Array<{ deadlocks: bigint }>
@@ -324,6 +340,8 @@ async function main() {
     );
   }
   const baseline = results[0];
+  const serviceDisabled = results.find(result => result.profile === 'service-disabled');
+  const incomplete = results.length !== AUTOMATION_LOAD_PROFILES.length - 1;
   const comparisons = results.slice(1).map(result => ({
     profile: result.profile,
     acceptedRatio: result.acceptedEvents / Math.max(1, baseline.acceptedEvents),
@@ -333,6 +351,14 @@ async function main() {
     p99Ratio:
       result.summary.metrics.automation_ingestion_latency_ms['p(99)'] /
       baseline.summary.metrics.automation_ingestion_latency_ms['p(99)'],
+    p95RatioToServiceDisabled: serviceDisabled
+      ? result.summary.metrics.automation_ingestion_latency_ms['p(95)'] /
+        serviceDisabled.summary.metrics.automation_ingestion_latency_ms['p(95)']
+      : null,
+    p99RatioToServiceDisabled: serviceDisabled
+      ? result.summary.metrics.automation_ingestion_latency_ms['p(99)'] /
+        serviceDisabled.summary.metrics.automation_ingestion_latency_ms['p(99)']
+      : null,
     peakCriticalQueueAgeMs: Math.max(
       ...result.telemetrySamples.map(
         sample => sample.postgres.oldestPendingCriticalNotificationAgeMs
@@ -394,11 +420,18 @@ async function main() {
       ...((result.criticalNotificationLatency.p99Ms ?? 0) > limits.notificationP99Ms
         ? [`${result.profile}: critical notification p99 exceeds ${limits.notificationP99Ms}ms`]
         : []),
+      ...(result.telemetrySamples.some(
+        sample =>
+          sample.postgres.oldestPendingCriticalNotificationAgeMs > limits.queueAgeMs ||
+          sample.postgres.oldestPendingAutomationObservationAgeMs > limits.queueAgeMs
+      )
+        ? [`${result.profile}: queue age exceeds ${limits.queueAgeMs}ms`]
+        : []),
     ])
     .concat(
       comparisons.flatMap(result => [
         ...(result.p95Ratio > limits.latencyRatio || result.p99Ratio > limits.latencyRatio
-          ? [`${result.profile}: HTTP latency exceeds ${limits.latencyRatio}x disabled`]
+          ? [`${result.profile}: HTTP latency exceeds ${limits.latencyRatio}x global-off`]
           : []),
         ...(result.peakCriticalQueueAgeMs > limits.queueAgeMs ||
         result.peakAutomationObservationQueueAgeMs > limits.queueAgeMs
@@ -406,6 +439,8 @@ async function main() {
           : []),
       ])
     );
+  if (incomplete)
+    failures.push('Incomplete certification: refused to start a profile on undrained state');
   await fs.writeFile(
     path.join(outputDir, 'certification.json'),
     JSON.stringify(
@@ -422,7 +457,7 @@ async function main() {
           responderUsers: 2,
           publicFanout: 'Dedicated status-fanout suite',
           comparisonValidity: results.some(result => result.pendingAfterDrain > 0)
-            ? 'FAILED: undrained work can carry over between profiles; latency ratios are diagnostic'
+            ? 'FAILED: a profile did not drain; no subsequent profile was started'
             : 'Queues drained between profiles',
         },
         durationPerProfile: process.env.AUTOMATION_DURATION || '30s',

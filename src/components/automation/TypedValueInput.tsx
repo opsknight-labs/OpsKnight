@@ -9,6 +9,7 @@ export function parseAuthoringScalar(raw: string, type?: Field['type']): Scalar 
 }
 export function TypedValueInput({
   type,
+  canonicalValues = [],
   value,
   list = false,
   label,
@@ -16,6 +17,7 @@ export function TypedValueInput({
   onChange,
 }: {
   type?: Field['type'];
+  canonicalValues?: string[];
   value: Scalar | Scalar[] | undefined;
   list?: boolean;
   label: string;
@@ -29,7 +31,43 @@ export function TypedValueInput({
   const text = Array.isArray(value) ? value.join(', ') : String(value ?? '');
   return (
     <div className="min-w-0 w-full sm:w-48 space-y-1">
-      {type === 'BOOLEAN' && !list ? (
+      {type === 'ENUM' ? (
+        list ? (
+          <div role="group" aria-label={label} className="flex flex-wrap gap-2">
+            {canonicalValues.map(item => (
+              <label key={item} className="rounded-full border px-2 py-1 text-sm">
+                <input
+                  type="checkbox"
+                  disabled={disabled}
+                  checked={Array.isArray(value) && value.includes(item)}
+                  onChange={event => {
+                    const selected = Array.isArray(value) ? value : [];
+                    onChange(
+                      event.target.checked ? [...selected, item] : selected.filter(v => v !== item)
+                    );
+                  }}
+                />{' '}
+                {item}
+              </label>
+            ))}
+          </div>
+        ) : (
+          <select
+            aria-label={label}
+            disabled={disabled}
+            value={text}
+            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+            onChange={event => onChange(event.target.value)}
+          >
+            <option value="">Choose canonical value…</option>
+            {canonicalValues.map(item => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        )
+      ) : type === 'BOOLEAN' && !list ? (
         <select
           aria-label={label}
           aria-invalid={invalid}

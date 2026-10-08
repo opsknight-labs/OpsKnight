@@ -33,7 +33,7 @@ export default function AutomationSettings({ initialSettings }: { initialSetting
       </label>
       <p className="text-sm text-muted-foreground">
         Disabling stops new evaluations. Existing incident decisions stay pinned. Each service
-        retains its Disabled, Shadow or Live mode.
+        returns to Disabled. After enabling again, review each service in Shadow before Live.
       </p>
       <div className="space-y-2">
         <Label htmlFor="automation-retention">Trace and observation retention (days)</Label>

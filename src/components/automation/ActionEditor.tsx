@@ -12,6 +12,7 @@ export function ActionEditor({
   policies,
   destinations,
   disabled,
+  allowRemove = true,
   onChange,
   onRemove,
 }: {
@@ -21,34 +22,54 @@ export function ActionEditor({
   policies: Data['policies'];
   destinations: Data['destinations'];
   disabled: boolean;
+  allowRemove?: boolean;
   onChange: (a: Action) => void;
   onRemove: () => void;
 }) {
   return (
     <div className="flex flex-wrap gap-2">
       <select
-        aria-label="Action"
+        aria-label={
+          phase === 'ROUTE'
+            ? action.type === 'NOTIFY_CHANNEL'
+              ? 'Notification action'
+              : 'Responder route'
+            : 'Action'
+        }
         className={controlClass}
         disabled={disabled}
         value={action.type}
         onChange={e => {
           const type = e.target.value;
+          const contextField = fields.find(
+            field => !builtinFields.some(builtin => builtin.key === field.key)
+          );
           const next: Action =
             type === 'SET_PRIORITY'
               ? { type, value: 'P1' }
               : type === 'SET_CONTEXT'
                 ? {
                     type,
-                    fieldKey:
-                      fields.find(f => !builtinFields.some(b => b.key === f.key))?.key ?? '',
-                    value: '',
+                    fieldKey: contextField?.key ?? '',
+                    value:
+                      contextField?.type === 'NUMBER'
+                        ? 0
+                        : contextField?.type === 'BOOLEAN'
+                          ? false
+                          : contextField?.type === 'ENUM'
+                            ? (contextField.allowedValues?.[0] ?? '')
+                            : '',
                   }
                 : type === 'ADD_TAG'
                   ? { type, value: 'tag' }
                   : type === 'USE_ESCALATION_POLICY'
                     ? { type, policyId: policies[0]?.id ?? '' }
                     : type === 'NOTIFY_CHANNEL'
-                      ? { type, provider: 'SLACK', destinationId: destinations[0]?.id ?? '' }
+                      ? {
+                          type,
+                          provider: destinations[0]?.provider ?? 'SLACK',
+                          destinationId: destinations[0]?.id ?? '',
+                        }
                       : type === 'NO_ESCALATION'
                         ? { type }
                         : { type: 'USE_SERVICE_DEFAULT' };
@@ -57,9 +78,20 @@ export function ActionEditor({
       >
         {(phase === 'ENRICH'
           ? ['SET_PRIORITY', 'SET_CONTEXT', 'ADD_TAG']
-          : ['USE_SERVICE_DEFAULT', 'USE_ESCALATION_POLICY', 'NO_ESCALATION', 'NOTIFY_CHANNEL']
+          : action.type === 'NOTIFY_CHANNEL'
+            ? ['NOTIFY_CHANNEL']
+            : ['USE_SERVICE_DEFAULT', 'USE_ESCALATION_POLICY', 'NO_ESCALATION']
         ).map(type => (
-          <option key={type} value={type}>
+          <option
+            key={type}
+            value={type}
+            disabled={
+              (type === 'SET_CONTEXT' &&
+                !fields.some(f => !builtinFields.some(b => b.key === f.key))) ||
+              (type === 'USE_ESCALATION_POLICY' && !policies.length) ||
+              (type === 'NOTIFY_CHANNEL' && !destinations.length)
+            }
+          >
             {type.replaceAll('_', ' ').toLowerCase()}
           </option>
         ))}
@@ -98,7 +130,21 @@ export function ActionEditor({
           className={controlClass}
           disabled={disabled}
           value={action.fieldKey}
-          onChange={e => onChange({ ...action, fieldKey: e.target.value })}
+          onChange={e => {
+            const field = fields.find(f => f.key === e.target.value);
+            onChange({
+              ...action,
+              fieldKey: e.target.value,
+              value:
+                field?.type === 'NUMBER'
+                  ? 0
+                  : field?.type === 'BOOLEAN'
+                    ? false
+                    : field?.type === 'ENUM'
+                      ? (field.allowedValues?.[0] ?? '')
+                      : '',
+            });
+          }}
         >
           {fields
             .filter(f => !builtinFields.some(b => b.key === f.key))
@@ -116,6 +162,11 @@ export function ActionEditor({
             action.type === 'SET_CONTEXT'
               ? fields.find(f => f.key === action.fieldKey)?.type
               : 'STRING'
+          }
+          canonicalValues={
+            action.type === 'SET_CONTEXT'
+              ? fields.find(f => f.key === action.fieldKey)?.allowedValues
+              : undefined
           }
           disabled={disabled}
           value={action.value}
@@ -143,7 +194,7 @@ export function ActionEditor({
           ))}
         </select>
       )}
-      {!disabled && (
+      {!disabled && allowRemove && (
         <Button size="sm" variant="ghost" onClick={onRemove}>
           Remove
         </Button>

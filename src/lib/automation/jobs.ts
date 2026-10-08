@@ -1,11 +1,11 @@
 import { getAutomationSettings } from './settings';
 import { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
-import { createHash, randomUUID } from 'crypto';
+import { persistObservationBatch } from './observation-batch';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { createCentralNotificationIntent } from '@/lib/notification-control-plane';
-import { enqueueMicrosoftTeamsDelivery } from '@/lib/microsoft-teams/delivery';
+import { enqueueMicrosoftTeamsDeliveryInTransaction } from '@/lib/microsoft-teams/delivery';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 const observationSchema = z
   .object({
@@ -38,12 +38,27 @@ const jobSchema = z.discriminatedUnion('task', [
       integrationId: z.string(),
       integrationType: z.string(),
       observations: z.array(observationSchema).max(64),
+      shadow: z
+        .object({
+          versionId: z.string(),
+          bucketDate: z.string().datetime(),
+          evaluated: z.number().int().nonnegative(),
+          same: z.number().int().nonnegative(),
+          priorityDifferent: z.number().int().nonnegative(),
+          routeDifferent: z.number().int().nonnegative(),
+          noEscalationDifferent: z.number().int().nonnegative(),
+          errors: z.number().int().nonnegative(),
+          fallbacks: z.number().int().nonnegative(),
+        })
+        .strict()
+        .optional(),
     })
     .strict(),
   z
     .object({ task: z.literal('AUTOMATION_RETENTION'), cutoff: z.string().datetime().optional() })
     .strict(),
 ]);
+export type ObservationJob = Extract<z.infer<typeof jobSchema>, { task: 'AUTOMATION_OBSERVE' }>;
 export async function processAutomationJob(payload: unknown) {
   const job = jobSchema.parse(payload);
   if (job.task === 'AUTOMATION_RETENTION') {
@@ -91,63 +106,14 @@ export async function processAutomationJob(payload: unknown) {
   }
   if (job.task === 'AUTOMATION_OBSERVE') {
     // Idempotency lives in the transaction: a crash/retry cannot count observations twice.
-    const recorded = await prisma.$transaction(async tx => {
-      const logicalId = createHash('sha256').update(JSON.stringify(job)).digest('hex');
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${logicalId}, 0))`;
-      const receiptId = `AUTOMATION_OBSERVATION_RECEIPT:${logicalId}`;
-      if (await tx.backgroundJob.findUnique({ where: { id: receiptId } })) return false;
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`automation-observations:${job.serviceId}`}, 0))`;
-      const existing = await tx.automationContextObservation.findMany({
-        where: { serviceId: job.serviceId },
-        select: { integrationId: true, fieldKey: true, normalizedRawValueHash: true },
-      });
-      const identities = new Set(
-        existing.map(row =>
-          JSON.stringify([row.integrationId, row.fieldKey, row.normalizedRawValueHash])
-        )
-      );
-      const cardinalities = new Map<string, number>();
-      for (const row of existing) {
-        const key = JSON.stringify([row.integrationId, row.fieldKey]);
-        cardinalities.set(key, (cardinalities.get(key) ?? 0) + 1);
-      }
-      let remaining = Math.max(0, 5000 - existing.length);
-      const candidates = new Map(
-        job.observations.map(observed => {
-          const hash = createHash('sha256').update(observed.value).digest('hex');
-          return [JSON.stringify([observed.key, hash]), { ...observed, hash }] as const;
-        })
-      );
-      const values: Prisma.Sql[] = [];
-      for (const observed of candidates.values()) {
-        const identity = JSON.stringify([job.integrationId, observed.key, observed.hash]);
-        const field = JSON.stringify([job.integrationId, observed.key]);
-        if (!identities.has(identity)) {
-          if (!remaining || (cardinalities.get(field) ?? 0) >= 256) continue;
-          remaining--;
-          cardinalities.set(field, (cardinalities.get(field) ?? 0) + 1);
-        }
-        values.push(
-          Prisma.sql`(${randomUUID()}, ${job.serviceId}, ${job.integrationId}, ${job.integrationType}, ${observed.key}, ${observed.path}, ${observed.type}, ${observed.hash}, ${observed.value}, ${observed.unmapped}, 1, NOW(), NOW())`
-        );
-      }
-      if (values.length)
-        await tx.$executeRaw(Prisma.sql`
-        INSERT INTO "AutomationContextObservation" (id, "serviceId", "integrationId", "integrationType", "fieldKey", "sourcePath", "fieldType", "normalizedRawValueHash", "rawValuePreview", unmapped, count, "firstSeenAt", "lastSeenAt") VALUES ${Prisma.join(values)}
-        ON CONFLICT ("serviceId", "integrationId", "fieldKey", "normalizedRawValueHash") DO UPDATE SET count = "AutomationContextObservation".count + 1, "lastSeenAt" = NOW(), unmapped = EXCLUDED.unmapped
-      `);
-      await tx.backgroundJob.create({
-        data: {
-          id: receiptId,
-          type: 'SCHEDULED_TASK',
-          status: 'COMPLETED',
-          scheduledAt: new Date(),
-          completedAt: new Date(),
-          payload: { task: 'AUTOMATION_OBSERVATION_RECEIPT' },
-        },
-      });
-      return true;
-    });
+    const recorded = await prisma.$transaction(
+      tx =>
+        persistObservationBatch(tx, job, payload => {
+          const parsed = jobSchema.safeParse(payload);
+          return parsed.success && parsed.data.task === 'AUTOMATION_OBSERVE' ? parsed.data : null;
+        }),
+      { timeout: 10000 }
+    );
     if (!recorded) return;
     const unmapped = job.observations.filter(o => o.unmapped);
     if (unmapped.length)
@@ -163,54 +129,98 @@ export async function processAutomationJob(payload: unknown) {
       });
     return;
   }
-  const incident = await prisma.incident.findFirst({
+  await prisma.$transaction(tx => enqueueAutomationNotification(tx, job));
+}
+export type NotifyJob = Extract<z.infer<typeof jobSchema>, { task: 'AUTOMATION_NOTIFY' }>;
+export async function enqueueAutomationNotification(tx: Prisma.TransactionClient, job: NotifyJob) {
+  const incident = await tx.incident.findFirst({
     where: { id: job.incidentId, serviceId: job.serviceId },
     include: { service: { select: { name: true } } },
   });
   if (!incident) return;
   if (job.provider === 'TEAMS') {
-    const destination = await prisma.microsoftTeamsDestination.findFirst({
+    const destination = await tx.microsoftTeamsDestination.findFirst({
       where: { id: job.destinationId, serviceId: job.serviceId, enabled: true },
     });
     if (!destination) return;
-    await enqueueMicrosoftTeamsDelivery({
+    await enqueueMicrosoftTeamsDeliveryInTransaction(tx, {
       incidentId: incident.id,
       destinationId: destination.id,
       eventType: 'triggered',
       incidentUpdatedAt: incident.createdAt,
       escalationGeneration: 0,
     });
+    return {
+      provider: 'TEAMS',
+      destinationId: destination.id,
+      label: destination.channelName ?? 'Teams channel',
+    };
   } else {
-    const destination = await prisma.slackDestination.findFirst({
+    const destination = await tx.slackDestination.findFirst({
       where: { id: job.destinationId, serviceId: job.serviceId, enabled: true },
     });
     if (!destination) return;
-    await createCentralNotificationIntent({
-      category: 'INCIDENT',
-      channel: 'SLACK',
-      recipientType: 'SLACK_CHANNEL',
-      recipientId: job.serviceId,
-      recipientAddress: destination.channelId,
-      incidentId: incident.id,
-      templateKey: 'automation-slack',
-      sourceType: 'AUTOMATION',
-      sourceId: incident.id,
-      eventKey: job.logicalKey,
-      displayMessage: `Automation: ${incident.title}`,
-      payload: {
-        kind: 'SLACK_CHANNEL',
-        channel: destination.channelId,
-        incident: {
-          id: incident.id,
-          title: incident.title,
-          status: incident.status,
-          urgency: incident.urgency,
-          serviceName: incident.service.name,
+    await createCentralNotificationIntent(
+      {
+        category: 'INCIDENT',
+        channel: 'SLACK',
+        recipientType: 'SLACK_CHANNEL',
+        recipientId: job.serviceId,
+        recipientAddress: destination.channelId,
+        incidentId: incident.id,
+        templateKey: 'automation-slack',
+        sourceType: 'AUTOMATION',
+        sourceId: incident.id,
+        eventKey: job.logicalKey,
+        displayMessage: `Automation: ${incident.title}`,
+        payload: {
+          kind: 'SLACK_CHANNEL',
+          channel: destination.channelId,
+          incident: {
+            id: incident.id,
+            title: incident.title,
+            status: incident.status,
+            urgency: incident.urgency,
+            serviceName: incident.service.name,
+          },
+          eventType: 'triggered',
+          serviceId: job.serviceId,
+          includeInteractiveButtons: true,
         },
-        eventType: 'triggered',
-        serviceId: job.serviceId,
-        includeInteractiveButtons: true,
       },
-    });
+      tx
+    );
+    return {
+      provider: 'SLACK',
+      destinationId: destination.id,
+      label: destination.channelName ?? 'Slack channel',
+    };
   }
+}
+
+/** Initial mixed-version rollout must not emit tasks that old workers cannot handle.
+ * Once history exists, retention remains active even with the global switch OFF. */
+export async function scheduleAutomationRetention(
+  store: Pick<
+    Prisma.TransactionClient,
+    'automationTrace' | 'automationContextObservation' | 'backgroundJob'
+  >
+) {
+  const history =
+    (await store.automationTrace.findFirst({ select: { id: true } })) ??
+    (await store.automationContextObservation.findFirst({ select: { id: true } }));
+  if (!history) return false;
+  const id = `AUTOMATION_RETENTION:${new Date().toISOString().slice(0, 10)}`;
+  await store.backgroundJob.upsert({
+    where: { id },
+    create: {
+      id,
+      type: 'SCHEDULED_TASK',
+      scheduledAt: new Date(),
+      maxAttempts: 3,
+      payload: { task: 'AUTOMATION_RETENTION' },
+    },
+    update: {},
+  });
+  return true;
 }

@@ -16,11 +16,17 @@ beforeAll(async () => {
 afterAll(async () => {
   await db.$disconnect();
 });
-it('certifies five profiles against real PostgreSQL ingestion with concurrent fresh and duplicate events', async () => {
+it('certifies independent global-off, service-disabled, Shadow and LIVE profiles against real PostgreSQL ingestion with concurrent fresh and duplicate events', async () => {
   const actor = await createTestUser({ role: 'ADMIN' });
-  const [before] = await db.$queryRaw<Array<{ deadlocks: bigint }>>`SELECT deadlocks FROM pg_stat_database WHERE datname = current_database()`;
+  const [before] = await db.$queryRaw<
+    Array<{ deadlocks: bigint }>
+  >`SELECT deadlocks FROM pg_stat_database WHERE datname = current_database()`;
   const results = [];
-  for (const profile of AUTOMATION_LOAD_PROFILES) {
+  for (const profile of AUTOMATION_LOAD_PROFILES.filter(profile => profile !== 'disabled')) {
+    await db.systemSettings.update({
+      where: { id: 'default' },
+      data: { automationEnabled: profile !== 'global-off' },
+    });
     const service = await db.service.create({ data: { name: `Load ${profile}` } });
     await configureAutomationLoadProfile(db, [service.id], actor.id, profile);
     const durations: number[] = [];
@@ -63,7 +69,7 @@ it('certifies five profiles against real PostgreSQL ingestion with concurrent fr
     const incidents = await db.incident.findMany({ where: { serviceId: service.id } });
     expect(incidents).toHaveLength(96);
     expect(await db.automationTrace.count({ where: { serviceId: service.id } })).toBe(
-      profile === 'disabled' ? 0 : 96
+      ['global-off', 'service-disabled'].includes(profile) ? 0 : 96
     );
     expect(await db.incidentAutomationDecision.count({ where: { serviceId: service.id } })).toBe(
       profile.startsWith('live') ? 96 : 0
@@ -90,7 +96,9 @@ it('certifies five profiles against real PostgreSQL ingestion with concurrent fr
         generatedAt: new Date().toISOString(),
         results,
         postgres,
-        deadlocksDelta: Number((postgres as Array<{ deadlocks: bigint }>)[0].deadlocks) - Number(before.deadlocks),
+        deadlocksDelta:
+          Number((postgres as Array<{ deadlocks: bigint }>)[0].deadlocks) -
+          Number(before.deadlocks),
       },
       (_key, value) => (typeof value === 'bigint' ? value.toString() : value),
       2

@@ -1,0 +1,24 @@
+# Optional production-style web pooling for the isolated automation suite.
+# Workers and migrations keep direct PostgreSQL connections, as in deploy/compose.
+services:
+  pgbouncer:
+    image: ${AUTOMATION_PGBOUNCER_IMAGE:-opsknight-pgbouncer:1.26.0}
+    environment:
+      PGBOUNCER_DB_HOST: db
+      PGBOUNCER_DB_NAME: automation_cert
+      PGBOUNCER_DB_USER: automation
+      PGBOUNCER_DB_PASSWORD: automation-cert-only
+      PGBOUNCER_SERVER_TLS_SSLMODE: disable
+      PGBOUNCER_POOL_MODE: transaction
+      PGBOUNCER_DEFAULT_POOL_SIZE: '24'
+      PGBOUNCER_RESERVE_POOL_SIZE: '8'
+    depends_on: { db: { condition: service_healthy } }
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -p 6432']
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  web:
+    environment:
+      DATABASE_URL: postgresql://automation:automation-cert-only@pgbouncer:6432/automation_cert?pgbouncer=true&connection_limit=12&pool_timeout=30
+    depends_on: { pgbouncer: { condition: service_healthy } }

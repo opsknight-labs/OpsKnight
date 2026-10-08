@@ -11,7 +11,12 @@ const formatState = (state: unknown) => {
 
 export function TraceDetail({ detail }: { detail: unknown }) {
   const trace = detail as {
+    diagnosticLevel?: string;
+    policyName?: string | null;
+    destinationNames?: Array<{ provider: string; destinationId: string; label: string }>;
     result?: {
+      matchedRule?: { name: string };
+      tags?: string[];
       inputContext?: Record<string, unknown>;
       enrichedContext?: Record<string, unknown>;
       writes?: Array<{ ruleId: string; fieldKey: string; value: unknown }>;
@@ -32,21 +37,38 @@ export function TraceDetail({ detail }: { detail: unknown }) {
           <h4 className="font-medium">Current behavior</h4>
           <p>
             Priority {trace.actual?.priority ?? 'Unset'} ·{' '}
-            {trace.actual?.route ?? 'Service default'}
+            {trace.actual?.route === 'SERVICE_DEFAULT'
+              ? 'Service default'
+              : (trace.actual?.route ?? 'Service default')}
           </p>
         </div>
         <div>
           <h4 className="font-medium">Automation outcome</h4>
           <p>
             {trace.fallbackReason ??
-              result?.outcome?.type.replaceAll('_', ' ').toLowerCase() ??
+              (result?.outcome?.type === 'NO_ESCALATION'
+                ? 'No responder paging'
+                : result?.outcome?.type === 'ESCALATION_POLICY'
+                  ? (trace.policyName ?? 'Selected escalation policy')
+                  : 'Service default') ??
               'Service default'}
-            {result?.outcome?.policyId ? ` · ${result.outcome.policyId}` : ''}
           </p>
           <p>Final priority: {formatState(result?.enrichedContext?.priority)}</p>
         </div>
       </div>
-      <h4 className="font-medium">Extraction → canonical context</h4>
+      {result?.matchedRule && (
+        <p>
+          Selected by: <strong>{result.matchedRule.name}</strong>
+        </p>
+      )}
+      {!!result?.tags?.length && <p>Tags: {result.tags.join(', ')}</p>}
+      {trace.diagnosticLevel === 'COMPACT' && (
+        <p className="text-muted-foreground">
+          Compact success record. Detailed diagnostics are retained for differences, fallbacks, and
+          sampled evaluations; Test can explain the full policy.
+        </p>
+      )}
+      <h4 className="font-medium">Why · normalization and matched rules</h4>
       {trace.normalization?.map(n => (
         <p key={n.fieldKey}>
           {n.fieldKey}: {String(n.raw ?? 'Missing')} → {formatState(n.canonical)}
@@ -76,9 +98,16 @@ export function TraceDetail({ detail }: { detail: unknown }) {
       ))}
       {result?.supplementalActions?.map((a, i) => (
         <p key={i}>
-          Also notify {a.provider} · {a.destinationId}
+          Also notify {a.provider} ·{' '}
+          {trace.destinationNames?.find(
+            d => d.destinationId === a.destinationId && d.provider === a.provider
+          )?.label ?? 'Configured destination'}
         </p>
       ))}
+      <details>
+        <summary className="cursor-pointer text-muted-foreground">Advanced diagnostics</summary>
+        <pre className="max-w-full overflow-auto text-xs">{JSON.stringify(detail, null, 2)}</pre>
+      </details>
     </div>
   );
 }

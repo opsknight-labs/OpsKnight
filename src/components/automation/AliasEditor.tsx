@@ -4,9 +4,11 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 export function AliasEditor({
   aliases,
+  canonicalValues,
   onChange,
 }: {
   aliases: Record<string, string>;
+  canonicalValues?: string[];
   onChange: (aliases: Record<string, string>) => void;
 }) {
   const [from, setFrom] = useState('');
@@ -18,12 +20,24 @@ export function AliasEditor({
         <div key={alias} className="flex flex-wrap gap-2 items-center">
           <span className="rounded-md bg-muted px-2 py-1 text-sm">{alias}</span>
           <span aria-hidden="true">→</span>
-          <Input
-            aria-label={`Canonical value for ${alias}`}
-            className="flex-1 min-w-24"
-            value={canonical}
-            onChange={event => onChange({ ...aliases, [alias]: event.target.value })}
-          />
+          {canonicalValues ? (
+            <select
+              className="rounded-md border bg-background px-3 py-2 text-sm"
+              aria-label={`Canonical value for ${alias}`}
+              value={canonical}
+              onChange={event => onChange({ ...aliases, [alias]: event.target.value })}
+            >
+              {canonicalValues.map(value => (
+                <option key={value}>{value}</option>
+              ))}
+            </select>
+          ) : (
+            <Input
+              aria-label={`Canonical value for ${alias}`}
+              value={canonical}
+              onChange={event => onChange({ ...aliases, [alias]: event.target.value })}
+            />
+          )}
           <Button
             size="sm"
             variant="ghost"
@@ -44,13 +58,27 @@ export function AliasEditor({
           onChange={event => setFrom(event.target.value)}
           className="flex-1 min-w-24"
         />
-        <Input
-          aria-label="New canonical value"
-          placeholder="production"
-          value={to}
-          onChange={event => setTo(event.target.value)}
-          className="flex-1 min-w-24"
-        />
+        {canonicalValues ? (
+          <select
+            aria-label="New canonical value"
+            className="rounded-md border bg-background px-3 py-2 text-sm"
+            value={to}
+            onChange={event => setTo(event.target.value)}
+          >
+            <option value="">Choose canonical value…</option>
+            {canonicalValues.map(value => (
+              <option key={value}>{value}</option>
+            ))}
+          </select>
+        ) : (
+          <Input
+            aria-label="New canonical value"
+            placeholder="production"
+            value={to}
+            onChange={event => setTo(event.target.value)}
+            className="flex-1 min-w-24"
+          />
+        )}
         <Button
           variant="outline"
           size="sm"

@@ -1,5 +1,6 @@
+import { enqueueAutomationNotification } from './jobs';
 import { getAutomationSettings } from './settings';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import type { EventPayload } from '@/lib/events';
 import { logger } from '@/lib/logger';
 import {
@@ -72,21 +73,6 @@ export async function prepareAutomation(
     where: { id: envelope.serviceId },
     select: { policy: { select: { id: true, name: true } } },
   });
-  const policies = config.activeVersion
-    ? await tx.escalationPolicy.findMany({
-        where: {
-          id: {
-            in: (
-              await tx.automationVersionPolicyRef.findMany({
-                where: { versionId: config.activeVersion.id },
-                select: { escalationPolicyId: true },
-              })
-            ).map(r => r.escalationPolicyId),
-          },
-        },
-        select: { id: true, name: true },
-      })
-    : [];
   const engineStartedAt = performance.now();
   try {
     if (!config.activeVersion) throw new Error('VERSION_MISSING');
@@ -133,7 +119,10 @@ export async function prepareAutomation(
     guard();
     const policy =
       result.outcome.type === 'ESCALATION_POLICY'
-        ? policies.find(p => p.id === (result.outcome as { policyId: string }).policyId)
+        ? await tx.escalationPolicy.findUnique({
+            where: { id: result.outcome.policyId },
+            select: { id: true, name: true },
+          })
         : service?.policy;
     if (result.outcome.type === 'ESCALATION_POLICY' && !policy) throw new Error('POLICY_MISSING');
     runtime.result = result;
@@ -160,6 +149,14 @@ export async function prepareAutomation(
       ...discoverFields(envelope.providerPayload).filter(field => !observedPaths.has(field.path)),
     ].slice(0, LIMITS.fields);
   } catch (error) {
+    // Database failures must abort ingestion and use the transaction/replay path,
+    // never silently commit a different responder route as an engine fallback.
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError ||
+      error instanceof Prisma.PrismaClientUnknownRequestError ||
+      error instanceof Prisma.PrismaClientInitializationError
+    )
+      throw error;
     const reason = error instanceof Error ? error.message : 'VERSION_INVALID';
     runtime.fallbackReason = [
       'VERSION_MISSING',
@@ -190,35 +187,21 @@ export async function persistAutomation(
 ) {
   if (!runtime) return;
   const result = runtime.result;
+  const destinationNames: Array<{ provider: string; destinationId: string; label: string }> = [];
   const actual = { priority: runtime.basePriority, route: 'SERVICE_DEFAULT' };
-  const detail = {
-    result: result
-      ? {
-          ...result,
-          enrichmentRuleResults: result.enrichmentRuleResults.map(
-            ({ terms: _terms, ...summary }) => summary
-          ),
-          routingRuleResults: result.routingRuleResults.map(
-            ({ terms: _terms, ...summary }) => summary
-          ),
-        }
-      : null,
-    actual,
-    fallbackReason: runtime.fallbackReason,
-    normalization: runtime.normalization,
-  };
-  await tx.automationTrace.create({
-    data: {
-      incidentId,
-      serviceId: envelope.serviceId,
-      versionId: runtime.versionId,
-      mode: runtime.mode,
-      evaluationAt: runtime.evaluationAt,
-      durationMs: runtime.durationMs,
-      fallbackReason: runtime.fallbackReason,
-      detail: asJson(detail),
-    },
-  });
+  let shadow:
+    | {
+        versionId: string;
+        bucketDate: string;
+        evaluated: number;
+        same: number;
+        priorityDifferent: number;
+        routeDifferent: number;
+        noEscalationDifferent: number;
+        errors: number;
+        fallbacks: number;
+      }
+    | undefined;
   if (runtime.mode === 'SHADOW' && runtime.versionId) {
     const priority = result?.enrichedContext.priority;
     const priorityDifferent =
@@ -243,25 +226,27 @@ export async function persistAutomation(
     };
     runtime.shadowDifferent = priorityDifferent || routeDifferent || !!runtime.fallbackReason;
     const bucketDate = new Date(runtime.evaluationAt.toISOString().slice(0, 10));
-    await tx.automationShadowAggregate.upsert({
-      where: {
-        serviceId_versionId_bucketDate: {
-          serviceId: envelope.serviceId,
-          versionId: runtime.versionId,
-          bucketDate,
-        },
-      },
-      create: {
-        serviceId: envelope.serviceId,
-        versionId: runtime.versionId,
-        bucketDate,
-        ...counts,
-      },
-      update: Object.fromEntries(
-        Object.entries(counts).map(([key, value]) => [key, { increment: value }])
-      ),
-    });
+    shadow = { versionId: runtime.versionId, bucketDate: bucketDate.toISOString(), ...counts };
   }
+  const detail = {
+    result: result
+      ? {
+          ...result,
+          enrichmentRuleResults: result.enrichmentRuleResults.map(
+            ({ terms: _terms, ...summary }) => summary
+          ),
+          routingRuleResults: result.routingRuleResults.map(
+            ({ terms: _terms, ...summary }) => summary
+          ),
+        }
+      : null,
+    actual,
+    fallbackReason: runtime.fallbackReason,
+    shadowDifferent: runtime.shadowDifferent,
+    normalization: runtime.normalization,
+    policyName: runtime.policyName,
+    destinationNames,
+  };
   if (runtime.mode === 'LIVE') {
     await tx.incidentAutomationDecision.create({
       data: {
@@ -301,41 +286,72 @@ export async function persistAutomation(
     if (operationalActions && runtime.versionId)
       for (const action of result?.supplementalActions ?? []) {
         const key = `AUTOMATION_NOTIFY:${incidentId}:${runtime.versionId}:${action.ruleId}:${action.provider}:${action.destinationId}`;
-        await tx.backgroundJob.create({
-          data: {
-            id: key,
-            type: 'SCHEDULED_TASK',
-            scheduledAt: runtime.evaluationAt,
-            payload: asJson({
-              task: 'AUTOMATION_NOTIFY',
-              incidentId,
-              serviceId: envelope.serviceId,
-              versionId: runtime.versionId,
-              ...action,
-              logicalKey: key,
-            }),
-            maxAttempts: 5,
-          },
+        const destination = await enqueueAutomationNotification(tx, {
+          task: 'AUTOMATION_NOTIFY',
+          incidentId,
+          serviceId: envelope.serviceId,
+          versionId: runtime.versionId,
+          ...action,
+          logicalKey: key,
         });
+        if (destination) destinationNames.push(destination);
       }
   }
-  // Store bounded scalar discovery candidates, never provider payloads or headers.
-  await tx.backgroundJob.create({
+  await tx.automationTrace.create({
     data: {
-      id: `AUTOMATION_OBSERVE:${incidentId}`,
-      type: 'SCHEDULED_TASK',
-      scheduledAt: runtime.evaluationAt,
-      payload: asJson({
-        task: 'AUTOMATION_OBSERVE',
-        logicalKey: `AUTOMATION_OBSERVE:${incidentId}`,
-        serviceId: envelope.serviceId,
-        integrationId: envelope.integrationId,
-        integrationType: envelope.integrationType,
-        observations: runtime.observations,
-      }),
-      maxAttempts: 3,
+      incidentId,
+      serviceId: envelope.serviceId,
+      versionId: runtime.versionId,
+      mode: runtime.mode,
+      evaluationAt: runtime.evaluationAt,
+      durationMs: runtime.durationMs,
+      fallbackReason: runtime.fallbackReason,
+      detail: asJson(
+        runtime.shadowDifferent ||
+          runtime.fallbackReason ||
+          runtime.normalization.some(field => field.canonical.state === 'UNMAPPED') ||
+          incidentId.charCodeAt(incidentId.length - 1) % 20 === 0
+          ? { ...detail, diagnosticLevel: 'FULL' }
+          : {
+              diagnosticLevel: 'COMPACT',
+              policyName: runtime.policyName,
+              destinationNames,
+              actual,
+              fallbackReason: runtime.fallbackReason,
+              shadowDifferent: runtime.shadowDifferent,
+              normalization: runtime.normalization.filter(n => n.canonical.state === 'UNMAPPED'),
+              result: result
+                ? {
+                    outcome: result.outcome,
+                    matchedRule: result.matchedRule,
+                    enrichedContext: { priority: result.enrichedContext.priority },
+                    tags: result.tags,
+                    supplementalActions: result.supplementalActions,
+                  }
+                : null,
+            }
+      ),
     },
   });
+  // Store bounded scalar discovery candidates, never provider payloads or headers.
+  if (runtime.observations.length || shadow)
+    await tx.backgroundJob.create({
+      data: {
+        id: `AUTOMATION_OBSERVE:${incidentId}`,
+        type: 'SCHEDULED_TASK',
+        scheduledAt: runtime.evaluationAt,
+        payload: asJson({
+          task: 'AUTOMATION_OBSERVE',
+          logicalKey: `AUTOMATION_OBSERVE:${incidentId}`,
+          serviceId: envelope.serviceId,
+          integrationId: envelope.integrationId,
+          integrationType: envelope.integrationType,
+          observations: runtime.observations,
+          ...(shadow ? { shadow } : {}),
+        }),
+        maxAttempts: 3,
+      },
+    });
 }
 export function recordAutomationMetrics(runtime: RuntimeEvaluation | null) {
   if (!runtime) return;

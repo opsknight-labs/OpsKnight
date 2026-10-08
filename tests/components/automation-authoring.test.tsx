@@ -2,7 +2,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest';
 import { TypedValueInput, parseAuthoringScalar } from '@/components/automation/TypedValueInput';
 import AutomationWorkspace from '@/components/automation/AutomationWorkspace';
-import { emptySnapshot } from '@/lib/automation/contract';
+import { RuleActionsEditor } from '@/components/automation/RuleActionsEditor';
+import { conditionOperators } from '@/components/automation/RuleConditionsEditor';
+import { semanticSnapshotChanges } from '@/lib/automation/diff';
+import { emptySnapshot, type Rule } from '@/lib/automation/contract';
 const api = vi.hoisted(() => ({ action: vi.fn(), area: vi.fn() }));
 vi.mock('@/app/(app)/services/[id]/automation/actions', () => ({
   automationAction: api.action,
@@ -92,6 +95,7 @@ it('loads Shadow readiness before LIVE and keeps the mode unchanged when review 
   expect(api.action).not.toHaveBeenCalled();
   expect(screen.getByLabelText('Automation mode')).toHaveValue('SHADOW');
   fireEvent.change(screen.getByLabelText('Automation mode'), { target: { value: 'LIVE' } });
+  fireEvent.click(await screen.findByRole('checkbox', { name: /I understand this version/ }));
   fireEvent.click(await screen.findByRole('button', { name: 'Confirm LIVE' }));
   await waitFor(() =>
     expect(api.action).toHaveBeenCalledWith(
@@ -146,4 +150,113 @@ it('shows recent-field frequency/examples and authors an EVENT mapping from the 
       })
     )
   );
+});
+
+it('LIVE review cannot replace Overview data when cancelled', async () => {
+  api.area.mockImplementation(async (_id: string, area: string) => ({
+    ...data,
+    mode: 'SHADOW',
+    activeVersionId: 'version-1',
+    activeVersion: { id: 'version-1', versionNumber: 1, snapshot: emptySnapshot },
+    traces:
+      area === 'overview'
+        ? [
+            {
+              id: 'trace-1',
+              incidentId: 'incident-1',
+              mode: 'SHADOW',
+              durationMs: 1,
+              fallbackReason: null,
+              detail: {},
+            },
+          ]
+        : [],
+  }));
+  render(<AutomationWorkspace serviceId="service" />);
+  expect(await screen.findByRole('link', { name: 'Incident' })).toHaveAttribute(
+    'href',
+    '/incidents/incident-1'
+  );
+  fireEvent.change(screen.getByLabelText('Automation mode'), { target: { value: 'LIVE' } });
+  await screen.findByRole('dialog');
+  fireEvent.click(screen.getByRole('button', { name: 'Keep unchanged' }));
+  expect(screen.getByRole('link', { name: 'Incident' })).toHaveAttribute(
+    'href',
+    '/incidents/incident-1'
+  );
+});
+
+it('limits conditions by field type and ENUM choices to published canonical values', () => {
+  expect(conditionOperators('BOOLEAN')).not.toHaveProperty('IN');
+  expect(conditionOperators('STRING')).not.toHaveProperty('LT');
+  expect(conditionOperators('NUMBER')).toHaveProperty('LT');
+  const change = vi.fn();
+  render(
+    <TypedValueInput
+      type="ENUM"
+      canonicalValues={['production', 'staging']}
+      value="production"
+      label="Environment"
+      onChange={change}
+    />
+  );
+  expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual([
+    'Choose canonical value…',
+    'production',
+    'staging',
+  ]);
+  fireEvent.change(screen.getByLabelText('Environment'), { target: { value: 'staging' } });
+  expect(change).toHaveBeenCalledWith('staging');
+});
+
+it('keeps exactly one responder route separate from optional notifications and gates missing destinations', () => {
+  const change = vi.fn();
+  const rule: Rule = {
+    id: 'route',
+    name: 'Production',
+    phase: 'ROUTE',
+    enabled: true,
+    conditions: [],
+    actions: [{ type: 'USE_SERVICE_DEFAULT' }],
+  };
+  render(
+    <RuleActionsEditor
+      rule={rule}
+      fields={[]}
+      policies={[]}
+      destinations={[]}
+      disabled={false}
+      onChange={change}
+    />
+  );
+  expect(screen.getByRole('button', { name: 'Add notification' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Remove action' })).not.toBeInTheDocument();
+  expect(screen.getByRole('option', { name: 'use escalation policy' })).toBeDisabled();
+  expect(screen.queryByRole('option', { name: 'notify channel' })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Responder route'), {
+    target: { value: 'NO_ESCALATION' },
+  });
+  expect(change).toHaveBeenCalledWith([{ type: 'NO_ESCALATION' }]);
+});
+
+it('reviews actual routing and priority changes using names rather than opaque policy identifiers', () => {
+  const rule: Rule = {
+    id: 'route',
+    name: 'Production',
+    phase: 'ROUTE',
+    enabled: true,
+    conditions: [],
+    actions: [{ type: 'USE_SERVICE_DEFAULT' }],
+  };
+  const changes = semanticSnapshotChanges(
+    { ...emptySnapshot, rules: [rule] },
+    {
+      ...emptySnapshot,
+      rules: [
+        { ...rule, actions: [{ type: 'USE_ESCALATION_POLICY', policyId: 'opaque-policy-id' }] },
+      ],
+    },
+    { policies: [{ id: 'opaque-policy-id', name: 'Production Primary' }] }
+  );
+  expect(changes).toEqual(['Production: Before: Service default → After: Production Primary']);
 });

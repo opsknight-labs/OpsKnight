@@ -21,6 +21,15 @@ export async function saveAutomationSettings(input: unknown) {
     const previous = await getAutomationSettings(tx);
     if (previous.automationSettingsRevision !== parsed.expectedRevision)
       throw new Error('Automation settings changed. Reload this page before saving.');
+    if (parsed.automationEnabled && !previous.automationEnabled && await tx.serviceAutomationConfig.count({ where: { mode: { not: 'DISABLED' } } }))
+      throw new Error('Services are already configured SHADOW or LIVE. Save global OFF to reset their modes before enabling; then activate services individually.');
+    // OFF is an emergency stop and resets operational modes. Enabling again
+    // cannot surprise-activate previously LIVE services behind the switch.
+    if (!parsed.automationEnabled)
+      await tx.serviceAutomationConfig.updateMany({
+        where: { mode: { not: 'DISABLED' } },
+        data: { mode: 'DISABLED', updatedBy: actor.id },
+      });
     const next = await tx.systemSettings.upsert({
       where: { id: 'default' },
       create: {
