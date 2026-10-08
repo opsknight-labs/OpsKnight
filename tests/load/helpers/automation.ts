@@ -2,6 +2,28 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { checksum } from '@/lib/automation/cache';
 const asJson = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+/** Explicit benchmark provisioning through the same persisted settings as the UI. */
+export async function provisionAutomationProviderCapacity(db: PrismaClient) {
+  for (const { channel, provider } of [
+    { channel: 'EMAIL', provider: 'smtp' },
+    { channel: 'PUSH', provider: 'web-push' },
+    { channel: 'WEBHOOK', provider: 'default' },
+  ] as const) {
+    const capacity = {
+      mode: 'CUSTOM' as const,
+      ratePerSecond: 200,
+      maxInFlight: 40,
+      bulkSharePercent: 80,
+      adaptiveBackpressure: true,
+      updatedBy: 'automation-load-certification',
+    };
+    await db.notificationProviderCapacity.upsert({
+      where: { provider_channel: { provider, channel } },
+      create: { provider, channel, ...capacity },
+      update: { ...capacity, revision: { increment: 1 } },
+    });
+  }
+}
 import {
   automationLoadSnapshot,
   type AutomationLoadProfile,
