@@ -920,6 +920,71 @@ describe('service automation transaction certification', () => {
     expect(notifications[0].recipientType).toBe('SLACK_CHANNEL');
     expect(await db.backgroundJob.count({ where: { type: 'ESCALATION' } })).toBe(0);
   });
+  it.skipIf(process.env.AUTOMATION_INFRA_DB_RESTART !== 'true')(
+    'recovers an isolated PostgreSQL restart during concurrent ingestion and replay',
+    async () => {
+      const container = process.env.AUTOMATION_INFRA_DB_CONTAINER;
+      if (container !== 'opsknight-automation-infra-db')
+        throw new Error(
+          'This drill may restart only the dedicated automation infrastructure database'
+        );
+      const database = new URL(process.env.DATABASE_URL!);
+      if (database.pathname !== '/automation_infrastructure_checks' || database.port !== '55444')
+        throw new Error('This drill requires the dedicated infrastructure test database');
+      const { execFile } = await import('node:child_process');
+      const { promisify } = await import('node:util');
+      const { service, version } = await setup();
+      let restarted = false;
+      const original = automationRuntime.persistAutomation;
+      const interception = vi
+        .spyOn(automationRuntime, 'persistAutomation')
+        .mockImplementation(async (...args) => {
+          await original(...args);
+          if (!restarted) {
+            restarted = true;
+            await promisify(execFile)('docker', ['restart', '--time', '0', container]);
+          }
+        });
+      try {
+        await Promise.allSettled(Array.from({ length: 8 }, () => ingest(service.id)));
+      } finally {
+        interception.mockRestore();
+      }
+      expect(restarted).toBe(true);
+      await expect
+        .poll(
+          () =>
+            db.$queryRaw`SELECT 1`.then(
+              () => true,
+              () => false
+            ),
+          { timeout: 10_000 }
+        )
+        .toBe(true);
+      await ingest(service.id);
+      expect(await db.incident.count()).toBe(1);
+      expect(await db.incidentAutomationDecision.count()).toBe(1);
+      const decision = await db.incidentAutomationDecision.findFirstOrThrow();
+      expect(decision.routeType).toBe('NO_ESCALATION');
+      expect(decision.versionId).toBe(version.id);
+      expect(decision.fallbackReason).toBeNull();
+      expect(decision.mode).toBe('LIVE');
+      expect((await db.incident.findFirstOrThrow()).priority).toBe('P1');
+      expect(await db.automationTrace.count()).toBe(1);
+      expect(await db.backgroundJob.count({ where: { type: 'ESCALATION' } })).toBe(0);
+      const observe = await db.backgroundJob.findFirstOrThrow({
+        where: { payload: { path: ['task'], equals: 'AUTOMATION_OBSERVE' } },
+      });
+      await processAutomationJob(observe.payload);
+      await processAutomationJob(observe.payload);
+      expect(
+        await db.backgroundJob.count({
+          where: { id: { startsWith: 'AUTOMATION_OBSERVATION_RECEIPT:' } },
+        })
+      ).toBe(1);
+    },
+    60_000
+  );
   it('recovers an actual database connection termination during ingestion without losing or changing routing', async () => {
     const { service } = await setup();
     let terminate = true;

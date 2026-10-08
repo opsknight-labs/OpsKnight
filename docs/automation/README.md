@@ -54,6 +54,8 @@ Supply `DATABASE_URL`, `BASE_URL`, `LOAD_SEED_MANIFEST`, and `LOAD_EMULATOR_CONT
 
 Provider duplicate counters must remain available and monotonic throughout a run; missing or reset telemetry fails certification. `AUTOMATION_PROVIDER_CAPACITY_PROFILE=provisioned-200` provisions persisted UI capacity settings for the fixture's `smtp` email provider, `web-push` push provider and default webhook provider at 200 messages/second and 40 concurrent deliveries each. The default profile leaves configured provider budgets unchanged. These infrastructure provisioning profiles do not change certification thresholds. The interactive scenarios use supported incident urgency updates and lifecycle actions.
 
+Use a fresh, exclusively owned provider emulator for each freshly seeded database. Alternatively, `AUTOMATION_RESET_PROVIDER_TELEMETRY=true` resets that emulator once before the first profile. Fixture IDs and durable delivery IDs can repeat across separate fresh databases; retaining previous-run identities would count those new-run deliveries as duplicates. Counters are never reset between profiles or while traffic is running. The emulator reports up to 20 duplicate identities for diagnosis.
+
 See [certification.md](certification.md) for implementation coverage and the limits of the local certification. Production rollout and a sustained Shadow observation window remain operator-controlled.
 
 Global OFF resets all service modes to DISABLED. Drafts and published versions remain available. After re-enabling, stage each service through SHADOW and review LIVE separately. All old workers must leave before global enablement: SHADOW already emits automation tasks that old workers cannot process.

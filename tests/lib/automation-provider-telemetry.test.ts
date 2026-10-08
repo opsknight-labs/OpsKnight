@@ -2,6 +2,28 @@ import { expect, it, vi } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import { provisionAutomationProviderCapacity } from '../load/helpers/automation';
 import { providerDuplicateDelta } from '../load/helpers/automation-provider-telemetry';
+import {
+  executeProviderEmulatorStep,
+  getProviderTelemetry,
+  resetProviderTelemetry,
+  setProviderBehavior,
+} from '../load/providers/shared';
+it('keeps duplicate diagnostics bounded without hiding duplicate counts', async () => {
+  resetProviderTelemetry('webhook');
+  setProviderBehavior('webhook', { latencyMs: 0 });
+  for (let index = 0; index < 25; index++) {
+    const delivery = { deliveryKey: `notification-${index}`, recipient: '/webhook/fixture' };
+    await executeProviderEmulatorStep('webhook', delivery);
+    await executeProviderEmulatorStep('webhook', delivery);
+  }
+  const telemetry = getProviderTelemetry('webhook');
+  expect(telemetry.duplicateDeliveries).toBe(25);
+  expect(telemetry.duplicateDeliverySamples).toHaveLength(20);
+  expect(telemetry.duplicateDeliverySamples.every(record => record.succeededCount === 2)).toBe(
+    true
+  );
+  resetProviderTelemetry('webhook');
+});
 it('provisions the identities actually used by SMTP, web push and generic webhook delivery', async () => {
   const upsert = vi.fn().mockResolvedValue({});
   await provisionAutomationProviderCapacity({

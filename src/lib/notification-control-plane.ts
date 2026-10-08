@@ -2943,6 +2943,20 @@ export async function processCentralNotificationQueue(
       "claimToken" = ${claimToken}, "claimedBy" = ${claimedBy}, "errorMsg" = NULL
     FROM candidates
     WHERE notification."id" = candidates."id"
+      -- The materialized ranking can become stale before the row lock is acquired.
+      -- Recheck the durable row so a completed inline delivery cannot be revived.
+      AND notification."payloadEncrypted" IS NOT NULL
+      AND notification."attempts" < notification."maxAttempts"
+      AND notification."scheduledAt" <= ${now}
+      AND notification."nextAttemptAt" <= ${now}
+      AND (notification."expiresAt" IS NULL OR notification."expiresAt" > ${now})
+      AND (
+        notification."status" = 'FAILED'::"NotificationStatus"
+        OR (
+          notification."status" = 'PENDING'::"NotificationStatus"
+          AND (notification."lastAttemptAt" IS NULL OR notification."lastAttemptAt" < ${staleClaimBefore})
+        )
+      )
     RETURNING notification."id", notification."claimToken"
   `);
 
