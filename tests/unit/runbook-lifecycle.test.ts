@@ -581,7 +581,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
       ).rejects.toThrow(RunbookArchivedError);
     });
 
-    it('rejects updateDraftVersion when expectedChecksum does not match current draft checksum', async () => {
+    it('rejects updateDraftVersion when expectedDraftRevision does not match current draft revision', async () => {
       vi.mocked(prisma.$transaction).mockImplementationOnce(
         (async (callback: (tx: MockTx) => Promise<unknown>) => {
           const tx: MockTx = {
@@ -599,6 +599,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
                 runbookId: 'rb_1',
                 state: 'DRAFT',
                 checksum: 'checksum_actual',
+                draftRevision: 5,
                 runbook: { archivedAt: null },
               }),
               updateMany: vi.fn(),
@@ -619,7 +620,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
               description: '',
               steps: [{ key: 'step_1', name: 'Step 1', type: 'MANUAL', riskClass: 'READ_ONLY' }],
             },
-            expectedChecksum: 'checksum_stale',
+            expectedDraftRevision: 4,
           },
           'user_1'
         )

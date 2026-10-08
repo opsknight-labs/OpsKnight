@@ -132,7 +132,7 @@ export async function updateRunbookMetadata(
 /** Updates a draft using a state predicate so a concurrent publish cannot be overwritten. */
 export async function updateDraftVersion(
   versionId: string,
-  input: { definition: unknown; inputs?: RunbookInputInput[]; expectedChecksum?: string },
+  input: { definition: unknown; inputs?: RunbookInputInput[]; expectedDraftRevision?: number },
   actorId: string
 ) {
   const inputs = runbookInputsSchema.parse(input.inputs ?? []);
@@ -149,7 +149,10 @@ export async function updateDraftVersion(
     if (current.state !== 'DRAFT') {
       throw new RunbookVersionImmutableError(versionId, current.state);
     }
-    if (input.expectedChecksum && current.checksum !== input.expectedChecksum) {
+    if (
+      input.expectedDraftRevision !== undefined &&
+      current.draftRevision !== input.expectedDraftRevision
+    ) {
       throw new RunbookDefinitionError(
         'DRAFT_CONFLICT: This draft was modified by another operator since you opened it. Please refresh and review the changes.'
       );
@@ -158,9 +161,15 @@ export async function updateDraftVersion(
       where: {
         id: versionId,
         state: 'DRAFT',
-        ...(input.expectedChecksum ? { checksum: input.expectedChecksum } : {}),
+        ...(input.expectedDraftRevision !== undefined
+          ? { draftRevision: input.expectedDraftRevision }
+          : {}),
       },
-      data: { definition: definitionJson(definition), checksum },
+      data: {
+        definition: definitionJson(definition),
+        checksum,
+        draftRevision: { increment: 1 },
+      },
     });
     if (changed.count !== 1) {
       throw new RunbookDefinitionError(
@@ -179,8 +188,8 @@ export async function updateDraftVersion(
         entityType: 'RUNBOOK_VERSION',
         entityId: versionId,
         actorId,
-        oldValue: { checksum: current.checksum },
-        newValue: { checksum },
+        oldValue: { checksum: current.checksum, draftRevision: current.draftRevision },
+        newValue: { checksum, draftRevision: current.draftRevision + 1 },
       },
       tx
     );

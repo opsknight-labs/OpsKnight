@@ -101,4 +101,20 @@ describe('Runbook nested check builder', () => {
     expect(screen.queryByRole('button', { name: 'Add precheck' })).toBeNull();
     expect(screen.getByText(/Before: Systemd/)).toBeTruthy();
   });
+
+  it('renders draftRevision hidden input and initializes from prop', () => {
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [newBuilderStep('MANUAL', 'action')] }}
+        initialInputs={[]}
+        initialDraftRevision={42}
+        action={async () => {}}
+      />
+    );
+    const revisionInput = container.querySelector(
+      'input[name="draftRevision"]'
+    ) as HTMLInputElement;
+    expect(revisionInput).toBeTruthy();
+    expect(revisionInput.value).toBe('42');
+  });
 });

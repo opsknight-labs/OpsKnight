@@ -164,15 +164,18 @@ function fieldsFor(type: RunbookStepType): ConfigField[] {
 export default function RunbookBuilder({
   initialDefinition,
   initialInputs,
+  initialDraftRevision = 0,
   action,
   readOnly = false,
 }: {
   initialDefinition: RunbookDefinition;
   initialInputs: RunbookInputInput[];
+  initialDraftRevision?: number;
   action: RunbookFormAction;
   readOnly?: boolean;
 }) {
   const [definition, setDefinition] = useState(initialDefinition);
+  const [draftRevision, setDraftRevision] = useState(initialDraftRevision);
   // Keep editor identity independent of editable keys and list positions.
   const [stepIdentities, setStepIdentities] = useState(
     initialDefinition.steps.map(step => step.key)
@@ -544,7 +547,17 @@ export default function RunbookBuilder({
     </div>
   );
   return (
-    <ActionForm action={action} className="space-y-6" onSuccess={() => setDirty(false)}>
+    <ActionForm
+      action={action}
+      className="space-y-6"
+      onSuccess={result => {
+        setDirty(false);
+        if (typeof result?.draftRevision === 'number') {
+          setDraftRevision(result.draftRevision);
+        }
+      }}
+    >
+      <input type="hidden" name="draftRevision" value={draftRevision} />
       <input type="hidden" name="definition" value={JSON.stringify(definition)} />
       <input
         type="hidden"

@@ -696,6 +696,18 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
       }
     );
     await prisma.$transaction(async tx => {
+      const executionState = await tx.runbookExecution.findUnique({
+        where: { id: executionId },
+        select: { status: true },
+      });
+      if (
+        !executionState ||
+        ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'CANCEL_REQUESTED'].includes(
+          executionState.status
+        )
+      ) {
+        return;
+      }
       const completedAt = new Date();
       const completed = await tx.runbookExecutionStep.updateMany({
         where: { id: step.id, executionId, status: 'READY' },
@@ -723,9 +735,14 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
         },
         data: { status: 'RUNNING' },
       });
-      if (transitioned.count === 1) {
-        await enqueueAdvance(tx, executionId);
+      if (transitioned.count !== 1) {
+        throw new RunbookExecutionInvalidTransitionError(
+          executionId,
+          executionState.status,
+          'RUNNING'
+        );
       }
+      await enqueueAdvance(tx, executionId);
     });
     return;
   }
@@ -804,6 +821,18 @@ export async function completeStep(
   outputPreview: string
 ) {
   await prisma.$transaction(async tx => {
+    const execution = await tx.runbookExecution.findUnique({
+      where: { id: executionId },
+      select: { status: true },
+    });
+    if (
+      !execution ||
+      ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'CANCEL_REQUESTED'].includes(
+        execution.status
+      )
+    ) {
+      return;
+    }
     const completed = await tx.runbookExecutionStep.updateMany({
       where: { id: stepId, executionId, status: { in: ['READY', 'RUNNING'] } },
       data: {
@@ -820,9 +849,14 @@ export async function completeStep(
       },
       data: { status: 'RUNNING' },
     });
-    if (transitioned.count === 1) {
-      await enqueueAdvance(tx, executionId);
+    if (transitioned.count !== 1) {
+      throw new RunbookExecutionInvalidTransitionError(
+        executionId,
+        execution.status,
+        'RUNNING'
+      );
     }
+    await enqueueAdvance(tx, executionId);
   });
 }
 
@@ -851,6 +885,56 @@ export async function advanceExecution(executionId: string): Promise<void> {
         where: {
           executionId,
           status: { in: ['PENDING', 'READY', 'WAITING_APPROVAL', 'WAITING_AGENT'] },
+        },
+        data: { status: 'CANCELLED', completedAt: new Date() },
+      });
+      await tx.runbookExecutionStep.updateMany({
+        where: {
+          executionId,
+          type: 'WAIT',
+          status: 'RUNNING',
+        },
+        data: { status: 'CANCELLED', completedAt: new Date() },
+      });
+      await tx.runbookExecutionStep.updateMany({
+        where: {
+          executionId,
+          type: 'HTTP',
+          status: 'RUNNING',
+          riskClass: 'READ_ONLY',
+        },
+        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'CANCELLED' },
+      });
+      await tx.runbookExecutionStep.updateMany({
+        where: {
+          executionId,
+          type: 'HTTP',
+          status: 'RUNNING',
+          riskClass: { not: 'READ_ONLY' },
+        },
+        data: {
+          status: 'UNKNOWN',
+          completedAt: new Date(),
+          errorCode: 'CANCELLED_WITH_UNKNOWN_OUTCOME',
+          outputPreview:
+            'Execution cancelled while HTTP write operation was in flight; outcome is unknown.',
+        },
+      });
+      await tx.runbookExecutionStep.updateMany({
+        where: {
+          executionId,
+          status: 'RUNNING',
+          type: {
+            notIn: [
+              'HTTP',
+              'WAIT',
+              'LINUX_DIAGNOSTICS',
+              'SYSTEMD',
+              'DOCKER',
+              'KUBERNETES',
+              'BASH',
+            ],
+          },
         },
         data: { status: 'CANCELLED', completedAt: new Date() },
       });
@@ -895,20 +979,75 @@ export async function advanceExecution(executionId: string): Promise<void> {
         },
         data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
       });
-      const timedOut = await tx.runbookExecution.updateMany({
+      await tx.runbookExecutionStep.updateMany({
         where: {
-          id: executionId,
-          status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
+          executionId,
+          type: 'WAIT',
+          status: 'RUNNING',
         },
-        data: { status: 'TIMED_OUT', completedAt: new Date(), failureCode: 'EXECUTION_TIMEOUT' },
+        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
       });
-      if (timedOut.count === 1) {
-        await addIncidentRunbookEvent(
-          tx,
-          execution.incidentId,
-          'RUNBOOK_FAILED',
-          'Runbook execution timed out.'
-        );
+      await tx.runbookExecutionStep.updateMany({
+        where: {
+          executionId,
+          type: 'HTTP',
+          status: 'RUNNING',
+          riskClass: 'READ_ONLY',
+        },
+        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
+      });
+      await tx.runbookExecutionStep.updateMany({
+        where: {
+          executionId,
+          type: 'HTTP',
+          status: 'RUNNING',
+          riskClass: { not: 'READ_ONLY' },
+        },
+        data: {
+          status: 'UNKNOWN',
+          completedAt: new Date(),
+          errorCode: 'TIMED_OUT_WITH_UNKNOWN_OUTCOME',
+          outputPreview:
+            'Execution timed out while HTTP write operation was in flight; outcome is unknown.',
+        },
+      });
+      await tx.runbookExecutionStep.updateMany({
+        where: {
+          executionId,
+          status: 'RUNNING',
+          type: {
+            notIn: [
+              'HTTP',
+              'WAIT',
+              'LINUX_DIAGNOSTICS',
+              'SYSTEMD',
+              'DOCKER',
+              'KUBERNETES',
+              'BASH',
+            ],
+          },
+        },
+        data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
+      });
+      const active = await tx.runbookStepAttempt.count({
+        where: { executionStep: { executionId }, status: 'RUNNING' },
+      });
+      if (active === 0) {
+        const timedOut = await tx.runbookExecution.updateMany({
+          where: {
+            id: executionId,
+            status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
+          },
+          data: { status: 'TIMED_OUT', completedAt: new Date(), failureCode: 'EXECUTION_TIMEOUT' },
+        });
+        if (timedOut.count === 1) {
+          await addIncidentRunbookEvent(
+            tx,
+            execution.incidentId,
+            'RUNBOOK_FAILED',
+            'Runbook execution timed out.'
+          );
+        }
       }
     });
     return;
@@ -1075,9 +1214,14 @@ export async function approveExecutionStep(input: {
       },
       data: { status: 'RUNNING' },
     });
-    if (transitioned.count === 1) {
-      await enqueueAdvance(tx, input.executionId);
+    if (transitioned.count !== 1) {
+      throw new RunbookExecutionInvalidTransitionError(
+        input.executionId,
+        'TERMINAL_OR_CANCELLED',
+        'RUNNING'
+      );
     }
+    await enqueueAdvance(tx, input.executionId);
     await addIncidentRunbookEvent(
       tx,
       step.execution.incidentId,

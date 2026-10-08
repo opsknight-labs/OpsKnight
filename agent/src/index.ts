@@ -23,10 +23,64 @@ const executionPublicKey = parseTrustedSigningKeys(
   process.env.OPSKNIGHT_EXECUTION_PUBLIC_KEY
 );
 
-const MAX_SPOOL_RECORDS = Number(process.env.OPSKNIGHT_MAX_SPOOL_RECORDS || 100);
-const MAX_SPOOL_BYTES = Number(process.env.OPSKNIGHT_MAX_SPOOL_BYTES || 50 * 1024 * 1024);
-const MAX_SPOOL_RECORD_AGE_MS = Number(
-  process.env.OPSKNIGHT_MAX_SPOOL_RECORD_AGE_MS || 24 * 60 * 60 * 1000
+function parseBoundedInteger(
+  envName: string,
+  raw: string | undefined,
+  defaultValue: number,
+  min: number,
+  max: number
+): number {
+  if (raw === undefined || raw.trim() === '') return defaultValue;
+  const parsed = Number(raw.trim());
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(
+      `Invalid ${envName}: must be an integer between ${min} and ${max}, got "${raw}".`
+    );
+  }
+  return parsed;
+}
+
+const MAX_SPOOL_RECORDS = parseBoundedInteger(
+  'OPSKNIGHT_MAX_SPOOL_RECORDS',
+  process.env.OPSKNIGHT_MAX_SPOOL_RECORDS,
+  100,
+  1,
+  100_000
+);
+const MAX_SPOOL_BYTES = parseBoundedInteger(
+  'OPSKNIGHT_MAX_SPOOL_BYTES',
+  process.env.OPSKNIGHT_MAX_SPOOL_BYTES,
+  50 * 1024 * 1024,
+  1024 * 1024,
+  10 * 1024 * 1024 * 1024
+);
+const MAX_SPOOL_RECORD_AGE_MS = parseBoundedInteger(
+  'OPSKNIGHT_MAX_SPOOL_RECORD_AGE_MS',
+  process.env.OPSKNIGHT_MAX_SPOOL_RECORD_AGE_MS,
+  24 * 60 * 60 * 1000,
+  60 * 1000,
+  30 * 24 * 60 * 60 * 1000
+);
+const MAX_DEAD_LETTER_RECORDS = parseBoundedInteger(
+  'OPSKNIGHT_MAX_DEAD_LETTER_RECORDS',
+  process.env.OPSKNIGHT_MAX_DEAD_LETTER_RECORDS,
+  50,
+  1,
+  50_000
+);
+const MAX_DEAD_LETTER_BYTES = parseBoundedInteger(
+  'OPSKNIGHT_MAX_DEAD_LETTER_BYTES',
+  process.env.OPSKNIGHT_MAX_DEAD_LETTER_BYTES,
+  25 * 1024 * 1024,
+  1024 * 1024,
+  5 * 1024 * 1024 * 1024
+);
+const MAX_DEAD_LETTER_AGE_MS = parseBoundedInteger(
+  'OPSKNIGHT_MAX_DEAD_LETTER_AGE_MS',
+  process.env.OPSKNIGHT_MAX_DEAD_LETTER_AGE_MS,
+  7 * 24 * 60 * 60 * 1000,
+  60 * 1000,
+  30 * 24 * 60 * 60 * 1000
 );
 
 if (!baseUrl) throw new Error('OPSKNIGHT_URL is required.');
@@ -278,6 +332,17 @@ async function run() {
           await new Promise(resolve => setTimeout(resolve, 5_000));
           continue;
         }
+        const deadLetterStats = await spool.deadLetterStats();
+        if (
+          deadLetterStats.count >= MAX_DEAD_LETTER_RECORDS ||
+          deadLetterStats.totalBytes >= MAX_DEAD_LETTER_BYTES ||
+          deadLetterStats.oldestAgeMs >= MAX_DEAD_LETTER_AGE_MS
+        ) {
+          lastError = `Dead-letter safety threshold reached (${deadLetterStats.count} records, ${deadLetterStats.totalBytes} bytes). Halting ALL claims until operator resolves quarantined records.`;
+          await new Promise(resolve => setTimeout(resolve, 5_000));
+          continue;
+        }
+
         const spoolStats = await spool.stats();
         if (
           spoolStats.count >= MAX_SPOOL_RECORDS ||
@@ -288,19 +353,18 @@ async function run() {
           await new Promise(resolve => setTimeout(resolve, 5_000));
           continue;
         }
-        attempt = await client.claim();
+
+        const currentSpoolDepth = await spool.depth();
+        const currentDeadLetterDepth = deadLetterStats.count;
+        const readOnlyOnly = currentSpoolDepth > 0 || currentDeadLetterDepth > 0;
+        attempt = await client.claim({ readOnlyOnly });
         if (!attempt) continue;
         if (await checkDraining()) {
           lastError = 'Execution claim released because Agent is draining.';
           await client.releaseClaim(attempt.attemptId, attempt.leaseToken).catch(() => undefined);
           continue;
         }
-        const currentSpoolDepth = await spool.depth();
-        const currentDeadLetterDepth = await spool.deadLetterDepth();
-        if (
-          (currentSpoolDepth > 0 || currentDeadLetterDepth > 0) &&
-          attempt.step.riskClass !== 'READ_ONLY'
-        ) {
+        if (readOnlyOnly && attempt.step.riskClass !== 'READ_ONLY') {
           lastError = `Write action claim released because result backlog (${currentSpoolDepth}) or dead letters (${currentDeadLetterDepth}) exist.`;
           await client.releaseClaim(attempt.attemptId, attempt.leaseToken).catch(() => undefined);
           continue;

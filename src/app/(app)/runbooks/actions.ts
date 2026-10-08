@@ -112,13 +112,18 @@ export async function saveDraftAction(versionId: string, runbookId: string, form
     const inputs = runbookInputsSchema.parse(
       parseJson(readString(formData, 'inputs') || '[]', 'Inputs')
     );
-    const expectedChecksum = readString(formData, 'expectedChecksum') || undefined;
-    await updateDraftVersion(
+    const draftRevisionRaw = formData.get('draftRevision');
+    const expectedDraftRevision =
+      draftRevisionRaw !== null && draftRevisionRaw !== ''
+        ? z.coerce.number().int().nonnegative().parse(draftRevisionRaw)
+        : undefined;
+    const updated = await updateDraftVersion(
       parsedVersionId,
-      { definition, inputs, expectedChecksum },
+      { definition, inputs, expectedDraftRevision },
       actor.id
     );
     revalidatePath(`/runbooks/${parsedRunbookId}`);
+    return { saved: true, draftRevision: updated.draftRevision };
   } catch (error) {
     if (error instanceof RunbookError) return { error: error.userMessage };
     if (error instanceof z.ZodError)

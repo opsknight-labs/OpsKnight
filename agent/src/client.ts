@@ -83,9 +83,10 @@ export class AgentClient {
     });
   }
 
-  async claim(): Promise<ClaimedAttempt | null> {
+  async claim(options?: { readOnlyOnly?: boolean }): Promise<ClaimedAttempt | null> {
+    const modeParam = options?.readOnlyOnly ? '&mode=READ_ONLY_ONLY' : '';
     const result = await this.request<{ attempt: ClaimedAttempt }>(
-      '/api/runbook-agent/v1/claim?waitSeconds=25',
+      `/api/runbook-agent/v1/claim?waitSeconds=25${modeParam}`,
       {}
     );
     return result?.attempt ?? null;

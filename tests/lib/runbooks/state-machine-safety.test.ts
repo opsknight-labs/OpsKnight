@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
-import { cancelExecution, completeStep } from '@/lib/runbooks/orchestrator';
+import { cancelExecution, completeStep, approveExecutionStep, advanceExecution } from '@/lib/runbooks/orchestrator';
 import { claimAgentAttempt } from '@/lib/runbooks/agent-claims';
+import { computePlanDigest } from '@/lib/runbooks/definition';
 import { RunbookExecutionInvalidTransitionError } from '@/lib/runbooks/errors';
 
 vi.mock('@/lib/prisma', () => ({
@@ -17,6 +18,7 @@ vi.mock('@/lib/prisma', () => ({
       count: vi.fn(),
     },
     runbookExecutionStep: {
+      findFirst: vi.fn(),
       findUnique: vi.fn(),
       updateMany: vi.fn(),
       count: vi.fn(),
@@ -32,6 +34,7 @@ vi.mock('@/lib/prisma', () => ({
       updateMany: vi.fn(),
     },
     runbookAgentPoolMember: {
+      findMany: vi.fn(),
       findUnique: vi.fn(),
       count: vi.fn(),
     },
@@ -40,6 +43,9 @@ vi.mock('@/lib/prisma', () => ({
       findFirst: vi.fn(),
     },
     backgroundJob: {
+      create: vi.fn(),
+    },
+    incidentEvent: {
       create: vi.fn(),
     },
     auditLog: {
@@ -93,7 +99,7 @@ describe('Runbooks State Machine Safety and Invariants', () => {
     );
   });
 
-  it('iterates through locked candidates to prevent claim starvation when first candidate fails authority check', async () => {
+  it('pre-filters pool authority to prevent claim starvation before single candidate lock', async () => {
     const agentId = 'agent_1';
     vi.mocked(prisma.runbookAgent.findFirst).mockResolvedValueOnce({
       id: agentId,
@@ -150,14 +156,15 @@ describe('Runbooks State Machine Safety and Invariants', () => {
       candidate2,
     ] as never);
 
-    // Locked candidates returned by SKIP LOCKED
-    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
-      { id: 'att_stale' },
-      { id: 'att_valid' },
+    // Agent belongs to pool_1, not pool_stale
+    vi.mocked(prisma.runbookAgentPoolMember.findMany).mockResolvedValueOnce([
+      { poolId: 'pool_1' },
     ] as never);
 
-    // Authority check for candidate1 fails: agent is NOT a member of pool_stale
-    vi.mocked(prisma.runbookAgentPoolMember.findUnique).mockResolvedValueOnce(null);
+    // Locked candidate returned by SKIP LOCKED is candidate2 directly
+    vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+      { id: 'att_valid' },
+    ] as never);
 
     // Attempt claim on candidate2 succeeds
     vi.mocked(prisma.runbookStepAttempt.updateMany).mockResolvedValueOnce({ count: 1 });
@@ -170,6 +177,7 @@ describe('Runbooks State Machine Safety and Invariants', () => {
   });
 
   it('completeStep updates step and transitions active execution to RUNNING, enqueuing advance', async () => {
+    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({ status: 'RUNNING' } as never);
     vi.mocked(prisma.runbookExecutionStep.updateMany).mockResolvedValueOnce({ count: 1 });
     vi.mocked(prisma.runbookExecution.updateMany).mockResolvedValueOnce({ count: 1 });
     vi.mocked(prisma.backgroundJob.create).mockResolvedValueOnce({ id: 'job_advance' } as never);
@@ -199,32 +207,92 @@ describe('Runbooks State Machine Safety and Invariants', () => {
     });
   });
 
-  it('completeStep updates step output but does NOT resurrect terminal or cancel-requested execution', async () => {
-    vi.mocked(prisma.runbookExecutionStep.updateMany).mockResolvedValueOnce({ count: 1 });
-    // CAS fails because execution is CANCELLED / CANCEL_REQUESTED / TIMED_OUT / FAILED
-    vi.mocked(prisma.runbookExecution.updateMany).mockResolvedValueOnce({ count: 0 });
-    const bgCreateSpy = vi.mocked(prisma.backgroundJob.create);
-    bgCreateSpy.mockClear();
+  it('completeStep does not mutate child step if parent execution is already terminal', async () => {
+    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({ status: 'CANCELLED' } as never);
+    const stepUpdateSpy = vi.mocked(prisma.runbookExecutionStep.updateMany);
+    stepUpdateSpy.mockClear();
 
     await completeStep('exec_terminal', 'step_1', 'SUCCEEDED', 'Late arriving output');
 
+    expect(stepUpdateSpy).not.toHaveBeenCalled();
+  });
+
+  it('completeStep rolls back via exception if parent CAS loses concurrent race', async () => {
+    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({ status: 'RUNNING' } as never);
+    vi.mocked(prisma.runbookExecutionStep.updateMany).mockResolvedValueOnce({ count: 1 });
+    vi.mocked(prisma.runbookExecution.updateMany).mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      completeStep('exec_1', 'step_1', 'SUCCEEDED', 'Late output')
+    ).rejects.toThrow(RunbookExecutionInvalidTransitionError);
+  });
+
+  it('approveExecutionStep rolls back and does not emit event/audit if parent transition loses', async () => {
+    const mockStep = {
+      id: 'step_1',
+      stepKey: 'step_1',
+      type: 'MANUAL' as const,
+      riskClass: 'NON_IDEMPOTENT' as const,
+      config: {},
+      status: 'WAITING_APPROVAL',
+      execution: {
+        definitionChecksum: 'checksum1',
+        inputValues: {},
+        resolvedTargetAgentId: null,
+        resolvedTargetAgentPoolId: null,
+        incidentId: 'inc_1',
+      },
+    };
+    const digest = computePlanDigest({
+      stepKey: mockStep.stepKey,
+      stepType: mockStep.type,
+      riskClass: mockStep.riskClass,
+      config: mockStep.config,
+      agentPoolId: undefined,
+      agentId: undefined,
+      inputValues: mockStep.execution.inputValues,
+      versionChecksum: mockStep.execution.definitionChecksum,
+    });
+    vi.mocked(prisma.runbookExecutionStep.findFirst).mockResolvedValueOnce(mockStep as never);
+    vi.mocked(prisma.runbookExecutionStep.updateMany).mockResolvedValueOnce({ count: 1 });
+    vi.mocked(prisma.runbookExecution.updateMany).mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      approveExecutionStep({
+        executionId: 'exec_cancelled',
+        stepId: 'step_1',
+        planDigest: digest,
+        actorId: 'user_1',
+      })
+    ).rejects.toThrow(RunbookExecutionInvalidTransitionError);
+  });
+
+  it('advanceExecution marks in-flight write HTTP steps as UNKNOWN with CANCELLED_WITH_UNKNOWN_OUTCOME', async () => {
+    vi.mocked(prisma.runbookExecution.findUnique).mockResolvedValueOnce({
+      id: 'exec_cancel',
+      status: 'CANCEL_REQUESTED',
+      cancelRequestedAt: new Date(),
+      steps: [],
+      incidentId: 'inc_1',
+    } as never);
+    vi.mocked(prisma.runbookStepAttempt.updateMany).mockResolvedValueOnce({ count: 0 });
+    vi.mocked(prisma.runbookExecutionStep.updateMany).mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.runbookStepAttempt.count).mockResolvedValueOnce(0);
+    vi.mocked(prisma.runbookExecution.updateMany).mockResolvedValueOnce({ count: 1 });
+
+    await advanceExecution('exec_cancel');
+
     expect(prisma.runbookExecutionStep.updateMany).toHaveBeenCalledWith({
-      where: { id: 'step_1', executionId: 'exec_terminal', status: { in: ['READY', 'RUNNING'] } },
-      data: {
-        status: 'SUCCEEDED',
-        completedAt: expect.any(Date),
-        outputPreview: 'Late arriving output',
-      },
-    });
-    expect(prisma.runbookExecution.updateMany).toHaveBeenCalledWith({
       where: {
-        id: 'exec_terminal',
-        status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
+        executionId: 'exec_cancel',
+        type: 'HTTP',
+        status: 'RUNNING',
+        riskClass: { not: 'READ_ONLY' },
       },
-      data: { status: 'RUNNING' },
+      data: expect.objectContaining({
+        status: 'UNKNOWN',
+        errorCode: 'CANCELLED_WITH_UNKNOWN_OUTCOME',
+      }),
     });
-    // Ensure backgroundJob.create was NOT called
-    expect(bgCreateSpy).not.toHaveBeenCalled();
   });
 });
-

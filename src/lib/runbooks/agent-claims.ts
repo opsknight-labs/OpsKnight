@@ -76,7 +76,11 @@ export async function recordAgentHeartbeat(input: {
   return { serverTime: new Date().toISOString() };
 }
 
-export async function claimAgentAttempt(agentId: string, confidentialTransport = false) {
+export async function claimAgentAttempt(
+  agentId: string,
+  confidentialTransport = false,
+  options?: { readOnlyOnly?: boolean }
+) {
   for (let transactionAttempt = 0; transactionAttempt < 3; transactionAttempt++) {
     try {
       const claimedAttempt = await prisma.$transaction(
@@ -109,6 +113,7 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
               },
             ],
             executionStep: {
+              ...(options?.readOnlyOnly ? { riskClass: 'READ_ONLY' } : {}),
               type: { in: supportedStepTypes },
               OR: [
                 { type: { not: 'DOCKER' } },
@@ -159,16 +164,44 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
               },
             },
           });
+          const memberships = await tx.runbookAgentPoolMember.findMany({
+            where: { agentId },
+            select: { poolId: true },
+          });
+          const memberPoolIds = new Set(memberships.map(m => m.poolId));
+
           let blockedSecretTransport = false;
-          const eligible = candidates.filter(candidate => {
-            if (!agentSupportsStep(capabilities, candidate.executionStep.type)) return false;
+          const eligible: typeof candidates = [];
+          for (const candidate of candidates) {
+            if (!agentSupportsStep(capabilities, candidate.executionStep.type)) continue;
             if (
               !candidate.targetAgentId &&
               candidate.executionStep.riskClass !== 'READ_ONLY' &&
               candidate.targetAgentPool?.mode === 'LOCAL_HOSTS' &&
               candidate.targetAgentPool._count.members > 1
             ) {
-              return false;
+              continue;
+            }
+            const selection = candidate.executionStep.execution.targetSelection;
+            const sourcePoolId =
+              selection &&
+              typeof selection === 'object' &&
+              !Array.isArray(selection) &&
+              typeof selection.sourcePoolId === 'string'
+                ? selection.sourcePoolId
+                : null;
+            if (sourcePoolId && !memberPoolIds.has(sourcePoolId)) {
+              continue;
+            }
+            if (
+              sourcePoolId &&
+              selection &&
+              typeof selection === 'object' &&
+              !Array.isArray(selection) &&
+              selection.implicitLocalHost === true &&
+              (await tx.runbookAgentPoolMember.count({ where: { poolId: sourcePoolId } })) !== 1
+            ) {
+              continue;
             }
             const keys = referencedStepInputKeys(candidate.executionStep.config);
             const inputs = candidate.executionStep.execution.inputValues as Record<string, unknown>;
@@ -184,10 +217,10 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
               )
             ) {
               blockedSecretTransport = true;
-              return false;
+              continue;
             }
-            return agentSupportsStep(capabilities, candidate.executionStep.type);
-          });
+            eligible.push(candidate);
+          }
           if (eligible.length === 0) {
             if (
               !allowConfidential &&
@@ -208,7 +241,7 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
             WHERE "id" IN (${Prisma.join(eligible.map(candidate => candidate.id))})
               AND "status" = 'PENDING'
             ORDER BY "createdAt", "id"
-            LIMIT 10 FOR UPDATE SKIP LOCKED
+            LIMIT 1 FOR UPDATE SKIP LOCKED
           `;
           if (lockedCandidates.length === 0) return null;
 
@@ -220,40 +253,22 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
             const candidate = eligible.find(item => item.id === locked.id);
             if (!candidate) continue;
 
-            const selection = candidate.executionStep.execution.targetSelection;
-            const sourcePoolId =
-              selection &&
-              typeof selection === 'object' &&
-              !Array.isArray(selection) &&
-              typeof selection.sourcePoolId === 'string'
-                ? selection.sourcePoolId
-                : null;
-
-            if (
-              sourcePoolId &&
-              !(await tx.runbookAgentPoolMember.findUnique({
-                where: { poolId_agentId: { poolId: sourcePoolId, agentId } },
-                select: { id: true },
-              }))
-            ) {
-              continue;
-            }
-
-            if (
-              sourcePoolId &&
-              selection &&
-              typeof selection === 'object' &&
-              !Array.isArray(selection) &&
-              selection.implicitLocalHost === true &&
-              (await tx.runbookAgentPoolMember.count({ where: { poolId: sourcePoolId } })) !== 1
-            ) {
-              continue;
-            }
-
             const token = crypto.randomBytes(32).toString('base64url');
             const expiresAt = new Date(Date.now() + DEFAULT_LEASE_DURATION_SECONDS * 1000);
             const claimed = await tx.runbookStepAttempt.updateMany({
-              where: { id: candidate.id, status: 'PENDING' },
+              where: {
+                id: candidate.id,
+                status: 'PENDING',
+                availableAt: { lte: now },
+                claimDeadlineAt: { gt: now },
+                executionStep: {
+                  execution: {
+                    status: { in: ['RUNNING', 'WAITING_AGENT'] },
+                    cancelRequestedAt: null,
+                    deadlineAt: { gt: now },
+                  },
+                },
+              },
               data: {
                 status: 'CLAIMED',
                 claimedAgentId: agentId,

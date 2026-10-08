@@ -339,4 +339,29 @@ describe('Agent authority and durable recovery', () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it('calculates deadLetterStats accurately and exposes dead-letter capacity metrics', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'opsknight-deadletter-stats-'));
+    try {
+      const spool = new ResultSpool(directory);
+      await spool.initialize();
+      const emptyStats = await spool.deadLetterStats();
+      expect(emptyStats).toEqual({ count: 0, totalBytes: 0, oldestAgeMs: 0 });
+
+      await spool.put({
+        attemptId: 'bad1',
+        leaseToken: 'token1',
+        producedAt: new Date().toISOString(),
+        status: 'SUCCEEDED',
+      });
+      await spool.quarantine('bad1');
+
+      const stats = await spool.deadLetterStats();
+      expect(stats.count).toBe(1);
+      expect(stats.totalBytes).toBeGreaterThan(0);
+      expect(stats.oldestAgeMs).toBeGreaterThanOrEqual(0);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });

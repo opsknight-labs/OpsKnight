@@ -170,4 +170,30 @@ export class ResultSpool {
       throw error;
     }
   }
+
+  async deadLetterStats(): Promise<{ count: number; totalBytes: number; oldestAgeMs: number }> {
+    const dir = join(this.directory, 'dead-letter');
+    let names: string[];
+    try {
+      names = (await readdir(dir)).filter(name => /^[a-z0-9]+\.json$/i.test(name));
+    } catch {
+      return { count: 0, totalBytes: 0, oldestAgeMs: 0 };
+    }
+    let totalBytes = 0;
+    let oldestMtime = Date.now();
+    for (const name of names) {
+      try {
+        const s = await stat(join(dir, name));
+        totalBytes += s.size;
+        if (s.mtimeMs < oldestMtime) oldestMtime = s.mtimeMs;
+      } catch {
+        // Ignored if file unlinked concurrently
+      }
+    }
+    return {
+      count: names.length,
+      totalBytes,
+      oldestAgeMs: names.length > 0 ? Math.max(0, Date.now() - oldestMtime) : 0,
+    };
+  }
 }

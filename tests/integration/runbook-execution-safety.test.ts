@@ -1,9 +1,15 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import { generateKeyPairSync } from 'node:crypto';
-import { computeDefinitionChecksum } from '@/lib/runbooks/definition';
+import { computeDefinitionChecksum, parseRunbookDefinition } from '@/lib/runbooks/definition';
 import { createServiceBinding, updateServiceBinding } from '@/lib/runbooks/bindings';
-import { advanceExecution, startRunbookExecution } from '@/lib/runbooks/orchestrator';
+import {
+  advanceExecution,
+  startRunbookExecution,
+  cancelExecution,
+  completeStep,
+  approveExecutionStep,
+} from '@/lib/runbooks/orchestrator';
 import {
   claimAgentAttempt,
   fenceAgentAttempt,
@@ -38,6 +44,7 @@ const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
 
 async function createPublishedRunbook(definition: RunbookDefinition) {
+  const parsed = parseRunbookDefinition(definition as unknown as Prisma.InputJsonValue);
   const runbook = await testPrisma.runbook.create({
     data: { name: `Safety ${crypto.randomUUID()}`, slug: `safety-${crypto.randomUUID()}` },
   });
@@ -46,8 +53,8 @@ async function createPublishedRunbook(definition: RunbookDefinition) {
       runbookId: runbook.id,
       version: 1,
       state: 'PUBLISHED',
-      definition: definition as unknown as Prisma.InputJsonValue,
-      checksum: computeDefinitionChecksum(definition),
+      definition: parsed as unknown as Prisma.InputJsonValue,
+      checksum: computeDefinitionChecksum(parsed),
       publishedAt: new Date(),
     },
   });
@@ -1612,4 +1619,187 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       }
     }
   );
+
+  async function assertTerminalExecutionInvariants(executionId: string) {
+    const execution = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: executionId },
+      include: { steps: { include: { attempts: true } } },
+    });
+    if (['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'].includes(execution.status)) {
+      for (const step of execution.steps) {
+        expect(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'SKIPPED', 'UNKNOWN']).toContain(
+          step.status
+        );
+        expect(['PENDING', 'READY', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL']).not.toContain(
+          step.status
+        );
+        for (const attempt of step.attempts) {
+          expect(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT']).toContain(attempt.status);
+          expect(['PENDING', 'CLAIMED', 'RUNNING']).not.toContain(attempt.status);
+        }
+      }
+    }
+  }
+
+  it('enforces terminal parent invariant: in-flight local WAIT cancelled terminates step and parent without leaving running steps', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'wait_step',
+          name: 'Wait step',
+          type: 'WAIT',
+          riskClass: 'READ_ONLY',
+          config: { seconds: 120 },
+        },
+      ],
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    await advanceExecution(execution.id);
+
+    const runningStep = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id, stepKey: 'wait_step' },
+    });
+    expect(runningStep.status).toBe('RUNNING');
+
+    await cancelExecution(execution.id, target.actor.id, 'operator cancelled');
+    await advanceExecution(execution.id);
+
+    const cancelledExecution = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: execution.id },
+    });
+    expect(cancelledExecution.status).toBe('CANCELLED');
+
+    const cancelledStep = await testPrisma.runbookExecutionStep.findUniqueOrThrow({
+      where: { id: runningStep.id },
+    });
+    expect(cancelledStep.status).toBe('CANCELLED');
+
+    await assertTerminalExecutionInvariants(execution.id);
+  });
+
+  it('enforces terminal parent invariant: in-flight local write HTTP cancelled transitions step to UNKNOWN and parent to CANCELLED', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'http_write',
+          name: 'HTTP Write Step',
+          type: 'HTTP',
+          riskClass: 'IDEMPOTENT_WRITE',
+          config: { url: 'https://example.com/api/deploy', method: 'PUT' },
+        },
+      ],
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+
+    const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id, stepKey: 'http_write' },
+    });
+    await testPrisma.runbookExecutionStep.update({
+      where: { id: step.id },
+      data: { status: 'RUNNING', startedAt: new Date() },
+    });
+
+    await cancelExecution(execution.id, target.actor.id, 'operator cancelled');
+    await advanceExecution(execution.id);
+
+    const cancelledExecution = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: execution.id },
+    });
+    expect(cancelledExecution.status).toBe('CANCELLED');
+
+    const updatedStep = await testPrisma.runbookExecutionStep.findUniqueOrThrow({
+      where: { id: step.id },
+    });
+    expect(updatedStep.status).toBe('UNKNOWN');
+    expect(updatedStep.errorCode).toBe('CANCELLED_WITH_UNKNOWN_OUTCOME');
+
+    await assertTerminalExecutionInvariants(execution.id);
+  });
+
+  it('completeStep does not resurrect cancelled execution and rolls back step completion', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'step1',
+          name: 'Step 1',
+          type: 'MANUAL',
+          riskClass: 'READ_ONLY',
+          config: {},
+        },
+      ],
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id, stepKey: 'step1' },
+    });
+
+    await cancelExecution(execution.id, target.actor.id);
+    await advanceExecution(execution.id);
+
+    await completeStep(execution.id, step.id, 'SUCCEEDED', 'late output');
+
+    const finalExecution = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: execution.id },
+    });
+    expect(finalExecution.status).toBe('CANCELLED');
+
+    const finalStep = await testPrisma.runbookExecutionStep.findUniqueOrThrow({
+      where: { id: step.id },
+    });
+    expect(finalStep.status).toBe('CANCELLED');
+
+    await assertTerminalExecutionInvariants(execution.id);
+  });
+
+  it('approveExecutionStep rolls back if execution was cancelled concurrently', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'action',
+          name: 'Action',
+          type: 'MANUAL',
+          riskClass: 'NON_IDEMPOTENT',
+          requiresApproval: true,
+          config: {},
+        },
+      ],
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    await advanceExecution(execution.id);
+
+    const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id, stepKey: 'action' },
+    });
+    expect(step.status).toBe('WAITING_APPROVAL');
+
+    await cancelExecution(execution.id, target.actor.id);
+    await advanceExecution(execution.id);
+
+    await expect(
+      approveExecutionStep({
+        executionId: execution.id,
+        stepId: step.id,
+        planDigest: 'manual:action',
+        actorId: target.actor.id,
+      })
+    ).rejects.toThrow();
+
+    await assertTerminalExecutionInvariants(execution.id);
+  });
 });
