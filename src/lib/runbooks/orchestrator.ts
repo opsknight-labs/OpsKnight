@@ -357,21 +357,21 @@ export async function startRunbookExecution(input: {
         throw new RunbookDefinitionError('Automatic write runbooks require a service boundary.');
       }
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-service:${resolvedServiceId}`}))`;
-      const newServiceWriteStepsCount = steps.filter(
-        step => step.riskClass !== 'READ_ONLY'
-      ).length;
-      const activeServiceWrites = await tx.runbookExecutionStep.count({
+      const newServiceWriteSlot = steps.some(step => step.riskClass !== 'READ_ONLY') ? 1 : 0;
+      const activeServiceWrites = await tx.runbookExecution.count({
         where: {
-          riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
-          status: { in: ['PENDING', 'READY', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
-          execution: {
-            serviceId: resolvedServiceId,
-            triggeredByUserId: null,
-            status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'CANCEL_REQUESTED', 'PAUSED'] },
+          serviceId: resolvedServiceId,
+          triggeredByUserId: null,
+          status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'CANCEL_REQUESTED', 'PAUSED'] },
+          steps: {
+            some: {
+              riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
+              status: { in: ['PENDING', 'READY', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
+            },
           },
         },
       });
-      if (activeServiceWrites + newServiceWriteStepsCount > MAX_AUTO_WRITE_ACTIONS_PER_SERVICE) {
+      if (activeServiceWrites + newServiceWriteSlot > MAX_AUTO_WRITE_ACTIONS_PER_SERVICE) {
         throw new RunbookDefinitionError(
           'AUTOMATION_BLAST_RADIUS_LIMIT: too many automatic write runbooks are active for this service.'
         );
@@ -438,23 +438,27 @@ export async function startRunbookExecution(input: {
           implicitLocalHost = true;
         }
       }
-      const newPoolWriteStepsCount = steps.filter(
+      const newPoolWriteSlot = steps.some(
         step => requiresAgent(step.type) && step.riskClass !== 'READ_ONLY'
-      ).length;
-      const activePoolWrites = await tx.runbookExecutionStep.count({
+      )
+        ? 1
+        : 0;
+      const activePoolWrites = await tx.runbookExecution.count({
         where: {
-          riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
-          status: { in: ['PENDING', 'READY', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
-          execution: {
-            OR: [
-              { resolvedTargetAgentPoolId },
-              { targetSelection: { path: ['sourcePoolId'], equals: resolvedTargetAgentPoolId } },
-            ],
-            status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'CANCEL_REQUESTED', 'PAUSED'] },
+          OR: [
+            { resolvedTargetAgentPoolId },
+            { targetSelection: { path: ['sourcePoolId'], equals: resolvedTargetAgentPoolId } },
+          ],
+          status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'CANCEL_REQUESTED', 'PAUSED'] },
+          steps: {
+            some: {
+              riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
+              status: { in: ['PENDING', 'READY', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
+            },
           },
         },
       });
-      if (activePoolWrites + newPoolWriteStepsCount > MAX_CONCURRENT_WRITE_ACTIONS_PER_POOL) {
+      if (activePoolWrites + newPoolWriteSlot > MAX_CONCURRENT_WRITE_ACTIONS_PER_POOL) {
         throw new RunbookDefinitionError(
           'AGENT_POOL_CONCURRENCY_LIMIT: too many write actions are active for this Agent pool.'
         );
@@ -561,6 +565,44 @@ function resolvedPlanDigest(
   });
 }
 
+async function readBoundedResponseBody(response: Response, maxBytes: number): Promise<string> {
+  if (!response.body) return '';
+  if (typeof response.body.getReader !== 'function') {
+    return (await response.text()).slice(0, maxBytes);
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const remaining = maxBytes - total;
+      if (value.byteLength > remaining) {
+        chunks.push(value.subarray(0, remaining));
+        total += remaining;
+        await reader.cancel('HTTP response preview limit reached');
+        break;
+      }
+      chunks.push(value);
+      total += value.byteLength;
+      if (total >= maxBytes) {
+        await reader.cancel('HTTP response preview limit reached');
+        break;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const combined = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return new TextDecoder().decode(combined);
+}
+
 async function executeHttpStep(
   step: RunbookExecutionStep,
   config: Record<string, unknown>,
@@ -593,7 +635,7 @@ async function executeHttpStep(
       signal: controller.signal,
       redirect: 'error',
     });
-    const body = (await response.text()).slice(0, MAX_OUTPUT_PREVIEW_BYTES);
+    const body = await readBoundedResponseBody(response, MAX_OUTPUT_PREVIEW_BYTES);
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${body.slice(0, 512)}`);
     return `HTTP ${response.status}\n${body}`;
   } finally {

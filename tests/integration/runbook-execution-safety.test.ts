@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Prisma } from '@prisma/client';
 import { generateKeyPairSync } from 'node:crypto';
-import { computeDefinitionChecksum, parseRunbookDefinition } from '@/lib/runbooks/definition';
+import { computeDefinitionChecksum, computePlanDigest, parseRunbookDefinition } from '@/lib/runbooks/definition';
 import { createServiceBinding, updateServiceBinding } from '@/lib/runbooks/bindings';
 import {
   advanceExecution,
@@ -1799,6 +1799,113 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         actorId: target.actor.id,
       })
     ).rejects.toThrow();
+
+    await assertTerminalExecutionInvariants(execution.id);
+  });
+
+  it('permits a sequential workflow with more write steps than pool concurrency limit', async () => {
+    const target = await createAgentTarget({
+      description: 'Multi-write sequential workflow',
+      steps: Array.from({ length: 6 }, (_, i) => ({
+        key: `step_${i}`,
+        name: `Step ${i}`,
+        type: 'SYSTEMD' as const,
+        riskClass: 'NON_IDEMPOTENT' as const,
+        config: { action: 'restart', unit: `service-${i}.service` },
+      })),
+    });
+
+    // MAX_CONCURRENT_WRITE_ACTIONS_PER_POOL is 5.
+    // A single sequential runbook with 6 write steps must be admitted because at most 1 step executes at a time.
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      runbookVersionId: target.version.id,
+      serviceId: target.service.id,
+      bindingId: target.binding.id,
+      triggeredByUserId: target.actor.id,
+      triggerFingerprint: 'sequential-write-multi-step',
+    });
+    expect(execution.status).toBe('QUEUED');
+  });
+
+  it('concurrent race: overlapping completeStep and cancelExecution preserve terminal parent and step invariants', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'step1',
+          name: 'Step 1',
+          type: 'MANUAL',
+          riskClass: 'READ_ONLY',
+          config: {},
+        },
+      ],
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id, stepKey: 'step1' },
+    });
+
+    // Fire completeStep and cancelExecution simultaneously in parallel against real PostgreSQL
+    await Promise.allSettled([
+      completeStep(execution.id, step.id, 'SUCCEEDED', 'concurrent output'),
+      cancelExecution(execution.id, target.actor.id, 'concurrent cancellation'),
+    ]);
+    await advanceExecution(execution.id);
+
+    await assertTerminalExecutionInvariants(execution.id);
+  });
+
+  it('concurrent race: overlapping approveExecutionStep and cancelExecution preserve terminal parent and step invariants', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'action',
+          name: 'Action',
+          type: 'MANUAL',
+          riskClass: 'NON_IDEMPOTENT',
+          requiresApproval: true,
+          config: {},
+        },
+      ],
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    await advanceExecution(execution.id);
+
+    const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id, stepKey: 'action' },
+    });
+    expect(step.status).toBe('WAITING_APPROVAL');
+
+    const digest = computePlanDigest({
+      stepKey: step.stepKey,
+      stepType: step.type,
+      riskClass: step.riskClass,
+      config: step.config as Record<string, unknown>,
+      agentPoolId: target.pool.id,
+      agentId: undefined,
+      inputValues: {},
+      versionChecksum: target.version.checksum,
+    });
+
+    // Fire approval and cancellation simultaneously against real PostgreSQL
+    await Promise.allSettled([
+      approveExecutionStep({
+        executionId: execution.id,
+        stepId: step.id,
+        planDigest: digest,
+        actorId: target.actor.id,
+      }),
+      cancelExecution(execution.id, target.actor.id, 'racing cancel'),
+    ]);
+    await advanceExecution(execution.id);
 
     await assertTerminalExecutionInvariants(execution.id);
   });

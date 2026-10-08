@@ -364,4 +364,18 @@ describe('Agent authority and durable recovery', () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it('fails closed on unexpected filesystem errors in stats calculation', async () => {
+    // If the directory path is an invalid target (e.g. points to a regular file where directory is expected)
+    const filePath = join(tmpdir(), `opsknight-not-a-dir-${Date.now()}`);
+    await writeFile(filePath, 'not-a-directory');
+    try {
+      const spool = new ResultSpool(filePath);
+      // stats() and deadLetterStats() should throw rather than masking the error as 0
+      await expect(spool.stats()).rejects.toThrow();
+      await expect(spool.deadLetterStats()).rejects.toThrow();
+    } finally {
+      await rm(filePath, { force: true });
+    }
+  });
 });

@@ -38,6 +38,10 @@ vi.mock('@/lib/prisma', () => ({
       findUnique: vi.fn(),
       count: vi.fn(),
     },
+    runbookAgentPool: {
+      findUnique: vi.fn(),
+      count: vi.fn().mockResolvedValue(1),
+    },
     runbookExecutionSigningKey: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),

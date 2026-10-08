@@ -113,10 +113,14 @@ export async function saveDraftAction(versionId: string, runbookId: string, form
       parseJson(readString(formData, 'inputs') || '[]', 'Inputs')
     );
     const draftRevisionRaw = formData.get('draftRevision');
-    const expectedDraftRevision =
-      draftRevisionRaw !== null && draftRevisionRaw !== ''
-        ? z.coerce.number().int().nonnegative().parse(draftRevisionRaw)
-        : undefined;
+    if (draftRevisionRaw === null || draftRevisionRaw === '') {
+      throw new Error('Draft revision is required for optimistic locking.');
+    }
+    const expectedDraftRevision = z.coerce
+      .number({ invalid_type_error: 'Draft revision must be a valid number.' })
+      .int('Draft revision must be an integer.')
+      .nonnegative('Draft revision must be non-negative.')
+      .parse(draftRevisionRaw);
     const updated = await updateDraftVersion(
       parsedVersionId,
       { definition, inputs, expectedDraftRevision },

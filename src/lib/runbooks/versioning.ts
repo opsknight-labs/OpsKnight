@@ -132,7 +132,7 @@ export async function updateRunbookMetadata(
 /** Updates a draft using a state predicate so a concurrent publish cannot be overwritten. */
 export async function updateDraftVersion(
   versionId: string,
-  input: { definition: unknown; inputs?: RunbookInputInput[]; expectedDraftRevision?: number },
+  input: { definition: unknown; inputs?: RunbookInputInput[]; expectedDraftRevision: number },
   actorId: string
 ) {
   const inputs = runbookInputsSchema.parse(input.inputs ?? []);
@@ -149,10 +149,7 @@ export async function updateDraftVersion(
     if (current.state !== 'DRAFT') {
       throw new RunbookVersionImmutableError(versionId, current.state);
     }
-    if (
-      input.expectedDraftRevision !== undefined &&
-      current.draftRevision !== input.expectedDraftRevision
-    ) {
+    if (current.draftRevision !== input.expectedDraftRevision) {
       throw new RunbookDefinitionError(
         'DRAFT_CONFLICT: This draft was modified by another operator since you opened it. Please refresh and review the changes.'
       );
@@ -161,9 +158,7 @@ export async function updateDraftVersion(
       where: {
         id: versionId,
         state: 'DRAFT',
-        ...(input.expectedDraftRevision !== undefined
-          ? { draftRevision: input.expectedDraftRevision }
-          : {}),
+        draftRevision: input.expectedDraftRevision,
       },
       data: {
         definition: definitionJson(definition),

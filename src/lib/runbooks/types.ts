@@ -168,6 +168,7 @@ export const TERMINAL_STEP_STATUSES: ReadonlySet<RunbookStepStatus> = new Set([
   'FAILED',
   'SKIPPED',
   'CANCELLED',
+  'UNKNOWN',
 ]);
 
 export function isTerminalStepStatus(status: RunbookStepStatus): boolean {

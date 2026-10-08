@@ -189,6 +189,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
             description: 'concurrent modification',
             steps: [{ key: 'step_concurrent', name: 'Concurrent Step', type: 'MANUAL', riskClass: 'READ_ONLY' }],
           },
+          expectedDraftRevision: 0,
         },
         actor.id
       ),
@@ -552,6 +553,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
             description: 'mutated',
             steps: [{ key: 'step_1', name: 'Step 1', type: 'MANUAL', riskClass: 'READ_ONLY' }],
           },
+          expectedDraftRevision: 0,
         },
         actor.id
       )

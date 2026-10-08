@@ -140,30 +140,6 @@ export async function claimAgentAttempt(
             confidentialTransport ||
             (process.env.NODE_ENV === 'development' &&
               process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true');
-          const candidates = await tx.runbookStepAttempt.findMany({
-            where: {
-              ...claimWhere,
-              ...(!allowConfidential ? { requiresConfidentialTransport: false } : {}),
-            },
-            orderBy: { createdAt: 'asc' },
-            take: 50,
-            include: {
-              targetAgentPool: { select: { mode: true, _count: { select: { members: true } } } },
-              executionStep: {
-                include: {
-                  execution: {
-                    select: {
-                      id: true,
-                      inputValues: true,
-                      definitionChecksum: true,
-                      deadlineAt: true,
-                      targetSelection: true,
-                    },
-                  },
-                },
-              },
-            },
-          });
           const memberships = await tx.runbookAgentPoolMember.findMany({
             where: { agentId },
             select: { poolId: true },
@@ -171,56 +147,126 @@ export async function claimAgentAttempt(
           const memberPoolIds = new Set(memberships.map(m => m.poolId));
 
           let blockedSecretTransport = false;
-          const eligible: typeof candidates = [];
-          for (const candidate of candidates) {
-            if (!agentSupportsStep(capabilities, candidate.executionStep.type)) continue;
-            if (
-              !candidate.targetAgentId &&
-              candidate.executionStep.riskClass !== 'READ_ONLY' &&
-              candidate.targetAgentPool?.mode === 'LOCAL_HOSTS' &&
-              candidate.targetAgentPool._count.members > 1
-            ) {
-              continue;
+          type CandidateAttempt = Prisma.RunbookStepAttemptGetPayload<{
+            include: {
+              targetAgentPool: { select: { mode: true; _count: { select: { members: true } } } };
+              executionStep: {
+                include: {
+                  execution: {
+                    select: {
+                      id: true;
+                      inputValues: true;
+                      definitionChecksum: true;
+                      deadlineAt: true;
+                      targetSelection: true;
+                    };
+                  };
+                };
+              };
+            };
+          }>;
+
+          let eligible: CandidateAttempt[] = [];
+
+          const CANDIDATE_BATCH_SIZE = 50;
+          const MAX_BATCHES = 10;
+          let cursorId: string | undefined = undefined;
+
+          for (let batch = 0; batch < MAX_BATCHES; batch++) {
+            const candidates: CandidateAttempt[] = await tx.runbookStepAttempt.findMany({
+              where: {
+                ...claimWhere,
+                ...(!allowConfidential ? { requiresConfidentialTransport: false } : {}),
+              },
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              take: CANDIDATE_BATCH_SIZE,
+              ...(cursorId ? { cursor: { id: cursorId }, skip: 1 } : {}),
+              include: {
+                targetAgentPool: { select: { mode: true, _count: { select: { members: true } } } },
+                executionStep: {
+                  include: {
+                    execution: {
+                      select: {
+                        id: true,
+                        inputValues: true,
+                        definitionChecksum: true,
+                        deadlineAt: true,
+                        targetSelection: true,
+                      },
+                    },
+                  },
+                },
+              },
+            });
+
+            if (candidates.length === 0) break;
+            cursorId = candidates[candidates.length - 1].id;
+
+            for (const candidate of candidates) {
+              if (!agentSupportsStep(capabilities, candidate.executionStep.type)) continue;
+              if (
+                !candidate.targetAgentId &&
+                candidate.executionStep.riskClass !== 'READ_ONLY' &&
+                candidate.targetAgentPool?.mode === 'LOCAL_HOSTS' &&
+                candidate.targetAgentPool._count.members > 1
+              ) {
+                continue;
+              }
+              const selection = candidate.executionStep.execution.targetSelection;
+              const sourcePoolId =
+                selection &&
+                typeof selection === 'object' &&
+                !Array.isArray(selection) &&
+                typeof selection.sourcePoolId === 'string'
+                  ? selection.sourcePoolId
+                  : null;
+              if (sourcePoolId && !memberPoolIds.has(sourcePoolId)) {
+                const sourcePoolCount = await tx.runbookAgentPool.count({ where: { id: sourcePoolId } });
+                if (sourcePoolCount === 0) {
+                  await tx.runbookStepAttempt.updateMany({
+                    where: { id: candidate.id, status: 'PENDING' },
+                    data: {
+                      status: 'FAILED',
+                      errorCode: 'TARGET_AUTHORITY_REVOKED',
+                      errorMessage: 'Target authority revoked: source pool no longer exists.',
+                    },
+                  });
+                }
+                continue;
+              }
+              if (
+                sourcePoolId &&
+                selection &&
+                typeof selection === 'object' &&
+                !Array.isArray(selection) &&
+                selection.implicitLocalHost === true &&
+                (await tx.runbookAgentPoolMember.count({ where: { poolId: sourcePoolId } })) !== 1
+              ) {
+                continue;
+              }
+              const keys = referencedStepInputKeys(candidate.executionStep.config);
+              const inputs = candidate.executionStep.execution.inputValues as Record<string, unknown>;
+              const hasSecrets = Object.entries(inputs).some(
+                ([key, value]) => keys.has(key) && isSecretReference(value)
+              );
+              if (
+                hasSecrets &&
+                !confidentialTransport &&
+                !(
+                  process.env.NODE_ENV === 'development' &&
+                  process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true'
+                )
+              ) {
+                blockedSecretTransport = true;
+                continue;
+              }
+              eligible.push(candidate);
+              if (eligible.length >= 10) break;
             }
-            const selection = candidate.executionStep.execution.targetSelection;
-            const sourcePoolId =
-              selection &&
-              typeof selection === 'object' &&
-              !Array.isArray(selection) &&
-              typeof selection.sourcePoolId === 'string'
-                ? selection.sourcePoolId
-                : null;
-            if (sourcePoolId && !memberPoolIds.has(sourcePoolId)) {
-              continue;
-            }
-            if (
-              sourcePoolId &&
-              selection &&
-              typeof selection === 'object' &&
-              !Array.isArray(selection) &&
-              selection.implicitLocalHost === true &&
-              (await tx.runbookAgentPoolMember.count({ where: { poolId: sourcePoolId } })) !== 1
-            ) {
-              continue;
-            }
-            const keys = referencedStepInputKeys(candidate.executionStep.config);
-            const inputs = candidate.executionStep.execution.inputValues as Record<string, unknown>;
-            const hasSecrets = Object.entries(inputs).some(
-              ([key, value]) => keys.has(key) && isSecretReference(value)
-            );
-            if (
-              hasSecrets &&
-              !confidentialTransport &&
-              !(
-                process.env.NODE_ENV === 'development' &&
-                process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true'
-              )
-            ) {
-              blockedSecretTransport = true;
-              continue;
-            }
-            eligible.push(candidate);
+
+            if (eligible.length > 0) break;
           }
+
           if (eligible.length === 0) {
             if (
               !allowConfidential &&

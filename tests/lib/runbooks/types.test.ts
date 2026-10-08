@@ -86,7 +86,7 @@ describe('Runbook Type Guards and Utilities', () => {
   });
 
   describe('isTerminalStepStatus', () => {
-    const terminal = ['SUCCEEDED', 'FAILED', 'SKIPPED', 'CANCELLED'];
+    const terminal = ['SUCCEEDED', 'FAILED', 'SKIPPED', 'CANCELLED', 'UNKNOWN'];
     it('identifies terminal step statuses', () => {
       RUNBOOK_STEP_STATUSES.forEach(status => {
         if (terminal.includes(status)) {
@@ -196,6 +196,7 @@ describe('Runbook Constants', () => {
       'FAILED',
       'SKIPPED',
       'CANCELLED',
+      'UNKNOWN',
     ]);
   });
 

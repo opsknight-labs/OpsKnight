@@ -575,6 +575,7 @@ describe('Runbook Lifecycle Unit Tests', () => {
               description: '',
               steps: [{ key: 'step_1', name: 'Step 1', type: 'MANUAL', riskClass: 'READ_ONLY' }],
             },
+            expectedDraftRevision: 0,
           },
           'user_1'
         )

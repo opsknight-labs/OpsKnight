@@ -139,8 +139,12 @@ export class ResultSpool {
     let names: string[];
     try {
       names = (await readdir(this.directory)).filter(name => /^[a-z0-9]+\.json$/i.test(name));
-    } catch {
-      names = [];
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        names = [];
+      } else {
+        throw error;
+      }
     }
     let totalBytes = 0;
     let oldestMtime = Date.now();
@@ -149,8 +153,8 @@ export class ResultSpool {
         const s = await stat(join(this.directory, name));
         totalBytes += s.size;
         if (s.mtimeMs < oldestMtime) oldestMtime = s.mtimeMs;
-      } catch {
-        // Ignored if file unlinked concurrently
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
     }
     return {
@@ -176,8 +180,11 @@ export class ResultSpool {
     let names: string[];
     try {
       names = (await readdir(dir)).filter(name => /^[a-z0-9]+\.json$/i.test(name));
-    } catch {
-      return { count: 0, totalBytes: 0, oldestAgeMs: 0 };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { count: 0, totalBytes: 0, oldestAgeMs: 0 };
+      }
+      throw error;
     }
     let totalBytes = 0;
     let oldestMtime = Date.now();
@@ -186,8 +193,8 @@ export class ResultSpool {
         const s = await stat(join(dir, name));
         totalBytes += s.size;
         if (s.mtimeMs < oldestMtime) oldestMtime = s.mtimeMs;
-      } catch {
-        // Ignored if file unlinked concurrently
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
     }
     return {
