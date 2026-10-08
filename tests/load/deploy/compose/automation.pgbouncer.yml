@@ -1,9 +1,6 @@
 # Optional production-style web pooling for the isolated automation suite.
 # Workers and migrations keep direct PostgreSQL connections, as in deploy/compose.
 services:
-  db:
-    # Eight worker replicas plus pooled web traffic must fit the database ceiling.
-    command: [postgres, '-c', 'max_connections=${AUTOMATION_POSTGRES_MAX_CONNECTIONS:-160}']
   pgbouncer:
     image: ${AUTOMATION_PGBOUNCER_IMAGE:-opsknight-pgbouncer:1.26.0}
     environment:

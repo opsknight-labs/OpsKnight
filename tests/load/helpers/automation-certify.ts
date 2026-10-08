@@ -137,6 +137,20 @@ async function main() {
   if (!['defaults', 'provisioned-200'].includes(providerCapacityProfile))
     throw new Error('Unknown automation provider capacity profile');
   if (providerCapacityProfile === 'provisioned-200') await provisionAutomationProviderCapacity(db);
+  const resetProviderTelemetry = process.env.AUTOMATION_RESET_PROVIDER_TELEMETRY === 'true';
+  if (resetProviderTelemetry) {
+    if (!process.env.LOAD_EMULATOR_CONTROL_URL)
+      throw new Error('An exclusively owned provider emulator is required for telemetry reset');
+    const response = await fetch(
+      new URL('/_control/reset', process.env.LOAD_EMULATOR_CONTROL_URL),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{"provider":"all"}',
+      }
+    );
+    if (!response.ok) throw new Error(`Provider telemetry reset failed (${response.status})`);
+  }
   let stopReason: string | null = null;
   for (const profile of AUTOMATION_LOAD_PROFILES.filter(profile => profile !== 'disabled')) {
     if (results.length && results.at(-1)!.pendingAfterDrain > 0) {
@@ -150,6 +164,10 @@ async function main() {
     if (
       off &&
       (off.k6ExitCode !== 0 ||
+        off.providerDuplicateDeliveriesDelta === null ||
+        off.providerDuplicateDeliveriesDelta > 0 ||
+        off.deadlocksDelta > 0 ||
+        off.criticalNotificationLatency.failed > 0 ||
         (off.criticalNotificationLatency.p99Ms ?? 0) >
           Number(process.env.AUTOMATION_MAX_NOTIFICATION_P99_MS || 30000) ||
         off.telemetrySamples.some(
@@ -481,6 +499,7 @@ async function main() {
           interactiveUsers: 2,
           responderUsers: 2,
           providerCapacityProfile,
+          providerTelemetryResetBeforeRun: resetProviderTelemetry,
           ...(providerCapacityProfile === 'provisioned-200'
             ? {
                 providerBudgets: {

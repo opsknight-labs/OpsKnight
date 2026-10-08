@@ -45,6 +45,7 @@ export interface ProviderTelemetrySnapshot {
   maxInFlight: number;
   uniqueDeliveriesSucceeded: number;
   duplicateDeliveries: number;
+  duplicateDeliverySamples: DeliveryRecord[];
   p50LatencyMs: number;
   p95LatencyMs: number;
   p99LatencyMs: number;
@@ -350,6 +351,10 @@ export function getProviderTelemetry(provider: ProviderName): ProviderTelemetryS
     maxInFlight: state.maxInFlight,
     uniqueDeliveriesSucceeded: uniqueSucceeded,
     duplicateDeliveries: state.duplicateDeliveries,
+    duplicateDeliverySamples: [...state.deliveries.values()]
+      .filter(record => record.succeededCount > 1)
+      .slice(-20)
+      .map(record => ({ ...record })),
     p50LatencyMs: percentile(state.latenciesMs, 0.5),
     p95LatencyMs: percentile(state.latenciesMs, 0.95),
     p99LatencyMs: percentile(state.latenciesMs, 0.99),
