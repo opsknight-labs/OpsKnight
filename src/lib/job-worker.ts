@@ -61,6 +61,7 @@ interface JobWorkerSharedState {
   lastQueueMaintenanceAt: number;
   queueMaintenanceInFlight: Promise<void> | null;
   lastRunbookReconciliationAt: number;
+  lastRunbookError: string | null;
 }
 
 declare global {
@@ -84,6 +85,7 @@ const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
   lastQueueMaintenanceAt: 0,
   queueMaintenanceInFlight: null,
   lastRunbookReconciliationAt: 0,
+  lastRunbookError: null,
 };
 
 // Next.js standalone webpack builds isolate module scopes between
@@ -374,10 +376,12 @@ async function runOnce(): Promise<void> {
       );
       if (result.failed > 0) {
         workerState.lastError = `${result.failed} runbook job(s) failed`;
+        workerState.lastRunbookError = workerState.lastError;
         logger.warn('[JobWorker] Runbook lane degraded', { failed: result.failed, reconciliation });
       } else {
         workerState.lastSuccessAt = new Date();
         workerState.lastError = null;
+        workerState.lastRunbookError = null;
       }
       scheduleNextRun(
         result.total > 0
@@ -404,9 +408,16 @@ async function runOnce(): Promise<void> {
       !workerState.excludeRunbookJobs &&
       Date.now() - workerState.lastRunbookReconciliationAt >= RUNBOOK_RECONCILIATION_INTERVAL_MS
     ) {
-      const { reconcileRunbooks } = await import('./runbooks/reconciler');
-      await reconcileRunbooks(Math.min(workerState.workerConfig.batchSize, 100));
-      workerState.lastRunbookReconciliationAt = Date.now();
+      try {
+        const { reconcileRunbooks } = await import('./runbooks/reconciler');
+        await reconcileRunbooks(Math.min(workerState.workerConfig.batchSize, 100));
+        workerState.lastRunbookReconciliationAt = Date.now();
+        workerState.lastRunbookError = null;
+      } catch (err) {
+        workerState.lastRunbookError =
+          err instanceof Error ? err.message : 'Runbook reconciliation failed';
+        logger.error('[JobWorker] Runbook reconciliation failed in integrated lane', { error: err });
+      }
     }
 
     // Operational background jobs (war-room, Jira, side effects, auto-unsnooze)
@@ -575,6 +586,7 @@ export function getJobWorkerStatus() {
     lastSuccessAt: workerState.lastSuccessAt,
     startedAt: workerState.startedAt,
     lastError: workerState.lastError,
+    lastRunbookError: workerState.lastRunbookError,
     config: workerState.workerConfig ? { ...workerState.workerConfig } : null,
     lane: workerState.workerLane,
     controlPlaneState: workerState.controlPlaneState,

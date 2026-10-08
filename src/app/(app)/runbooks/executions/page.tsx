@@ -1,13 +1,14 @@
-import Link from 'next/link';
-import { Play } from 'lucide-react';
+import { getRunbookDatabaseNow, getRunbookExecutionSummary, getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
+import { ACTIVE_EXECUTION_STATUSES, getExecutionDateRange, getExecutionProgress, getUnknownOutcomeWhere, TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability, getCurrentUser } from '@/lib/rbac';
-import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import EmptyState from '@/components/ui/EmptyState';
-import { RunbookNavigation, StatusBadge } from '@/components/runbooks/RunbookControls';
+import { RunbookPageHeader } from '@/components/runbooks/RunbookPageHeader';
+import { RunbookMetricStrip } from '@/components/runbooks/RunbookMetricStrip';
+import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
+import { ExecutionFilterBar } from '@/components/runbooks/executions/ExecutionFilterBar';
+import { ExecutionList } from '@/components/runbooks/executions/ExecutionList';
 import {
-  RunbookFilters,
   RunbookPagination,
   runbookPageQuery,
   RUNBOOK_PAGE_SIZE,
@@ -17,6 +18,7 @@ import { runbookExecutionFilterSchema } from '@/lib/runbooks/schemas';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 
 export const revalidate = 0;
+
 export default async function RunbookExecutionsPage({
   searchParams,
 }: {
@@ -26,39 +28,63 @@ export default async function RunbookExecutionsPage({
   const user = await getCurrentUser();
   const userTimeZone = getUserTimeZone(user);
   const { query, page: requestedPage } = runbookPageQuery(await searchParams);
+
+  const now = await getRunbookDatabaseNow();
+  const dateRange = getExecutionDateRange(query, userTimeZone, now);
+  const trigger = Object.keys(TRIGGER_LABELS).find(value => value === query.trigger) as keyof typeof TRIGGER_LABELS | undefined;
   const status = Object.values(RunbookExecutionStatus).find(value => value === query.status);
-  const from =
-    query.from && Number.isFinite(Date.parse(query.from)) ? new Date(query.from) : undefined;
-  const to =
-    query.to && Number.isFinite(Date.parse(query.to))
-      ? new Date(`${query.to}T23:59:59.999Z`)
-      : undefined;
+
   const filter = runbookExecutionFilterSchema.parse({
     status,
     runbookId: query.runbook,
     serviceId: query.service,
     incidentId: query.incident,
     agentId: query.agent,
-    from,
-    to,
-    trigger: ['automatic', 'responder'].includes(query.trigger) ? query.trigger : undefined,
+    from: dateRange.gte,
+    to: dateRange.lt,
+    triggeredByType: trigger,
     page: requestedPage,
   });
+
+  const searchConstraint: Prisma.RunbookExecutionWhereInput = query.q
+    ? {
+        OR: [
+          { runbook: { name: { contains: query.q, mode: 'insensitive' } } },
+          { id: { contains: query.q, mode: 'insensitive' } },
+        ],
+      }
+    : {};
+
   const where: Prisma.RunbookExecutionWhereInput = {
+    ...searchConstraint,
     ...(status ? { status } : {}),
     ...(filter.runbookId ? { runbookId: filter.runbookId } : {}),
     ...(filter.serviceId ? { serviceId: filter.serviceId } : {}),
     ...(filter.incidentId ? { incidentId: filter.incidentId } : {}),
     ...(filter.agentId ? { resolvedTargetAgentId: filter.agentId } : {}),
-    ...(query.trigger === 'automatic'
-      ? { triggeredByUserId: null }
-      : query.trigger === 'responder'
-        ? { triggeredByUserId: { not: null } }
-        : {}),
-    ...(from || to ? { createdAt: { gte: from, lte: to } } : {}),
+    ...(trigger ? { triggeredByType: trigger } : {}),
+    ...(query.attemptStatus === 'UNKNOWN' ? getUnknownOutcomeWhere() : {}),
+    ...(dateRange.gte || dateRange.lt ? { createdAt: dateRange } : {}),
   };
-  const total = await prisma.runbookExecution.count({ where });
+
+  const [statusCounts, summary, navigation] = await Promise.all([
+    prisma.runbookExecution.groupBy({ by: ['status'], where, _count: { id: true } }),
+    getRunbookExecutionSummary(),
+    getRunbookNavigationSummary(),
+  ]);
+
+  const total = statusCounts.reduce((acc, row) => acc + row._count.id, 0);
+  const runningCount = statusCounts.find(r => r.status === 'RUNNING')?._count.id ?? 0;
+  const waitingApprovalCount = statusCounts.find(r => r.status === 'WAITING_APPROVAL')?._count.id ?? 0;
+  const failedCount = statusCounts
+    .filter(r => r.status === 'FAILED' || r.status === 'TIMED_OUT')
+    .reduce((acc, r) => acc + r._count.id, 0);
+  const activeCount = statusCounts
+    .filter(r => (ACTIVE_EXECUTION_STATUSES as readonly string[]).includes(r.status))
+    .reduce((acc, r) => acc + r._count.id, 0);
+
   const page = Math.min(requestedPage, Math.max(1, Math.ceil(total / RUNBOOK_PAGE_SIZE)));
+
   const executions = await prisma.runbookExecution.findMany({
     where,
     orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
@@ -67,80 +93,112 @@ export default async function RunbookExecutionsPage({
     select: {
       id: true,
       status: true,
+      triggeredByType: true,
       createdAt: true,
       startedAt: true,
       completedAt: true,
-      service: { select: { name: true } },
+      service: { select: { id: true, name: true } },
       resolvedTargetAgent: { select: { name: true } },
+      resolvedTargetAgentPool: { select: { id: true, name: true } },
       triggeredByUser: { select: { name: true } },
       incidentId: true,
+      incident: { select: { id: true, title: true } },
       runbook: { select: { id: true, name: true } },
       runbookVersion: { select: { version: true } },
+      steps: {
+        select: {
+          id: true,
+          stepKey: true,
+          status: true,
+          startedAt: true,
+          completedAt: true,
+        },
+        orderBy: { sequence: 'asc' },
+      },
     },
   });
+  const successRate = summary.successRate.percent === null ? 'No outcomes' : `${summary.successRate.percent}%`;
+
+  const executionListData = executions.map(item => {
+    return {
+      id: item.id,
+      status: item.status,
+      triggeredByType: item.triggeredByType,
+      createdAt: item.createdAt.toISOString(),
+      startedAt: item.startedAt?.toISOString() ?? null,
+      completedAt: item.completedAt?.toISOString() ?? null,
+      service: item.service,
+      incidentId: item.incidentId,
+      incidentTitle: item.incident?.title ?? null,
+      runbook: item.runbook,
+      runbookVersion: item.runbookVersion,
+      resolvedTargetAgent: item.resolvedTargetAgent,
+      resolvedTargetAgentPool: item.resolvedTargetAgentPool,
+      triggeredByUser: item.triggeredByUser,
+      ...getExecutionProgress(item.steps),
+      steps: item.steps.map(st => ({
+        id: st.id,
+        stepKey: st.stepKey,
+        status: st.status,
+        startedAt: st.startedAt?.toISOString() ?? null,
+        completedAt: st.completedAt?.toISOString() ?? null,
+      })),
+    };
+  });
+
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
-      <DetailHeroBanner
-        tag="RUNBOOK AUTOMATION"
+    <div className="mx-auto w-full max-w-[1600px] space-y-5 p-4 md:p-6">
+      {/* Compact Page Header */}
+      <RunbookPageHeader
         title="Executions"
-        subtitle="Recent execution history. Open an incident to inspect its exact plan, approvals and output."
-        icon={<Play className="h-8 w-8" />}
+        description={`Monitor active automation runs, step traces, approvals and outcome evidence. Live view as of ${formatDateTime(now, userTimeZone, { format: 'time' })}.`}
       />
-      <RunbookNavigation />
-      <RunbookFilters
-        query={query}
-        fields={[
-          { name: 'runbook', label: 'Runbook ID' },
-          { name: 'service', label: 'Service ID' },
-          { name: 'incident', label: 'Incident ID' },
-          { name: 'agent', label: 'Agent ID' },
-          { name: 'from', label: 'From date', type: 'date' },
-          { name: 'to', label: 'To date', type: 'date' },
-          { name: 'trigger', label: 'Trigger (automatic or responder)' },
+
+      {/* Modern Metric Strip */}
+      <RunbookMetricStrip
+        stats={[
+          {
+            label: 'Running',
+            value: summary.running,
+            tone: summary.running > 0 ? 'info' : 'default',
+            subtext: summary.running > 0 ? 'Active on agents' : 'Idle',
+          },
+          {
+            label: 'Waiting Approval',
+            value: summary.waitingApproval,
+            tone: summary.waitingApproval > 0 ? 'warning' : 'default',
+            subtext: summary.waitingApproval > 0 ? 'Action required' : 'Clear',
+          },
+          {
+            label: 'Last 24h',
+            value: summary.last24h,
+            subtext: 'Last 24 hours',
+          },
+          {
+            label: '7-day success rate',
+            value: successRate,
+            tone: summary.successRate.percent === null ? 'default' : summary.successRate.percent >= 95 ? 'success' : 'warning',
+            subtext: `${summary.successRate.total} completed outcomes; cancellations excluded`,
+          },
         ]}
-        statusOptions={Object.values(RunbookExecutionStatus).map(value => ({
-          value,
-          label: value.replaceAll('_', ' '),
-        }))}
       />
-      <section className="space-y-3" aria-label="Recent executions">
-        {executions.map(item => (
-          <Link
-            key={item.id}
-            href={
-              item.incidentId
-                ? `/incidents/${item.incidentId}?tab=runbooks`
-                : `/runbooks/${item.runbook.id}?tab=executions`
-            }
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 hover:border-primary/30"
-          >
-            <div>
-              <h2 className="font-semibold">{item.runbook.name}</h2>
-              <p className="text-xs text-muted-foreground">
-                v{item.runbookVersion.version} ·{' '}
-                {item.startedAt
-                  ? `Started ${formatDateTime(item.startedAt, userTimeZone, { format: 'datetime' })}`
-                  : `Queued ${formatDateTime(item.createdAt, userTimeZone, { format: 'datetime' })}`}
-                {' · '}
-                {item.service?.name || 'No service'} ·{' '}
-                {item.resolvedTargetAgent?.name || 'Control plane/pool'} ·{' '}
-                {item.triggeredByUser?.name || 'Automatic'} ·{' '}
-                {item.startedAt
-                  ? `${Math.max(0, Math.round(((item.completedAt ?? new Date()).getTime() - item.startedAt.getTime()) / 1000))}s`
-                  : 'Not started'}
-              </p>
-            </div>
-            <StatusBadge status={item.status} />
-          </Link>
-        ))}
-        {executions.length === 0 && (
-          <EmptyState
-            icon={<Play />}
-            title="No executions yet"
-            description="Attach a published workflow to a service, then start it from an incident."
-          />
-        )}
-      </section>
+
+      {/* Persistent Module Navigation */}
+      <RunbookModuleNav summary={navigation} />
+      <ExecutionFilterBar key={JSON.stringify(query)} query={query} />
+
+      {/* High-Density Hybrid List / Drawer Experience */}
+      <ExecutionList
+        executions={executionListData}
+        userTimeZone={userTimeZone}
+        totalCount={total}
+        runningCount={runningCount}
+        waitingApprovalCount={waitingApprovalCount}
+        failedCount={failedCount}
+        activeCount={activeCount}
+      />
+
+      {/* Bounded Server Pagination */}
       <RunbookPagination page={page} total={total} query={query} />
     </div>
   );

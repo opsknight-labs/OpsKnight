@@ -10,6 +10,12 @@ import {
   RunbookDefinitionError,
   RunbookNotFoundError,
 } from './errors';
+
+export {
+  RunbookCannotDeleteError,
+  RunbookDefinitionError,
+  RunbookNotFoundError,
+};
 import {
   computeDefinitionChecksum,
   parseRunbookDefinition,
