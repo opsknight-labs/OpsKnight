@@ -4,8 +4,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
-import { configureAutomationLoadProfile } from './automation';
+import { configureAutomationLoadProfile, provisionAutomationProviderCapacity } from './automation';
 import { countAutomationBacklog } from './automation-backlog';
+import { providerDuplicateDelta } from './automation-provider-telemetry';
 import { AUTOMATION_LOAD_PROFILES } from '../fixtures/automation';
 import { collectSingleTelemetrySample } from './metrics';
 import type { LoadSeedManifest } from './seed';
@@ -132,6 +133,10 @@ async function main() {
   const outputDir = path.resolve('artifacts/load-certification/automation', topology);
   await fs.mkdir(outputDir, { recursive: true });
   const results = [];
+  const providerCapacityProfile = process.env.AUTOMATION_PROVIDER_CAPACITY_PROFILE || 'defaults';
+  if (!['defaults', 'provisioned-200'].includes(providerCapacityProfile))
+    throw new Error('Unknown automation provider capacity profile');
+  if (providerCapacityProfile === 'provisioned-200') await provisionAutomationProviderCapacity(db);
   let stopReason: string | null = null;
   for (const profile of AUTOMATION_LOAD_PROFILES.filter(profile => profile !== 'disabled')) {
     if (results.length && results.at(-1)!.pendingAfterDrain > 0) {
@@ -318,6 +323,10 @@ async function main() {
       k6ExitCode,
       acceptedEvents: incidents,
       duplicateGroups: 0,
+      providerDuplicateDeliveriesDelta: providerDuplicateDelta(
+        samples[0]?.providers ?? {},
+        telemetry.providers
+      ),
       fallbackCount: traces.filter(trace => trace.fallbackReason).length,
       traceCount: traces.length,
       traceJsonBytes: traces.reduce(
@@ -402,6 +411,7 @@ async function main() {
       : null,
     criticalNotificationLatency: result.criticalNotificationLatency,
     deadlocksDelta: result.deadlocksDelta,
+    providerDuplicateDeliveriesDelta: result.providerDuplicateDeliveriesDelta,
   }));
   const limits = {
     latencyRatio: Number(process.env.AUTOMATION_MAX_LATENCY_RATIO || 1.25),
@@ -422,6 +432,13 @@ async function main() {
       ...(result.deadlocksDelta > 0
         ? [`${result.profile}: ${result.deadlocksDelta} new deadlocks`]
         : []),
+      ...(result.providerDuplicateDeliveriesDelta === null
+        ? [`${result.profile}: missing or reset provider duplicate-delivery telemetry`]
+        : result.providerDuplicateDeliveriesDelta > 0
+          ? [
+              `${result.profile}: ${result.providerDuplicateDeliveriesDelta} duplicate provider deliveries`,
+            ]
+          : []),
       ...(result.criticalNotificationLatency.failed > 0
         ? [`${result.profile}: failed critical notifications`]
         : []),
@@ -463,6 +480,17 @@ async function main() {
           integrationKeys: manifest.capacityIntegrationKeys.length,
           interactiveUsers: 2,
           responderUsers: 2,
+          providerCapacityProfile,
+          ...(providerCapacityProfile === 'provisioned-200'
+            ? {
+                providerBudgets: {
+                  channels: ['EMAIL', 'PUSH', 'WEBHOOK'],
+                  providers: { EMAIL: 'smtp', PUSH: 'web-push', WEBHOOK: 'default' },
+                  ratePerSecond: 200,
+                  maxInFlight: 40,
+                },
+              }
+            : {}),
           publicFanout: 'Dedicated status-fanout suite',
           historicalFixtureTimers:
             'Disabled before first profile; real alert/responder escalation unchanged',

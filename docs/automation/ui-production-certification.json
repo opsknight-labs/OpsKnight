@@ -1,0 +1,71 @@
+{
+  "kind": "Node 20 production Docker image; 100 rules, 64 fields, 20 conditions and 8 actions per rule",
+  "sourceRevision": "c2ed9c8353b670d9856d41c65b11b0465fb20c9e",
+  "imageDigest": "sha256:3b8e060d7e04843aee454fbbcd3a94105b38a4dd9e3a595d70915934057cccce",
+  "browserStats": {
+    "startTime": "2026-10-08T13:11:19.937Z",
+    "duration": 104751.243,
+    "expected": 8,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "targets": {
+    "warmRulesMs": 1500,
+    "interactionMs": 300
+  },
+  "projects": [
+    {
+      "project": "desktop",
+      "timing": {
+        "initialRulesMs": 1652,
+        "warmRulesMs": 134,
+        "searchMs": 36,
+        "expandMs": 159,
+        "typingMs": 42,
+        "domNodes": 689,
+        "heapBytes": 42100000
+      },
+      "accessibilityViolations": []
+    },
+    {
+      "project": "mobile",
+      "timing": {
+        "initialRulesMs": 724,
+        "warmRulesMs": 67,
+        "searchMs": 22,
+        "expandMs": 68,
+        "typingMs": 25,
+        "domNodes": 688,
+        "heapBytes": 44700000
+      },
+      "accessibilityViolations": []
+    },
+    {
+      "project": "iphone",
+      "timing": {
+        "initialRulesMs": 1568,
+        "warmRulesMs": 116,
+        "searchMs": 75,
+        "expandMs": 108,
+        "typingMs": 36,
+        "domNodes": 688,
+        "heapBytes": null
+      },
+      "accessibilityViolations": []
+    },
+    {
+      "project": "tablet",
+      "timing": {
+        "initialRulesMs": 7698,
+        "warmRulesMs": 226,
+        "searchMs": 132,
+        "expandMs": 238,
+        "typingMs": 187,
+        "domNodes": 688,
+        "heapBytes": null
+      },
+      "accessibilityViolations": []
+    }
+  ]
+}

@@ -41,7 +41,7 @@ The existing load suite supports `AUTOMATION_LOAD_PROFILE=global-off|service-dis
 
 Metrics are `opsknight_automation_evaluations_total`, `fallback_total`, `shadow_difference_total`, `unmapped_total`, `evaluation_duration_ms`, and `extraction_duration_ms`, with the shared automation prefix. Labels are low-cardinality mode/outcome/reason/type; service, incident, rule, and version IDs are never metric labels. Existing structured logs and audit events record actor, service, version transitions, mode transitions, and lint state without webhook payloads.
 
-Run all five HTTP profiles against an explicitly isolated, seeded deployment:
+Run all six HTTP profiles against an explicitly isolated, seeded deployment:
 
 ```sh
 OPSKNIGHT_LOAD_CERT_DB=true AUTOMATION_TOPOLOGY=compose-split \
@@ -51,6 +51,8 @@ OPSKNIGHT_LOAD_CERT_DB=true AUTOMATION_TOPOLOGY=compose-split \
 ```
 
 Supply `DATABASE_URL`, `BASE_URL`, `LOAD_SEED_MANIFEST`, and `LOAD_EMULATOR_CONTROL_URL` for that deployment. For Kubernetes, also set an isolated `KUBECONFIG` and `AUTOMATION_K8S_NAMESPACE`; the fault drill deletes one web, critical-worker, and general-worker pod. Integrated Compose restarts one integrated replica. Results go to `artifacts/load-certification/automation/<topology>/certification.json`. The runner checks accepted-event parity and duplicate incidents, and collects latency percentiles, trace volume, queue age, database locks/connections/transactions, provider telemetry, and container resources through the existing load tooling.
+
+Provider duplicate counters must remain available and monotonic throughout a run; missing or reset telemetry fails certification. `AUTOMATION_PROVIDER_CAPACITY_PROFILE=provisioned-200` provisions persisted UI capacity settings for the fixture's `smtp` email provider, `web-push` push provider and default webhook provider at 200 messages/second and 40 concurrent deliveries each. The default profile leaves configured provider budgets unchanged. These infrastructure provisioning profiles do not change certification thresholds. The interactive scenarios use supported incident urgency updates and lifecycle actions.
 
 See [certification.md](certification.md) for implementation coverage and the limits of the local certification. Production rollout and a sustained Shadow observation window remain operator-controlled.
 

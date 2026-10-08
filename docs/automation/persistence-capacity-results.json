@@ -1,8 +1,5 @@
 {
   "status": "NOT_CERTIFIED",
-  "image": "opsknight-automation:audit2",
-  "imageDigest": "sha256:4a0a6bbce132f60677313e4f8ac49831ce84f4ca6f201643e8a1e79cc3980e29",
-  "codeRevision": "d4241560c5dc2224464d41cbca373659b3990656",
   "host": {
     "dockerCPUs": 12,
     "dockerMemoryBytes": 8319238144
@@ -10,7 +7,8 @@
   "limitations": [
     "Only global-OFF baselines ran; the runner stopped before Shadow/LIVE because baseline gates failed.",
     "No optimized cross-profile capacity comparison or infrastructure failover certification is claimed.",
-    "First two runs used two critical/two general workers; the third used four critical/four general workers."
+    "First two runs used two critical/two general workers; the third used four critical/four general workers.",
+    "Default provider budgets include EMAIL at 8 deliveries/second. Earlier shared workload scripts attempted a nonexistent notes endpoint and accepted its 404; corrected provisioned reruns use real urgency updates and are a distinct workload revision."
   ],
   "runs": [
     {
@@ -152,6 +150,122 @@
           "failed": 0
         }
       }
+    },
+    {
+      "topology": "compose-split-pgbouncer-audit3-1rps",
+      "generatedAt": "2026-10-08T13:16:54.933Z",
+      "rps": 1,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "global-off: k6 gate failed (99)",
+          "global-off: critical notification p99 exceeds 30000ms",
+          "global-off: queue age exceeds 30000ms",
+          "Incomplete certification: Global-off baseline failed its sustained latency or workload gates"
+        ]
+      },
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "publicFanout": "Dedicated status-fanout suite",
+        "historicalFixtureTimers": "Disabled before first profile; real alert/responder escalation unchanged",
+        "comparisonValidity": "Queues drained between profiles",
+        "stopReason": "Global-off baseline failed its sustained latency or workload gates"
+      },
+      "sourceRevision": "c2ed9c8353b670d9856d41c65b11b0465fb20c9e",
+      "imageDigest": "sha256:f78704a8a8e2faf97e5d08f4386aa0e165985610ef508cd8481887498ff06b4b",
+      "result": {
+        "profile": "global-off",
+        "k6ExitCode": 99,
+        "acceptedEvents": 121,
+        "duplicateGroups": 0,
+        "providerDuplicateDeliveriesDelta": 0,
+        "fallbackCount": 0,
+        "pendingAfterDrain": 0,
+        "transactionRetryCount": 262,
+        "recoveryDrainMs": 37218,
+        "criticalNotificationLatency": {
+          "p95Ms": 30206.29999999998,
+          "p99Ms": 60900.85,
+          "sent": 474,
+          "failed": 0
+        },
+        "deadlocksDelta": 0
+      }
+    },
+    {
+      "topology": "compose-split-pgbouncer-audit3-providers-1rps",
+      "generatedAt": "2026-10-08T13:24:16.238Z",
+      "rps": 1,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "global-off: 8 duplicate provider deliveries",
+          "global-off: critical notification p99 exceeds 30000ms",
+          "global-off: queue age exceeds 30000ms",
+          "Incomplete certification: Global-off baseline failed its sustained latency or workload gates"
+        ]
+      },
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "providerCapacityProfile": "provisioned-200",
+        "providerBudgets": {
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
+          "ratePerSecond": 200,
+          "maxInFlight": 40
+        },
+        "publicFanout": "Dedicated status-fanout suite",
+        "historicalFixtureTimers": "Disabled before first profile; real alert/responder escalation unchanged",
+        "comparisonValidity": "Queues drained between profiles",
+        "stopReason": "Global-off baseline failed its sustained latency or workload gates"
+      },
+      "sourceRevision": "c2ed9c8353b670d9856d41c65b11b0465fb20c9e",
+      "imageDigest": "sha256:f78704a8a8e2faf97e5d08f4386aa0e165985610ef508cd8481887498ff06b4b",
+      "result": {
+        "profile": "global-off",
+        "k6ExitCode": 0,
+        "acceptedEvents": 121,
+        "duplicateGroups": 0,
+        "providerDuplicateDeliveriesDelta": 8,
+        "fallbackCount": 0,
+        "pendingAfterDrain": 0,
+        "transactionRetryCount": 236,
+        "recoveryDrainMs": 43217,
+        "criticalNotificationLatency": {
+          "p95Ms": 23901.949999999964,
+          "p99Ms": 35104.32,
+          "sent": 452,
+          "failed": 0
+        },
+        "deadlocksDelta": 0
+      },
+      "limitation": "Requested provisioned budgets were saved under default; EMAIL smtp and PUSH web-push did not inherit those settings and retained their defaults. WEBHOOK inherited the configured default. Corrected subsequent fixtures use actual provider identities."
     }
-  ]
+  ],
+  "initialImage": "opsknight-automation:audit2",
+  "initialImageDigest": "sha256:4a0a6bbce132f60677313e4f8ac49831ce84f4ca6f201643e8a1e79cc3980e29",
+  "initialCodeRevision": "d4241560c5dc2224464d41cbca373659b3990656"
 }

@@ -1297,6 +1297,7 @@ async function dispatchPayload(
           secret: payload.secret,
           method: payload.method,
           timeout: payload.timeout,
+          deliveryId: notificationId,
           maxAttempts: 1,
           circuitBreaker: false,
         })
