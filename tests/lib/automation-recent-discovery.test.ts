@@ -5,7 +5,7 @@ vi.mock('@/lib/automation/access', () => ({ assertAutomationAccess: db.access })
 import { automationAction } from '@/app/(app)/services/[id]/automation/actions';
 beforeEach(() => {
   db.alerts.mockReset();
-  db.access.mockReset().mockResolvedValue({ id: 'operator' });
+  db.access.mockReset().mockResolvedValue({ id: 'operator', role: 'RESPONDER' });
 });
 it('discovers bounded service-owned recent fields as event mappings without credential exposure', async () => {
   db.alerts.mockResolvedValue([
@@ -39,6 +39,12 @@ it('discovers bounded service-owned recent fields as event mappings without cred
 it('does not read alerts when service access is denied', async () => {
   db.access.mockRejectedValue(new Error('Forbidden service'));
   const response = await automationAction({ action: 'discoverRecent', serviceId: 'other-service' });
+  expect(response.ok).toBe(false);
+  expect(db.alerts).not.toHaveBeenCalled();
+});
+it('does not read recent alert values for an Auditor without sensitive incident access', async () => {
+  db.access.mockResolvedValue({ id: 'auditor', role: 'AUDITOR' });
+  const response = await automationAction({ action: 'discoverRecent', serviceId: 'service-a' });
   expect(response.ok).toBe(false);
   expect(db.alerts).not.toHaveBeenCalled();
 });

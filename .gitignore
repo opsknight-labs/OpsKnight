@@ -70,6 +70,8 @@ artifacts/load-certification/**/*.log
 artifacts/load-test-25m/
 artifacts/single-image-test-10m/
 artifacts/soak-test/
+artifacts/automation-ui/
+artifacts/automation-rolling/
 
 # debug API routes
 /src/app/api/debug/

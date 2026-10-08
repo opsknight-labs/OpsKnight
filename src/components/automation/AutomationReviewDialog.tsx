@@ -38,9 +38,10 @@ export function AutomationReviewDialog({
   busy: boolean;
   error?: string;
   onCancel: () => void;
-  onConfirm: (acknowledgeNoShadow: boolean) => void;
+  onConfirm: (acknowledgeNoShadow: boolean, acknowledgeShadowErrors: boolean) => void;
 }) {
   const [acknowledge, setAcknowledge] = useState(false);
+  const [acknowledgeErrors, setAcknowledgeErrors] = useState(false);
 
   const changes = useMemo(
     () => (before ? semanticSnapshotChanges(before, snapshot, { policies, destinations }) : []),
@@ -167,6 +168,16 @@ export function AutomationReviewDialog({
                   </label>
                 </p>
               )}
+              {!!counts?.errors && (
+                <label className="block text-amber-700 dark:text-amber-300">
+                  <input
+                    type="checkbox"
+                    checked={acknowledgeErrors}
+                    onChange={event => setAcknowledgeErrors(event.target.checked)}
+                  />{' '}
+                  I explicitly accept enabling LIVE despite observed Shadow errors and fallbacks.
+                </label>
+              )}
             </div>
           )}
           {!enabled && (
@@ -184,9 +195,13 @@ export function AutomationReviewDialog({
             disabled={
               busy ||
               issues.some(issue => issue.level === 'ERROR') ||
-              (action === 'LIVE' && (!version || !enabled || (!counts?.evaluated && !acknowledge)))
+              (action === 'LIVE' &&
+                (!version ||
+                  !enabled ||
+                  (!counts?.evaluated && !acknowledge) ||
+                  (!!counts?.errors && !acknowledgeErrors)))
             }
-            onClick={() => onConfirm(acknowledge)}
+            onClick={() => onConfirm(acknowledge, acknowledgeErrors)}
           >
             {busy ? 'Saving…' : action === 'LIVE' ? 'Confirm LIVE' : 'Confirm publication'}
           </Button>

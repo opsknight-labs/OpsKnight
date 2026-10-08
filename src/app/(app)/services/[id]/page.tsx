@@ -12,6 +12,7 @@ import {
   assertCanViewService,
   getCurrentAuthorizationActor,
 } from '@/lib/rbac';
+import { hasCapability, CAPABILITIES } from '@/lib/authorization';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import { deleteService, updateService, deleteIntegration } from '../actions';
 import { parsePageParam, calculatePaginationBounds } from '@/lib/pagination-parser';
@@ -1248,7 +1249,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         integrationCount={service.integrations?.length || 0}
         notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}
-        automationContent={<AutomationShell serviceId={service.id} />}
+        automationContent={
+          hasCapability(actor.role, CAPABILITIES.AUTOMATION_READ) ? (
+            <AutomationShell serviceId={service.id} />
+          ) : undefined
+        }
         escalationContent={escalationContent}
         runbooksContent={
           <ServiceRunbooks

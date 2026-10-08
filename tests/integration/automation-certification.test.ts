@@ -17,6 +17,7 @@ import { prepareAutomation, persistAutomation } from '@/lib/automation/runtime';
 import { processAutomationJob, scheduleAutomationRetention } from '@/lib/automation/jobs';
 import { emptySnapshot, type Snapshot } from '@/lib/automation/contract';
 import { checksum } from '@/lib/automation/cache';
+import { countAutomationBacklog } from '../load/helpers/automation-backlog';
 vi.mock('@/lib/slack', () => ({ sendSlackMessageToChannel: vi.fn() }));
 vi.mock('@/lib/notification-control-plane', async importOriginal => ({
   ...(await importOriginal<typeof import('@/lib/notification-control-plane')>()),
@@ -114,6 +115,101 @@ describe('service automation transaction certification', () => {
   });
   afterAll(async () => {
     await db.$disconnect();
+  });
+  it('requires a separate LIVE override for Shadow errors even when no-traffic acknowledgement is supplied', async () => {
+    const { service, actor, version } = await setup(emptySnapshot, 'SHADOW');
+    await db.automationShadowAggregate.create({
+      data: {
+        serviceId: service.id,
+        versionId: version.id,
+        bucketDate: new Date(),
+        evaluated: 1,
+        errors: 1,
+        fallbacks: 1,
+      },
+    });
+    const input = {
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedActiveVersionId: version.id,
+      mode: 'LIVE' as const,
+      acknowledgeNoShadow: true,
+    };
+    await expect(changeMode(input)).rejects.toThrow('Explicitly acknowledge Shadow errors');
+    expect((await changeMode({ ...input, acknowledgeShadowErrors: true })).mode).toBe('LIVE');
+  });
+  it('protects inactive published policy references even before any incident exists', async () => {
+    const policy = await db.escalationPolicy.create({ data: { name: 'Historical dependency' } });
+    const { service, actor, version, draft } = await setup({
+      ...emptySnapshot,
+      rules: [
+        {
+          id: 'historical',
+          name: 'Historical route',
+          phase: 'ROUTE',
+          enabled: true,
+          conditions: [],
+          actions: [{ type: 'USE_ESCALATION_POLICY', policyId: policy.id }],
+        },
+      ],
+    });
+    const nextDraft = await saveDraft({
+      serviceId: service.id,
+      actorId: actor.id,
+      snapshot: emptySnapshot,
+      expectedRevision: draft.revision,
+    });
+    await publishVersion({
+      serviceId: service.id,
+      actorId: actor.id,
+      expectedRevision: nextDraft.revision,
+      expectedActiveVersionId: version.id,
+    });
+    await expect(db.escalationPolicy.delete({ where: { id: policy.id } })).rejects.toThrow();
+    await expect(db.automationVersion.delete({ where: { id: version.id } })).rejects.toThrow();
+    expect(await db.incidentAutomationDecision.count()).toBe(0);
+  });
+  it('rejects direct decision deletion but permits incident lifecycle cleanup', async () => {
+    const { service } = await setup();
+    await ingest(service.id);
+    const incident = await db.incident.findFirstOrThrow();
+    await expect(
+      db.incidentAutomationDecision.delete({ where: { incidentId: incident.id } })
+    ).rejects.toThrow();
+    await db.incident.delete({ where: { id: incident.id } });
+    expect(await db.incidentAutomationDecision.count()).toBe(0);
+  });
+  it('capacity isolation counts delayed retries and due maintenance, without waiting for future periodic timers', async () => {
+    const future = new Date(Date.now() + 3600000);
+    await db.backgroundJob.createMany({
+      data: [
+        {
+          id: 'retry',
+          type: 'SCHEDULED_TASK',
+          scheduledAt: future,
+          payload: { task: 'AUTOMATION_OBSERVE' },
+        },
+        {
+          id: 'future-sweep',
+          type: 'COMPLIANCE_EVALUATION_SWEEP',
+          scheduledAt: future,
+          payload: {},
+        },
+        {
+          id: 'due-sweep',
+          type: 'COMPLIANCE_EVALUATION_SWEEP',
+          scheduledAt: new Date(0),
+          payload: {},
+        },
+        { id: 'terminal-escalation', type: 'ESCALATION', scheduledAt: future, payload: {} },
+      ],
+    });
+    expect(await countAutomationBacklog(db)).toBe(2);
+    await db.backgroundJob.updateMany({
+      where: { id: { in: ['retry', 'due-sweep'] } },
+      data: { status: 'COMPLETED' },
+    });
+    expect(await countAutomationBacklog(db)).toBe(0);
   });
   it('50 concurrent duplicates create one incident, decision, trace, logical outbox', async () => {
     const { service } = await setup();
@@ -399,6 +495,78 @@ describe('service automation transaction certification', () => {
         where: { entityId: incident.id, userId: defaultUser.id },
       })
     ).toBe(0);
+  });
+  it('freezes later step targets, delays and conditions when the selected policy is edited', async () => {
+    const original = await createTestUser();
+    const replacement = await createTestUser();
+    const policy = await db.escalationPolicy.create({
+      data: {
+        name: 'Frozen behavior',
+        steps: {
+          create: [
+            { stepOrder: 0, targetUserId: original.id, notificationChannels: ['EMAIL'] },
+            {
+              stepOrder: 1,
+              delayMinutes: 5,
+              targetUserId: original.id,
+              notificationChannels: ['EMAIL'],
+              conditions: {
+                create: {
+                  field: 'PRIORITY',
+                  operator: 'IN',
+                  values: ['P2'],
+                },
+              },
+            },
+          ],
+        },
+      },
+      include: { steps: { orderBy: { stepOrder: 'asc' } } },
+    });
+    const { service } = await setup({
+      ...emptySnapshot,
+      rules: [
+        {
+          id: 'pin',
+          name: 'Pin policy',
+          phase: 'ROUTE',
+          enabled: true,
+          conditions: [],
+          actions: [{ type: 'USE_ESCALATION_POLICY', policyId: policy.id }],
+        },
+      ],
+    });
+    await ingest(service.id);
+    const incident = await db.incident.findFirstOrThrow();
+    const originalRoute = await resolveIncidentResponderRouting(incident.id, service.id, db);
+    await db.escalationRule.update({
+      where: { id: policy.steps[1].id },
+      data: {
+        delayMinutes: 2,
+        targetUserId: replacement.id,
+        conditions: {
+          deleteMany: {},
+          create: { field: 'PRIORITY', operator: 'IN', values: ['P1'] },
+        },
+      },
+    });
+    const route = await resolveIncidentResponderRouting(incident.id, service.id, db);
+    expect(route.policy?.steps).toEqual(originalRoute.policy?.steps);
+    expect(route.policy?.steps[1].targetUserId).toBe(original.id);
+    expect(route.policy?.steps[1].delayMinutes).toBe(5);
+    expect(route.pinnedConditions?.get(policy.steps[1].id)).toEqual([
+      { field: 'PRIORITY', operator: 'IN', values: ['P2'] },
+    ]);
+    await db.incident.update({
+      where: { id: incident.id },
+      data: {
+        currentEscalationStep: 1,
+        nextEscalationAt: null,
+      },
+    });
+    expect((await executeEscalation(incident.id, 1)).outcome).toBe('STEP_SCHEDULED');
+    const scheduled = await db.incident.findUniqueOrThrow({ where: { id: incident.id } });
+    expect(scheduled.nextEscalationAt!.getTime() - Date.now()).toBeGreaterThan(4 * 60_000);
   });
   it('historical pinned policies remain available for reopening after version deactivation', async () => {
     const pinned = await db.escalationPolicy.create({ data: { name: 'Pinned policy' } });

@@ -54,6 +54,65 @@ describe('automation semantics', () => {
     });
     expect(result.issues.some(i => i.code === 'ALIAS_COLLISION')).toBe(true);
   });
+  it('preserves declared ENUM display values across case-insensitive inputs and aliases', () => {
+    const { compiled, issues } = compileAutomation({
+      schemaVersion: 1,
+      fields: [
+        {
+          fieldId: 'env',
+          key: 'environment',
+          label: 'Environment',
+          type: 'ENUM',
+          allowedValues: ['Production', 'Staging'],
+          aliases: { prod: 'Production' },
+          mappings: [],
+        },
+      ],
+      rules: [
+        {
+          id: 'production',
+          name: 'Production',
+          phase: 'ROUTE',
+          enabled: true,
+          conditions: [{ fieldKey: 'environment', operator: 'EQ', value: 'Production' }],
+          actions: [{ type: 'USE_SERVICE_DEFAULT' }],
+        },
+      ],
+    });
+    expect(issues.filter(issue => issue.level === 'ERROR')).toEqual([]);
+    for (const input of ['Production', 'production', 'PRODUCTION', ' prod '])
+      expect(normalizeValue(input, compiled.fields[0])).toEqual({
+        state: 'RECOGNIZED',
+        value: 'Production',
+      });
+  });
+  it('rejects normalized ENUM collisions while allowing distinct case-sensitive choices', () => {
+    const snapshot = {
+      schemaVersion: 1,
+      fields: [
+        {
+          fieldId: 'env',
+          key: 'environment',
+          label: 'Environment',
+          type: 'ENUM',
+          allowedValues: ['Prod', 'prod', 'PROD'],
+          aliases: {},
+          mappings: [],
+        },
+      ],
+      rules: [],
+    };
+    expect(compileAutomation(snapshot).issues.some(issue => issue.code === 'ENUM_COLLISION')).toBe(
+      true
+    );
+    snapshot.fields[0] = {
+      ...snapshot.fields[0],
+      caseSensitive: true,
+    } as (typeof snapshot.fields)[0];
+    expect(compileAutomation(snapshot).issues.some(issue => issue.code === 'ENUM_COLLISION')).toBe(
+      false
+    );
+  });
   it('routes post enrichment, unions tags, replays identically', () => {
     const snapshot: Snapshot = {
       schemaVersion: 1,

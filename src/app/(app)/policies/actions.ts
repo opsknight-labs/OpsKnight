@@ -239,7 +239,7 @@ export async function deletePolicy(policyId: string) {
   }
 
   const automationReferences = await prisma.automationVersionPolicyRef.findMany({
-    where: { escalationPolicyId: policyId, version: { activeConfig: { isNot: null } } },
+    where: { escalationPolicyId: policyId },
     select: { version: { select: { service: { select: { name: true } } } } },
   });
   const pinnedDecisions = await prisma.incidentAutomationDecision.count({

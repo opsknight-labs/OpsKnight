@@ -1,0 +1,157 @@
+{
+  "status": "NOT_CERTIFIED",
+  "image": "opsknight-automation:audit2",
+  "imageDigest": "sha256:4a0a6bbce132f60677313e4f8ac49831ce84f4ca6f201643e8a1e79cc3980e29",
+  "codeRevision": "d4241560c5dc2224464d41cbca373659b3990656",
+  "host": {
+    "dockerCPUs": 12,
+    "dockerMemoryBytes": 8319238144
+  },
+  "limitations": [
+    "Only global-OFF baselines ran; the runner stopped before Shadow/LIVE because baseline gates failed.",
+    "No optimized cross-profile capacity comparison or infrastructure failover certification is claimed.",
+    "First two runs used two critical/two general workers; the third used four critical/four general workers."
+  ],
+  "runs": [
+    {
+      "topology": "compose-split-pgbouncer-audit2-20rps",
+      "generatedAt": "2026-10-08T04:11:26.045Z",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "global-off: k6 gate failed (99)",
+          "global-off: queue did not drain (2532)",
+          "global-off: critical notification p99 exceeds 30000ms",
+          "global-off: queue age exceeds 30000ms",
+          "Incomplete certification: refused to start a profile on undrained state"
+        ]
+      },
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "publicFanout": "Dedicated status-fanout suite",
+        "comparisonValidity": "FAILED: a profile did not drain; no subsequent profile was started"
+      },
+      "result": {
+        "profile": "global-off",
+        "k6ExitCode": 99,
+        "acceptedEvents": 2394,
+        "duplicateGroups": 0,
+        "fallbackCount": 0,
+        "pendingAfterDrain": 2532,
+        "transactionRetryCount": 6504,
+        "recoveryDrainMs": 180077,
+        "criticalNotificationLatency": {
+          "p95Ms": 61271.69999999998,
+          "p99Ms": 103976.22,
+          "sent": 2335,
+          "failed": 0
+        }
+      }
+    },
+    {
+      "topology": "compose-split-pgbouncer-audit2-2rps",
+      "generatedAt": "2026-10-08T04:17:49.784Z",
+      "rps": 2,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "global-off: queue did not drain (1)",
+          "global-off: critical notification p99 exceeds 30000ms",
+          "global-off: queue age exceeds 30000ms",
+          "Incomplete certification: Previous profile did not drain"
+        ]
+      },
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "publicFanout": "Dedicated status-fanout suite",
+        "comparisonValidity": "FAILED: a profile did not drain; no subsequent profile was started",
+        "stopReason": "Previous profile did not drain"
+      },
+      "result": {
+        "profile": "global-off",
+        "k6ExitCode": 0,
+        "acceptedEvents": 241,
+        "duplicateGroups": 0,
+        "fallbackCount": 0,
+        "pendingAfterDrain": 1,
+        "transactionRetryCount": 699,
+        "recoveryDrainMs": 180366,
+        "criticalNotificationLatency": {
+          "p95Ms": 32437.149999999994,
+          "p99Ms": 55521.45999999999,
+          "sent": 1052,
+          "failed": 0
+        }
+      },
+      "limitation": "The single pending row was future periodic maintenance, corrected in the runner afterward. Independent critical-notification p99 and queue-age gates still failed."
+    },
+    {
+      "topology": "compose-split-pgbouncer-audit2-provisioned-20rps",
+      "generatedAt": "2026-10-08T04:25:46.047Z",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "global-off: queue did not drain (3445)",
+          "global-off: critical notification p99 exceeds 30000ms",
+          "global-off: queue age exceeds 30000ms",
+          "Incomplete certification: Previous profile did not drain"
+        ]
+      },
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "publicFanout": "Dedicated status-fanout suite",
+        "historicalFixtureTimers": "Disabled before first profile; real alert/responder escalation unchanged",
+        "comparisonValidity": "FAILED: a profile did not drain; no subsequent profile was started",
+        "stopReason": "Previous profile did not drain"
+      },
+      "result": {
+        "profile": "global-off",
+        "k6ExitCode": 0,
+        "acceptedEvents": 2401,
+        "duplicateGroups": 0,
+        "fallbackCount": 0,
+        "pendingAfterDrain": 3445,
+        "transactionRetryCount": 13386,
+        "recoveryDrainMs": 180809,
+        "criticalNotificationLatency": {
+          "p95Ms": 48440.24999999999,
+          "p99Ms": 78274,
+          "sent": 1626,
+          "failed": 0
+        }
+      }
+    }
+  ]
+}

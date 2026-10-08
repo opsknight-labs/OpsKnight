@@ -28,6 +28,11 @@ const FORBIDDEN_LABELS = new Set([
 ]);
 
 export const OPERATIONAL_METRICS = [
+  { name: 'opsknight_automation_observation_queue_depth', help: 'Pending or processing Automation observation jobs', kind: 'gauge', labels: [], scope: 'cluster_snapshot', estimatedMaxSeries: 1 },
+  { name: 'opsknight_automation_observation_oldest_age_seconds', help: 'Age of oldest unfinished Automation observation job', kind: 'gauge', labels: [], scope: 'cluster_snapshot', estimatedMaxSeries: 1 },
+  { name: 'opsknight_automation_shadow_rollup_lag_seconds', help: 'Age of oldest unfinished Shadow rollup job', kind: 'gauge', labels: [], scope: 'cluster_snapshot', estimatedMaxSeries: 1 },
+  { name: 'opsknight_automation_retention_pending', help: 'Pending or processing Automation retention jobs', kind: 'gauge', labels: [], scope: 'cluster_snapshot', estimatedMaxSeries: 1 },
+  { name: 'opsknight_automation_detailed_trace_bytes_total', help: 'UTF-8 bytes in full Automation diagnostic traces committed by this process', kind: 'counter', labels: [], scope: 'counter', estimatedMaxSeries: 1 },
   { name: 'opsknight_automation_evaluations_total', help: 'Automation evaluations_total', kind: 'counter', labels: ['mode', 'outcome'], scope: 'counter', estimatedMaxSeries: 24 },
   { name: 'opsknight_automation_fallback_total', help: 'Automation fallback_total', kind: 'counter', labels: ['fallback_reason'], scope: 'counter', estimatedMaxSeries: 24 },
   { name: 'opsknight_automation_shadow_difference_total', help: 'Automation shadow_difference_total', kind: 'counter', labels: ['outcome'], scope: 'counter', estimatedMaxSeries: 24 },

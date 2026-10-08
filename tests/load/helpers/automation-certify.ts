@@ -5,6 +5,7 @@ import path from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 import { configureAutomationLoadProfile } from './automation';
+import { countAutomationBacklog } from './automation-backlog';
 import { AUTOMATION_LOAD_PROFILES } from '../fixtures/automation';
 import { collectSingleTelemetrySample } from './metrics';
 import type { LoadSeedManifest } from './seed';
@@ -89,20 +90,20 @@ async function runK6(profile: string, output: string) {
 async function main() {
   if (process.env.OPSKNIGHT_LOAD_CERT_DB !== 'true')
     throw new Error('Use an explicitly isolated load database with OPSKNIGHT_LOAD_CERT_DB=true');
-  const outstanding = await db.backgroundJob.count({
-    where: {
-      status: { in: ['PENDING', 'PROCESSING', 'PENDING_V2', 'PROCESSING_V2'] },
-      scheduledAt: { lte: new Date() },
-      NOT: { type: { in: ['ESCALATION', 'AUTO_UNSNOOZE'] } },
-    },
-  });
-  const outstandingNotifications = await db.notification.count({ where: { status: 'PENDING' } });
-  if (outstanding || outstandingNotifications)
-    throw new Error('Certification requires a drained database before the first profile');
   const manifestPath = path.resolve(
     process.env.LOAD_SEED_MANIFEST || 'artifacts/load-certification/automation/seed-manifest.json'
   );
   const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as LoadSeedManifest;
+  // Historical display fixtures must not emit one-time pages into later profiles.
+  // Real alerts and responder-created incidents retain normal escalation behavior.
+  await db.incident.updateMany({
+    where: { id: { in: manifest.baselineIncidentIds }, title: { startsWith: '[LoadCert #' } },
+    data: { escalationStatus: 'COMPLETED', nextEscalationAt: null },
+  });
+  if (await countAutomationBacklog(db))
+    throw new Error(
+      'Certification requires a drained database, including delayed retries, before the first profile'
+    );
   // Keep the 10,000-subscriber public fan-out fixture in its dedicated suite.
   // Comparative ingestion rotates evenly across internal service integrations.
   const publicServices = await db.statusPageService.findMany({ select: { serviceId: true } });
@@ -131,11 +132,29 @@ async function main() {
   const outputDir = path.resolve('artifacts/load-certification/automation', topology);
   await fs.mkdir(outputDir, { recursive: true });
   const results = [];
+  let stopReason: string | null = null;
   for (const profile of AUTOMATION_LOAD_PROFILES.filter(profile => profile !== 'disabled')) {
     if (results.length && results.at(-1)!.pendingAfterDrain > 0) {
+      stopReason = 'Previous profile did not drain';
       process.stderr.write(
         'Stopped: previous profile did not drain; refusing a contaminated comparison.\n'
       );
+      break;
+    }
+    const off = results.length ? results[0] : undefined;
+    if (
+      off &&
+      (off.k6ExitCode !== 0 ||
+        (off.criticalNotificationLatency.p99Ms ?? 0) >
+          Number(process.env.AUTOMATION_MAX_NOTIFICATION_P99_MS || 30000) ||
+        off.telemetrySamples.some(
+          sample =>
+            sample.postgres.oldestPendingCriticalNotificationAgeMs >
+            Number(process.env.AUTOMATION_MAX_QUEUE_AGE_MS || 30000)
+        ))
+    ) {
+      stopReason = 'Global-off baseline failed its sustained latency or workload gates';
+      process.stderr.write(`Stopped: ${stopReason}; establish a sustainable baseline first.\n`);
       break;
     }
     await db.systemSettings.upsert({
@@ -190,7 +209,6 @@ async function main() {
         where: {
           serviceId: { in: manifest.allServiceIds },
           createdAt: { gte: started },
-          title: 'Automation capacity certification',
           status: { not: 'RESOLVED' },
         },
         select: { id: true },
@@ -213,17 +231,7 @@ async function main() {
     const drainDeadline = Date.now() + Number(process.env.AUTOMATION_DRAIN_TIMEOUT_MS || 180000);
     let pending = 0;
     do {
-      const jobs = await db.backgroundJob.count({
-        where: {
-          status: { in: ['PENDING', 'PROCESSING', 'PENDING_V2', 'PROCESSING_V2'] },
-          scheduledAt: { lte: new Date() },
-          NOT: { type: { in: ['ESCALATION', 'AUTO_UNSNOOZE'] } },
-        },
-      });
-      const intents = await db.notification.count({
-        where: { status: 'PENDING' },
-      });
-      pending = jobs + intents;
+      pending = await countAutomationBacklog(db);
       if (!pending) break;
       await new Promise(resolve => setTimeout(resolve, 1000));
     } while (Date.now() < drainDeadline);
@@ -440,7 +448,7 @@ async function main() {
       ])
     );
   if (incomplete)
-    failures.push('Incomplete certification: refused to start a profile on undrained state');
+    failures.push(`Incomplete certification: ${stopReason ?? 'not all profiles ran'}`);
   await fs.writeFile(
     path.join(outputDir, 'certification.json'),
     JSON.stringify(
@@ -456,9 +464,12 @@ async function main() {
           interactiveUsers: 2,
           responderUsers: 2,
           publicFanout: 'Dedicated status-fanout suite',
+          historicalFixtureTimers:
+            'Disabled before first profile; real alert/responder escalation unchanged',
           comparisonValidity: results.some(result => result.pendingAfterDrain > 0)
             ? 'FAILED: a profile did not drain; no subsequent profile was started'
             : 'Queues drained between profiles',
+          stopReason,
         },
         durationPerProfile: process.env.AUTOMATION_DURATION || '30s',
         comparisonGate: { passed: failures.length === 0, limits, failures },
