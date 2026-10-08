@@ -134,6 +134,32 @@ export class ResultSpool {
     return (await this.list()).length;
   }
 
+  async stats(): Promise<{ count: number; totalBytes: number; oldestAgeMs: number }> {
+    await this.initialize();
+    let names: string[];
+    try {
+      names = (await readdir(this.directory)).filter(name => /^[a-z0-9]+\.json$/i.test(name));
+    } catch {
+      names = [];
+    }
+    let totalBytes = 0;
+    let oldestMtime = Date.now();
+    for (const name of names) {
+      try {
+        const s = await stat(join(this.directory, name));
+        totalBytes += s.size;
+        if (s.mtimeMs < oldestMtime) oldestMtime = s.mtimeMs;
+      } catch {
+        // Ignored if file unlinked concurrently
+      }
+    }
+    return {
+      count: names.length,
+      totalBytes,
+      oldestAgeMs: names.length > 0 ? Math.max(0, Date.now() - oldestMtime) : 0,
+    };
+  }
+
   async deadLetterDepth() {
     try {
       return (await readdir(join(this.directory, 'dead-letter'))).filter(name =>

@@ -112,7 +112,12 @@ export async function saveDraftAction(versionId: string, runbookId: string, form
     const inputs = runbookInputsSchema.parse(
       parseJson(readString(formData, 'inputs') || '[]', 'Inputs')
     );
-    await updateDraftVersion(parsedVersionId, { definition, inputs }, actor.id);
+    const expectedChecksum = readString(formData, 'expectedChecksum') || undefined;
+    await updateDraftVersion(
+      parsedVersionId,
+      { definition, inputs, expectedChecksum },
+      actor.id
+    );
     revalidatePath(`/runbooks/${parsedRunbookId}`);
   } catch (error) {
     if (error instanceof RunbookError) return { error: error.userMessage };

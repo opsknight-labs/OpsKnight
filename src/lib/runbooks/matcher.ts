@@ -25,11 +25,22 @@ export function matchesCondition(
   condition: TriggerCondition
 ): boolean {
   const actual = readPath(context, condition.field);
+  const isMissing = actual === undefined || actual === null;
+
+  if (condition.operator === 'EXISTS') {
+    return !isMissing;
+  }
+  if (condition.operator === 'NOT_EXISTS') {
+    return isMissing;
+  }
+
+  // Value-evaluating operators: missing or unmapped fields evaluate to UNKNOWN (false).
+  // Absence of data must never satisfy negative comparisons (e.g. NOT_EQUALS, NOT_IN).
+  if (isMissing) {
+    return false;
+  }
+
   switch (condition.operator) {
-    case 'EXISTS':
-      return actual !== undefined && actual !== null;
-    case 'NOT_EXISTS':
-      return actual === undefined || actual === null;
     case 'EQUALS':
       return actual === condition.value;
     case 'NOT_EQUALS':

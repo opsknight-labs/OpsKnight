@@ -309,4 +309,34 @@ describe('Agent authority and durable recovery', () => {
     expect(result.status).toBe('CANCELLED');
     expect(result.errorCode).toBe('AGENT_SHUTDOWN');
   });
+
+  it('calculates spool stats accurately and exposes capacity metrics', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'opsknight-spool-stats-'));
+    try {
+      const spool = new ResultSpool(directory);
+      await spool.initialize();
+      const emptyStats = await spool.stats();
+      expect(emptyStats).toEqual({ count: 0, totalBytes: 0, oldestAgeMs: 0 });
+
+      await spool.put({
+        attemptId: 'stat1',
+        leaseToken: 'token1',
+        producedAt: new Date().toISOString(),
+        status: 'SUCCEEDED',
+      });
+      await spool.put({
+        attemptId: 'stat2',
+        leaseToken: 'token2',
+        producedAt: new Date().toISOString(),
+        status: 'FAILED',
+      });
+
+      const stats = await spool.stats();
+      expect(stats.count).toBe(2);
+      expect(stats.totalBytes).toBeGreaterThan(0);
+      expect(stats.oldestAgeMs).toBeGreaterThanOrEqual(0);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });

@@ -357,15 +357,21 @@ export async function startRunbookExecution(input: {
         throw new RunbookDefinitionError('Automatic write runbooks require a service boundary.');
       }
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-service:${resolvedServiceId}`}))`;
-      const activeServiceWrites = await tx.runbookExecution.count({
+      const newServiceWriteStepsCount = steps.filter(
+        step => step.riskClass !== 'READ_ONLY'
+      ).length;
+      const activeServiceWrites = await tx.runbookExecutionStep.count({
         where: {
-          serviceId: resolvedServiceId,
-          triggeredByUserId: null,
-          status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
-          steps: { some: { riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] } } },
+          riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
+          status: { in: ['PENDING', 'READY', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
+          execution: {
+            serviceId: resolvedServiceId,
+            triggeredByUserId: null,
+            status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'CANCEL_REQUESTED', 'PAUSED'] },
+          },
         },
       });
-      if (activeServiceWrites >= MAX_AUTO_WRITE_ACTIONS_PER_SERVICE) {
+      if (activeServiceWrites + newServiceWriteStepsCount > MAX_AUTO_WRITE_ACTIONS_PER_SERVICE) {
         throw new RunbookDefinitionError(
           'AUTOMATION_BLAST_RADIUS_LIMIT: too many automatic write runbooks are active for this service.'
         );
@@ -432,6 +438,9 @@ export async function startRunbookExecution(input: {
           implicitLocalHost = true;
         }
       }
+      const newPoolWriteStepsCount = steps.filter(
+        step => requiresAgent(step.type) && step.riskClass !== 'READ_ONLY'
+      ).length;
       const activePoolWrites = await tx.runbookExecutionStep.count({
         where: {
           riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
@@ -441,11 +450,11 @@ export async function startRunbookExecution(input: {
               { resolvedTargetAgentPoolId },
               { targetSelection: { path: ['sourcePoolId'], equals: resolvedTargetAgentPoolId } },
             ],
-            status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
+            status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'CANCEL_REQUESTED', 'PAUSED'] },
           },
         },
       });
-      if (activePoolWrites >= MAX_CONCURRENT_WRITE_ACTIONS_PER_POOL) {
+      if (activePoolWrites + newPoolWriteStepsCount > MAX_CONCURRENT_WRITE_ACTIONS_PER_POOL) {
         throw new RunbookDefinitionError(
           'AGENT_POOL_CONCURRENCY_LIMIT: too many write actions are active for this Agent pool.'
         );
@@ -600,17 +609,24 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
         data: { status: 'WAITING_APPROVAL' },
       });
       if (changed.count !== 1) return;
-      const execution = await tx.runbookExecution.update({
-        where: { id: executionId },
+      const transitioned = await tx.runbookExecution.updateMany({
+        where: { id: executionId, status: { in: ['QUEUED', 'RUNNING'] } },
         data: { status: 'WAITING_APPROVAL' },
-        select: { incidentId: true },
       });
-      await addIncidentRunbookEvent(
-        tx,
-        execution.incidentId,
-        'RUNBOOK_APPROVAL_REQUIRED',
-        `Runbook approval required: ${step.name}`
-      );
+      if (transitioned.count === 1) {
+        const execution = await tx.runbookExecution.findUnique({
+          where: { id: executionId },
+          select: { incidentId: true },
+        });
+        if (execution?.incidentId) {
+          await addIncidentRunbookEvent(
+            tx,
+            execution.incidentId,
+            'RUNBOOK_APPROVAL_REQUIRED',
+            `Runbook approval required: ${step.name}`
+          );
+        }
+      }
     });
     return;
   }
@@ -700,11 +716,16 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
           },
         });
       }
-      await tx.runbookExecution.update({
-        where: { id: executionId },
+      const transitioned = await tx.runbookExecution.updateMany({
+        where: {
+          id: executionId,
+          status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
+        },
         data: { status: 'RUNNING' },
       });
-      await enqueueAdvance(tx, executionId);
+      if (transitioned.count === 1) {
+        await enqueueAdvance(tx, executionId);
+      }
     });
     return;
   }
@@ -766,14 +787,17 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
         planDigest,
       },
     });
-    await tx.runbookExecution.update({
-      where: { id: executionId },
+    await tx.runbookExecution.updateMany({
+      where: {
+        id: executionId,
+        status: { in: ['QUEUED', 'RUNNING'] },
+      },
       data: { status: 'WAITING_AGENT' },
     });
   });
 }
 
-async function completeStep(
+export async function completeStep(
   executionId: string,
   stepId: string,
   status: 'SUCCEEDED' | 'SKIPPED',
@@ -789,11 +813,16 @@ async function completeStep(
       },
     });
     if (completed.count !== 1) return;
-    await tx.runbookExecution.update({
-      where: { id: executionId },
+    const transitioned = await tx.runbookExecution.updateMany({
+      where: {
+        id: executionId,
+        status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
+      },
       data: { status: 'RUNNING' },
     });
-    await enqueueAdvance(tx, executionId);
+    if (transitioned.count === 1) {
+      await enqueueAdvance(tx, executionId);
+    }
   });
 }
 
@@ -946,10 +975,14 @@ export async function advanceExecution(executionId: string): Promise<void> {
     if (claimed.count !== 1) return;
     owned = { ...current, status: 'READY' };
   }
-  await prisma.runbookExecution.update({
-    where: { id: executionId },
+  const updatedExecution = await prisma.runbookExecution.updateMany({
+    where: {
+      id: executionId,
+      status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL'] },
+    },
     data: { status: 'RUNNING', startedAt: execution.startedAt ?? new Date() },
   });
+  if (updatedExecution.count !== 1) return;
   try {
     await processCurrentStep(executionId, owned);
   } catch (error) {
@@ -1035,11 +1068,16 @@ export async function approveExecutionStep(input: {
     if (approved.count !== 1) {
       throw new RunbookExecutionInvalidTransitionError(input.executionId, step.status, 'READY');
     }
-    await tx.runbookExecution.update({
-      where: { id: input.executionId },
+    const transitioned = await tx.runbookExecution.updateMany({
+      where: {
+        id: input.executionId,
+        status: { in: ['QUEUED', 'RUNNING', 'WAITING_APPROVAL'] },
+      },
       data: { status: 'RUNNING' },
     });
-    await enqueueAdvance(tx, input.executionId);
+    if (transitioned.count === 1) {
+      await enqueueAdvance(tx, input.executionId);
+    }
     await addIncidentRunbookEvent(
       tx,
       step.execution.incidentId,
@@ -1061,16 +1099,16 @@ export async function approveExecutionStep(input: {
 }
 
 export async function cancelExecution(executionId: string, actorId: string, reason?: string) {
-  const result = await prisma.runbookExecution.updateMany({
-    where: {
-      id: executionId,
-      status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
-    },
-    data: { status: 'CANCEL_REQUESTED', cancelRequestedAt: new Date(), failureMessage: reason },
-  });
-  if (result.count !== 1)
-    throw new RunbookExecutionInvalidTransitionError(executionId, 'TERMINAL', 'CANCEL_REQUESTED');
   await prisma.$transaction(async tx => {
+    const result = await tx.runbookExecution.updateMany({
+      where: {
+        id: executionId,
+        status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
+      },
+      data: { status: 'CANCEL_REQUESTED', cancelRequestedAt: new Date(), failureMessage: reason },
+    });
+    if (result.count !== 1)
+      throw new RunbookExecutionInvalidTransitionError(executionId, 'TERMINAL', 'CANCEL_REQUESTED');
     await enqueueAdvance(tx, executionId);
     await logAudit(
       {

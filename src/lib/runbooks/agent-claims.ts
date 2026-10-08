@@ -203,52 +203,74 @@ export async function claimAgentAttempt(agentId: string, confidentialTransport =
               );
             return null;
           }
-          const locked = await tx.$queryRaw<Array<{ id: string }>>`
+          const lockedCandidates = await tx.$queryRaw<Array<{ id: string }>>`
             SELECT "id" FROM "RunbookStepAttempt"
             WHERE "id" IN (${Prisma.join(eligible.map(candidate => candidate.id))})
               AND "status" = 'PENDING'
             ORDER BY "createdAt", "id"
-            LIMIT 1 FOR UPDATE SKIP LOCKED
+            LIMIT 10 FOR UPDATE SKIP LOCKED
           `;
-          const attempt = eligible.find(candidate => candidate.id === locked[0]?.id);
+          if (lockedCandidates.length === 0) return null;
+
+          let attempt: (typeof eligible)[number] | null = null;
+          let rawLeaseToken = '';
+          let leaseExpiresAt = new Date();
+
+          for (const locked of lockedCandidates) {
+            const candidate = eligible.find(item => item.id === locked.id);
+            if (!candidate) continue;
+
+            const selection = candidate.executionStep.execution.targetSelection;
+            const sourcePoolId =
+              selection &&
+              typeof selection === 'object' &&
+              !Array.isArray(selection) &&
+              typeof selection.sourcePoolId === 'string'
+                ? selection.sourcePoolId
+                : null;
+
+            if (
+              sourcePoolId &&
+              !(await tx.runbookAgentPoolMember.findUnique({
+                where: { poolId_agentId: { poolId: sourcePoolId, agentId } },
+                select: { id: true },
+              }))
+            ) {
+              continue;
+            }
+
+            if (
+              sourcePoolId &&
+              selection &&
+              typeof selection === 'object' &&
+              !Array.isArray(selection) &&
+              selection.implicitLocalHost === true &&
+              (await tx.runbookAgentPoolMember.count({ where: { poolId: sourcePoolId } })) !== 1
+            ) {
+              continue;
+            }
+
+            const token = crypto.randomBytes(32).toString('base64url');
+            const expiresAt = new Date(Date.now() + DEFAULT_LEASE_DURATION_SECONDS * 1000);
+            const claimed = await tx.runbookStepAttempt.updateMany({
+              where: { id: candidate.id, status: 'PENDING' },
+              data: {
+                status: 'CLAIMED',
+                claimedAgentId: agentId,
+                leaseToken: sha256(token),
+                leaseExpiresAt: expiresAt,
+              },
+            });
+
+            if (claimed.count === 1) {
+              attempt = candidate;
+              rawLeaseToken = token;
+              leaseExpiresAt = expiresAt;
+              break;
+            }
+          }
+
           if (!attempt) return null;
-          const selection = attempt.executionStep.execution.targetSelection;
-          const sourcePoolId =
-            selection &&
-            typeof selection === 'object' &&
-            !Array.isArray(selection) &&
-            typeof selection.sourcePoolId === 'string'
-              ? selection.sourcePoolId
-              : null;
-          if (
-            sourcePoolId &&
-            !(await tx.runbookAgentPoolMember.findUnique({
-              where: { poolId_agentId: { poolId: sourcePoolId, agentId } },
-              select: { id: true },
-            }))
-          )
-            return null;
-          if (
-            sourcePoolId &&
-            selection &&
-            typeof selection === 'object' &&
-            !Array.isArray(selection) &&
-            selection.implicitLocalHost === true &&
-            (await tx.runbookAgentPoolMember.count({ where: { poolId: sourcePoolId } })) !== 1
-          )
-            return null;
-          const rawLeaseToken = crypto.randomBytes(32).toString('base64url');
-          const leaseExpiresAt = new Date(Date.now() + DEFAULT_LEASE_DURATION_SECONDS * 1000);
-          const claimed = await tx.runbookStepAttempt.updateMany({
-            where: { id: attempt.id, status: 'PENDING' },
-            data: {
-              status: 'CLAIMED',
-              claimedAgentId: agentId,
-              leaseToken: sha256(rawLeaseToken),
-              leaseExpiresAt,
-            },
-          });
-          if (claimed.count !== 1) return null;
           const allInputValues = attempt.executionStep.execution.inputValues as Record<
             string,
             unknown

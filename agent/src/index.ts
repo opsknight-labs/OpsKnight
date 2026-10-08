@@ -23,6 +23,12 @@ const executionPublicKey = parseTrustedSigningKeys(
   process.env.OPSKNIGHT_EXECUTION_PUBLIC_KEY
 );
 
+const MAX_SPOOL_RECORDS = Number(process.env.OPSKNIGHT_MAX_SPOOL_RECORDS || 100);
+const MAX_SPOOL_BYTES = Number(process.env.OPSKNIGHT_MAX_SPOOL_BYTES || 50 * 1024 * 1024);
+const MAX_SPOOL_RECORD_AGE_MS = Number(
+  process.env.OPSKNIGHT_MAX_SPOOL_RECORD_AGE_MS || 24 * 60 * 60 * 1000
+);
+
 if (!baseUrl) throw new Error('OPSKNIGHT_URL is required.');
 if (!executionPublicKey)
   throw new Error(
@@ -272,10 +278,30 @@ async function run() {
           await new Promise(resolve => setTimeout(resolve, 5_000));
           continue;
         }
+        const spoolStats = await spool.stats();
+        if (
+          spoolStats.count >= MAX_SPOOL_RECORDS ||
+          spoolStats.totalBytes >= MAX_SPOOL_BYTES ||
+          spoolStats.oldestAgeMs >= MAX_SPOOL_RECORD_AGE_MS
+        ) {
+          lastError = `Spool threshold reached (${spoolStats.count} records, ${spoolStats.totalBytes} bytes). Halting claims until backlog drains.`;
+          await new Promise(resolve => setTimeout(resolve, 5_000));
+          continue;
+        }
         attempt = await client.claim();
         if (!attempt) continue;
         if (await checkDraining()) {
           lastError = 'Execution claim released because Agent is draining.';
+          await client.releaseClaim(attempt.attemptId, attempt.leaseToken).catch(() => undefined);
+          continue;
+        }
+        const currentSpoolDepth = await spool.depth();
+        const currentDeadLetterDepth = await spool.deadLetterDepth();
+        if (
+          (currentSpoolDepth > 0 || currentDeadLetterDepth > 0) &&
+          attempt.step.riskClass !== 'READ_ONLY'
+        ) {
+          lastError = `Write action claim released because result backlog (${currentSpoolDepth}) or dead letters (${currentDeadLetterDepth}) exist.`;
           await client.releaseClaim(attempt.attemptId, attempt.leaseToken).catch(() => undefined);
           continue;
         }

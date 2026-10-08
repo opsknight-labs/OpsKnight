@@ -132,7 +132,7 @@ export async function updateRunbookMetadata(
 /** Updates a draft using a state predicate so a concurrent publish cannot be overwritten. */
 export async function updateDraftVersion(
   versionId: string,
-  input: { definition: unknown; inputs?: RunbookInputInput[] },
+  input: { definition: unknown; inputs?: RunbookInputInput[]; expectedChecksum?: string },
   actorId: string
 ) {
   const inputs = runbookInputsSchema.parse(input.inputs ?? []);
@@ -149,11 +149,24 @@ export async function updateDraftVersion(
     if (current.state !== 'DRAFT') {
       throw new RunbookVersionImmutableError(versionId, current.state);
     }
+    if (input.expectedChecksum && current.checksum !== input.expectedChecksum) {
+      throw new RunbookDefinitionError(
+        'DRAFT_CONFLICT: This draft was modified by another operator since you opened it. Please refresh and review the changes.'
+      );
+    }
     const changed = await tx.runbookVersion.updateMany({
-      where: { id: versionId, state: 'DRAFT' },
+      where: {
+        id: versionId,
+        state: 'DRAFT',
+        ...(input.expectedChecksum ? { checksum: input.expectedChecksum } : {}),
+      },
       data: { definition: definitionJson(definition), checksum },
     });
-    if (changed.count !== 1) throw new RunbookVersionImmutableError(versionId, 'PUBLISHED');
+    if (changed.count !== 1) {
+      throw new RunbookDefinitionError(
+        'DRAFT_CONFLICT: This draft was modified or published by another operator.'
+      );
+    }
     await tx.runbookInput.deleteMany({ where: { runbookVersionId: versionId } });
     if (inputs.length) {
       await tx.runbookInput.createMany({
