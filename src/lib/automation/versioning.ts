@@ -205,6 +205,7 @@ export async function changeMode(input: {
   mode: 'DISABLED' | 'SHADOW' | 'LIVE';
   expectedActiveVersionId: string | null;
   acknowledgeNoShadow?: boolean;
+  acknowledgeShadowErrors?: boolean;
 }) {
   return runSerializableTransaction(async tx => {
     await lock(tx, input.serviceId);
@@ -229,18 +230,22 @@ export async function changeMode(input: {
       if (issues.some(i => i.level === 'ERROR'))
         throw new Error('Active version has blocking lint errors');
       await validateReferences(tx, input.serviceId, compiled);
-      if (input.mode === 'LIVE' && !input.acknowledgeNoShadow) {
+      if (input.mode === 'LIVE') {
         const evidence = await tx.automationShadowAggregate.aggregate({
           where: {
             serviceId: input.serviceId,
             versionId: config.activeVersion.id,
             bucketDate: { gte: new Date(Date.now() - 7 * 86400000) },
           },
-          _sum: { evaluated: true },
+          _sum: { evaluated: true, errors: true, fallbacks: true },
         });
-        if (!evidence._sum.evaluated)
+        if (!evidence._sum.evaluated && !input.acknowledgeNoShadow)
           throw new Error(
             'Acknowledge activation without Shadow traffic for this published version.'
+          );
+        if ((evidence._sum.errors || evidence._sum.fallbacks) && !input.acknowledgeShadowErrors)
+          throw new Error(
+            'Explicitly acknowledge Shadow errors and fallbacks before activating LIVE.'
           );
       }
     }
@@ -264,7 +269,16 @@ export async function changeMode(input: {
         input.actorId,
         input.mode === 'LIVE' ? 'automation.live.enabled' : 'automation.shadow.enabled',
         { mode: config?.mode ?? 'DISABLED' },
-        { mode: input.mode, versionId: updated.activeVersionId }
+        {
+          mode: input.mode,
+          versionId: updated.activeVersionId,
+          ...(input.mode === 'LIVE'
+            ? {
+                acknowledgeNoShadow: input.acknowledgeNoShadow === true,
+                acknowledgeShadowErrors: input.acknowledgeShadowErrors === true,
+              }
+            : {}),
+        }
       );
     logger.info('automation.mode.changed', {
       serviceId: input.serviceId,

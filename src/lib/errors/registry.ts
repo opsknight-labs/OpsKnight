@@ -254,6 +254,13 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  AUTOMATION_PINNED_POLICY_INVALID: {
+    status: 409,
+    category: 'conflict',
+    userMessage: 'The pinned escalation definition failed integrity validation.',
+    retryable: false,
+    exposure: 'public',
+  },
   INCIDENT_TRANSITION_CONFLICT: {
     status: 409,
     category: 'conflict',

@@ -107,7 +107,9 @@ export async function persistObservationBatch(
     if (values.length)
       await tx.$executeRaw(Prisma.sql`
       INSERT INTO "AutomationContextObservation" (id, "serviceId", "integrationId", "integrationType", "fieldKey", "sourcePath", "fieldType", "normalizedRawValueHash", "rawValuePreview", unmapped, count, "firstSeenAt", "lastSeenAt") VALUES ${Prisma.join(values)}
-      ON CONFLICT ("serviceId", "integrationId", "fieldKey", "normalizedRawValueHash") DO UPDATE SET count = "AutomationContextObservation".count + EXCLUDED.count, "lastSeenAt" = NOW(), unmapped = EXCLUDED.unmapped`);
+      ON CONFLICT ("serviceId", "integrationId", "fieldKey", "normalizedRawValueHash") DO UPDATE SET count = "AutomationContextObservation".count + EXCLUDED.count, "lastSeenAt" = NOW(), unmapped = EXCLUDED.unmapped,
+      "sourcePath" = EXCLUDED."sourcePath", "integrationType" = EXCLUDED."integrationType",
+      "fieldType" = EXCLUDED."fieldType", "rawValuePreview" = EXCLUDED."rawValuePreview"`);
   }
   const rollups = new Map<string, NonNullable<ObservationJob['shadow']>>();
   for (const job of jobs) {

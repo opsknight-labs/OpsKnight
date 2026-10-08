@@ -13,6 +13,8 @@ import { automationEnabled } from '@/lib/automation/runtime';
 import { compileAutomation } from '@/lib/automation/compiler';
 import { discoverFields } from '@/lib/automation/discovery';
 import { testAutomation } from '@/lib/automation/testing';
+import { hasCapability } from '@/lib/authorization';
+import { normalizeValue } from '@/lib/automation/context/normalize';
 const id = z.string().min(1).max(100);
 const eventSchema = z
   .object({
@@ -52,6 +54,7 @@ const actionSchema = z.discriminatedUnion('action', [
       serviceId: id,
       mode: z.enum(['DISABLED', 'SHADOW', 'LIVE']),
       acknowledgeNoShadow: z.boolean().optional(),
+      acknowledgeShadowErrors: z.boolean().optional(),
       expectedActiveVersionId: id.nullable(),
     })
     .strict(),
@@ -91,6 +94,8 @@ export async function automationAction(raw: unknown) {
     if (input.action === 'lint')
       return { ok: true as const, data: compileAutomation(input.snapshot) };
     if (input.action === 'discoverRecent') {
+      if (!hasCapability(user.role, 'incident.sensitive.read'))
+        throw new Error('Sensitive incident access is required to discover recent alert values');
       const alerts = await prisma.alert.findMany({
         where: { serviceId: input.serviceId },
         select: { payload: true },
@@ -168,6 +173,7 @@ export async function getAutomationArea(
     area = z.enum(['overview', 'context', 'rules', 'test', 'activity', 'trace']).parse(areaRaw);
   const page = z.number().int().min(1).max(10000).parse(pageRaw);
   const user = await assertAutomationAccess(serviceId, 'automation.read');
+  const canReadSensitive = hasCapability(user.role, 'incident.sensitive.read');
   let canEdit = false;
   try {
     await assertAutomationAccess(serviceId, 'automation.edit');
@@ -193,6 +199,14 @@ export async function getAutomationArea(
           orderBy: { versionNumber: 'desc' },
           take: 20,
           skip: (page - 1) * 20,
+          select: {
+            id: true,
+            versionNumber: true,
+            publishedAt: true,
+            publishedBy: true,
+            checksum: true,
+            sourceVersionId: true,
+          },
         })
       : [];
   const versionTotal =
@@ -205,10 +219,6 @@ export async function getAutomationArea(
           take: 200,
         })
       : [];
-  const unmappedCount =
-    area === 'overview'
-      ? await prisma.automationContextObservation.count({ where: { serviceId, unmapped: true } })
-      : 0;
   const aggregates = ['overview', 'rules'].includes(area)
     ? await prisma.automationShadowAggregate.findMany({
         where: {
@@ -252,7 +262,7 @@ export async function getAutomationArea(
       })
     : [];
   const alerts =
-    area === 'test'
+    area === 'test' && canReadSensitive
       ? await prisma.alert.findMany({
           where: { serviceId },
           orderBy: { createdAt: 'desc' },
@@ -269,10 +279,32 @@ export async function getAutomationArea(
           publishedAt: true,
           publishedBy: true,
           lintReport: true,
-          snapshot: area !== 'overview',
+          snapshot: true,
         },
       })
     : null;
+  let unmappedCount = 0;
+  if (area === 'overview' && activeVersion) {
+    const parsed = snapshotSchema.safeParse(activeVersion.snapshot);
+    if (!parsed.success)
+      throw new Error(`Version ${activeVersion.versionNumber} failed integrity validation`);
+    const fields = compileAutomation(parsed.data).compiled.fields;
+    const observedValues = await prisma.automationContextObservation.findMany({
+      where: { serviceId },
+      take: 5000,
+      select: { fieldKey: true, rawValuePreview: true },
+    });
+    for (const observation of observedValues) {
+      const field = fields.find(candidate => candidate.key === observation.fieldKey);
+      if (!field) continue;
+      try {
+        if (normalizeValue(observation.rawValuePreview, field).state === 'UNMAPPED')
+          unmappedCount++;
+      } catch {
+        unmappedCount++;
+      }
+    }
+  }
   const publishers = versions.length
     ? await prisma.user.findMany({
         where: { id: { in: [...new Set(versions.map(version => version.publishedBy))] } },
@@ -285,13 +317,17 @@ export async function getAutomationArea(
     activeVersionId: config?.activeVersionId ?? null,
     canEdit,
     canPublish: user.role === 'ADMIN',
+    canReadSensitive,
     draft: draft
       ? { snapshot: draft.snapshot, revision: draft.revision }
       : {
           snapshot: activeVersion?.snapshot ?? emptySnapshot,
           revision: draftRevision?.revision ?? 0,
         },
-    activeVersion,
+    activeVersion:
+      activeVersion && area === 'overview'
+        ? { ...activeVersion, snapshot: undefined }
+        : activeVersion,
     versions: versions.map(version => ({
       ...version,
       publisherName:
@@ -299,10 +335,29 @@ export async function getAutomationArea(
         'Former administrator',
     })),
     versionTotal,
-    observations,
+    observations: canReadSensitive
+      ? observations
+      : observations.map(observation => ({
+          ...observation,
+          rawValuePreview: '[redacted]',
+        })),
     unmappedCount,
     aggregates,
-    traces,
+    traces: canReadSensitive
+      ? traces
+      : traces.map(trace => ({
+          ...trace,
+          detail: {
+            redacted: true,
+            shadowDifferent: !!(
+              trace.detail &&
+              typeof trace.detail === 'object' &&
+              !Array.isArray(trace.detail) &&
+              'shadowDifferent' in trace.detail &&
+              trace.detail.shadowDifferent
+            ),
+          },
+        })),
     policies,
     destinations: [
       ...slack.map(d => ({ ...d, provider: 'SLACK' as const })),
@@ -311,4 +366,20 @@ export async function getAutomationArea(
     integrations,
     alerts,
   };
+}
+export async function getAutomationVersionSnapshot(serviceIdRaw: string, versionIdRaw: string) {
+  const serviceId = id.parse(serviceIdRaw),
+    versionId = id.parse(versionIdRaw);
+  await assertAutomationAccess(serviceId, 'automation.read');
+  const version = await prisma.automationVersion.findFirst({
+    where: { id: versionId, serviceId },
+    select: { snapshot: true, versionNumber: true },
+  });
+  if (!version) throw new Error('Automation version not found');
+  const parsed = snapshotSchema.safeParse(version.snapshot);
+  if (!parsed.success)
+    throw new Error(
+      `Version ${version.versionNumber} failed integrity validation and cannot be rendered`
+    );
+  return parsed.data;
 }

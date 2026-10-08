@@ -31,8 +31,11 @@ export function normalizeValue(raw: unknown, field: Field): FieldState {
   if (typeof raw !== 'string') return unmapped;
   const key = normalizedString(raw, field);
   const value = Object.prototype.hasOwnProperty.call(field.aliases, key) ? field.aliases[key] : key;
-  const allowed = field.allowedValues?.map(v => normalizedString(v, field));
-  return field.type === 'ENUM' && !allowed?.includes(value)
-    ? unmapped
-    : { state: 'RECOGNIZED', value };
+  if (field.type === 'ENUM') {
+    const canonical = field.allowedValues?.find(
+      choice => normalizedString(choice, field) === normalizedString(value, field)
+    );
+    return canonical === undefined ? unmapped : { state: 'RECOGNIZED', value: canonical };
+  }
+  return { state: 'RECOGNIZED', value };
 }

@@ -54,13 +54,19 @@ export function AutomationTest({
       <p className="text-sm text-muted-foreground">
         Sample tests use the production evaluator and create no incidents or notifications.
       </p>
+      {data.canReadSensitive === false && (
+        <p className="text-sm text-muted-foreground">
+          Recent alert samples require sensitive incident access. You can test a sample you provide.
+        </p>
+      )}
       <label className="block text-sm">
         Use recent alert
         <select
           className={`${controlClass} block w-full`}
           onChange={e => {
             const alert = data.alerts.find(a => a.id === e.target.value);
-            if (alert)
+            if (alert) {
+              setProviderSample('{}');
               setSample(
                 JSON.stringify(
                   { event_action: 'trigger', dedup_key: 'sample', payload: alert.payload },
@@ -68,6 +74,7 @@ export function AutomationTest({
                   2
                 )
               );
+            }
           }}
         >
           <option value="">Choose recent alert…</option>
@@ -78,6 +85,10 @@ export function AutomationTest({
           ))}
         </select>
       </label>
+      <p className="text-sm text-muted-foreground">
+        Recent alerts replay the normalized OpsKnight event only. Provider-specific mappings require
+        a raw provider sample in Advanced inputs.
+      </p>
       <label className="block text-sm">
         Integration
         <select

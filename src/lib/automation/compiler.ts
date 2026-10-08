@@ -46,6 +46,11 @@ export function compileAutomation(raw: unknown): {
     }
     if (field.type === 'ENUM' && !field.allowedValues?.length)
       add('INVALID_ENUM', 'Choice fields need canonical values');
+    if (field.type === 'ENUM') {
+      const canonicalKeys = field.allowedValues?.map(value => normalizedString(value, field)) ?? [];
+      if (new Set(canonicalKeys).size !== canonicalKeys.length)
+        add('ENUM_COLLISION', 'Canonical choices must have distinct normalized values');
+    }
     return {
       ...field,
       aliases,

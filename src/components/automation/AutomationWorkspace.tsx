@@ -74,7 +74,9 @@ export default function AutomationWorkspace({
   const [activityPage, setActivityPage] = useState(1);
   const [area, setArea] = useState<Area>('overview');
   const [areaData, setAreaData] = useState<Partial<Record<Area, Data>>>({});
-  const [restoreVersion, setRestoreVersion] = useState<Data['versions'][number] | null>(null);
+  const [restoreVersion, setRestoreVersion] = useState<
+    (Data['versions'][number] & { snapshot: Snapshot }) | null
+  >(null);
   const [undo, setUndo] = useState<{
     label: string;
     restore: (current: Snapshot) => Snapshot;
@@ -121,14 +123,23 @@ export default function AutomationWorkspace({
       setError('');
       try {
         const next = await getAutomationArea(serviceId, nextArea, activityPage);
-        setAreaData(previous => ({ ...previous, [nextArea]: next }));
+        if (
+          next.activeVersion?.snapshot &&
+          !snapshotSchema.safeParse(next.activeVersion.snapshot).success
+        )
+          throw new Error(
+            `Version ${next.activeVersion.versionNumber} failed integrity validation and cannot be rendered`
+          );
         if (!initialized.current) revision.current = next.draft.revision;
         if (!initialized.current && ['context', 'rules', 'test'].includes(nextArea)) {
           const parsed = snapshotSchema.safeParse(next.draft.snapshot);
-          setDraft(parsed.success ? parsed.data : emptySnapshot);
+          if (!parsed.success)
+            throw new Error('Stored draft failed integrity validation and cannot be rendered');
+          setDraft(parsed.data);
           revision.current = next.draft.revision;
           initialized.current = true;
         }
+        setAreaData(previous => ({ ...previous, [nextArea]: next }));
         return next;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not load automation');
@@ -324,6 +335,7 @@ export default function AutomationWorkspace({
       ],
     };
     const field = kind === 'account' || kind === 'vip' ? enterprise : env;
+    const existingField = draft.fields.find(candidate => candidate.key === field.key);
     const condition: Condition =
       kind === 'priority'
         ? { fieldKey: 'priority', operator: 'IN', value: ['P1', 'P2'] }
@@ -343,12 +355,33 @@ export default function AutomationWorkspace({
       );
       return;
     }
+    let templateFields = draft.fields;
+    if (kind !== 'priority' && kind !== 'scratch' && existingField?.type === 'ENUM') {
+      const canonical = existingField.allowedValues?.find(value =>
+        existingField.caseSensitive
+          ? value === 'production'
+          : value.trim().toLowerCase() === 'production'
+      );
+      condition.value = canonical ?? 'production';
+      if (!canonical && (existingField.allowedValues?.length ?? 0) >= 200) {
+        setError(
+          'The environment field has reached its canonical choice limit. Add a compatible production choice before using this template.'
+        );
+        return;
+      }
+      if (!canonical)
+        templateFields = draft.fields.map(candidate =>
+          candidate.fieldId === existingField.fieldId
+            ? { ...candidate, allowedValues: [...(candidate.allowedValues ?? []), 'production'] }
+            : candidate
+        );
+    }
     edit({
       schemaVersion: 1,
       fields:
         kind === 'priority' || kind === 'scratch' || draft.fields.some(f => f.key === field.key)
-          ? draft.fields
-          : [...draft.fields, field],
+          ? templateFields
+          : [...templateFields, field],
       rules:
         kind === 'scratch'
           ? []
@@ -481,10 +514,10 @@ export default function AutomationWorkspace({
         busy={busy}
         error={error}
         onCancel={() => setReview(null)}
-        onConfirm={acknowledgeNoShadow => {
+        onConfirm={(acknowledgeNoShadow, acknowledgeShadowErrors) => {
           void command(
             review === 'LIVE'
-              ? { action: 'mode', mode: 'LIVE', acknowledgeNoShadow }
+              ? { action: 'mode', mode: 'LIVE', acknowledgeNoShadow, acknowledgeShadowErrors }
               : {
                   action: 'publish',
                   ...(review === 'restore' ? { sourceVersionId: restoreVersion?.id } : {}),
@@ -694,8 +727,13 @@ export default function AutomationWorkspace({
               variant="outline"
               onClick={async () => {
                 const remote = await getAutomationArea(serviceId, 'rules');
+                const parsed = snapshotSchema.safeParse(remote.draft.snapshot);
+                if (!parsed.success) {
+                  setError('Stored draft failed integrity validation');
+                  return;
+                }
                 setConflictDraft({
-                  snapshot: snapshotSchema.parse(remote.draft.snapshot),
+                  snapshot: parsed.data,
                   revision: remote.draft.revision,
                 });
               }}
@@ -711,6 +749,7 @@ export default function AutomationWorkspace({
                 ))}
                 <Button
                   onClick={async () => {
+                    const savedGeneration = generation.current;
                     const response = await automationAction({
                       action: 'save',
                       serviceId,
@@ -723,10 +762,19 @@ export default function AutomationWorkspace({
                       return;
                     }
                     revision.current = (response.data as { revision: number }).revision;
+                    persistedGeneration.current = savedGeneration;
                     setConflict(false);
                     setConflictDraft(null);
-                    setDirty(false);
-                    setSaveState('Saved');
+                    if (savedGeneration === generation.current) {
+                      setDirty(false);
+                      setSaveState('Saved');
+                      setLocalCopy(null);
+                      try {
+                        localStorage.removeItem(`automation-draft:${serviceId}`);
+                      } catch {
+                        /* Optional browser recovery. */
+                      }
+                    } else setSaveState('Unsaved');
                   }}
                 >
                   Keep my copy as a new draft revision
@@ -885,6 +933,7 @@ export default function AutomationWorkspace({
         )}
         {data && area === 'activity' && (
           <AutomationActivity
+            serviceId={serviceId}
             data={data}
             activityPage={activityPage}
             setActivityPage={setActivityPage}

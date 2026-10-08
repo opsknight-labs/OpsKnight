@@ -143,6 +143,15 @@ test('100-rule policy remains bounded, keyboard editable, searchable and recover
   await workspace.getByRole('button', { name: 'Rules', exact: true }).click();
   await expect(workspace.getByRole('button', { name: /^Configure Rule / })).toHaveCount(100);
   timing.initialRulesMs = Date.now() - start;
+  await workspace.getByRole('button', { name: 'Overview', exact: true }).click();
+  await expect(
+    workspace.getByText(/Queue health and capacity approval require deployment review/)
+  ).toBeVisible();
+  start = Date.now();
+  await workspace.getByRole('button', { name: 'Rules', exact: true }).click();
+  await expect(workspace.getByRole('button', { name: /^Configure Rule / })).toHaveCount(100);
+  timing.warmRulesMs = Date.now() - start;
+  expect(timing.warmRulesMs).toBeLessThan(1500);
   await expect(workspace.getByLabel('Rule name')).toHaveCount(0);
   start = Date.now();
   await workspace.getByLabel('Search rules').fill('Rule 99');

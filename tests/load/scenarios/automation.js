@@ -36,7 +36,11 @@ export const options = {
     'checks{scenario:automation_ingestion}': ['rate==1'],
     opsknight_user_workload_success_rate: ['rate>0.95'],
     opsknight_lifecycle_success_rate: ['rate>0.90'],
-    http_req_failed: [__ENV.AUTOMATION_RECOVERY_DRILL === 'true' ? 'rate<0.25' : 'rate<0.01'],
+    http_req_failed: [
+      __ENV.AUTOMATION_RECOVERY_DRILL === 'true' && __ENV.AUTOMATION_LOAD_PROFILE === 'live-small'
+        ? 'rate<0.25'
+        : 'rate<0.01',
+    ],
     dropped_iterations: ['count==0'],
   },
 };

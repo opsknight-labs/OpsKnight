@@ -144,4 +144,25 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
     expect(Number(mutationLastSeenLine?.split(' ').at(1))).toBeGreaterThanOrEqual(3);
     expect(Number(mutationLastSeenLine?.split(' ').at(1))).toBeLessThan(10);
   });
+  it('exports Automation maintenance queues separately from other scheduled tasks', async () => {
+    process.env.PROMETHEUS_SCRAPE_TOKEN = 'automation-metrics-test';
+    vi.mocked(prisma.$queryRaw).mockImplementation(
+      query =>
+        Promise.resolve(
+          String(query).includes('AUTOMATION_OBSERVE')
+            ? [{ observations: BigInt(12), oldestAge: 45, rollupLag: 30, retention: BigInt(1) }]
+            : []
+        ) as ReturnType<typeof prisma.$queryRaw>
+    );
+    const response = await GET(
+      new Request('http://localhost:3000/api/metrics', {
+        headers: { authorization: 'Bearer automation-metrics-test' },
+      })
+    );
+    const text = await response.text();
+    expect(text).toContain('opsknight_automation_observation_queue_depth 12');
+    expect(text).toContain('opsknight_automation_observation_oldest_age_seconds 45');
+    expect(text).toContain('opsknight_automation_shadow_rollup_lag_seconds 30');
+    expect(text).toContain('opsknight_automation_retention_pending 1');
+  });
 });

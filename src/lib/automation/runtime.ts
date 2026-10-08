@@ -14,6 +14,7 @@ import { getCachedCompiledVersion, loadCompiledVersion } from './cache';
 import { evaluateAutomation, type Evaluation } from './evaluator';
 import { asJson } from './versioning';
 import { discoverFields } from './discovery';
+import { captureResponderSnapshot } from '@/lib/escalation/automation-snapshot';
 export const automationEnabled = async (client?: Prisma.TransactionClient) =>
   (await getAutomationSettings(client)).automationEnabled;
 export type IntegrationEventEnvelope = {
@@ -37,6 +38,7 @@ export type RuntimeEvaluation = {
   finalPriority: string | null;
   policyId: string | null;
   policyName: string | null;
+  detailedTraceBytes?: number;
   observations: ReturnType<typeof discoverFields>;
   normalization: ReturnType<typeof extractContextWithProvenance>['normalization'];
 };
@@ -248,6 +250,9 @@ export async function persistAutomation(
     destinationNames,
   };
   if (runtime.mode === 'LIVE') {
+    const responderPolicy = runtime.policyId
+      ? await captureResponderSnapshot(tx, runtime.policyId)
+      : null;
     await tx.incidentAutomationDecision.create({
       data: {
         incidentId,
@@ -264,6 +269,7 @@ export async function persistAutomation(
         evaluationAt: runtime.evaluationAt,
         fallbackReason: runtime.fallbackReason,
         summary: asJson({
+          responderPolicy,
           normalization: runtime.normalization,
           inputContext: result?.inputContext ?? {},
           enrichedContext: result?.enrichedContext ?? {},
@@ -297,7 +303,7 @@ export async function persistAutomation(
         if (destination) destinationNames.push(destination);
       }
   }
-  await tx.automationTrace.create({
+  const trace = await tx.automationTrace.create({
     data: {
       incidentId,
       serviceId: envelope.serviceId,
@@ -333,6 +339,14 @@ export async function persistAutomation(
       ),
     },
   });
+  if (
+    trace?.detail &&
+    typeof trace.detail === 'object' &&
+    !Array.isArray(trace.detail) &&
+    'diagnosticLevel' in trace.detail &&
+    trace.detail.diagnosticLevel === 'FULL'
+  )
+    runtime.detailedTraceBytes = Buffer.byteLength(JSON.stringify(trace.detail), 'utf8');
   // Store bounded scalar discovery candidates, never provider payloads or headers.
   if (runtime.observations.length || shadow)
     await tx.backgroundJob.create({
@@ -355,6 +369,12 @@ export async function persistAutomation(
 }
 export function recordAutomationMetrics(runtime: RuntimeEvaluation | null) {
   if (!runtime) return;
+  if (runtime.detailedTraceBytes)
+    addOperationalMetric(
+      'opsknight_automation_detailed_trace_bytes_total',
+      runtime.detailedTraceBytes,
+      {}
+    );
   addOperationalMetric('opsknight_automation_evaluations_total', 1, {
     mode: runtime.mode,
     outcome: runtime.result?.outcome.type ?? 'FALLBACK',
