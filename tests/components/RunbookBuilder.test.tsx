@@ -360,6 +360,123 @@ describe('Runbook nested check builder', () => {
     expect(inputKeyField.value).toBe('updated_service_name');
     expect(document.activeElement).toBe(inputKeyField);
   });
+
+  it('preserves active step selection when moving another step', () => {
+    const step1 = { ...newBuilderStep('MANUAL', 'step_1'), name: 'First step' };
+    const step2 = { ...newBuilderStep('MANUAL', 'step_2'), name: 'Second step' };
+    const step3 = { ...newBuilderStep('MANUAL', 'step_3'), name: 'Third step' };
+
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [step1, step2, step3] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    // Select Second step
+    const selectStep2Btn = screen.getByRole('button', { name: 'Step 2: Second step' });
+    fireEvent.click(selectStep2Btn);
+    expect(screen.getByRole('heading', { name: 'Step 2: Second step' })).toBeTruthy();
+
+    // Move First step down (which swaps step 1 and step 2)
+    const moveDownBtn = screen.getByRole('button', { name: 'Move First step down' });
+    fireEvent.click(moveDownBtn);
+
+    // The editor must STILL be editing Second step (now at Step 1 position)!
+    expect(screen.getByRole('heading', { name: 'Step 1: Second step' })).toBeTruthy();
+    const stepNameInput = screen.getByLabelText('Step name') as HTMLInputElement;
+    expect(stepNameInput.value).toBe('Second step');
+  });
+
+  it('preserves active step selection when removing an earlier step', () => {
+    const step1 = { ...newBuilderStep('MANUAL', 'step_1'), name: 'First step' };
+    const step2 = { ...newBuilderStep('MANUAL', 'step_2'), name: 'Second step' };
+    const step3 = { ...newBuilderStep('MANUAL', 'step_3'), name: 'Third step' };
+
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [step1, step2, step3] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    // Select Second step
+    const selectStep2Btn = screen.getByRole('button', { name: 'Step 2: Second step' });
+    fireEvent.click(selectStep2Btn);
+    expect(screen.getByRole('heading', { name: 'Step 2: Second step' })).toBeTruthy();
+
+    // Remove First step
+    const removeStep1Btn = screen.getByRole('button', { name: 'Remove First step' });
+    fireEvent.click(removeStep1Btn);
+
+    // The editor must still be editing Second step (now at index 0 / Step 1)!
+    expect(screen.getByRole('heading', { name: 'Step 1: Second step' })).toBeTruthy();
+    const stepNameInput = screen.getByLabelText('Step name') as HTMLInputElement;
+    expect(stepNameInput.value).toBe('Second step');
+  });
+
+  it('checks against flattened nested keys when adding a new step', () => {
+    const parentStep = {
+      ...newBuilderStep('MANUAL', 'step_1'),
+      name: 'Parent step',
+      precheck: {
+        steps: [
+          { ...newBuilderStep('SYSTEMD', 'step_2'), name: 'Nested check with step_2 key' },
+        ],
+      },
+    };
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [parentStep] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    const addStepBtn = screen.getByRole('button', { name: 'Add Step' });
+    fireEvent.click(addStepBtn);
+
+    const saved = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(saved.steps).toHaveLength(2);
+    // Because step_2 is already used in nested prechecks, new step must get step_3!
+    expect(saved.steps[1].key).toBe('step_3');
+  });
+
+  it('validates Kubernetes action and resource compatibility rules', () => {
+    const invalidK8sStep = {
+      ...newBuilderStep('KUBERNETES', 'k8s_restart'),
+      name: 'Restart Job',
+      config: {
+        action: 'rollout-restart',
+        namespace: 'default',
+        resource: 'job',
+        name: 'batch-worker',
+      },
+    };
+
+    const result = validateStep(invalidK8sStep);
+    expect(result.isValid).toBe(false);
+    expect(result.errors.resource).toContain('does not support resource "job"');
+
+    const validK8sStep = {
+      ...newBuilderStep('KUBERNETES', 'k8s_restart_valid'),
+      name: 'Restart Deployment',
+      config: {
+        action: 'rollout-restart',
+        namespace: 'default',
+        resource: 'deployment',
+        name: 'batch-worker',
+      },
+    };
+    const validResult = validateStep(validK8sStep);
+    expect(validResult.isValid).toBe(true);
+    expect(validResult.errors.resource).toBeUndefined();
+  });
 });
 
 

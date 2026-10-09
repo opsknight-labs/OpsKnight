@@ -91,7 +91,7 @@ export default function KubernetesActionEditor({
   const rawReplicas = config.replicas;
   const isScale = action === 'scale';
   const requiresName = ['logs', 'rollout-restart', 'rollout-status', 'scale'].includes(action);
-  const resourceNameError = errors.resourceName || errors.name;
+  const resourceNameError = errors.resourceName;
 
   const handleActionChange = (nextAction: string) => {
     const nextConfig: Record<string, unknown> = {

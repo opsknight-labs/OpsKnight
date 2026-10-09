@@ -133,10 +133,13 @@ export function cloneStepRecursively(
   existingKeys: Set<string>
 ): RunbookStepDefinition {
   const newKey = generateUniqueStepKey(source.key, existingKeys);
+  const copySuffix = ' (Copy)';
+  const maxBaseLen = Math.max(1, 200 - copySuffix.length);
+  const baseName = (source.name || 'Untitled step').slice(0, maxBaseLen);
   const cloned: RunbookStepDefinition = {
     ...JSON.parse(JSON.stringify(source)),
     key: newKey,
-    name: `${source.name} (Copy)`,
+    name: `${baseName}${copySuffix}`,
   };
 
   if (cloned.precheck?.steps) {

@@ -123,6 +123,7 @@ export default function StepEditor({
       {/* Mini Sequence Header: Before Checks */}
       {depth === 1 && (
         <NestedChecks
+          key={`precheck-${editorId}`}
           phase="precheck"
           step={step}
           inputs={inputs}
@@ -393,6 +394,7 @@ export default function StepEditor({
       {/* Mini Sequence Footer: After Checks (Verification) */}
       {depth === 1 && (
         <NestedChecks
+          key={`verification-${editorId}`}
           phase="verification"
           step={step}
           inputs={inputs}

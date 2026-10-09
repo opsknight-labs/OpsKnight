@@ -107,6 +107,21 @@ describe('Runbook authoring templates', () => {
 
     expect(existingKeys.size).toBe(17);
   });
+
+  it('bounds cloned step name to at most 200 characters', () => {
+    const maxLenName = 'x'.repeat(200);
+    const source = {
+      ...newBuilderStep('MANUAL', 'step_max_name'),
+      name: maxLenName,
+    };
+    const cloned = cloneStepRecursively(source, new Set<string>());
+    expect(cloned.name.length).toBeLessThanOrEqual(200);
+    expect(cloned.name.endsWith(' (Copy)')).toBe(true);
+    expect(cloned.name).toBe(`${'x'.repeat(193)} (Copy)`);
+
+    const definition = { steps: [source, cloned] };
+    expect(() => parseRunbookDefinition(definition)).not.toThrow();
+  });
 });
 
 

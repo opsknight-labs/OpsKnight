@@ -122,6 +122,8 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await page.getByRole('button', { name: 'Publish draft', exact: true }).click();
   await expect(page.getByRole('alertdialog')).toContainText('Only the saved draft is published');
   await page.getByRole('button', { name: 'Keep unchanged', exact: true }).click();
+  await page.getByRole('tab', { name: 'Builder', exact: true }).click();
+  await expect(page.getByLabel('Step name', { exact: true })).toBeVisible();
   await noOverflow(page);
   await page.screenshot({ path: 'test-results/runbooks-builder-desktop.png', fullPage: true });
 });
@@ -393,7 +395,13 @@ test('390px infrastructure, health and builder have no horizontal overflow', asy
     await page.goto(route);
     await noOverflow(page);
     if (route === `/runbooks/${runbookId}`) {
+      await expect(page.getByLabel('Step name', { exact: true })).toBeVisible();
       await page.screenshot({ path: 'test-results/runbooks-builder-mobile.png', fullPage: true });
+      for (const width of [390, 768, 1024, 1280]) {
+        await page.setViewportSize({ width, height: 844 });
+        await page.screenshot({ path: `test-results/runbooks-builder-${width}.png`, fullPage: true });
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
     }
     if (route === '/runbooks/agents') {
       await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^pools/i }).click();

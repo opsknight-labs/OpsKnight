@@ -55,10 +55,10 @@ export default function RunbookBuilder({
 }) {
   const [definition, setDefinition] = useState(initialDefinition);
   const [draftRevision, setDraftRevision] = useState(initialDraftRevision);
-  const [stepIdentities, setStepIdentities] = useState(
-    initialDefinition.steps.map(step => step.key || crypto.randomUUID())
+  const [stepIdentities, setStepIdentities] = useState<string[]>(() =>
+    initialDefinition.steps.map(() => crypto.randomUUID())
   );
-  const [selectedStepIndex, setSelectedStepIndex] = useState(0);
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [inputs, setInputs] = useState(initialInputs);
   const [inputIdentities, setInputIdentities] = useState(() =>
     initialInputs.map(() => crypto.randomUUID())
@@ -73,6 +73,20 @@ export default function RunbookBuilder({
 
   // Compute live validation results
   const { stepErrors, inputErrors, errorCount } = validateRunbook(definition, inputs);
+
+  // Derive active index and selected step from stable selectedStepId
+  const foundIndex = selectedStepId ? stepIdentities.indexOf(selectedStepId) : -1;
+  const selectedStepIndex =
+    foundIndex >= 0 ? foundIndex : definition.steps.length > 0 ? 0 : 0;
+  const selectedStep = definition.steps.at(selectedStepIndex);
+  const activeStepId = stepIdentities.at(selectedStepIndex) ?? selectedStep?.key ?? 'active-step';
+
+  function handleSelectStep(index: number) {
+    const id = stepIdentities.at(index);
+    if (id) {
+      setSelectedStepId(id);
+    }
+  }
 
   function updateStep(index: number, patch: Partial<RunbookStepDefinition>) {
     setDirty(true);
@@ -96,7 +110,7 @@ export default function RunbookBuilder({
 
     setStepIdentities(nextIdentities);
     setDefinition({ ...definition, steps: nextSteps });
-    setSelectedStepIndex(index + offset);
+    // Stable selectedStepId ensures the selected step stays selected regardless of move
     setDirty(true);
   }
 
@@ -108,43 +122,54 @@ export default function RunbookBuilder({
 
     const nextSteps = [...definition.steps];
     nextSteps.splice(index + 1, 0, clone);
+    const newId = crypto.randomUUID();
     const nextIds = [...stepIdentities];
-    nextIds.splice(index + 1, 0, crypto.randomUUID());
+    nextIds.splice(index + 1, 0, newId);
 
     setDefinition({ ...definition, steps: nextSteps });
     setStepIdentities(nextIds);
-    setSelectedStepIndex(index + 1);
+    setSelectedStepId(newId);
     setDirty(true);
   }
 
   function removeStep(index: number) {
     if (definition.steps.length <= 1) return;
+    const removedId = stepIdentities.at(index);
+    const currentlySelectedId = selectedStepId ?? stepIdentities.at(selectedStepIndex);
+
     const nextSteps = definition.steps.filter((_, position) => position !== index);
     const nextIds = stepIdentities.filter((_, position) => position !== index);
+
     setDefinition({ ...definition, steps: nextSteps });
     setStepIdentities(nextIds);
-    setSelectedStepIndex(Math.max(0, Math.min(selectedStepIndex, nextSteps.length - 1)));
+
+    if (removedId === currentlySelectedId) {
+      const nextIndex = Math.min(index, nextSteps.length - 1);
+      setSelectedStepId(nextIds.at(nextIndex) ?? null);
+    } else {
+      setSelectedStepId(currentlySelectedId ?? null);
+    }
     setDirty(true);
   }
 
   function addStep(type: RunbookStepType) {
+    const allKeys = new Set(flattenSteps(definition).map(step => step.key));
     let sequence = definition.steps.length + 1;
-    while (definition.steps.some(step => step.key === `step_${sequence}`)) {
+    while (allKeys.has(`step_${sequence}`)) {
       sequence++;
     }
     const key = `step_${sequence}`;
     const newStep = newBuilderStep(type, key);
+    const newId = crypto.randomUUID();
     setDefinition({ ...definition, steps: [...definition.steps, newStep] });
-    setStepIdentities([...stepIdentities, crypto.randomUUID()]);
-    setSelectedStepIndex(definition.steps.length);
+    setStepIdentities([...stepIdentities, newId]);
+    setSelectedStepId(newId);
     setDirty(true);
   }
 
-  const selectedStep = definition.steps.at(selectedStepIndex);
-
   const builderView = (
     <div className="space-y-6">
-      <div className="rounded-xl border bg-muted/20 p-4 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-3">
+      <div className="rounded-xl border bg-muted/20 p-3 sm:p-4 text-xs text-muted-foreground hidden sm:flex flex-wrap items-center justify-between gap-3">
         <span>
           Steps execute in strict top-to-bottom sequence. Mutations require explicit approval or non-idempotent safeguards. Agent policy remains authoritative.
         </span>
@@ -159,7 +184,7 @@ export default function RunbookBuilder({
             selectedIndex={selectedStepIndex}
             stepErrors={stepErrors}
             readOnly={readOnly}
-            onSelectStep={setSelectedStepIndex}
+            onSelectStep={handleSelectStep}
             onMoveStep={moveStep}
             onDuplicateStep={duplicateStep}
             onRemoveStep={removeStep}
@@ -198,9 +223,10 @@ export default function RunbookBuilder({
               </div>
 
               <StepEditor
+                key={activeStepId}
                 step={selectedStep}
                 inputs={inputs}
-                editorId={String(stepIdentities.at(selectedStepIndex) ?? selectedStep.key)}
+                editorId={activeStepId}
                 depth={1}
                 errors={stepErrors.get(selectedStepIndex) ?? {}}
                 readOnly={readOnly}
@@ -441,8 +467,9 @@ export default function RunbookBuilder({
               );
               const parsedInputs = runbookInputsSchema.parse(JSON.parse(advancedInputs));
               setDefinition(parsedDefinition as RunbookDefinition);
-              setStepIdentities(parsedDefinition.steps.map(() => crypto.randomUUID()));
-              setSelectedStepIndex(0);
+              const newIds = parsedDefinition.steps.map(() => crypto.randomUUID());
+              setStepIdentities(newIds);
+              setSelectedStepId(newIds.at(0) ?? null);
               setInputs(parsedInputs);
               setInputIdentities(parsedInputs.map(() => crypto.randomUUID()));
               setDirty(true);

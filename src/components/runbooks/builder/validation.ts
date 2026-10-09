@@ -6,8 +6,8 @@ export const INPUT_TEMPLATE = /^\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}$/;
 export const SYSTEMD_UNIT =
   /^[A-Za-z0-9][A-Za-z0-9_.@:-]*\.(?:service|socket|timer|target|mount|path|slice|scope|device|automount|swap)$/;
 export const DOCKER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
-// eslint-disable-next-line security/detect-unsafe-regex
-export const KUBERNETES_NAME = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
+// RFC 1123 DNS label: lowercase alphanumeric, hyphens/periods allowed in middle, start/end alphanumeric
+export const KUBERNETES_NAME = /^(?:[a-z0-9]|[a-z0-9][a-z0-9.-]*[a-z0-9])$/;
 export const STEP_KEY_REGEX = /^[a-z0-9_-]{1,80}$/;
 
 export interface StepValidationResult {
@@ -105,6 +105,49 @@ export function validateStep(
         errors.resource = 'Resource type is required (e.g., deployment, pod).';
       } else if (!INPUT_TEMPLATE.test(resource) && !KUBERNETES_NAME.test(resource)) {
         errors.resource = 'Invalid resource type format.';
+      } else if (!INPUT_TEMPLATE.test(resource)) {
+        const lowerRes = resource.toLowerCase();
+        if (action === 'logs') {
+          const allowedLogResources = [
+            'pod',
+            'pods',
+            'deployment',
+            'deployments',
+            'daemonset',
+            'daemonsets',
+            'statefulset',
+            'statefulsets',
+          ];
+          if (!allowedLogResources.includes(lowerRes)) {
+            errors.resource = `Kubernetes logs action does not support resource "${resource}". Supported resources are Pod, Deployment, DaemonSet, and StatefulSet.`;
+          }
+        } else if (['rollout-restart', 'rollout-status'].includes(action)) {
+          const allowedRolloutResources = [
+            'deployment',
+            'deployments',
+            'daemonset',
+            'daemonsets',
+            'statefulset',
+            'statefulsets',
+          ];
+          if (!allowedRolloutResources.includes(lowerRes)) {
+            errors.resource = `Kubernetes ${action} does not support resource "${resource}". Supported resources are Deployment, DaemonSet, and StatefulSet.`;
+          }
+        } else if (action === 'scale') {
+          const allowedScaleResources = [
+            'deployment',
+            'deployments',
+            'statefulset',
+            'statefulsets',
+            'replicaset',
+            'replicasets',
+            'replicationcontroller',
+            'replicationcontrollers',
+          ];
+          if (!allowedScaleResources.includes(lowerRes)) {
+            errors.resource = `Kubernetes scale action does not support resource "${resource}". Supported resources are Deployment, StatefulSet, ReplicaSet, and ReplicationController.`;
+          }
+        }
       }
 
       if (['logs', 'rollout-restart', 'rollout-status', 'scale'].includes(action) && !name) {
