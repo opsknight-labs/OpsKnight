@@ -2121,11 +2121,46 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
       where: { executionId: execution.id, stepKey: 'restart_svc' },
     });
-    expect(step.status).toBe('WAITING_AGENT');
+    expect(step.status).toBe('WAITING_APPROVAL');
+
+    const digest = computePlanDigest({
+      stepKey: step.stepKey,
+      stepType: step.type,
+      riskClass: step.riskClass,
+      config: step.config as Record<string, unknown>,
+      agentPoolId: target.pool.id,
+      agentId: undefined,
+      inputValues: {},
+      versionChecksum: target.version.checksum,
+    });
+
+    await approveExecutionStep({
+      executionId: execution.id,
+      stepId: step.id,
+      planDigest: digest,
+      actorId: target.actor.id,
+    });
+    await advanceExecution(execution.id);
+
+    const stepAfterApproval = await testPrisma.runbookExecutionStep.findUniqueOrThrow({
+      where: { id: step.id },
+    });
+    expect(stepAfterApproval.status).toBe('WAITING_AGENT');
 
     const claim = await claimAgentAttempt(target.agent.id);
     expect(claim).not.toBeNull();
     expect(claim?.step.key).toBe('restart_svc');
+
+    const claimedAttempt = await testPrisma.runbookStepAttempt.findUniqueOrThrow({
+      where: { id: claim!.attemptId },
+    });
+    expect(claimedAttempt.status).toBe('CLAIMED');
+
+    await fenceAgentAttempt({
+      attemptId: claim!.attemptId,
+      agentId: target.agent.id,
+      leaseToken: claim!.leaseToken,
+    });
 
     const runningAttempt = await testPrisma.runbookStepAttempt.findFirstOrThrow({
       where: { executionStepId: step.id },

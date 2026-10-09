@@ -311,6 +311,18 @@ describe('Runbooks Zod Schemas', () => {
       expect(agentArtifactSchema.safeParse(artifact).success).toBe(true);
     });
 
+    it('accepts multi-megabyte compressed payload up to 10 MiB limit', () => {
+      // 2 MiB binary payload expands to ~2.67M chars base64 (which previously exceeded the 1.5M limit)
+      const twoMegabytes = Buffer.alloc(2 * 1024 * 1024, 0x42);
+      const largeBase64 = twoMegabytes.toString('base64');
+      expect(largeBase64.length).toBeGreaterThan(1_500_000);
+      const result = agentArtifactSchema.safeParse({
+        ...artifact,
+        contentBase64: largeBase64,
+      });
+      expect(result.success).toBe(true);
+    });
+
     it('rejects unsupported encodings and invalid checksums', () => {
       expect(agentArtifactSchema.safeParse({ ...artifact, encoding: 'identity' }).success).toBe(
         false

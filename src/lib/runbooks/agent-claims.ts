@@ -857,7 +857,7 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
       if (recoveredStep.count !== 1) {
         throw new RunbookPreExecutionFenceError(input.attemptId, 'late result step state changed');
       }
-      if (stepStatus === 'SUCCEEDED') {
+      if (stepStatus === 'SUCCEEDED' && !cancellationRequested) {
         await tx.runbookExecution.updateMany({
           where: {
             id: attempt.executionStep.executionId,
@@ -871,31 +871,18 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
             failureMessage: null,
           },
         });
-      } else if (cancellationRequested && stepStatus === 'CANCELLED') {
+      } else if (cancellationRequested) {
         await tx.runbookExecution.updateMany({
           where: {
             id: attempt.executionStep.executionId,
-            status: { in: ['CANCEL_REQUESTED', 'FAILED'] },
+            status: 'FAILED',
+            failureCode: 'UNKNOWN_OUTCOME',
           },
           data: {
-            status: 'CANCELLED',
-            completedAt: producedAt,
+            status: 'CANCEL_REQUESTED',
+            completedAt: null,
             failureCode: null,
             failureMessage: null,
-          },
-        });
-      } else if (cancellationRequested && stepStatus === 'UNKNOWN') {
-        await tx.runbookExecution.updateMany({
-          where: {
-            id: attempt.executionStep.executionId,
-            status: 'CANCEL_REQUESTED',
-          },
-          data: {
-            status: 'FAILED',
-            completedAt: producedAt,
-            failureCode: 'UNKNOWN_OUTCOME',
-            failureMessage:
-              'Execution cancelled but one or more write steps had unverified outcomes.',
           },
         });
       }
@@ -1060,7 +1047,10 @@ export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInpu
       where: {
         attemptId: input.attemptId,
         sha256: input.sha256,
-        attempt: { claimedAgentId: agentId },
+        attempt: {
+          claimedAgentId: agentId,
+          leaseToken: leaseHash(input.leaseToken),
+        },
       },
       select: { id: true, sizeBytes: true, sha256: true },
     });
@@ -1069,26 +1059,28 @@ export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInpu
     }
 
     const now = new Date();
-    const graceWindowCutoff = new Date(now.getTime() - 60_000);
     const attempt = await tx.runbookStepAttempt.findFirst({
       where: {
         id: input.attemptId,
         claimedAgentId: agentId,
         leaseToken: leaseHash(input.leaseToken),
-        executionStep: {
-          execution: {
-            deadlineAt: { gt: now },
-          },
-        },
         OR: [
           {
             status: 'RUNNING',
             leaseExpiresAt: { gt: now },
+            executionStep: {
+              execution: {
+                deadlineAt: { gt: now },
+              },
+            },
           },
           {
             status: 'UNKNOWN',
             errorCode: { in: ['AGENT_LEASE_EXPIRED', 'CANCEL_ACK_TIMEOUT_UNKNOWN'] },
-            leaseExpiresAt: { gte: graceWindowCutoff },
+            executionStep: {
+              status: 'UNKNOWN',
+              errorCode: { in: ['UNKNOWN_OUTCOME', 'CANCEL_ACK_TIMEOUT_UNKNOWN'] },
+            },
           },
         ],
       },

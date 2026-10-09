@@ -260,7 +260,37 @@ describe('runbook enhancement safety', () => {
       'get',
       'events',
       '--field-selector',
-      'involvedObject.name=api',
+      'involvedObject.name=api,involvedObject.kind=Pod',
+    ]);
+
+    const deployEvents = attempt('KUBERNETES', {
+      action: 'events',
+      namespace: 'payments',
+      resource: 'deployments',
+      name: 'api',
+    });
+    expect(commandFor(deployEvents).args).toEqual([
+      '-n',
+      'payments',
+      'get',
+      'events',
+      '--field-selector',
+      'involvedObject.name=api,involvedObject.kind=Deployment',
+    ]);
+
+    const statefulEvents = attempt('KUBERNETES', {
+      action: 'events',
+      namespace: 'payments',
+      resource: 'statefulset',
+      name: 'db',
+    });
+    expect(commandFor(statefulEvents).args).toEqual([
+      '-n',
+      'payments',
+      'get',
+      'events',
+      '--field-selector',
+      'involvedObject.name=db,involvedObject.kind=StatefulSet',
     ]);
   });
   it('enforces fine-grained kubernetesTargets local policy when configured', () => {
@@ -357,6 +387,22 @@ describe('runbook enhancement safety', () => {
     );
     expect(() => assertPolicyAllows(deniedZeroMax, policyWithZeroMaxReplicas)).toThrow(
       'not allowlisted by local agent target policies'
+    );
+
+    const policyDenyingGlobalAction: AgentPolicy = {
+      ...policy,
+      kubernetesActions: ['get', 'describe'],
+      kubernetesTargets: [
+        {
+          namespace: 'payments',
+          resources: ['deployment'],
+          names: ['api'],
+          actions: ['scale'],
+        },
+      ],
+    };
+    expect(() => assertPolicyAllows(allowedScale, policyDenyingGlobalAction)).toThrow(
+      'LOCAL_POLICY_DENIED: Kubernetes action is not allowlisted.'
     );
   });
   it('enforces linuxDiagnostics default allowlist of summary, disk, memory', () => {

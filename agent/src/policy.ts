@@ -170,6 +170,11 @@ export function assertPolicyAllows(attempt: ClaimedAttempt, policy: AgentPolicy)
     const resource = String(config.resource ?? 'pods').toLowerCase();
     const name = String(config.name ?? '');
 
+    if (
+      !(policy.kubernetesActions ?? ['get', 'describe', 'logs', 'rollout-restart']).includes(action)
+    )
+      throw new Error('LOCAL_POLICY_DENIED: Kubernetes action is not allowlisted.');
+
     if (policy.kubernetesTargets && policy.kubernetesTargets.length > 0) {
       const matchingTarget = policy.kubernetesTargets.find(target => {
         if (!matchesAllowlist(namespace, [target.namespace])) return false;
@@ -206,10 +211,6 @@ export function assertPolicyAllows(attempt: ClaimedAttempt, policy: AgentPolicy)
         );
       }
     } else {
-      if (
-        !(policy.kubernetesActions ?? ['get', 'describe', 'logs', 'rollout-restart']).includes(action)
-      )
-        throw new Error('LOCAL_POLICY_DENIED: Kubernetes action is not allowlisted.');
       if (
         action === 'scale' &&
         (!Number.isInteger(config.replicas) ||

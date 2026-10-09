@@ -153,8 +153,8 @@ export function commandFor(
         if (name) {
           selectors.push(`involvedObject.name=${name}`);
         }
-        if (config.resource) {
-          selectors.push(`involvedObject.kind=${resourceToKind(String(config.resource))}`);
+        if (config.resource || name) {
+          selectors.push(`involvedObject.kind=${resourceToKind(resource)}`);
         }
         if (selectors.length > 0) {
           args.push('--field-selector', selectors.join(','));
