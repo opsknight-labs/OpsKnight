@@ -3886,6 +3886,144 @@
         "pgbouncerDefaultPoolSize": 12,
         "pgbouncerReservePoolSize": 4
       }
+    },
+    {
+      "rps": 20,
+      "drainBudgetMs": 180000,
+      "durationPerProfile": "120s",
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "providerCapacityProfile": "provisioned-200",
+        "providerTelemetryResetBeforeRun": true,
+        "providerBudgets": {
+          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "providers": {
+            "EMAIL": "smtp",
+            "PUSH": "web-push",
+            "WEBHOOK": "default"
+          },
+          "ratePerSecond": 200,
+          "maxInFlight": 40
+        },
+        "publicFanout": "Dedicated status-fanout suite",
+        "historicalFixtureTimers": "Disabled before first profile; real alert/responder escalation unchanged",
+        "comparisonValidity": "FAILED: a profile did not drain; no subsequent profile was started",
+        "stopReason": "Previous profile did not drain"
+      },
+      "topology": "kind-helm-split-pgbouncer-audit17-pool24-pg4-20rps",
+      "generatedAt": "2026-10-09T17:32:48.463845+00:00",
+      "sourceRevision": "b82e97c5a64d6bac50458639a98936a8ad16e6da",
+      "imageDigest": "sha256:b5f41db9d95474316400241f1f94f56d80c77afa3af5e33526a9623888c4a1f4",
+      "scope": "PARTIAL_MATRIX_CANCELLED_FOR_NATIVE_PREPARED_STATEMENTS",
+      "comparisonGate": {
+        "passed": false,
+        "failures": [
+          "Incomplete matrix: stopped after three completed profiles; LIVE-small was interrupted",
+          "Service-disabled and SHADOW ingestion exceeded 1.25 times OFF",
+          "SHADOW dropped 449 arrivals and recorded 15 EVALUATION_TIMEOUT fallbacks"
+        ]
+      },
+      "profiles": [
+        {
+          "profile": "global-off",
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 111546,
+          "criticalNotificationLatency": {
+            "p95Ms": 337,
+            "p99Ms": 656.0999999999999,
+            "sent": 6046,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 4207,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 2017.083,
+          "ingestionP99Ms": 3947.741,
+          "maxCriticalQueueAgeMs": 1983,
+          "maxObservationQueueAgeMs": 0
+        },
+        {
+          "profile": "service-disabled",
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 130170,
+          "criticalNotificationLatency": {
+            "p95Ms": 501,
+            "p99Ms": 1065.5999999999992,
+            "sent": 4438,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 3100,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 2691.731,
+          "ingestionP99Ms": 4124.773,
+          "maxCriticalQueueAgeMs": 3596,
+          "maxObservationQueueAgeMs": 0
+        },
+        {
+          "profile": "shadow-small",
+          "acceptedEvents": 1952,
+          "persistedIncidents": 1952,
+          "k6ExitCode": 99,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 15,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 134772,
+          "criticalNotificationLatency": {
+            "p95Ms": 852.1999999999995,
+            "p99Ms": 2255.729999999997,
+            "sent": 2980,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 2376,
+          "droppedIterations": 449,
+          "ingestionP95Ms": 12345.7711,
+          "ingestionP99Ms": 18581.294599999997,
+          "maxCriticalQueueAgeMs": 7359,
+          "maxObservationQueueAgeMs": 66241
+        }
+      ],
+      "cpuProfile": {
+        "reservedSystem": "0",
+        "webReplicas": 4,
+        "webGuaranteedCpuPerPod": 1,
+        "generalReplicas": 3,
+        "generalRequestCpuPerPod": 0.333,
+        "generalLimitCpuPerPod": 1.5,
+        "criticalReplicas": 2,
+        "criticalRequestCpuPerPod": 0.5,
+        "criticalLimitCpuPerPod": 1,
+        "postgresGuaranteedCpu": 4,
+        "postgresMemory": "2Gi"
+      },
+      "generalBatchSize": 25,
+      "poolProfile": {
+        "webConnectionsPerPod": 24,
+        "pgbouncerDefaultPoolSize": 24,
+        "pgbouncerReservePoolSize": 8,
+        "pgbouncerMaxPreparedStatements": 1000,
+        "prismaCompatibilityMode": true
+      },
+      "postgresSharedBuffers": "512MB",
+      "unknownDispatchesObservedAtCancellation": 3
     }
   ],
   "initialImage": "opsknight-automation:audit2",
