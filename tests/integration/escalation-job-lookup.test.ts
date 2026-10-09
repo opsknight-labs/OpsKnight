@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, expect, it } from 'vitest';
 import { resetDatabase, testPrisma as db } from '../helpers/test-db';
+import { escalationJobLookupQuery } from '@/lib/escalation/job-query';
 
 beforeEach(resetDatabase, 30000);
 afterAll(() => db.$disconnect());
@@ -12,23 +13,15 @@ it('isolates escalation deduplication from a large runnable queue, including gen
     FROM generate_series(1, 10000) n
   `;
   await db.$executeRaw`ANALYZE "BackgroundJob"`;
-  expect(
-    await db.backgroundJob.findFirst({
-      where: {
-        type: 'ESCALATION',
-        status: { in: ['PENDING', 'PROCESSING'] },
-        payload: { path: ['logicalKey'], equals: 'ESCALATION:fixture:5000:0' },
-      },
-      select: { id: true },
-    })
-  ).toEqual({ id: 'lookup-fixture-5000' });
+  expect(await db.$queryRaw(escalationJobLookupQuery('ESCALATION:fixture:5000:0'))).toEqual([
+    { id: 'lookup-fixture-5000' },
+  ]);
 
   await db.$transaction(async tx => {
     await tx.$executeRawUnsafe('SET LOCAL plan_cache_mode = force_generic_plan');
-    await tx.$executeRawUnsafe(`PREPARE escalation_lookup_test(jsonb, "JobType", "JobStatus", "JobStatus") AS
-      SELECT id FROM "BackgroundJob"
-      WHERE type = $2 AND status IN ($3, $4)
-        AND payload #> ARRAY['logicalKey']::text[] = $1 LIMIT 1`);
+    // Prepare the production statement, including its exact parameter positions.
+    const query = escalationJobLookupQuery('ESCALATION:fixture:5000:0');
+    await tx.$executeRawUnsafe(`PREPARE escalation_lookup_test(text) AS ${query.text}`);
     try {
       for (const key of ['ESCALATION:fixture:5000:0', 'ESCALATION:absent:0:0']) {
         // Keys are fixed fixture literals; EXECUTE does not accept bind parameters.
@@ -43,7 +36,7 @@ it('isolates escalation deduplication from a large runnable queue, including gen
             }>;
           }>
         >(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
-          EXECUTE escalation_lookup_test('"${key}"', 'ESCALATION', 'PENDING', 'PROCESSING')`);
+          EXECUTE escalation_lookup_test('"${key}"')`);
         expect(JSON.stringify(rows)).toContain('BackgroundJob_escalation_logical_key_lookup_idx');
         const plan = rows[0]['QUERY PLAN'][0].Plan;
         expect(plan['Actual Rows']).toBe(key.includes('absent') ? 0 : 1);

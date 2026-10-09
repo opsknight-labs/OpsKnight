@@ -15,6 +15,7 @@ import { resolveIncidentResponderRouting } from './routing';
 import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
 import { runSerializableTransaction } from '../db-utils';
+import { escalationJobLookupQuery } from './job-query';
 import { logger } from '../logger';
 import type { EscalationAssignment } from './assignee-selection';
 import type { EscalationPlan } from './planner';
@@ -101,14 +102,9 @@ async function createEscalationJob(
   input: { incidentId: string; generation: number; stepIndex: number; scheduledAt: Date }
 ): Promise<string> {
   const logicalKey = escalationJobKey(input.incidentId, input.generation, input.stepIndex);
-  const existing = await tx.backgroundJob.findFirst({
-    where: {
-      type: 'ESCALATION',
-      status: { in: ['PENDING', 'PROCESSING'] },
-      payload: { path: ['logicalKey'], equals: logicalKey },
-    },
-    select: { id: true },
-  });
+  const [existing] = await tx.$queryRaw<Array<{ id: string }>>(
+    escalationJobLookupQuery(logicalKey)
+  );
   if (existing) return existing.id;
 
   const job = await tx.backgroundJob.create({

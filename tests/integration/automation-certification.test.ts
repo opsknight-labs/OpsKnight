@@ -13,6 +13,7 @@ import { executeEscalation } from '@/lib/escalation';
 import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 import { claimPendingJobs, processJob, GENERAL_WORKER_EXCLUDED_JOB_TYPES } from '@/lib/jobs/queue';
 import * as automationRuntime from '@/lib/automation/runtime';
+import * as responderSnapshots from '@/lib/escalation/automation-snapshot';
 import { prepareAutomation, persistAutomation } from '@/lib/automation/runtime';
 import { processAutomationJob, scheduleAutomationRetention } from '@/lib/automation/jobs';
 import { emptySnapshot, type Snapshot } from '@/lib/automation/contract';
@@ -151,6 +152,67 @@ describe('service automation transaction certification', () => {
     expect(decision.fallbackReason).toBe('VERSION_INVALID');
     expect(decision.escalationPolicyId).toBeNull();
     expect(decision.basePriority).toBe(decision.finalPriority);
+  });
+
+  it('pins the policy label from the same snapshot when a concurrent rename follows routing', async () => {
+    const policy = await db.escalationPolicy.create({ data: { name: 'Before rename' } });
+    const { service } = await setup({
+      ...emptySnapshot,
+      rules: [
+        {
+          id: 'route',
+          name: 'Pinned route',
+          phase: 'ROUTE',
+          enabled: true,
+          conditions: [],
+          actions: [{ type: 'USE_ESCALATION_POLICY', policyId: policy.id }],
+        },
+      ],
+    });
+    const capture = responderSnapshots.captureResponderSnapshot;
+    const rename = vi
+      .spyOn(responderSnapshots, 'captureResponderSnapshot')
+      .mockImplementationOnce(async (tx, policyId) => {
+        // This independent commit lands after the routing metadata read and before capture.
+        await db.escalationPolicy.update({
+          where: { id: policyId },
+          data: { name: 'After rename' },
+        });
+        return capture(tx, policyId);
+      });
+    try {
+      const envelope = {
+        serviceId: service.id,
+        integrationId: 'cert',
+        integrationType: 'EVENTS_API',
+        event,
+        providerPayload: event,
+        receivedAt: new Date(),
+      };
+      await db.$transaction(async tx => {
+        const incident = await tx.incident.create({
+          data: {
+            title: 'Concurrent rename',
+            serviceId: service.id,
+            priority: 'P2',
+            urgency: 'HIGH',
+          },
+        });
+        const runtime = await prepareAutomation(tx, envelope, { priority: 'P2', urgency: 'HIGH' });
+        expect(runtime?.policyName).toBe('After rename');
+        await persistAutomation(tx, incident.id, envelope, runtime);
+      });
+      const decision = await db.incidentAutomationDecision.findFirstOrThrow({
+        where: { serviceId: service.id },
+      });
+      expect(rename).toHaveBeenCalledOnce();
+      expect(decision.escalationPolicyNameSnapshot).toBe('After rename');
+      expect(decision.summary).toMatchObject({
+        responderPolicy: { id: policy.id, name: 'After rename' },
+      });
+    } finally {
+      rename.mockRestore();
+    }
   });
 
   it('rolls back Shadow ingestion atomically when diagnostic persistence fails and succeeds on replay', async () => {
