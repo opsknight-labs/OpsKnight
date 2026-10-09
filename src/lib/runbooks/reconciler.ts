@@ -149,21 +149,31 @@ export async function reconcileRunbooks(limit = 100) {
       attempt.executionStep.execution.status === 'CANCEL_REQUESTED'
     ) {
       await prisma.$transaction(async tx => {
+        const isWrite = attempt.executionStep.riskClass !== 'READ_ONLY';
         const cancelled = await tx.runbookStepAttempt.updateMany({
           where: { id: attempt.id, status: 'RUNNING', leaseExpiresAt: { lt: now } },
           data: {
-            status: 'CANCELLED',
+            status: isWrite ? 'UNKNOWN' : 'CANCELLED',
             completedAt: now,
             leaseToken: null,
             leaseExpiresAt: null,
-            errorCode: 'CANCEL_ACK_TIMEOUT',
-            errorMessage: 'The Agent did not acknowledge cancellation before its lease expired.',
+            errorCode: isWrite ? 'CANCEL_ACK_TIMEOUT_UNKNOWN' : 'CANCEL_ACK_TIMEOUT',
+            errorMessage: isWrite
+              ? 'The Agent was executing a write when cancellation was requested and its lease expired without acknowledgement; physical outcome is unknown.'
+              : 'The Agent did not acknowledge cancellation before its lease expired.',
           },
         });
         if (cancelled.count !== 1) return;
         await tx.runbookExecutionStep.updateMany({
-          where: { id: attempt.executionStepId, status: 'RUNNING' },
-          data: { status: 'CANCELLED', completedAt: now },
+          where: { id: attempt.executionStepId, status: { in: ['RUNNING', 'WAITING_AGENT'] } },
+          data: {
+            status: isWrite ? 'UNKNOWN' : 'CANCELLED',
+            completedAt: now,
+            errorCode: isWrite ? 'CANCEL_ACK_TIMEOUT_UNKNOWN' : 'CANCEL_ACK_TIMEOUT',
+            errorMessage: isWrite
+              ? 'The Agent was executing a write when cancellation was requested and its lease expired without acknowledgement; physical outcome is unknown.'
+              : 'The Agent did not acknowledge cancellation before its lease expired.',
+          },
         });
         await tx.backgroundJob.create({
           data: {

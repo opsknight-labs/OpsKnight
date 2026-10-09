@@ -185,11 +185,11 @@ async function run() {
       try {
         const { localOutput, ...result } = record;
         if (localOutput && !result.outputArtifactId) {
-          result.outputArtifactId = await uploadOutput(client, record, localOutput).catch(
-            () => undefined
-          );
-          if (result.outputArtifactId)
-            await spool.put({ ...record, outputArtifactId: result.outputArtifactId });
+          const artifactId = await uploadOutput(client, record, localOutput);
+          if (artifactId) {
+            result.outputArtifactId = artifactId;
+            await spool.put({ ...record, outputArtifactId: artifactId });
+          }
         }
         await client.submit(result);
         await spool.remove(record.attemptId);

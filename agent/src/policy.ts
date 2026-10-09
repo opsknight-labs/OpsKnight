@@ -179,17 +179,21 @@ export function assertPolicyAllows(attempt: ClaimedAttempt, policy: AgentPolicy)
         ) {
           return false;
         }
-        if (target.names && name && !matchesAllowlist(name, target.names)) {
-          return false;
+        if (target.names && target.names.length > 0) {
+          if (!name || !matchesAllowlist(name, target.names)) {
+            return false;
+          }
         }
         if (target.actions && !target.actions.includes(action)) {
           return false;
         }
-        if (action === 'scale' && target.maxReplicas !== undefined) {
+        if (action === 'scale') {
+          const maxReplicas = target.maxReplicas ?? policy.kubernetesMaxReplicas ?? 0;
           if (
+            maxReplicas <= 0 ||
             !Number.isInteger(config.replicas) ||
             Number(config.replicas) < 0 ||
-            Number(config.replicas) > target.maxReplicas
+            Number(config.replicas) > maxReplicas
           ) {
             return false;
           }

@@ -1036,6 +1036,19 @@ export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInpu
         'artifact requires an active fenced attempt'
       );
     }
+    const executionId = attempt.executionStep.executionId;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-artifacts:${executionId}`}))`;
+
+    const existing = await tx.runbookArtifact.findFirst({
+      where: {
+        attemptId: attempt.id,
+        sha256: input.sha256,
+      },
+      select: { id: true, sizeBytes: true, sha256: true },
+    });
+    if (existing) {
+      return existing;
+    }
 
     const MAX_ARTIFACTS_PER_ATTEMPT = 10;
     const MAX_BYTES_PER_ATTEMPT = 10 * 1024 * 1024;
@@ -1055,7 +1068,6 @@ export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInpu
       throw new Error('Artifact quota exceeded: maximum of 10 MiB allowed per attempt.');
     }
 
-    const executionId = attempt.executionStep.executionId;
     const executionArtifacts = await tx.runbookArtifact.aggregate({
       where: {
         attempt: {

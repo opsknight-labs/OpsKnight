@@ -14,6 +14,7 @@ spec:
       labels: { app: opsknight-agent }
     spec:
       serviceAccountName: opsknight-agent
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001

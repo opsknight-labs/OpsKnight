@@ -987,17 +987,41 @@ export async function advanceExecution(executionId: string): Promise<void> {
         where: { executionStep: { executionId }, status: 'RUNNING' },
       });
       if (active === 0) {
-        const cancelled = await tx.runbookExecution.updateMany({
-          where: { id: executionId, status: 'CANCEL_REQUESTED' },
-          data: { status: 'CANCELLED', completedAt: new Date() },
+        const hasUnknown = await tx.runbookExecutionStep.count({
+          where: { executionId, status: 'UNKNOWN' },
         });
-        if (cancelled.count === 1) {
-          await addIncidentRunbookEvent(
-            tx,
-            execution.incidentId,
-            'RUNBOOK_CANCELLED',
-            'Runbook execution cancelled.'
-          );
+        if (hasUnknown > 0) {
+          const failed = await tx.runbookExecution.updateMany({
+            where: { id: executionId, status: 'CANCEL_REQUESTED' },
+            data: {
+              status: 'FAILED',
+              completedAt: new Date(),
+              failureCode: 'UNKNOWN_OUTCOME',
+              failureMessage:
+                'Execution cancelled but one or more write steps had unverified outcomes.',
+            },
+          });
+          if (failed.count === 1) {
+            await addIncidentRunbookEvent(
+              tx,
+              execution.incidentId,
+              'RUNBOOK_FAILED',
+              'Runbook execution failed due to an unknown step outcome during cancellation.'
+            );
+          }
+        } else {
+          const cancelled = await tx.runbookExecution.updateMany({
+            where: { id: executionId, status: 'CANCEL_REQUESTED' },
+            data: { status: 'CANCELLED', completedAt: new Date() },
+          });
+          if (cancelled.count === 1) {
+            await addIncidentRunbookEvent(
+              tx,
+              execution.incidentId,
+              'RUNBOOK_CANCELLED',
+              'Runbook execution cancelled.'
+            );
+          }
         }
       }
     });

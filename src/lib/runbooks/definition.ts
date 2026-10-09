@@ -62,7 +62,7 @@ export function parseRunbookDefinition(
 
 function validateDefinitionStructure(definition: RunbookDefinition): void {
   const serialized = JSON.stringify(definition);
-  if (serialized.length > 256 * 1024) {
+  if (Buffer.byteLength(serialized, 'utf8') > 256 * 1024) {
     throw new RunbookDefinitionError('Runbook definition exceeds maximum allowed size of 256 KiB.');
   }
   const stack = definition.steps.map(step => ({ step, depth: 1 }));
@@ -174,7 +174,7 @@ function validateTarget(
 function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates = true): void {
   const serializedConfig = JSON.stringify(step.config);
   const maxConfigBytes = step.type === 'HTTP' ? 96 * 1024 : 32 * 1024;
-  if (serializedConfig.length > maxConfigBytes) {
+  if (Buffer.byteLength(serializedConfig, 'utf8') > maxConfigBytes) {
     throw new RunbookDefinitionError(
       `Step "${step.key}" config exceeds maximum allowed size of ${step.type === 'HTTP' ? '96' : '32'} KiB.`
     );
@@ -414,7 +414,7 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
     if (!command) {
       throw new RunbookDefinitionError(`Step "${step.key}" requires a Bash command.`);
     }
-    if (command.length > 8192) {
+    if (Buffer.byteLength(command, 'utf8') > 8192) {
       throw new RunbookDefinitionError(
         `Step "${step.key}" Bash command exceeds maximum allowed size of 8 KiB.`
       );
@@ -442,7 +442,7 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
           `Step "${step.key}" HTTP headers exceed maximum allowed count of 64 entries.`
         );
       }
-      if (JSON.stringify(headers).length > 16 * 1024) {
+      if (Buffer.byteLength(JSON.stringify(headers), 'utf8') > 16 * 1024) {
         throw new RunbookDefinitionError(
           `Step "${step.key}" HTTP headers exceed maximum allowed size of 16 KiB.`
         );
@@ -453,7 +453,7 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
         typeof step.config.body === 'string'
           ? step.config.body
           : JSON.stringify(step.config.body);
-      if (bodyStr.length > 64 * 1024) {
+      if (Buffer.byteLength(bodyStr, 'utf8') > 64 * 1024) {
         throw new RunbookDefinitionError(
           `Step "${step.key}" HTTP body exceeds maximum allowed size of 64 KiB.`
         );

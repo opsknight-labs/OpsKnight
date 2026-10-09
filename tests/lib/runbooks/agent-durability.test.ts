@@ -368,10 +368,10 @@ describe('Agent authority and durable recovery', () => {
   it('fails closed on unexpected filesystem errors in stats calculation', async () => {
     // If the directory path is an invalid target (e.g. points to a regular file where directory is expected)
     const tempDir = await mkdtemp(join(tmpdir(), 'opsknight-not-a-dir-'));
-    const filePath = join(tempDir, 'file');
     // Paths are confined to this test's freshly allocated temporary directory.
     // eslint-disable-next-line security/detect-non-literal-fs-filename
-    await writeFile(filePath, 'not-a-directory');
+    await writeFile(join(tempDir, 'file'), 'not-a-directory');
+    const filePath = join(tempDir, 'file');
     try {
       const spool = new ResultSpool(filePath);
       // stats() and deadLetterStats() should throw rather than masking the error as 0

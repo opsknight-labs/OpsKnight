@@ -300,6 +300,64 @@ describe('runbook enhancement safety', () => {
     expect(() => assertPolicyAllows(deniedReplicas, fineGrainedPolicy)).toThrow(
       'not allowlisted by local agent target policies'
     );
+
+    const omittedNameWhenNamesConfigured = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', replicas: 2 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(omittedNameWhenNamesConfigured, fineGrainedPolicy)).toThrow(
+      'not allowlisted by local agent target policies'
+    );
+
+    const policyWithoutTargetMaxReplicas: AgentPolicy = {
+      ...policy,
+      kubernetesMaxReplicas: 3,
+      kubernetesTargets: [
+        {
+          namespace: 'payments',
+          resources: ['deployment'],
+          names: ['api'],
+          actions: ['scale'],
+        },
+      ],
+    };
+    const allowedFallback = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', name: 'api', replicas: 3 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(allowedFallback, policyWithoutTargetMaxReplicas)).not.toThrow();
+
+    const deniedFallback = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', name: 'api', replicas: 4 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(deniedFallback, policyWithoutTargetMaxReplicas)).toThrow(
+      'not allowlisted by local agent target policies'
+    );
+
+    const policyWithZeroMaxReplicas: AgentPolicy = {
+      ...policy,
+      kubernetesMaxReplicas: 0,
+      kubernetesTargets: [
+        {
+          namespace: 'payments',
+          resources: ['deployment'],
+          names: ['api'],
+          actions: ['scale'],
+        },
+      ],
+    };
+    const deniedZeroMax = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', name: 'api', replicas: 1 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(deniedZeroMax, policyWithZeroMaxReplicas)).toThrow(
+      'not allowlisted by local agent target policies'
+    );
   });
   it('enforces linuxDiagnostics default allowlist of summary, disk, memory', () => {
     expect(() =>

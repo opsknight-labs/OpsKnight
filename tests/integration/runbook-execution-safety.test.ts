@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, RunbookInputType } from '@prisma/client';
 import { generateKeyPairSync } from 'node:crypto';
 import { computeDefinitionChecksum, computePlanDigest, parseRunbookDefinition } from '@/lib/runbooks/definition';
 import { createServiceBinding, updateServiceBinding } from '@/lib/runbooks/bindings';
@@ -48,7 +48,7 @@ async function createPublishedRunbook(
   inputs?: Array<{
     key: string;
     label: string;
-    type?: 'STRING' | 'SECRET_REF' | 'INTEGER' | 'BOOLEAN';
+    type?: RunbookInputType;
     defaultValue?: string;
     required?: boolean;
     sequence?: number;
@@ -95,7 +95,7 @@ async function createAgentTarget(
   inputs?: Array<{
     key: string;
     label: string;
-    type?: 'STRING' | 'SECRET_REF' | 'INTEGER' | 'BOOLEAN';
+    type?: RunbookInputType;
     defaultValue?: string;
     required?: boolean;
     sequence?: number;
@@ -2096,5 +2096,68 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     expect(finalExecution.status).toBe('FAILED');
     expect(finalExecution.failureCode).toBe('TARGET_AUTHORITY_REVOKED');
     await assertTerminalExecutionInvariants(execution.id);
+  });
+
+  it('marks in-flight write attempt as UNKNOWN and parent execution as FAILED when cancellation requested and lease expires', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'restart_svc',
+          name: 'Restart Service',
+          type: 'SYSTEMD',
+          riskClass: 'IDEMPOTENT_WRITE',
+          config: { action: 'restart', unit: 'app.service' },
+        },
+      ],
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    await advanceExecution(execution.id);
+
+    const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id, stepKey: 'restart_svc' },
+    });
+    expect(step.status).toBe('WAITING_AGENT');
+
+    const claim = await claimAgentAttempt(target.agent.id);
+    expect(claim).not.toBeNull();
+    expect(claim?.step.key).toBe('restart_svc');
+
+    const runningAttempt = await testPrisma.runbookStepAttempt.findFirstOrThrow({
+      where: { executionStepId: step.id },
+    });
+    expect(runningAttempt.status).toBe('RUNNING');
+
+    await cancelExecution(execution.id, target.actor.id, 'Operator aborted write');
+
+    await testPrisma.runbookStepAttempt.update({
+      where: { id: runningAttempt.id },
+      data: { leaseExpiresAt: new Date(Date.now() - 5000) },
+    });
+
+    await reconcileRunbooks();
+
+    const reconciledAttempt = await testPrisma.runbookStepAttempt.findUniqueOrThrow({
+      where: { id: runningAttempt.id },
+    });
+    expect(reconciledAttempt.status).toBe('UNKNOWN');
+    expect(reconciledAttempt.errorCode).toBe('CANCEL_ACK_TIMEOUT_UNKNOWN');
+
+    const reconciledStep = await testPrisma.runbookExecutionStep.findUniqueOrThrow({
+      where: { id: step.id },
+    });
+    expect(reconciledStep.status).toBe('UNKNOWN');
+    expect(reconciledStep.errorCode).toBe('CANCEL_ACK_TIMEOUT_UNKNOWN');
+
+    await advanceExecution(execution.id);
+
+    const finalExecution = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: execution.id },
+    });
+    expect(finalExecution.status).toBe('FAILED');
+    expect(finalExecution.failureCode).toBe('UNKNOWN_OUTCOME');
   });
 });
