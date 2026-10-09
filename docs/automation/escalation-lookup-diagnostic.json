@@ -1,0 +1,17 @@
+{
+  "scope": "COMPONENT_DIAGNOSTIC_NOT_CERTIFICATION",
+  "baseRevision": "9d111b7095ccbd0b15aac682c6c723f8c428f1b2",
+  "intervention": "Applied exact JSONB escalation logical-key index to an already-used isolated database. No fresh seed, drain or cross-profile comparison.",
+  "duration": "120s",
+  "offeredRps": 20,
+  "acknowledgedEvents": 2401,
+  "droppedIterations": 0,
+  "httpFailureRate": 0,
+  "ingestionP95Ms": 676.371,
+  "ingestionP99Ms": 950.806,
+  "userSuccessRate": 1,
+  "limitations": [
+    "Queue, notification and pure evaluation gates were not certified by this diagnostic.",
+    "Full fresh production-image topology matrix is still required."
+  ]
+}

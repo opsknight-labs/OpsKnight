@@ -290,14 +290,9 @@ async function main() {
         dropped_iterations?: { count: number };
       };
     };
-    if (incidents !== summary.metrics.automation_accepted_events.count)
-      throw new Error(
-        `Lost accepted event: ${incidents} incidents / ${summary.metrics.automation_accepted_events.count} accepted`
-      );
     const duplicates = await db.$queryRaw<
       Array<{ count: bigint }>
     >`SELECT COUNT(*)::bigint AS count FROM (SELECT "serviceId", "dedupKey" FROM "Incident" WHERE "createdAt" >= ${started} AND title = 'Automation capacity certification' GROUP BY "serviceId", "dedupKey" HAVING COUNT(*) > 1) duplicate_groups`;
-    if (Number(duplicates[0].count) !== 0) throw new Error('Duplicate incidents');
     const namespace = process.env.AUTOMATION_K8S_NAMESPACE;
     const { stdout: retryLogs } = await exec(
       namespace ? 'kubectl' : 'docker',
@@ -339,8 +334,9 @@ async function main() {
     results.push({
       profile,
       k6ExitCode,
-      acceptedEvents: incidents,
-      duplicateGroups: 0,
+      acceptedEvents: summary.metrics.automation_accepted_events.count,
+      persistedIncidents: incidents,
+      duplicateGroups: Number(duplicates[0].count),
       providerDuplicateDeliveriesDelta: providerDuplicateDelta(
         samples[0]?.providers ?? {},
         telemetry.providers
@@ -371,8 +367,12 @@ async function main() {
       JSON.stringify({ topology, results }, null, 2) + '\n'
     );
     process.stdout.write(
-      `Recorded ${topology} ${profile}: ${incidents} accepted incidents; k6 exit ${k6ExitCode}\n`
+      `Recorded ${topology} ${profile}: ${incidents} persisted incidents / ${summary.metrics.automation_accepted_events.count} acknowledged events; k6 exit ${k6ExitCode}\n`
     );
+    if (incidents !== summary.metrics.automation_accepted_events.count) {
+      stopReason = `${profile}: persisted incident count differs from acknowledged event count`;
+      break;
+    }
   }
   const baseline = results[0];
   const serviceDisabled = results.find(result => result.profile === 'service-disabled');
@@ -438,6 +438,14 @@ async function main() {
   };
   const failures = results
     .flatMap(result => [
+      ...(result.persistedIncidents !== result.acceptedEvents
+        ? [
+            `${result.profile}: ${result.persistedIncidents} persisted incidents / ${result.acceptedEvents} acknowledged events`,
+          ]
+        : []),
+      ...(result.duplicateGroups > 0
+        ? [`${result.profile}: ${result.duplicateGroups} duplicate incident groups`]
+        : []),
       ...(result.k6ExitCode !== 0
         ? [`${result.profile}: k6 gate failed (${result.k6ExitCode})`]
         : []),

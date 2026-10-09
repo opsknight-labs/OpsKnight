@@ -5,7 +5,7 @@
     "dockerMemoryBytes": 8319238144
   },
   "limitations": [
-    "Latest unpinned 20-RPS PgBouncer run failed fallback, queue-age, latency-ratio and recovery-drain gates; clean four-topology certification remains incomplete.",
+    "Latest CPU-isolated 20-RPS PgBouncer run passed OFF, then failed service-disabled transaction/workload gates; clean four-topology certification remains incomplete.",
     "No passing cross-profile capacity comparison or promoted-primary failover certification is claimed.",
     "First two runs used two critical/two general workers; the third used four critical/four general workers.",
     "Default provider budgets include EMAIL at 8 deliveries/second. Earlier shared workload scripts attempted a nonexistent notes endpoint and accepted its 404; corrected provisioned reruns use real urgency updates and are a distinct workload revision."
@@ -1164,6 +1164,55 @@
         "Not certified: Shadow/LIVE fallbacks, excessive observation/critical queue age, LIVE incomplete drain and HTTP overhead gates failed.",
         "The runner stopped after LIVE-small; LIVE-medium and LIVE-worst were not run.",
         "Central Notification claims still used a ten-minute stale timeout in this revision. BackgroundJob operational leases were fenced and heartbeat-enabled."
+      ]
+    },
+    {
+      "topology": "compose-split-pgbouncer-audit10-cpu-isolated-20rps",
+      "sourceRevision": "9d111b7095ccbd0b15aac682c6c723f8c428f1b2",
+      "imageDigest": "sha256:05df0335835a61959006bbf4591cbcd585e67658307e3ffc3d4152eee8247a8e",
+      "scope": "SUSTAINED_PARTIAL_FAILED",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "cpuProfile": "12-CPU explicit affinity",
+      "comparisonGate": {
+        "passed": false,
+        "failures": [
+          "service-disabled: dropped 415 arrivals and failed HTTP/user workload gates",
+          "service-disabled: 1929 persisted incidents / 1913 acknowledged events",
+          "Incomplete: runner stopped before Shadow/LIVE; no aggregate certification artifact was emitted"
+        ]
+      },
+      "profiles": [
+        {
+          "profile": "global-off",
+          "acceptedEvents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "criticalNotificationLatency": {
+            "p95Ms": 360,
+            "p99Ms": 2731.919999999999,
+            "sent": 6360,
+            "failed": 0
+          },
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "service-disabled",
+          "acknowledgedEvents": 1913,
+          "persistedIncidents": 1929,
+          "droppedIterations": 415,
+          "httpFailureRate": 0.66022366422753,
+          "ingestionP95Ms": 8834.284749999997,
+          "ingestionP99Ms": 12619.56525,
+          "completePostDrainTelemetry": false
+        }
+      ],
+      "limitations": [
+        "Incident excess is consistent with failed HTTP acknowledgement after commit; this is not evidence of lost accepted events.",
+        "Failed-profile aggregate queue/provider results were not recorded and are not inferred."
       ]
     }
   ],
