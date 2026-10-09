@@ -2,6 +2,14 @@ export type StepType = 'LINUX_DIAGNOSTICS' | 'SYSTEMD' | 'DOCKER' | 'KUBERNETES'
 
 export type RiskClass = 'READ_ONLY' | 'IDEMPOTENT_WRITE' | 'NON_IDEMPOTENT';
 
+export interface KubernetesTargetPolicy {
+  namespace: string;
+  resources?: string[];
+  names?: string[];
+  actions?: string[];
+  maxReplicas?: number;
+}
+
 export interface AgentPolicy {
   allowedStepTypes: StepType[];
   allowNonIdempotent: boolean;
@@ -14,6 +22,8 @@ export interface AgentPolicy {
   podmanContainers?: string[];
   kubernetesActions?: string[];
   kubernetesMaxReplicas?: number;
+  kubernetesTargets?: KubernetesTargetPolicy[];
+  linuxDiagnostics?: string[];
   networkHosts?: string[];
   networkPorts?: number[];
 }

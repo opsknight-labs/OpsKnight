@@ -3407,6 +3407,7 @@ model RunbookVersion {
   definition    Json
   schemaVersion Int                 @default(1)
   checksum      String
+  draftRevision Int                 @default(0)
   createdById   String?
   publishedById String?
   publishedAt   DateTime?

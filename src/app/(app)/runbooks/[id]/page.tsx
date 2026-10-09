@@ -167,6 +167,7 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
           })
         )}
         action={saveDraftAction.bind(null, source.id, runbook.id)}
+        initialDraftRevision={source.draftRevision}
         readOnly={!canManage || source.state !== 'DRAFT'}
       />
     </div>

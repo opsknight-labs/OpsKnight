@@ -7,7 +7,7 @@ import { sha256 } from '@/lib/runbooks/agent-auth';
 
 export async function POST(request: Request) {
   try {
-    const { agent, json } = await authenticatedAgentJson(request);
+    const { agent, json } = await authenticatedAgentJson(request, 15 * 1024 * 1024);
     const payload = agentArtifactSchema.parse(json);
     return jsonOk(
       await signExecutionEnvelope({

@@ -7,7 +7,7 @@ import { dirname } from 'node:path';
 import { AgentApiError, AgentClient, enrollAgent } from './client';
 import { LeaseAuthority } from './lease';
 import { verifyExecutionEnvelope, parseTrustedSigningKeys } from './envelope';
-import { executeAttempt } from './executor';
+import { executeAttempt, sliceUtf8Safe } from './executor';
 import { probeCapabilities } from './capabilities';
 import { assertPolicyAllows, loadPolicy } from './policy';
 import { ResultSpool } from './spool';
@@ -21,6 +21,66 @@ const policyPath = process.env.OPSKNIGHT_AGENT_POLICY_FILE ?? '/etc/opsknight-ag
 const executionPublicKey = parseTrustedSigningKeys(
   process.env.OPSKNIGHT_EXECUTION_PUBLIC_KEYS,
   process.env.OPSKNIGHT_EXECUTION_PUBLIC_KEY
+);
+
+function parseBoundedInteger(
+  envName: string,
+  raw: string | undefined,
+  defaultValue: number,
+  min: number,
+  max: number
+): number {
+  if (raw === undefined || raw.trim() === '') return defaultValue;
+  const parsed = Number(raw.trim());
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(
+      `Invalid ${envName}: must be an integer between ${min} and ${max}, got "${raw}".`
+    );
+  }
+  return parsed;
+}
+
+const MAX_SPOOL_RECORDS = parseBoundedInteger(
+  'OPSKNIGHT_MAX_SPOOL_RECORDS',
+  process.env.OPSKNIGHT_MAX_SPOOL_RECORDS,
+  100,
+  1,
+  100_000
+);
+const MAX_SPOOL_BYTES = parseBoundedInteger(
+  'OPSKNIGHT_MAX_SPOOL_BYTES',
+  process.env.OPSKNIGHT_MAX_SPOOL_BYTES,
+  50 * 1024 * 1024,
+  1024 * 1024,
+  10 * 1024 * 1024 * 1024
+);
+const MAX_SPOOL_RECORD_AGE_MS = parseBoundedInteger(
+  'OPSKNIGHT_MAX_SPOOL_RECORD_AGE_MS',
+  process.env.OPSKNIGHT_MAX_SPOOL_RECORD_AGE_MS,
+  24 * 60 * 60 * 1000,
+  60 * 1000,
+  30 * 24 * 60 * 60 * 1000
+);
+const MAX_DEAD_LETTER_RECORDS = parseBoundedInteger(
+  'OPSKNIGHT_MAX_DEAD_LETTER_RECORDS',
+  process.env.OPSKNIGHT_MAX_DEAD_LETTER_RECORDS,
+  50,
+  1,
+  50_000
+);
+const MAX_DEAD_LETTER_BYTES = parseBoundedInteger(
+  'OPSKNIGHT_MAX_DEAD_LETTER_BYTES',
+  process.env.OPSKNIGHT_MAX_DEAD_LETTER_BYTES,
+  25 * 1024 * 1024,
+  1024 * 1024,
+  5 * 1024 * 1024 * 1024
+);
+const MAX_DEAD_LETTER_AGE_MS = parseBoundedInteger(
+  'OPSKNIGHT_MAX_DEAD_LETTER_AGE_MS',
+  process.env.OPSKNIGHT_MAX_DEAD_LETTER_AGE_MS,
+  7 * 24 * 60 * 60 * 1000,
+  60 * 1000,
+  30 * 24 * 60 * 60 * 1000
 );
 
 if (!baseUrl) throw new Error('OPSKNIGHT_URL is required.');
@@ -59,8 +119,26 @@ async function uploadOutput(
   output: string
 ): Promise<string | undefined> {
   if (Buffer.byteLength(output) <= 32_768) return undefined;
-  const content = gzipSync(Buffer.from(output));
-  if (content.length > 1_048_576) return undefined;
+  const text = output;
+  let content = gzipSync(Buffer.from(text, 'utf8'));
+  let truncated = text.endsWith('[output truncated]');
+  const MAX_ARTIFACT_SIZE = 10 * 1024 * 1024;
+  if (content.length > MAX_ARTIFACT_SIZE) {
+    const targetRatio = (9.5 * 1024 * 1024) / content.length;
+    let maxBytes = Math.floor(Buffer.byteLength(text, 'utf8') * targetRatio);
+    while (maxBytes > 0) {
+      const sliced = sliceUtf8Safe(text, maxBytes);
+      const withMarker = `${sliced}\n[output truncated]`;
+      const compressed = gzipSync(Buffer.from(withMarker, 'utf8'));
+      if (compressed.length <= MAX_ARTIFACT_SIZE) {
+        content = compressed;
+        truncated = true;
+        break;
+      }
+      maxBytes = Math.floor(maxBytes * 0.9);
+    }
+    if (content.length > MAX_ARTIFACT_SIZE) return undefined;
+  }
   const artifact = await client.uploadArtifact({
     attemptId: attempt.attemptId,
     leaseToken: attempt.leaseToken,
@@ -69,7 +147,7 @@ async function uploadOutput(
     encoding: 'gzip',
     contentBase64: content.toString('base64'),
     sha256: createHash('sha256').update(content).digest('hex'),
-    truncated: output.endsWith('[output truncated]'),
+    truncated,
   });
   return artifact?.id;
 }
@@ -125,11 +203,11 @@ async function run() {
       try {
         const { localOutput, ...result } = record;
         if (localOutput && !result.outputArtifactId) {
-          result.outputArtifactId = await uploadOutput(client, record, localOutput).catch(
-            () => undefined
-          );
-          if (result.outputArtifactId)
-            await spool.put({ ...record, outputArtifactId: result.outputArtifactId });
+          const artifactId = await uploadOutput(client, record, localOutput);
+          if (artifactId) {
+            result.outputArtifactId = artifactId;
+            await spool.put({ ...record, outputArtifactId: artifactId });
+          }
         }
         await client.submit(result);
         await spool.remove(record.attemptId);
@@ -272,10 +350,40 @@ async function run() {
           await new Promise(resolve => setTimeout(resolve, 5_000));
           continue;
         }
-        attempt = await client.claim();
+        const deadLetterStats = await spool.deadLetterStats();
+        if (
+          deadLetterStats.count >= MAX_DEAD_LETTER_RECORDS ||
+          deadLetterStats.totalBytes >= MAX_DEAD_LETTER_BYTES ||
+          deadLetterStats.oldestAgeMs >= MAX_DEAD_LETTER_AGE_MS
+        ) {
+          lastError = `Dead-letter safety threshold reached (${deadLetterStats.count} records, ${deadLetterStats.totalBytes} bytes). Halting ALL claims until operator resolves quarantined records.`;
+          await new Promise(resolve => setTimeout(resolve, 5_000));
+          continue;
+        }
+
+        const spoolStats = await spool.stats();
+        if (
+          spoolStats.count >= MAX_SPOOL_RECORDS ||
+          spoolStats.totalBytes >= MAX_SPOOL_BYTES ||
+          spoolStats.oldestAgeMs >= MAX_SPOOL_RECORD_AGE_MS
+        ) {
+          lastError = `Spool threshold reached (${spoolStats.count} records, ${spoolStats.totalBytes} bytes). Halting claims until backlog drains.`;
+          await new Promise(resolve => setTimeout(resolve, 5_000));
+          continue;
+        }
+
+        const currentSpoolDepth = await spool.depth();
+        const currentDeadLetterDepth = deadLetterStats.count;
+        const readOnlyOnly = currentSpoolDepth > 0 || currentDeadLetterDepth > 0;
+        attempt = await client.claim({ readOnlyOnly });
         if (!attempt) continue;
         if (await checkDraining()) {
           lastError = 'Execution claim released because Agent is draining.';
+          await client.releaseClaim(attempt.attemptId, attempt.leaseToken).catch(() => undefined);
+          continue;
+        }
+        if (readOnlyOnly && attempt.step.riskClass !== 'READ_ONLY') {
+          lastError = `Write action claim released because result backlog (${currentSpoolDepth}) or dead letters (${currentDeadLetterDepth}) exist.`;
           await client.releaseClaim(attempt.attemptId, attempt.leaseToken).catch(() => undefined);
           continue;
         }
@@ -319,7 +427,7 @@ async function run() {
           void client
             .renew(attempt!.attemptId, attempt!.leaseToken)
             .then(result => {
-              if (result?.cancelRequested) controller.abort();
+              if (result?.cancelRequested) controller.abort('CANCEL_REQUESTED');
               else if (result && authority?.valid)
                 authority.renew(result.leaseExpiresAt, attempt!.executionDeadlineAt);
             })

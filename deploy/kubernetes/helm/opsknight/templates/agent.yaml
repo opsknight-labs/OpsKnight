@@ -1,4 +1,7 @@
 {{- if .Values.agent.enabled }}
+{{- if ne (int .Values.agent.replicaCount) 1 }}
+{{- fail "agent.replicaCount must equal 1 when agent is enabled; runbook agents require an active identity and cannot share a single token across multiple replicas." }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -15,7 +18,7 @@ metadata:
   name: {{ include "opsknight.agent.serviceAccountName" . }}
   labels:
     {{- include "opsknight.labels" . | nindent 4 }}
-automountServiceAccountToken: true
+automountServiceAccountToken: {{ default false (and .Values.agent.kubernetes .Values.agent.kubernetes.enabled) }}
 ---
 {{- end }}
 {{- if .Values.agent.rbac.rules }}
@@ -66,6 +69,7 @@ spec:
         app.kubernetes.io/component: runbook-agent
     spec:
       serviceAccountName: {{ include "opsknight.agent.serviceAccountName" . }}
+      automountServiceAccountToken: {{ default false (and .Values.agent.kubernetes .Values.agent.kubernetes.enabled) }}
       terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true

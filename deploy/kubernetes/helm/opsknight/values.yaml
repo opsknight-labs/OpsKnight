@@ -211,6 +211,8 @@ runbookWorker:
 agent:
   enabled: false
   replicaCount: 1
+  kubernetes:
+    enabled: false
   image:
     repository: ghcr.io/opsknight-labs/opsknight-agent
     tag: '2.0.0'
@@ -229,6 +231,8 @@ agent:
     kubernetesNamespaces: []
     kubernetesActions: [get, describe, logs, events, rollout-status]
     kubernetesMaxReplicas: 0
+    kubernetesTargets: []
+    linuxDiagnostics: [summary, disk, memory]
     networkHosts: []
     networkPorts: []
     bashCommandPatterns: []

@@ -19,6 +19,7 @@ export const DEFAULT_POLICY: AgentPolicy = {
   bashCommandPatterns: [],
   maxRuntimeSeconds: 300,
   maxOutputBytes: 1_048_576,
+  linuxDiagnostics: ['summary', 'disk', 'memory'],
 };
 
 function stringList(value: unknown): string[] {
@@ -75,12 +76,34 @@ export async function loadPolicy(path: string): Promise<{ policy: AgentPolicy; h
     kubernetesNamespaces: stringList(parsed.kubernetesNamespaces ?? []),
     bashCommandPatterns: stringList(parsed.bashCommandPatterns ?? []),
     maxRuntimeSeconds: boundedInteger(parsed.maxRuntimeSeconds, 300, 1, 3600),
-    maxOutputBytes: boundedInteger(parsed.maxOutputBytes, 1_048_576, 1024, 8_388_608),
+    maxOutputBytes: boundedInteger(parsed.maxOutputBytes, 1_048_576, 1024, 10_485_760),
     podmanContainers: stringList(parsed.podmanContainers ?? []),
     kubernetesActions: stringList(
       parsed.kubernetesActions ?? ['get', 'describe', 'logs', 'rollout-restart']
     ),
     kubernetesMaxReplicas: boundedInteger(parsed.kubernetesMaxReplicas, 0, 0, 10000),
+    kubernetesTargets: Array.isArray(parsed.kubernetesTargets)
+      ? parsed.kubernetesTargets.map((target: unknown) => {
+          if (!target || typeof target !== 'object' || Array.isArray(target)) {
+            throw new Error('kubernetesTargets entries must be objects.');
+          }
+          const t = target as Record<string, unknown>;
+          if (typeof t.namespace !== 'string') {
+            throw new Error('kubernetesTargets entries must specify a namespace string.');
+          }
+          return {
+            namespace: t.namespace,
+            resources: t.resources !== undefined ? stringList(t.resources) : undefined,
+            names: t.names !== undefined ? stringList(t.names) : undefined,
+            actions: t.actions !== undefined ? stringList(t.actions) : undefined,
+            maxReplicas:
+              t.maxReplicas !== undefined
+                ? boundedInteger(t.maxReplicas, 0, 0, 10000)
+                : undefined,
+          };
+        })
+      : undefined,
+    linuxDiagnostics: stringList(parsed.linuxDiagnostics ?? ['summary', 'disk', 'memory']),
     networkHosts: stringList(parsed.networkHosts ?? []),
     networkPorts:
       Array.isArray(parsed.networkPorts) &&
@@ -143,20 +166,68 @@ export function assertPolicyAllows(attempt: ClaimedAttempt, policy: AgentPolicy)
   }
   if (step.type === 'KUBERNETES') {
     const action = String(config.action ?? 'get');
+    const namespace = String(config.namespace ?? 'default');
+    const resource = String(config.resource ?? 'pods').toLowerCase();
+    const name = String(config.name ?? '');
+
     if (
       !(policy.kubernetesActions ?? ['get', 'describe', 'logs', 'rollout-restart']).includes(action)
     )
       throw new Error('LOCAL_POLICY_DENIED: Kubernetes action is not allowlisted.');
-    if (
-      action === 'scale' &&
-      (!Number.isInteger(config.replicas) ||
-        Number(config.replicas) < 0 ||
-        Number(config.replicas) > (policy.kubernetesMaxReplicas ?? 0))
-    )
-      throw new Error('LOCAL_POLICY_DENIED: Kubernetes replica limit exceeded.');
-    const namespace = String(config.namespace ?? 'default');
-    if (!matchesAllowlist(namespace, policy.kubernetesNamespaces)) {
-      throw new Error(`LOCAL_POLICY_DENIED: namespace ${namespace} is not allowlisted.`);
+
+    if (policy.kubernetesTargets && policy.kubernetesTargets.length > 0) {
+      const matchingTarget = policy.kubernetesTargets.find(target => {
+        if (!matchesAllowlist(namespace, [target.namespace])) return false;
+        if (
+          target.resources &&
+          !matchesAllowlist(resource, target.resources.map(r => r.toLowerCase()))
+        ) {
+          return false;
+        }
+        if (target.names && target.names.length > 0) {
+          if (!name || !matchesAllowlist(name, target.names)) {
+            return false;
+          }
+        }
+        if (target.actions && !target.actions.includes(action)) {
+          return false;
+        }
+        if (action === 'scale') {
+          const maxReplicas = target.maxReplicas ?? policy.kubernetesMaxReplicas ?? 0;
+          if (
+            maxReplicas <= 0 ||
+            !Number.isInteger(config.replicas) ||
+            Number(config.replicas) < 0 ||
+            Number(config.replicas) > maxReplicas
+          ) {
+            return false;
+          }
+        }
+        return true;
+      });
+      if (!matchingTarget) {
+        throw new Error(
+          `LOCAL_POLICY_DENIED: Kubernetes target (${action} ${resource}/${name || '*'} in ${namespace}) is not allowlisted by local agent target policies.`
+        );
+      }
+    } else {
+      if (
+        action === 'scale' &&
+        (!Number.isInteger(config.replicas) ||
+          Number(config.replicas) < 0 ||
+          Number(config.replicas) > (policy.kubernetesMaxReplicas ?? 0))
+      )
+        throw new Error('LOCAL_POLICY_DENIED: Kubernetes replica limit exceeded.');
+      if (!matchesAllowlist(namespace, policy.kubernetesNamespaces)) {
+        throw new Error(`LOCAL_POLICY_DENIED: namespace ${namespace} is not allowlisted.`);
+      }
+    }
+  }
+  if (step.type === 'LINUX_DIAGNOSTICS') {
+    const diagnostic = String(config.diagnostic ?? 'summary');
+    const allowed = policy.linuxDiagnostics ?? ['summary', 'disk', 'memory'];
+    if (!allowed.includes(diagnostic)) {
+      throw new Error(`LOCAL_POLICY_DENIED: Linux diagnostic ${diagnostic} is not allowlisted.`);
     }
   }
   if (

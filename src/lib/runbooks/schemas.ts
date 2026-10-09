@@ -403,7 +403,7 @@ export const agentArtifactSchema = z
     kind: z.enum(['OUTPUT', 'DIAGNOSTIC']).default('OUTPUT'),
     mediaType: z.string().trim().min(1).max(100).default('text/plain'),
     encoding: z.literal('gzip').default('gzip'),
-    contentBase64: z.string().min(1).max(1_500_000),
+    contentBase64: z.string().min(1).max(16_000_000),
     sha256: z.string().regex(/^[a-f0-9]{64}$/),
     truncated: z.boolean().default(false),
   })

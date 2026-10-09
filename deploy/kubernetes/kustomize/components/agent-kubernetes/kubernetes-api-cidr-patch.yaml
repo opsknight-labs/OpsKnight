@@ -1,0 +1,32 @@
+# Example Kustomize patch to customize the agent Kubernetes API endpoint CIDRs
+# for cloud-managed clusters (e.g. AWS EKS, GCP GKE, Azure AKS, or custom VPC subnets)
+# instead of the default cluster-service CIDR (10.96.0.0/12).
+#
+# To apply in your production overlay kustomization.yaml:
+#   patches:
+#     - path: kubernetes-api-cidr-patch.yaml
+#
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opsknight-agent
+  namespace: opsknight
+spec:
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { app: opsknight-app }
+      ports:
+        - { protocol: TCP, port: 3000 }
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        # Replace with your cluster API server CIDR block(s)
+        - ipBlock:
+            cidr: 10.96.0.0/12
+      ports:
+        - { protocol: TCP, port: 443 }
+        - { protocol: TCP, port: 6443 }

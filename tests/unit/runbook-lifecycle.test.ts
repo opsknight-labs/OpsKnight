@@ -32,8 +32,9 @@ type MockTx = {
   };
   runbookVersion: {
     findUnique?: ReturnType<typeof vi.fn>;
-    deleteMany: ReturnType<typeof vi.fn>;
+    deleteMany?: ReturnType<typeof vi.fn>;
     create?: ReturnType<typeof vi.fn>;
+    updateMany?: ReturnType<typeof vi.fn>;
   };
   serviceRunbookBinding: {
     updateMany: ReturnType<typeof vi.fn>;
@@ -574,10 +575,57 @@ describe('Runbook Lifecycle Unit Tests', () => {
               description: '',
               steps: [{ key: 'step_1', name: 'Step 1', type: 'MANUAL', riskClass: 'READ_ONLY' }],
             },
+            expectedDraftRevision: 0,
           },
           'user_1'
         )
       ).rejects.toThrow(RunbookArchivedError);
+    });
+
+    it('rejects updateDraftVersion when expectedDraftRevision does not match current draft revision', async () => {
+      vi.mocked(prisma.$transaction).mockImplementationOnce(
+        (async (callback: (tx: MockTx) => Promise<unknown>) => {
+          const tx: MockTx = {
+            runbook: {
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'rb_1',
+                archivedAt: null,
+              }),
+              update: vi.fn(),
+              delete: vi.fn(),
+            },
+            runbookVersion: {
+              findUnique: vi.fn().mockResolvedValue({
+                id: 'ver_1',
+                runbookId: 'rb_1',
+                state: 'DRAFT',
+                checksum: 'checksum_actual',
+                draftRevision: 5,
+                runbook: { archivedAt: null },
+              }),
+              updateMany: vi.fn(),
+            },
+            serviceRunbookBinding: {
+              updateMany: vi.fn(),
+            },
+          };
+          return callback(tx);
+        }) as never
+      );
+
+      await expect(
+        updateDraftVersion(
+          'ver_1',
+          {
+            definition: {
+              description: '',
+              steps: [{ key: 'step_1', name: 'Step 1', type: 'MANUAL', riskClass: 'READ_ONLY' }],
+            },
+            expectedDraftRevision: 4,
+          },
+          'user_1'
+        )
+      ).rejects.toThrow(/DRAFT_CONFLICT/);
     });
 
     it('rejects publishDraftVersion on archived runbooks', async () => {

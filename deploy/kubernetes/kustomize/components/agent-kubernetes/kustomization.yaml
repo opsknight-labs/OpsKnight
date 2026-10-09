@@ -1,0 +1,94 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - target:
+      kind: ServiceAccount
+      name: opsknight-agent
+    patch: |
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: opsknight-agent
+      automountServiceAccountToken: true
+  - target:
+      kind: Deployment
+      name: opsknight-agent
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: opsknight-agent
+      spec:
+        template:
+          spec:
+            automountServiceAccountToken: true
+  - target:
+      kind: ConfigMap
+      name: opsknight-agent-policy
+    patch: |
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: opsknight-agent-policy
+      data:
+        policy.json: |
+          {
+            "allowedStepTypes": ["LINUX_DIAGNOSTICS", "KUBERNETES"],
+            "systemdUnits": [],
+            "dockerContainers": [],
+            "podmanContainers": [],
+            "kubernetesNamespaces": ["*"],
+            "kubernetesActions": ["get", "describe", "logs", "events", "rollout-status"],
+            "kubernetesMaxReplicas": 0,
+            "networkHosts": [],
+            "networkPorts": [],
+            "bashCommandPatterns": [],
+            "allowNonIdempotent": false,
+            "maxRuntimeSeconds": 300,
+            "maxOutputBytes": 10485760
+          }
+  - target:
+      kind: Role
+      name: opsknight-agent-readonly
+    patch: |
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: Role
+      metadata:
+        name: opsknight-agent-readonly
+      rules:
+        - apiGroups: [""]
+          resources: ["pods", "pods/log", "events", "services"]
+          verbs: ["get", "list", "watch"]
+        - apiGroups: ["apps"]
+          resources: ["deployments", "statefulsets", "daemonsets"]
+          verbs: ["get", "list", "watch"]
+  # Outbound HTTPS/API egress is confined to cluster service CIDRs by default.
+  # For cloud-managed clusters (EKS, GKE, AKS), overlay kubernetes-api-cidr-patch.yaml
+  # to scope egress to your specific API server endpoints.
+  - target:
+      kind: NetworkPolicy
+      name: opsknight-agent
+    patch: |
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: opsknight-agent
+      spec:
+        egress:
+          - to:
+              - podSelector:
+                  matchLabels: { app: opsknight-app }
+            ports:
+              - { protocol: TCP, port: 3000 }
+          - to:
+              - namespaceSelector: {}
+            ports:
+              - { protocol: UDP, port: 53 }
+              - { protocol: TCP, port: 53 }
+          - to:
+              - ipBlock:
+                  cidr: 10.96.0.0/12
+            ports:
+              - { protocol: TCP, port: 443 }
+              - { protocol: TCP, port: 6443 }

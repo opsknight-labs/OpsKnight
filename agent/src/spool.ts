@@ -134,6 +134,36 @@ export class ResultSpool {
     return (await this.list()).length;
   }
 
+  async stats(): Promise<{ count: number; totalBytes: number; oldestAgeMs: number }> {
+    await this.initialize();
+    let names: string[];
+    try {
+      names = (await readdir(this.directory)).filter(name => /^[a-z0-9]+\.json$/i.test(name));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        names = [];
+      } else {
+        throw error;
+      }
+    }
+    let totalBytes = 0;
+    let oldestMtime = Date.now();
+    for (const name of names) {
+      try {
+        const s = await stat(join(this.directory, name));
+        totalBytes += s.size;
+        if (s.mtimeMs < oldestMtime) oldestMtime = s.mtimeMs;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
+    return {
+      count: names.length,
+      totalBytes,
+      oldestAgeMs: names.length > 0 ? Math.max(0, Date.now() - oldestMtime) : 0,
+    };
+  }
+
   async deadLetterDepth() {
     try {
       return (await readdir(join(this.directory, 'dead-letter'))).filter(name =>
@@ -143,5 +173,34 @@ export class ResultSpool {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 0;
       throw error;
     }
+  }
+
+  async deadLetterStats(): Promise<{ count: number; totalBytes: number; oldestAgeMs: number }> {
+    const dir = join(this.directory, 'dead-letter');
+    let names: string[];
+    try {
+      names = (await readdir(dir)).filter(name => /^[a-z0-9]+\.json$/i.test(name));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { count: 0, totalBytes: 0, oldestAgeMs: 0 };
+      }
+      throw error;
+    }
+    let totalBytes = 0;
+    let oldestMtime = Date.now();
+    for (const name of names) {
+      try {
+        const s = await stat(join(dir, name));
+        totalBytes += s.size;
+        if (s.mtimeMs < oldestMtime) oldestMtime = s.mtimeMs;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
+    return {
+      count: names.length,
+      totalBytes,
+      oldestAgeMs: names.length > 0 ? Math.max(0, Date.now() - oldestMtime) : 0,
+    };
   }
 }

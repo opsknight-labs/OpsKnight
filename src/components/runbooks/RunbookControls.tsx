@@ -64,7 +64,9 @@ export function SubmitButton({
   );
 }
 
-export type RunbookFormAction = (data: FormData) => Promise<void | { error?: string }>;
+export type RunbookFormAction = (
+  data: FormData
+) => Promise<void | { error?: string; saved?: boolean; draftRevision?: number; [key: string]: unknown }>;
 export function ActionForm({
   action,
   children,
@@ -74,17 +76,21 @@ export function ActionForm({
   action: RunbookFormAction;
   children: ReactNode;
   className?: string;
-  onSuccess?: () => void;
+  onSuccess?: (result?: { saved?: boolean; draftRevision?: number; [key: string]: unknown }) => void;
 }) {
   const router = useRouter();
-  const [state, submit, pending] = useActionState<{ error?: string; saved?: boolean }, FormData>(
-    async (_state: { error?: string; saved?: boolean }, data: FormData) => {
+  const [state, submit, pending] = useActionState<
+    { error?: string; saved?: boolean; draftRevision?: number },
+    FormData
+  >(
+    async (_state, data: FormData) => {
       try {
         const result = await action(data);
         if (result?.error) return { error: result.error };
-        onSuccess?.();
+        const successPayload = { saved: true, ...(result || {}) };
+        onSuccess?.(successPayload);
         router.refresh();
-        return { saved: true };
+        return successPayload;
       } catch (error) {
         unstable_rethrow(error);
         return {

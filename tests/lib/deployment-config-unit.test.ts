@@ -917,5 +917,29 @@ describe('deployment configuration invariants', () => {
     expect(values.agent.policy.podmanContainers).toEqual([]);
     expect(values.agent.policy.kubernetesActions).not.toContain('scale');
     expect(values.agent.policy.networkHosts).toEqual([]);
+
+    const agentK8sKustomization = read(
+      'deploy/kubernetes/kustomize/components/agent-kubernetes/kustomization.yaml'
+    );
+    expect(agentK8sKustomization).toContain('ipBlock:');
+    expect(agentK8sKustomization).toContain('cidr: 10.96.0.0/12');
+    const agentK8sParsed = YAML.parse(agentK8sKustomization) as {
+      patches?: Array<{ target?: { kind?: string }; patch?: string }>;
+    };
+    const npPatch = agentK8sParsed.patches?.find((p) => p.target?.kind === 'NetworkPolicy')?.patch;
+    expect(npPatch).toBeDefined();
+    const np = YAML.parse(npPatch!) as {
+      spec?: {
+        egress?: Array<{
+          to?: Array<{ ipBlock?: { cidr?: string } }>;
+          ports?: Array<{ port?: number }>;
+        }>;
+      };
+    };
+    const k8sApiEgress = np.spec?.egress?.find((e) =>
+      e.ports?.some((p) => p.port === 443 || p.port === 6443)
+    );
+    expect(k8sApiEgress?.to).toBeDefined();
+    expect(k8sApiEgress?.to?.[0]?.ipBlock?.cidr).toBe('10.96.0.0/12');
   });
 });

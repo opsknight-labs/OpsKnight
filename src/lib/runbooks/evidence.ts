@@ -130,9 +130,8 @@ export function compareEvidence(pre: unknown, post: unknown) {
   if (after.data.kubernetesState) {
     const state = after.data.kubernetesState;
     goals.push(
-      state.desired > 0 &&
-        state.ready >= state.desired &&
-        state.observedGeneration >= state.generation
+      state.observedGeneration >= state.generation &&
+        (state.desired === 0 ? state.ready === 0 : state.ready >= state.desired)
     );
   }
   if (after.data.ports?.length) goals.push(after.data.ports.every(port => port.listening));

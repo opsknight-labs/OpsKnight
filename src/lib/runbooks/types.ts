@@ -168,6 +168,7 @@ export const TERMINAL_STEP_STATUSES: ReadonlySet<RunbookStepStatus> = new Set([
   'FAILED',
   'SKIPPED',
   'CANCELLED',
+  'UNKNOWN',
 ]);
 
 export function isTerminalStepStatus(status: RunbookStepStatus): boolean {
@@ -358,10 +359,10 @@ export const DEFAULT_EXECUTION_TIMEOUT_SECONDS = 3600; // 1 hour
 /** Default timeout for a single step (seconds). */
 export const DEFAULT_STEP_TIMEOUT_SECONDS = 600; // 10 minutes
 
-/** Maximum concurrent automatic write actions per service. */
+/** Maximum concurrent automatic write-capable runbook workflows per service. */
 export const MAX_AUTO_WRITE_ACTIONS_PER_SERVICE = 3;
 
-/** Maximum concurrent write actions per agent pool. */
+/** Maximum concurrent write-capable runbook workflows per agent pool. */
 export const MAX_CONCURRENT_WRITE_ACTIONS_PER_POOL = 5;
 
 /** Circuit breaker: fail count before pausing automatic execution. */

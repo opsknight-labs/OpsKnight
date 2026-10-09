@@ -6,20 +6,23 @@ import { hasConfidentialAgentTransport } from '@/lib/runbooks/agent-transport';
 
 export async function POST(request: Request) {
   try {
-    const { agent } = await authenticatedAgentJson(request);
+    const { agent } = await authenticatedAgentJson(request, 4 * 1024);
+    const url = new URL(request.url);
     const waitSeconds = Math.min(
       25,
       Math.max(
         0,
-        Number.parseInt(new URL(request.url).searchParams.get('waitSeconds') ?? '0', 10) || 0
+        Number.parseInt(url.searchParams.get('waitSeconds') ?? '0', 10) || 0
       )
     );
+    const mode = url.searchParams.get('mode');
+    const readOnlyOnly = mode === 'READ_ONLY_ONLY';
     const deadline = Date.now() + waitSeconds * 1000;
     const confidentialTransport = hasConfidentialAgentTransport(request);
-    let attempt = await claimAgentAttempt(agent.id, confidentialTransport);
+    let attempt = await claimAgentAttempt(agent.id, confidentialTransport, { readOnlyOnly });
     while (!attempt && Date.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, 2_000 + Math.floor(Math.random() * 3_001)));
-      attempt = await claimAgentAttempt(agent.id, confidentialTransport);
+      attempt = await claimAgentAttempt(agent.id, confidentialTransport, { readOnlyOnly });
     }
     return attempt ? jsonOk({ attempt }) : new NextResponse(null, { status: 204 });
   } catch (error) {

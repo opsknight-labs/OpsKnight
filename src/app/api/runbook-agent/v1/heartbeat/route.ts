@@ -39,7 +39,7 @@ const schema = z
 
 export async function POST(request: Request) {
   try {
-    const { agent, json } = await authenticatedAgentJson(request);
+    const { agent, json } = await authenticatedAgentJson(request, 64 * 1024);
     return jsonOk(await recordAgentHeartbeat({ agentId: agent.id, ...schema.parse(json) }));
   } catch (error) {
     return agentApiError(error);

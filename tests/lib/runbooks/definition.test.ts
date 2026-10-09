@@ -445,4 +445,203 @@ describe('Runbook Definition Module', () => {
       expect(result.errors.some(e => e.includes('Duplicate step key: "dup"'))).toBe(true);
     });
   });
+
+  describe('size limits and k8s action/resource compatibility', () => {
+    it('rejects definitions exceeding the 256 KiB size limit', () => {
+      const steps: RunbookStepDefinition[] = [];
+      for (let i = 0; i < 20; i++) {
+        steps.push(
+          createMockStep({
+            key: `step_${i}`,
+            type: 'BASH',
+            riskClass: 'NON_IDEMPOTENT',
+            config: { command: 'echo hello', padding: 'x'.repeat(14 * 1024) },
+          })
+        );
+      }
+      const def = createMockDefinition({ steps });
+      expect(() => parseRunbookDefinition(def)).toThrow(
+        'Runbook definition exceeds maximum allowed size of 256 KiB.'
+      );
+    });
+
+    it('rejects step configs exceeding the 32 KiB size limit on non-HTTP steps', () => {
+      const hugeConfig = {
+        command: 'echo ok',
+        extraPadding: 'y'.repeat(33 * 1024),
+      };
+      const def = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'BASH',
+            riskClass: 'NON_IDEMPOTENT',
+            config: hugeConfig,
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(def)).toThrow(
+        'config exceeds maximum allowed size of 32 KiB.'
+      );
+    });
+
+    it('enforces BASH command size limit of 8 KiB', () => {
+      const longCommand = 'echo ' + 'a'.repeat(8193);
+      const def = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'BASH',
+            riskClass: 'NON_IDEMPOTENT',
+            config: { command: longCommand },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(def)).toThrow(
+        'Bash command exceeds maximum allowed size of 8 KiB.'
+      );
+    });
+
+    it('enforces HTTP header entry count and size limits', () => {
+      // More than 64 header entries
+      const headers65: Record<string, string> = {};
+      for (let i = 0; i < 65; i++) {
+        headers65[`X-Header-${i}`] = 'val';
+      }
+      const defCount = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'HTTP',
+            riskClass: 'READ_ONLY',
+            config: {
+              url: 'https://example.com/api',
+              method: 'GET',
+              headers: headers65,
+            },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(defCount)).toThrow(
+        'HTTP headers exceed maximum allowed count of 64 entries.'
+      );
+
+      // Header size exceeding 16 KiB
+      const defSize = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'HTTP',
+            riskClass: 'READ_ONLY',
+            config: {
+              url: 'https://example.com/api',
+              method: 'GET',
+              headers: { 'X-Large': 'z'.repeat(17 * 1024) },
+            },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(defSize)).toThrow(
+        'HTTP headers exceed maximum allowed size of 16 KiB.'
+      );
+    });
+
+    it('enforces HTTP body size limit of 64 KiB', () => {
+      const largeBody = 'b'.repeat(65 * 1024);
+      const def = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'HTTP',
+            riskClass: 'NON_IDEMPOTENT',
+            config: {
+              url: 'https://example.com/api',
+              method: 'POST',
+              body: largeBody,
+            },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(def)).toThrow(
+        'HTTP body exceeds maximum allowed size of 64 KiB.'
+      );
+    });
+
+    it('validates Kubernetes action and resource compatibility matrix', () => {
+      // logs accepts Pods, Deployment, DaemonSet, StatefulSet
+      for (const res of ['pod', 'pods', 'deployment', 'statefulset', 'daemonset']) {
+        const validLogsDef = createMockDefinition({
+          steps: [
+            createMockStep({
+              type: 'KUBERNETES',
+              riskClass: 'READ_ONLY',
+              config: { action: 'logs', resource: res, name: 'my-resource' },
+            }),
+          ],
+        });
+        expect(() => parseRunbookDefinition(validLogsDef)).not.toThrow();
+      }
+
+      // logs rejects unsupported resources like service
+      const invalidLogsDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'KUBERNETES',
+            riskClass: 'READ_ONLY',
+            config: { action: 'logs', resource: 'service', name: 'my-service' },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(invalidLogsDef)).toThrow(
+        'Kubernetes logs action does not support resource "service"'
+      );
+
+      // rollout-restart accepts Deployment, DaemonSet, StatefulSet
+      const validRolloutDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'KUBERNETES',
+            riskClass: 'NON_IDEMPOTENT',
+            config: { action: 'rollout-restart', resource: 'deployment', name: 'my-deploy' },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(validRolloutDef)).not.toThrow();
+
+      // rollout-restart rejects Pod
+      const invalidRolloutDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'KUBERNETES',
+            riskClass: 'NON_IDEMPOTENT',
+            config: { action: 'rollout-restart', resource: 'pod', name: 'my-pod' },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(invalidRolloutDef)).toThrow(
+        'Kubernetes rollout-restart does not support resource "pod"'
+      );
+
+      // scale accepts Deployment, StatefulSet, ReplicaSet, ReplicationController
+      const validScaleDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'KUBERNETES',
+            riskClass: 'IDEMPOTENT_WRITE',
+            config: { action: 'scale', resource: 'statefulset', name: 'my-sts', replicas: 3 },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(validScaleDef)).not.toThrow();
+
+      // scale rejects Pod
+      const invalidScaleDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'KUBERNETES',
+            riskClass: 'IDEMPOTENT_WRITE',
+            config: { action: 'scale', resource: 'pod', name: 'my-pod', replicas: 3 },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(invalidScaleDef)).toThrow(
+        'Kubernetes scale action does not support resource "pod"'
+      );
+    });
+  });
 });

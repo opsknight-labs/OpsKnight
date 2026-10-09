@@ -12,8 +12,70 @@ import {
   RunbookError,
 } from './errors';
 
-export async function authenticatedAgentJson(request: Request) {
-  const rawBody = await request.text();
+export class RunbookPayloadTooLargeError extends Error {
+  constructor(maxBytes: number) {
+    super(`Payload exceeds maximum allowed size of ${maxBytes} bytes.`);
+    this.name = 'RunbookPayloadTooLargeError';
+  }
+}
+
+export async function readBoundedRequestBody(request: Request, maxBytes: number): Promise<string> {
+  const contentLength = request.headers.get('content-length');
+  if (contentLength !== null && contentLength !== undefined) {
+    const parsedLength = parseInt(contentLength, 10);
+    if (!Number.isNaN(parsedLength) && parsedLength > maxBytes) {
+      throw new RunbookPayloadTooLargeError(maxBytes);
+    }
+  }
+
+  if (!request.body) {
+    return '';
+  }
+
+  if (typeof request.body.getReader !== 'function') {
+    if (contentLength === null || contentLength === undefined) {
+      throw new RunbookPayloadTooLargeError(maxBytes);
+    }
+    const parsedLength = parseInt(contentLength, 10);
+    if (Number.isNaN(parsedLength) || parsedLength < 0 || parsedLength > maxBytes) {
+      throw new RunbookPayloadTooLargeError(maxBytes);
+    }
+    const text = await request.text();
+    if (Buffer.byteLength(text, 'utf8') > maxBytes) {
+      throw new RunbookPayloadTooLargeError(maxBytes);
+    }
+    return text;
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel('Request payload exceeds limit');
+        throw new RunbookPayloadTooLargeError(maxBytes);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return new TextDecoder().decode(combined);
+}
+
+export async function authenticatedAgentJson(request: Request, maxBytes: number = 64 * 1024) {
+  const rawBody = await readBoundedRequestBody(request, maxBytes);
   const agent = await authenticateAgentRequest(request, rawBody);
   let json: unknown = {};
   if (rawBody) {
@@ -27,6 +89,14 @@ export async function authenticatedAgentJson(request: Request) {
 }
 
 export function agentApiError(error: unknown) {
+  if (
+    error instanceof RunbookPayloadTooLargeError ||
+    (error instanceof Error &&
+      (error.name === 'RunbookPayloadTooLargeError' ||
+        error.message.startsWith('Payload exceeds maximum allowed size')))
+  ) {
+    return jsonError('Payload too large.', 413);
+  }
   if (error instanceof RunbookAgentRevokedError) return jsonError('Agent has been revoked.', 403);
   if (
     error instanceof RunbookPreExecutionFenceError ||
@@ -49,6 +119,7 @@ export function agentApiError(error: unknown) {
   ]);
   if (authenticationErrors.has(message)) return jsonError('Agent authentication failed.', 401);
   if (
+    message.startsWith('Artifact quota exceeded') ||
     [
       'Request body must be valid JSON.',
       'A PEM public signing key is required.',

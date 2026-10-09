@@ -21,11 +21,12 @@ const stamp = { capturedAt: new Date().toISOString() };
 const policy: AgentPolicy = {
   ...DEFAULT_POLICY,
   allowedStepTypes: ['LINUX_DIAGNOSTICS', 'SYSTEMD', 'DOCKER', 'KUBERNETES'],
+  linuxDiagnostics: ['summary', 'disk', 'memory', 'http', 'tcp', 'dns'],
   systemdUnits: ['payments.service'],
   dockerContainers: ['payments'],
   podmanContainers: ['pod-payments'],
   kubernetesNamespaces: ['payments'],
-  kubernetesActions: ['get', 'events', 'scale', 'rollout-status'],
+  kubernetesActions: ['get', 'events', 'scale', 'rollout-status', 'logs'],
   kubernetesMaxReplicas: 5,
   networkHosts: ['127.0.0.1'],
   networkPorts: [80],
@@ -160,6 +161,18 @@ describe('runbook enhancement safety', () => {
       }).healthy
     ).toBe(true);
     expect(
+      compareEvidence(stamp, {
+        ...stamp,
+        kubernetesState: { desired: 0, ready: 0, generation: 2, observedGeneration: 2 },
+      }).healthy
+    ).toBe(true);
+    expect(
+      compareEvidence(stamp, {
+        ...stamp,
+        kubernetesState: { desired: 0, ready: 1, generation: 2, observedGeneration: 2 },
+      }).healthy
+    ).toBe(false);
+    expect(
       runbookEvidenceSchema.safeParse({ ...stamp, logSummary: 'x'.repeat(4097) }).success
     ).toBe(false);
   });
@@ -212,10 +225,205 @@ describe('runbook enhancement safety', () => {
     expect(() =>
       parseRunbookDefinition({ steps: [{ ...scale.step, riskClass: 'READ_ONLY' }] })
     ).toThrow('IDEMPOTENT_WRITE');
-    expect(
-      commandFor(attempt('KUBERNETES', { action: 'events', namespace: 'payments', name: 'api' }))
-        .args
-    ).toContain('involvedObject.name=api');
+
+    // Kubernetes logs syntax with --limit-bytes and --tail
+    const podLogs = attempt('KUBERNETES', {
+      action: 'logs',
+      namespace: 'payments',
+      resource: 'pods',
+      name: 'api-pod-1',
+    });
+    expect(commandFor(podLogs).args).toEqual([
+      '-n',
+      'payments',
+      'logs',
+      'api-pod-1',
+      '--tail=500',
+      '--limit-bytes=262144',
+    ]);
+
+    const deployLogs = attempt('KUBERNETES', {
+      action: 'logs',
+      namespace: 'payments',
+      resource: 'deployment',
+      name: 'api',
+    });
+    expect(commandFor(deployLogs).args).toEqual([
+      '-n',
+      'payments',
+      'logs',
+      'deployment/api',
+      '--tail=500',
+      '--limit-bytes=262144',
+    ]);
+
+    // Kubernetes events: namespace-wide without name, field-selector with name
+    const allEvents = attempt('KUBERNETES', { action: 'events', namespace: 'payments' });
+    expect(commandFor(allEvents).args).toEqual(['-n', 'payments', 'get', 'events']);
+
+    const namedEvents = attempt('KUBERNETES', {
+      action: 'events',
+      namespace: 'payments',
+      name: 'api',
+    });
+    expect(commandFor(namedEvents).args).toEqual([
+      '-n',
+      'payments',
+      'get',
+      'events',
+      '--field-selector',
+      'involvedObject.name=api,involvedObject.kind=Pod',
+    ]);
+
+    const deployEvents = attempt('KUBERNETES', {
+      action: 'events',
+      namespace: 'payments',
+      resource: 'deployments',
+      name: 'api',
+    });
+    expect(commandFor(deployEvents).args).toEqual([
+      '-n',
+      'payments',
+      'get',
+      'events',
+      '--field-selector',
+      'involvedObject.name=api,involvedObject.kind=Deployment',
+    ]);
+
+    const statefulEvents = attempt('KUBERNETES', {
+      action: 'events',
+      namespace: 'payments',
+      resource: 'statefulset',
+      name: 'db',
+    });
+    expect(commandFor(statefulEvents).args).toEqual([
+      '-n',
+      'payments',
+      'get',
+      'events',
+      '--field-selector',
+      'involvedObject.name=db,involvedObject.kind=StatefulSet',
+    ]);
+  });
+  it('enforces fine-grained kubernetesTargets local policy when configured', () => {
+    const fineGrainedPolicy: AgentPolicy = {
+      ...policy,
+      kubernetesTargets: [
+        {
+          namespace: 'payments',
+          resources: ['deployment'],
+          names: ['api'],
+          actions: ['scale'],
+          maxReplicas: 3,
+        },
+      ],
+    };
+    const allowedScale = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', name: 'api', replicas: 3 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(allowedScale, fineGrainedPolicy)).not.toThrow();
+
+    const deniedName = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', name: 'worker', replicas: 3 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(deniedName, fineGrainedPolicy)).toThrow(
+      'not allowlisted by local agent target policies'
+    );
+
+    const deniedReplicas = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', name: 'api', replicas: 4 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(deniedReplicas, fineGrainedPolicy)).toThrow(
+      'not allowlisted by local agent target policies'
+    );
+
+    const omittedNameWhenNamesConfigured = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', replicas: 2 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(omittedNameWhenNamesConfigured, fineGrainedPolicy)).toThrow(
+      'not allowlisted by local agent target policies'
+    );
+
+    const policyWithoutTargetMaxReplicas: AgentPolicy = {
+      ...policy,
+      kubernetesMaxReplicas: 3,
+      kubernetesTargets: [
+        {
+          namespace: 'payments',
+          resources: ['deployment'],
+          names: ['api'],
+          actions: ['scale'],
+        },
+      ],
+    };
+    const allowedFallback = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', name: 'api', replicas: 3 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(allowedFallback, policyWithoutTargetMaxReplicas)).not.toThrow();
+
+    const deniedFallback = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', name: 'api', replicas: 4 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(deniedFallback, policyWithoutTargetMaxReplicas)).toThrow(
+      'not allowlisted by local agent target policies'
+    );
+
+    const policyWithZeroMaxReplicas: AgentPolicy = {
+      ...policy,
+      kubernetesMaxReplicas: 0,
+      kubernetesTargets: [
+        {
+          namespace: 'payments',
+          resources: ['deployment'],
+          names: ['api'],
+          actions: ['scale'],
+        },
+      ],
+    };
+    const deniedZeroMax = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', name: 'api', replicas: 1 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(deniedZeroMax, policyWithZeroMaxReplicas)).toThrow(
+      'not allowlisted by local agent target policies'
+    );
+
+    const policyDenyingGlobalAction: AgentPolicy = {
+      ...policy,
+      kubernetesActions: ['get', 'describe'],
+      kubernetesTargets: [
+        {
+          namespace: 'payments',
+          resources: ['deployment'],
+          names: ['api'],
+          actions: ['scale'],
+        },
+      ],
+    };
+    expect(() => assertPolicyAllows(allowedScale, policyDenyingGlobalAction)).toThrow(
+      'LOCAL_POLICY_DENIED: Kubernetes action is not allowlisted.'
+    );
+  });
+  it('enforces linuxDiagnostics default allowlist of summary, disk, memory', () => {
+    expect(() =>
+      assertPolicyAllows(attempt('LINUX_DIAGNOSTICS', { diagnostic: 'processes' }), DEFAULT_POLICY)
+    ).toThrow('LOCAL_POLICY_DENIED: Linux diagnostic processes is not allowlisted.');
+    expect(() =>
+      assertPolicyAllows(attempt('LINUX_DIAGNOSTICS', { diagnostic: 'summary' }), DEFAULT_POLICY)
+    ).not.toThrow();
   });
   it('rejects network destinations and URL credentials unless locally permitted', () => {
     expect(() =>

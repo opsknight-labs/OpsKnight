@@ -112,8 +112,22 @@ export async function saveDraftAction(versionId: string, runbookId: string, form
     const inputs = runbookInputsSchema.parse(
       parseJson(readString(formData, 'inputs') || '[]', 'Inputs')
     );
-    await updateDraftVersion(parsedVersionId, { definition, inputs }, actor.id);
+    const draftRevisionRaw = formData.get('draftRevision');
+    if (draftRevisionRaw === null || draftRevisionRaw === '') {
+      throw new Error('Draft revision is required for optimistic locking.');
+    }
+    const expectedDraftRevision = z.coerce
+      .number({ invalid_type_error: 'Draft revision must be a valid number.' })
+      .int('Draft revision must be an integer.')
+      .nonnegative('Draft revision must be non-negative.')
+      .parse(draftRevisionRaw);
+    const updated = await updateDraftVersion(
+      parsedVersionId,
+      { definition, inputs, expectedDraftRevision },
+      actor.id
+    );
     revalidatePath(`/runbooks/${parsedRunbookId}`);
+    return { saved: true, draftRevision: updated.draftRevision };
   } catch (error) {
     if (error instanceof RunbookError) return { error: error.userMessage };
     if (error instanceof z.ZodError)

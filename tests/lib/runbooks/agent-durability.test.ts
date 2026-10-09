@@ -309,4 +309,76 @@ describe('Agent authority and durable recovery', () => {
     expect(result.status).toBe('CANCELLED');
     expect(result.errorCode).toBe('AGENT_SHUTDOWN');
   });
+
+  it('calculates spool stats accurately and exposes capacity metrics', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'opsknight-spool-stats-'));
+    try {
+      const spool = new ResultSpool(directory);
+      await spool.initialize();
+      const emptyStats = await spool.stats();
+      expect(emptyStats).toEqual({ count: 0, totalBytes: 0, oldestAgeMs: 0 });
+
+      await spool.put({
+        attemptId: 'stat1',
+        leaseToken: 'token1',
+        producedAt: new Date().toISOString(),
+        status: 'SUCCEEDED',
+      });
+      await spool.put({
+        attemptId: 'stat2',
+        leaseToken: 'token2',
+        producedAt: new Date().toISOString(),
+        status: 'FAILED',
+      });
+
+      const stats = await spool.stats();
+      expect(stats.count).toBe(2);
+      expect(stats.totalBytes).toBeGreaterThan(0);
+      expect(stats.oldestAgeMs).toBeGreaterThanOrEqual(0);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('calculates deadLetterStats accurately and exposes dead-letter capacity metrics', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'opsknight-deadletter-stats-'));
+    try {
+      const spool = new ResultSpool(directory);
+      await spool.initialize();
+      const emptyStats = await spool.deadLetterStats();
+      expect(emptyStats).toEqual({ count: 0, totalBytes: 0, oldestAgeMs: 0 });
+
+      await spool.put({
+        attemptId: 'bad1',
+        leaseToken: 'token1',
+        producedAt: new Date().toISOString(),
+        status: 'SUCCEEDED',
+      });
+      await spool.quarantine('bad1');
+
+      const stats = await spool.deadLetterStats();
+      expect(stats.count).toBe(1);
+      expect(stats.totalBytes).toBeGreaterThan(0);
+      expect(stats.oldestAgeMs).toBeGreaterThanOrEqual(0);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed on unexpected filesystem errors in stats calculation', async () => {
+    // If the directory path is an invalid target (e.g. points to a regular file where directory is expected)
+    const tempDir = await mkdtemp(join(tmpdir(), 'opsknight-not-a-dir-'));
+    // Paths are confined to this test's freshly allocated temporary directory.
+    // eslint-disable-next-line security/detect-non-literal-fs-filename
+    await writeFile(join(tempDir, 'file'), 'not-a-directory');
+    const filePath = join(tempDir, 'file');
+    try {
+      const spool = new ResultSpool(filePath);
+      // stats() and deadLetterStats() should throw rather than masking the error as 0
+      await expect(spool.stats()).rejects.toThrow();
+      await expect(spool.deadLetterStats()).rejects.toThrow();
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });

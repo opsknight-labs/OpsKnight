@@ -37,4 +37,56 @@ describe('runbook trigger matcher', () => {
       matchesCondition(context, { field: '__proto__.constructor', operator: 'EXISTS', value: null })
     ).toBe(false);
   });
+
+  it('never satisfies negative comparisons when the target field is missing or null', () => {
+    expect(
+      matchesCondition(context, {
+        field: 'incident.environment',
+        operator: 'NOT_EQUALS',
+        value: 'production',
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(context, {
+        field: 'incident.priority',
+        operator: 'NOT_IN',
+        value: ['P1', 'P2'],
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(context, {
+        field: 'incident.missingField',
+        operator: 'EQUALS',
+        value: 'test',
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(context, {
+        field: 'incident.environment',
+        operator: 'NOT_EXISTS',
+        value: null,
+      })
+    ).toBe(true);
+    expect(
+      matchesCondition(context, {
+        field: 'incident.environment',
+        operator: 'EXISTS',
+        value: null,
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(context, {
+        field: 'incident.urgency',
+        operator: 'NOT_EQUALS',
+        value: 'LOW',
+      })
+    ).toBe(true);
+    expect(
+      matchesCondition(context, {
+        field: 'incident.urgency',
+        operator: 'NOT_IN',
+        value: ['LOW', 'MEDIUM'],
+      })
+    ).toBe(true);
+  });
 });

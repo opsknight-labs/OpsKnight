@@ -13,21 +13,30 @@ vi.mock('@/lib/prisma', () => ({
   },
 }));
 
-import { agentSignaturePayload, authenticateAgentRequest, sha256 } from '@/lib/runbooks/agent-auth';
+import {
+  agentSignaturePayload,
+  authenticateAgentRequest,
+  canonicalRequestTarget,
+  sha256,
+} from '@/lib/runbooks/agent-auth';
 
 const keys = generateKeyPairSync('ed25519', {
   privateKeyEncoding: { format: 'pem', type: 'pkcs8' },
   publicKeyEncoding: { format: 'pem', type: 'spki' },
 });
 
-function signedRequest(body: string, timestamp = new Date().toISOString(), nonce = 'nonce-1') {
-  const url = 'https://opsknight.example.com/api/runbook-agent/v1/heartbeat?ignored=true';
+function signedRequest(
+  body: string,
+  timestamp = new Date().toISOString(),
+  nonce = 'nonce-1',
+  url = 'https://opsknight.example.com/api/runbook-agent/v1/heartbeat?ignored=true'
+) {
   const signature = sign(
     null,
     Buffer.from(
       agentSignaturePayload({
         method: 'POST',
-        pathname: new URL(url).pathname,
+        target: url,
         timestamp,
         nonce,
         body,
@@ -66,6 +75,53 @@ describe('Runbook Agent request authentication', () => {
       data: { agentId: 'agent-1', nonceHash: sha256('nonce-1') },
     });
     await expect(authenticateAgentRequest(signedRequest(body), '{"spoolDepth":1}')).rejects.toThrow(
+      'signature is invalid'
+    );
+  });
+
+  it('canonicalizes query parameters and resists query tampering', async () => {
+    const body = '{"status":"ok"}';
+    const originalUrl = 'https://opsknight.example.com/api/runbook-agent/v1/claim?mode=READ_ONLY_ONLY&waitSeconds=25';
+
+    // Valid signed request
+    const req = signedRequest(body, new Date().toISOString(), 'nonce-q1', originalUrl);
+    await expect(authenticateAgentRequest(req, body)).resolves.toMatchObject({ id: 'agent-1' });
+
+    // Parameter ordering invariance in canonical target
+    expect(canonicalRequestTarget('/api/runbook-agent/v1/claim?b=2&a=1')).toBe(
+      '/api/runbook-agent/v1/claim?a=1&b=2'
+    );
+
+    // Tampered query parameters invalidate signature
+    const signature = sign(
+      null,
+      Buffer.from(
+        agentSignaturePayload({
+          method: 'POST',
+          target: originalUrl,
+          timestamp: new Date().toISOString(),
+          nonce: 'nonce-tamper',
+          body,
+        })
+      ),
+      keys.privateKey
+    ).toString('base64');
+
+    const tamperedReq = new Request(
+      'https://opsknight.example.com/api/runbook-agent/v1/claim?mode=READ_WRITE&waitSeconds=25',
+      {
+        method: 'POST',
+        headers: {
+          'x-opsknight-agent-id': 'agent-1',
+          'x-opsknight-timestamp': new Date().toISOString(),
+          'x-opsknight-nonce': 'nonce-tamper',
+          'x-opsknight-signature': signature,
+        },
+        body,
+      }
+    );
+
+    await expect(authenticateAgentRequest(tamperedReq, body)).rejects.toThrow(
       'signature is invalid'
     );
   });
