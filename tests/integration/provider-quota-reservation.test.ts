@@ -137,3 +137,28 @@ it('does not oversubscribe a rate window when eight allocation snapshots overlap
     await Promise.all([gateClient.$disconnect(), allocationClient.$disconnect()]);
   }
 }, 30_000);
+
+it('shares the composite quota window even when an existing row has a different surrogate id', async () => {
+  await configure(7);
+  const now = new Date(Date.now() + 60_000);
+  const windowStart = new Date(Math.floor(now.getTime() / 1000) * 1000);
+  await db.providerQuotaWindow.create({
+    data: {
+      id: 'existing-window-identity',
+      providerKey: 'smtp',
+      channel: 'EMAIL',
+      windowStart,
+      globalUsed: 6,
+      bulkUsed: 0,
+      expiresAt: new Date(windowStart.getTime() + 1000),
+    },
+  });
+  expect(await acquireProviderAdmission('EMAIL', 'smtp', now, 'CRITICAL')).toEqual({
+    allowed: true,
+  });
+  expect(
+    (await db.providerQuotaWindow.findUniqueOrThrow({ where: { id: 'existing-window-identity' } }))
+      .globalUsed
+  ).toBe(7);
+  expect(await db.providerQuotaWindow.count()).toBe(1);
+});

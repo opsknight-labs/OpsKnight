@@ -5,7 +5,7 @@
     "dockerMemoryBytes": 8319238144
   },
   "limitations": [
-    "The latest optimized six-profile run completed but failed duplicate-delivery, fallback and latency-ratio gates; fresh four-topology certification remains incomplete.",
+    "Latest unpinned 20-RPS PgBouncer run failed fallback, queue-age, latency-ratio and recovery-drain gates; clean four-topology certification remains incomplete.",
     "No passing cross-profile capacity comparison or promoted-primary failover certification is claimed.",
     "First two runs used two critical/two general workers; the third used four critical/four general workers.",
     "Default provider budgets include EMAIL at 8 deliveries/second. Earlier shared workload scripts attempted a nonexistent notes endpoint and accepted its 404; corrected provisioned reruns use real urgency updates and are a distinct workload revision."
@@ -976,6 +976,194 @@
         "Generator preallocates its existing maximum of 100 workers; offered rate and gates unchanged.",
         "Both baselines drained with zero duplicates; Shadow recorded three evaluation timeouts and exceeded observation queue age; forced LIVE worker restart left 9956 background jobs after the 180-second drain budget.",
         "Medium and worst profiles were not run because the previous profile did not drain."
+      ]
+    },
+    {
+      "topology": "compose-split-pgbouncer-audit9-20rps",
+      "generatedAt": "2026-10-09T06:38:34.307Z",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "shadow-small: 3 automation fallbacks",
+          "shadow-small: queue age exceeds 30000ms",
+          "live-small: 2 automation fallbacks",
+          "live-small: queue did not drain (8499)",
+          "live-small: queue age exceeds 30000ms",
+          "shadow-small: HTTP latency exceeds 1.25x global-off",
+          "shadow-small: queue age exceeds 30000ms",
+          "live-small: HTTP latency exceeds 1.25x global-off",
+          "live-small: queue age exceeds 30000ms",
+          "Incomplete certification: Previous profile did not drain"
+        ]
+      },
+      "comparisons": [
+        {
+          "profile": "service-disabled",
+          "acceptedRatio": 0.9995835068721366,
+          "p95Ratio": 1.1783162312239297,
+          "p99Ratio": 0.998521650754288,
+          "p95RatioToServiceDisabled": 1,
+          "p99RatioToServiceDisabled": 1,
+          "peakCriticalQueueAgeMs": 5053,
+          "peakAutomationObservationQueueAgeMs": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 108403,
+          "transactionRetryCount": 12463,
+          "peakDatabaseConnections": 142,
+          "peakDatabaseLockWaits": 3,
+          "peakDatabaseCpuPercent": 287.32,
+          "criticalNotificationLatency": {
+            "p95Ms": 464.4499999999997,
+            "p99Ms": 3105.6299999999997,
+            "sent": 6592,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "profile": "shadow-small",
+          "acceptedRatio": 1,
+          "p95Ratio": 3.014140587016044,
+          "p99Ratio": 2.3188560644194123,
+          "p95RatioToServiceDisabled": 2.5580065072049663,
+          "p99RatioToServiceDisabled": 2.322289218934549,
+          "peakCriticalQueueAgeMs": 7955,
+          "peakAutomationObservationQueueAgeMs": 48769,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 73926,
+          "transactionRetryCount": 12395,
+          "peakDatabaseConnections": 143,
+          "peakDatabaseLockWaits": 1,
+          "peakDatabaseCpuPercent": 396.26,
+          "criticalNotificationLatency": {
+            "p95Ms": 993.5999999999949,
+            "p99Ms": 5273.559999999997,
+            "sent": 4833,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "profile": "live-small",
+          "acceptedRatio": 0.9995835068721366,
+          "p95Ratio": 4.397649504849151,
+          "p99Ratio": 2.8926499628993128,
+          "p95RatioToServiceDisabled": 3.732147099663785,
+          "p99RatioToServiceDisabled": 2.896932641084138,
+          "peakCriticalQueueAgeMs": 12297,
+          "peakAutomationObservationQueueAgeMs": 51986,
+          "pendingAfterDrain": 8499,
+          "recoveryDrainMs": 327041,
+          "transactionRetryCount": 11387,
+          "peakDatabaseConnections": 143,
+          "peakDatabaseLockWaits": 2,
+          "peakDatabaseCpuPercent": 336.94,
+          "criticalNotificationLatency": {
+            "p95Ms": 1706.5999999999974,
+            "p99Ms": 6387.839999999998,
+            "sent": 4517,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        }
+      ],
+      "sourceRevision": "bede1c08835bda5938ea7ac481ba2e28083398b4",
+      "imageDigest": "sha256:707ee541a85afd9763dd92151fad50554f718b5b4867e3ba1999ac662850a3eb",
+      "nodeVersion": 20,
+      "cpuProfile": "Shared unpinned 12-CPU Docker host",
+      "rawArtifact": "artifacts/load-certification/automation/compose-split-pgbouncer-audit9-20rps/certification.json",
+      "profiles": [
+        {
+          "profile": "global-off",
+          "acceptedEvents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 13344,
+          "recoveryDrainMs": 107141,
+          "criticalNotificationLatency": {
+            "p95Ms": 851.2499999999984,
+            "p99Ms": 2754.2199999999993,
+            "sent": 7028,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "service-disabled",
+          "acceptedEvents": 2400,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 12463,
+          "recoveryDrainMs": 108403,
+          "criticalNotificationLatency": {
+            "p95Ms": 464.4499999999997,
+            "p99Ms": 3105.6299999999997,
+            "sent": 6592,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "shadow-small",
+          "acceptedEvents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 3,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 12395,
+          "recoveryDrainMs": 73926,
+          "criticalNotificationLatency": {
+            "p95Ms": 993.5999999999949,
+            "p99Ms": 5273.559999999997,
+            "sent": 4833,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 21.45520900003612,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "live-small",
+          "acceptedEvents": 2400,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 2,
+          "pendingAfterDrain": 8499,
+          "transactionRetryCount": 11387,
+          "recoveryDrainMs": 327041,
+          "criticalNotificationLatency": {
+            "p95Ms": 1706.5999999999974,
+            "p99Ms": 6387.839999999998,
+            "sent": 4517,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 90.90058300000965,
+          "deadlocksDelta": 0
+        }
+      ],
+      "limitations": [
+        "Not certified: Shadow/LIVE fallbacks, excessive observation/critical queue age, LIVE incomplete drain and HTTP overhead gates failed.",
+        "The runner stopped after LIVE-small; LIVE-medium and LIVE-worst were not run.",
+        "Central Notification claims still used a ten-minute stale timeout in this revision. BackgroundJob operational leases were fenced and heartbeat-enabled."
       ]
     }
   ],

@@ -1706,6 +1706,7 @@ model Notification {
   nextAttemptAt          DateTime                      @default(now())
   lastAttemptAt          DateTime?
   claimToken             String?
+  claimHeartbeatAt       DateTime?
   claimedBy              String?
   maxAttempts            Int                           @default(3)
   expiresAt              DateTime?
