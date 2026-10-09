@@ -142,7 +142,10 @@ export async function captureEvidence(
           )
         )
           throw new Error('Invalid StatefulSet evidence.');
-        const revisionMatch = !updateRevision || !currentRevision || currentRevision === updateRevision;
+        const revisionMatch =
+          desired === 0
+            ? true
+            : Boolean(currentRevision) && Boolean(updateRevision) && currentRevision === updateRevision;
         const converged =
           desired === 0
             ? updated === 0 && readyReplicas === 0

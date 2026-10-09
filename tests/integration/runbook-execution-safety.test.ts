@@ -1747,7 +1747,8 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     const cancelledExecution = await testPrisma.runbookExecution.findUniqueOrThrow({
       where: { id: execution.id },
     });
-    expect(cancelledExecution.status).toBe('CANCELLED');
+    expect(cancelledExecution.status).toBe('FAILED');
+    expect(cancelledExecution.failureCode).toBe('UNKNOWN_OUTCOME');
 
     const updatedStep = await testPrisma.runbookExecutionStep.findUniqueOrThrow({
       where: { id: step.id },
@@ -2105,7 +2106,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
           key: 'restart_svc',
           name: 'Restart Service',
           type: 'SYSTEMD',
-          riskClass: 'IDEMPOTENT_WRITE',
+          riskClass: 'NON_IDEMPOTENT',
           config: { action: 'restart', unit: 'app.service' },
         },
       ],

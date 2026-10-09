@@ -743,10 +743,15 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
     ) {
       input.status = 'UNKNOWN';
     }
-    if (attempt.status === 'UNKNOWN' && attempt.errorCode === 'AGENT_LEASE_EXPIRED') {
+    if (
+      attempt.status === 'UNKNOWN' &&
+      ['AGENT_LEASE_EXPIRED', 'CANCEL_ACK_TIMEOUT_UNKNOWN'].includes(attempt.errorCode ?? '')
+    ) {
       if (
         attempt.executionStep.status !== 'UNKNOWN' ||
-        attempt.executionStep.errorCode !== 'UNKNOWN_OUTCOME'
+        !['UNKNOWN_OUTCOME', 'CANCEL_ACK_TIMEOUT_UNKNOWN'].includes(
+          attempt.executionStep.errorCode ?? ''
+        )
       ) {
         throw new RunbookPreExecutionFenceError(
           input.attemptId,
@@ -778,9 +783,8 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
         (!executionOutcomeUnknown &&
           !['RUNNING', 'WAITING_AGENT'].includes(attempt.executionStep.execution.status));
       if (
-        (cancellationRequested && input.status !== 'CANCELLED') ||
-        (!cancellationRequested && input.status === 'CANCELLED') ||
-        input.status === 'UNKNOWN'
+        (cancellationRequested && !['CANCELLED', 'UNKNOWN'].includes(input.status)) ||
+        (!cancellationRequested && ['CANCELLED', 'UNKNOWN'].includes(input.status))
       ) {
         throw new RunbookPreExecutionFenceError(
           input.attemptId,
@@ -806,7 +810,7 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
         where: {
           id: attempt.id,
           status: 'UNKNOWN',
-          errorCode: 'AGENT_LEASE_EXPIRED',
+          errorCode: { in: ['AGENT_LEASE_EXPIRED', 'CANCEL_ACK_TIMEOUT_UNKNOWN'] },
           claimedAgentId: agentId,
           leaseToken: leaseHash(input.leaseToken),
         },
@@ -827,9 +831,20 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
       if (recovered.count !== 1) {
         throw new RunbookPreExecutionFenceError(input.attemptId, 'late result state changed');
       }
-      const stepStatus = input.status === 'SUCCEEDED' ? 'SUCCEEDED' : 'FAILED';
+      const stepStatus =
+        input.status === 'SUCCEEDED'
+          ? 'SUCCEEDED'
+          : input.status === 'FAILED'
+            ? 'FAILED'
+            : input.status === 'CANCELLED'
+              ? 'CANCELLED'
+              : 'UNKNOWN';
       const recoveredStep = await tx.runbookExecutionStep.updateMany({
-        where: { id: attempt.executionStepId, status: 'UNKNOWN', errorCode: 'UNKNOWN_OUTCOME' },
+        where: {
+          id: attempt.executionStepId,
+          status: 'UNKNOWN',
+          errorCode: { in: ['UNKNOWN_OUTCOME', 'CANCEL_ACK_TIMEOUT_UNKNOWN'] },
+        },
         data: {
           status: stepStatus,
           completedAt: producedAt,
@@ -842,19 +857,48 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
       if (recoveredStep.count !== 1) {
         throw new RunbookPreExecutionFenceError(input.attemptId, 'late result step state changed');
       }
-      await tx.runbookExecution.updateMany({
-        where: {
-          id: attempt.executionStep.executionId,
-          status: 'FAILED',
-          failureCode: 'UNKNOWN_OUTCOME',
-        },
-        data: {
-          status: 'RUNNING',
-          completedAt: null,
-          failureCode: null,
-          failureMessage: null,
-        },
-      });
+      if (stepStatus === 'SUCCEEDED') {
+        await tx.runbookExecution.updateMany({
+          where: {
+            id: attempt.executionStep.executionId,
+            status: 'FAILED',
+            failureCode: 'UNKNOWN_OUTCOME',
+          },
+          data: {
+            status: 'RUNNING',
+            completedAt: null,
+            failureCode: null,
+            failureMessage: null,
+          },
+        });
+      } else if (cancellationRequested && stepStatus === 'CANCELLED') {
+        await tx.runbookExecution.updateMany({
+          where: {
+            id: attempt.executionStep.executionId,
+            status: { in: ['CANCEL_REQUESTED', 'FAILED'] },
+          },
+          data: {
+            status: 'CANCELLED',
+            completedAt: producedAt,
+            failureCode: null,
+            failureMessage: null,
+          },
+        });
+      } else if (cancellationRequested && stepStatus === 'UNKNOWN') {
+        await tx.runbookExecution.updateMany({
+          where: {
+            id: attempt.executionStep.executionId,
+            status: 'CANCEL_REQUESTED',
+          },
+          data: {
+            status: 'FAILED',
+            completedAt: producedAt,
+            failureCode: 'UNKNOWN_OUTCOME',
+            failureMessage:
+              'Execution cancelled but one or more write steps had unverified outcomes.',
+          },
+        });
+      }
       await tx.backgroundJob.create({
         data: {
           type: 'RUNBOOK',
@@ -885,7 +929,7 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
     if (
       attempt.status !== 'RUNNING' ||
       attempt.executionStep.execution.status === 'CANCELLED' ||
-      (cancellationRequested && input.status !== 'CANCELLED') ||
+      (cancellationRequested && !['CANCELLED', 'UNKNOWN'].includes(input.status)) ||
       (!cancellationRequested && input.status === 'CANCELLED')
     ) {
       throw new RunbookPreExecutionFenceError(
@@ -922,7 +966,9 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
       isRetryable(attempt.executionStep.riskClass) &&
       isRetryableFailure(attempt.executionStep.riskClass, input.errorCode);
     const shouldRetry =
-      (retryUnknown || retryFailed) && attempt.attemptNumber <= attempt.executionStep.maxRetries;
+      !cancellationRequested &&
+      (retryUnknown || retryFailed) &&
+      attempt.attemptNumber <= attempt.executionStep.maxRetries;
     const completed = await tx.runbookStepAttempt.updateMany({
       where: { id: attempt.id, status: 'RUNNING', claimedAgentId: agentId },
       data: {
@@ -1005,25 +1051,46 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
 export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInput) {
   const input = agentArtifactSchema.parse(raw);
   const content = Buffer.from(input.contentBase64, 'base64');
-  if (content.length === 0 || content.length > 1_048_576) {
-    throw new Error('Compressed artifact must be between 1 byte and 1 MiB.');
+  if (content.length === 0 || content.length > 10 * 1024 * 1024) {
+    throw new Error('Compressed artifact must be between 1 byte and 10 MiB.');
   }
   if (sha256(content) !== input.sha256) throw new Error('Artifact checksum does not match.');
   return prisma.$transaction(async tx => {
+    const existing = await tx.runbookArtifact.findFirst({
+      where: {
+        attemptId: input.attemptId,
+        sha256: input.sha256,
+        attempt: { claimedAgentId: agentId },
+      },
+      select: { id: true, sizeBytes: true, sha256: true },
+    });
+    if (existing) {
+      return existing;
+    }
+
+    const now = new Date();
+    const graceWindowCutoff = new Date(now.getTime() - 60_000);
     const attempt = await tx.runbookStepAttempt.findFirst({
       where: {
         id: input.attemptId,
         claimedAgentId: agentId,
-        status: 'RUNNING',
         leaseToken: leaseHash(input.leaseToken),
-        leaseExpiresAt: { gt: new Date() },
         executionStep: {
           execution: {
-            cancelRequestedAt: null,
-            status: { in: ['RUNNING', 'WAITING_AGENT'] },
-            deadlineAt: { gt: new Date() },
+            deadlineAt: { gt: now },
           },
         },
+        OR: [
+          {
+            status: 'RUNNING',
+            leaseExpiresAt: { gt: now },
+          },
+          {
+            status: 'UNKNOWN',
+            errorCode: { in: ['AGENT_LEASE_EXPIRED', 'CANCEL_ACK_TIMEOUT_UNKNOWN'] },
+            leaseExpiresAt: { gte: graceWindowCutoff },
+          },
+        ],
       },
       select: {
         id: true,
@@ -1039,15 +1106,15 @@ export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInpu
     const executionId = attempt.executionStep.executionId;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`runbook-artifacts:${executionId}`}))`;
 
-    const existing = await tx.runbookArtifact.findFirst({
+    const existingLocked = await tx.runbookArtifact.findFirst({
       where: {
         attemptId: attempt.id,
         sha256: input.sha256,
       },
       select: { id: true, sizeBytes: true, sha256: true },
     });
-    if (existing) {
-      return existing;
+    if (existingLocked) {
+      return existingLocked;
     }
 
     const MAX_ARTIFACTS_PER_ATTEMPT = 10;

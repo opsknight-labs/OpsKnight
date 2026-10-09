@@ -155,8 +155,8 @@ export async function reconcileRunbooks(limit = 100) {
           data: {
             status: isWrite ? 'UNKNOWN' : 'CANCELLED',
             completedAt: now,
-            leaseToken: null,
-            leaseExpiresAt: null,
+            leaseToken: isWrite ? attempt.leaseToken : null,
+            leaseExpiresAt: isWrite ? attempt.leaseExpiresAt : null,
             errorCode: isWrite ? 'CANCEL_ACK_TIMEOUT_UNKNOWN' : 'CANCEL_ACK_TIMEOUT',
             errorMessage: isWrite
               ? 'The Agent was executing a write when cancellation was requested and its lease expired without acknowledgement; physical outcome is unknown.'

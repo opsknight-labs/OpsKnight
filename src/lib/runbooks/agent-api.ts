@@ -33,6 +33,13 @@ export async function readBoundedRequestBody(request: Request, maxBytes: number)
   }
 
   if (typeof request.body.getReader !== 'function') {
+    if (contentLength === null || contentLength === undefined) {
+      throw new RunbookPayloadTooLargeError(maxBytes);
+    }
+    const parsedLength = parseInt(contentLength, 10);
+    if (Number.isNaN(parsedLength) || parsedLength < 0 || parsedLength > maxBytes) {
+      throw new RunbookPayloadTooLargeError(maxBytes);
+    }
     const text = await request.text();
     if (Buffer.byteLength(text, 'utf8') > maxBytes) {
       throw new RunbookPayloadTooLargeError(maxBytes);

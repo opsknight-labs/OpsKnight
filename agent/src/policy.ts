@@ -76,7 +76,7 @@ export async function loadPolicy(path: string): Promise<{ policy: AgentPolicy; h
     kubernetesNamespaces: stringList(parsed.kubernetesNamespaces ?? []),
     bashCommandPatterns: stringList(parsed.bashCommandPatterns ?? []),
     maxRuntimeSeconds: boundedInteger(parsed.maxRuntimeSeconds, 300, 1, 3600),
-    maxOutputBytes: boundedInteger(parsed.maxOutputBytes, 1_048_576, 1024, 8_388_608),
+    maxOutputBytes: boundedInteger(parsed.maxOutputBytes, 1_048_576, 1024, 10_485_760),
     podmanContainers: stringList(parsed.podmanContainers ?? []),
     kubernetesActions: stringList(
       parsed.kubernetesActions ?? ['get', 'describe', 'logs', 'rollout-restart']

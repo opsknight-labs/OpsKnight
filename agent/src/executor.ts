@@ -39,6 +39,36 @@ export function containerHealthPassed(output: string): boolean {
   }
 }
 
+function resourceToKind(res: string): string {
+  const normalized = res.toLowerCase().replace(/s$/, '');
+  switch (normalized) {
+    case 'deployment':
+      return 'Deployment';
+    case 'statefulset':
+      return 'StatefulSet';
+    case 'daemonset':
+      return 'DaemonSet';
+    case 'pod':
+      return 'Pod';
+    case 'service':
+      return 'Service';
+    case 'job':
+      return 'Job';
+    case 'cronjob':
+      return 'CronJob';
+    case 'replicaset':
+      return 'ReplicaSet';
+    case 'node':
+      return 'Node';
+    case 'configmap':
+      return 'ConfigMap';
+    case 'secret':
+      return 'Secret';
+    default:
+      return res.charAt(0).toUpperCase() + res.slice(1);
+  }
+}
+
 export function commandFor(
   attempt: ClaimedAttempt,
   policy?: AgentPolicy
@@ -119,8 +149,15 @@ export function commandFor(
         };
       if (action === 'events') {
         const args = ['-n', namespace, 'get', 'events'];
+        const selectors: string[] = [];
         if (name) {
-          args.push('--field-selector', `involvedObject.name=${name}`);
+          selectors.push(`involvedObject.name=${name}`);
+        }
+        if (config.resource) {
+          selectors.push(`involvedObject.kind=${resourceToKind(String(config.resource))}`);
+        }
+        if (selectors.length > 0) {
+          args.push('--field-selector', selectors.join(','));
         }
         return {
           command: 'kubectl',
@@ -326,21 +363,28 @@ async function executeCommand(
         const isShutdown = signal.reason === 'AGENT_SHUTDOWN';
         const isLeaseLost = signal.reason === 'LEASE_LOST';
         const isWrite = attempt.step.riskClass !== 'READ_ONLY';
-        const status = isLeaseLost || (isShutdown && isWrite) ? 'UNKNOWN' : 'CANCELLED';
+        const status =
+          isLeaseLost || (isShutdown && isWrite) || (!isShutdown && isWrite)
+            ? 'UNKNOWN'
+            : 'CANCELLED';
         const errorCode = isShutdown
           ? isWrite
             ? 'AGENT_INTERRUPTED_BY_SHUTDOWN'
             : 'AGENT_SHUTDOWN'
           : isLeaseLost
             ? 'LEASE_LOST'
-            : undefined;
+            : isWrite
+              ? 'CANCELLED_WITH_UNKNOWN_OUTCOME'
+              : undefined;
         const errorMessage = isShutdown
           ? isWrite
             ? 'Execution was interrupted by process shutdown; target state is unknown.'
             : 'Execution was cancelled by process shutdown.'
           : isLeaseLost
             ? 'Local execution authority expired.'
-            : undefined;
+            : isWrite
+              ? 'Execution cancelled while write operation was in flight; physical outcome is unknown.'
+              : undefined;
 
         return resolve({
           status,

@@ -120,7 +120,7 @@ async function uploadOutput(
 ): Promise<string | undefined> {
   if (Buffer.byteLength(output) <= 32_768) return undefined;
   const content = gzipSync(Buffer.from(output));
-  if (content.length > 1_048_576) return undefined;
+  if (content.length > 10 * 1024 * 1024) return undefined;
   const artifact = await client.uploadArtifact({
     attemptId: attempt.attemptId,
     leaseToken: attempt.leaseToken,
@@ -409,7 +409,7 @@ async function run() {
           void client
             .renew(attempt!.attemptId, attempt!.leaseToken)
             .then(result => {
-              if (result?.cancelRequested) controller.abort();
+              if (result?.cancelRequested) controller.abort('CANCEL_REQUESTED');
               else if (result && authority?.valid)
                 authority.renew(result.leaseExpiresAt, attempt!.executionDeadlineAt);
             })
