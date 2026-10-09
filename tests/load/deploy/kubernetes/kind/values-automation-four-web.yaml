@@ -114,6 +114,7 @@ pgbouncer:
   defaultPoolSize: 24
   reservePoolSize: 8
   maxPreparedStatements: 1000
+  prismaCompatibilityMode: false
   resources:
     requests:
       cpu: '0'

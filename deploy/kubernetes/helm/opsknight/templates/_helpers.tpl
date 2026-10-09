@@ -112,7 +112,8 @@ app.kubernetes.io/component: {{ .role }}
 
 {{- define "opsknight.webDatabaseUrl" -}}
 {{- if .Values.pgbouncer.enabled -}}
-{{- printf "postgresql://%s:%s@%s:%d/%s?schema=public&pgbouncer=true" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) (include "opsknight.pgbouncer.fullname" .) (int .Values.pgbouncer.port) .Values.postgresql.database -}}
+{{- printf "postgresql://%s:%s@%s:%d/%s?schema=public" (.Values.postgresql.username | urlquery) (.Values.postgresql.password | urlquery) (include "opsknight.pgbouncer.fullname" .) (int .Values.pgbouncer.port) .Values.postgresql.database -}}
+{{- if .Values.pgbouncer.prismaCompatibilityMode -}}&pgbouncer=true{{- end -}}
 {{- else -}}
 {{- include "opsknight.databaseUrl" . -}}
 {{- end -}}

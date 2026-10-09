@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { parse, parseAllDocuments } from 'yaml';
 
 /* eslint-disable security/detect-non-literal-fs-filename -- Deployment matrix tests inspect a fixed repository-local file set. */
+/* eslint-disable security/detect-object-injection -- Deployment fixture keys come from the fixed repository-local manifests under test. */
 
 const root = process.cwd();
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -213,6 +214,75 @@ describe('deployment secret matrix', () => {
     ]) {
       expect(migrationRunner).toContain(token);
     }
+  });
+
+  it('keeps Prisma compatibility selectable without changing worker database routing', () => {
+    const args = [
+      '--set',
+      'runtime.mode=split',
+      '--set',
+      'image.tag=2.0.0',
+      '--set',
+      'pgbouncer.enabled=true',
+      '--set-string',
+      'postgresql.password=isolated-pool-test',
+    ];
+    const native = helmTemplate([...args, '--set', 'pgbouncer.prismaCompatibilityMode=false']);
+    const legacy = helmTemplate(args);
+    if (!native || !legacy) {
+      expect(read('deploy/kubernetes/helm/opsknight/templates/_helpers.tpl')).toContain(
+        'if .Values.pgbouncer.prismaCompatibilityMode'
+      );
+      expect(
+        yaml('deploy/kubernetes/helm/opsknight/values.yaml').pgbouncer.prismaCompatibilityMode
+      ).toBe(true);
+      return;
+    }
+    for (const [docs, compatibility] of [
+      [native, false],
+      [legacy, true],
+    ] as const) {
+      const secret = docs.find(doc => doc.kind === 'Secret' && doc.data?.WEB_DATABASE_URL);
+      if (!secret) throw new Error('Rendered Helm chart is missing pooled application credentials');
+      const url = new URL(Buffer.from(secret.data.WEB_DATABASE_URL, 'base64').toString());
+      expect(url.hostname).toBe('secret-matrix-opsknight-pgbouncer');
+      expect(url.searchParams.get('pgbouncer')).toBe(compatibility ? 'true' : null);
+      const direct = new URL(Buffer.from(secret.data.DIRECT_DATABASE_URL, 'base64').toString());
+      expect(direct.hostname).toBe('secret-matrix-opsknight-postgresql');
+      expect(direct.searchParams.has('pgbouncer')).toBe(false);
+    }
+  });
+
+  it('rejects native pooled Prisma connections when prepared-statement tracking is disabled', () => {
+    const result = spawnSync(
+      'helm',
+      [
+        'template',
+        'native-pool',
+        'deploy/kubernetes/helm/opsknight',
+        '--set',
+        'runtime.mode=split',
+        '--set',
+        'image.tag=2.0.0',
+        '--set',
+        'pgbouncer.enabled=true',
+        '--set-string',
+        'postgresql.password=isolated-pool-test',
+        '--set',
+        'pgbouncer.prismaCompatibilityMode=false',
+        '--set',
+        'pgbouncer.maxPreparedStatements=0',
+      ],
+      { cwd: root, encoding: 'utf8' }
+    );
+    if (result.error && (result.error as NodeJS.ErrnoException).code === 'ENOENT') {
+      expect(read('deploy/kubernetes/helm/opsknight/templates/pgbouncer-configmap.yaml')).toContain(
+        'requires maxPreparedStatements>0'
+      );
+      return;
+    }
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('requires maxPreparedStatements>0');
   });
 
   it('renders or statically verifies Helm integrated, split, and migration secret delivery', () => {

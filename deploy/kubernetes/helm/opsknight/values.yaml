@@ -403,6 +403,9 @@ pgbouncer:
   defaultPoolSize: 10
   reservePoolSize: 5
   maxPreparedStatements: 100
+  # Disable for PgBouncer >=1.21 with prepared-statement tracking enabled.
+  # Legacy compatibility mode disables Prisma's prepared-statement cache.
+  prismaCompatibilityMode: true
   existingAuthSecret: ''
   authFileKey: userlist.txt
   podDisruptionBudget: { enabled: true, minAvailable: 1 }

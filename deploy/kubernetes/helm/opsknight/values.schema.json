@@ -517,6 +517,7 @@
         "defaultPoolSize": { "type": "integer", "minimum": 1 },
         "reservePoolSize": { "type": "integer", "minimum": 0 },
         "maxPreparedStatements": { "type": "integer", "minimum": 0 },
+        "prismaCompatibilityMode": { "type": "boolean" },
         "existingAuthSecret": { "type": "string" },
         "authFileKey": { "type": "string", "minLength": 1 },
         "podDisruptionBudget": { "$ref": "#/definitions/pdb" },

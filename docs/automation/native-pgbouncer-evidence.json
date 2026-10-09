@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "clients": 8,
+  "serverPoolSize": 2,
+  "transactions": 320,
+  "intentionalRollbacks": 32,
+  "maxTrackedPreparedStatements": 9,
+  "statementMismatchErrors": 0,
+  "pgbouncerVersion": "1.26.0",
+  "prismaCompatibilityMode": false,
+  "scope": "NATIVE_PREPARED_STATEMENT_CORRECTNESS_SMOKE"
+}

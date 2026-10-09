@@ -14,6 +14,12 @@ connections per pod; each PgBouncer has a 24-connection default pool, eight
 reserve connections, and capacity for 1,000 prepared statements. This is capacity-test tuning,
 not a change to production defaults or the certification gates.
 
+The Kind values select `pgbouncer.prismaCompatibilityMode: false` for the
+verified PgBouncer 1.26.0 image. This preserves Prisma's prepared-statement
+cache in transaction pooling mode. Legacy compatibility remains available
+through the Helm setting; native mode requires positive
+`pgbouncer.maxPreparedStatements`. See the [Prisma pooling guidance](https://docs.prisma.io/docs/orm/prisma-client/setup-and-configuration/databases-connections/pgbouncer).
+
 Load the exact revision's application image and the local PgBouncer image into
 `opsknight-automation`, then install the existing Helm chart in namespace
 `automation-cert` with these values. Override `image.tag` with the image under
