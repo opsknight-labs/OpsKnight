@@ -157,6 +157,7 @@ export async function prepareAutomation(
       runtime.responderPolicy = runtime.policyId
         ? await captureResponderSnapshot(tx, runtime.policyId)
         : null;
+      runtime.policyName = runtime.responderPolicy?.name ?? null;
       runtime.responderSnapshotMs = performance.now() - snapshotStart;
     }
     // Bounded safe scalar summaries are queued; observation writes occur in the general worker.
@@ -208,6 +209,7 @@ export async function prepareAutomation(
         runtime.responderPolicy = runtime.policyId
           ? await captureResponderSnapshot(tx, runtime.policyId)
           : null;
+        runtime.policyName = runtime.responderPolicy?.name ?? null;
       } catch (snapshotError) {
         if (
           snapshotError instanceof Prisma.PrismaClientKnownRequestError ||

@@ -67,6 +67,7 @@ vi.mock('@/lib/db-utils', () => ({
         updateMany: txIncidentUpdateMany,
         update: txIncidentUpdate,
       },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       incidentEvent: { create: vi.fn() },
       backgroundJob: {
         findFirst: vi.fn().mockResolvedValue(null),

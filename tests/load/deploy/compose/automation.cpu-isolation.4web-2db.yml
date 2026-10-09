@@ -1,0 +1,9 @@
+# Failed sizing characterization retained for reproducibility on the 12-CPU host.
+# Apply after automation.cpu-isolation.yml. Certification gates stay unchanged.
+services:
+  db:
+    cpuset: '4-5'
+  web:
+    cpuset: '0-3'
+  proxy:
+    cpuset: '0-3'

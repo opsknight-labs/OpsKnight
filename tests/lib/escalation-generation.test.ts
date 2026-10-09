@@ -121,6 +121,7 @@ function liveTransaction(escalationProcessingAt: Date | null) {
         }),
         update: mocks.txIncidentUpdate,
       },
+      $queryRaw: vi.fn().mockResolvedValue([]),
       incidentEvent: { create: mocks.txIncidentEventCreate },
       backgroundJob: { create: mocks.txBackgroundJobCreate },
     });
