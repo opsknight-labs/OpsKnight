@@ -161,6 +161,18 @@ describe('runbook enhancement safety', () => {
       }).healthy
     ).toBe(true);
     expect(
+      compareEvidence(stamp, {
+        ...stamp,
+        kubernetesState: { desired: 0, ready: 0, generation: 2, observedGeneration: 2 },
+      }).healthy
+    ).toBe(true);
+    expect(
+      compareEvidence(stamp, {
+        ...stamp,
+        kubernetesState: { desired: 0, ready: 1, generation: 2, observedGeneration: 2 },
+      }).healthy
+    ).toBe(false);
+    expect(
       runbookEvidenceSchema.safeParse({ ...stamp, logSummary: 'x'.repeat(4097) }).success
     ).toBe(false);
   });

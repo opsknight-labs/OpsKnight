@@ -63,6 +63,9 @@ patches:
         - apiGroups: ["apps"]
           resources: ["deployments", "statefulsets", "daemonsets"]
           verbs: ["get", "list", "watch"]
+  # Outbound HTTPS/API egress is confined to cluster service CIDRs by default.
+  # For cloud-managed clusters (EKS, GKE, AKS), overlay kubernetes-api-cidr-patch.yaml
+  # to scope egress to your specific API server endpoints.
   - target:
       kind: NetworkPolicy
       name: opsknight-agent

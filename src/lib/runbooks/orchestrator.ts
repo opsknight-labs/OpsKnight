@@ -1134,7 +1134,10 @@ export async function advanceExecution(executionId: string): Promise<void> {
         data: {
           status: 'FAILED',
           completedAt: new Date(),
-          failureCode: failed.errorCode ?? 'STEP_FAILED',
+          failureCode:
+            failed.status === 'UNKNOWN'
+              ? 'UNKNOWN_OUTCOME'
+              : failed.errorCode ?? 'STEP_FAILED',
           failureMessage: failed.errorMessage,
         },
       });

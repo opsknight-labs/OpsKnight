@@ -784,11 +784,11 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
           !['RUNNING', 'WAITING_AGENT'].includes(attempt.executionStep.execution.status));
       if (
         (cancellationRequested && !['CANCELLED', 'UNKNOWN'].includes(input.status)) ||
-        (!cancellationRequested && ['CANCELLED', 'UNKNOWN'].includes(input.status))
+        (!cancellationRequested && input.status === 'CANCELLED')
       ) {
         throw new RunbookPreExecutionFenceError(
           input.attemptId,
-          'late result conflicts with cancellation or remains ambiguous'
+          'late result conflicts with cancellation'
         );
       }
       if (input.outputArtifactId) {
@@ -1015,7 +1015,7 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
         completedAt: resultProducedAt,
         outputPreview,
         outputArtifactId: input.outputArtifactId,
-        errorCode: input.errorCode,
+        errorCode: input.errorCode ?? (stepStatus === 'UNKNOWN' ? 'UNKNOWN_OUTCOME' : undefined),
         errorMessage: input.errorMessage ? redactRunbookOutput(input.errorMessage) : undefined,
       },
     });

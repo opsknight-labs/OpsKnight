@@ -1603,6 +1603,136 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     ).toBe(1);
   });
 
+  it('accepts direct UNKNOWN result from agent on write command timeout without retrying or dead-lettering', async () => {
+    const target = await createAgentTarget({
+      description: 'Write direct timeout',
+      steps: [
+        {
+          key: 'start',
+          name: 'Start',
+          type: 'SYSTEMD',
+          riskClass: 'IDEMPOTENT_WRITE',
+          config: { action: 'start', unit: 'api.service' },
+          maxRetries: 2,
+        },
+      ],
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    await advanceExecution(execution.id);
+    const claim = (await claimAgentAttempt(target.agent.id))!;
+    await fenceAgentAttempt({
+      attemptId: claim.attemptId,
+      agentId: target.agent.id,
+      leaseToken: claim.leaseToken,
+    });
+    const result = await submitAgentResult(target.agent.id, {
+      attemptId: claim.attemptId,
+      leaseToken: claim.leaseToken,
+      status: 'UNKNOWN',
+      errorCode: 'COMMAND_TIMEOUT',
+      errorMessage: 'Command exceeded 30 seconds.',
+      outputPreview: 'systemctl start api timed out',
+    });
+    expect(result).toMatchObject({ accepted: true, status: 'UNKNOWN' });
+
+    expect(
+      await testPrisma.runbookStepAttempt.count({
+        where: { executionStep: { executionId: execution.id } },
+      })
+    ).toBe(1);
+
+    const attempt = await testPrisma.runbookStepAttempt.findUniqueOrThrow({
+      where: { id: claim.attemptId },
+    });
+    expect(attempt.status).toBe('UNKNOWN');
+    expect(attempt.errorCode).toBe('COMMAND_TIMEOUT');
+    expect(attempt.errorMessage).toContain('Command exceeded 30 seconds.');
+    expect(attempt.outputPreview).toBe('systemctl start api timed out');
+
+    const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id },
+    });
+    expect(step.status).toBe('UNKNOWN');
+    expect(step.errorCode).toBe('COMMAND_TIMEOUT');
+
+    await advanceExecution(execution.id);
+    const finalExecution = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: execution.id },
+    });
+    expect(finalExecution.status).toBe('FAILED');
+    expect(finalExecution.failureCode).toBe('UNKNOWN_OUTCOME');
+  });
+
+  it('accepts direct UNKNOWN result from agent on write nonzero exit code without retrying', async () => {
+    const target = await createAgentTarget({
+      description: 'Write nonzero exit',
+      steps: [
+        {
+          key: 'start',
+          name: 'Start',
+          type: 'SYSTEMD',
+          riskClass: 'IDEMPOTENT_WRITE',
+          config: { action: 'start', unit: 'api.service' },
+          maxRetries: 2,
+        },
+      ],
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+    await advanceExecution(execution.id);
+    const claim = (await claimAgentAttempt(target.agent.id))!;
+    await fenceAgentAttempt({
+      attemptId: claim.attemptId,
+      agentId: target.agent.id,
+      leaseToken: claim.leaseToken,
+    });
+    const result = await submitAgentResult(target.agent.id, {
+      attemptId: claim.attemptId,
+      leaseToken: claim.leaseToken,
+      status: 'UNKNOWN',
+      exitCode: 1,
+      errorCode: 'COMMAND_FAILED',
+      errorMessage: 'Command exited with 1.',
+      outputPreview: 'Job for api.service failed',
+    });
+    expect(result).toMatchObject({ accepted: true, status: 'UNKNOWN' });
+
+    expect(
+      await testPrisma.runbookStepAttempt.count({
+        where: { executionStep: { executionId: execution.id } },
+      })
+    ).toBe(1);
+
+    const attempt = await testPrisma.runbookStepAttempt.findUniqueOrThrow({
+      where: { id: claim.attemptId },
+    });
+    expect(attempt.status).toBe('UNKNOWN');
+    expect(attempt.exitCode).toBe(1);
+    expect(attempt.errorCode).toBe('COMMAND_FAILED');
+    expect(attempt.errorMessage).toContain('Command exited with 1.');
+    expect(attempt.outputPreview).toBe('Job for api.service failed');
+
+    const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id },
+    });
+    expect(step.status).toBe('UNKNOWN');
+    expect(step.errorCode).toBe('COMMAND_FAILED');
+
+    await advanceExecution(execution.id);
+    const finalExecution = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: execution.id },
+    });
+    expect(finalExecution.status).toBe('FAILED');
+    expect(finalExecution.failureCode).toBe('UNKNOWN_OUTCOME');
+  });
+
   it.each(['cancel', 'deadline', 'revoke'] as const)(
     'enforces %s while the Agent is executing',
     async reason => {

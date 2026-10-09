@@ -119,8 +119,27 @@ async function uploadOutput(
   output: string
 ): Promise<string | undefined> {
   if (Buffer.byteLength(output) <= 32_768) return undefined;
-  const content = gzipSync(Buffer.from(output));
-  if (content.length > 10 * 1024 * 1024) return undefined;
+  const rawBuffer = Buffer.from(output);
+  let content = gzipSync(rawBuffer);
+  let truncated = output.endsWith('[output truncated]');
+  const MAX_ARTIFACT_SIZE = 10 * 1024 * 1024;
+  if (content.length > MAX_ARTIFACT_SIZE) {
+    let sliceLen = Math.floor(rawBuffer.length * (9.5 * 1024 * 1024 / content.length));
+    while (sliceLen > 0) {
+      const sliced = Buffer.concat([
+        rawBuffer.subarray(0, sliceLen),
+        Buffer.from('\n[output truncated]'),
+      ]);
+      const compressed = gzipSync(sliced);
+      if (compressed.length <= MAX_ARTIFACT_SIZE) {
+        content = compressed;
+        truncated = true;
+        break;
+      }
+      sliceLen = Math.floor(sliceLen * 0.9);
+    }
+    if (content.length > MAX_ARTIFACT_SIZE) return undefined;
+  }
   const artifact = await client.uploadArtifact({
     attemptId: attempt.attemptId,
     leaseToken: attempt.leaseToken,
@@ -129,7 +148,7 @@ async function uploadOutput(
     encoding: 'gzip',
     contentBase64: content.toString('base64'),
     sha256: createHash('sha256').update(content).digest('hex'),
-    truncated: output.endsWith('[output truncated]'),
+    truncated,
   });
   return artifact?.id;
 }
