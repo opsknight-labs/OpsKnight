@@ -57,21 +57,11 @@ export async function resolveIncidentResponderRouting(
         pinnedConditions: new Map(snapshot.steps.map(step => [step.id, step.conditions])),
       };
     }
-    const policy = await client.escalationPolicy.findUnique({
-      where: { id: decision.escalationPolicyId },
-      include: responderPolicyInclude,
+    throw new AppError({
+      code: 'AUTOMATION_PINNED_POLICY_MISSING',
+      userMessage:
+        'This LIVE incident has no valid pinned escalation definition. Escalation is paused for integrity review; the current mutable policy cannot be used.',
     });
-    if (!policy) {
-      throw new AppError({
-        code: 'AUTOMATION_PINNED_POLICY_MISSING',
-        userMessage:
-          'The escalation policy pinned to this incident was deleted. Restore that policy before resuming escalation.',
-      });
-    }
-    return {
-      type: decision.routeType === 'ESCALATION_POLICY' ? 'SELECTED_POLICY' : 'DEFAULT_POLICY',
-      policy,
-    };
   }
   // A default route that originally had no policy pins default fanout too.
   if (decision?.mode === 'LIVE' && !decision.escalationPolicyId)

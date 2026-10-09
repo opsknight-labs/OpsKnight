@@ -34,11 +34,12 @@ vi.mock('@/lib/prisma', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       updateMany: vi.fn(),
+      update: vi.fn(),
     },
     incident: { findUnique: vi.fn() },
     service: { findUnique: vi.fn() },
     systemConfig: { findUnique: vi.fn() },
-    notificationDeliveryAttempt: { create: vi.fn(), count: vi.fn() },
+    notificationDeliveryAttempt: { create: vi.fn(), count: vi.fn(), updateMany: vi.fn() },
     userNotificationEndpoint: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     $queryRaw: vi.fn(),
     $transaction: vi.fn(async (operation: unknown) =>
@@ -50,6 +51,9 @@ vi.mock('@/lib/prisma', () => ({
           })
     ),
   },
+}));
+vi.mock('@/lib/notification-dispatch-recovery', () => ({
+  recoverAbandonedNotificationDispatches: vi.fn().mockResolvedValue(0),
 }));
 vi.mock('@/lib/encryption', () => ({
   encrypt: mocks.encrypt,
@@ -122,6 +126,8 @@ describe('central notification control plane', () => {
     vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
     vi.mocked(prisma.userNotificationEndpoint.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.notificationDeliveryAttempt.count).mockResolvedValue(0);
+    vi.mocked(prisma.notificationDeliveryAttempt.updateMany).mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.notification.update).mockResolvedValue({ id: 'claimed' } as never);
     vi.mocked(prisma.systemConfig.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
     mocks.isBulkPaused.mockResolvedValue(false);
@@ -530,6 +536,9 @@ describe('central notification control plane', () => {
       expect.objectContaining({
         data: expect.objectContaining({ status: 'PENDING', attempts: 1, failedAt: null }),
       })
+    );
+    expect(prisma.notificationDeliveryAttempt.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ outcome: 'NOT_DISPATCHED' }) })
     );
     expect(prisma.notificationDeliveryAttempt.create).not.toHaveBeenCalled();
   });

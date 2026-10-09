@@ -1,0 +1,30 @@
+{
+  "sourceRevision": "37424d6ca5f61b6dee233e18142ba1bffe314abe",
+  "imageDigest": "sha256:1e986971993579ed02f112ab14730b761eb34c89c36f70ce48e01f425e2fafdc",
+  "profile": "live-small",
+  "providerDuplicates": [
+    {
+      "deliveryKey": "notification_429f2f955a2ea049695d01a239a3102",
+      "channel": "webhook",
+      "recipient": "/webhook/lt-service-014",
+      "trafficClass": "TRANSACTIONAL",
+      "attempts": 2,
+      "succeededCount": 2,
+      "firstAttemptAt": 1791543038101,
+      "lastAttemptAt": 1791543060817,
+      "firstSuccessAt": 1791543038121
+    },
+    {
+      "deliveryKey": "notification_e133f854b72316ba8d3ad905901764f",
+      "channel": "webhook",
+      "recipient": "/webhook/lt-service-014",
+      "trafficClass": "TRANSACTIONAL",
+      "attempts": 2,
+      "succeededCount": 2,
+      "firstAttemptAt": 1791543038101,
+      "lastAttemptAt": 1791543060822,
+      "firstSuccessAt": 1791543038121
+    }
+  ],
+  "databaseEvidence": "Each notification had attempts=2 but only ordinal=1 ACCEPTED ledger row, written for the second send. First acceptance preceded the ledger-less worker crash by about 22 seconds."
+}

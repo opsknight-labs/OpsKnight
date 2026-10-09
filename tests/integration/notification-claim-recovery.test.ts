@@ -2,9 +2,13 @@ import { afterAll, beforeEach, expect, it, vi } from 'vitest';
 import { testPrisma as db, resetDatabase } from '../helpers/test-db';
 import {
   createCentralNotificationIntent,
+  deliverCentralNotification,
+  reconcileUnknownNotifications,
+  UNKNOWN_RECONCILIATION_DELAY_MS,
   processCentralNotificationQueue,
   getNextCentralNotificationAt,
 } from '@/lib/notification-control-plane';
+import { recoverAbandonedNotificationDispatches } from '@/lib/notification-dispatch-recovery';
 import { notificationClaimAvailable } from '@/lib/notification-claim-lease';
 const mocks = vi.hoisted(() => ({ send: vi.fn(), concurrency: vi.fn() }));
 vi.mock('@/lib/webhooks', () => ({ sendWebhook: mocks.send }));
@@ -17,6 +21,7 @@ vi.mock('@/lib/provider-admission', () => ({
   acquireProviderAdmission: async () => ({ allowed: true }),
   acquireProviderConcurrency: mocks.concurrency,
   releaseProviderConcurrency: async () => undefined,
+  deferProviderAdmission: async () => undefined,
 }));
 vi.mock('@/lib/notification-capacity-control', async original => ({
   ...(await original<typeof import('@/lib/notification-capacity-control')>()),
@@ -171,4 +176,155 @@ it('a replaced claim cannot dispatch after its provider admission resumes', asyn
     release();
     await stale;
   }
+});
+
+it.each(['queue', 'inline'] as const)(
+  'does not replay an abandoned dispatch through %s delivery',
+  async path => {
+    const row = await intent(`abandoned-${path}`);
+    const old = new Date(Date.now() - 21000);
+    await db.notification.update({
+      where: { id: row.id },
+      data: {
+        trafficClass: 'TRANSACTIONAL',
+        attempts: 1,
+        lastAttemptAt: old,
+        claimToken: 'lost-owner',
+        claimHeartbeatAt: old,
+        deliveryAttempts: {
+          create: { ordinal: 1, outcome: 'IN_FLIGHT', provider: 'default', startedAt: old },
+        },
+      },
+    });
+    if (path === 'queue') await processCentralNotificationQueue({ batchSize: 1 });
+    else await deliverCentralNotification(row.id);
+    expect(mocks.send).not.toHaveBeenCalled();
+    const stored = await db.notification.findUniqueOrThrow({
+      where: { id: row.id },
+      include: { deliveryAttempts: true },
+    });
+    expect(stored.status).toBe('UNKNOWN');
+    expect(stored.attempts).toBe(1);
+    expect(stored.deliveryAttempts).toMatchObject([
+      { ordinal: 1, outcome: 'UNKNOWN', errorCode: 'DISPATCH_OWNER_LOST' },
+    ]);
+    expect(
+      await reconcileUnknownNotifications(
+        new Date(Date.now() + UNKNOWN_RECONCILIATION_DELAY_MS + 1000)
+      )
+    ).toEqual({ retried: 0, awaitingCallback: 0, unsupported: 1 });
+    await processCentralNotificationQueue({ batchSize: 1 });
+    expect(mocks.send).not.toHaveBeenCalled();
+  }
+);
+
+it('sends nothing and preserves the attempt budget when the dispatch ledger cannot commit', async () => {
+  const row = await intent('ledger-failure');
+  await db.$executeRawUnsafe(
+    `CREATE FUNCTION reject_notification_dispatch() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.outcome='IN_FLIGHT' THEN RAISE EXCEPTION 'injected dispatch ledger failure'; END IF; RETURN NEW; END $$`
+  );
+  await db.$executeRawUnsafe(
+    `CREATE TRIGGER reject_notification_dispatch BEFORE INSERT ON "NotificationDeliveryAttempt" FOR EACH ROW EXECUTE FUNCTION reject_notification_dispatch()`
+  );
+  try {
+    expect(await deliverCentralNotification(row.id)).toMatchObject({
+      success: false,
+      claimed: true,
+    });
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(await db.notification.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({
+      status: 'PENDING',
+      attempts: 0,
+      lastAttemptAt: null,
+    });
+    expect(await db.notificationDeliveryAttempt.count({ where: { notificationId: row.id } })).toBe(
+      0
+    );
+  } finally {
+    await db.$executeRawUnsafe(
+      'DROP TRIGGER reject_notification_dispatch ON "NotificationDeliveryAttempt"'
+    );
+    await db.$executeRawUnsafe('DROP FUNCTION reject_notification_dispatch()');
+  }
+});
+
+it('lets a late provider acceptance settle its own recovered ambiguous marker', async () => {
+  const row = await intent('late-acceptance');
+  await db.notification.update({ where: { id: row.id }, data: { trafficClass: 'CRITICAL' } });
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  mocks.send.mockImplementationOnce(async () => {
+    await gate;
+    return { success: true };
+  });
+  const delivery = deliverCentralNotification(row.id);
+  try {
+    await vi.waitFor(() => expect(mocks.send).toHaveBeenCalledOnce());
+    const attempt = await db.notificationDeliveryAttempt.findFirstOrThrow({
+      where: { notificationId: row.id },
+    });
+    expect(attempt.outcome).toBe('IN_FLIGHT');
+    await db.notification.update({
+      where: { id: row.id },
+      data: { claimHeartbeatAt: new Date(Date.now() - 21000) },
+    });
+    expect(
+      await recoverAbandonedNotificationDispatches(new Date(), UNKNOWN_RECONCILIATION_DELAY_MS)
+    ).toBe(1);
+    expect((await db.notification.findUniqueOrThrow({ where: { id: row.id } })).status).toBe(
+      'UNKNOWN'
+    );
+  } finally {
+    release();
+  }
+  expect(await delivery).toMatchObject({ success: true, claimed: true });
+  expect((await db.notification.findUniqueOrThrow({ where: { id: row.id } })).status).toBe('SENT');
+  expect(
+    (await db.notificationDeliveryAttempt.findFirstOrThrow({ where: { notificationId: row.id } }))
+      .outcome
+  ).toBe('ACCEPTED');
+  expect(mocks.send).toHaveBeenCalledOnce();
+});
+
+it('keeps ownership until a rejected dispatch can be durably settled', async () => {
+  const row = await intent('rejected-ledger-failure');
+  mocks.send.mockResolvedValue({ success: false, statusCode: 429, error: 'Rate limited' });
+  await db.$executeRawUnsafe(
+    `CREATE FUNCTION test_reject_attempt_settlement() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.outcome <> 'IN_FLIGHT' THEN RAISE EXCEPTION 'test settlement unavailable'; END IF; RETURN NEW; END $$`
+  );
+  await db.$executeRawUnsafe(
+    `CREATE TRIGGER test_reject_attempt_settlement BEFORE UPDATE ON "NotificationDeliveryAttempt" FOR EACH ROW EXECUTE FUNCTION test_reject_attempt_settlement()`
+  );
+  try {
+    await deliverCentralNotification(row.id);
+    const pending = await db.notification.findUniqueOrThrow({ where: { id: row.id } });
+    expect(pending.status).toBe('PENDING');
+    expect(pending.lastAttemptAt).not.toBeNull();
+    expect(
+      await db.notificationDeliveryAttempt.count({
+        where: { notificationId: row.id, outcome: 'IN_FLIGHT' },
+      })
+    ).toBe(1);
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+  } finally {
+    await db.$executeRawUnsafe(
+      `DROP TRIGGER test_reject_attempt_settlement ON "NotificationDeliveryAttempt"`
+    );
+    await db.$executeRawUnsafe(`DROP FUNCTION test_reject_attempt_settlement()`);
+  }
+  const old = new Date(Date.now() - 21_000);
+  await db.notification.update({
+    where: { id: row.id },
+    data: { trafficClass: 'TRANSACTIONAL', claimHeartbeatAt: old, lastAttemptAt: old },
+  });
+  expect(
+    await recoverAbandonedNotificationDispatches(new Date(), UNKNOWN_RECONCILIATION_DELAY_MS)
+  ).toBe(1);
+  await processCentralNotificationQueue({ batchSize: 1 });
+  expect((await db.notification.findUniqueOrThrow({ where: { id: row.id } })).status).toBe(
+    'UNKNOWN'
+  );
+  expect(mocks.send).toHaveBeenCalledTimes(1);
 });

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import crypto from 'crypto';
+import { recoverAbandonedNotificationDispatches } from './notification-dispatch-recovery';
 import {
   notificationClaimAvailable,
   notificationClaimDeadlineSql,
@@ -1884,7 +1885,7 @@ async function finishAttempt(input: {
   const finishedAt = new Date();
   try {
     if (input.attemptId) {
-      await prisma.notificationDeliveryAttempt.updateMany({
+      const settled = await prisma.notificationDeliveryAttempt.updateMany({
         where: { id: input.attemptId, outcome: 'IN_FLIGHT' },
         data: {
           outcome: input.outcome,
@@ -1896,6 +1897,7 @@ async function finishAttempt(input: {
           latencyMs: Math.max(0, finishedAt.getTime() - input.startedAt.getTime()),
         },
       });
+      return settled.count > 0;
     } else {
       await prisma.notificationDeliveryAttempt.create({
         data: {
@@ -1911,6 +1913,7 @@ async function finishAttempt(input: {
           latencyMs: Math.max(0, finishedAt.getTime() - input.startedAt.getTime()),
         },
       });
+      return true;
     }
   } catch (error) {
     logger.error('notification.attempt_ledger_write_failed', {
@@ -1919,6 +1922,7 @@ async function finishAttempt(input: {
       outcome: input.outcome,
       error: safeError(error),
     });
+    return false;
   }
 }
 
@@ -2049,6 +2053,7 @@ async function deliverCentralNotificationOwned(
         scheduledAt: { lte: now },
         nextAttemptAt: { lte: now },
         ...notificationClaimAvailable(now),
+        deliveryAttempts: { none: { outcome: 'IN_FLIGHT', finishedAt: null } },
       },
       data: {
         status: 'PENDING',
@@ -2060,7 +2065,15 @@ async function deliverCentralNotificationOwned(
         errorMsg: null,
       },
     });
-    if (claim.count === 0) return { success: false, claimed: false };
+    if (claim.count === 0) {
+      await recoverAbandonedNotificationDispatches(
+        now,
+        UNKNOWN_RECONCILIATION_DELAY_MS,
+        1,
+        candidate.id
+      );
+      return { success: false, claimed: false };
+    }
   }
 
   ownHeartbeat(
@@ -2378,54 +2391,65 @@ async function deliverCentralNotificationOwned(
       return { success: false, claimed: true, error: errorMessage };
     }
 
-    const dispatchClaim = await prisma.notification.updateMany({
-      where: {
-        id: candidate.id,
-        status: 'PENDING',
-        lastAttemptAt: now,
-        claimToken: ownershipToken,
-      },
-      data: { attempts: { increment: 1 } },
-    });
-    if (dispatchClaim.count !== 1) {
-      await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
-      return { success: false, claimed: false };
-    }
-
-    anyAttemptDispatched = true;
     const startedAt = new Date();
+    const isVoicePayload = payload.kind === 'INCIDENT_VOICE' || payload.kind === 'VOICE';
+    const preCreatedAttemptId = crypto.randomUUID();
+    // The ownership fence, attempt budget and dispatch marker commit atomically.
+    // Every channel needs this marker before an external request can be accepted.
+    try {
+      await prisma.notification.update({
+        where: {
+          id: candidate.id,
+          status: 'PENDING',
+          lastAttemptAt: now,
+          claimToken: ownershipToken,
+        },
+        data: {
+          attempts: { increment: 1 },
+          claimHeartbeatAt: ['CRITICAL', 'TRANSACTIONAL'].includes(candidate.trafficClass)
+            ? new Date()
+            : null,
+          deliveryAttempts: {
+            create: {
+              id: preCreatedAttemptId,
+              ordinal,
+              outcome: 'IN_FLIGHT',
+              provider: currentProvider,
+              startedAt,
+            },
+          },
+        },
+        select: { id: true },
+      });
+    } catch (error) {
+      await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        return { success: false, claimed: false };
+      }
+      const errorMessage = safeError(error);
+      await prisma.notification.updateMany({
+        where: {
+          id: candidate.id,
+          status: 'PENDING',
+          lastAttemptAt: now,
+          claimToken: ownershipToken,
+        },
+        data: {
+          lastAttemptAt: null,
+          claimHeartbeatAt: null,
+          claimToken: null,
+          nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
+          errorMsg: `Dispatch ledger unavailable; no provider request was sent: ${errorMessage}`,
+        },
+      });
+      return { success: false, claimed: true, error: errorMessage };
+    }
+    anyAttemptDispatched = true;
     const currentDeliveryAttempt = candidate.attempts + routeIndex + 1;
-
     let result: DeliveryResult;
     let releaseConcurrencyLease = true;
     let circuitTimeout = false;
     let circuitOpen = false;
-
-    // For voice calls, pre-create the delivery attempt so the attempt ID is
-    // available for Twilio callback URL correlation. This prevents the race
-    // where a Twilio callback arrives before the attempt row exists.
-    let preCreatedAttemptId: string | undefined;
-    const isVoicePayload = payload.kind === 'INCIDENT_VOICE' || payload.kind === 'VOICE';
-    if (isVoicePayload) {
-      try {
-        const preAttempt = await prisma.notificationDeliveryAttempt.create({
-          data: {
-            notificationId: candidate.id,
-            ordinal,
-            outcome: 'IN_FLIGHT',
-            provider: currentProvider,
-            startedAt,
-          },
-        });
-        preCreatedAttemptId = preAttempt.id;
-      } catch (preAttemptError) {
-        logger.warn('notification.voice_pre_attempt_failed', {
-          notificationId: candidate.id,
-          error: safeError(preAttemptError),
-        });
-        // Continue without pre-created attempt; legacy callback path will handle it.
-      }
-    }
 
     try {
       const payloadForProvider =
@@ -2478,7 +2502,7 @@ async function deliverCentralNotificationOwned(
               // CAS guard: only update if the attempt has not yet been completed by a
               // concurrent Twilio callback. Prevents overwriting a terminal finishedAt.
               finishedAt: null,
-              outcome: { in: VOICE_ACTIVE_OUTCOMES },
+              outcome: { in: [...VOICE_ACTIVE_OUTCOMES, 'UNKNOWN'] },
             },
             data: {
               provider:
@@ -2506,7 +2530,7 @@ async function deliverCentralNotificationOwned(
           prisma.notification.updateMany({
             where: {
               id: candidate.id,
-              status: 'PENDING',
+              status: { in: ['PENDING', 'UNKNOWN'] },
               lastAttemptAt: now,
               claimToken: ownershipToken,
             },
@@ -2518,7 +2542,7 @@ async function deliverCentralNotificationOwned(
           // If still IN_FLIGHT, mark it as ACCEPTED (or SKIPPED). If a concurrent callback
           // already set a richer status (e.g. ANSWERED, COMPLETED), do not regress it.
           await prisma.notificationDeliveryAttempt.updateMany({
-            where: { id: preCreatedAttemptId, outcome: 'IN_FLIGHT' },
+            where: { id: preCreatedAttemptId, outcome: { in: ['IN_FLIGHT', 'UNKNOWN'] } },
             data: { outcome: result.skipped ? 'SKIPPED' : 'ACCEPTED' },
           });
         }
@@ -2526,7 +2550,7 @@ async function deliverCentralNotificationOwned(
         committed = await prisma.notification.updateMany({
           where: {
             id: candidate.id,
-            status: 'PENDING',
+            status: { in: ['PENDING', 'UNKNOWN'] },
             lastAttemptAt: now,
             claimToken: ownershipToken,
           },
@@ -2539,7 +2563,7 @@ async function deliverCentralNotificationOwned(
                 id: preCreatedAttemptId,
                 // Same CAS guard as primary path — never overwrite a terminal attempt.
                 finishedAt: null,
-                outcome: { in: VOICE_ACTIVE_OUTCOMES },
+                outcome: { in: [...VOICE_ACTIVE_OUTCOMES, 'UNKNOWN'] },
               },
               data: {
                 provider:
@@ -2552,7 +2576,7 @@ async function deliverCentralNotificationOwned(
             .catch(() => undefined);
           await prisma.notificationDeliveryAttempt
             .updateMany({
-              where: { id: preCreatedAttemptId, outcome: 'IN_FLIGHT' },
+              where: { id: preCreatedAttemptId, outcome: { in: ['IN_FLIGHT', 'UNKNOWN'] } },
               data: { outcome: result.skipped ? 'SKIPPED' : 'ACCEPTED' },
             })
             .catch(() => undefined);
@@ -2586,6 +2610,16 @@ async function deliverCentralNotificationOwned(
 
     // Circuit breaker is open during dispatch
     if (circuitOpen) {
+      const settled = await finishAttempt({
+        notificationId: candidate.id,
+        ordinal,
+        outcome: 'NOT_DISPATCHED',
+        startedAt,
+        attemptId: preCreatedAttemptId,
+        provider: currentProvider,
+        errorMessage,
+      });
+      if (!settled) return { success: false, claimed: true, error: errorMessage };
       if (!isLastProviderInRoute) {
         logger.warn('notification.email_failover_on_circuit_open', {
           notificationId: candidate.id,
@@ -2600,7 +2634,7 @@ async function deliverCentralNotificationOwned(
       await prisma.notification.updateMany({
         where: {
           id: candidate.id,
-          status: 'PENDING',
+          status: { in: ['PENDING', 'UNKNOWN'] },
           lastAttemptAt: now,
           claimToken: ownershipToken,
         },
@@ -2624,10 +2658,21 @@ async function deliverCentralNotificationOwned(
       result.retryAfterMs > 0
     ) {
       const retryAt = new Date(Date.now() + Math.max(result.retryAfterMs, 1_000));
+      const settled = await finishAttempt({
+        notificationId: candidate.id,
+        ordinal,
+        outcome: 'DEFERRED_NOT_DUE',
+        startedAt,
+        attemptId: preCreatedAttemptId,
+        provider: (result as { selectedProvider?: string }).selectedProvider || currentProvider,
+        errorCode: result.errorCode,
+        errorMessage,
+      });
+      if (!settled) return { success: false, claimed: true, error: errorMessage };
       await prisma.notification.updateMany({
         where: {
           id: candidate.id,
-          status: 'PENDING',
+          status: { in: ['PENDING', 'UNKNOWN'] },
           lastAttemptAt: now,
           claimToken: ownershipToken,
         },
@@ -2642,16 +2687,7 @@ async function deliverCentralNotificationOwned(
           errorMsg: `Announcement delivery deferred until ${retryAt.toISOString()}`,
         },
       });
-      await finishAttempt({
-        notificationId: candidate.id,
-        ordinal,
-        outcome: 'DEFERRED_NOT_DUE',
-        startedAt,
-        attemptId: preCreatedAttemptId,
-        provider: (result as { selectedProvider?: string }).selectedProvider || currentProvider,
-        errorCode: result.errorCode,
-        errorMessage,
-      });
+
       return { success: false, claimed: true, error: errorMessage };
     }
 
@@ -2758,7 +2794,7 @@ async function deliverCentralNotificationOwned(
 
     if (providerRetryAt) {
       await deferProviderAdmission(channelScope, currentProvider, providerRetryAt);
-      await finishAttempt({
+      const settled = await finishAttempt({
         notificationId: candidate.id,
         ordinal,
         outcome: 'RATE_LIMITED',
@@ -2769,6 +2805,7 @@ async function deliverCentralNotificationOwned(
         errorMessage,
       });
 
+      if (!settled) return { success: false, claimed: true, error: errorMessage };
       const exhausted = currentDeliveryAttempt >= candidate.maxAttempts;
       if (!isLastProviderInRoute && !exhausted) {
         logger.warn('notification.email_failover_on_rate_limit', {
@@ -2804,7 +2841,7 @@ async function deliverCentralNotificationOwned(
     const safeFailover = isEmail && isSafeEmailFailoverCondition(result);
     const canFailover = safeFailover && !isLastProviderInRoute && !exhausted;
 
-    await finishAttempt({
+    const settled = await finishAttempt({
       notificationId: candidate.id,
       ordinal,
       outcome: permanent || (exhausted && !canFailover) ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
@@ -2815,6 +2852,7 @@ async function deliverCentralNotificationOwned(
       errorCode: result.errorCode,
     });
 
+    if (!settled) return { success: false, claimed: true, error: errorMessage };
     if (permanent) {
       await prisma.notification.updateMany({
         where: {
@@ -2995,6 +3033,7 @@ export async function processCentralNotificationQueue(
   failed: number;
 }> {
   const now = new Date();
+  await recoverAbandonedNotificationDispatches(now, UNKNOWN_RECONCILIATION_DELAY_MS);
   await reconcileUnknownNotifications(now);
   await cleanupExpiredNotifications(now);
   try {
@@ -3033,6 +3072,11 @@ export async function processCentralNotificationQueue(
       AND "scheduledAt" <= ${now}
       AND "nextAttemptAt" <= ${now}
       ${trafficFilter}
+      AND NOT EXISTS (
+        SELECT 1 FROM "NotificationDeliveryAttempt" attempt
+        WHERE attempt."notificationId" = "Notification".id
+          AND attempt.outcome = 'IN_FLIGHT' AND attempt."finishedAt" IS NULL
+      )
       AND ("expiresAt" IS NULL OR "expiresAt" > ${now})
       AND (
         "status" = 'FAILED'::"NotificationStatus"
@@ -3067,6 +3111,11 @@ export async function processCentralNotificationQueue(
       -- The materialized ranking can become stale before the row lock is acquired.
       -- Recheck the durable row so a completed inline delivery cannot be revived.
       AND notification."payloadEncrypted" IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM "NotificationDeliveryAttempt" attempt
+        WHERE attempt."notificationId" = notification.id
+          AND attempt.outcome = 'IN_FLIGHT' AND attempt."finishedAt" IS NULL
+      )
       AND notification."attempts" < notification."maxAttempts"
       AND notification."scheduledAt" <= ${now}
       AND notification."nextAttemptAt" <= ${now}

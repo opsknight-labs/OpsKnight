@@ -272,3 +272,56 @@ it('global OFF locks operational modes, resets staged services and fences a conc
   ).toBe('DISABLED');
   await changeMode({ ...mode, mode: 'LIVE', acknowledgeNoShadow: true });
 });
+
+it.each([
+  { steps: 51, name: 'Legacy default', reason: 'maximum step limit of 50' },
+  { steps: 1, name: 'x'.repeat(65_536), reason: 'byte size limit of 65536 bytes' },
+])(
+  'rejects an unsafe legacy default before LIVE activation ($steps steps)',
+  async ({ steps, name, reason }) => {
+    await saveAutomationSettings({
+      automationEnabled: true,
+      automationTraceRetentionDays: 90,
+      expectedRevision: 0,
+    });
+    const policy = await db.escalationPolicy.create({ data: { name } });
+    await db.escalationRule.createMany({
+      data: Array.from({ length: steps }, (_, stepOrder) => ({
+        policyId: policy.id,
+        stepOrder,
+        delayMinutes: 0,
+        targetType: 'USER' as const,
+        targetUserId: auth.actorId,
+        notificationChannels: ['EMAIL' as const],
+      })),
+    });
+    const service = await db.service.create({
+      data: { name: 'Legacy upgrade', escalationPolicyId: policy.id },
+    });
+    const draft = await saveDraft({
+      serviceId: service.id,
+      actorId: auth.actorId,
+      snapshot: emptySnapshot,
+      expectedRevision: 0,
+    });
+    const version = await publishVersion({
+      serviceId: service.id,
+      actorId: auth.actorId,
+      expectedRevision: draft.revision,
+      expectedActiveVersionId: null,
+    });
+    const input = {
+      serviceId: service.id,
+      actorId: auth.actorId,
+      expectedActiveVersionId: version.id,
+    };
+    await changeMode({ ...input, mode: 'SHADOW' });
+    await expect(changeMode({ ...input, mode: 'LIVE', acknowledgeNoShadow: true })).rejects.toThrow(
+      reason
+    );
+    expect(
+      (await db.serviceAutomationConfig.findUniqueOrThrow({ where: { serviceId: service.id } }))
+        .mode
+    ).toBe('SHADOW');
+  }
+);
