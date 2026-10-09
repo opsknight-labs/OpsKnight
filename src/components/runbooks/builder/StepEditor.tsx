@@ -121,14 +121,16 @@ export default function StepEditor({
   return (
     <>
       {/* Mini Sequence Header: Before Checks */}
-      <NestedChecks
-        phase="precheck"
-        step={step}
-        inputs={inputs}
-        depth={depth}
-        readOnly={readOnly}
-        onChange={onChange}
-      />
+      {depth === 1 && (
+        <NestedChecks
+          phase="precheck"
+          step={step}
+          inputs={inputs}
+          depth={depth}
+          readOnly={readOnly}
+          onChange={onChange}
+        />
+      )}
 
       {/* Main Action Workspace Card */}
       <div className="rounded-xl border bg-card p-5 shadow-2xs space-y-5">
@@ -381,14 +383,16 @@ export default function StepEditor({
       </div>
 
       {/* Mini Sequence Footer: After Checks (Verification) */}
-      <NestedChecks
-        phase="verification"
-        step={step}
-        inputs={inputs}
-        depth={depth}
-        readOnly={readOnly}
-        onChange={onChange}
-      />
+      {depth === 1 && (
+        <NestedChecks
+          phase="verification"
+          step={step}
+          inputs={inputs}
+          depth={depth}
+          readOnly={readOnly}
+          onChange={onChange}
+        />
+      )}
     </>
   );
 }
