@@ -243,6 +243,19 @@ export async function changeMode(input: {
         throw new Error('Active version has blocking lint errors');
       await validateReferences(tx, input.serviceId, compiled);
       if (input.mode === 'LIVE') {
+        const service = await tx.service.findUnique({
+          where: { id: input.serviceId },
+          select: { escalationPolicyId: true },
+        });
+        if (service?.escalationPolicyId) {
+          try {
+            await assertResponderPolicySnapshotSafe(tx, service.escalationPolicyId);
+          } catch (error) {
+            throw new Error(
+              `Service default escalation policy is unsafe for LIVE automation: ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
+        }
         const evidence = await tx.automationShadowAggregate.aggregate({
           where: {
             serviceId: input.serviceId,
