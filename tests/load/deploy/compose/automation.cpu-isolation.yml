@@ -1,0 +1,16 @@
+# Test-only CPU affinity for a 12-CPU Docker host. Pair with automation.yml.
+# Web evaluations retain their 15 ms wall-clock guard; workers cannot consume
+# the two Web CPUs while testing sustained ingestion. All capacity gates remain unchanged.
+services:
+  db:
+    cpuset: '2-5'
+  web:
+    cpuset: '0-1'
+  general:
+    cpuset: '6-9'
+  critical:
+    cpuset: '10-11'
+  scheduler:
+    cpuset: '10-11'
+  proxy:
+    cpuset: '0-1'

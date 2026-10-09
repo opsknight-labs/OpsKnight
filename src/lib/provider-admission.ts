@@ -391,17 +391,17 @@ export async function acquireProviderAdmission(
     INSERT INTO "ProviderQuotaWindow"
       ("id", "providerKey", "channel", "windowStart", "globalUsed", "bulkUsed", "expiresAt", "updatedAt")
     VALUES (${id}, ${providerKey}, ${scope}, ${windowStart}, 0, 0, ${expiresAt}, NOW())
-    ON CONFLICT ("id") DO NOTHING
+    ON CONFLICT DO NOTHING
   `);
     const rows = (await safePrisma.$queryRaw(Prisma.sql`
     WITH capacity AS MATERIALIZED (
-      SELECT LEAST(
+      SELECT "id", LEAST(
         ${requested},
         GREATEST(0, ${capacity.effectiveRatePerSecond} - "globalUsed"),
         ${bulk ? Prisma.sql`GREATEST(0, ${capacity.bulkRatePerSecond} - "bulkUsed")` : Prisma.sql`${requested}`}
       )::integer AS granted
       FROM "ProviderQuotaWindow"
-      WHERE "id" = ${id}
+      WHERE "providerKey" = ${providerKey} AND "channel" = ${scope} AND "windowStart" = ${windowStart}
       FOR UPDATE
     )
     UPDATE "ProviderQuotaWindow" AS quota_window
@@ -409,7 +409,7 @@ export async function acquireProviderAdmission(
         "bulkUsed" = quota_window."bulkUsed" + ${bulk ? Prisma.sql`capacity.granted` : Prisma.sql`0`},
         "updatedAt" = NOW()
     FROM capacity
-    WHERE quota_window."id" = ${id} AND capacity.granted > 0
+    WHERE quota_window."id" = capacity."id" AND capacity.granted > 0
     RETURNING capacity.granted
   `)) as Array<{ granted: number }>;
     const granted = Number(rows[0]?.granted ?? 0);

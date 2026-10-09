@@ -2,6 +2,12 @@ import 'server-only';
 
 import crypto from 'crypto';
 import {
+  notificationClaimAvailable,
+  notificationClaimDeadlineSql,
+  startNotificationClaimHeartbeat,
+  LEGACY_NOTIFICATION_CLAIM_MS,
+} from './notification-claim-lease';
+import {
   Prisma,
   type NotificationCategory,
   type NotificationTrafficClass,
@@ -43,7 +49,7 @@ import {
 
 const MAX_ENCRYPTED_PAYLOAD_BYTES = 768 * 1024;
 const MAX_ERROR_LENGTH = 1_000;
-const CLAIM_TIMEOUT_MS = 10 * 60_000;
+const CLAIM_TIMEOUT_MS = LEGACY_NOTIFICATION_CLAIM_MS;
 const SYSTEM_NOTIFICATION_BATCH_SIZE = 100;
 const SYSTEM_NOTIFICATION_CONCURRENCY = 10;
 const EXPIRED_NOTIFICATION_CLEANUP_BATCH_SIZE = 100;
@@ -1343,18 +1349,13 @@ function terminalPayload(_category: NotificationCategory): { payloadEncrypted: n
 }
 
 async function cleanupExpiredNotifications(now: Date): Promise<number> {
-  const staleClaimBefore = new Date(now.getTime() - CLAIM_TIMEOUT_MS);
   // Pass 1: rows with an explicit expiresAt that has elapsed.
   const expired = await prisma.notification.findMany({
     where: {
       payloadEncrypted: { not: null },
       expiresAt: { lte: now },
       status: { in: ['PENDING', 'FAILED'] },
-      OR: [
-        { status: 'FAILED' },
-        { status: 'PENDING', lastAttemptAt: null },
-        { status: 'PENDING', lastAttemptAt: { lt: staleClaimBefore } },
-      ],
+      OR: [{ status: 'FAILED' }, { status: 'PENDING', ...notificationClaimAvailable(now) }],
     },
     orderBy: { expiresAt: 'asc' },
     take: EXPIRED_NOTIFICATION_CLEANUP_BATCH_SIZE,
@@ -1373,11 +1374,7 @@ async function cleanupExpiredNotifications(now: Date): Promise<number> {
       expiresAt: null,
       createdAt: { lt: nullExpiryOlderThan },
       status: { in: ['PENDING', 'FAILED'] },
-      OR: [
-        { status: 'FAILED' },
-        { status: 'PENDING', lastAttemptAt: null },
-        { status: 'PENDING', lastAttemptAt: { lt: staleClaimBefore } },
-      ],
+      OR: [{ status: 'FAILED' }, { status: 'PENDING', ...notificationClaimAvailable(now) }],
     },
     orderBy: { createdAt: 'asc' },
     take: EXPIRED_NOTIFICATION_CLEANUP_BATCH_SIZE,
@@ -1387,7 +1384,10 @@ async function cleanupExpiredNotifications(now: Date): Promise<number> {
   const allExpiredIds = [...expired.map(item => item.id), ...nullExpired.map(item => item.id)];
   if (allExpiredIds.length === 0) return 0;
   const result = await prisma.notification.updateMany({
-    where: { id: { in: allExpiredIds } },
+    where: {
+      id: { in: allExpiredIds },
+      OR: [{ status: 'FAILED' }, { status: 'PENDING', ...notificationClaimAvailable(now) }],
+    },
     data: {
       status: 'SKIPPED',
       payloadEncrypted: null,
@@ -1942,6 +1942,21 @@ export async function deliverCentralNotification(
   notificationId: string,
   options: { claimToken?: string; claimedAt?: Date } = {}
 ): Promise<{ success: boolean; claimed: boolean; error?: string }> {
+  let stopHeartbeat = () => {};
+  try {
+    return await deliverCentralNotificationOwned(notificationId, options, stop => {
+      stopHeartbeat = stop;
+    });
+  } finally {
+    stopHeartbeat();
+  }
+}
+
+async function deliverCentralNotificationOwned(
+  notificationId: string,
+  options: { claimToken?: string; claimedAt?: Date },
+  ownHeartbeat: (stop: () => void) => void
+): Promise<{ success: boolean; claimed: boolean; error?: string }> {
   const now = options.claimedAt ?? new Date();
   const candidate = await prisma.notification.findUnique({
     where: { id: notificationId },
@@ -2017,6 +2032,7 @@ export async function deliverCentralNotification(
   ) {
     return { success: false, claimed: false };
   }
+  const ownershipToken = options.claimToken ?? crypto.randomUUID();
   if (options.claimToken) {
     if (
       candidate.claimToken !== options.claimToken ||
@@ -2025,7 +2041,6 @@ export async function deliverCentralNotification(
       return { success: false, claimed: false };
     }
   } else {
-    const staleClaimBefore = new Date(now.getTime() - CLAIM_TIMEOUT_MS);
     const claim = await prisma.notification.updateMany({
       where: {
         id: candidate.id,
@@ -2033,13 +2048,24 @@ export async function deliverCentralNotification(
         attempts: candidate.attempts,
         scheduledAt: { lte: now },
         nextAttemptAt: { lte: now },
-        OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lt: staleClaimBefore } }],
+        ...notificationClaimAvailable(now),
       },
-      data: { status: 'PENDING', lastAttemptAt: now, errorMsg: null },
+      data: {
+        status: 'PENDING',
+        lastAttemptAt: now,
+        claimToken: ownershipToken,
+        claimHeartbeatAt: ['CRITICAL', 'TRANSACTIONAL'].includes(candidate.trafficClass)
+          ? now
+          : null,
+        errorMsg: null,
+      },
     });
     if (claim.count === 0) return { success: false, claimed: false };
   }
 
+  ownHeartbeat(
+    startNotificationClaimHeartbeat([{ id: candidate.id, claimToken: ownershipToken }], now)
+  );
   let payload: CentralNotificationPayload;
   try {
     const decoded: unknown = JSON.parse(await decrypt(candidate.payloadEncrypted));
@@ -2048,7 +2074,12 @@ export async function deliverCentralNotification(
   } catch (error) {
     const errorMessage = safeError(error);
     await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+      where: {
+        id: candidate.id,
+        status: 'PENDING',
+        lastAttemptAt: now,
+        claimToken: ownershipToken,
+      },
       data: {
         status: 'FAILED',
         attempts: candidate.maxAttempts,
@@ -2070,7 +2101,12 @@ export async function deliverCentralNotification(
   } catch (error) {
     const errorMessage = safeError(error);
     await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+      where: {
+        id: candidate.id,
+        status: 'PENDING',
+        lastAttemptAt: now,
+        claimToken: ownershipToken,
+      },
       data: {
         status: 'PENDING',
         failedAt: null,
@@ -2083,7 +2119,12 @@ export async function deliverCentralNotification(
   }
   if (supersededReason) {
     await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+      where: {
+        id: candidate.id,
+        status: 'PENDING',
+        lastAttemptAt: now,
+        claimToken: ownershipToken,
+      },
       data: {
         status: 'SKIPPED',
         lastAttemptAt: null,
@@ -2153,7 +2194,12 @@ export async function deliverCentralNotification(
           Date.now() + notificationRetryDelayMs(Math.max(1, candidate.attempts + 1))
         );
         await prisma.notification.updateMany({
-          where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+          where: {
+            id: candidate.id,
+            status: 'PENDING',
+            lastAttemptAt: now,
+            claimToken: ownershipToken,
+          },
           data: {
             status: 'PENDING',
             attempts: candidate.attempts,
@@ -2187,7 +2233,12 @@ export async function deliverCentralNotification(
         continue;
       }
       await prisma.notification.updateMany({
-        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        where: {
+          id: candidate.id,
+          status: 'PENDING',
+          lastAttemptAt: now,
+          claimToken: ownershipToken,
+        },
         data: {
           status: 'PENDING',
           lastAttemptAt: null,
@@ -2216,7 +2267,12 @@ export async function deliverCentralNotification(
         });
       }
       await prisma.notification.updateMany({
-        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        where: {
+          id: candidate.id,
+          status: 'PENDING',
+          lastAttemptAt: now,
+          claimToken: ownershipToken,
+        },
         data: {
           status: 'PENDING',
           lastAttemptAt: null,
@@ -2243,7 +2299,12 @@ export async function deliverCentralNotification(
         continue;
       }
       await prisma.notification.updateMany({
-        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        where: {
+          id: candidate.id,
+          status: 'PENDING',
+          lastAttemptAt: now,
+          claimToken: ownershipToken,
+        },
         data: {
           status: 'PENDING',
           failedAt: null,
@@ -2274,7 +2335,12 @@ export async function deliverCentralNotification(
         });
       }
       await prisma.notification.updateMany({
-        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        where: {
+          id: candidate.id,
+          status: 'PENDING',
+          lastAttemptAt: now,
+          claimToken: ownershipToken,
+        },
         data: {
           status: 'PENDING',
           failedAt: null,
@@ -2297,7 +2363,12 @@ export async function deliverCentralNotification(
       await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
       const errorMessage = safeError(error);
       await prisma.notification.updateMany({
-        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        where: {
+          id: candidate.id,
+          status: 'PENDING',
+          lastAttemptAt: now,
+          claimToken: ownershipToken,
+        },
         data: {
           lastAttemptAt: null,
           nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
@@ -2307,14 +2378,19 @@ export async function deliverCentralNotification(
       return { success: false, claimed: true, error: errorMessage };
     }
 
-    await prisma.notification.updateMany({
+    const dispatchClaim = await prisma.notification.updateMany({
       where: {
         id: candidate.id,
         status: 'PENDING',
         lastAttemptAt: now,
+        claimToken: ownershipToken,
       },
       data: { attempts: { increment: 1 } },
     });
+    if (dispatchClaim.count !== 1) {
+      await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+      return { success: false, claimed: false };
+    }
 
     anyAttemptDispatched = true;
     const startedAt = new Date();
@@ -2428,7 +2504,12 @@ export async function deliverCentralNotification(
       try {
         [committed] = await prisma.$transaction([
           prisma.notification.updateMany({
-            where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+            where: {
+              id: candidate.id,
+              status: 'PENDING',
+              lastAttemptAt: now,
+              claimToken: ownershipToken,
+            },
             data: acceptedState,
           }),
           attemptOperation,
@@ -2443,7 +2524,12 @@ export async function deliverCentralNotification(
         }
       } catch (persistenceError) {
         committed = await prisma.notification.updateMany({
-          where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+          where: {
+            id: candidate.id,
+            status: 'PENDING',
+            lastAttemptAt: now,
+            claimToken: ownershipToken,
+          },
           data: acceptedState,
         });
         if (preCreatedAttemptId) {
@@ -2512,7 +2598,12 @@ export async function deliverCentralNotification(
         Date.now() + notificationRetryDelayMs(Math.max(1, candidate.attempts + 1))
       );
       await prisma.notification.updateMany({
-        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        where: {
+          id: candidate.id,
+          status: 'PENDING',
+          lastAttemptAt: now,
+          claimToken: ownershipToken,
+        },
         data: {
           status: 'PENDING',
           attempts: candidate.attempts,
@@ -2534,7 +2625,12 @@ export async function deliverCentralNotification(
     ) {
       const retryAt = new Date(Date.now() + Math.max(result.retryAfterMs, 1_000));
       await prisma.notification.updateMany({
-        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        where: {
+          id: candidate.id,
+          status: 'PENDING',
+          lastAttemptAt: now,
+          claimToken: ownershipToken,
+        },
         data: {
           status: 'PENDING',
           attempts: candidate.attempts,
@@ -2588,7 +2684,12 @@ export async function deliverCentralNotification(
       try {
         await prisma.$transaction(async tx => {
           await tx.notification.updateMany({
-            where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+            where: {
+              id: candidate.id,
+              status: 'PENDING',
+              lastAttemptAt: now,
+              claimToken: ownershipToken,
+            },
             data: ambiguousState,
           });
           if (preCreatedAttemptId) {
@@ -2619,7 +2720,12 @@ export async function deliverCentralNotification(
         });
       } catch (persistenceError) {
         await prisma.notification.updateMany({
-          where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+          where: {
+            id: candidate.id,
+            status: 'PENDING',
+            lastAttemptAt: now,
+            claimToken: ownershipToken,
+          },
           data: ambiguousState,
         });
         if (preCreatedAttemptId) {
@@ -2674,7 +2780,12 @@ export async function deliverCentralNotification(
       }
 
       await prisma.notification.updateMany({
-        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        where: {
+          id: candidate.id,
+          status: 'PENDING',
+          lastAttemptAt: now,
+          claimToken: ownershipToken,
+        },
         data: {
           status: 'PENDING',
           attempts: currentDeliveryAttempt,
@@ -2706,7 +2817,12 @@ export async function deliverCentralNotification(
 
     if (permanent) {
       await prisma.notification.updateMany({
-        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        where: {
+          id: candidate.id,
+          status: 'PENDING',
+          lastAttemptAt: now,
+          claimToken: ownershipToken,
+        },
         data: {
           status: 'FAILED',
           failedAt: new Date(),
@@ -2732,7 +2848,12 @@ export async function deliverCentralNotification(
 
     // Otherwise halt on failure
     const failedUpdate = await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+      where: {
+        id: candidate.id,
+        status: 'PENDING',
+        lastAttemptAt: now,
+        claimToken: ownershipToken,
+      },
       data: {
         status: 'FAILED',
         failedAt: new Date(),
@@ -2755,7 +2876,7 @@ export async function deliverCentralNotification(
   const finalAttempts = candidate.attempts + 1;
   const isExhausted = finalAttempts >= candidate.maxAttempts;
   await prisma.notification.updateMany({
-    where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+    where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now, claimToken: ownershipToken },
     data: {
       status: 'FAILED',
       failedAt: new Date(),
@@ -2892,7 +3013,6 @@ export async function processCentralNotificationQueue(
     : requestedTrafficClasses;
   if (trafficClasses.length === 0) return { processed: 0, succeeded: 0, failed: 0 };
 
-  const staleClaimBefore = new Date(now.getTime() - CLAIM_TIMEOUT_MS);
   const trafficFilter = Prisma.sql`AND "trafficClass" IN (${Prisma.join(
     trafficClasses.map(value => Prisma.sql`${value}::"NotificationTrafficClass"`)
   )})`;
@@ -2918,7 +3038,7 @@ export async function processCentralNotificationQueue(
         "status" = 'FAILED'::"NotificationStatus"
         OR (
           "status" = 'PENDING'::"NotificationStatus"
-          AND ("lastAttemptAt" IS NULL OR "lastAttemptAt" < ${staleClaimBefore})
+          AND ("lastAttemptAt" IS NULL OR ${notificationClaimDeadlineSql()} < ${now})
         )
       )
     ), candidates AS (
@@ -2940,7 +3060,8 @@ export async function processCentralNotificationQueue(
     )
     UPDATE "Notification" AS notification
     SET "status" = 'PENDING'::"NotificationStatus", "lastAttemptAt" = ${now},
-      "claimToken" = ${claimToken}, "claimedBy" = ${claimedBy}, "errorMsg" = NULL
+      "claimToken" = ${claimToken}, "claimedBy" = ${claimedBy}, "errorMsg" = NULL,
+      "claimHeartbeatAt" = CASE WHEN notification."trafficClass" IN ('CRITICAL'::"NotificationTrafficClass", 'TRANSACTIONAL'::"NotificationTrafficClass") THEN ${now} ELSE NULL END
     FROM candidates
     WHERE notification."id" = candidates."id"
       -- The materialized ranking can become stale before the row lock is acquired.
@@ -2954,7 +3075,7 @@ export async function processCentralNotificationQueue(
         notification."status" = 'FAILED'::"NotificationStatus"
         OR (
           notification."status" = 'PENDING'::"NotificationStatus"
-          AND (notification."lastAttemptAt" IS NULL OR notification."lastAttemptAt" < ${staleClaimBefore})
+          AND (notification."lastAttemptAt" IS NULL OR ${notificationClaimDeadlineSql('notification')} < ${now})
         )
       )
     RETURNING notification."id", notification."claimToken"
@@ -2962,24 +3083,29 @@ export async function processCentralNotificationQueue(
 
   let succeeded = 0;
   let failed = 0;
-  for (let index = 0; index < candidates.length; index += concurrency) {
-    const batch = candidates.slice(index, index + concurrency);
-    const results = await Promise.allSettled(
-      batch.map(item =>
-        deliverCentralNotification(item.id, { claimToken: item.claimToken, claimedAt: now })
-      )
-    );
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value.claimed && result.value.success)
-        succeeded++;
-      else if (
-        result.status === 'rejected' ||
-        (result.status === 'fulfilled' && result.value.claimed)
-      )
-        failed++;
+  const stopHeartbeat = startNotificationClaimHeartbeat(candidates, now);
+  try {
+    for (let index = 0; index < candidates.length; index += concurrency) {
+      const batch = candidates.slice(index, index + concurrency);
+      const results = await Promise.allSettled(
+        batch.map(item =>
+          deliverCentralNotification(item.id, { claimToken: item.claimToken, claimedAt: now })
+        )
+      );
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value.claimed && result.value.success)
+          succeeded++;
+        else if (
+          result.status === 'rejected' ||
+          (result.status === 'fulfilled' && result.value.claimed)
+        )
+          failed++;
+      }
     }
+    return { processed: succeeded + failed, succeeded, failed };
+  } finally {
+    stopHeartbeat();
   }
-  return { processed: succeeded + failed, succeeded, failed };
 }
 
 export async function getNextCentralNotificationAt(
@@ -2995,18 +3121,13 @@ export async function getNextCentralNotificationAt(
     ? requestedTrafficClasses.filter(value => value !== 'PUBLIC_INCIDENT' && value !== 'BULK')
     : requestedTrafficClasses;
   if (trafficClasses.length === 0) return null;
-  const staleClaimBefore = new Date(now.getTime() - CLAIM_TIMEOUT_MS);
   const expiredNotification = await prisma.notification.findFirst({
     where: {
       payloadEncrypted: { not: null },
       expiresAt: { lte: now },
       status: { in: ['PENDING', 'FAILED'] },
       trafficClass: { in: trafficClasses },
-      OR: [
-        { status: 'FAILED' },
-        { status: 'PENDING', lastAttemptAt: null },
-        { status: 'PENDING', lastAttemptAt: { lt: staleClaimBefore } },
-      ],
+      OR: [{ status: 'FAILED' }, { status: 'PENDING', ...notificationClaimAvailable(now) }],
     },
     select: { id: true },
   });
@@ -3032,7 +3153,7 @@ export async function getNextCentralNotificationAt(
       "nextAttemptAt",
       CASE
         WHEN "status" = 'PENDING'::"NotificationStatus" AND "lastAttemptAt" IS NOT NULL
-          THEN "lastAttemptAt" + (${CLAIM_TIMEOUT_MS} * INTERVAL '1 millisecond')
+          THEN ${notificationClaimDeadlineSql()}
         ELSE "nextAttemptAt"
       END
     ) AS "nextEligibleAt"

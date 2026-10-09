@@ -271,8 +271,14 @@ describe('central notification control plane', () => {
 
   it('identifies webhook deliveries by durable intent, preserving identity across retries', async () => {
     const due = new Date(Date.now() - 60_000);
-    const payload = { kind: 'WEBHOOK', url: 'https://example.com/events', payload: { event: 'alert' } };
-    vi.mocked(prisma.notification.findUnique).mockImplementation((async (id: Parameters<typeof prisma.notification.findUnique>[0]) => ({
+    const payload = {
+      kind: 'WEBHOOK',
+      url: 'https://example.com/events',
+      payload: { event: 'alert' },
+    };
+    vi.mocked(prisma.notification.findUnique).mockImplementation((async (
+      id: Parameters<typeof prisma.notification.findUnique>[0]
+    ) => ({
       id: id.where.id,
       status: 'PENDING',
       category: 'SECURITY',
@@ -292,7 +298,9 @@ describe('central notification control plane', () => {
     await deliverCentralNotification('webhook-first');
 
     expect(mocks.sendWebhook.mock.calls.map(([options]) => options.deliveryId)).toEqual([
-      'webhook-first', 'webhook-second', 'webhook-first',
+      'webhook-first',
+      'webhook-second',
+      'webhook-first',
     ]);
   });
 
@@ -542,7 +550,10 @@ describe('central notification control plane', () => {
         take: 100,
         where: expect.objectContaining({
           OR: expect.arrayContaining([
-            expect.objectContaining({ status: 'PENDING', lastAttemptAt: null }),
+            expect.objectContaining({
+              status: 'PENDING',
+              OR: expect.arrayContaining([{ lastAttemptAt: null }]),
+            }),
           ]),
         }),
       })
