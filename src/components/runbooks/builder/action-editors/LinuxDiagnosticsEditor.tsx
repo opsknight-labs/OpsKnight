@@ -39,14 +39,19 @@ export default function LinuxDiagnosticsEditor({
     onChange({ diagnostic: nextDiag });
   };
 
-  const handleNumberChange = (key: string, valStr: string) => {
+  const handleNumberChange = (key: 'lines' | 'port' | 'expectedStatus', valStr: string) => {
     const nextConfig = { ...config };
     const trimmed = valStr.trim();
     if (trimmed === '') {
-      delete nextConfig[key];
+      if (key === 'lines') delete nextConfig.lines;
+      if (key === 'port') delete nextConfig.port;
+      if (key === 'expectedStatus') delete nextConfig.expectedStatus;
     } else {
       const parsed = Number(trimmed);
-      nextConfig[key] = Number.isNaN(parsed) ? trimmed : parsed;
+      const val = Number.isNaN(parsed) ? trimmed : parsed;
+      if (key === 'lines') nextConfig.lines = val;
+      if (key === 'port') nextConfig.port = val;
+      if (key === 'expectedStatus') nextConfig.expectedStatus = val;
     }
     onChange(nextConfig);
   };
@@ -219,7 +224,7 @@ export default function LinuxDiagnosticsEditor({
         </div>
       )}
 
-      {['disk', 'filesystem'].includes(diagnostic) && (
+      {diagnostic === 'filesystem' && (
         <div>
           <Label htmlFor="diag-path">Filesystem Path</Label>
           <div className="mt-1.5">

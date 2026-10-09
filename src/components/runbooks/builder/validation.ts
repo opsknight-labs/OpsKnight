@@ -1,11 +1,12 @@
-import type { RunbookDefinition, RunbookStepDefinition, RunbookStepType } from '@/lib/runbooks/types';
-import type { RunbookInputInput } from '@/lib/runbooks/schemas';
-import { minimumRiskForStep } from '@/lib/runbooks/definition';
+import type { RunbookDefinition, RunbookStepDefinition } from '@/lib/runbooks/types';
+import { runbookInputsSchema, type RunbookInputInput } from '@/lib/runbooks/schemas';
+import { flattenSteps } from '@/lib/runbooks/definition';
 
 export const INPUT_TEMPLATE = /^\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}$/;
 export const SYSTEMD_UNIT =
   /^[A-Za-z0-9][A-Za-z0-9_.@:-]*\.(?:service|socket|timer|target|mount|path|slice|scope|device|automount|swap)$/;
 export const DOCKER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+// eslint-disable-next-line security/detect-unsafe-regex
 export const KUBERNETES_NAME = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
 export const STEP_KEY_REGEX = /^[a-z0-9_-]{1,80}$/;
 
@@ -156,7 +157,7 @@ export function validateStep(
       } else if (diagnostic === 'process') {
         const pattern = String(config.pattern ?? '').trim();
         if (!pattern) errors.pattern = 'Process search pattern is required.';
-      } else if (['disk', 'filesystem'].includes(diagnostic)) {
+      } else if (diagnostic === 'filesystem') {
         const path = String(config.path ?? '').trim();
         if (!path) errors.path = 'Filesystem path is required.';
       }
@@ -199,7 +200,7 @@ export function validateStep(
   // Prechecks & verifications validation
   if (step.precheck?.steps) {
     step.precheck.steps.forEach((check, index) => {
-      const sub = validateStep(check, inputs, step.precheck?.steps.map(s => s.key) ?? []);
+      const sub = validateStep(check, inputs, allStepKeys);
       if (!sub.isValid) {
         errors[`precheck_${index}`] = `Precheck "${check.name}" has configuration errors.`;
       }
@@ -208,7 +209,7 @@ export function validateStep(
 
   if (step.verification?.steps) {
     step.verification.steps.forEach((check, index) => {
-      const sub = validateStep(check, inputs, step.verification?.steps.map(s => s.key) ?? []);
+      const sub = validateStep(check, inputs, allStepKeys);
       if (!sub.isValid) {
         errors[`verification_${index}`] = `Verification "${check.name}" has configuration errors.`;
       }
@@ -226,11 +227,13 @@ export function validateRunbook(
   inputs: RunbookInputInput[] = []
 ): {
   stepErrors: Map<number, Record<string, string>>;
+  inputErrors: Map<number, Record<string, string>>;
   hasErrors: boolean;
   errorCount: number;
 } {
   const stepErrors = new Map<number, Record<string, string>>();
-  const allKeys = definition.steps.map(s => s.key);
+  const inputErrors = new Map<number, Record<string, string>>();
+  const allKeys = flattenSteps(definition).map(s => s.key);
   let errorCount = 0;
 
   definition.steps.forEach((step, index) => {
@@ -241,8 +244,30 @@ export function validateRunbook(
     }
   });
 
+  // Validate typed inputs to include input schema errors in readiness
+  const parsedInputs = runbookInputsSchema.safeParse(inputs);
+  if (!parsedInputs.success) {
+    for (const issue of parsedInputs.error.issues) {
+      errorCount++;
+      const index = typeof issue.path[0] === 'number' ? issue.path[0] : -1;
+      const field = typeof issue.path[1] === 'string' ? issue.path[1] : 'key';
+      if (index >= 0) {
+        const current = inputErrors.get(index) ?? {};
+        if (field === 'key') {
+          current.key = issue.message;
+        } else if (field === 'label') {
+          current.label = issue.message;
+        } else {
+          current.general = issue.message;
+        }
+        inputErrors.set(index, current);
+      }
+    }
+  }
+
   return {
     stepErrors,
+    inputErrors,
     hasErrors: errorCount > 0,
     errorCount,
   };

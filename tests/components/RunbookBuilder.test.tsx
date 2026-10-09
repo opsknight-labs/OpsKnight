@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import RunbookBuilder from '@/components/runbooks/RunbookBuilder';
 import { newBuilderStep } from '@/lib/runbooks/builder';
 import { parseRunbookDefinition } from '@/lib/runbooks/definition';
+import { validateRunbook, validateStep } from '@/components/runbooks/builder/validation';
 
 vi.mock('@/components/ui/DetailTabs', () => ({
   default: ({ tabs }: { tabs: { id: string; content: ReactNode }[] }) => (
@@ -259,6 +260,54 @@ describe('Runbook nested check builder', () => {
     fireEvent.change(nameInput, { target: { value: '' } });
 
     expect(screen.getByText('Step name is required.')).toBeTruthy();
+  });
+
+  it('validates that disk diagnostics does not require path while filesystem requires path', () => {
+    const diskStep = {
+      ...newBuilderStep('LINUX_DIAGNOSTICS', 'disk_check'),
+      config: { diagnostic: 'disk' },
+    };
+    const diskResult = validateStep(diskStep);
+    expect(diskResult.isValid).toBe(true);
+    expect(diskResult.errors.path).toBeUndefined();
+
+    const fsStep = {
+      ...newBuilderStep('LINUX_DIAGNOSTICS', 'fs_check'),
+      config: { diagnostic: 'filesystem' },
+    };
+    const fsResult = validateStep(fsStep);
+    expect(fsResult.isValid).toBe(false);
+    expect(fsResult.errors.path).toBe('Filesystem path is required.');
+  });
+
+  it('reports input validation errors in validateRunbook and readiness summary', () => {
+    const validStep = newBuilderStep('MANUAL', 'step_1');
+    const invalidInputs = [
+      { key: 'INVALID KEY WITH SPACES', label: 'My Param', type: 'STRING' as const, required: false, sequence: 0 },
+      { key: 'duplicate_key', label: 'First', type: 'STRING' as const, required: false, sequence: 1 },
+      { key: 'duplicate_key', label: 'Second', type: 'STRING' as const, required: false, sequence: 2 },
+    ];
+
+    const result = validateRunbook({ steps: [validStep] }, invalidInputs);
+    expect(result.hasErrors).toBe(true);
+    expect(result.errorCount).toBeGreaterThan(0);
+    expect(result.inputErrors.size).toBeGreaterThan(0);
+  });
+
+  it('detects duplicate step keys across flattened nested checks', () => {
+    const stepWithPrecheck = {
+      ...newBuilderStep('MANUAL', 'parent_step'),
+      precheck: {
+        steps: [
+          newBuilderStep('SYSTEMD', 'shared_key'),
+        ],
+      },
+    };
+    const secondStep = newBuilderStep('WAIT', 'shared_key');
+
+    const result = validateRunbook({ steps: [stepWithPrecheck, secondStep] }, []);
+    expect(result.hasErrors).toBe(true);
+    expect(result.stepErrors.get(1)?.key).toBe('Step key must be unique across the runbook.');
   });
 });
 

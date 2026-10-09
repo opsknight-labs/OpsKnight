@@ -12,7 +12,7 @@ interface ReadinessBarProps {
   errorCount: number;
   dirty: boolean;
   unappliedJson: boolean;
-  readOnly?: boolean;
+  _readOnly?: boolean;
   draftRevision?: number;
 }
 
@@ -21,7 +21,7 @@ export default function ReadinessBar({
   errorCount,
   dirty,
   unappliedJson,
-  readOnly = false,
+  _readOnly = false,
   draftRevision = 0,
 }: ReadinessBarProps) {
   const executableSteps = flattenSteps(definition);
@@ -56,7 +56,7 @@ export default function ReadinessBar({
         {errorCount === 0 ? (
           <span className="flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 className="h-4 w-4" />
-            Ready for execution
+            Draft configuration checks passed
           </span>
         ) : (
           <span className="flex items-center gap-1 font-medium text-destructive">

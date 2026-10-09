@@ -2,16 +2,10 @@
 
 import { useState } from 'react';
 import {
-  ArrowDown,
-  ArrowUp,
   Code2,
-  Copy,
   ListOrdered,
   Plus,
-  Settings2,
   ShieldCheck,
-  ShieldAlert,
-  AlertCircle,
   Trash2,
 } from 'lucide-react';
 import DetailTabs from '@/components/ui/DetailTabs';
@@ -23,7 +17,6 @@ import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
   RUNBOOK_INPUT_TYPES,
-  RUNBOOK_STEP_TYPES,
   type RunbookDefinition,
   type RunbookStepDefinition,
   type RunbookStepType,
@@ -33,15 +26,16 @@ import {
   runbookInputsSchema,
   type RunbookInputInput,
 } from '@/lib/runbooks/schemas';
-import { newBuilderStep } from '@/lib/runbooks/builder';
+import { cloneStepRecursively, newBuilderStep } from '@/lib/runbooks/builder';
+import { flattenSteps } from '@/lib/runbooks/definition';
 import {
   ActionForm,
-  ConfigureSheet,
   FormSelect,
   SubmitButton,
   type RunbookFormAction,
 } from './RunbookControls';
 
+import StepNavigator from './builder/StepNavigator';
 import StepEditor from './builder/StepEditor';
 import ReadinessBar from './builder/ReadinessBar';
 import { validateRunbook } from './builder/validation';
@@ -64,8 +58,11 @@ export default function RunbookBuilder({
   const [stepIdentities, setStepIdentities] = useState(
     initialDefinition.steps.map(step => step.key || crypto.randomUUID())
   );
-  const [stepType, setStepType] = useState<RunbookStepType>('MANUAL');
+  const [selectedStepIndex, setSelectedStepIndex] = useState(0);
   const [inputs, setInputs] = useState(initialInputs);
+  const [inputIdentities, setInputIdentities] = useState(() =>
+    initialInputs.map(() => crypto.randomUUID())
+  );
   const [dirty, setDirty] = useState(false);
   const [advancedDefinition, setAdvancedDefinition] = useState(
     JSON.stringify(initialDefinition, null, 2)
@@ -75,7 +72,7 @@ export default function RunbookBuilder({
   const [unappliedJson, setUnappliedJson] = useState(false);
 
   // Compute live validation results
-  const { stepErrors, errorCount } = validateRunbook(definition, inputs);
+  const { stepErrors, inputErrors, errorCount } = validateRunbook(definition, inputs);
 
   function updateStep(index: number, patch: Partial<RunbookStepDefinition>) {
     setDirty(true);
@@ -89,32 +86,25 @@ export default function RunbookBuilder({
 
   function moveStep(index: number, offset: number) {
     const nextSteps = [...definition.steps];
-    const item = nextSteps.splice(index, 1)[0];
+    const item = nextSteps.splice(index, 1).at(0);
     if (!item) return;
     nextSteps.splice(index + offset, 0, item);
 
     const nextIdentities = [...stepIdentities];
-    const id = nextIdentities.splice(index, 1)[0];
-    nextIdentities.splice(index + offset, 0, id);
+    const id = nextIdentities.splice(index, 1).at(0);
+    if (id) nextIdentities.splice(index + offset, 0, id);
 
     setStepIdentities(nextIdentities);
     setDefinition({ ...definition, steps: nextSteps });
+    setSelectedStepIndex(index + offset);
     setDirty(true);
   }
 
   function duplicateStep(index: number) {
-    const source = definition.steps[index];
+    const source = definition.steps.at(index);
     if (!source) return;
-    let sequence = definition.steps.length + 1;
-    while (definition.steps.some(step => step.key === `${source.key}_copy_${sequence}`)) {
-      sequence++;
-    }
-    const clonedKey = `${source.key}_copy_${sequence}`;
-    const clone: RunbookStepDefinition = {
-      ...JSON.parse(JSON.stringify(source)),
-      key: clonedKey,
-      name: `${source.name} (Copy)`,
-    };
+    const existingKeys = new Set(flattenSteps(definition).map(step => step.key));
+    const clone = cloneStepRecursively(source, existingKeys);
 
     const nextSteps = [...definition.steps];
     nextSteps.splice(index + 1, 0, clone);
@@ -123,6 +113,7 @@ export default function RunbookBuilder({
 
     setDefinition({ ...definition, steps: nextSteps });
     setStepIdentities(nextIds);
+    setSelectedStepIndex(index + 1);
     setDirty(true);
   }
 
@@ -132,6 +123,7 @@ export default function RunbookBuilder({
     const nextIds = stepIdentities.filter((_, position) => position !== index);
     setDefinition({ ...definition, steps: nextSteps });
     setStepIdentities(nextIds);
+    setSelectedStepIndex(Math.max(0, Math.min(selectedStepIndex, nextSteps.length - 1)));
     setDirty(true);
   }
 
@@ -144,8 +136,11 @@ export default function RunbookBuilder({
     const newStep = newBuilderStep(type, key);
     setDefinition({ ...definition, steps: [...definition.steps, newStep] });
     setStepIdentities([...stepIdentities, crypto.randomUUID()]);
+    setSelectedStepIndex(definition.steps.length);
     setDirty(true);
   }
+
+  const selectedStep = definition.steps.at(selectedStepIndex);
 
   const builderView = (
     <div className="space-y-6">
@@ -155,168 +150,73 @@ export default function RunbookBuilder({
         </span>
       </div>
 
-      <ol aria-label="Runbook steps" className="space-y-0">
-        {definition.steps.map((step, index) => {
-          const errors = stepErrors.get(index);
-          const hasErrors = errors && Object.keys(errors).length > 0;
-          const isApprovalRequired =
-            step.riskClass === 'NON_IDEMPOTENT' || step.requiresApproval || step.type === 'APPROVAL';
-
-          return (
-            <li
-              key={stepIdentities[index] ?? step.key}
-              className="relative ml-3 border-l-2 border-border pb-5 pl-6 last:border-transparent"
-            >
-              <span
-                className={`absolute -left-3 top-5 flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold ${
-                  hasErrors ? 'border-destructive bg-destructive/10 text-destructive' : 'bg-background'
-                }`}
-              >
-                {index + 1}
-              </span>
-
-              <div className="rounded-xl border bg-card p-4 shadow-2xs">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-foreground">{step.name || 'Untitled step'}</h3>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {step.type.replaceAll('_', ' ')} · {step.key}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {step.riskClass === 'NON_IDEMPOTENT' ? (
-                      <Badge variant="destructive" className="text-xs">
-                        MUTATION
-                      </Badge>
-                    ) : step.riskClass === 'IDEMPOTENT_WRITE' ? (
-                      <Badge variant="warning" className="text-xs">
-                        WRITE
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="text-xs">
-                        READ ONLY
-                      </Badge>
-                    )}
-
-                    {isApprovalRequired && (
-                      <Badge variant="warning" className="text-xs flex items-center gap-1">
-                        <ShieldAlert className="h-3 w-3" />
-                        Approval required
-                      </Badge>
-                    )}
-
-                    {hasErrors && (
-                      <Badge variant="destructive" className="text-xs flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {Object.keys(errors).length} issues
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                {step.description && (
-                  <p className="mt-3 break-words text-sm text-muted-foreground">{step.description}</p>
-                )}
-
-                {(step.precheck || step.verification) && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Before: {step.precheck?.steps.map(check => check.name).join(' → ') || 'None'}
-                    {' · '}After:{' '}
-                    {step.verification?.steps.map(check => check.name).join(' → ') || 'None'}
-                  </p>
-                )}
-
-                {!readOnly && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <ConfigureSheet
-                      title={`Configure ${step.name}`}
-                      description="Changes remain local until you save the draft."
-                      trigger={
-                        <Button type="button" size="sm" variant="outline">
-                          <Settings2 className="h-4 w-4 mr-1.5" />
-                          Configure step
-                        </Button>
-                      }
-                    >
-                      <StepEditor
-                        step={step}
-                        inputs={inputs}
-                        editorId={String(stepIdentities[index] ?? step.key)}
-                        depth={1}
-                        errors={errors ?? {}}
-                        readOnly={readOnly}
-                        onChange={patch => updateStep(index, patch)}
-                      />
-                    </ConfigureSheet>
-
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Move ${step.name} up`}
-                      disabled={index === 0}
-                      onClick={() => moveStep(index, -1)}
-                    >
-                      <ArrowUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Move ${step.name} down`}
-                      disabled={index === definition.steps.length - 1}
-                      onClick={() => moveStep(index, 1)}
-                    >
-                      <ArrowDown className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Duplicate ${step.name}`}
-                      onClick={() => duplicateStep(index)}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Remove ${step.name}`}
-                      disabled={definition.steps.length === 1}
-                      onClick={() => removeStep(index)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
-
-      {!readOnly && (
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <div className="sm:w-64">
-            <FormSelect
-              name="newStepType"
-              label="New step type"
-              value={stepType}
-              onValueChange={value => setStepType(value as RunbookStepType)}
-              options={RUNBOOK_STEP_TYPES.map(type => ({
-                value: type,
-                label: type.replaceAll('_', ' '),
-              }))}
-            />
-          </div>
-          <Button type="button" variant="outline" onClick={() => addStep(stepType)}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            Add step
-          </Button>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        {/* Left column: Step navigator */}
+        <div className="lg:col-span-5 xl:col-span-4 min-w-0">
+          <StepNavigator
+            steps={definition.steps}
+            stepIdentities={stepIdentities}
+            selectedIndex={selectedStepIndex}
+            stepErrors={stepErrors}
+            inputs={inputs}
+            readOnly={readOnly}
+            onSelectStep={setSelectedStepIndex}
+            onUpdateStep={updateStep}
+            onMoveStep={moveStep}
+            onDuplicateStep={duplicateStep}
+            onRemoveStep={removeStep}
+            onAddStep={addStep}
+          />
         </div>
-      )}
+
+        {/* Right column: Active step editor */}
+        <div className="lg:col-span-7 xl:col-span-8 min-w-0">
+          {selectedStep ? (
+            <div className="rounded-xl border bg-card p-4 sm:p-6 shadow-2xs space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">
+                    Step {selectedStepIndex + 1}: {selectedStep.name || 'Untitled step'}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+                    Key: {selectedStep.key} · Type: {selectedStep.type.replaceAll('_', ' ')}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {selectedStep.riskClass === 'NON_IDEMPOTENT' ? (
+                    <Badge variant="destructive" className="text-xs">
+                      MUTATION
+                    </Badge>
+                  ) : selectedStep.riskClass === 'IDEMPOTENT_WRITE' ? (
+                    <Badge variant="warning" className="text-xs">
+                      WRITE
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary" className="text-xs">
+                      READ ONLY
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <StepEditor
+                step={selectedStep}
+                inputs={inputs}
+                editorId={String(stepIdentities.at(selectedStepIndex) ?? selectedStep.key)}
+                depth={1}
+                errors={stepErrors.get(selectedStepIndex) ?? {}}
+                readOnly={readOnly}
+                onChange={patch => updateStep(selectedStepIndex, patch)}
+              />
+            </div>
+          ) : (
+            <EmptyState
+              title="No step selected"
+              description="Select a step from the navigator to configure its actions, prechecks, and verification."
+            />
+          )}
+        </div>
+      </div>
 
       {/* Sticky Bottom Readiness Bar */}
       <ReadinessBar
@@ -324,7 +224,6 @@ export default function RunbookBuilder({
         errorCount={errorCount}
         dirty={dirty}
         unappliedJson={unappliedJson}
-        readOnly={readOnly}
         draftRevision={draftRevision}
       />
     </div>
@@ -342,9 +241,10 @@ export default function RunbookBuilder({
           );
           setDirty(true);
         };
+        const currentErrors = inputErrors.get(index);
         return (
           <fieldset
-            key={input.key || index}
+            key={inputIdentities.at(index) ?? index}
             disabled={readOnly}
             className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2 bg-card"
           >
@@ -358,7 +258,11 @@ export default function RunbookBuilder({
                 value={input.key}
                 disabled={readOnly}
                 onChange={e => update({ key: e.target.value })}
+                className={currentErrors?.key ? 'border-destructive' : ''}
               />
+              {currentErrors?.key && (
+                <p className="text-xs text-destructive">{currentErrors.key}</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Label</Label>
@@ -367,7 +271,11 @@ export default function RunbookBuilder({
                 value={input.label}
                 disabled={readOnly}
                 onChange={e => update({ label: e.target.value })}
+                className={currentErrors?.label ? 'border-destructive' : ''}
               />
+              {currentErrors?.label && (
+                <p className="text-xs text-destructive">{currentErrors.label}</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Type</Label>
@@ -420,6 +328,7 @@ export default function RunbookBuilder({
                   className="text-xs text-destructive hover:text-destructive h-7"
                   onClick={() => {
                     setInputs(inputs.filter((_, position) => position !== index));
+                    setInputIdentities(inputIdentities.filter((_, position) => position !== index));
                     setDirty(true);
                   }}
                 >
@@ -458,6 +367,7 @@ export default function RunbookBuilder({
                 sequence: inputs.length,
               },
             ]);
+            setInputIdentities([...inputIdentities, crypto.randomUUID()]);
             setDirty(true);
           }}
         >
@@ -534,7 +444,9 @@ export default function RunbookBuilder({
               const parsedInputs = runbookInputsSchema.parse(JSON.parse(advancedInputs));
               setDefinition(parsedDefinition as RunbookDefinition);
               setStepIdentities(parsedDefinition.steps.map(() => crypto.randomUUID()));
+              setSelectedStepIndex(0);
               setInputs(parsedInputs);
+              setInputIdentities(parsedInputs.map(() => crypto.randomUUID()));
               setDirty(true);
               setJsonError('');
               setUnappliedJson(false);

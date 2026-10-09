@@ -23,45 +23,62 @@ const KUBERNETES_ACTIONS = [
   { value: 'scale', label: 'Scale (Adjust replica count)' },
 ];
 
-function resourceOptionsFor(action: string) {
+function resourceOptionsFor(action: string, inputs: RunbookInputInput[] = [], currentResource = '') {
+  let base: { value: string; label: string }[];
   if (['rollout-restart', 'rollout-status'].includes(action)) {
-    return [
+    base = [
       { value: 'deployment', label: 'Deployment' },
       { value: 'daemonset', label: 'DaemonSet' },
       { value: 'statefulset', label: 'StatefulSet' },
     ];
-  }
-  if (action === 'scale') {
-    return [
+  } else if (action === 'scale') {
+    base = [
       { value: 'deployment', label: 'Deployment' },
       { value: 'statefulset', label: 'StatefulSet' },
       { value: 'replicaset', label: 'ReplicaSet' },
       { value: 'replicationcontroller', label: 'ReplicationController' },
     ];
-  }
-  if (action === 'logs') {
-    return [
+  } else if (action === 'logs') {
+    base = [
       { value: 'pod', label: 'Pod' },
       { value: 'deployment', label: 'Deployment' },
       { value: 'daemonset', label: 'DaemonSet' },
       { value: 'statefulset', label: 'StatefulSet' },
     ];
+  } else {
+    base = [
+      { value: 'pod', label: 'Pod' },
+      { value: 'deployment', label: 'Deployment' },
+      { value: 'statefulset', label: 'StatefulSet' },
+      { value: 'daemonset', label: 'DaemonSet' },
+      { value: 'service', label: 'Service' },
+      { value: 'configmap', label: 'ConfigMap' },
+      { value: 'node', label: 'Node' },
+      { value: 'namespace', label: 'Namespace' },
+    ];
   }
-  return [
-    { value: 'pod', label: 'Pod' },
-    { value: 'deployment', label: 'Deployment' },
-    { value: 'statefulset', label: 'StatefulSet' },
-    { value: 'daemonset', label: 'DaemonSet' },
-    { value: 'service', label: 'Service' },
-    { value: 'configmap', label: 'ConfigMap' },
-    { value: 'node', label: 'Node' },
-    { value: 'namespace', label: 'Namespace' },
-  ];
+
+  const inputOptions = inputs
+    .filter(i => i.type === 'STRING')
+    .map(i => ({
+      value: `\${{ inputs.${i.key} }}`,
+      label: `Input: \${{ inputs.${i.key} }} (${i.label || i.key})`,
+    }));
+
+  const custom =
+    currentResource &&
+    !base.some(b => b.value === currentResource.toLowerCase()) &&
+    !inputOptions.some(o => o.value === currentResource)
+      ? [{ value: currentResource, label: `Configured: ${currentResource}` }]
+      : [];
+
+  return [...base, ...inputOptions, ...custom];
 }
 
 export default function KubernetesActionEditor({
   config,
   errors = {},
+  inputs = [],
   readOnly = false,
   onChange,
 }: KubernetesActionEditorProps) {
@@ -82,11 +99,8 @@ export default function KubernetesActionEditor({
     if (nextAction !== 'scale') {
       delete nextConfig.replicas;
     }
-    // Adjust resource default if current resource is incompatible with nextAction
-    const validResources = resourceOptionsFor(nextAction).map(r => r.value);
-    if (!validResources.includes(resource.toLowerCase()) && validResources.length > 0) {
-      nextConfig.resource = validResources[0];
-    }
+    // NEVER overwrite templated resources or force-rewrite without explicit user intent!
+    // Preserves ${{ inputs.resource }} and allows validation to explain any concrete incompatibility.
     onChange(nextConfig);
   };
 
@@ -145,10 +159,14 @@ export default function KubernetesActionEditor({
             <FormSelect
               name="k8s-resource"
               label="Resource type"
-              value={resource.toLowerCase()}
+              value={
+                resourceOptionsFor(action, inputs, resource).find(
+                  o => o.value.toLowerCase() === resource.toLowerCase() || o.value === resource
+                )?.value ?? resource
+              }
               disabled={readOnly}
               onValueChange={(nextRes: string) => onChange({ ...config, resource: nextRes })}
-              options={resourceOptionsFor(action)}
+              options={resourceOptionsFor(action, inputs, resource)}
             />
           </div>
           {errors.resource && <p className="mt-1 text-xs text-destructive">{errors.resource}</p>}

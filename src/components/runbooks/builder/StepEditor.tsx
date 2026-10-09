@@ -45,11 +45,11 @@ interface StepEditorProps {
   onChange: (patch: Partial<RunbookStepDefinition>) => void;
 }
 
-const RISK_RANKS: Record<RunbookRiskClass, number> = {
-  READ_ONLY: 0,
-  IDEMPOTENT_WRITE: 1,
-  NON_IDEMPOTENT: 2,
-};
+function getRiskRank(risk: RunbookRiskClass): number {
+  if (risk === 'NON_IDEMPOTENT') return 2;
+  if (risk === 'IDEMPOTENT_WRITE') return 1;
+  return 0;
+}
 
 export default function StepEditor({
   step,
@@ -85,7 +85,7 @@ export default function StepEditor({
       if (minRisk === 'NON_IDEMPOTENT' && requiredMinRisk !== 'NON_IDEMPOTENT') {
         nextApproval = false;
       }
-    } else if (RISK_RANKS[nextRisk] < RISK_RANKS[requiredMinRisk]) {
+    } else if (getRiskRank(nextRisk) < getRiskRank(requiredMinRisk)) {
       nextRisk = requiredMinRisk;
     }
 
@@ -101,7 +101,7 @@ export default function StepEditor({
   };
 
   const handleRiskClassChange = (selectedRisk: RunbookRiskClass) => {
-    if (RISK_RANKS[selectedRisk] < RISK_RANKS[minRisk]) return;
+    if (getRiskRank(selectedRisk) < getRiskRank(minRisk)) return;
     onChange({
       riskClass: selectedRisk,
       requiresApproval: selectedRisk === 'NON_IDEMPOTENT' ? true : step.requiresApproval,
@@ -462,7 +462,7 @@ function NestedChecks({
       {checks.length > 0 && (
         <ol className="mt-3 space-y-2" aria-label={`${label} ordered checks`}>
           {checks.map((check, index) => (
-            <li key={identities[index] ?? check.key} className="rounded-lg border bg-card p-3 shadow-2xs">
+            <li key={identities.at(index) ?? check.key} className="rounded-lg border bg-card p-3 shadow-2xs">
               <details>
                 <summary className="cursor-pointer break-words text-sm font-medium flex items-center justify-between">
                   <span>
@@ -481,7 +481,7 @@ function NestedChecks({
                   <StepEditor
                     step={check}
                     inputs={inputs}
-                    editorId={identities[index] ?? check.key}
+                    editorId={identities.at(index) ?? check.key}
                     depth={depth + 1}
                     readOnly={readOnly}
                     onChange={patch =>

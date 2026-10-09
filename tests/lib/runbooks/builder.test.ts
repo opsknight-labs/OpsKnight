@@ -4,6 +4,7 @@ import {
   newBuilderStep,
   RUNBOOK_TEMPLATES,
   runbookTemplate,
+  cloneStepRecursively,
 } from '@/lib/runbooks/builder';
 import { parseRunbookDefinition } from '@/lib/runbooks/definition';
 
@@ -33,4 +34,57 @@ describe('Runbook authoring templates', () => {
   it('uses the canonical incident priority field for new condition steps', () => {
     expect(newBuilderStep('CONDITION', 'gate').config.field).toBe('incident.priority');
   });
+
+  it('recursively clones a step and regenerates keys for all nested descendants', () => {
+    const source = {
+      ...newBuilderStep('SYSTEMD', 'restart_svc'),
+      name: 'Restart service',
+      riskClass: 'NON_IDEMPOTENT' as const,
+      requiresApproval: true,
+      config: { action: 'restart', unit: 'payments.service' },
+      precheck: {
+        steps: [
+          {
+            ...newBuilderStep('SYSTEMD', 'check_exists'),
+            name: 'Check exists',
+            config: { action: 'status', unit: 'payments.service' },
+          },
+        ],
+      },
+      verification: {
+        steps: [
+          {
+            ...newBuilderStep('SYSTEMD', 'check_healthy'),
+            name: 'Check healthy',
+            config: { action: 'status', unit: 'payments.service' },
+          },
+        ],
+      },
+    };
+
+    const existingKeys = new Set(['restart_svc', 'check_exists', 'check_healthy']);
+    const cloned = cloneStepRecursively(source, existingKeys);
+
+    expect(cloned.key).not.toBe(source.key);
+    expect(cloned.key).toMatch(/^[a-z0-9_-]{1,80}$/);
+    expect(cloned.name).toBe('Restart service (Copy)');
+
+    // Precheck key must be freshly generated and distinct
+    expect(cloned.precheck?.steps[0].key).not.toBe('check_exists');
+    expect(cloned.precheck?.steps[0].key).toMatch(/^[a-z0-9_-]{1,80}$/);
+    expect(cloned.precheck?.steps[0].name).toBe('Check exists (Copy)');
+
+    // Verification key must be freshly generated and distinct
+    expect(cloned.verification?.steps[0].key).not.toBe('check_healthy');
+    expect(cloned.verification?.steps[0].key).toMatch(/^[a-z0-9_-]{1,80}$/);
+    expect(cloned.verification?.steps[0].name).toBe('Check healthy (Copy)');
+
+    // All keys must be unique in existingKeys
+    expect(existingKeys.size).toBe(6);
+
+    // Full runbook containing original and cloned steps must be server-valid
+    const definition = { steps: [source, cloned] };
+    expect(() => parseRunbookDefinition(definition)).not.toThrow();
+  });
 });
+

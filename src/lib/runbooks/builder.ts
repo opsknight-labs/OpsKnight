@@ -107,3 +107,50 @@ export function runbookTemplate(template: (typeof RUNBOOK_TEMPLATES)[number]): R
     };
   return { steps: [newBuilderStep('MANUAL', 'first_step')] };
 }
+
+export function generateUniqueStepKey(baseKey: string, existingKeys: Set<string>): string {
+  const clean = baseKey
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '_')
+    .slice(0, 60);
+  let candidate = `${clean}_copy`;
+  if (candidate.length > 80) {
+    candidate = candidate.slice(0, 80);
+  }
+  let counter = 1;
+  while (existingKeys.has(candidate)) {
+    const suffix = `_copy_${counter}`;
+    const maxPrefixLen = Math.max(1, 80 - suffix.length);
+    candidate = `${clean.slice(0, maxPrefixLen)}${suffix}`;
+    counter++;
+  }
+  existingKeys.add(candidate);
+  return candidate;
+}
+
+export function cloneStepRecursively(
+  source: RunbookStepDefinition,
+  existingKeys: Set<string>
+): RunbookStepDefinition {
+  const newKey = generateUniqueStepKey(source.key, existingKeys);
+  const cloned: RunbookStepDefinition = {
+    ...JSON.parse(JSON.stringify(source)),
+    key: newKey,
+    name: `${source.name} (Copy)`,
+  };
+
+  if (cloned.precheck?.steps) {
+    cloned.precheck.steps = cloned.precheck.steps.map(child =>
+      cloneStepRecursively(child, existingKeys)
+    );
+  }
+
+  if (cloned.verification?.steps) {
+    cloned.verification.steps = cloned.verification.steps.map(child =>
+      cloneStepRecursively(child, existingKeys)
+    );
+  }
+
+  return cloned;
+}
+
