@@ -61,3 +61,15 @@ Kind shares the host CPU and memory with other applications; record concurrent
 host workloads when interpreting a failed run. Delete only this test namespace
 and its database between fresh matrices. These files do not certify capacity by
 themselves.
+
+The alternative `values-automation-integrated.yaml` gives four integrated
+replicas two exclusive CPUs and 1 GiB each, with two exclusive CPUs and 2 GiB
+for PostgreSQL. It uses direct PostgreSQL connections. Patch Deployment
+`automation` to the same non-surging strategy, and additionally set
+`DATABASE_POOL_SIZE_INTEGRATED=24`, `OPSKNIGHT_WORKER_BATCH_SIZE=25`, and
+`OPSKNIGHT_WORKER_CONCURRENCY=15`. Set `AUTOMATION_K8S_RUNTIME_MODE=integrated`
+on the certification runner. Its recovery drill deletes one physical integrated
+replica, exercising the web and worker roles in that process together. Split
+mode deletes one replica of each of the three roles. A missing target or an
+unsupported runtime mode fails the drill. Screening diagnostics are separate
+from the unchanged six-profile sustained certification.

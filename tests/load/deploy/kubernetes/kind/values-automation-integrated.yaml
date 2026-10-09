@@ -1,0 +1,45 @@
+# Isolated Kind capacity fixture; test-only credentials and resource allocation.
+runtime:
+  mode: integrated
+replicaCount: 4
+resources:
+  requests:
+    cpu: 2000m
+    memory: 1024Mi
+  limits:
+    cpu: 2000m
+    memory: 1024Mi
+image:
+  repository: opsknight-automation
+  tag: automation-cert
+  pullPolicy: Never
+fullnameOverride: automation
+config:
+  nextauthUrl: http://127.0.0.1:3439
+  nextPublicAppUrl: http://127.0.0.1:3439
+secrets:
+  nextauthSecret: automation-cert-nextauth-secret-at-least-32-characters
+  apiKeySecret: automation-cert-independent-api-secret-at-least-32-characters
+  encryptionKey: 4e7d2b9c1a8f6e3d5c0b9a8f7e6d5c4b3a29180f7e6d5c4b3a2918f7e6d5c4b3
+postgresql:
+  database: automation_cert
+  username: automation
+  password: automation-cert-only
+  storage: 4Gi
+  image:
+    tag: 16-alpine
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 2048Mi
+    limits:
+      cpu: 2000m
+      memory: 2048Mi
+database:
+  maxApplicationConnections: 200
+pgbouncer:
+  enabled: false
+service:
+  type: NodePort
+  port: 3000
+  nodePort: 30080
