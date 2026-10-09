@@ -1,4 +1,5 @@
 'use server';
+import { decodeExplanation } from '@/lib/automation/explanation';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { assertAutomationAccess } from '@/lib/automation/access';
@@ -344,7 +345,7 @@ export async function getAutomationArea(
     unmappedCount,
     aggregates,
     traces: canReadSensitive
-      ? traces
+      ? traces.map(trace => ({ ...trace, detail: decodeExplanation(trace.detail) }))
       : traces.map(trace => ({
           ...trace,
           detail: {

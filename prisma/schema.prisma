@@ -2043,6 +2043,7 @@ model BackgroundJob {
   type        JobType
   status      JobStatus @default(PENDING)
   scheduledAt DateTime
+  claimToken  String?   @db.Uuid
   startedAt   DateTime?
   completedAt DateTime?
   failedAt    DateTime?

@@ -78,3 +78,12 @@ domains:
     retention: { current: configuration-and-provider-specific, target: provider-specific-inventory }
     exportable: false
     deletion: { current: configuration-dependent, target: phase-2-or-3 }
+
+  - domain: service-automation
+    data: [context-values, normalization, enrichment-writes, responder-policy-snapshots, observation-previews]
+    purpose: [incident-routing-evidence, diagnostics, context-discovery]
+    storage: [postgresql]
+    recipients: [authorized-automation-readers-with-sensitive-context-permission]
+    retention: { current: incident-lifetime-for-decisions-and-ui-configured-retention-for-diagnostics, target: approved-minimization-with-routing-integrity-and-retention-holds }
+    exportable: manual-review-no-verified-subject-relation
+    deletion: { current: manual-review-preserve-immutable-routing-evidence, target: approved-subject-attribution-and-minimization }

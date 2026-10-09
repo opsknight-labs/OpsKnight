@@ -1,3 +1,8 @@
+import {
+  encodeExplanation,
+  MAX_AUTOMATION_DECISION_BYTES,
+  MAX_AUTOMATION_TRACE_BYTES,
+} from './explanation';
 import { enqueueAutomationNotification } from './jobs';
 import { getAutomationSettings } from './settings';
 import { Prisma } from '@prisma/client';
@@ -35,6 +40,7 @@ export type RuntimeEvaluation = {
   evaluatorMs: number;
   policyLookupMs: number;
   responderSnapshotMs: number;
+  responderPolicy?: Awaited<ReturnType<typeof captureResponderSnapshot>> | null;
   result: Evaluation | null;
   fallbackReason: string | null;
   shadowDifferent: boolean;
@@ -43,6 +49,7 @@ export type RuntimeEvaluation = {
   policyId: string | null;
   policyName: string | null;
   detailedTraceBytes?: number;
+  decisionBytes?: number;
   observations: ReturnType<typeof discoverFields>;
   normalization: ReturnType<typeof extractContextWithProvenance>['normalization'];
 };
@@ -149,6 +156,13 @@ export async function prepareAutomation(
       config.mode === 'LIVE' && priority?.state === 'RECOGNIZED'
         ? String(priority.value)
         : classification.priority;
+    if (runtime.mode === 'LIVE') {
+      const snapshotStart = performance.now();
+      runtime.responderPolicy = runtime.policyId
+        ? await captureResponderSnapshot(tx, runtime.policyId)
+        : null;
+      runtime.responderSnapshotMs = performance.now() - snapshotStart;
+    }
     // Bounded safe scalar summaries are queued; observation writes occur in the general worker.
     const configuredObservations = extracted.normalization
       .filter(n => n.raw !== null)
@@ -190,6 +204,24 @@ export async function prepareAutomation(
     runtime.finalPriority = classification.priority;
     runtime.policyId = service?.policy?.id ?? null;
     runtime.policyName = service?.policy?.name ?? null;
+    // Snapshot validation belongs before incident creation/final-priority/SLA writes.
+    // If even the default policy is invalid, keep legacy default routing available
+    // rather than making a diagnostic snapshot prevent alert acceptance.
+    if (runtime.mode === 'LIVE') {
+      try {
+        runtime.responderPolicy = runtime.policyId
+          ? await captureResponderSnapshot(tx, runtime.policyId)
+          : null;
+      } catch (snapshotError) {
+        if (
+          snapshotError instanceof Prisma.PrismaClientKnownRequestError ||
+          snapshotError instanceof Prisma.PrismaClientUnknownRequestError ||
+          snapshotError instanceof Prisma.PrismaClientInitializationError
+        )
+          throw snapshotError;
+        runtime.responderPolicy = undefined;
+      }
+    }
   }
   runtime.durationMs = performance.now() - engineStartedAt;
   return runtime;
@@ -264,13 +296,19 @@ export async function persistAutomation(
     destinationNames,
   };
   if (runtime.mode === 'LIVE') {
-    const snapshotStart = performance.now();
-    const responderPolicy = runtime.policyId
-      ? await captureResponderSnapshot(tx, runtime.policyId)
-      : null;
-    if (runtime.policyId) {
-      runtime.responderSnapshotMs = performance.now() - snapshotStart;
-    }
+    const responderPolicy = runtime.responderPolicy;
+    const summary = encodeExplanation(
+      {
+        ...(responderPolicy === undefined ? { snapshotUnavailable: true } : { responderPolicy }),
+        normalization: runtime.normalization,
+        inputContext: result?.inputContext ?? {},
+        enrichedContext: result?.enrichedContext ?? {},
+        writes: result?.writes ?? [],
+        outcome: result?.outcome ?? { type: 'SERVICE_DEFAULT' },
+      },
+      MAX_AUTOMATION_DECISION_BYTES
+    );
+    runtime.decisionBytes = Buffer.byteLength(JSON.stringify(summary), 'utf8');
     await tx.incidentAutomationDecision.create({
       data: {
         incidentId,
@@ -286,14 +324,7 @@ export async function persistAutomation(
         finalPriority: runtime.finalPriority,
         evaluationAt: runtime.evaluationAt,
         fallbackReason: runtime.fallbackReason,
-        summary: asJson({
-          responderPolicy,
-          normalization: runtime.normalization,
-          inputContext: result?.inputContext ?? {},
-          enrichedContext: result?.enrichedContext ?? {},
-          writes: result?.writes ?? [],
-          outcome: result?.outcome ?? { type: 'SERVICE_DEFAULT' },
-        }),
+        summary,
       },
     });
     if (result?.tags.length) {
@@ -330,7 +361,7 @@ export async function persistAutomation(
       evaluationAt: runtime.evaluationAt,
       durationMs: runtime.durationMs,
       fallbackReason: runtime.fallbackReason,
-      detail: asJson(
+      detail: encodeExplanation(
         runtime.shadowDifferent ||
           runtime.fallbackReason ||
           runtime.normalization.some(field => field.canonical.state === 'UNMAPPED') ||
@@ -353,7 +384,8 @@ export async function persistAutomation(
                     supplementalActions: result.supplementalActions,
                   }
                 : null,
-            }
+            },
+        MAX_AUTOMATION_TRACE_BYTES
       ),
     },
   });
@@ -387,6 +419,8 @@ export async function persistAutomation(
 }
 export function recordAutomationMetrics(runtime: RuntimeEvaluation | null) {
   if (!runtime) return;
+  if (runtime.decisionBytes !== undefined)
+    observeOperationalHistogram('opsknight_automation_decision_bytes', runtime.decisionBytes, {});
   if (runtime.detailedTraceBytes)
     addOperationalMetric(
       'opsknight_automation_detailed_trace_bytes_total',

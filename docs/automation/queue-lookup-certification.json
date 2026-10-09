@@ -1,0 +1,13 @@
+{
+  "status": "PASSED_COMPONENT_LOOKUP_CHECK",
+  "scope": "Read-only predecessor lookup on the existing outbox claim path; not a production HTTP capacity certification.",
+  "database": "Isolated PostgreSQL 16 certification fixture",
+  "pendingFixtureJobs": 5000,
+  "beforeIndexExecutionMs": 3895.562,
+  "afterIndexExecutionMs": 9.563,
+  "beforeJoinFilterRowsRemoved": 25210250,
+  "afterJoinFilterRowsRemoved": 5021,
+  "selectedRows": 100,
+  "migration": "20261009050000_automation_event_order_lookup",
+  "orderingSemantics": "Unchanged; partial index covers existing incident/lane equality predicates."
+}

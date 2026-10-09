@@ -291,7 +291,9 @@ export function AutomationRules({
             <Button
               variant="outline"
               size="sm"
+              disabled={draft.rules.length >= 100}
               onClick={() => {
+                if (draft.rules.length >= 100) return;
                 const rule = newRule(phase);
                 setExpandedRules(previous =>
                   mobile ? new Set([rule.id]) : new Set([...previous, rule.id])

@@ -1,4 +1,8 @@
 'use server';
+import {
+  assertResponderPolicySnapshotSafe,
+  lockResponderPolicy,
+} from '@/lib/escalation/automation-snapshot';
 
 import {
   ESCALATION_STEP_CHANNELS_SUBMITTED,
@@ -65,11 +69,15 @@ export async function createPolicyAction(
   }
 
   try {
-    const policy = await prisma.escalationPolicy.create({
-      data: {
-        name: normalizedName,
-        description,
-      },
+    const policy = await prisma.$transaction(async tx => {
+      const created = await tx.escalationPolicy.create({
+        data: {
+          name: normalizedName,
+          description,
+        },
+      });
+      await assertResponderPolicySnapshotSafe(tx, created.id);
+      return created;
     });
 
     await logAudit({
@@ -154,23 +162,27 @@ export async function createPolicy(formData: FormData) {
     throw error;
   }
 
-  const policy = await prisma.escalationPolicy.create({
-    data: {
-      name: normalizedName,
-      description: description || undefined,
-      steps: {
-        create: steps.map(({ conditions = [], ...step }) => ({
-          ...step,
-          conditions: conditions.length > 0 ? { create: conditions } : undefined,
-        })),
+  const policy = await prisma.$transaction(async tx => {
+    const created = await tx.escalationPolicy.create({
+      data: {
+        name: normalizedName,
+        description: description || undefined,
+        steps: {
+          create: steps.map(({ conditions = [], ...step }) => ({
+            ...step,
+            conditions: conditions.length > 0 ? { create: conditions } : undefined,
+          })),
+        },
       },
-    },
-    include: {
-      steps: {
-        include: { targetUser: true },
-        orderBy: { stepOrder: 'asc' },
+      include: {
+        steps: {
+          include: { targetUser: true },
+          orderBy: { stepOrder: 'asc' },
+        },
       },
-    },
+    });
+    await assertResponderPolicySnapshotSafe(tx, created.id);
+    return created;
   });
 
   await logAudit({
@@ -208,12 +220,16 @@ export async function updatePolicy(policyId: string, formData: FormData) {
     throw error;
   }
 
-  await prisma.escalationPolicy.update({
-    where: { id: policyId },
-    data: {
-      name: normalizedName,
-      description: description || undefined,
-    },
+  await prisma.$transaction(async tx => {
+    await lockResponderPolicy(tx, policyId);
+    await tx.escalationPolicy.update({
+      where: { id: policyId },
+      data: {
+        name: normalizedName,
+        description: description || undefined,
+      },
+    });
+    await assertResponderPolicySnapshotSafe(tx, policyId);
   });
 
   await logAudit({
@@ -316,6 +332,7 @@ export async function addPolicyStep(
 
   try {
     const nextStepOrder = await prisma.$transaction(async tx => {
+      await lockResponderPolicy(tx, policyId);
       const targetId = step.targetUserId ?? step.targetTeamId ?? (step.targetScheduleId as string);
       if (!(await escalationTargetExists(tx, targetType, targetId))) {
         throw new Error(`The selected ${targetType.toLowerCase()} no longer exists.`);
@@ -333,6 +350,7 @@ export async function addPolicyStep(
         data: { policyId, stepOrder: order, ...stepData, conditions: { create: conditions } },
       });
 
+      await assertResponderPolicySnapshotSafe(tx, policyId);
       return order;
     });
 
@@ -403,6 +421,7 @@ export async function updatePolicyStep(
 
   try {
     await prisma.$transaction(async tx => {
+      await lockResponderPolicy(tx, existing.policyId);
       const targetId = step.targetUserId ?? step.targetTeamId ?? (step.targetScheduleId as string);
       if (!(await escalationTargetExists(tx, step.targetType, targetId))) {
         throw new Error(`The selected ${step.targetType.toLowerCase()} no longer exists.`);
@@ -416,6 +435,7 @@ export async function updatePolicyStep(
             data: conditions.map(condition => ({ ruleId: stepId, ...condition })),
           });
       }
+      await assertResponderPolicySnapshotSafe(tx, existing.policyId);
     });
 
     await logAudit({
@@ -456,6 +476,7 @@ export async function deletePolicyStep(stepId: string): Promise<{ error?: string
 
   try {
     await prisma.$transaction(async tx => {
+      await lockResponderPolicy(tx, policyId);
       await tx.escalationRule.delete({
         where: { id: stepId },
       });
@@ -475,6 +496,7 @@ export async function deletePolicyStep(stepId: string): Promise<{ error?: string
           });
         }
       }
+      await assertResponderPolicySnapshotSafe(tx, policyId);
     });
 
     await logAudit({
@@ -544,6 +566,7 @@ export async function movePolicyStep(
   try {
     // Swap step orders and positional delays via temporary negative index to satisfy @@unique([policyId, stepOrder])
     await prisma.$transaction(async tx => {
+      await lockResponderPolicy(tx, policyId);
       await tx.escalationRule.update({
         where: { id: stepId },
         data: { stepOrder: -1 },
@@ -558,6 +581,7 @@ export async function movePolicyStep(
         where: { id: stepId },
         data: { stepOrder: newOrder, delayMinutes: targetDelay },
       });
+      await assertResponderPolicySnapshotSafe(tx, policyId);
     });
 
     await logAudit({
@@ -599,6 +623,7 @@ export async function reorderPolicySteps(
 
   try {
     await prisma.$transaction(async tx => {
+      await lockResponderPolicy(tx, policyId);
       // Verify all steps belong to the policy
       const steps = await tx.escalationRule.findMany({
         where: {
@@ -633,6 +658,7 @@ export async function reorderPolicySteps(
           },
         });
       }
+      await assertResponderPolicySnapshotSafe(tx, policyId);
     });
 
     await logAudit({

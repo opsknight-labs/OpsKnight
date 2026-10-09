@@ -1,15 +1,19 @@
+import { decodeExplanation } from '@/lib/automation/explanation';
 import prisma from '@/lib/prisma';
-import { assertCanViewIncident } from '@/lib/rbac';
+import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
 export default async function IncidentAutomationCard({ incidentId }: { incidentId: string }) {
   await assertCanViewIncident(incidentId);
+  const permissions = await getUserPermissions();
+  if (!permissions.capabilities.includes('automation.read')) return null;
+  const sensitive = permissions.capabilities.includes('incident.sensitive.read');
   const decision = await prisma.incidentAutomationDecision.findUnique({
     where: { incidentId },
     include: { version: { select: { versionNumber: true } } },
   });
   if (!decision) return null;
-  const summary = decision.summary as {
+  const summary = (sensitive ? decodeExplanation(decision.summary) : {}) as {
     inputContext?: Record<string, { state: string; value?: unknown; raw?: unknown }>;
     enrichedContext?: Record<string, { state: string; value?: unknown; raw?: unknown }>;
     normalization?: Array<{
@@ -41,30 +45,33 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
             : (decision.escalationPolicyNameSnapshot ?? 'Service default')}
         </p>
         {decision.fallbackReason && <p>Fallback: {decision.fallbackReason}</p>}
-        <details>
-          <summary className="cursor-pointer">View evaluation</summary>
-          <div className="mt-2 space-y-1">
-            {summary.normalization?.map(n => (
-              <p key={n.fieldKey}>
-                {n.fieldKey}: {String(n.raw ?? 'Missing')} →{' '}
-                {n.canonical.state === 'RECOGNIZED'
-                  ? String(n.canonical.value)
-                  : n.canonical.state.toLowerCase()}
-              </p>
-            ))}
-            {Object.entries(summary.inputContext ?? {}).map(([key, field]) => (
-              <p key={key}>
-                {key}: {field.state === 'MISSING' ? 'Missing' : String(field.value ?? field.raw)}
-                {field.state === 'UNMAPPED' ? ' (unmapped)' : ''}
-              </p>
-            ))}
-            {summary.writes?.map((write, i) => (
-              <p key={i}>
-                {write.fieldKey} → {String(write.value)}
-              </p>
-            ))}
-          </div>
-        </details>
+        {!sensitive && <p>Evaluation context is restricted.</p>}
+        {sensitive && (
+          <details>
+            <summary className="cursor-pointer">View evaluation</summary>
+            <div className="mt-2 space-y-1">
+              {summary.normalization?.map(n => (
+                <p key={n.fieldKey}>
+                  {n.fieldKey}: {String(n.raw ?? 'Missing')} →{' '}
+                  {n.canonical.state === 'RECOGNIZED'
+                    ? String(n.canonical.value)
+                    : n.canonical.state.toLowerCase()}
+                </p>
+              ))}
+              {Object.entries(summary.inputContext ?? {}).map(([key, field]) => (
+                <p key={key}>
+                  {key}: {field.state === 'MISSING' ? 'Missing' : String(field.value ?? field.raw)}
+                  {field.state === 'UNMAPPED' ? ' (unmapped)' : ''}
+                </p>
+              ))}
+              {summary.writes?.map((write, i) => (
+                <p key={i}>
+                  {write.fieldKey} → {String(write.value)}
+                </p>
+              ))}
+            </div>
+          </details>
+        )}
       </CardContent>
     </Card>
   );

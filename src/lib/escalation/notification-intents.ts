@@ -207,10 +207,7 @@ export async function planEscalationNotificationIntents(input: {
 
     let channels = enabledChannels as NotificationDeliveryChannel[];
     if (stepChannels && stepChannels.length > 0) {
-      const restricted = channels.filter(channel => stepChannels.includes(channel));
-      // Preserve the existing fallback for a legacy policy whose configured
-      // channels are all unavailable for this recipient.
-      channels = restricted.length > 0 ? restricted : channels;
+      channels = channels.filter(channel => stepChannels.includes(channel));
     }
 
     const quietHours = filterChannelsForQuietHours(channels, incident.urgency, recipient);

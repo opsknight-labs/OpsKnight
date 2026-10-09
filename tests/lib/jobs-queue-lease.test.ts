@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   processEventSideEffect: vi.fn(),
   updateMany: vi.fn(),
+  queryRaw: vi.fn(),
   update: vi.fn(),
   findUnique: vi.fn(),
   externalFindUnique: vi.fn(),
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
+    $queryRaw: mocks.queryRaw,
     backgroundJob: {
       updateMany: mocks.updateMany,
       update: mocks.update,
@@ -33,7 +35,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
-import { processJob } from '@/lib/jobs/queue';
+import { processJob, processPendingJobsByType } from '@/lib/jobs/queue';
 
 describe('background job processing lease', () => {
   beforeEach(() => {
@@ -55,6 +57,7 @@ describe('background job processing lease', () => {
 
     const processing = processJob({
       id: 'job-1',
+      claimToken: '00000000-0000-4000-8000-000000000001',
       type: 'SCHEDULED_TASK',
       status: 'PROCESSING',
       attempts: 1,
@@ -70,7 +73,7 @@ describe('background job processing lease', () => {
 
     await vi.advanceTimersByTimeAsync(60_000);
     expect(mocks.updateMany).toHaveBeenCalledWith({
-      where: { id: 'job-1', status: 'PROCESSING' },
+      where: { id: 'job-1', status: 'PROCESSING', attempts: 1, claimToken: '00000000-0000-4000-8000-000000000001' },
       data: { startedAt: expect.any(Date) },
     });
 
@@ -83,17 +86,32 @@ describe('background job processing lease', () => {
     const nextAttemptAt = new Date('2026-09-13T12:00:00.000Z');
     mocks.processExternalOperation.mockRejectedValue(new Error('provider unavailable'));
     mocks.externalFindUnique.mockResolvedValueOnce({
-      provider: 'JIRA', status: 'AMBIGUOUS', nextAttemptAt, leaseExpiresAt: null, lastError: 'retry',
+      provider: 'JIRA',
+      status: 'AMBIGUOUS',
+      nextAttemptAt,
+      leaseExpiresAt: null,
+      lastError: 'retry',
     });
     const job = {
-      id: 'job-jira', type: 'EXTERNAL_OPERATION' as const, status: 'PROCESSING' as const,
-      attempts: 1, maxAttempts: 8, payload: { operationId: 'op-jira' },
+      id: 'job-jira',
+      type: 'EXTERNAL_OPERATION' as const,
+      status: 'PROCESSING' as const,
+      attempts: 1,
+      maxAttempts: 8,
+      payload: { operationId: 'op-jira' },
     };
 
     await expect(processJob(job)).resolves.toBe(false);
     expect(mocks.update).toHaveBeenCalledWith({
       where: { id: 'job-jira' },
-      data: { status: 'PENDING', scheduledAt: nextAttemptAt, startedAt: null, attempts: 0, error: null },
+      data: {
+        status: 'PENDING',
+        scheduledAt: nextAttemptAt,
+        startedAt: null,
+        claimToken: null,
+        attempts: 0,
+        error: null,
+      },
     });
 
     vi.clearAllMocks();
@@ -101,11 +119,64 @@ describe('background job processing lease', () => {
     mocks.update.mockResolvedValue({});
     mocks.processExternalOperation.mockRejectedValue(new Error('ambiguous create'));
     mocks.externalFindUnique.mockResolvedValueOnce({
-      provider: 'MICROSOFT_TEAMS', status: 'AMBIGUOUS', nextAttemptAt, leaseExpiresAt: null, lastError: 'reconcile',
+      provider: 'MICROSOFT_TEAMS',
+      status: 'AMBIGUOUS',
+      nextAttemptAt,
+      leaseExpiresAt: null,
+      lastError: 'reconcile',
     });
-    await expect(processJob({ ...job, id: 'job-teams', payload: { operationId: 'op-teams' } })).resolves.toBe(false);
-    expect(mocks.update).not.toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ status: 'PENDING' }),
+    await expect(
+      processJob({ ...job, id: 'job-teams', payload: { operationId: 'op-teams' } })
+    ).resolves.toBe(false);
+    expect(mocks.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'PENDING' }),
+      })
+    );
+  });
+});
+
+describe('queued batch lease heartbeat', () => {
+  it('renews the waiting batch member while its predecessor is still executing', async () => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+    const jobs = ['active', 'waiting'].map(id => ({
+      id,
+      type: 'SCHEDULED_TASK',
+      status: 'PROCESSING',
+      attempts: 1,
+      maxAttempts: 5,
+      payload: {
+        task: 'EVENT_SIDE_EFFECT',
+        effect: 'TRIGGER_WEBHOOK',
+        lane: 'WEBHOOK',
+        incidentId: id,
+        eventOrderAt: '2026-10-09T00:00:00Z',
+      },
     }));
+    mocks.queryRaw.mockResolvedValue(jobs);
+    let finish!: () => void;
+    mocks.processEventSideEffect.mockResolvedValue(undefined).mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        })
+    );
+    const batch = processPendingJobsByType('SCHEDULED_TASK', 2, 1);
+    try {
+      await vi.advanceTimersByTimeAsync(25_000);
+      expect(mocks.updateMany).toHaveBeenCalledWith({
+        where: { OR: jobs.map(job => ({ id: job.id, attempts: 1, status: 'PROCESSING' })) },
+        data: { startedAt: expect.any(Date) },
+      });
+      finish();
+      await expect(batch).resolves.toEqual({ processed: 2, failed: 0, total: 2 });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      if (finish) finish();
+      await batch;
+      vi.useRealTimers();
+    }
   });
 });

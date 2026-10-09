@@ -1,5 +1,6 @@
 /** PostgreSQL-backed durable job queue. */
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import type { EventSideEffectPayload } from '../event-outbox';
 import { logger } from '../logger';
 import prisma from '../prisma';
@@ -13,7 +14,17 @@ import {
 } from '../status-pages/announcement-fanout-contract';
 
 const MAX_RETRY_BACKOFF_MS = 15 * 60 * 1000;
-const PROCESSING_LEASE_HEARTBEAT_MS = 60 * 1000;
+const PROCESSING_LEASE_HEARTBEAT_MS = 5 * 1000;
+// These operational handlers already fence their effects with durable intent IDs,
+// incident generations, or observation receipts. Bulk and runbook leases stay unchanged.
+const operationalLease = (candidate: boolean) =>
+  candidate
+    ? Prisma.sql`CASE WHEN candidate."claimToken" IS NOT NULL AND (candidate."type" IN ('ESCALATION'::"JobType", 'WAR_ROOM_PROVIDER_EVENT'::"JobType")
+      OR (candidate."type"='SCHEDULED_TASK'::"JobType" AND candidate.payload->>'task' IN ('EVENT_SIDE_EFFECT','AUTOMATION_OBSERVE')))
+      THEN INTERVAL '20 seconds' ELSE INTERVAL '10 minutes' END`
+    : Prisma.sql`CASE WHEN "claimToken" IS NOT NULL AND ("type" IN ('ESCALATION'::"JobType", 'WAR_ROOM_PROVIDER_EVENT'::"JobType")
+      OR ("type"='SCHEDULED_TASK'::"JobType" AND payload->>'task' IN ('EVENT_SIDE_EFFECT','AUTOMATION_OBSERVE')))
+      THEN INTERVAL '20 seconds' ELSE INTERVAL '10 minutes' END`;
 
 function isNonRetryableBackgroundJobError(error: string): boolean {
   return /message_limit_exceeded|user has not enabled any notification channels|403|401|forbidden|permission|unauthorized/i.test(
@@ -89,6 +100,7 @@ export interface QueuedJob {
   payload: unknown;
   attempts: number;
   maxAttempts: number;
+  claimToken?: string | null;
 }
 
 function isAnnouncementFanoutV2(type: string): boolean {
@@ -114,6 +126,7 @@ async function rescheduleBulkBackpressuredJob(job: QueuedJob): Promise<void> {
           status: STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING,
           scheduledAt: new Date(Date.now() + delayMs),
           startedAt: null,
+          claimToken: null,
           error: null,
           failedAt: null,
         }
@@ -121,6 +134,7 @@ async function rescheduleBulkBackpressuredJob(job: QueuedJob): Promise<void> {
           status: 'PENDING',
           scheduledAt: new Date(Date.now() + delayMs),
           startedAt: null,
+          claimToken: null,
           error: null,
           failedAt: null,
         },
@@ -338,7 +352,7 @@ export async function runQueueMaintenance(prismaClient = prisma): Promise<QueueM
 
   await prismaClient
     .$executeRaw(
-      Prisma.sql`UPDATE "BackgroundJob" SET "status"='FAILED',"error"='Job timed out in PROCESSING state after exceeding maxAttempts',"failedAt"=NOW() WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts";`
+      Prisma.sql`UPDATE "BackgroundJob" SET "status"='FAILED',"error"='Job timed out in PROCESSING state after exceeding maxAttempts',"failedAt"=NOW() WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-(${operationalLease(false)})) AND "attempts">="maxAttempts";`
     )
     .catch(err => logger.warn('[Queue] Failed to sweep zombie processing jobs', { error: err }));
   await prismaClient
@@ -389,7 +403,7 @@ export async function claimPendingJobs(
               candidate."status"='PENDING'::"JobStatus"
               OR (
                 candidate."status"='PROCESSING'::"JobStatus"
-                AND (candidate."startedAt" IS NULL OR candidate."startedAt"<NOW()-INTERVAL '10 minutes')
+                AND (candidate."startedAt" IS NULL OR candidate."startedAt"<NOW()-(${operationalLease(true)}))
               )
             )
           )
@@ -426,13 +440,14 @@ export async function claimPendingJobs(
           ELSE 'PROCESSING'::"JobStatus"
         END,
         "startedAt"=NOW(),
+        "claimToken"=gen_random_uuid(),
         "attempts"=CASE WHEN "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType") THEN "attempts" ELSE "attempts"+1 END
     WHERE "id" IN (SELECT "id" FROM cte)
     RETURNING *;
   `);
 }
 
-export async function markJobProcessing(jobId: string): Promise<void> {
+export async function markJobProcessing(jobId: string, claimToken?: string): Promise<void> {
   const existing = await prisma.backgroundJob.findUnique({
     where: { id: jobId },
     select: { type: true },
@@ -443,21 +458,53 @@ export async function markJobProcessing(jobId: string): Promise<void> {
   await prisma.backgroundJob.update({
     where: { id: jobId },
     data: isBulk
-      ? { status: processingStatusForJobType(type), startedAt: new Date() }
-      : { status: 'PROCESSING', startedAt: new Date(), attempts: { increment: 1 } },
+      ? {
+          status: processingStatusForJobType(type),
+          startedAt: new Date(),
+          claimToken: claimToken ?? null,
+        }
+      : {
+          status: 'PROCESSING',
+          startedAt: new Date(),
+          attempts: { increment: 1 },
+          claimToken: claimToken ?? null,
+        },
   });
 }
 
-export async function markJobCompleted(jobId: string): Promise<void> {
-  await prisma.backgroundJob.update({
-    where: { id: jobId },
-    data: { status: 'COMPLETED', completedAt: new Date() },
+export async function markJobCompleted(
+  jobId: string,
+  claimAttempt?: number,
+  claimToken?: string | null
+): Promise<void> {
+  const data = { status: 'COMPLETED' as const, completedAt: new Date() };
+  if (claimAttempt === undefined) {
+    await prisma.backgroundJob.update({ where: { id: jobId }, data });
+    return;
+  }
+  await prisma.backgroundJob.updateMany({
+    where: {
+      id: jobId,
+      attempts: claimAttempt,
+      status: { in: ['PROCESSING', 'PROCESSING_V2'] },
+      ...(claimToken === undefined ? {} : { claimToken }),
+    },
+    data,
   });
 }
 
-async function markWarRoomJobCompleted(jobId: string): Promise<boolean> {
+async function markWarRoomJobCompleted(
+  jobId: string,
+  claimAttempt?: number,
+  claimToken?: string | null
+): Promise<boolean> {
   const result = await prisma.backgroundJob.updateMany({
-    where: { id: jobId, status: 'PROCESSING' },
+    where: {
+      id: jobId,
+      status: 'PROCESSING',
+      ...(claimAttempt === undefined ? {} : { attempts: claimAttempt }),
+      ...(claimToken === undefined ? {} : { claimToken }),
+    },
     data: { status: 'COMPLETED', completedAt: new Date() },
   });
   return result.count === 1;
@@ -466,8 +513,15 @@ async function markWarRoomJobCompleted(jobId: string): Promise<boolean> {
 async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void> {
   const current = await prisma.backgroundJob.findUnique({
     where: { id: job.id },
-    select: { attempts: true, maxAttempts: true },
+    select: { attempts: true, maxAttempts: true, claimToken: true },
   });
+  if (
+    current &&
+    job.claimToken !== undefined &&
+    (current.attempts !== job.attempts ||
+      (job.claimToken !== undefined && current.claimToken !== job.claimToken))
+  )
+    return;
   const attempts = current?.attempts ?? job.attempts;
   const maxAttempts = current?.maxAttempts ?? job.maxAttempts;
   const shouldRetry = attempts < maxAttempts && !isNonRetryableBackgroundJobError(error);
@@ -479,10 +533,16 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
     if (deliveryId) {
       try {
         await prisma.$transaction(async tx => {
-          await tx.backgroundJob.updateMany({
-            where: { id: job.id, status: 'PROCESSING' },
+          const settled = await tx.backgroundJob.updateMany({
+            where: {
+              id: job.id,
+              status: 'PROCESSING',
+              attempts: job.attempts,
+              ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
+            },
             data: { status: 'FAILED', failedAt: new Date(), error },
           });
+          if (settled.count !== 1) return;
           await tx.warRoomProviderEventDelivery.updateMany({
             where: { id: deliveryId },
             data: {
@@ -505,9 +565,16 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
       return;
     }
   }
-  await prisma.backgroundJob.updateMany({
-    where: { id: job.id, status: 'PROCESSING' },
+  const settled = await prisma.backgroundJob.updateMany({
+    where: {
+      id: job.id,
+      status: 'PROCESSING',
+      attempts: job.attempts,
+      ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
+    },
     data: {
+      startedAt: null,
+      claimToken: null,
       status: shouldRetry ? 'PENDING' : 'FAILED',
       failedAt: shouldRetry ? null : new Date(),
       error,
@@ -516,6 +583,7 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
         : undefined,
     },
   });
+  if (settled.count !== 1) return;
   if (!shouldRetry && job.type === 'WAR_ROOM_PROVISION') {
     const warRoomId = payloadValue(job.payload, 'warRoomId');
     const provisioningToken = payloadValue(job.payload, 'provisioningToken');
@@ -579,8 +647,19 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
   }
 }
 
-export async function markJobFailed(jobId: string, error: string): Promise<void> {
-  const job = await prisma.backgroundJob.findUnique({ where: { id: jobId } });
+export async function markJobFailed(
+  jobId: string,
+  error: string,
+  claimAttempt?: number,
+  claimToken?: string | null
+): Promise<void> {
+  const job = await prisma.backgroundJob.findUnique({
+    where: {
+      id: jobId,
+      ...(claimAttempt === undefined ? {} : { attempts: claimAttempt }),
+      ...(claimToken === undefined ? {} : { claimToken }),
+    },
+  });
   if (!job) return;
   const type = job.type as JobType;
   const isBulk = isBulkNotificationJob(type);
@@ -588,13 +667,18 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
     const nextAttempts = job.attempts + 1;
     const shouldRetry = nextAttempts < job.maxAttempts && !isNonRetryableBackgroundJobError(error);
     await prisma.backgroundJob.update({
-      where: { id: jobId },
+      where: {
+        id: jobId,
+        ...(claimAttempt === undefined ? {} : { attempts: claimAttempt }),
+        ...(claimToken === undefined ? {} : { claimToken }),
+      },
       data: {
         status: shouldRetry ? pendingStatusForJobType(type) : 'FAILED',
         attempts: nextAttempts,
         failedAt: shouldRetry ? null : new Date(),
         error: shouldRetry ? null : error,
         startedAt: null,
+        claimToken: null,
         scheduledAt: shouldRetry
           ? new Date(
               Date.now() +
@@ -618,7 +702,12 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
 
     await prisma.$transaction(async tx => {
       await tx.backgroundJob.updateMany({
-        where: { id: jobId, status: { in: ['PROCESSING', 'PENDING'] } },
+        where: {
+          id: jobId,
+          status: { in: ['PROCESSING', 'PENDING'] },
+          ...(claimAttempt === undefined ? {} : { attempts: claimAttempt }),
+          ...(claimToken === undefined ? {} : { claimToken }),
+        },
         data: {
           status: 'FAILED',
           failedAt: now,
@@ -650,7 +739,12 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
 
     await prisma.$transaction(async tx => {
       await tx.backgroundJob.updateMany({
-        where: { id: jobId, status: { in: ['PROCESSING', 'PENDING'] } },
+        where: {
+          id: jobId,
+          status: { in: ['PROCESSING', 'PENDING'] },
+          ...(claimAttempt === undefined ? {} : { attempts: claimAttempt }),
+          ...(claimToken === undefined ? {} : { claimToken }),
+        },
         data: {
           status: 'FAILED',
           failedAt: now,
@@ -675,10 +769,16 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
     return;
   }
 
-  await prisma.backgroundJob.update({
-    where: { id: jobId },
+  const update = {
+    where: {
+      id: jobId,
+      ...(claimAttempt === undefined ? {} : { attempts: claimAttempt }),
+      ...(claimToken === undefined ? {} : { claimToken }),
+    },
     data: {
-      status: shouldRetry ? 'PENDING' : 'FAILED',
+      startedAt: null,
+      claimToken: null,
+      status: shouldRetry ? ('PENDING' as const) : ('FAILED' as const),
       failedAt: shouldRetry ? null : now,
       error: shouldRetry ? null : error,
       scheduledAt: shouldRetry
@@ -691,7 +791,13 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
           )
         : job.scheduledAt,
     },
-  });
+  };
+  if (claimToken === undefined) await prisma.backgroundJob.update(update);
+  else
+    await prisma.backgroundJob.updateMany({
+      ...update,
+      where: { ...update.where, status: 'PROCESSING' },
+    });
 }
 
 export async function processJob(jobInput: QueuedJob | string | null): Promise<boolean> {
@@ -702,13 +808,24 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
       : jobInput;
   if (!job) return false;
   let leaseHeartbeat: NodeJS.Timeout | null = null;
+  let claimAttempt = job.claimToken === undefined ? undefined : job.attempts;
   try {
     const expectedProcessingStatus = processingStatusForJobType(job.type);
-    if (job.status !== expectedProcessingStatus) await markJobProcessing(job.id);
+    if (job.status !== expectedProcessingStatus) {
+      job.claimToken = randomUUID();
+      await markJobProcessing(job.id, job.claimToken);
+      if (!isBulkNotificationJob(job.type as JobType)) job.attempts++;
+      claimAttempt = job.attempts;
+    }
     leaseHeartbeat = setInterval(() => {
       void prisma.backgroundJob
         .updateMany({
-          where: { id: job.id, status: expectedProcessingStatus },
+          where: {
+            id: job.id,
+            status: expectedProcessingStatus,
+            ...(claimAttempt === undefined ? {} : { attempts: claimAttempt }),
+            ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
+          },
           data: { startedAt: new Date() },
         })
         .catch(error =>
@@ -723,7 +840,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
       case 'RUNBOOK': {
         const { processRunbookJob } = await import('../runbooks/orchestrator');
         await processRunbookJob(job.payload);
-        await markJobCompleted(job.id);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
       case 'ESCALATION': {
@@ -736,15 +853,23 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
         const stepIndex = typeof stepIndexValue === 'number' ? stepIndexValue : undefined;
         const result = await executeEscalation(incidentId, stepIndex, { generation });
         if (escalationJobIsSettled(result.outcome)) {
-          await markJobCompleted(job.id);
+          await markJobCompleted(job.id, claimAttempt, job.claimToken);
           return true;
         }
-        await markJobFailed(job.id, result.reason || `Escalation failed (${result.outcome})`);
+        await markJobFailed(
+          job.id,
+          result.reason || `Escalation failed (${result.outcome})`,
+          claimAttempt,
+          job.claimToken
+        );
         return false;
       }
       case 'NOTIFICATION':
         await prisma.backgroundJob.update({
-          where: { id: job.id },
+          where: {
+            id: job.id,
+            ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
+          },
           data: {
             status: 'CANCELLED',
             completedAt: new Date(),
@@ -757,7 +882,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           throw new Error('ChatOps intent job is missing intentId');
         const { processChatOpsIntent } = await import('../chatops/intents');
         await processChatOpsIntent(requiredPayloadString(job.payload, 'intentId'));
-        await markJobCompleted(job.id);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
       case 'WAR_ROOM_PROVISION': {
@@ -781,7 +906,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
             requiredPayloadString(job.payload, 'provisioningToken')
           );
         }
-        return markWarRoomJobCompleted(job.id);
+        return markWarRoomJobCompleted(job.id, claimAttempt, job.claimToken);
       }
       case 'MEETING_PROVISION': {
         if (
@@ -805,7 +930,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           attempt: job.attempts,
           maxAttempts: job.maxAttempts,
         });
-        await markJobCompleted(job.id);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
       case 'MEETING_CLOSE': {
@@ -825,7 +950,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           organizerEmail:
             typeof rawClose.organizerEmail === 'string' ? rawClose.organizerEmail : null,
         });
-        await markJobCompleted(job.id);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
       case 'WAR_ROOM_PARTICIPANT_SYNC': {
@@ -833,7 +958,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           throw new Error('War-room participant sync job is missing warRoomId');
         const { syncWarRoomParticipants } = await import('../war-room/engine');
         await syncWarRoomParticipants(requiredPayloadString(job.payload, 'warRoomId'));
-        return markWarRoomJobCompleted(job.id);
+        return markWarRoomJobCompleted(job.id, claimAttempt, job.claimToken);
       }
       case 'WAR_ROOM_PROJECT': {
         const version = payloadValue(job.payload, 'projectionVersion');
@@ -841,7 +966,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           throw new Error('War-room projection job is missing projectionVersion');
         const { projectWarRoom } = await import('../war-room/engine');
         await projectWarRoom(requiredPayloadString(job.payload, 'warRoomId'), version);
-        return markWarRoomJobCompleted(job.id);
+        return markWarRoomJobCompleted(job.id, claimAttempt, job.claimToken);
       }
       case 'WAR_ROOM_RECONCILE': {
         if (typeof payloadValue(job.payload, 'warRoomId') !== 'string')
@@ -858,7 +983,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
             incidentId,
             terminalProjectionVersion
           );
-          return markWarRoomJobCompleted(job.id);
+          return markWarRoomJobCompleted(job.id, claimAttempt, job.claimToken);
         }
         if (raw.reason === 'external_cleanup_retry') {
           const { reconcileTerminalWarRoomDriftForRoom } =
@@ -866,7 +991,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           await reconcileTerminalWarRoomDriftForRoom(
             requiredPayloadString(job.payload, 'warRoomId')
           );
-          return markWarRoomJobCompleted(job.id);
+          return markWarRoomJobCompleted(job.id, claimAttempt, job.claimToken);
         }
         if (raw.reason === 'permission_refresh') {
           // Durable RSC probe for the room's team before normal health reconcile.
@@ -929,7 +1054,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
               } as unknown as never,
             });
           } catch {}
-          return markWarRoomJobCompleted(job.id);
+          return markWarRoomJobCompleted(job.id, claimAttempt, job.claimToken);
         }
         if (raw.reason === 'connection_test') {
           let probeProbeOk = true;
@@ -982,11 +1107,11 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
               } as unknown as never,
             });
           } catch {}
-          return markWarRoomJobCompleted(job.id);
+          return markWarRoomJobCompleted(job.id, claimAttempt, job.claimToken);
         }
         const { reconcileWarRoom } = await import('../war-room/engine');
         await reconcileWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
-        return markWarRoomJobCompleted(job.id);
+        return markWarRoomJobCompleted(job.id, claimAttempt, job.claimToken);
       }
       case 'WAR_ROOM_CLOSE': {
         if (typeof payloadValue(job.payload, 'warRoomId') !== 'string')
@@ -1003,7 +1128,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           incidentId,
           terminalProjectionVersion
         );
-        return markWarRoomJobCompleted(job.id);
+        return markWarRoomJobCompleted(job.id, claimAttempt, job.claimToken);
       }
       case 'WAR_ROOM_PROVIDER_EVENT': {
         const raw = job.payload as Record<string, unknown>;
@@ -1011,7 +1136,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
         if (typeof deliveryIdValue === 'string' && deliveryIdValue.trim()) {
           const { handleIncidentWarRoomProviderEvent } = await import('../war-room/engine');
           await handleIncidentWarRoomProviderEvent({ deliveryId: deliveryIdValue });
-          return markWarRoomJobCompleted(job.id);
+          return markWarRoomJobCompleted(job.id, claimAttempt, job.claimToken);
         }
         // Legacy payload (rolling deploy) — provider/event/idempotencyKey
         const providerValue = raw.provider;
@@ -1030,7 +1155,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           event: eventValue as unknown as import('../war-room/provider').WarRoomIncidentEvent,
           idempotencyKey: typeof idempotencyKeyValue === 'string' ? idempotencyKeyValue : undefined,
         });
-        return markWarRoomJobCompleted(job.id);
+        return markWarRoomJobCompleted(job.id, claimAttempt, job.claimToken);
       }
       case 'EXTERNAL_OPERATION': {
         if (typeof payloadValue(job.payload, 'operationId') !== 'string')
@@ -1066,12 +1191,22 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
               ? operation.nextAttemptAt
               : (operation.leaseExpiresAt ?? new Date(Date.now() + 30_000));
           await prisma.backgroundJob.update({
-            where: { id: job.id },
-            data: { status: 'PENDING', scheduledAt, startedAt: null, attempts: 0, error: null },
+            where: {
+              id: job.id,
+              ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
+            },
+            data: {
+              status: 'PENDING',
+              scheduledAt,
+              startedAt: null,
+              claimToken: null,
+              attempts: 0,
+              error: null,
+            },
           });
           return false;
         }
-        await markJobCompleted(job.id);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return operation.status === 'COMPLETED';
       }
       case 'STATUS_PAGE_NOTIFICATION': {
@@ -1146,7 +1281,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           if (webhookResult.failed > 0)
             throw new Error(`Status page webhook delivery failed (${webhookResult.failed})`);
         }
-        await markJobCompleted(job.id);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
       case STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1:
@@ -1172,11 +1307,15 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
 
         if (result.status === 'STALE') {
           await prisma.backgroundJob.update({
-            where: { id: job.id },
+            where: {
+              id: job.id,
+              ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
+            },
             data: {
               status: 'CANCELLED',
               completedAt: new Date(),
               startedAt: null,
+              claimToken: null,
               error: result.reason,
             },
           });
@@ -1184,11 +1323,15 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
         }
         if (result.status === 'NOT_DUE') {
           await prisma.backgroundJob.update({
-            where: { id: job.id },
+            where: {
+              id: job.id,
+              ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
+            },
             data: {
               status: pendingStatusForJobType(job.type),
               scheduledAt: result.retryAt,
               startedAt: null,
+              claimToken: null,
               failedAt: null,
               error: null,
             },
@@ -1197,19 +1340,26 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
         }
         if (result.failed > 0)
           throw new Error(`Status page announcement fan-out failed (${result.failed})`);
-        await markJobCompleted(job.id);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
       case 'SCHEDULED_TASK': {
-        if (['AUTOMATION_NOTIFY', 'AUTOMATION_OBSERVE', 'AUTOMATION_RETENTION'].includes(String(payloadValue(job.payload, 'task')))) {
+        if (
+          ['AUTOMATION_NOTIFY', 'AUTOMATION_OBSERVE', 'AUTOMATION_RETENTION'].includes(
+            String(payloadValue(job.payload, 'task'))
+          )
+        ) {
           const { processAutomationJob } = await import('../automation/jobs');
           await processAutomationJob(job.payload);
-          await markJobCompleted(job.id);
+          await markJobCompleted(job.id, claimAttempt, job.claimToken);
           return true;
         }
         if (payloadValue(job.payload, 'task') !== 'EVENT_SIDE_EFFECT') {
           await prisma.backgroundJob.update({
-            where: { id: job.id },
+            where: {
+              id: job.id,
+              ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
+            },
             data: {
               status: 'FAILED',
               failedAt: new Date(),
@@ -1220,7 +1370,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
         }
         const { processEventSideEffect } = await import('../event-side-effects');
         await processEventSideEffect(job.payload as unknown as EventSideEffectPayload);
-        await markJobCompleted(job.id);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
       case 'AUTO_UNSNOOZE': {
@@ -1229,23 +1379,30 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           requiredPayloadString(job.payload, 'incidentId')
         );
         if (result.outcome === 'changed') {
-          await markJobCompleted(job.id);
+          await markJobCompleted(job.id, claimAttempt, job.claimToken);
           return true;
         }
         if (result.outcome === 'not_due') {
           await prisma.backgroundJob.update({
-            where: { id: job.id },
+            where: {
+              id: job.id,
+              ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
+            },
             data: {
               status: 'PENDING',
               attempts: 0,
               scheduledAt: result.snoozedUntil,
               startedAt: null,
+              claimToken: null,
             },
           });
           return false;
         }
         await prisma.backgroundJob.update({
-          where: { id: job.id },
+          where: {
+            id: job.id,
+            ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
+          },
           data: { status: 'CANCELLED', completedAt: new Date() },
         });
         return false;
@@ -1254,7 +1411,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
         const runId = requiredPayloadString(job.payload, 'runId');
         const { executeMigrationRun } = await import('../encryption/migration');
         await executeMigrationRun({ runId, prisma });
-        await markJobCompleted(job.id);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
       case 'COMPLIANCE_DRIFT_PROJECT': {
@@ -1266,7 +1423,7 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           evaluationId: typeof evaluationId === 'string' ? evaluationId : undefined,
           prisma,
         });
-        await markJobCompleted(job.id);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
       case 'COMPLIANCE_EVALUATION_SWEEP': {
@@ -1276,11 +1433,11 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           monitorRunId,
           prisma,
         });
-        await markJobCompleted(job.id);
+        await markJobCompleted(job.id, claimAttempt, job.claimToken);
         return true;
       }
       default:
-        await markJobFailed(job.id, `Unknown job type: ${job.type}`);
+        await markJobFailed(job.id, `Unknown job type: ${job.type}`, job.attempts, job.claimToken);
         return false;
     }
   } catch (error) {
@@ -1302,16 +1459,25 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           ? retryAfterMs
           : Math.min(Math.pow(2, job.attempts) * 30_000, MAX_RETRY_BACKOFF_MS);
       const current = await prisma.backgroundJob.findUnique({
-        where: { id: job.id },
+        where: {
+          id: job.id,
+          ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
+        },
         select: { attempts: true, maxAttempts: true },
       });
       if (current && (retryBudgetNeutral || current.attempts < current.maxAttempts)) {
         await prisma.backgroundJob.updateMany({
-          where: { id: job.id, status: 'PROCESSING' },
+          where: {
+            id: job.id,
+            status: 'PROCESSING',
+            ...(claimAttempt === undefined ? {} : { attempts: claimAttempt }),
+            ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
+          },
           data: {
             status: 'PENDING',
             scheduledAt: new Date(Date.now() + delay),
             startedAt: null,
+            claimToken: null,
             error: null,
             ...(retryBudgetNeutral ? { attempts: { decrement: 1 } } : {}),
           },
@@ -1332,15 +1498,49 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           error:
             rescheduleError instanceof Error ? rescheduleError.message : String(rescheduleError),
         });
-        await markJobFailed(job.id, error instanceof Error ? error.message : 'Unknown error');
+        await markJobFailed(
+          job.id,
+          error instanceof Error ? error.message : 'Unknown error',
+          claimAttempt,
+          job.claimToken
+        );
       }
       return false;
     }
-    await markJobFailed(job.id, error instanceof Error ? error.message : 'Unknown error');
+    await markJobFailed(
+      job.id,
+      error instanceof Error ? error.message : 'Unknown error',
+      claimAttempt,
+      job.claimToken
+    );
     return false;
   } finally {
     if (leaseHeartbeat) clearInterval(leaseHeartbeat);
   }
+}
+
+function heartbeatClaimedBatch(jobs: QueuedJob[]) {
+  if (!jobs.length) return () => {};
+  const timer = setInterval(() => {
+    void prisma.backgroundJob
+      .updateMany({
+        where: {
+          OR: jobs.map(job => ({
+            id: job.id,
+            attempts: job.attempts,
+            status: processingStatusForJobType(job.type as JobType),
+            ...(job.claimToken === undefined ? {} : { claimToken: job.claimToken }),
+          })),
+        },
+        data: { startedAt: new Date() },
+      })
+      .catch(error =>
+        logger.warn('jobs.batch_lease_heartbeat_failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
+  }, PROCESSING_LEASE_HEARTBEAT_MS);
+  return () => clearInterval(timer);
 }
 
 export async function processPendingJobs(
@@ -1359,14 +1559,19 @@ export async function processPendingJobs(
   const pendingJobs = await claimPendingJobs(limit, undefined, excludeTypes);
   let processed = 0;
   let failed = 0;
-  for (let i = 0; i < pendingJobs.length; i += concurrency) {
-    const results = await Promise.allSettled(
-      pendingJobs.slice(i, i + concurrency).map(job => processJob(job))
-    );
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value) processed++;
-      else failed++;
+  const stopHeartbeat = heartbeatClaimedBatch(pendingJobs);
+  try {
+    for (let i = 0; i < pendingJobs.length; i += concurrency) {
+      const results = await Promise.allSettled(
+        pendingJobs.slice(i, i + concurrency).map(job => processJob(job))
+      );
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) processed++;
+        else failed++;
+      }
     }
+  } finally {
+    stopHeartbeat();
   }
   return { processed, failed, total: pendingJobs.length };
 }
@@ -1385,14 +1590,19 @@ export async function processPendingGeneralJobs(
   ]);
   let processed = 0;
   let failed = 0;
-  for (let i = 0; i < pendingJobs.length; i += concurrency) {
-    const results = await Promise.allSettled(
-      pendingJobs.slice(i, i + concurrency).map(job => processJob(job))
-    );
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value) processed++;
-      else failed++;
+  const stopHeartbeat = heartbeatClaimedBatch(pendingJobs);
+  try {
+    for (let i = 0; i < pendingJobs.length; i += concurrency) {
+      const results = await Promise.allSettled(
+        pendingJobs.slice(i, i + concurrency).map(job => processJob(job))
+      );
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) processed++;
+        else failed++;
+      }
     }
+  } finally {
+    stopHeartbeat();
   }
   return { processed, failed, total: pendingJobs.length };
 }
@@ -1408,14 +1618,19 @@ export async function processPendingJobsByType(
   const pendingJobs = await claimPendingJobs(limit, type);
   let processed = 0;
   let failed = 0;
-  for (let i = 0; i < pendingJobs.length; i += concurrency) {
-    const results = await Promise.allSettled(
-      pendingJobs.slice(i, i + concurrency).map(job => processJob(job))
-    );
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value) processed++;
-      else failed++;
+  const stopHeartbeat = heartbeatClaimedBatch(pendingJobs);
+  try {
+    for (let i = 0; i < pendingJobs.length; i += concurrency) {
+      const results = await Promise.allSettled(
+        pendingJobs.slice(i, i + concurrency).map(job => processJob(job))
+      );
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) processed++;
+        else failed++;
+      }
     }
+  } finally {
+    stopHeartbeat();
   }
   return { processed, failed, total: pendingJobs.length };
 }

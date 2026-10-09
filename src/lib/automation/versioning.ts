@@ -7,7 +7,10 @@ import { compileAutomation } from './compiler';
 import { logger } from '@/lib/logger';
 import { checksum, loadCompiledVersion } from './cache';
 import { snapshotSchema, emptySnapshot, type CompiledSnapshot } from './contract';
-import { MAX_ESCALATION_STEPS } from '@/lib/escalation/automation-snapshot';
+import {
+  MAX_ESCALATION_STEPS,
+  assertResponderPolicySnapshotSafe,
+} from '@/lib/escalation/automation-snapshot';
 export class AutomationConflict extends Error {
   constructor() {
     super('Another version was saved. Reload or review your changes before saving.');
@@ -106,6 +109,7 @@ export async function validateReferences(
         `Referenced escalation policy "${policy.name}" exceeds maximum step limit of ${MAX_ESCALATION_STEPS}`
       );
     }
+    await assertResponderPolicySnapshotSafe(tx, policy.id);
   }
   const notifications = compiled.rules.flatMap(r =>
     r.actions.filter(a => a.type === 'NOTIFY_CHANNEL')
