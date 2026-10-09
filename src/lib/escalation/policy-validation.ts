@@ -54,7 +54,7 @@ export type EscalationStepValidation =
 
 const TARGET_TYPES: readonly EscalationTargetType[] = ['USER', 'TEAM', 'SCHEDULE'];
 const conditionOperator = z.enum(['IN', 'NOT_IN', 'EQUALS', 'NOT_EQUALS']);
-const escalationConditionSchema = z
+export const escalationConditionSchema = z
   .discriminatedUnion('field', [
     z
       .object({

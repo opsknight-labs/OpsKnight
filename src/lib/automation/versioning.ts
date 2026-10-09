@@ -7,6 +7,7 @@ import { compileAutomation } from './compiler';
 import { logger } from '@/lib/logger';
 import { checksum, loadCompiledVersion } from './cache';
 import { snapshotSchema, emptySnapshot, type CompiledSnapshot } from './contract';
+import { MAX_ESCALATION_STEPS } from '@/lib/escalation/automation-snapshot';
 export class AutomationConflict extends Error {
   constructor() {
     super('Another version was saved. Reload or review your changes before saving.');
@@ -99,6 +100,13 @@ export async function validateReferences(
   });
   if (policies.length !== policyIds.length)
     throw new Error('A referenced escalation policy is missing');
+  for (const policy of policies) {
+    if (policy._count.steps > MAX_ESCALATION_STEPS) {
+      throw new Error(
+        `Referenced escalation policy "${policy.name}" exceeds maximum step limit of ${MAX_ESCALATION_STEPS}`
+      );
+    }
+  }
   const notifications = compiled.rules.flatMap(r =>
     r.actions.filter(a => a.type === 'NOTIFY_CHANNEL')
   );

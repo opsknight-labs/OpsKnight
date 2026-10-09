@@ -369,7 +369,10 @@ export async function acquireProviderAdmission(
   const id = `${scope}:${providerKey}:${windowStart.getTime()}`.slice(0, 240);
   const requested = Math.min(
     capacity.quotaBlockSize,
-    bulk ? capacity.bulkRatePerSecond : capacity.effectiveRatePerSecond
+    bulk ? capacity.bulkRatePerSecond : capacity.effectiveRatePerSecond,
+    // Urgent lanes cannot strand a whole second's budget in an idle replica.
+    // Match their reservation burst to the worker concurrency cap; bulk keeps batching.
+    bulk ? capacity.quotaBlockSize : MAX_SLOTS_PER_WORKER
   );
   // DB quota window is best-effort. Per-file vi.mock('@/lib/prisma') often omits
   // $executeRaw/$queryRaw — degrade to in-memory allow rather than unhandled throw.
@@ -391,7 +394,7 @@ export async function acquireProviderAdmission(
     ON CONFLICT ("id") DO NOTHING
   `);
     const rows = (await safePrisma.$queryRaw(Prisma.sql`
-    WITH capacity AS (
+    WITH capacity AS MATERIALIZED (
       SELECT LEAST(
         ${requested},
         GREATEST(0, ${capacity.effectiveRatePerSecond} - "globalUsed"),
@@ -399,6 +402,7 @@ export async function acquireProviderAdmission(
       )::integer AS granted
       FROM "ProviderQuotaWindow"
       WHERE "id" = ${id}
+      FOR UPDATE
     )
     UPDATE "ProviderQuotaWindow" AS quota_window
     SET "globalUsed" = quota_window."globalUsed" + capacity.granted,
