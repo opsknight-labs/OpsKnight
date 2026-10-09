@@ -119,7 +119,7 @@ export default function StepEditor({
   };
 
   return (
-    <div className="space-y-6">
+    <>
       {/* Mini Sequence Header: Before Checks */}
       <NestedChecks
         phase="precheck"
@@ -389,7 +389,7 @@ export default function StepEditor({
         readOnly={readOnly}
         onChange={onChange}
       />
-    </div>
+    </>
   );
 }
 

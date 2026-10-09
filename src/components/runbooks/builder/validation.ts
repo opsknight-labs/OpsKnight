@@ -7,7 +7,7 @@ export const SYSTEMD_UNIT =
   /^[A-Za-z0-9][A-Za-z0-9_.@:-]*\.(?:service|socket|timer|target|mount|path|slice|scope|device|automount|swap)$/;
 export const DOCKER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 export const KUBERNETES_NAME = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
-export const STEP_KEY_REGEX = /^[a-z0-9_]{1,64}$/i;
+export const STEP_KEY_REGEX = /^[a-z0-9_-]{1,80}$/;
 
 export interface StepValidationResult {
   errors: Record<string, string>;
@@ -31,7 +31,7 @@ export function validateStep(
   if (!step.key || step.key.trim().length === 0) {
     errors.key = 'Step key is required.';
   } else if (!STEP_KEY_REGEX.test(step.key)) {
-    errors.key = 'Key must contain only letters, numbers, and underscores (max 64 chars).';
+    errors.key = 'Key must be lowercase alphanumeric with underscores or hyphens (max 80 chars).';
   } else if (allStepKeys.filter(k => k === step.key).length > 1) {
     errors.key = 'Step key must be unique across the runbook.';
   }

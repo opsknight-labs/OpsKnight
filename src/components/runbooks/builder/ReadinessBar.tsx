@@ -5,6 +5,9 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { SubmitButton } from '../RunbookControls';
 import type { RunbookDefinition } from '@/lib/runbooks/types';
 
+import { flattenSteps } from '@/lib/runbooks/definition';
+import { stepRequiresApproval } from '@/lib/runbooks/safety';
+
 interface ReadinessBarProps {
   definition: RunbookDefinition;
   errorCount: number;
@@ -22,12 +25,10 @@ export default function ReadinessBar({
   readOnly = false,
   draftRevision = 0,
 }: ReadinessBarProps) {
-  const steps = definition.steps;
-  const totalSteps = steps.length;
-  const approvalGates = steps.filter(
-    s => s.riskClass === 'NON_IDEMPOTENT' || s.requiresApproval || s.type === 'APPROVAL'
-  ).length;
-  const mutationSteps = steps.filter(s => s.riskClass !== 'READ_ONLY').length;
+  const executableSteps = flattenSteps(definition);
+  const totalSteps = executableSteps.length;
+  const approvalGates = executableSteps.filter(stepRequiresApproval).length;
+  const mutationSteps = executableSteps.filter(s => s.riskClass !== 'READ_ONLY').length;
 
   return (
     <aside

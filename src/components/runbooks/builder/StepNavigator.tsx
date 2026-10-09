@@ -10,23 +10,28 @@ import {
   AlertCircle,
   ShieldAlert,
   CheckCircle2,
+  Settings2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { FormSelect } from '../RunbookControls';
+import { ConfigureSheet, FormSelect } from '../RunbookControls';
 import {
   RUNBOOK_STEP_TYPES,
   type RunbookStepDefinition,
   type RunbookStepType,
 } from '@/lib/runbooks/types';
+import type { RunbookInputInput } from '@/lib/runbooks/schemas';
+import StepEditor from './StepEditor';
 
 interface StepNavigatorProps {
   steps: RunbookStepDefinition[];
   stepIdentities: string[];
   selectedIndex: number;
   stepErrors: Map<number, Record<string, string>>;
+  inputs: RunbookInputInput[];
   readOnly?: boolean;
   onSelectStep: (index: number) => void;
+  onUpdateStep: (index: number, patch: Partial<RunbookStepDefinition>) => void;
   onMoveStep: (index: number, offset: number) => void;
   onDuplicateStep: (index: number) => void;
   onRemoveStep: (index: number) => void;
@@ -38,8 +43,10 @@ export default function StepNavigator({
   stepIdentities,
   selectedIndex,
   stepErrors,
+  inputs,
   readOnly = false,
   onSelectStep,
+  onUpdateStep,
   onMoveStep,
   onDuplicateStep,
   onRemoveStep,
@@ -63,7 +70,11 @@ export default function StepNavigator({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 space-y-1.5" tabIndex={0} role="region" aria-label="Step list">
+      <ol
+        aria-label="Runbook steps"
+        className="flex-1 overflow-y-auto p-2 space-y-1.5 list-none"
+        tabIndex={0}
+      >
         {steps.map((step, index) => {
           const isSelected = index === selectedIndex;
           const errors = stepErrors.get(index);
@@ -76,7 +87,7 @@ export default function StepNavigator({
           );
 
           return (
-            <div
+            <li
               key={stepIdentities[index] ?? step.key}
               onClick={() => onSelectStep(index)}
               className={`group relative flex flex-col rounded-lg border p-2.5 transition-all cursor-pointer select-none text-left ${
@@ -98,9 +109,9 @@ export default function StepNavigator({
                   >
                     {index + 1}
                   </span>
-                  <span className="truncate text-xs font-medium text-foreground">
-                    {step.name || <em className="text-muted-foreground">Untitled step</em>}
-                  </span>
+                  <h3 className="truncate text-xs font-semibold text-foreground">
+                    {step.name || <em className="text-muted-foreground font-normal">Untitled step</em>}
+                  </h3>
                 </div>
 
                 {hasErrors ? (
@@ -149,72 +160,105 @@ export default function StepNavigator({
               </div>
 
               {!readOnly && (
-                <div className="mt-2.5 flex items-center justify-end gap-1 border-t border-border/40 pt-1.5">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    title={`Move ${step.name} up`}
-                    aria-label={`Move ${step.name} up`}
-                    disabled={index === 0}
-                    onClick={e => {
-                      e.stopPropagation();
-                      onMoveStep(index, -1);
-                    }}
+                <div className="mt-2.5 flex items-center justify-between gap-1 border-t border-border/40 pt-1.5">
+                  <ConfigureSheet
+                    title={`Configure ${step.name}`}
+                    description="Changes remain local until you save the draft."
+                    trigger={
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        aria-label="Configure step"
+                        className="h-6 px-2 text-[11px] gap-1 font-medium"
+                        onClick={e => {
+                          e.stopPropagation();
+                          onSelectStep(index);
+                        }}
+                      >
+                        <Settings2 className="h-3 w-3" />
+                        Configure step
+                      </Button>
+                    }
                   >
-                    <ArrowUp className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    title={`Move ${step.name} down`}
-                    aria-label={`Move ${step.name} down`}
-                    disabled={index === steps.length - 1}
-                    onClick={e => {
-                      e.stopPropagation();
-                      onMoveStep(index, 1);
-                    }}
-                  >
-                    <ArrowDown className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    title={`Duplicate ${step.name}`}
-                    aria-label={`Duplicate ${step.name}`}
-                    onClick={e => {
-                      e.stopPropagation();
-                      onDuplicateStep(index);
-                    }}
-                  >
-                    <Copy className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-destructive hover:text-destructive"
-                    title={`Remove ${step.name}`}
-                    aria-label={`Remove ${step.name}`}
-                    disabled={steps.length === 1}
-                    onClick={e => {
-                      e.stopPropagation();
-                      onRemoveStep(index);
-                    }}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                    <StepEditor
+                      step={step}
+                      inputs={inputs}
+                      editorId={String(stepIdentities[index] ?? step.key)}
+                      depth={1}
+                      errors={errors ?? {}}
+                      readOnly={readOnly}
+                      onChange={patch => onUpdateStep(index, patch)}
+                    />
+                  </ConfigureSheet>
+
+                  <div className="flex items-center gap-0.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      title={`Move ${step.name} up`}
+                      aria-label={`Move ${step.name} up`}
+                      disabled={index === 0}
+                      onClick={e => {
+                        e.stopPropagation();
+                        onMoveStep(index, -1);
+                      }}
+                    >
+                      <ArrowUp className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      title={`Move ${step.name} down`}
+                      aria-label={`Move ${step.name} down`}
+                      disabled={index === steps.length - 1}
+                      onClick={e => {
+                        e.stopPropagation();
+                        onMoveStep(index, 1);
+                      }}
+                    >
+                      <ArrowDown className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      title={`Duplicate ${step.name}`}
+                      aria-label={`Duplicate ${step.name}`}
+                      onClick={e => {
+                        e.stopPropagation();
+                        onDuplicateStep(index);
+                      }}
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-destructive hover:text-destructive"
+                      title={`Remove ${step.name}`}
+                      aria-label={`Remove ${step.name}`}
+                      disabled={steps.length === 1}
+                      onClick={e => {
+                        e.stopPropagation();
+                        onRemoveStep(index);
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
               )}
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ol>
 
       {!readOnly && (
         <div className="border-t bg-muted/20 p-2.5 space-y-2">
