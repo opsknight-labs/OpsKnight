@@ -57,20 +57,20 @@ describe('readBoundedResponseBody streaming and memory bounds', () => {
     expect(result).toBe('');
   });
 
-  it('fallback fails closed when getReader is unavailable and Content-Length exceeds maxBytes', async () => {
+  it('fails closed when getReader is unavailable regardless of Content-Length', async () => {
     const fakeResponse = {
       body: {}, // No getReader function
-      headers: new Headers({ 'content-length': '500000' }),
-      text: vi.fn().mockResolvedValue('huge content'),
+      headers: new Headers({ 'content-length': '500' }),
+      text: vi.fn().mockResolvedValue('{"status":"ok"}'),
     } as unknown as Response;
 
     await expect(readBoundedResponseBody(fakeResponse, 1000)).rejects.toThrow(
-      'Streaming response reader is unavailable and content size exceeds or cannot verify preview limit of 1000 bytes.'
+      'Streaming response reader is unavailable; response body cannot be safely bounded without stream consumption.'
     );
     expect(fakeResponse.text).not.toHaveBeenCalled();
   });
 
-  it('fallback fails closed when getReader is unavailable and Content-Length header is missing', async () => {
+  it('fails closed when getReader is unavailable and Content-Length header is missing', async () => {
     const fakeResponse = {
       body: {},
       headers: new Headers(),
@@ -78,21 +78,8 @@ describe('readBoundedResponseBody streaming and memory bounds', () => {
     } as unknown as Response;
 
     await expect(readBoundedResponseBody(fakeResponse, 1000)).rejects.toThrow(
-      'Streaming response reader is unavailable and content size exceeds or cannot verify preview limit of 1000 bytes.'
+      'Streaming response reader is unavailable; response body cannot be safely bounded without stream consumption.'
     );
     expect(fakeResponse.text).not.toHaveBeenCalled();
-  });
-
-  it('fallback allows response when getReader is unavailable but trusted Content-Length is within maxBytes', async () => {
-    const smallContent = '{"status":"ok"}';
-    const fakeResponse = {
-      body: {},
-      headers: new Headers({ 'content-length': String(smallContent.length) }),
-      text: vi.fn().mockResolvedValue(smallContent),
-    } as unknown as Response;
-
-    const result = await readBoundedResponseBody(fakeResponse, 1000);
-    expect(result).toBe(smallContent);
-    expect(fakeResponse.text).toHaveBeenCalled();
   });
 });

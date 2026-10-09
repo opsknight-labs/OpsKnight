@@ -89,7 +89,7 @@ async function terminalizeRevokedAuthorityAttempt(
   errorMessage: string
 ) {
   const now = new Date();
-  await tx.runbookStepAttempt.updateMany({
+  const attemptChanged = await tx.runbookStepAttempt.updateMany({
     where: { id: candidate.id, status: 'PENDING' },
     data: {
       status: 'FAILED',
@@ -98,7 +98,9 @@ async function terminalizeRevokedAuthorityAttempt(
       errorMessage,
     },
   });
-  await tx.runbookExecutionStep.updateMany({
+  if (attemptChanged.count !== 1) return false;
+
+  const stepChanged = await tx.runbookExecutionStep.updateMany({
     where: { id: candidate.executionStepId, status: { in: ['READY', 'WAITING_AGENT', 'RUNNING'] } },
     data: {
       status: 'FAILED',
@@ -107,18 +109,21 @@ async function terminalizeRevokedAuthorityAttempt(
       errorMessage,
     },
   });
-  await tx.backgroundJob.create({
-    data: {
-      type: 'RUNBOOK',
-      status: 'PENDING',
-      scheduledAt: now,
-      maxAttempts: 8,
-      payload: {
-        kind: 'ADVANCE_EXECUTION',
-        executionId: candidate.executionStep.executionId ?? candidate.executionStep.execution.id,
+  if (stepChanged.count === 1) {
+    await tx.backgroundJob.create({
+      data: {
+        type: 'RUNBOOK',
+        status: 'PENDING',
+        scheduledAt: now,
+        maxAttempts: 8,
+        payload: {
+          kind: 'ADVANCE_EXECUTION',
+          executionId: candidate.executionStep.executionId ?? candidate.executionStep.execution.id,
+        },
       },
-    },
-  });
+    });
+  }
+  return true;
 }
 
 export async function claimAgentAttempt(

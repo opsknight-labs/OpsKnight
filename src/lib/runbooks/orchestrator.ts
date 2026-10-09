@@ -569,15 +569,8 @@ function resolvedPlanDigest(
 export async function readBoundedResponseBody(response: Response, maxBytes: number): Promise<string> {
   if (!response.body) return '';
   if (typeof response.body.getReader !== 'function') {
-    const contentLength = response.headers?.get?.('content-length');
-    if (contentLength !== null && contentLength !== undefined) {
-      const parsedLength = parseInt(contentLength, 10);
-      if (!Number.isNaN(parsedLength) && parsedLength >= 0 && parsedLength <= maxBytes) {
-        return (await response.text()).slice(0, maxBytes);
-      }
-    }
     throw new Error(
-      `Streaming response reader is unavailable and content size exceeds or cannot verify preview limit of ${maxBytes} bytes.`
+      'Streaming response reader is unavailable; response body cannot be safely bounded without stream consumption.'
     );
   }
   const reader = response.body.getReader();
