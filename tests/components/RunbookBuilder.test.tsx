@@ -117,4 +117,148 @@ describe('Runbook nested check builder', () => {
     expect(revisionInput).toBeTruthy();
     expect(revisionInput.value).toBe('42');
   });
+
+  it('handles numeric fields safely: clearing replicas deletes key and explicit 0 sets 0', () => {
+    const k8sStep = {
+      ...newBuilderStep('KUBERNETES', 'scale_step'),
+      config: {
+        action: 'scale',
+        namespace: 'prod',
+        resource: 'deployment',
+        name: 'web-service',
+        replicas: 3,
+      },
+      riskClass: 'IDEMPOTENT_WRITE' as const,
+    };
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [k8sStep] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    const replicasInput = screen.getByLabelText(
+      'Desired replicas (Agent policy is authoritative)'
+    ) as HTMLInputElement;
+    expect(replicasInput.value).toBe('3');
+
+    // Clearing the field must delete the key, NOT evaluate to 0
+    fireEvent.change(replicasInput, { target: { value: '' } });
+    const rawSaved = JSON.parse(
+      (container.querySelector('input[name="definition"]') as HTMLInputElement).value
+    );
+    expect(rawSaved.steps[0].config.replicas).toBeUndefined();
+    expect(screen.getByText('Desired replicas is required for scale action.')).toBeTruthy();
+
+    // Explicitly entering 0 must set replicas to 0 (scale-to-zero) and be server-valid
+    fireEvent.change(replicasInput, { target: { value: '0' } });
+    const zeroSaved = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(zeroSaved.steps[0].config.replicas).toBe(0);
+  });
+
+  it('strips replicas when switching Kubernetes action away from scale', () => {
+    const k8sStep = {
+      ...newBuilderStep('KUBERNETES', 'scale_step'),
+      config: {
+        action: 'scale',
+        namespace: 'prod',
+        resource: 'deployment',
+        name: 'web-service',
+        replicas: 5,
+      },
+    };
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [k8sStep] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    const actionSelect = screen.getByLabelText('Action');
+    fireEvent.change(actionSelect, { target: { value: 'rollout-restart' } });
+
+    const saved = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(saved.steps[0].config.action).toBe('rollout-restart');
+    expect(saved.steps[0].config.replicas).toBeUndefined();
+  });
+
+  it('demotes risk and unlocks approval when switching from non-idempotent to read-only action', () => {
+    const restartStep = {
+      ...newBuilderStep('SYSTEMD', 'svc_step'),
+      config: {
+        action: 'restart',
+        unit: 'payment.service',
+      },
+      riskClass: 'NON_IDEMPOTENT' as const,
+      requiresApproval: true,
+    };
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [restartStep] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    const actionSelect = screen.getByLabelText('Action');
+    fireEvent.change(actionSelect, { target: { value: 'status' } });
+
+    const saved = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(saved.steps[0].config.action).toBe('status');
+    expect(saved.steps[0].riskClass).toBe('READ_ONLY');
+    expect(saved.steps[0].requiresApproval).toBe(false);
+  });
+
+  it('duplicates step with fresh unique key', () => {
+    const initialStep = newBuilderStep('MANUAL', 'first_action');
+    initialStep.name = 'Initial Manual Step';
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [initialStep] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    const duplicateBtn = screen.getByRole('button', { name: 'Duplicate Initial Manual Step' });
+    fireEvent.click(duplicateBtn);
+
+    const saved = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(saved.steps).toHaveLength(2);
+    expect(saved.steps[1].key).not.toBe(saved.steps[0].key);
+    expect(saved.steps[1].key).toContain('first_action_copy');
+    expect(saved.steps[1].name).toBe('Initial Manual Step (Copy)');
+  });
+
+  it('displays inline validation error when step name is empty', () => {
+    const initialStep = newBuilderStep('MANUAL', 'test_step');
+
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [initialStep] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    const nameInput = screen.getByLabelText('Step name');
+    fireEvent.change(nameInput, { target: { value: '' } });
+
+    expect(screen.getByText('Step name is required.')).toBeTruthy();
+  });
 });
+

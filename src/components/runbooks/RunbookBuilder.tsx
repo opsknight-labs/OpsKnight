@@ -5,10 +5,13 @@ import {
   ArrowDown,
   ArrowUp,
   Code2,
+  Copy,
   ListOrdered,
   Plus,
   Settings2,
   ShieldCheck,
+  ShieldAlert,
+  AlertCircle,
   Trash2,
 } from 'lucide-react';
 import DetailTabs from '@/components/ui/DetailTabs';
@@ -19,8 +22,8 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
-  RUNBOOK_STEP_TYPES,
   RUNBOOK_INPUT_TYPES,
+  RUNBOOK_STEP_TYPES,
   type RunbookDefinition,
   type RunbookStepDefinition,
   type RunbookStepType,
@@ -30,12 +33,7 @@ import {
   runbookInputsSchema,
   type RunbookInputInput,
 } from '@/lib/runbooks/schemas';
-import {
-  newBuilderStep,
-  builderRisk,
-  CONDITION_FIELDS,
-  canonicalConditionField,
-} from '@/lib/runbooks/builder';
+import { newBuilderStep } from '@/lib/runbooks/builder';
 import {
   ActionForm,
   ConfigureSheet,
@@ -44,122 +42,9 @@ import {
   type RunbookFormAction,
 } from './RunbookControls';
 
-type ConfigField = {
-  key: string;
-  label: string;
-  options?: string[];
-  number?: boolean;
-  multiline?: boolean;
-};
-function fieldsFor(type: RunbookStepType): ConfigField[] {
-  switch (type) {
-    case 'HTTP':
-      return [
-        {
-          key: 'method',
-          label: 'Method',
-          options: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
-        },
-        { key: 'url', label: 'URL or input reference' },
-        { key: 'body', label: 'Request body', multiline: true },
-      ];
-    case 'SYSTEMD':
-      return [
-        { key: 'action', label: 'Action', options: ['status', 'start', 'stop', 'restart', 'logs'] },
-        { key: 'unit', label: 'Service unit or input reference' },
-        { key: 'lines', label: 'Recent log lines (maximum 500)', number: true },
-      ];
-    case 'DOCKER':
-      return [
-        {
-          key: 'action',
-          label: 'Action',
-          options: ['inspect', 'logs', 'health', 'start', 'stop', 'restart'],
-        },
-        { key: 'container', label: 'Container or input reference' },
-        { key: 'runtime', label: 'Container runtime', options: ['docker', 'podman'] },
-      ];
-    case 'KUBERNETES':
-      return [
-        {
-          key: 'action',
-          label: 'Action',
-          options: [
-            'get',
-            'describe',
-            'logs',
-            'events',
-            'rollout-status',
-            'rollout-restart',
-            'scale',
-          ],
-        },
-        { key: 'namespace', label: 'Namespace' },
-        { key: 'resource', label: 'Resource type' },
-        { key: 'name', label: 'Resource name' },
-        {
-          key: 'replicas',
-          label: 'Desired replicas (Agent policy is authoritative)',
-          number: true,
-        },
-      ];
-    case 'LINUX_DIAGNOSTICS':
-      return [
-        {
-          key: 'diagnostic',
-          label: 'Diagnostic',
-          options: [
-            'summary',
-            'disk',
-            'memory',
-            'processes',
-            'network',
-            'dns',
-            'tcp',
-            'http',
-            'journal',
-            'listeners',
-            'process',
-            'filesystem',
-          ],
-        },
-        { key: 'hostname', label: 'DNS hostname' },
-        { key: 'host', label: 'TCP host' },
-        { key: 'port', label: 'TCP port', number: true },
-        { key: 'url', label: 'Local health URL' },
-        { key: 'expectedStatus', label: 'Expected HTTP status', number: true },
-        { key: 'unit', label: 'Journal service unit' },
-        { key: 'lines', label: 'Journal lines (maximum 500)', number: true },
-        { key: 'pattern', label: 'Process lookup pattern' },
-        { key: 'path', label: 'Filesystem path' },
-      ];
-    case 'BASH':
-      return [{ key: 'command', label: 'Exact allowlisted command', multiline: true }];
-    case 'WAIT':
-      return [{ key: 'durationSeconds', label: 'Wait duration (seconds)', number: true }];
-    case 'CONDITION':
-      return [
-        { key: 'field', label: 'Incident field' },
-        {
-          key: 'operator',
-          label: 'Operator',
-          options: [
-            'EQUALS',
-            'NOT_EQUALS',
-            'CONTAINS',
-            'STARTS_WITH',
-            'IN',
-            'NOT_IN',
-            'EXISTS',
-            'NOT_EXISTS',
-          ],
-        },
-        { key: 'value', label: 'Match value (comma-separated for IN / NOT_IN)' },
-      ];
-    default:
-      return [];
-  }
-}
+import StepEditor from './builder/StepEditor';
+import ReadinessBar from './builder/ReadinessBar';
+import { validateRunbook } from './builder/validation';
 
 export default function RunbookBuilder({
   initialDefinition,
@@ -176,12 +61,11 @@ export default function RunbookBuilder({
 }) {
   const [definition, setDefinition] = useState(initialDefinition);
   const [draftRevision, setDraftRevision] = useState(initialDraftRevision);
-  // Keep editor identity independent of editable keys and list positions.
   const [stepIdentities, setStepIdentities] = useState(
-    initialDefinition.steps.map(step => step.key)
+    initialDefinition.steps.map(step => step.key || crypto.randomUUID())
   );
-  const [inputs, setInputs] = useState(initialInputs);
   const [stepType, setStepType] = useState<RunbookStepType>('MANUAL');
+  const [inputs, setInputs] = useState(initialInputs);
   const [dirty, setDirty] = useState(false);
   const [advancedDefinition, setAdvancedDefinition] = useState(
     JSON.stringify(initialDefinition, null, 2)
@@ -189,7 +73,11 @@ export default function RunbookBuilder({
   const [advancedInputs, setAdvancedInputs] = useState(JSON.stringify(initialInputs, null, 2));
   const [jsonError, setJsonError] = useState('');
   const [unappliedJson, setUnappliedJson] = useState(false);
-  function changeStep(index: number, patch: Partial<RunbookStepDefinition>) {
+
+  // Compute live validation results
+  const { stepErrors, errorCount } = validateRunbook(definition, inputs);
+
+  function updateStep(index: number, patch: Partial<RunbookStepDefinition>) {
     setDirty(true);
     setDefinition(current => ({
       ...current,
@@ -198,120 +86,217 @@ export default function RunbookBuilder({
       ),
     }));
   }
-  function move(index: number, offset: number) {
-    const steps = [...definition.steps];
-    const item = steps.splice(index, 1)[0];
+
+  function moveStep(index: number, offset: number) {
+    const nextSteps = [...definition.steps];
+    const item = nextSteps.splice(index, 1)[0];
     if (!item) return;
-    steps.splice(index + offset, 0, item);
-    const identities = [...stepIdentities];
-    const identity = identities.splice(index, 1)[0];
-    identities.splice(index + offset, 0, identity);
-    setStepIdentities(identities);
-    setDefinition({ ...definition, steps });
+    nextSteps.splice(index + offset, 0, item);
+
+    const nextIdentities = [...stepIdentities];
+    const id = nextIdentities.splice(index, 1)[0];
+    nextIdentities.splice(index + offset, 0, id);
+
+    setStepIdentities(nextIdentities);
+    setDefinition({ ...definition, steps: nextSteps });
     setDirty(true);
   }
-  const builder = (
-    <div className="space-y-4">
-      <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
-        Steps execute in order. Non-idempotent actions require approval; Agent policy and server
-        validation remain authoritative.
+
+  function duplicateStep(index: number) {
+    const source = definition.steps[index];
+    if (!source) return;
+    let sequence = definition.steps.length + 1;
+    while (definition.steps.some(step => step.key === `${source.key}_copy_${sequence}`)) {
+      sequence++;
+    }
+    const clonedKey = `${source.key}_copy_${sequence}`;
+    const clone: RunbookStepDefinition = {
+      ...JSON.parse(JSON.stringify(source)),
+      key: clonedKey,
+      name: `${source.name} (Copy)`,
+    };
+
+    const nextSteps = [...definition.steps];
+    nextSteps.splice(index + 1, 0, clone);
+    const nextIds = [...stepIdentities];
+    nextIds.splice(index + 1, 0, crypto.randomUUID());
+
+    setDefinition({ ...definition, steps: nextSteps });
+    setStepIdentities(nextIds);
+    setDirty(true);
+  }
+
+  function removeStep(index: number) {
+    if (definition.steps.length <= 1) return;
+    const nextSteps = definition.steps.filter((_, position) => position !== index);
+    const nextIds = stepIdentities.filter((_, position) => position !== index);
+    setDefinition({ ...definition, steps: nextSteps });
+    setStepIdentities(nextIds);
+    setDirty(true);
+  }
+
+  function addStep(type: RunbookStepType) {
+    let sequence = definition.steps.length + 1;
+    while (definition.steps.some(step => step.key === `step_${sequence}`)) {
+      sequence++;
+    }
+    const key = `step_${sequence}`;
+    const newStep = newBuilderStep(type, key);
+    setDefinition({ ...definition, steps: [...definition.steps, newStep] });
+    setStepIdentities([...stepIdentities, crypto.randomUUID()]);
+    setDirty(true);
+  }
+
+  const builderView = (
+    <div className="space-y-6">
+      <div className="rounded-xl border bg-muted/20 p-4 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-3">
+        <span>
+          Steps execute in strict top-to-bottom sequence. Mutations require explicit approval or non-idempotent safeguards. Agent policy remains authoritative.
+        </span>
       </div>
+
       <ol aria-label="Runbook steps" className="space-y-0">
-        {definition.steps.map((step, index) => (
-          <li
-            key={stepIdentities.at(index)}
-            className="relative ml-3 border-l-2 border-border pb-5 pl-6 last:border-transparent"
-          >
-            <span className="absolute -left-3 top-5 flex h-6 w-6 items-center justify-center rounded-full border bg-background text-xs font-semibold">
-              {index + 1}
-            </span>
-            <div className="rounded-xl border bg-card p-4 shadow-2xs">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="font-semibold">{step.name}</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {step.type.replaceAll('_', ' ')} · {step.key}
+        {definition.steps.map((step, index) => {
+          const errors = stepErrors.get(index);
+          const hasErrors = errors && Object.keys(errors).length > 0;
+          const isApprovalRequired =
+            step.riskClass === 'NON_IDEMPOTENT' || step.requiresApproval || step.type === 'APPROVAL';
+
+          return (
+            <li
+              key={stepIdentities[index] ?? step.key}
+              className="relative ml-3 border-l-2 border-border pb-5 pl-6 last:border-transparent"
+            >
+              <span
+                className={`absolute -left-3 top-5 flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold ${
+                  hasErrors ? 'border-destructive bg-destructive/10 text-destructive' : 'bg-background'
+                }`}
+              >
+                {index + 1}
+              </span>
+
+              <div className="rounded-xl border bg-card p-4 shadow-2xs">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-foreground">{step.name || 'Untitled step'}</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {step.type.replaceAll('_', ' ')} · {step.key}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {step.riskClass === 'NON_IDEMPOTENT' ? (
+                      <Badge variant="destructive" className="text-xs">
+                        MUTATION
+                      </Badge>
+                    ) : step.riskClass === 'IDEMPOTENT_WRITE' ? (
+                      <Badge variant="warning" className="text-xs">
+                        WRITE
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-xs">
+                        READ ONLY
+                      </Badge>
+                    )}
+
+                    {isApprovalRequired && (
+                      <Badge variant="warning" className="text-xs flex items-center gap-1">
+                        <ShieldAlert className="h-3 w-3" />
+                        Approval required
+                      </Badge>
+                    )}
+
+                    {hasErrors && (
+                      <Badge variant="destructive" className="text-xs flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        {Object.keys(errors).length} issues
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {step.description && (
+                  <p className="mt-3 break-words text-sm text-muted-foreground">{step.description}</p>
+                )}
+
+                {(step.precheck || step.verification) && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Before: {step.precheck?.steps.map(check => check.name).join(' → ') || 'None'}
+                    {' · '}After:{' '}
+                    {step.verification?.steps.map(check => check.name).join(' → ') || 'None'}
                   </p>
-                </div>
-                <Badge variant={step.riskClass === 'READ_ONLY' ? 'secondary' : 'warning'}>
-                  {step.riskClass === 'NON_IDEMPOTENT' || step.requiresApproval
-                    ? 'Approval required'
-                    : step.riskClass.replaceAll('_', ' ')}
-                </Badge>
+                )}
+
+                {!readOnly && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <ConfigureSheet
+                      title={`Configure ${step.name}`}
+                      description="Changes remain local until you save the draft."
+                      trigger={
+                        <Button type="button" size="sm" variant="outline">
+                          <Settings2 className="h-4 w-4 mr-1.5" />
+                          Configure step
+                        </Button>
+                      }
+                    >
+                      <StepEditor
+                        step={step}
+                        inputs={inputs}
+                        editorId={String(stepIdentities[index] ?? step.key)}
+                        depth={1}
+                        errors={errors ?? {}}
+                        readOnly={readOnly}
+                        onChange={patch => updateStep(index, patch)}
+                      />
+                    </ConfigureSheet>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Move ${step.name} up`}
+                      disabled={index === 0}
+                      onClick={() => moveStep(index, -1)}
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Move ${step.name} down`}
+                      disabled={index === definition.steps.length - 1}
+                      onClick={() => moveStep(index, 1)}
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Duplicate ${step.name}`}
+                      onClick={() => duplicateStep(index)}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove ${step.name}`}
+                      disabled={definition.steps.length === 1}
+                      onClick={() => removeStep(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
-              {step.description && (
-                <p className="mt-3 break-words text-sm text-muted-foreground">{step.description}</p>
-              )}
-              {(step.precheck || step.verification) && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Before: {step.precheck?.steps.map(check => check.name).join(' → ') || 'None'}
-                  {' · '}After:{' '}
-                  {step.verification?.steps.map(check => check.name).join(' → ') || 'None'}
-                </p>
-              )}
-              {!readOnly && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <ConfigureSheet
-                    title={`Configure ${step.name}`}
-                    description="Changes remain local until you save the draft."
-                    trigger={
-                      <Button type="button" size="sm" variant="outline">
-                        <Settings2 className="h-4 w-4" />
-                        Configure step
-                      </Button>
-                    }
-                  >
-                    <StepConfiguration
-                      step={step}
-                      inputs={inputs}
-                      editorId={String(stepIdentities.at(index))}
-                      depth={1}
-                      onChange={patch => changeStep(index, patch)}
-                    />
-                  </ConfigureSheet>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Move ${step.name} up`}
-                    disabled={index === 0}
-                    onClick={() => move(index, -1)}
-                  >
-                    <ArrowUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Move ${step.name} down`}
-                    disabled={index === definition.steps.length - 1}
-                    onClick={() => move(index, 1)}
-                  >
-                    <ArrowDown className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Remove ${step.name}`}
-                    disabled={definition.steps.length === 1}
-                    onClick={() => {
-                      setStepIdentities(stepIdentities.filter((_, position) => position !== index));
-                      setDefinition({
-                        ...definition,
-                        steps: definition.steps.filter((_, position) => position !== index),
-                      });
-                      setDirty(true);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ol>
+
       {!readOnly && (
         <div className="flex flex-col gap-2 sm:flex-row">
           <div className="sm:w-64">
@@ -326,32 +311,29 @@ export default function RunbookBuilder({
               }))}
             />
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              let sequence = definition.steps.length + 1;
-              while (definition.steps.some(step => step.key === `step_${sequence}`)) sequence++;
-              setStepIdentities([...stepIdentities, crypto.randomUUID()]);
-              setDefinition({
-                ...definition,
-                steps: [...definition.steps, newBuilderStep(stepType, `step_${sequence}`)],
-              });
-              setDirty(true);
-            }}
-          >
-            <Plus className="h-4 w-4" />
+          <Button type="button" variant="outline" onClick={() => addStep(stepType)}>
+            <Plus className="h-4 w-4 mr-1.5" />
             Add step
           </Button>
         </div>
       )}
+
+      {/* Sticky Bottom Readiness Bar */}
+      <ReadinessBar
+        definition={definition}
+        errorCount={errorCount}
+        dirty={dirty}
+        unappliedJson={unappliedJson}
+        readOnly={readOnly}
+        draftRevision={draftRevision}
+      />
     </div>
   );
+
   const inputEditor = (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Define reusable parameters. SECRET_REF inputs contain secret references, never plaintext
-        values.
+        Define reusable parameters for this runbook. Parameters can be bound to services, passed at manual launch, or evaluated from incident metadata.
       </p>
       {inputs.map((input, index) => {
         const update = (patch: Partial<RunbookInputInput>) => {
@@ -362,60 +344,72 @@ export default function RunbookBuilder({
         };
         return (
           <fieldset
-            key={index}
+            key={input.key || index}
             disabled={readOnly}
-            className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2"
+            className="grid gap-4 rounded-xl border p-4 sm:grid-cols-2 bg-card"
           >
-            <legend className="px-2 text-sm font-semibold">Input {index + 1}</legend>
-            <Field label="Key">
+            <legend className="px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Parameter {index + 1}: {input.label || input.key}
+            </legend>
+            <div className="space-y-1.5">
+              <Label>Key</Label>
               <Input
                 aria-label={`Input ${index + 1} key`}
                 value={input.key}
-                onChange={event => update({ key: event.target.value })}
+                disabled={readOnly}
+                onChange={e => update({ key: e.target.value })}
               />
-            </Field>
-            <Field label="Label">
+            </div>
+            <div className="space-y-1.5">
+              <Label>Label</Label>
               <Input
                 aria-label={`Input ${index + 1} label`}
                 value={input.label}
-                onChange={event => update({ label: event.target.value })}
+                disabled={readOnly}
+                onChange={e => update({ label: e.target.value })}
               />
-            </Field>
-            <Field label="Type">
+            </div>
+            <div className="space-y-1.5">
+              <Label>Type</Label>
               <FormSelect
                 name={`inputType-${index}`}
                 label={`Input ${index + 1} type`}
                 value={input.type}
-                onValueChange={value => update({ type: value as RunbookInputInput['type'] })}
-                options={RUNBOOK_INPUT_TYPES.map(type => ({
-                  value: type,
-                  label: type.replaceAll('_', ' '),
-                }))}
                 disabled={readOnly}
+                onValueChange={v => update({ type: v as RunbookInputInput['type'] })}
+                options={RUNBOOK_INPUT_TYPES.map(t => ({
+                  value: t,
+                  label: t.replaceAll('_', ' '),
+                }))}
               />
-            </Field>
-            <Field label="Default value / secret reference">
+            </div>
+            <div className="space-y-1.5">
+              <Label>Default value / secret reference</Label>
               <Input
                 aria-label={`Input ${index + 1} default`}
                 value={input.defaultValue ?? ''}
-                onChange={event => update({ defaultValue: event.target.value || undefined })}
+                disabled={readOnly}
+                onChange={e => update({ defaultValue: e.target.value || undefined })}
               />
-            </Field>
-            <Field label="Help text">
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Help text</Label>
               <Input
                 aria-label={`Input ${index + 1} help`}
                 value={input.description}
-                onChange={event => update({ description: event.target.value })}
+                disabled={readOnly}
+                onChange={e => update({ description: e.target.value })}
               />
-            </Field>
-            <div className="flex items-center justify-between gap-2">
-              <label className="flex items-center gap-2 text-sm">
+            </div>
+            <div className="flex items-center justify-between sm:col-span-2 pt-2 border-t">
+              <label className="flex items-center gap-2 text-xs font-medium cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={input.required}
-                  onChange={event => update({ required: event.target.checked })}
+                  disabled={readOnly}
+                  onChange={e => update({ required: e.target.checked })}
                 />
-                Required
+                Required parameter
               </label>
               {!readOnly && (
                 <Button
@@ -423,30 +417,35 @@ export default function RunbookBuilder({
                   variant="ghost"
                   size="sm"
                   aria-label={`Remove input ${index + 1}`}
+                  className="text-xs text-destructive hover:text-destructive h-7"
                   onClick={() => {
                     setInputs(inputs.filter((_, position) => position !== index));
                     setDirty(true);
                   }}
                 >
-                  <Trash2 className="h-4 w-4" />
-                  Remove
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  Remove parameter
                 </Button>
               )}
             </div>
           </fieldset>
         );
       })}
+
       {inputs.length === 0 && (
         <EmptyState
           title="No inputs defined"
-          description="Add typed parameters to reuse this workflow across services."
+          description="Add typed parameters to reuse this workflow across multiple environments or incidents."
           size="sm"
         />
       )}
+
       {!readOnly && (
         <Button
           type="button"
           variant="outline"
+          size="sm"
+          className="text-xs font-semibold"
           onClick={() => {
             setInputs([
               ...inputs,
@@ -462,22 +461,25 @@ export default function RunbookBuilder({
             setDirty(true);
           }}
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-3.5 w-3.5 mr-1.5" />
           Add input
         </Button>
       )}
     </div>
   );
+
   const advanced = (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Advanced editing remains compatible with all builder checks and additional configuration.
-        Apply JSON before saving. Refresh from the builder before editing to avoid replacing newer
-        changes.
+        Advanced JSON editing remains compatible with all builder checks. Apply JSON to synchronize
+        with the builder before saving draft.
       </p>
+
       <Button
         type="button"
         variant="outline"
+        size="sm"
+        className="text-xs"
         onClick={() => {
           setAdvancedDefinition(JSON.stringify(definition, null, 2));
           setAdvancedInputs(JSON.stringify(inputs, null, 2));
@@ -487,36 +489,43 @@ export default function RunbookBuilder({
       >
         Refresh JSON from builder
       </Button>
-      <Field label="Definition JSON">
+
+      <div className="space-y-1.5">
+        <Label>Definition JSON</Label>
         <Textarea
           aria-label="Definition JSON"
           value={advancedDefinition}
-          onChange={event => {
-            setAdvancedDefinition(event.target.value);
+          onChange={e => {
+            setAdvancedDefinition(e.target.value);
             setUnappliedJson(true);
           }}
           readOnly={readOnly}
           className="min-h-72 font-mono text-xs"
           spellCheck={false}
         />
-      </Field>
-      <Field label="Typed inputs JSON">
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Typed inputs JSON</Label>
         <Textarea
           aria-label="Typed inputs JSON"
           value={advancedInputs}
-          onChange={event => {
-            setAdvancedInputs(event.target.value);
+          onChange={e => {
+            setAdvancedInputs(e.target.value);
             setUnappliedJson(true);
           }}
           readOnly={readOnly}
           className="min-h-40 font-mono text-xs"
           spellCheck={false}
         />
-      </Field>
+      </div>
+
       {!readOnly && (
         <Button
           type="button"
           variant="outline"
+          size="sm"
+          className="text-xs font-semibold"
           onClick={() => {
             try {
               const parsedDefinition = runbookDefinitionSchema.parse(
@@ -539,13 +548,15 @@ export default function RunbookBuilder({
           Apply JSON to builder
         </Button>
       )}
+
       {jsonError && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-destructive font-medium">
           {jsonError}
         </p>
       )}
     </div>
   );
+
   return (
     <ActionForm
       action={action}
@@ -564,6 +575,7 @@ export default function RunbookBuilder({
         name="inputs"
         value={JSON.stringify(inputs.map((input, sequence) => ({ ...input, sequence })))}
       />
+
       <DetailTabs
         urlParamName="editor"
         tabs={[
@@ -571,7 +583,7 @@ export default function RunbookBuilder({
             id: 'builder',
             label: 'Builder',
             icon: <ListOrdered className="h-4 w-4" />,
-            content: builder,
+            content: builderView,
           },
           { id: 'inputs', label: 'Inputs', count: inputs.length, content: inputEditor },
           {
@@ -582,352 +594,25 @@ export default function RunbookBuilder({
           },
         ]}
       />
+
       {unappliedJson && !readOnly && (
         <p role="alert" className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
           Advanced JSON has unapplied changes. Apply JSON to the builder before saving, or refresh
           JSON from the builder to discard those edits.
         </p>
       )}
+
       {!readOnly && (
         <div className="flex flex-wrap items-center gap-3 border-t pt-4">
           <SubmitButton pendingLabel="Saving draft…" disabled={unappliedJson}>
             <ShieldCheck className="h-4 w-4" />
             Save draft
           </SubmitButton>
-          <span aria-live="polite" className="text-xs text-muted-foreground">
+          <span aria-live="polite" className="text-xs text-muted-foreground font-medium">
             {dirty ? 'Unsaved changes' : 'Saved draft'}
           </span>
         </div>
       )}
     </ActionForm>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      {children}
-    </div>
-  );
-}
-
-function NestedChecks({
-  phase,
-  step,
-  inputs,
-  depth,
-  onChange,
-}: {
-  phase: 'precheck' | 'verification';
-  step: RunbookStepDefinition;
-  inputs: RunbookInputInput[];
-  depth: number;
-  onChange: (patch: Partial<RunbookStepDefinition>) => void;
-}) {
-  const group = phase === 'precheck' ? step.precheck : step.verification;
-  const checks = group?.steps ?? [];
-  const [identities, setIdentities] = useState(checks.map(check => check.key));
-  const [type, setType] = useState<RunbookStepType>('SYSTEMD');
-  const label = phase === 'precheck' ? 'Before action' : 'After action';
-  const commit = (steps: RunbookStepDefinition[]) =>
-    onChange({
-      [phase]: steps.length ? { ...group, steps } : undefined,
-    });
-  const move = (index: number, offset: number) => {
-    const next = [...checks];
-    const item = next.splice(index, 1)[0];
-    if (!item) return;
-    next.splice(index + offset, 0, item);
-    const ids = [...identities];
-    const id = ids.splice(index, 1)[0];
-    ids.splice(index + offset, 0, id);
-    setIdentities(ids);
-    commit(next);
-  };
-  return (
-    <section aria-label={`${label} checks`} className="mt-5 space-y-3 rounded-xl border p-3">
-      <h4 className="font-semibold">{label}</h4>
-      <p className="text-xs text-muted-foreground">
-        {phase === 'precheck'
-          ? 'A failed precheck prevents the action from running.'
-          : 'A failed verification means remediation failed, even if the action exited successfully.'}
-      </p>
-      <ol className="space-y-2" aria-label={`${label} ordered checks`}>
-        {checks.map((check, index) => (
-          <li key={identities.at(index) ?? check.key} className="rounded-lg border p-3">
-            <details>
-              <summary className="cursor-pointer break-words text-sm font-medium">
-                {index + 1}. {check.name}{' '}
-                <Badge variant={check.riskClass === 'READ_ONLY' ? 'secondary' : 'warning'}>
-                  {check.riskClass === 'READ_ONLY' ? 'READ ONLY' : 'WRITE'}
-                </Badge>{' '}
-                {(check.requiresApproval ||
-                  check.riskClass === 'NON_IDEMPOTENT' ||
-                  check.type === 'APPROVAL') && <Badge variant="warning">APPROVAL</Badge>}
-              </summary>
-              <div className="mt-3">
-                <StepConfiguration
-                  step={check}
-                  inputs={inputs}
-                  editorId={identities.at(index) ?? check.key}
-                  depth={depth + 1}
-                  onChange={patch =>
-                    commit(
-                      checks.map((item, position) =>
-                        position === index ? { ...item, ...patch } : item
-                      )
-                    )
-                  }
-                />
-              </div>
-            </details>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={`Move ${check.name} up in ${label}`}
-                disabled={index === 0}
-                onClick={() => move(index, -1)}
-              >
-                <ArrowUp className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label={`Move ${check.name} down in ${label}`}
-                disabled={index === checks.length - 1}
-                onClick={() => move(index, 1)}
-              >
-                <ArrowDown className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={`Remove ${check.name} from ${label}`}
-                onClick={() => {
-                  setIdentities(identities.filter((_, position) => position !== index));
-                  commit(checks.filter((_, position) => position !== index));
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-                Remove
-              </Button>
-            </div>
-          </li>
-        ))}
-      </ol>
-      {depth < 3 && checks.length < 10 ? (
-        <div className="flex flex-wrap gap-2">
-          <FormSelect
-            name={`${phase}-type-${step.key}`}
-            label={`${label} check type`}
-            value={type}
-            onValueChange={value => setType(value as RunbookStepType)}
-            options={RUNBOOK_STEP_TYPES.map(value => ({
-              value,
-              label: value.replaceAll('_', ' '),
-            }))}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const key = `${phase}_${crypto.randomUUID().replaceAll('-', '_')}`;
-              setIdentities([...identities, key]);
-              commit([...checks, newBuilderStep(type, key)]);
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            {phase === 'precheck' ? 'Add precheck' : 'Add verification'}
-          </Button>
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          Maximum{' '}
-          {depth >= 3 ? 'nesting depth reached (three levels)' : 'ten checks per group reached'}.
-        </p>
-      )}
-    </section>
-  );
-}
-
-function StepConfiguration({
-  step,
-  inputs,
-  editorId,
-  depth,
-  onChange,
-}: {
-  step: RunbookStepDefinition;
-  inputs: RunbookInputInput[];
-  editorId: string;
-  depth: number;
-  onChange: (patch: Partial<RunbookStepDefinition>) => void;
-}) {
-  return (
-    <>
-      <NestedChecks
-        phase="precheck"
-        step={step}
-        inputs={inputs}
-        depth={depth}
-        onChange={onChange}
-      />
-      <div className="space-y-4">
-        <h4 className="font-semibold">{depth === 1 ? 'Action' : 'Check configuration'}</h4>
-        <Field label="Name">
-          <Input
-            aria-label="Step name"
-            value={step.name}
-            maxLength={200}
-            onChange={event => onChange({ name: event.target.value })}
-          />
-        </Field>
-        <Field label="Step key">
-          <Input
-            aria-label="Step key"
-            value={step.key}
-            onChange={event => onChange({ key: event.target.value })}
-          />
-        </Field>
-        <Field label="Description / responder instructions">
-          <Textarea
-            aria-label="Step description"
-            value={step.description ?? ''}
-            onChange={event => onChange({ description: event.target.value })}
-          />
-        </Field>
-        {fieldsFor(step.type).map(field => {
-          if (step.type === 'CONDITION' && field.key === 'field') {
-            return (
-              <Field key={field.key} label="Condition field">
-                <FormSelect
-                  name={`condition-field-${editorId}`}
-                  label="Condition field"
-                  value={canonicalConditionField(String(step.config.field ?? ''))}
-                  onValueChange={value => onChange({ config: { ...step.config, field: value } })}
-                  options={[
-                    ...CONDITION_FIELDS,
-                    ...inputs.map(input => ({
-                      value: `input.${input.key}`,
-                      label: `Input → ${input.label} (${input.key})`,
-                    })),
-                  ]}
-                />
-                <p className="text-xs text-muted-foreground">
-                  A false condition skips all remaining pending steps. Incident/service fields are
-                  unavailable when execution has no corresponding resource.
-                </p>
-              </Field>
-            );
-          }
-          const raw = Object.entries(step.config).find(([key]) => key === field.key)?.[1];
-          const value =
-            raw === undefined
-              ? ''
-              : Array.isArray(raw)
-                ? raw.join(', ')
-                : typeof raw === 'object'
-                  ? JSON.stringify(raw)
-                  : String(raw);
-          const update = (next: string) => {
-            const config = {
-              ...step.config,
-              [field.key]: field.number ? Number(next) : next,
-            };
-            if (step.type === 'CONDITION') {
-              if (['IN', 'NOT_IN'].includes(String(config.operator))) {
-                config.value = String(field.key === 'value' ? next : (step.config.value ?? ''))
-                  .split(',')
-                  .map(value => value.trim())
-                  .filter(Boolean);
-              } else if (['EXISTS', 'NOT_EXISTS'].includes(String(config.operator))) {
-                config.value = null;
-              }
-            }
-            const updated = { ...step, config };
-            const minimumRisk = builderRisk(updated);
-            const ranks = new Map([
-              ['READ_ONLY', 0],
-              ['IDEMPOTENT_WRITE', 1],
-              ['NON_IDEMPOTENT', 2],
-            ]);
-            const riskClass =
-              ranks.get(step.riskClass)! > ranks.get(minimumRisk)! ? step.riskClass : minimumRisk;
-            onChange({
-              config,
-              riskClass,
-              requiresApproval: riskClass === 'NON_IDEMPOTENT' || step.requiresApproval,
-            });
-          };
-          return (
-            <Field key={field.key} label={field.label}>
-              {field.options ? (
-                <FormSelect
-                  name={`config-${field.key}`}
-                  label={field.label}
-                  value={value}
-                  onValueChange={update}
-                  options={field.options.map(option => ({
-                    value: option,
-                    label: option,
-                  }))}
-                />
-              ) : field.multiline ? (
-                <Textarea
-                  aria-label={field.label}
-                  value={value}
-                  onChange={event => update(event.target.value)}
-                  className="font-mono text-xs"
-                />
-              ) : (
-                <Input
-                  aria-label={field.label}
-                  value={value}
-                  type={field.number ? 'number' : 'text'}
-                  min={field.number ? 0 : undefined}
-                  onChange={event => update(event.target.value)}
-                />
-              )}
-            </Field>
-          );
-        })}
-        <Field label="Timeout (seconds)">
-          <Input
-            aria-label="Step timeout"
-            type="number"
-            min={1}
-            max={86400}
-            value={step.timeoutSeconds ?? 300}
-            onChange={event => onChange({ timeoutSeconds: Number(event.target.value) })}
-          />
-        </Field>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={step.requiresApproval || step.riskClass === 'NON_IDEMPOTENT'}
-            disabled={step.riskClass === 'NON_IDEMPOTENT'}
-            onChange={event => onChange({ requiresApproval: event.target.checked })}
-          />
-          Require explicit approval
-        </label>
-        <p className="text-xs text-muted-foreground">
-          Use {'${{ inputs.key }}'} for typed input references. Keep credentials in scoped secrets,
-          not command text or headers.
-        </p>
-      </div>
-      <NestedChecks
-        phase="verification"
-        step={step}
-        inputs={inputs}
-        depth={depth}
-        onChange={onChange}
-      />
-    </>
   );
 }
