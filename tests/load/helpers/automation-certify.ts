@@ -5,6 +5,7 @@ import path from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { applyIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 import { configureAutomationLoadProfile, provisionAutomationProviderCapacity } from './automation';
+import { kubernetesRecoveryTargets, requireRecoveryTarget } from './automation-recovery';
 import { countAutomationBacklog } from './automation-backlog';
 import { providerDuplicateDelta } from './automation-provider-telemetry';
 import { AUTOMATION_LOAD_PROFILES } from '../fixtures/automation';
@@ -20,6 +21,9 @@ const composeArgs = [
   'tests/load/deploy/compose/automation.yml',
 ];
 async function runK6(profile: string, output: string) {
+  const recoveryTargets = process.env.AUTOMATION_K8S_NAMESPACE
+    ? kubernetesRecoveryTargets(process.env.AUTOMATION_K8S_RUNTIME_MODE)
+    : ['web', 'critical', 'general'].map(role => ({ role, selector: '' }));
   const child = spawn(
     process.env.K6_BINARY || 'k6',
     ['run', '--summary-export', output, 'tests/load/scenarios/automation.js'],
@@ -36,25 +40,25 @@ async function runK6(profile: string, output: string) {
   child.stdout.on('data', chunk => chunks.push(String(chunk)));
   child.stderr.on('data', chunk => chunks.push(String(chunk)));
   let faultWork: Promise<unknown> | null = null;
+  let faultError: unknown;
   const fault =
     profile === 'live-small' && process.env.AUTOMATION_RECOVERY_DRILL === 'true'
       ? setTimeout(() => {
           faultWork = Promise.all(
-            ['web', 'critical', 'general'].map(async role => {
+            recoveryTargets.map(async ({ role, selector }) => {
               const namespace = process.env.AUTOMATION_K8S_NAMESPACE;
               if (namespace) {
-                const component = role === 'web' ? role : `${role}-worker`;
                 const { stdout } = await exec('kubectl', [
                   'get',
                   'pods',
                   '-n',
                   namespace,
                   '-l',
-                  `app.kubernetes.io/component=${component}`,
+                  selector,
                   '-o',
                   'jsonpath={.items[0].metadata.name}',
                 ]);
-                if (stdout.trim()) {
+                if (requireRecoveryTarget(stdout, role)) {
                   chunks.push(`Deleting one ${role} pod ${stdout.trim()}\n`);
                   await exec('kubectl', [
                     'delete',
@@ -70,13 +74,15 @@ async function runK6(profile: string, output: string) {
               } else {
                 const { stdout } = await exec('docker', [...composeArgs, 'ps', '-q', role]);
                 const id = stdout.trim().split('\n')[0];
-                if (id) {
+                if (requireRecoveryTarget(id, role)) {
                   chunks.push(`Restarting one ${role} replica ${id}\n`);
                   await exec('docker', ['restart', '--time', '0', id]);
                 }
               }
             })
-          );
+          ).catch(error => {
+            faultError = error;
+          });
         }, 5000)
       : null;
   const code = await new Promise<number | null>((resolve, reject) => {
@@ -86,6 +92,8 @@ async function runK6(profile: string, output: string) {
   if (fault) clearTimeout(fault);
   if (faultWork) await faultWork;
   await fs.writeFile(output.replace('.json', '.log'), chunks.join(''));
+  if (faultError) throw faultError;
+  if (fault && !faultWork) throw new Error('Load ended before the recovery drill started');
   return code;
 }
 async function main() {

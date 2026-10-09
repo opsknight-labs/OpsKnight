@@ -111,3 +111,10 @@ Recovery also treats unfinished voice `ACCEPTED`/`RINGING`/connection progress r
 The isolated Kind capacity attempts are also retained in `persistence-capacity-results.json`. The first matrix completed five profiles and aborted during worst-case cleanup after a transaction timeout; concurrent host test processes were observed during that last profile. The four-Web matrix was stopped after four completed profiles because its disabled/SHADOW latency, SHADOW arrival-drop, and fallback gates had already failed. Its restart profile accepted and persisted all 2,401 alerts with zero duplicate provider deliveries and no `UNKNOWN` attempts remaining at cancellation. Neither attempt certifies capacity. The reproducible test topology and database/pool tuning are documented under `tests/load/deploy/kubernetes/kind`.
 
 The larger-pool/four-core PostgreSQL Kind attempt was stopped after three complete profiles when disabled latency and SHADOW drops/fallbacks failed their gates. Helm now exposes `pgbouncer.prismaCompatibilityMode`: the existing legacy mode remains the default, while the Kind fixture explicitly selects native prepared statements on verified PgBouncer 1.26.0. Native mode rejects disabled prepared-statement tracking. `native-pgbouncer-evidence.json` records a real eight-client/two-server connection smoke test, including transaction rollbacks and correctly isolated prepared-statement results. This smoke test establishes protocol correctness, not sustained capacity; a fresh image/matrix is still required for that.
+
+The native prepared-statement Kind matrix failed its sustained OFF baseline:
+2,048 events were accepted and persisted, 353 scheduled arrivals were dropped,
+and the queue drained in 102.8 seconds with no duplicate provider deliveries.
+This result does not certify native-mode capacity. The retained integrated Kind
+fixture and explicit recovery topology support a separate fresh allocation test;
+short diagnostics do not establish sustained capacity.

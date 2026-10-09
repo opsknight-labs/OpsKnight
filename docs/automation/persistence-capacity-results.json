@@ -4024,6 +4024,94 @@
       },
       "postgresSharedBuffers": "512MB",
       "unknownDispatchesObservedAtCancellation": 3
+    },
+    {
+      "topology": "kind-helm-split-pgbouncer-audit18-native-pool24-pg4-20rps",
+      "generatedAt": "2026-10-09T17:57:24.797Z",
+      "rps": 20,
+      "drainBudgetMs": 180000,
+      "durationPerProfile": "120s",
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "providerCapacityProfile": "provisioned-200",
+        "providerTelemetryResetBeforeRun": true,
+        "providerBudgets": {
+          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "providers": {
+            "EMAIL": "smtp",
+            "PUSH": "web-push",
+            "WEBHOOK": "default"
+          },
+          "ratePerSecond": 200,
+          "maxInFlight": 40
+        },
+        "publicFanout": "Dedicated status-fanout suite",
+        "historicalFixtureTimers": "Disabled before first profile; real alert/responder escalation unchanged",
+        "comparisonValidity": "Queues drained between profiles",
+        "stopReason": "Global-off baseline failed its sustained latency or workload gates"
+      },
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "global-off: k6 gate failed (99)",
+          "Incomplete certification: Global-off baseline failed its sustained latency or workload gates"
+        ]
+      },
+      "sourceRevision": "418fc558da1619b25a071320813d2c04a7cafa6a",
+      "imageDigest": "sha256:43cba6b702d3dacb1a7a1616645b5729b21d811e80c0241fc36672f0aab892cf",
+      "scope": "SUSTAINED_BASELINE_FAILED",
+      "profiles": [
+        {
+          "profile": "global-off",
+          "acceptedEvents": 2048,
+          "persistedIncidents": 2048,
+          "k6ExitCode": 99,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 102788,
+          "criticalNotificationLatency": {
+            "p95Ms": 1388.5999999999992,
+            "p99Ms": 2497.519999999999,
+            "sent": 3129,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 2620,
+          "droppedIterations": 353,
+          "ingestionP95Ms": 10358.022949999997,
+          "ingestionP99Ms": 14195.228799999999
+        }
+      ],
+      "poolProfile": {
+        "webConnectionsPerPod": 24,
+        "pgbouncerDefaultPoolSize": 24,
+        "pgbouncerReservePoolSize": 8,
+        "pgbouncerMaxPreparedStatements": 1000,
+        "prismaCompatibilityMode": false
+      },
+      "cpuProfile": {
+        "webReplicas": 4,
+        "webGuaranteedCpuPerPod": 1,
+        "postgresGuaranteedCpu": 4,
+        "postgresMemory": "2Gi",
+        "generalReplicas": 3,
+        "criticalReplicas": 2
+      },
+      "unknownDispatches": {
+        "queryAfterRun": "No UNKNOWN rows returned; diagnostic workload had also run before this query",
+        "certificationOnlyCount": null
+      }
     }
   ],
   "initialImage": "opsknight-automation:audit2",
