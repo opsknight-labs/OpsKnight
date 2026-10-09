@@ -5,6 +5,7 @@ import RunbookBuilder from '@/components/runbooks/RunbookBuilder';
 import { newBuilderStep } from '@/lib/runbooks/builder';
 import { parseRunbookDefinition } from '@/lib/runbooks/definition';
 import { validateRunbook, validateStep } from '@/components/runbooks/builder/validation';
+import type { RunbookInputInput } from '@/lib/runbooks/schemas';
 
 vi.mock('@/components/ui/DetailTabs', () => ({
   default: ({ tabs }: { tabs: { id: string; content: ReactNode }[] }) => (
@@ -282,10 +283,10 @@ describe('Runbook nested check builder', () => {
 
   it('reports input validation errors in validateRunbook and readiness summary', () => {
     const validStep = newBuilderStep('MANUAL', 'step_1');
-    const invalidInputs = [
-      { key: 'INVALID KEY WITH SPACES', label: 'My Param', type: 'STRING' as const, required: false, sequence: 0 },
-      { key: 'duplicate_key', label: 'First', type: 'STRING' as const, required: false, sequence: 1 },
-      { key: 'duplicate_key', label: 'Second', type: 'STRING' as const, required: false, sequence: 2 },
+    const invalidInputs: RunbookInputInput[] = [
+      { key: 'INVALID KEY WITH SPACES', label: 'My Param', description: '', type: 'STRING', required: false, sequence: 0 },
+      { key: 'duplicate_key', label: 'First', description: '', type: 'STRING', required: false, sequence: 1 },
+      { key: 'duplicate_key', label: 'Second', description: '', type: 'STRING', required: false, sequence: 2 },
     ];
 
     const result = validateRunbook({ steps: [validStep] }, invalidInputs);

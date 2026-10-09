@@ -19,17 +19,14 @@ import {
   type RunbookStepDefinition,
   type RunbookStepType,
 } from '@/lib/runbooks/types';
-import type { RunbookInputInput } from '@/lib/runbooks/schemas';
 
 interface StepNavigatorProps {
   steps: RunbookStepDefinition[];
   stepIdentities: string[];
   selectedIndex: number;
   stepErrors: Map<number, Record<string, string>>;
-  _inputs?: RunbookInputInput[];
   readOnly?: boolean;
   onSelectStep: (index: number) => void;
-  _onUpdateStep?: (index: number, patch: Partial<RunbookStepDefinition>) => void;
   onMoveStep: (index: number, offset: number) => void;
   onDuplicateStep: (index: number) => void;
   onRemoveStep: (index: number) => void;
@@ -41,10 +38,8 @@ export default function StepNavigator({
   stepIdentities,
   selectedIndex,
   stepErrors,
-  _inputs,
   readOnly = false,
   onSelectStep,
-  _onUpdateStep,
   onMoveStep,
   onDuplicateStep,
   onRemoveStep,

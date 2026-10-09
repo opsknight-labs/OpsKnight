@@ -158,10 +158,8 @@ export default function RunbookBuilder({
             stepIdentities={stepIdentities}
             selectedIndex={selectedStepIndex}
             stepErrors={stepErrors}
-            inputs={inputs}
             readOnly={readOnly}
             onSelectStep={setSelectedStepIndex}
-            onUpdateStep={updateStep}
             onMoveStep={moveStep}
             onDuplicateStep={duplicateStep}
             onRemoveStep={removeStep}
