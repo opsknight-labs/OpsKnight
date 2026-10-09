@@ -4,7 +4,7 @@ import {
   MAX_AUTOMATION_TRACE_BYTES,
 } from './explanation';
 import { enqueueAutomationNotification } from './jobs';
-import { getAutomationSettings } from './settings';
+import { getAutomationSettings, getIngestionAutomationConfig } from './settings';
 import { Prisma } from '@prisma/client';
 import type { EventPayload } from '@/lib/events';
 import { logger } from '@/lib/logger';
@@ -58,16 +58,12 @@ export async function prepareAutomation(
   envelope: IntegrationEventEnvelope,
   classification: { priority: string | null; urgency: string }
 ): Promise<RuntimeEvaluation | null> {
-  if (!(await automationEnabled(tx))) return null;
-  const config = await tx.serviceAutomationConfig.findUnique({
-    where: { serviceId: envelope.serviceId },
-    include: { activeVersion: { select: { id: true } } },
-  });
+  const config = await getIngestionAutomationConfig(tx, envelope.serviceId);
   if (!config || config.mode === 'DISABLED') return null;
   const evaluationAt = envelope.receivedAt;
   const runtime: RuntimeEvaluation = {
     mode: config.mode,
-    versionId: config.activeVersion?.id ?? null,
+    versionId: config.activeVersionId,
     evaluationAt,
     durationMs: 0,
     extractionMs: 0,
@@ -93,12 +89,12 @@ export async function prepareAutomation(
   const engineStartedAt = performance.now();
   try {
     const versionLoadStart = performance.now();
-    if (!config.activeVersion) throw new Error('VERSION_MISSING');
-    const cached = getCachedCompiledVersion(config.activeVersion.id);
+    if (!config.activeVersionId) throw new Error('VERSION_MISSING');
+    const cached = getCachedCompiledVersion(config.activeVersionId);
     const stored = cached
       ? null
       : await tx.automationVersion.findUnique({
-          where: { id: config.activeVersion.id },
+          where: { id: config.activeVersionId },
           select: { id: true, compiledSnapshot: true, checksum: true },
         });
     if (!cached && !stored) throw new Error('VERSION_MISSING');

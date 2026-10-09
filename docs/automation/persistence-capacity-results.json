@@ -5,7 +5,7 @@
     "dockerMemoryBytes": 8319238144
   },
   "limitations": [
-    "Latest CPU-isolated 20-RPS PgBouncer run passed OFF, then failed service-disabled transaction/workload gates; clean four-topology certification remains incomplete.",
+    "The latest 20-RPS CPU-isolated PgBouncer matrix completed six profiles with correct acknowledged/persisted counts and drained queues, but failed throughput, relative HTTP latency, evaluation timeout and queue-age gates.",
     "No passing cross-profile capacity comparison or promoted-primary failover certification is claimed.",
     "First two runs used two critical/two general workers; the third used four critical/four general workers.",
     "Default provider budgets include EMAIL at 8 deliveries/second. Earlier shared workload scripts attempted a nonexistent notes endpoint and accepted its 404; corrected provisioned reruns use real urgency updates and are a distinct workload revision."
@@ -1213,6 +1213,187 @@
       "limitations": [
         "Incident excess is consistent with failed HTTP acknowledgement after commit; this is not evidence of lost accepted events.",
         "Failed-profile aggregate queue/provider results were not recorded and are not inferred."
+      ]
+    },
+    {
+      "topology": "compose-split-pgbouncer-audit11-cpu-isolated-20rps",
+      "sourceRevision": "5e2167f164901f21b447295cab08d423446ad4a1",
+      "imageDigest": "sha256:d118cc66bfda2bd67024f33b0eee07197844d2222602da485db54e871576b342",
+      "scope": "SUSTAINED_SIX_PROFILE_FAILED",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "cpuProfile": {
+        "web": "0-1",
+        "postgres": "2-5",
+        "general": "6-9",
+        "criticalSchedulerPooling": "10-11"
+      },
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "shadow-small: k6 gate failed (99)",
+          "shadow-small: 8 automation fallbacks",
+          "shadow-small: queue age exceeds 30000ms",
+          "live-small: k6 gate failed (99)",
+          "live-small: 11 automation fallbacks",
+          "live-small: queue age exceeds 30000ms",
+          "live-medium: k6 gate failed (99)",
+          "live-medium: 10 automation fallbacks",
+          "live-medium: queue age exceeds 30000ms",
+          "live-worst: k6 gate failed (99)",
+          "live-worst: 61 automation fallbacks",
+          "service-disabled: HTTP latency exceeds 1.25x global-off",
+          "shadow-small: HTTP latency exceeds 1.25x global-off",
+          "shadow-small: queue age exceeds 30000ms",
+          "live-small: HTTP latency exceeds 1.25x global-off",
+          "live-small: queue age exceeds 30000ms",
+          "live-medium: HTTP latency exceeds 1.25x global-off",
+          "live-medium: queue age exceeds 30000ms",
+          "live-worst: HTTP latency exceeds 1.25x global-off"
+        ]
+      },
+      "profiles": [
+        {
+          "profile": "global-off",
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 64824,
+          "criticalNotificationLatency": {
+            "p95Ms": 576.6499999999996,
+            "p99Ms": 2575.399999999994,
+            "sent": 8068,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 6325,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 1139.578,
+          "ingestionP99Ms": 1539.209
+        },
+        {
+          "profile": "service-disabled",
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 77501,
+          "criticalNotificationLatency": {
+            "p95Ms": 723.4999999999991,
+            "p99Ms": 3974.0999999999945,
+            "sent": 6911,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 5024,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 1717.068,
+          "ingestionP99Ms": 2413.184
+        },
+        {
+          "profile": "shadow-small",
+          "acceptedEvents": 2096,
+          "persistedIncidents": 2096,
+          "k6ExitCode": 99,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 8,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 74578,
+          "criticalNotificationLatency": {
+            "p95Ms": 2455.799999999992,
+            "p99Ms": 7427.709999999998,
+            "sent": 5728,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 4922,
+          "droppedIterations": 305,
+          "ingestionP95Ms": 10474.569,
+          "ingestionP99Ms": 12358.5029
+        },
+        {
+          "profile": "live-small",
+          "acceptedEvents": 1806,
+          "persistedIncidents": 1806,
+          "k6ExitCode": 99,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 11,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 60045,
+          "criticalNotificationLatency": {
+            "p95Ms": 2557.399999999993,
+            "p99Ms": 6669.999999999998,
+            "sent": 4619,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 4281,
+          "droppedIterations": 595,
+          "ingestionP95Ms": 11637.30925,
+          "ingestionP99Ms": 13667.6492
+        },
+        {
+          "profile": "live-medium",
+          "acceptedEvents": 2288,
+          "persistedIncidents": 2288,
+          "k6ExitCode": 99,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 10,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 82652,
+          "criticalNotificationLatency": {
+            "p95Ms": 1758.7499999999989,
+            "p99Ms": 7167.6299999999965,
+            "sent": 5582,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 4364,
+          "droppedIterations": 112,
+          "ingestionP95Ms": 7635.770499999998,
+          "ingestionP99Ms": 9651.46116
+        },
+        {
+          "profile": "live-worst",
+          "acceptedEvents": 1232,
+          "persistedIncidents": 1232,
+          "k6ExitCode": 99,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 61,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 63160,
+          "criticalNotificationLatency": {
+            "p95Ms": 2384.3499999999985,
+            "p99Ms": 10562.329999999998,
+            "sent": 3718,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 4246,
+          "droppedIterations": 1169,
+          "ingestionP95Ms": 12843.25015,
+          "ingestionP99Ms": 14352.67196
+        }
+      ],
+      "limitations": [
+        "NOT CERTIFIED: no passing topology comparison is claimed.",
+        "Operational recovery drained all six profiles; throughput and pure wall-clock guard gates still failed on the two-Web-CPU allocation."
       ]
     }
   ],
