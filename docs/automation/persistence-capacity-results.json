@@ -3228,6 +3228,664 @@
         "generalReplicas": 4,
         "criticalReplicas": 4
       }
+    },
+    {
+      "topology": "compose-split-pgbouncer-main-ab-balanced-four-web-20rps",
+      "generatedAt": "2026-10-09T12:48:33.389Z",
+      "rps": 20,
+      "drainBudgetMs": 180000,
+      "durationPerProfile": "120s",
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "providerCapacityProfile": "provisioned-200",
+        "providerTelemetryResetBeforeRun": true,
+        "providerBudgets": {
+          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "providers": {
+            "EMAIL": "smtp",
+            "PUSH": "web-push",
+            "WEBHOOK": "default"
+          },
+          "ratePerSecond": 200,
+          "maxInFlight": 40
+        },
+        "publicFanout": "Dedicated status-fanout suite",
+        "historicalFixtureTimers": "Disabled before first profile; real alert/responder escalation unchanged",
+        "comparisonValidity": "FAILED: a profile did not drain; no subsequent profile was started",
+        "stopReason": null
+      },
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "global-off: queue did not drain (13045)",
+          "global-off: 2 duplicate provider deliveries",
+          "global-off: failed critical notifications",
+          "global-off: critical notification p99 exceeds 30000ms",
+          "global-off: queue age exceeds 30000ms"
+        ]
+      },
+      "comparisons": [],
+      "sourceRevision": "64b967d148d5cab9a9812331885f4e0863bb4e73",
+      "imageDigest": "sha256:5197fc059c847ab544eec6ad40d8612f09557cd261879457d2d152b3d93cd658",
+      "scope": "ORIGINAL_MAIN_OFF_AB_BASELINE_FAILED",
+      "profiles": [
+        {
+          "profile": "global-off",
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 2,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 13045,
+          "recoveryDrainMs": 180047,
+          "criticalNotificationLatency": {
+            "p95Ms": 36076.2,
+            "p99Ms": 59880.159999999996,
+            "sent": 3540,
+            "failed": 32
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 0,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 554.7402999999998,
+          "ingestionP99Ms": 1200.676249999999
+        }
+      ],
+      "cpuProfile": {
+        "web": "0-3",
+        "postgres": "4-6",
+        "general": "7-9",
+        "criticalSchedulerPooling": "10-11",
+        "webReplicas": 4,
+        "generalReplicas": 4,
+        "criticalReplicas": 4,
+        "generalBatchSize": 25,
+        "postgresMaxConnections": 200
+      }
+    },
+    {
+      "topology": "compose-split-pgbouncer-audit15-balanced-four-web-20rps",
+      "generatedAt": "2026-10-09T13:02:22.622Z",
+      "rps": 20,
+      "drainBudgetMs": 180000,
+      "durationPerProfile": "120s",
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "providerCapacityProfile": "provisioned-200",
+        "providerTelemetryResetBeforeRun": true,
+        "providerBudgets": {
+          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "providers": {
+            "EMAIL": "smtp",
+            "PUSH": "web-push",
+            "WEBHOOK": "default"
+          },
+          "ratePerSecond": 200,
+          "maxInFlight": 40
+        },
+        "publicFanout": "Dedicated status-fanout suite",
+        "historicalFixtureTimers": "Disabled before first profile; real alert/responder escalation unchanged",
+        "comparisonValidity": "FAILED: a profile did not drain; no subsequent profile was started",
+        "stopReason": "Previous profile did not drain"
+      },
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "service-disabled: queue did not drain (11325)",
+          "service-disabled: HTTP latency exceeds 1.25x global-off",
+          "Incomplete certification: Previous profile did not drain"
+        ]
+      },
+      "comparisons": [
+        {
+          "profile": "service-disabled",
+          "acceptedRatio": 0.9995835068721366,
+          "p95Ratio": 3.2384923371941126,
+          "p99Ratio": 2.9591046994153363,
+          "p95RatioToServiceDisabled": 1,
+          "p99RatioToServiceDisabled": 1,
+          "peakCriticalQueueAgeMs": 19344,
+          "peakAutomationObservationQueueAgeMs": 0,
+          "pendingAfterDrain": 11325,
+          "recoveryDrainMs": 380517,
+          "transactionRetryCount": 3926,
+          "peakDatabaseConnections": 143,
+          "peakDatabaseLockWaits": 4,
+          "peakDatabaseCpuPercent": 277.02,
+          "criticalNotificationLatency": {
+            "p95Ms": 1762.2499999999998,
+            "p99Ms": 5665.349999999989,
+            "sent": 4336,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        }
+      ],
+      "sourceRevision": "566815c3d970297e65f805e3eec6c09151242c5f",
+      "imageDigest": "sha256:da13af3a9dfeca95ebfd3cf6d332f1d3ff472f214321f1a527175eda62178e5b",
+      "scope": "SUSTAINED_MATRIX_FAILED",
+      "profiles": [
+        {
+          "profile": "global-off",
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 80033,
+          "criticalNotificationLatency": {
+            "p95Ms": 959.4999999999993,
+            "p99Ms": 4004.299999999999,
+            "sent": 7766,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 5951,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 587.187,
+          "ingestionP99Ms": 777.884
+        },
+        {
+          "profile": "service-disabled",
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 11325,
+          "recoveryDrainMs": 380517,
+          "criticalNotificationLatency": {
+            "p95Ms": 1762.2499999999998,
+            "p99Ms": 5665.349999999989,
+            "sent": 4336,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 3926,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 1901.6005999999995,
+          "ingestionP99Ms": 2301.8401999999996
+        }
+      ],
+      "cpuProfile": {
+        "web": "0-3",
+        "postgres": "4-6",
+        "general": "7-9",
+        "criticalSchedulerPooling": "10-11",
+        "webReplicas": 4,
+        "generalReplicas": 4,
+        "criticalReplicas": 4,
+        "generalBatchSize": 25,
+        "postgresMaxConnections": 200
+      }
+    },
+    {
+      "topology": "compose-integrated-audit15-eight-replicas-batch25-20rps",
+      "generatedAt": "2026-10-09T16:07:29.775137+00:00",
+      "rps": 20,
+      "drainBudgetMs": 180000,
+      "durationPerProfile": "120s",
+      "workload": {
+        "seedProfile": "medium",
+        "providerCapacityProfile": "provisioned-200",
+        "stopReason": "User selected Kind; cancelled during LIVE-small after retaining three complete profiles."
+      },
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "Incomplete certification: switched to Kind at user request",
+          "shadow-small: 4 automation fallbacks",
+          "shadow-small: HTTP latency exceeds 1.25x global-off",
+          "shadow-small: queue age exceeds 30000ms"
+        ]
+      },
+      "comparisons": [],
+      "sourceRevision": "566815c3d970297e65f805e3eec6c09151242c5f",
+      "imageDigest": "sha256:da13af3a9dfeca95ebfd3cf6d332f1d3ff472f214321f1a527175eda62178e5b",
+      "scope": "PARTIAL_MATRIX_CANCELLED_FOR_KIND",
+      "profiles": [
+        {
+          "profile": "global-off",
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 50096,
+          "criticalNotificationLatency": {
+            "p95Ms": 269,
+            "p99Ms": 415,
+            "sent": 8972,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 8908,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 310.9274,
+          "ingestionP99Ms": 465.91808
+        },
+        {
+          "profile": "service-disabled",
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 59476,
+          "criticalNotificationLatency": {
+            "p95Ms": 314,
+            "p99Ms": 472.9899999999998,
+            "sent": 8768,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 9198,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 386.35,
+          "ingestionP99Ms": 561.058
+        },
+        {
+          "profile": "shadow-small",
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 4,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 77430,
+          "criticalNotificationLatency": {
+            "p95Ms": 455.3499999999997,
+            "p99Ms": 712.1399999999999,
+            "sent": 7394,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 8771,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 639.3929999999999,
+          "ingestionP99Ms": 903.8462
+        }
+      ],
+      "cpuProfile": {
+        "application": "0-2,6-11",
+        "postgres": "3-5",
+        "applicationReplicas": 8,
+        "generalBatchSize": 25
+      }
+    },
+    {
+      "rps": 20,
+      "drainBudgetMs": 180000,
+      "durationPerProfile": "120s",
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "providerCapacityProfile": "provisioned-200",
+        "providerTelemetryResetBeforeRun": true,
+        "providerBudgets": {
+          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "providers": {
+            "EMAIL": "smtp",
+            "PUSH": "web-push",
+            "WEBHOOK": "default"
+          },
+          "ratePerSecond": 200,
+          "maxInFlight": 40
+        },
+        "publicFanout": "Dedicated status-fanout suite",
+        "historicalFixtureTimers": "Disabled before first profile; real alert/responder escalation unchanged",
+        "comparisonValidity": "FAILED: a profile did not drain; no subsequent profile was started",
+        "stopReason": "Previous profile did not drain"
+      },
+      "topology": "kind-helm-split-pgbouncer-audit16-20rps",
+      "generatedAt": "2026-10-09T16:44:29.437927+00:00",
+      "sourceRevision": "257b99a7eec983c2c409c245a8d4ce936a2b96ee",
+      "imageDigest": "sha256:c96425b9cbe45cc2bdfd43a7d889b6f98237fcda8127a5110b54bba8ce79e6c8",
+      "scope": "PARTIAL_MATRIX_ABORTED_TRANSACTION_TIMEOUT",
+      "comparisonGate": {
+        "passed": false,
+        "failures": [
+          "Incomplete matrix: worst-case cleanup transaction expired (5000-ms transaction; 6919-ms elapsed)",
+          "Service-disabled and SHADOW ingestion exceeded 1.25 times OFF",
+          "SHADOW recorded one EVALUATION_TIMEOUT",
+          "LIVE restart dropped scheduled arrivals and k6 exited 99"
+        ]
+      },
+      "profiles": [
+        {
+          "profile": "global-off",
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 68366,
+          "criticalNotificationLatency": {
+            "p95Ms": 192,
+            "p99Ms": 315.8799999999999,
+            "sent": 8157,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 5345,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 350.15484999999995,
+          "ingestionP99Ms": 581.8638699999995
+        },
+        {
+          "profile": "service-disabled",
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 101212,
+          "criticalNotificationLatency": {
+            "p95Ms": 645.3999999999997,
+            "p99Ms": 1048.1199999999997,
+            "sent": 5233,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 3250,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 3631.084,
+          "ingestionP99Ms": 4348.979
+        },
+        {
+          "profile": "shadow-small",
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 1,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 81586,
+          "criticalNotificationLatency": {
+            "p95Ms": 266,
+            "p99Ms": 497.5199999999999,
+            "sent": 7749,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 4706,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 2286.692,
+          "ingestionP99Ms": 3513.101
+        },
+        {
+          "profile": "live-small",
+          "acceptedEvents": 2292,
+          "persistedIncidents": 2292,
+          "k6ExitCode": 99,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 69933,
+          "criticalNotificationLatency": {
+            "p95Ms": 319,
+            "p99Ms": 514.7199999999999,
+            "sent": 7165,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 4556,
+          "droppedIterations": 109,
+          "ingestionP95Ms": 7030.6702,
+          "ingestionP99Ms": 7848.0598899999995
+        },
+        {
+          "profile": "live-medium",
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 82487,
+          "criticalNotificationLatency": {
+            "p95Ms": 297,
+            "p99Ms": 558.4899999999999,
+            "sent": 7952,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 5285,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 531.834,
+          "ingestionP99Ms": 795.248
+        }
+      ],
+      "cpuProfile": {
+        "reservedSystem": "0",
+        "webReplicas": 2,
+        "webGuaranteedCpuPerPod": 1,
+        "generalReplicas": 4,
+        "generalGuaranteedCpuPerPod": 1,
+        "criticalReplicas": 2,
+        "criticalRequestCpuPerPod": 0.5,
+        "criticalLimitCpuPerPod": 1,
+        "postgresGuaranteedCpu": 3
+      },
+      "unknownDispatches": {
+        "count": 3,
+        "criticalEmail": 2,
+        "transactionalPush": 1,
+        "reconciliation": "Manual receipt review required; not included in pending-backlog count",
+        "observedBeforeWorstCleanupAbort": true,
+        "finalCount": null
+      },
+      "hostContention": "Concurrent tests in another project observed during worst-case load; no unrelated processes were stopped",
+      "incompleteWorstLoad": {
+        "acceptedEvents": 1522,
+        "droppedIterations": 780,
+        "drainCompleted": false
+      }
+    },
+    {
+      "rps": 20,
+      "drainBudgetMs": 180000,
+      "durationPerProfile": "120s",
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "providerCapacityProfile": "provisioned-200",
+        "providerTelemetryResetBeforeRun": true,
+        "providerBudgets": {
+          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "providers": {
+            "EMAIL": "smtp",
+            "PUSH": "web-push",
+            "WEBHOOK": "default"
+          },
+          "ratePerSecond": 200,
+          "maxInFlight": 40
+        },
+        "publicFanout": "Dedicated status-fanout suite",
+        "historicalFixtureTimers": "Disabled before first profile; real alert/responder escalation unchanged",
+        "comparisonValidity": "FAILED: a profile did not drain; no subsequent profile was started",
+        "stopReason": "Previous profile did not drain"
+      },
+      "sourceRevision": "257b99a7eec983c2c409c245a8d4ce936a2b96ee",
+      "imageDigest": "sha256:c96425b9cbe45cc2bdfd43a7d889b6f98237fcda8127a5110b54bba8ce79e6c8",
+      "topology": "kind-helm-split-pgbouncer-audit16-four-web-20rps",
+      "generatedAt": "2026-10-09T17:07:18.446636+00:00",
+      "scope": "PARTIAL_MATRIX_CANCELLED_FOR_DATABASE_POOL_TUNING",
+      "comparisonGate": {
+        "passed": false,
+        "failures": [
+          "Incomplete matrix: stopped after four complete profiles to tune database/pooling",
+          "Service-disabled and SHADOW ingestion exceeded 1.25 times OFF",
+          "SHADOW dropped 68 arrivals and recorded three EVALUATION_TIMEOUT fallbacks",
+          "LIVE restart recorded one EVALUATION_TIMEOUT fallback"
+        ]
+      },
+      "profiles": [
+        {
+          "profile": "global-off",
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 111642,
+          "criticalNotificationLatency": {
+            "p95Ms": 276,
+            "p99Ms": 468.0999999999999,
+            "sent": 7091,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 4876,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 663.9639999999998,
+          "ingestionP99Ms": 1673.12913,
+          "maxCriticalQueueAgeMs": 593,
+          "maxObservationQueueAgeMs": 0
+        },
+        {
+          "profile": "service-disabled",
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 117778,
+          "criticalNotificationLatency": {
+            "p95Ms": 441.6999999999998,
+            "p99Ms": 950.5399999999995,
+            "sent": 4687,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 3557,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 2219.868,
+          "ingestionP99Ms": 3165.032,
+          "maxCriticalQueueAgeMs": 2343,
+          "maxObservationQueueAgeMs": 0
+        },
+        {
+          "profile": "shadow-small",
+          "acceptedEvents": 2333,
+          "persistedIncidents": 2333,
+          "k6ExitCode": 99,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 3,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 124104,
+          "criticalNotificationLatency": {
+            "p95Ms": 526,
+            "p99Ms": 1380.5,
+            "sent": 4626,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 3300,
+          "droppedIterations": 68,
+          "ingestionP95Ms": 6056.133599999999,
+          "ingestionP99Ms": 8327.07884,
+          "maxCriticalQueueAgeMs": 2760,
+          "maxObservationQueueAgeMs": 54393
+        },
+        {
+          "profile": "live-small",
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "k6ExitCode": 0,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 1,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 137579,
+          "criticalNotificationLatency": {
+            "p95Ms": 236,
+            "p99Ms": 344.24999999999994,
+            "sent": 6676,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "transactionRetryCount": 4323,
+          "droppedIterations": 0,
+          "ingestionP95Ms": 287.383,
+          "ingestionP99Ms": 514.53,
+          "maxCriticalQueueAgeMs": 822,
+          "maxObservationQueueAgeMs": 27274
+        }
+      ],
+      "cpuProfile": {
+        "reservedSystem": "0",
+        "webReplicas": 4,
+        "webGuaranteedCpuPerPod": 1,
+        "generalReplicas": 3,
+        "generalRequestCpuPerPod": 0.5,
+        "generalLimitCpuPerPod": 1.5,
+        "criticalReplicas": 2,
+        "criticalRequestCpuPerPod": 0.5,
+        "criticalLimitCpuPerPod": 1,
+        "postgresGuaranteedCpu": 3
+      },
+      "generalBatchSize": 25,
+      "unknownDispatches": {
+        "observedAtCancellation": 0,
+        "manualReconciliationRequired": false
+      },
+      "poolProfile": {
+        "webConnectionsPerPod": 12,
+        "pgbouncerDefaultPoolSize": 12,
+        "pgbouncerReservePoolSize": 4
+      }
     }
   ],
   "initialImage": "opsknight-automation:audit2",
