@@ -226,6 +226,7 @@ export default function StepEditor({
               config={step.config}
               errors={errors}
               inputs={inputs}
+              editorId={editorId}
               readOnly={readOnly}
               onChange={handleConfigChange}
             />
@@ -236,6 +237,7 @@ export default function StepEditor({
               config={step.config}
               errors={errors}
               inputs={inputs}
+              editorId={editorId}
               readOnly={readOnly}
               onChange={handleConfigChange}
             />
@@ -245,6 +247,7 @@ export default function StepEditor({
             <SystemdActionEditor
               config={step.config}
               errors={errors}
+              editorId={editorId}
               readOnly={readOnly}
               onChange={handleConfigChange}
             />
@@ -254,6 +257,7 @@ export default function StepEditor({
             <DockerActionEditor
               config={step.config}
               errors={errors}
+              editorId={editorId}
               readOnly={readOnly}
               onChange={handleConfigChange}
             />
@@ -263,6 +267,7 @@ export default function StepEditor({
             <LinuxDiagnosticsEditor
               config={step.config}
               errors={errors}
+              editorId={editorId}
               readOnly={readOnly}
               onChange={handleConfigChange}
             />
@@ -273,6 +278,7 @@ export default function StepEditor({
               config={step.config}
               errors={errors}
               inputs={inputs}
+              editorId={editorId}
               readOnly={readOnly}
               onChange={handleConfigChange}
             />
@@ -293,6 +299,7 @@ export default function StepEditor({
             <WaitActionEditor
               config={step.config}
               errors={errors}
+              editorId={editorId}
               readOnly={readOnly}
               onChange={handleConfigChange}
             />
@@ -302,6 +309,7 @@ export default function StepEditor({
             <ManualActionEditor
               config={step.config}
               errors={errors}
+              editorId={editorId}
               readOnly={readOnly}
               onChange={handleConfigChange}
             />

@@ -7,6 +7,7 @@ import { FormSelect } from '../../RunbookControls';
 interface LinuxDiagnosticsEditorProps {
   config: Record<string, unknown>;
   errors?: Record<string, string>;
+  editorId?: string;
   readOnly?: boolean;
   onChange: (config: Record<string, unknown>) => void;
 }
@@ -29,6 +30,7 @@ const DIAGNOSTICS = [
 export default function LinuxDiagnosticsEditor({
   config,
   errors = {},
+  editorId = 'diag',
   readOnly = false,
   onChange,
 }: LinuxDiagnosticsEditorProps) {
@@ -59,10 +61,10 @@ export default function LinuxDiagnosticsEditor({
   return (
     <div className="space-y-4">
       <div>
-        <Label htmlFor="linux-diag">Diagnostic Category</Label>
+        <Label htmlFor={`linux-diag-${editorId}`}>Diagnostic Category</Label>
         <div className="mt-1.5">
           <FormSelect
-            name="linux-diag"
+            name={`linux-diag-${editorId}`}
             label="Diagnostic"
             value={diagnostic}
             disabled={readOnly}
@@ -75,10 +77,10 @@ export default function LinuxDiagnosticsEditor({
 
       {diagnostic === 'dns' && (
         <div>
-          <Label htmlFor="diag-hostname">Hostname to Resolve</Label>
+          <Label htmlFor={`diag-hostname-${editorId}`}>Hostname to Resolve</Label>
           <div className="mt-1.5">
             <Input
-              id="diag-hostname"
+              id={`diag-hostname-${editorId}`}
               aria-label="DNS hostname"
               placeholder="e.g. database.internal"
               value={String(config.hostname ?? '')}
@@ -94,10 +96,10 @@ export default function LinuxDiagnosticsEditor({
       {diagnostic === 'tcp' && (
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label htmlFor="diag-host">Target Host / IP</Label>
+            <Label htmlFor={`diag-host-${editorId}`}>Target Host / IP</Label>
             <div className="mt-1.5">
               <Input
-                id="diag-host"
+                id={`diag-host-${editorId}`}
                 aria-label="TCP host"
                 placeholder="10.0.0.5 or db.internal"
                 value={String(config.host ?? '')}
@@ -110,10 +112,10 @@ export default function LinuxDiagnosticsEditor({
           </div>
 
           <div>
-            <Label htmlFor="diag-port">Port (1–65535)</Label>
+            <Label htmlFor={`diag-port-${editorId}`}>Port (1–65535)</Label>
             <div className="mt-1.5">
               <Input
-                id="diag-port"
+                id={`diag-port-${editorId}`}
                 aria-label="TCP port"
                 type="number"
                 min={1}
@@ -133,10 +135,10 @@ export default function LinuxDiagnosticsEditor({
       {diagnostic === 'http' && (
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label htmlFor="diag-url">Probe URL</Label>
+            <Label htmlFor={`diag-url-${editorId}`}>Probe URL</Label>
             <div className="mt-1.5">
               <Input
-                id="diag-url"
+                id={`diag-url-${editorId}`}
                 aria-label="Local health URL"
                 placeholder="http://127.0.0.1:8080/health"
                 value={String(config.url ?? '')}
@@ -149,10 +151,10 @@ export default function LinuxDiagnosticsEditor({
           </div>
 
           <div>
-            <Label htmlFor="diag-status">Expected Status Code</Label>
+            <Label htmlFor={`diag-status-${editorId}`}>Expected Status Code</Label>
             <div className="mt-1.5">
               <Input
-                id="diag-status"
+                id={`diag-status-${editorId}`}
                 aria-label="Expected HTTP status"
                 type="number"
                 min={100}
@@ -170,10 +172,10 @@ export default function LinuxDiagnosticsEditor({
       {diagnostic === 'journal' && (
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label htmlFor="diag-unit">Service Unit</Label>
+            <Label htmlFor={`diag-unit-${editorId}`}>Service Unit</Label>
             <div className="mt-1.5">
               <Input
-                id="diag-unit"
+                id={`diag-unit-${editorId}`}
                 aria-label="Journal service unit"
                 placeholder="e.g. payments.service"
                 value={String(config.unit ?? '')}
@@ -186,10 +188,10 @@ export default function LinuxDiagnosticsEditor({
           </div>
 
           <div>
-            <Label htmlFor="diag-lines">Lines (1–500)</Label>
+            <Label htmlFor={`diag-lines-${editorId}`}>Lines (1–500)</Label>
             <div className="mt-1.5">
               <Input
-                id="diag-lines"
+                id={`diag-lines-${editorId}`}
                 aria-label="Journal lines (maximum 500)"
                 type="number"
                 min={1}
@@ -208,10 +210,10 @@ export default function LinuxDiagnosticsEditor({
 
       {diagnostic === 'process' && (
         <div>
-          <Label htmlFor="diag-pattern">Process Search Pattern (pgrep)</Label>
+          <Label htmlFor={`diag-pattern-${editorId}`}>Process Search Pattern (pgrep)</Label>
           <div className="mt-1.5">
             <Input
-              id="diag-pattern"
+              id={`diag-pattern-${editorId}`}
               aria-label="Process lookup pattern"
               placeholder="e.g. node.*server.js or nginx"
               value={String(config.pattern ?? '')}
@@ -226,10 +228,10 @@ export default function LinuxDiagnosticsEditor({
 
       {diagnostic === 'filesystem' && (
         <div>
-          <Label htmlFor="diag-path">Filesystem Path</Label>
+          <Label htmlFor={`diag-path-${editorId}`}>Filesystem Path</Label>
           <div className="mt-1.5">
             <Input
-              id="diag-path"
+              id={`diag-path-${editorId}`}
               aria-label="Filesystem path"
               placeholder="e.g. /var/log or /"
               value={String(config.path ?? '')}

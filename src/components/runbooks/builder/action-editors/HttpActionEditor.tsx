@@ -10,6 +10,7 @@ interface HttpActionEditorProps {
   config: Record<string, unknown>;
   errors?: Record<string, string>;
   inputs: RunbookInputInput[];
+  editorId?: string;
   readOnly?: boolean;
   onChange: (config: Record<string, unknown>) => void;
 }
@@ -20,6 +21,7 @@ export default function HttpActionEditor({
   config,
   errors = {},
   inputs,
+  editorId = 'http',
   readOnly = false,
   onChange,
 }: HttpActionEditorProps) {
@@ -36,10 +38,10 @@ export default function HttpActionEditor({
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
-          <Label htmlFor="http-method">HTTP Method</Label>
+          <Label htmlFor={`http-method-${editorId}`}>HTTP Method</Label>
           <div className="mt-1.5">
             <FormSelect
-              name="http-method"
+              name={`http-method-${editorId}`}
               label="HTTP Method"
               value={method}
               disabled={readOnly}
@@ -50,10 +52,10 @@ export default function HttpActionEditor({
         </div>
 
         <div className="sm:col-span-2">
-          <Label htmlFor="http-url">Endpoint URL</Label>
+          <Label htmlFor={`http-url-${editorId}`}>Endpoint URL</Label>
           <div className="mt-1.5">
             <Input
-              id="http-url"
+              id={`http-url-${editorId}`}
               aria-label="URL or input reference"
               placeholder="https://api.internal/health or ${{ inputs.url }}"
               value={url}
@@ -75,12 +77,12 @@ export default function HttpActionEditor({
       {isWriteMethod && (
         <div>
           <div className="flex items-center justify-between">
-            <Label htmlFor="http-body">Request Body</Label>
+            <Label htmlFor={`http-body-${editorId}`}>Request Body</Label>
             <span className="text-xs text-muted-foreground">JSON or plaintext payload</span>
           </div>
           <div className="mt-1.5">
             <Textarea
-              id="http-body"
+              id={`http-body-${editorId}`}
               aria-label="Request body"
               placeholder='{"status": "maintenance"}'
               value={body}

@@ -86,5 +86,27 @@ describe('Runbook authoring templates', () => {
     const definition = { steps: [source, cloned] };
     expect(() => parseRunbookDefinition(definition)).not.toThrow();
   });
+
+  it('guarantees unique keys at 80-character boundary and handles collisions', () => {
+    const maxLenKey = 'a'.repeat(80);
+    const existingKeys = new Set<string>([maxLenKey]);
+
+    // First clone
+    const source = newBuilderStep('MANUAL', maxLenKey);
+    const clone1 = cloneStepRecursively(source, existingKeys);
+    expect(clone1.key.length).toBeLessThanOrEqual(80);
+    expect(clone1.key).toMatch(/^[a-z0-9_-]{1,80}$/);
+    expect(existingKeys.has(clone1.key)).toBe(true);
+
+    // Repeated clones to trigger collisions
+    for (let i = 0; i < 15; i++) {
+      const clone = cloneStepRecursively(source, existingKeys);
+      expect(clone.key.length).toBeLessThanOrEqual(80);
+      expect(clone.key).toMatch(/^[a-z0-9_-]{1,80}$/);
+    }
+
+    expect(existingKeys.size).toBe(17);
+  });
 });
+
 

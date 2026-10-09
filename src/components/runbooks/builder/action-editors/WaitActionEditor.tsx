@@ -7,6 +7,7 @@ import { Clock } from 'lucide-react';
 interface WaitActionEditorProps {
   config: Record<string, unknown>;
   errors?: Record<string, string>;
+  editorId?: string;
   readOnly?: boolean;
   onChange: (config: Record<string, unknown>) => void;
 }
@@ -22,6 +23,7 @@ function formatDuration(seconds: number): string {
 export default function WaitActionEditor({
   config,
   errors = {},
+  editorId = 'wait',
   readOnly = false,
   onChange,
 }: WaitActionEditorProps) {
@@ -44,10 +46,10 @@ export default function WaitActionEditor({
   return (
     <div className="space-y-4">
       <div className="max-w-xs">
-        <Label htmlFor="wait-duration">Wait Duration (Seconds)</Label>
+        <Label htmlFor={`wait-duration-${editorId}`}>Wait Duration (Seconds)</Label>
         <div className="mt-1.5">
           <Input
-            id="wait-duration"
+            id={`wait-duration-${editorId}`}
             aria-label="Wait duration (seconds)"
             type="number"
             min={1}

@@ -7,6 +7,7 @@ import { FormSelect } from '../../RunbookControls';
 interface DockerActionEditorProps {
   config: Record<string, unknown>;
   errors?: Record<string, string>;
+  editorId?: string;
   readOnly?: boolean;
   onChange: (config: Record<string, unknown>) => void;
 }
@@ -28,6 +29,7 @@ const RUNTIMES = [
 export default function DockerActionEditor({
   config,
   errors = {},
+  editorId = 'docker',
   readOnly = false,
   onChange,
 }: DockerActionEditorProps) {
@@ -39,10 +41,10 @@ export default function DockerActionEditor({
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
         <div>
-          <Label htmlFor="docker-runtime">Container Runtime</Label>
+          <Label htmlFor={`docker-runtime-${editorId}`}>Container Runtime</Label>
           <div className="mt-1.5">
             <FormSelect
-              name="docker-runtime"
+              name={`docker-runtime-${editorId}`}
               label="Runtime"
               value={runtime}
               disabled={readOnly}
@@ -53,10 +55,10 @@ export default function DockerActionEditor({
         </div>
 
         <div>
-          <Label htmlFor="docker-action">Action</Label>
+          <Label htmlFor={`docker-action-${editorId}`}>Action</Label>
           <div className="mt-1.5">
             <FormSelect
-              name="docker-action"
+              name={`docker-action-${editorId}`}
               label="Action"
               value={action}
               disabled={readOnly}
@@ -68,10 +70,10 @@ export default function DockerActionEditor({
         </div>
 
         <div>
-          <Label htmlFor="docker-container">Container Name / ID</Label>
+          <Label htmlFor={`docker-container-${editorId}`}>Container Name / ID</Label>
           <div className="mt-1.5">
             <Input
-              id="docker-container"
+              id={`docker-container-${editorId}`}
               aria-label="Container or input reference"
               placeholder="e.g. redis-cache"
               value={container}

@@ -9,6 +9,7 @@ interface BashActionEditorProps {
   config: Record<string, unknown>;
   errors?: Record<string, string>;
   inputs: RunbookInputInput[];
+  editorId?: string;
   readOnly?: boolean;
   onChange: (config: Record<string, unknown>) => void;
 }
@@ -17,6 +18,7 @@ export default function BashActionEditor({
   config,
   errors = {},
   inputs,
+  editorId = 'bash',
   readOnly = false,
   onChange,
 }: BashActionEditorProps) {
@@ -42,12 +44,12 @@ export default function BashActionEditor({
 
       <div>
         <div className="flex items-center justify-between">
-          <Label htmlFor="bash-command">Script / Shell Command</Label>
+          <Label htmlFor={`bash-command-${editorId}`}>Script / Shell Command</Label>
           <span className="text-xs text-muted-foreground">Executed via bash -euo pipefail</span>
         </div>
         <div className="mt-1.5">
           <Textarea
-            id="bash-command"
+            id={`bash-command-${editorId}`}
             aria-label="Exact allowlisted command"
             placeholder={`#!/usr/bin/env bash\n# Your remediation script here\nsystemctl restart my-app\n`}
             value={command}

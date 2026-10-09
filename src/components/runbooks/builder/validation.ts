@@ -108,9 +108,9 @@ export function validateStep(
       }
 
       if (['logs', 'rollout-restart', 'rollout-status', 'scale'].includes(action) && !name) {
-        errors.name = `Resource name is required for Kubernetes ${action}.`;
+        errors.resourceName = `Resource name is required for Kubernetes ${action}.`;
       } else if (name && !INPUT_TEMPLATE.test(name) && !KUBERNETES_NAME.test(name)) {
-        errors.name = 'Invalid resource name format (DNS-1123 label).';
+        errors.resourceName = 'Invalid resource name format (DNS-1123 label).';
       }
 
       if (action === 'scale') {

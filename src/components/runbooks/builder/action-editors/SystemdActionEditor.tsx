@@ -7,6 +7,7 @@ import { FormSelect } from '../../RunbookControls';
 interface SystemdActionEditorProps {
   config: Record<string, unknown>;
   errors?: Record<string, string>;
+  editorId?: string;
   readOnly?: boolean;
   onChange: (config: Record<string, unknown>) => void;
 }
@@ -22,6 +23,7 @@ const SYSTEMD_ACTIONS = [
 export default function SystemdActionEditor({
   config,
   errors = {},
+  editorId = 'systemd',
   readOnly = false,
   onChange,
 }: SystemdActionEditorProps) {
@@ -54,10 +56,10 @@ export default function SystemdActionEditor({
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label htmlFor="systemd-action">Systemd Action</Label>
+          <Label htmlFor={`systemd-action-${editorId}`}>Systemd Action</Label>
           <div className="mt-1.5">
             <FormSelect
-              name="systemd-action"
+              name={`systemd-action-${editorId}`}
               label="Action"
               value={action}
               disabled={readOnly}
@@ -69,10 +71,10 @@ export default function SystemdActionEditor({
         </div>
 
         <div>
-          <Label htmlFor="systemd-unit">Service Unit</Label>
+          <Label htmlFor={`systemd-unit-${editorId}`}>Service Unit</Label>
           <div className="mt-1.5">
             <Input
-              id="systemd-unit"
+              id={`systemd-unit-${editorId}`}
               aria-label="Service unit or input reference"
               placeholder="e.g. nginx.service or ${{ inputs.unit }}"
               value={unit}
@@ -93,10 +95,10 @@ export default function SystemdActionEditor({
 
       {isLogs && (
         <div className="max-w-xs">
-          <Label htmlFor="systemd-lines">Recent Log Lines</Label>
+          <Label htmlFor={`systemd-lines-${editorId}`}>Recent Log Lines</Label>
           <div className="mt-1.5">
             <Input
-              id="systemd-lines"
+              id={`systemd-lines-${editorId}`}
               aria-label="Recent log lines (maximum 500)"
               type="number"
               min={1}

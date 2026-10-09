@@ -6,12 +6,14 @@ import { Textarea } from '@/components/ui/shadcn/textarea';
 interface ManualActionEditorProps {
   config: Record<string, unknown>;
   errors?: Record<string, string>;
+  editorId?: string;
   readOnly?: boolean;
   onChange: (config: Record<string, unknown>) => void;
 }
 
 export default function ManualActionEditor({
   config,
+  editorId = 'manual',
   readOnly = false,
   onChange,
 }: ManualActionEditorProps) {
@@ -21,12 +23,12 @@ export default function ManualActionEditor({
     <div className="space-y-4">
       <div>
         <div className="flex items-center justify-between">
-          <Label htmlFor="manual-instructions">Manual Task Instructions</Label>
+          <Label htmlFor={`manual-instructions-${editorId}`}>Manual Task Instructions</Label>
           <span className="text-xs text-muted-foreground">Shown to on-call responder</span>
         </div>
         <div className="mt-1.5">
           <Textarea
-            id="manual-instructions"
+            id={`manual-instructions-${editorId}`}
             aria-label="Manual instructions"
             placeholder="Describe the physical or manual verification task the responder must perform before marking this step complete..."
             value={instructions}

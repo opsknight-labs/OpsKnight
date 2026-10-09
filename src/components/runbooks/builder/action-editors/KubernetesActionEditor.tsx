@@ -9,6 +9,7 @@ interface KubernetesActionEditorProps {
   config: Record<string, unknown>;
   errors?: Record<string, string>;
   inputs: RunbookInputInput[];
+  editorId?: string;
   readOnly?: boolean;
   onChange: (config: Record<string, unknown>) => void;
 }
@@ -79,6 +80,7 @@ export default function KubernetesActionEditor({
   config,
   errors = {},
   inputs = [],
+  editorId = 'k8s',
   readOnly = false,
   onChange,
 }: KubernetesActionEditorProps) {
@@ -89,6 +91,7 @@ export default function KubernetesActionEditor({
   const rawReplicas = config.replicas;
   const isScale = action === 'scale';
   const requiresName = ['logs', 'rollout-restart', 'rollout-status', 'scale'].includes(action);
+  const resourceNameError = errors.resourceName || errors.name;
 
   const handleActionChange = (nextAction: string) => {
     const nextConfig: Record<string, unknown> = {
@@ -121,10 +124,10 @@ export default function KubernetesActionEditor({
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label htmlFor="k8s-action">Kubernetes Action</Label>
+          <Label htmlFor={`k8s-action-${editorId}`}>Kubernetes Action</Label>
           <div className="mt-1.5">
             <FormSelect
-              name="k8s-action"
+              name={`k8s-action-${editorId}`}
               label="Action"
               value={action}
               disabled={readOnly}
@@ -136,10 +139,10 @@ export default function KubernetesActionEditor({
         </div>
 
         <div>
-          <Label htmlFor="k8s-namespace">Namespace</Label>
+          <Label htmlFor={`k8s-namespace-${editorId}`}>Namespace</Label>
           <div className="mt-1.5">
             <Input
-              id="k8s-namespace"
+              id={`k8s-namespace-${editorId}`}
               aria-label="Namespace"
               placeholder="default"
               value={namespace}
@@ -154,10 +157,10 @@ export default function KubernetesActionEditor({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label htmlFor="k8s-resource">Resource Type</Label>
+          <Label htmlFor={`k8s-resource-${editorId}`}>Resource Type</Label>
           <div className="mt-1.5">
             <FormSelect
-              name="k8s-resource"
+              name={`k8s-resource-${editorId}`}
               label="Resource type"
               value={
                 resourceOptionsFor(action, inputs, resource).find(
@@ -173,22 +176,22 @@ export default function KubernetesActionEditor({
         </div>
 
         <div>
-          <Label htmlFor="k8s-name">
+          <Label htmlFor={`k8s-name-${editorId}`}>
             Resource Name {requiresName && <span className="text-destructive">*</span>}
           </Label>
           <div className="mt-1.5">
             <Input
-              id="k8s-name"
+              id={`k8s-name-${editorId}`}
               aria-label="Resource name"
               placeholder="e.g. checkout-api"
               value={name}
               disabled={readOnly}
               onChange={e => onChange({ ...config, name: e.target.value })}
-              className={errors.name ? 'border-destructive' : ''}
+              className={resourceNameError ? 'border-destructive' : ''}
             />
           </div>
-          {errors.name ? (
-            <p className="mt-1 text-xs text-destructive">{errors.name}</p>
+          {resourceNameError ? (
+            <p className="mt-1 text-xs text-destructive">{resourceNameError}</p>
           ) : (
             <p className="mt-1 text-xs text-muted-foreground">
               {requiresName ? 'Name is required for this action.' : 'Optional: leave blank for all matching resources.'}
@@ -200,13 +203,13 @@ export default function KubernetesActionEditor({
       {isScale && (
         <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 space-y-2">
           <div className="flex items-center justify-between">
-            <Label htmlFor="k8s-replicas" className="font-semibold text-foreground">
+            <Label htmlFor={`k8s-replicas-${editorId}`} className="font-semibold text-foreground">
               Desired Replicas <span className="text-destructive">*</span>
             </Label>
             <span className="text-xs text-muted-foreground">Must be integer 0–10,000</span>
           </div>
           <Input
-            id="k8s-replicas"
+            id={`k8s-replicas-${editorId}`}
             aria-label="Desired replicas (Agent policy is authoritative)"
             type="number"
             min={0}

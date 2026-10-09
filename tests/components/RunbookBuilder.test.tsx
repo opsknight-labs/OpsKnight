@@ -310,5 +310,56 @@ describe('Runbook nested check builder', () => {
     expect(result.hasErrors).toBe(true);
     expect(result.stepErrors.get(1)?.key).toBe('Step key must be unique across the runbook.');
   });
+
+  it('isolates Kubernetes resourceName error and does not render under Step name', () => {
+    const k8sStep = {
+      ...newBuilderStep('KUBERNETES', 'k8s_action'),
+      name: 'Valid Step Name',
+      config: { action: 'rollout-restart', namespace: 'prod', resource: 'deployment', name: '' },
+    };
+
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [k8sStep] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    const resourceError = screen.getByText('Resource name is required for Kubernetes rollout-restart.');
+    expect(resourceError).toBeTruthy();
+
+    const stepNameInput = screen.getByLabelText('Step name');
+    expect(stepNameInput.classList.contains('border-destructive')).toBe(false);
+    expect(screen.queryByText('Step name is required.')).toBeNull();
+  });
+
+  it('retains input key focus and state during key editing without unmounting', () => {
+    const initialInput: RunbookInputInput = {
+      key: 'service_name',
+      label: 'Target Service',
+      description: 'The target service to restart',
+      type: 'STRING',
+      required: true,
+      sequence: 0,
+    };
+
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [newBuilderStep('MANUAL', 'step_1')] }}
+        initialInputs={[initialInput]}
+        action={async () => {}}
+      />
+    );
+
+    const inputKeyField = screen.getByLabelText('Input 1 key') as HTMLInputElement;
+    inputKeyField.focus();
+    expect(document.activeElement).toBe(inputKeyField);
+
+    fireEvent.change(inputKeyField, { target: { value: 'updated_service_name' } });
+    expect(inputKeyField.value).toBe('updated_service_name');
+    expect(document.activeElement).toBe(inputKeyField);
+  });
 });
+
 
