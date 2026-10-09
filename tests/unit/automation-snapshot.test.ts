@@ -77,13 +77,15 @@ describe('responderSnapshotSchema and captureResponderSnapshot bounds', () => {
 
   it('captureResponderSnapshot enforces MAX_ESCALATION_STEPS', async () => {
     const mockTx = {
-      escalationPolicy: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: 'pol-oversized',
-          name: 'Oversized Policy',
-          steps: Array.from({ length: 51 }, (_, i) => validStep(i)),
-        }),
-      },
+      $queryRaw: vi.fn().mockResolvedValue([
+        {
+          policy: {
+            id: 'pol-oversized',
+            name: 'Oversized Policy',
+            steps: Array.from({ length: 51 }, (_, i) => validStep(i)),
+          },
+        },
+      ]),
     } as unknown as Prisma.TransactionClient;
 
     await expect(captureResponderSnapshot(mockTx, 'pol-oversized')).rejects.toThrow(
@@ -95,13 +97,15 @@ describe('responderSnapshotSchema and captureResponderSnapshot bounds', () => {
     // 40 steps, but with massive names or IDs that blow past 65,536 bytes
     const largeName = 'A'.repeat(70_000);
     const mockTx = {
-      escalationPolicy: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: 'pol-large',
-          name: largeName,
-          steps: [validStep(0)],
-        }),
-      },
+      $queryRaw: vi.fn().mockResolvedValue([
+        {
+          policy: {
+            id: 'pol-large',
+            name: largeName,
+            steps: [validStep(0)],
+          },
+        },
+      ]),
     } as unknown as Prisma.TransactionClient;
 
     await expect(captureResponderSnapshot(mockTx, 'pol-large')).rejects.toThrow(
@@ -154,8 +158,10 @@ describe('responderSnapshotSchema and captureResponderSnapshot bounds', () => {
         findMany: vi
           .fn()
           .mockResolvedValue([{ id: 'large', name: 'Large policy', _count: { steps: 0 } }]),
-        findUnique: vi.fn().mockResolvedValue({ id: 'large', name: 'x'.repeat(70000), steps: [] }),
       },
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValue([{ policy: { id: 'large', name: 'x'.repeat(70000), steps: [] } }]),
     } as unknown as Prisma.TransactionClient;
     const compiled = {
       schemaVersion: 1,
