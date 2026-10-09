@@ -1,0 +1,127 @@
+# Test-only provider credentials and capacity tuning; not production defaults.
+runtime:
+  mode: split
+image:
+  repository: opsknight-automation
+  tag: automation-cert
+  pullPolicy: Never
+fullnameOverride: automation
+config:
+  nextauthUrl: http://127.0.0.1:3439
+  nextPublicAppUrl: http://127.0.0.1:3439
+secrets:
+  nextauthSecret: automation-cert-nextauth-secret-at-least-32-characters
+  apiKeySecret: automation-cert-independent-api-secret-at-least-32-characters
+  encryptionKey: 4e7d2b9c1a8f6e3d5c0b9a8f7e6d5c4b3a29180f7e6d5c4b3a2918f7e6d5c4b3
+postgresql:
+  database: automation_cert
+  username: automation
+  password: automation-cert-only
+  storage: 4Gi
+  image:
+    tag: 16-alpine
+  resources:
+    requests:
+      cpu: 4000m
+      memory: 2048Mi
+    limits:
+      cpu: 4000m
+      memory: 2048Mi
+scheduler:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: '0'
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+bulkWorker:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: '0'
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+runbookWorker:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: '0'
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+statusProjector:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: '0'
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 384Mi
+database:
+  maxApplicationConnections: 200
+web:
+  replicaCount: 4
+  database:
+    poolSize: 24
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+criticalWorker:
+  replicaCount: 2
+  database:
+    poolSize: 12
+  resources:
+    requests:
+      cpu: 500m
+      memory: 384Mi
+    limits:
+      cpu: 1000m
+      memory: 384Mi
+generalWorker:
+  replicaCount: 3
+  worker:
+    batchSize: 25
+    concurrency: 15
+    idlePollMs: 1000
+    busyPollMs: 100
+  database:
+    poolSize: 12
+  resources:
+    requests:
+      cpu: 333m
+      memory: 384Mi
+    limits:
+      cpu: 1500m
+      memory: 384Mi
+pgbouncer:
+  enabled: true
+  replicas: 2
+  image:
+    repository: opsknight-pgbouncer
+    tag: automation-audit
+    digest: ''
+    pullPolicy: Never
+  defaultPoolSize: 24
+  reservePoolSize: 8
+  maxPreparedStatements: 1000
+  resources:
+    requests:
+      cpu: '0'
+      memory: 32Mi
+    limits:
+      cpu: 500m
+      memory: 128Mi
+service:
+  type: NodePort
+  port: 3000
+  nodePort: 30080
