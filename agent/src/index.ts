@@ -119,12 +119,12 @@ async function uploadOutput(
   output: string
 ): Promise<string | undefined> {
   if (Buffer.byteLength(output) <= 32_768) return undefined;
-  let text = output;
+  const text = output;
   let content = gzipSync(Buffer.from(text, 'utf8'));
   let truncated = text.endsWith('[output truncated]');
   const MAX_ARTIFACT_SIZE = 10 * 1024 * 1024;
   if (content.length > MAX_ARTIFACT_SIZE) {
-    let targetRatio = (9.5 * 1024 * 1024) / content.length;
+    const targetRatio = (9.5 * 1024 * 1024) / content.length;
     let maxBytes = Math.floor(Buffer.byteLength(text, 'utf8') * targetRatio);
     while (maxBytes > 0) {
       const sliced = sliceUtf8Safe(text, maxBytes);

@@ -2360,7 +2360,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
           name: 'HTTP Write Step Timeout',
           type: 'HTTP',
           riskClass: 'IDEMPOTENT_WRITE',
-          config: { url: 'https://example.com/api/restart', method: 'POST' },
+          config: { url: 'https://example.com/api/restart', method: 'PUT' },
         },
       ],
     });
@@ -2411,7 +2411,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
           name: 'Auto Remediation Step',
           type: 'SYSTEMD',
           riskClass: 'IDEMPOTENT_WRITE',
-          config: { action: 'restart', unit: 'app.service' },
+          config: { action: 'start', unit: 'app.service' },
         },
       ],
     });
