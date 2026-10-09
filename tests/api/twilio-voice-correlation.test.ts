@@ -403,7 +403,7 @@ describe('Twilio voice callback correlation & races', () => {
       expect(updateCall).toBeDefined();
       expect(updateCall![0].where.finishedAt).toBeNull();
       expect(updateCall![0].where.outcome).toEqual({
-        in: ['IN_FLIGHT', 'ACCEPTED', 'RINGING'],
+        in: ['IN_FLIGHT', 'UNKNOWN', 'ACCEPTED', 'RINGING'],
       });
     });
 
