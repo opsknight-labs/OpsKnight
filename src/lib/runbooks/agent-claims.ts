@@ -1025,7 +1025,10 @@ export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInpu
           },
         },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        executionStep: { select: { executionId: true } },
+      },
     });
     if (!attempt) {
       throw new RunbookPreExecutionFenceError(
@@ -1033,6 +1036,40 @@ export async function storeAgentArtifact(agentId: string, raw: AgentArtifactInpu
         'artifact requires an active fenced attempt'
       );
     }
+
+    const MAX_ARTIFACTS_PER_ATTEMPT = 10;
+    const MAX_BYTES_PER_ATTEMPT = 10 * 1024 * 1024;
+    const MAX_BYTES_PER_EXECUTION = 25 * 1024 * 1024;
+
+    const attemptArtifacts = await tx.runbookArtifact.aggregate({
+      where: { attemptId: attempt.id },
+      _count: { id: true },
+      _sum: { sizeBytes: true },
+    });
+    if ((attemptArtifacts._count.id ?? 0) >= MAX_ARTIFACTS_PER_ATTEMPT) {
+      throw new Error(
+        `Artifact quota exceeded: maximum of ${MAX_ARTIFACTS_PER_ATTEMPT} artifacts allowed per attempt.`
+      );
+    }
+    if ((attemptArtifacts._sum.sizeBytes ?? 0) + content.length > MAX_BYTES_PER_ATTEMPT) {
+      throw new Error('Artifact quota exceeded: maximum of 10 MiB allowed per attempt.');
+    }
+
+    const executionId = attempt.executionStep.executionId;
+    const executionArtifacts = await tx.runbookArtifact.aggregate({
+      where: {
+        attempt: {
+          executionStep: {
+            executionId,
+          },
+        },
+      },
+      _sum: { sizeBytes: true },
+    });
+    if ((executionArtifacts._sum.sizeBytes ?? 0) + content.length > MAX_BYTES_PER_EXECUTION) {
+      throw new Error('Artifact quota exceeded: maximum of 25 MiB allowed per execution.');
+    }
+
     return tx.runbookArtifact.create({
       data: {
         attemptId: attempt.id,

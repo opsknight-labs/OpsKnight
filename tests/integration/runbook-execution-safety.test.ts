@@ -43,8 +43,18 @@ import {
 const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
 
-async function createPublishedRunbook(definition: RunbookDefinition) {
-  const parsed = parseRunbookDefinition(definition as unknown as Prisma.InputJsonValue);
+async function createPublishedRunbook(
+  definition: RunbookDefinition,
+  inputs?: Array<{
+    key: string;
+    label: string;
+    type?: 'STRING' | 'SECRET_REF' | 'INTEGER' | 'BOOLEAN';
+    defaultValue?: string;
+    required?: boolean;
+    sequence?: number;
+  }>
+) {
+  const parsed = parseRunbookDefinition(definition as unknown as Prisma.InputJsonValue, inputs ?? []);
   const runbook = await testPrisma.runbook.create({
     data: { name: `Safety ${crypto.randomUUID()}`, slug: `safety-${crypto.randomUUID()}` },
   });
@@ -52,11 +62,26 @@ async function createPublishedRunbook(definition: RunbookDefinition) {
     data: {
       runbookId: runbook.id,
       version: 1,
-      state: 'PUBLISHED',
+      state: 'DRAFT',
       definition: parsed as unknown as Prisma.InputJsonValue,
       checksum: computeDefinitionChecksum(parsed),
-      publishedAt: new Date(),
+      inputs: inputs
+        ? {
+            create: inputs.map(inp => ({
+              key: inp.key,
+              label: inp.label,
+              type: inp.type ?? 'STRING',
+              defaultValue: inp.defaultValue,
+              required: inp.required ?? false,
+              sequence: inp.sequence ?? 0,
+            })),
+          }
+        : undefined,
     },
+  });
+  await testPrisma.runbookVersion.update({
+    where: { id: version.id },
+    data: { state: 'PUBLISHED', publishedAt: new Date() },
   });
   await testPrisma.runbook.update({
     where: { id: runbook.id },
@@ -65,9 +90,19 @@ async function createPublishedRunbook(definition: RunbookDefinition) {
   return { runbook, version };
 }
 
-async function createAgentTarget(definition: RunbookDefinition) {
+async function createAgentTarget(
+  definition: RunbookDefinition,
+  inputs?: Array<{
+    key: string;
+    label: string;
+    type?: 'STRING' | 'SECRET_REF' | 'INTEGER' | 'BOOLEAN';
+    defaultValue?: string;
+    required?: boolean;
+    sequence?: number;
+  }>
+) {
   const [{ runbook, version }, service, agent, actor] = await Promise.all([
-    createPublishedRunbook(definition),
+    createPublishedRunbook(definition, inputs),
     createTestService('Runbook safety'),
     testPrisma.runbookAgent.create({
       data: {
@@ -98,7 +133,7 @@ async function createAgentTarget(definition: RunbookDefinition) {
 }
 
 describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
-  beforeEach(async () => resetDatabase());
+  beforeEach(async () => resetDatabase(), 30000);
   afterAll(async () => testPrisma.$disconnect());
 
   it('converts budget exhaustion into one frozen suggestion rather than dropping remediation', async () => {
@@ -220,28 +255,32 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   it.each(['podman', '${{ inputs.runtime }}'])(
     'never dispatches %s Podman work to a Docker-only Agent',
     async runtime => {
-      const target = await createAgentTarget({
-        steps: [
-          {
-            key: 'inspect',
-            name: 'Inspect',
-            type: 'DOCKER',
-            riskClass: 'READ_ONLY',
-            config: { runtime, action: 'inspect', container: 'api' },
-          },
-        ],
-      });
-      if (runtime !== 'podman')
-        await testPrisma.runbookInput.create({
-          data: {
-            runbookVersionId: target.version.id,
-            key: 'runtime',
-            label: 'Runtime',
-            type: 'STRING',
-            defaultValue: 'podman',
-            sequence: 0,
-          },
-        });
+      const inputs =
+        runtime !== 'podman'
+          ? [
+              {
+                key: 'runtime',
+                label: 'Runtime',
+                type: 'STRING' as const,
+                defaultValue: 'podman',
+                sequence: 0,
+              },
+            ]
+          : undefined;
+      const target = await createAgentTarget(
+        {
+          steps: [
+            {
+              key: 'inspect',
+              name: 'Inspect',
+              type: 'DOCKER',
+              riskClass: 'READ_ONLY',
+              config: { runtime, action: 'inspect', container: 'api' },
+            },
+          ],
+        },
+        inputs
+      );
       await testPrisma.runbookAgent.update({
         where: { id: target.agent.id },
         data: { capabilities: ['RUNBOOK_DOCKER', 'RUNBOOK_DOCKER_RUNTIME'] },
@@ -981,40 +1020,38 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   });
 
   it('delivers only inputs and secrets referenced by the claimed step', async () => {
-    const target = await createAgentTarget({
-      description: 'Step secrets',
-      steps: [
-        {
-          key: 'status',
-          name: 'Status',
-          type: 'SYSTEMD',
-          riskClass: 'READ_ONLY',
-          config: {
-            action: 'status',
-            unit: 'api.service',
-            environment: { TOKEN: '${{ inputs.unit }}' },
+    const target = await createAgentTarget(
+      {
+        description: 'Step secrets',
+        steps: [
+          {
+            key: 'status',
+            name: 'Status',
+            type: 'SYSTEMD',
+            riskClass: 'READ_ONLY',
+            config: {
+              action: 'status',
+              unit: 'api.service',
+              environment: { TOKEN: '${{ inputs.unit }}' },
+            },
           },
-        },
-      ],
-    });
-    await testPrisma.runbookInput.createMany({
-      data: [
+        ],
+      },
+      [
         {
-          runbookVersionId: target.version.id,
           key: 'unit',
           label: 'Unit',
           type: 'SECRET_REF',
           required: true,
         },
         {
-          runbookVersionId: target.version.id,
           key: 'unused',
           label: 'Unused token',
           type: 'SECRET_REF',
           required: true,
         },
-      ],
-    });
+      ]
+    );
     await testPrisma.runbookSecret.create({
       data: {
         name: 'unit-secret',
@@ -1296,16 +1333,14 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         },
       ],
     };
-    const target = await createAgentTarget(definition);
-    await testPrisma.runbookInput.create({
-      data: {
-        runbookVersionId: target.version.id,
+    const target = await createAgentTarget(definition, [
+      {
         key: 'unit',
         label: 'Unit',
         type: 'STRING',
         required: true,
       },
-    });
+    ]);
     await testPrisma.serviceRunbookBinding.update({
       where: { id: target.binding.id },
       data: { inputValues: { unit: '--system' } },

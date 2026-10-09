@@ -17,14 +17,23 @@ export interface ExecutionResult {
 
 export function containerHealthPassed(output: string): boolean {
   try {
-    const health: unknown = JSON.parse(output);
-    if (typeof health === 'string') return health === 'healthy';
-    return Boolean(
-      health &&
-      typeof health === 'object' &&
-      !Array.isArray(health) &&
-      Object.entries(health).some(([key, value]) => key === 'Status' && value === 'healthy')
-    );
+    const trimmed = output.trim();
+    if (!trimmed) return false;
+    const parsed: unknown = JSON.parse(trimmed);
+    if (typeof parsed === 'string') return parsed.toLowerCase() === 'healthy';
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const state = parsed as Record<string, unknown>;
+      const healthObj = (state.Health ?? state.Healthcheck ?? state.health ?? state.healthcheck) as
+        | Record<string, unknown>
+        | undefined;
+      if (healthObj && typeof healthObj === 'object') {
+        const status = String(healthObj.Status ?? healthObj.status ?? '');
+        return status.toLowerCase() === 'healthy';
+      }
+      if (typeof state.Status === 'string') return state.Status.toLowerCase() === 'healthy';
+      if (typeof state.status === 'string') return state.status.toLowerCase() === 'healthy';
+    }
+    return false;
   } catch {
     return false;
   }
@@ -92,9 +101,7 @@ export function commandFor(
             ? [
                 'inspect',
                 '--format',
-                config.runtime === 'podman'
-                  ? '{{if .State.Healthcheck}}{{json .State.Healthcheck.Status}}{{else}}null{{end}}'
-                  : '{{if .State.Health}}{{json .State.Health.Status}}{{else}}null{{end}}',
+                '{{json .State}}',
                 String(config.container),
               ]
             : [action, String(config.container)];
@@ -110,18 +117,16 @@ export function commandFor(
           command: 'kubectl',
           args: ['-n', namespace, 'scale', `${resource}/${name}`, `--replicas=${config.replicas}`],
         };
-      if (action === 'events')
+      if (action === 'events') {
+        const args = ['-n', namespace, 'get', 'events'];
+        if (name) {
+          args.push('--field-selector', `involvedObject.name=${name}`);
+        }
         return {
           command: 'kubectl',
-          args: [
-            '-n',
-            namespace,
-            'get',
-            'events',
-            '--field-selector',
-            `involvedObject.name=${name}`,
-          ],
+          args,
         };
+      }
       if (action === 'rollout-status')
         return {
           command: 'kubectl',
@@ -134,7 +139,22 @@ export function commandFor(
           args: ['-n', namespace, 'rollout', 'restart', `${resource}/${name}`],
         };
       }
-      if (!['get', 'describe', 'logs'].includes(action)) {
+      if (action === 'logs') {
+        if (!name) throw new Error('Kubernetes logs requires a target resource name.');
+        const target = ['pod', 'pods'].includes(resource.toLowerCase()) ? name : `${resource}/${name}`;
+        return {
+          command: 'kubectl',
+          args: [
+            '-n',
+            namespace,
+            'logs',
+            target,
+            '--tail=500',
+            '--limit-bytes=262144',
+          ],
+        };
+      }
+      if (!['get', 'describe'].includes(action)) {
         throw new Error(`Unsupported Kubernetes action: ${action}`);
       }
       return {
@@ -145,7 +165,6 @@ export function commandFor(
           action,
           resource,
           ...(name ? [name] : []),
-          ...(action === 'logs' ? ['--tail=500'] : []),
         ],
       };
     }

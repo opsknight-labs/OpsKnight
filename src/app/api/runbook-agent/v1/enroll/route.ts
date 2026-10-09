@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { jsonOk } from '@/lib/api-response';
 import { consumeEnrollmentToken } from '@/lib/runbooks/agent-auth';
-import { agentApiError } from '@/lib/runbooks/agent-api';
+import { agentApiError, readBoundedRequestBody } from '@/lib/runbooks/agent-api';
 
 const schema = z
   .object({
@@ -15,7 +15,14 @@ const schema = z
 
 export async function POST(request: Request) {
   try {
-    const result = await consumeEnrollmentToken(schema.parse(await request.json()));
+    const rawBody = await readBoundedRequestBody(request, 16 * 1024);
+    let json: unknown;
+    try {
+      json = JSON.parse(rawBody);
+    } catch {
+      throw new Error('Request body must be valid JSON.');
+    }
+    const result = await consumeEnrollmentToken(schema.parse(json));
     return jsonOk({ agent: result, protocolVersion: 'v1' }, 201);
   } catch (error) {
     return agentApiError(error);

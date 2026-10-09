@@ -11,16 +11,40 @@ export function sha256(value: string | Buffer): string {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
+export function canonicalRequestTarget(urlOrPath: string): string {
+  try {
+    const parsed =
+      urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')
+        ? new URL(urlOrPath)
+        : new URL(urlOrPath, 'http://localhost');
+    const params = Array.from(parsed.searchParams.entries()).sort(([aKey, aVal], [bKey, bVal]) => {
+      const cmp = aKey.localeCompare(bKey);
+      return cmp !== 0 ? cmp : aVal.localeCompare(bVal);
+    });
+    if (params.length === 0) {
+      return parsed.pathname;
+    }
+    const queryString = params
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join('&');
+    return `${parsed.pathname}?${queryString}`;
+  } catch {
+    return urlOrPath;
+  }
+}
+
 export function agentSignaturePayload(input: {
   method: string;
-  pathname: string;
+  pathname?: string;
+  target?: string;
   timestamp: string;
   nonce: string;
   body: string;
 }): string {
+  const target = canonicalRequestTarget(input.target ?? input.pathname ?? '');
   return [
     input.method.toUpperCase(),
-    input.pathname,
+    target,
     input.timestamp,
     input.nonce,
     sha256(input.body),
@@ -121,7 +145,7 @@ export async function authenticateAgentRequest(request: Request, rawBody: string
   if (!agent.publicKey) throw new Error('Agent has not completed enrollment.');
   const payload = agentSignaturePayload({
     method: request.method,
-    pathname: new URL(request.url).pathname,
+    target: request.url,
     timestamp,
     nonce,
     body: rawBody,

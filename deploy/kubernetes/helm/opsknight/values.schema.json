@@ -53,6 +53,7 @@
       "required": [
         "enabled",
         "replicaCount",
+        "kubernetes",
         "image",
         "url",
         "enrollmentToken",
@@ -69,6 +70,14 @@
       "properties": {
         "enabled": { "type": "boolean" },
         "replicaCount": { "type": "integer", "const": 1 },
+        "kubernetes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" }
+          }
+        },
         "image": {
           "type": "object",
           "additionalProperties": false,

@@ -29,9 +29,20 @@ export class AgentClient {
     const raw = JSON.stringify(body);
     const timestamp = new Date().toISOString();
     const nonce = randomBytes(24).toString('base64url');
+    const targetUrl = new URL(pathname, this.baseUrl);
+    const sortedParams = Array.from(targetUrl.searchParams.entries()).sort(([aKey, aVal], [bKey, bVal]) => {
+      const cmp = aKey.localeCompare(bKey);
+      return cmp !== 0 ? cmp : aVal.localeCompare(bVal);
+    });
+    const canonicalTarget =
+      sortedParams.length > 0
+        ? `${targetUrl.pathname}?${sortedParams
+            .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+            .join('&')}`
+        : targetUrl.pathname;
     const payload = [
       'POST',
-      new URL(pathname, this.baseUrl).pathname,
+      canonicalTarget,
       timestamp,
       nonce,
       createHash('sha256').update(raw).digest('hex'),

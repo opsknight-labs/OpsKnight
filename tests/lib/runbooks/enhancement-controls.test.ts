@@ -21,11 +21,12 @@ const stamp = { capturedAt: new Date().toISOString() };
 const policy: AgentPolicy = {
   ...DEFAULT_POLICY,
   allowedStepTypes: ['LINUX_DIAGNOSTICS', 'SYSTEMD', 'DOCKER', 'KUBERNETES'],
+  linuxDiagnostics: ['summary', 'disk', 'memory', 'http', 'tcp', 'dns'],
   systemdUnits: ['payments.service'],
   dockerContainers: ['payments'],
   podmanContainers: ['pod-payments'],
   kubernetesNamespaces: ['payments'],
-  kubernetesActions: ['get', 'events', 'scale', 'rollout-status'],
+  kubernetesActions: ['get', 'events', 'scale', 'rollout-status', 'logs'],
   kubernetesMaxReplicas: 5,
   networkHosts: ['127.0.0.1'],
   networkPorts: [80],
@@ -212,10 +213,101 @@ describe('runbook enhancement safety', () => {
     expect(() =>
       parseRunbookDefinition({ steps: [{ ...scale.step, riskClass: 'READ_ONLY' }] })
     ).toThrow('IDEMPOTENT_WRITE');
-    expect(
-      commandFor(attempt('KUBERNETES', { action: 'events', namespace: 'payments', name: 'api' }))
-        .args
-    ).toContain('involvedObject.name=api');
+
+    // Kubernetes logs syntax with --limit-bytes and --tail
+    const podLogs = attempt('KUBERNETES', {
+      action: 'logs',
+      namespace: 'payments',
+      resource: 'pods',
+      name: 'api-pod-1',
+    });
+    expect(commandFor(podLogs).args).toEqual([
+      '-n',
+      'payments',
+      'logs',
+      'api-pod-1',
+      '--tail=500',
+      '--limit-bytes=262144',
+    ]);
+
+    const deployLogs = attempt('KUBERNETES', {
+      action: 'logs',
+      namespace: 'payments',
+      resource: 'deployment',
+      name: 'api',
+    });
+    expect(commandFor(deployLogs).args).toEqual([
+      '-n',
+      'payments',
+      'logs',
+      'deployment/api',
+      '--tail=500',
+      '--limit-bytes=262144',
+    ]);
+
+    // Kubernetes events: namespace-wide without name, field-selector with name
+    const allEvents = attempt('KUBERNETES', { action: 'events', namespace: 'payments' });
+    expect(commandFor(allEvents).args).toEqual(['-n', 'payments', 'get', 'events']);
+
+    const namedEvents = attempt('KUBERNETES', {
+      action: 'events',
+      namespace: 'payments',
+      name: 'api',
+    });
+    expect(commandFor(namedEvents).args).toEqual([
+      '-n',
+      'payments',
+      'get',
+      'events',
+      '--field-selector',
+      'involvedObject.name=api',
+    ]);
+  });
+  it('enforces fine-grained kubernetesTargets local policy when configured', () => {
+    const fineGrainedPolicy: AgentPolicy = {
+      ...policy,
+      kubernetesTargets: [
+        {
+          namespace: 'payments',
+          resources: ['deployment'],
+          names: ['api'],
+          actions: ['scale'],
+          maxReplicas: 3,
+        },
+      ],
+    };
+    const allowedScale = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', name: 'api', replicas: 3 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(allowedScale, fineGrainedPolicy)).not.toThrow();
+
+    const deniedName = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', name: 'worker', replicas: 3 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(deniedName, fineGrainedPolicy)).toThrow(
+      'not allowlisted by local agent target policies'
+    );
+
+    const deniedReplicas = attempt(
+      'KUBERNETES',
+      { action: 'scale', namespace: 'payments', resource: 'deployment', name: 'api', replicas: 4 },
+      'IDEMPOTENT_WRITE'
+    );
+    expect(() => assertPolicyAllows(deniedReplicas, fineGrainedPolicy)).toThrow(
+      'not allowlisted by local agent target policies'
+    );
+  });
+  it('enforces linuxDiagnostics default allowlist of summary, disk, memory', () => {
+    expect(() =>
+      assertPolicyAllows(attempt('LINUX_DIAGNOSTICS', { diagnostic: 'processes' }), DEFAULT_POLICY)
+    ).toThrow('LOCAL_POLICY_DENIED: Linux diagnostic processes is not allowlisted.');
+    expect(() =>
+      assertPolicyAllows(attempt('LINUX_DIAGNOSTICS', { diagnostic: 'summary' }), DEFAULT_POLICY)
+    ).not.toThrow();
   });
   it('rejects network destinations and URL credentials unless locally permitted', () => {
     expect(() =>

@@ -699,4 +699,91 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     expect(actions).toContain('runbook.restored');
     expect(actions).toContain('runbook.deleted');
   });
+
+  it('certifies database-level immutability triggers for published and retired versions and inputs', async () => {
+    const actor = await createTestUser();
+    const slug = `immut-cert-${crypto.randomUUID().slice(0, 8)}`;
+    const runbook = await createRunbook(
+      { name: 'Immutability Cert Runbook', slug, description: 'Testing DB immutability triggers' },
+      actor.id
+    );
+
+    const draftId = runbook.draftVersionId!;
+    // Attach an input to the draft
+    const input = await testPrisma.runbookInput.create({
+      data: {
+        runbookVersionId: draftId,
+        key: 'target_host',
+        label: 'Target Host',
+        type: 'STRING',
+        required: true,
+      },
+    });
+
+    // Publish the draft
+    const published = await publishDraftVersion(draftId, actor.id);
+    expect(published.state).toBe('PUBLISHED');
+
+    // 1. Direct DB update to definition or checksum on PUBLISHED version must fail
+    await expect(
+      testPrisma.runbookVersion.update({
+        where: { id: published.id },
+        data: { definition: { steps: [] } },
+      })
+    ).rejects.toThrow(/Published runbook versions are immutable/);
+
+    // 2. Direct DB delete of PUBLISHED version must fail
+    await expect(
+      testPrisma.runbookVersion.delete({
+        where: { id: published.id },
+      })
+    ).rejects.toThrow(/Cannot delete PUBLISHED runbook version/);
+
+    // 3. Direct DB update of RunbookInput on PUBLISHED version must fail
+    await expect(
+      testPrisma.runbookInput.update({
+        where: { id: input.id },
+        data: { label: 'Mutated Label' },
+      })
+    ).rejects.toThrow(/Cannot mutate inputs for PUBLISHED runbook version/);
+
+    // 4. Direct DB insert of new RunbookInput on PUBLISHED version must fail
+    await expect(
+      testPrisma.runbookInput.create({
+        data: {
+          runbookVersionId: published.id,
+          key: 'extra_input',
+          label: 'Extra',
+        },
+      })
+    ).rejects.toThrow(/Cannot mutate inputs for PUBLISHED runbook version/);
+
+    // 5. Direct DB delete of RunbookInput on PUBLISHED version must fail
+    await expect(
+      testPrisma.runbookInput.delete({
+        where: { id: input.id },
+      })
+    ).rejects.toThrow(/Cannot mutate inputs for PUBLISHED runbook version/);
+
+    // 6. Transition to RETIRED succeeds
+    const retired = await testPrisma.runbookVersion.update({
+      where: { id: published.id },
+      data: { state: 'RETIRED' },
+    });
+    expect(retired.state).toBe('RETIRED');
+
+    // 7. Direct DB mutation on RETIRED version must fail
+    await expect(
+      testPrisma.runbookVersion.update({
+        where: { id: published.id },
+        data: { state: 'PUBLISHED' },
+      })
+    ).rejects.toThrow(/Cannot mutate retired runbook version/);
+
+    await expect(
+      testPrisma.runbookVersion.delete({
+        where: { id: published.id },
+      })
+    ).rejects.toThrow(/Cannot delete RETIRED runbook version/);
+  });
 });

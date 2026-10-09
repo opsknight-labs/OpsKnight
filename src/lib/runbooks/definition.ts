@@ -61,6 +61,10 @@ export function parseRunbookDefinition(
 }
 
 function validateDefinitionStructure(definition: RunbookDefinition): void {
+  const serialized = JSON.stringify(definition);
+  if (serialized.length > 256 * 1024) {
+    throw new RunbookDefinitionError('Runbook definition exceeds maximum allowed size of 256 KiB.');
+  }
   const stack = definition.steps.map(step => ({ step, depth: 1 }));
   const keys = new Set<string>();
   let count = 0;
@@ -168,6 +172,13 @@ function validateTarget(
 }
 
 function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates = true): void {
+  const serializedConfig = JSON.stringify(step.config);
+  const maxConfigBytes = step.type === 'HTTP' ? 96 * 1024 : 32 * 1024;
+  if (serializedConfig.length > maxConfigBytes) {
+    throw new RunbookDefinitionError(
+      `Step "${step.key}" config exceeds maximum allowed size of ${step.type === 'HTTP' ? '96' : '32'} KiB.`
+    );
+  }
   if (step.type === 'CONDITION' && !workflowConditionSchema.safeParse(step.config).success) {
     throw new RunbookDefinitionError(
       `Step "${step.key}" has an unsupported CONDITION field or operator.`
@@ -236,8 +247,9 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
       step.key,
       allowInputTemplates
     );
+    const resource = configuredString(step, 'resource', 'pods').toLowerCase();
     validateTarget(
-      configuredString(step, 'resource', 'pods'),
+      resource,
       KUBERNETES_NAME,
       'Kubernetes resource',
       step.key,
@@ -252,19 +264,86 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
         step.key,
         allowInputTemplates
       );
-    if (['rollout-restart', 'rollout-status', 'scale'].includes(action) && !name) {
-      throw new RunbookDefinitionError(
-        `Step "${step.key}" requires a Kubernetes resource name for rollout-restart.`
-      );
+
+    if (action === 'logs') {
+      const allowedLogResources = [
+        'pod',
+        'pods',
+        'deployment',
+        'deployments',
+        'daemonset',
+        'daemonsets',
+        'statefulset',
+        'statefulsets',
+      ];
+      if (
+        !(allowInputTemplates && INPUT_TEMPLATE.test(resource)) &&
+        !allowedLogResources.includes(resource)
+      ) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" Kubernetes logs action does not support resource "${resource}". Supported resources are Pod, Deployment, DaemonSet, and StatefulSet.`
+        );
+      }
+      if (!name) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" requires a Kubernetes resource name for logs.`
+        );
+      }
+    } else if (['rollout-restart', 'rollout-status'].includes(action)) {
+      const allowedRolloutResources = [
+        'deployment',
+        'deployments',
+        'daemonset',
+        'daemonsets',
+        'statefulset',
+        'statefulsets',
+      ];
+      if (
+        !(allowInputTemplates && INPUT_TEMPLATE.test(resource)) &&
+        !allowedRolloutResources.includes(resource)
+      ) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" Kubernetes ${action} does not support resource "${resource}". Supported resources are Deployment, DaemonSet, and StatefulSet.`
+        );
+      }
+      if (!name) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" requires a Kubernetes resource name for ${action}.`
+        );
+      }
+    } else if (action === 'scale') {
+      const allowedScaleResources = [
+        'deployment',
+        'deployments',
+        'statefulset',
+        'statefulsets',
+        'replicaset',
+        'replicasets',
+        'replicationcontroller',
+        'replicationcontrollers',
+      ];
+      if (
+        !(allowInputTemplates && INPUT_TEMPLATE.test(resource)) &&
+        !allowedScaleResources.includes(resource)
+      ) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" Kubernetes scale action does not support resource "${resource}". Supported resources are Deployment, StatefulSet, ReplicaSet, and ReplicationController.`
+        );
+      }
+      if (!name) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" requires a Kubernetes resource name for scale.`
+        );
+      }
+      if (
+        !(allowInputTemplates && INPUT_TEMPLATE.test(String(step.config.replicas))) &&
+        (!Number.isInteger(step.config.replicas) ||
+          Number(step.config.replicas) < 0 ||
+          Number(step.config.replicas) > 10000)
+      ) {
+        throw new RunbookDefinitionError('Kubernetes replicas must be an integer from 0 to 10000.');
+      }
     }
-    if (
-      action === 'scale' &&
-      !(allowInputTemplates && INPUT_TEMPLATE.test(String(step.config.replicas))) &&
-      (!Number.isInteger(step.config.replicas) ||
-        Number(step.config.replicas) < 0 ||
-        Number(step.config.replicas) > 10000)
-    )
-      throw new RunbookDefinitionError('Kubernetes replicas must be an integer from 0 to 10000.');
   }
   if (step.type === 'LINUX_DIAGNOSTICS') {
     const diagnostic = configuredString(step, 'diagnostic', 'summary');
@@ -330,8 +409,16 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
         throw new RunbookDefinitionError('Expected HTTP status must be between 100 and 599.');
     }
   }
-  if (step.type === 'BASH' && !configuredString(step, 'command')) {
-    throw new RunbookDefinitionError(`Step "${step.key}" requires a Bash command.`);
+  if (step.type === 'BASH') {
+    const command = configuredString(step, 'command');
+    if (!command) {
+      throw new RunbookDefinitionError(`Step "${step.key}" requires a Bash command.`);
+    }
+    if (command.length > 8192) {
+      throw new RunbookDefinitionError(
+        `Step "${step.key}" Bash command exceeds maximum allowed size of 8 KiB.`
+      );
+    }
   }
   if (step.type === 'HTTP') {
     const method = configuredString(step, 'method', 'GET').toUpperCase();
@@ -340,6 +427,37 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
     }
     if (!configuredString(step, 'url')) {
       throw new RunbookDefinitionError(`Step "${step.key}" requires an HTTP URL.`);
+    }
+    if (step.config.headers !== undefined) {
+      if (
+        typeof step.config.headers !== 'object' ||
+        step.config.headers === null ||
+        Array.isArray(step.config.headers)
+      ) {
+        throw new RunbookDefinitionError(`Step "${step.key}" HTTP headers must be an object.`);
+      }
+      const headers = step.config.headers as Record<string, unknown>;
+      if (Object.keys(headers).length > 64) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" HTTP headers exceed maximum allowed count of 64 entries.`
+        );
+      }
+      if (JSON.stringify(headers).length > 16 * 1024) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" HTTP headers exceed maximum allowed size of 16 KiB.`
+        );
+      }
+    }
+    if (step.config.body !== undefined) {
+      const bodyStr =
+        typeof step.config.body === 'string'
+          ? step.config.body
+          : JSON.stringify(step.config.body);
+      if (bodyStr.length > 64 * 1024) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" HTTP body exceeds maximum allowed size of 64 KiB.`
+        );
+      }
     }
   }
 }

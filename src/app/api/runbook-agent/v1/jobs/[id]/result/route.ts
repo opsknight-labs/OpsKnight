@@ -9,7 +9,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   try {
     const [{ id }, { agent, json }] = await Promise.all([
       context.params,
-      authenticatedAgentJson(request),
+      authenticatedAgentJson(request, 128 * 1024),
     ]);
     const payload = agentJobResultSchema.parse({
       ...(json as Record<string, unknown>),

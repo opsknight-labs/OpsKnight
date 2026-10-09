@@ -211,6 +211,8 @@ runbookWorker:
 agent:
   enabled: false
   replicaCount: 1
+  kubernetes:
+    enabled: false
   image:
     repository: ghcr.io/opsknight-labs/opsknight-agent
     tag: '2.0.0'
