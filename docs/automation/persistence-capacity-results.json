@@ -626,6 +626,75 @@
         "Independent local database restart/regression checks ran on the same host during some enabled profiles; no clean-host or release-capacity certification is claimed.",
         "Duplicate samples identified an actual stale queue-claim race; the image predates its fix."
       ]
+    },
+    {
+      "topology": "compose-split-pgbouncer-audit5-20rps",
+      "generatedAt": "2026-10-08T16:38:59.429Z",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "global-off: critical notification p99 exceeds 30000ms",
+          "global-off: queue age exceeds 30000ms",
+          "Incomplete certification: Global-off baseline failed its sustained latency or workload gates"
+        ]
+      },
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "providerCapacityProfile": "provisioned-200",
+        "providerTelemetryResetBeforeRun": true,
+        "providerBudgets": {
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
+          "providers": {
+            "EMAIL": "smtp",
+            "PUSH": "web-push",
+            "WEBHOOK": "default"
+          },
+          "ratePerSecond": 200,
+          "maxInFlight": 40
+        },
+        "publicFanout": "Dedicated status-fanout suite",
+        "historicalFixtureTimers": "Disabled before first profile; real alert/responder escalation unchanged",
+        "comparisonValidity": "Queues drained between profiles",
+        "stopReason": "Global-off baseline failed its sustained latency or workload gates"
+      },
+      "sourceRevision": "ffcd97fa778d245046cda1c38dd073a37614cffa",
+      "imageDigest": "sha256:139051ddca29dd22ae7b5da1b2a05137961dcd7fcdeed7dd9d132e656f79993e",
+      "results": [
+        {
+          "profile": "global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 12368,
+          "recoveryDrainMs": 161594,
+          "criticalNotificationLatency": {
+            "p95Ms": 17966.249999999985,
+            "p99Ms": 33843.44999999999,
+            "sent": 4646,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "traceRuntimeP99Ms": null
+        }
+      ]
     }
   ],
   "initialImage": "opsknight-automation:audit2",

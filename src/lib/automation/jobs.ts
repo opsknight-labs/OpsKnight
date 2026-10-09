@@ -106,7 +106,7 @@ export async function processAutomationJob(payload: unknown) {
   }
   if (job.task === 'AUTOMATION_OBSERVE') {
     // Idempotency lives in the transaction: a crash/retry cannot count observations twice.
-    const recorded = await prisma.$transaction(
+    const result = await prisma.$transaction(
       tx =>
         persistObservationBatch(tx, job, payload => {
           const parsed = jobSchema.safeParse(payload);
@@ -114,14 +114,13 @@ export async function processAutomationJob(payload: unknown) {
         }),
       { timeout: 10000 }
     );
-    if (!recorded) return;
-    const unmapped = job.observations.filter(o => o.unmapped);
-    if (unmapped.length)
+    if (!result.recorded) return;
+    if (result.unmapped.length)
       logger.info('automation.context.unmapped', {
         serviceId: job.serviceId,
-        fields: unmapped.map(field => field.key),
+        fields: result.unmapped.map(field => field.key),
       });
-    for (const field of unmapped)
+    for (const field of result.unmapped)
       addOperationalMetric('opsknight_automation_unmapped_total', 1, {
         field_type: ['STRING', 'ENUM', 'NUMBER', 'BOOLEAN'].includes(field.type)
           ? field.type

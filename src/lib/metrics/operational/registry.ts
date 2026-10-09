@@ -38,7 +38,11 @@ export const OPERATIONAL_METRICS = [
   { name: 'opsknight_automation_shadow_difference_total', help: 'Automation shadow_difference_total', kind: 'counter', labels: ['outcome'], scope: 'counter', estimatedMaxSeries: 24 },
   { name: 'opsknight_automation_unmapped_total', help: 'Automation unmapped_total', kind: 'counter', labels: ['field_type'], scope: 'counter', estimatedMaxSeries: 24 },
   { name: 'opsknight_automation_evaluation_duration_ms', help: 'Automation duration in milliseconds', kind: 'histogram', labels: ['mode'], scope: 'counter', estimatedMaxSeries: 32, buckets: [0.1, 0.5, 1, 3, 8, 15, 30] },
-  { name: 'opsknight_automation_extraction_duration_ms', help: 'Automation duration in milliseconds', kind: 'histogram', labels: [], scope: 'counter', estimatedMaxSeries: 32, buckets: [0.1, 0.5, 1, 3, 8, 15, 30] },
+  { name: 'opsknight_automation_extraction_duration_ms', help: 'Automation extraction duration in milliseconds', kind: 'histogram', labels: [], scope: 'counter', estimatedMaxSeries: 32, buckets: [0.1, 0.5, 1, 3, 8, 15, 30] },
+  { name: 'opsknight_automation_version_load_ms', help: 'Automation version load duration in milliseconds', kind: 'histogram', labels: [], scope: 'counter', estimatedMaxSeries: 32, buckets: [0.1, 0.5, 1, 3, 8, 15, 30] },
+  { name: 'opsknight_automation_evaluator_ms', help: 'Automation pure evaluator duration in milliseconds', kind: 'histogram', labels: [], scope: 'counter', estimatedMaxSeries: 32, buckets: [0.1, 0.5, 1, 3, 8, 15, 30] },
+  { name: 'opsknight_automation_policy_lookup_ms', help: 'Automation escalation policy lookup duration in milliseconds', kind: 'histogram', labels: [], scope: 'counter', estimatedMaxSeries: 32, buckets: [0.1, 0.5, 1, 3, 8, 15, 30] },
+  { name: 'opsknight_automation_responder_snapshot_ms', help: 'Automation responder snapshot duration in milliseconds', kind: 'histogram', labels: [], scope: 'counter', estimatedMaxSeries: 32, buckets: [0.1, 0.5, 1, 3, 8, 15, 30] },
   {
     name: 'opsknight_chatops_invokes_total',
     help: 'Authenticated ChatOps invokes by provider, verb, and outcome',

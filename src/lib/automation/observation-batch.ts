@@ -6,15 +6,21 @@ import type { ObservationJob } from './jobs';
 const receipt = (job: ObservationJob) =>
   `AUTOMATION_OBSERVATION_RECEIPT:${createHash('sha256').update(JSON.stringify(job)).digest('hex')}`;
 
+export type ObservationBatchResult = {
+  recorded: boolean;
+  unmapped: Array<{ key: string; type: string }>;
+};
+
 /** Consume a bounded, durable service batch. Receipts, rollups and queue completion
  * commit together; other workers skip the locked pending rows. */
 export async function persistObservationBatch(
   tx: Prisma.TransactionClient,
   current: ObservationJob,
   parse: (payload: unknown) => ObservationJob | null
-) {
+): Promise<ObservationBatchResult> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`automation-observations:${current.serviceId}`}, 0))`;
-  if (await tx.backgroundJob.findUnique({ where: { id: receipt(current) } })) return false;
+  if (await tx.backgroundJob.findUnique({ where: { id: receipt(current) } }))
+    return { recorded: false, unmapped: [] };
   const pending = await tx.$queryRaw<Array<{ id: string; payload: Prisma.JsonValue }>>`
     SELECT id, payload FROM "BackgroundJob"
     WHERE type = 'SCHEDULED_TASK'::"JobType" AND status = 'PENDING'::"JobStatus"
@@ -163,5 +169,13 @@ export async function persistObservationBatch(
       where: { id: { in: siblings.map(row => row.id) }, status: 'PENDING' },
       data: { status: 'COMPLETED', completedAt: new Date() },
     });
-  return true;
+  const unmapped: Array<{ key: string; type: string }> = [];
+  for (const job of jobs) {
+    for (const observation of job.observations) {
+      if (observation.unmapped) {
+        unmapped.push({ key: observation.key, type: observation.type });
+      }
+    }
+  }
+  return { recorded: true, unmapped };
 }

@@ -31,6 +31,10 @@ export type RuntimeEvaluation = {
   evaluationAt: Date;
   durationMs: number;
   extractionMs: number;
+  versionLoadMs: number;
+  evaluatorMs: number;
+  policyLookupMs: number;
+  responderSnapshotMs: number;
   result: Evaluation | null;
   fallbackReason: string | null;
   shadowDifferent: boolean;
@@ -60,6 +64,10 @@ export async function prepareAutomation(
     evaluationAt,
     durationMs: 0,
     extractionMs: 0,
+    versionLoadMs: 0,
+    evaluatorMs: 0,
+    policyLookupMs: 0,
+    responderSnapshotMs: 0,
     result: null,
     fallbackReason: null,
     shadowDifferent: false,
@@ -77,6 +85,7 @@ export async function prepareAutomation(
   });
   const engineStartedAt = performance.now();
   try {
+    const versionLoadStart = performance.now();
     if (!config.activeVersion) throw new Error('VERSION_MISSING');
     const cached = getCachedCompiledVersion(config.activeVersion.id);
     const stored = cached
@@ -87,6 +96,7 @@ export async function prepareAutomation(
         });
     if (!cached && !stored) throw new Error('VERSION_MISSING');
     const version = cached ?? loadCompiledVersion(stored!);
+    runtime.versionLoadMs = performance.now() - versionLoadStart;
     const guard = () => {
       if (performance.now() - evalStart > LIMITS.evaluationMs)
         throw new Error('EVALUATION_TIMEOUT');
@@ -112,13 +122,16 @@ export async function prepareAutomation(
       })
     );
     guard();
+    const pureEvalStart = performance.now();
     const result = evaluateAutomation({
       version,
       initialContext: context,
       evaluationAt: evaluationAt.toISOString(),
       guard,
     });
+    runtime.evaluatorMs = performance.now() - pureEvalStart;
     guard();
+    const policyLookupStart = performance.now();
     const policy =
       result.outcome.type === 'ESCALATION_POLICY'
         ? await tx.escalationPolicy.findUnique({
@@ -126,6 +139,7 @@ export async function prepareAutomation(
             select: { id: true, name: true },
           })
         : service?.policy;
+    runtime.policyLookupMs = performance.now() - policyLookupStart;
     if (result.outcome.type === 'ESCALATION_POLICY' && !policy) throw new Error('POLICY_MISSING');
     runtime.result = result;
     runtime.policyId = result.outcome.type === 'NO_ESCALATION' ? null : (policy?.id ?? null);
@@ -250,9 +264,13 @@ export async function persistAutomation(
     destinationNames,
   };
   if (runtime.mode === 'LIVE') {
+    const snapshotStart = performance.now();
     const responderPolicy = runtime.policyId
       ? await captureResponderSnapshot(tx, runtime.policyId)
       : null;
+    if (runtime.policyId) {
+      runtime.responderSnapshotMs = performance.now() - snapshotStart;
+    }
     await tx.incidentAutomationDecision.create({
       data: {
         incidentId,
@@ -387,6 +405,16 @@ export function recordAutomationMetrics(runtime: RuntimeEvaluation | null) {
     runtime.extractionMs,
     {}
   );
+  observeOperationalHistogram('opsknight_automation_version_load_ms', runtime.versionLoadMs, {});
+  observeOperationalHistogram('opsknight_automation_evaluator_ms', runtime.evaluatorMs, {});
+  observeOperationalHistogram('opsknight_automation_policy_lookup_ms', runtime.policyLookupMs, {});
+  if (runtime.responderSnapshotMs > 0) {
+    observeOperationalHistogram(
+      'opsknight_automation_responder_snapshot_ms',
+      runtime.responderSnapshotMs,
+      {}
+    );
+  }
   if (runtime.mode === 'SHADOW' && runtime.shadowDifferent)
     addOperationalMetric('opsknight_automation_shadow_difference_total', 1, {
       outcome: runtime.result?.outcome.type ?? 'FALLBACK',
