@@ -78,6 +78,13 @@ it('does not oversubscribe a rate window when eight allocation snapshots overlap
   const query = Prisma.sql(strings, ...allocation!.values);
   const window = await db.providerQuotaWindow.findFirstOrThrow();
   const gateClient = new PrismaClient();
+  // The default CI pool has five connections; this race requires eight statements
+  // to establish their snapshots simultaneously, independently of the observer.
+  const allocationUrl = new URL(process.env.DATABASE_URL!);
+  allocationUrl.searchParams.set('connection_limit', '8');
+  const allocationClient = new PrismaClient({
+    datasources: { db: { url: allocationUrl.toString() } },
+  });
   let releaseGate!: () => void;
   let announceGate!: () => void;
   const release = new Promise<void>(resolve => {
@@ -97,9 +104,9 @@ it('does not oversubscribe a rate window when eight allocation snapshots overlap
   );
   await ready;
   const allocations = Array.from({ length: 8 }, () =>
-    db.$queryRaw<Array<{ granted: number }>>(query)
+    allocationClient.$queryRaw<Array<{ granted: number }>>(query)
   );
-  const completed = Promise.all(allocations);
+  const completed = Promise.allSettled(allocations);
   try {
     await expect
       .poll(
@@ -115,7 +122,11 @@ it('does not oversubscribe a rate window when eight allocation snapshots overlap
       .toBe(8);
     releaseGate();
     await gate;
-    const granted = (await completed).flat().reduce((total, row) => total + row.granted, 0);
+    const results = await completed;
+    expect(results.every(result => result.status === 'fulfilled')).toBe(true);
+    const granted = results
+      .flatMap(result => (result.status === 'fulfilled' ? result.value : []))
+      .reduce((total, row) => total + row.granted, 0);
     expect(granted).toBe(7);
     expect(
       (await db.providerQuotaWindow.findUniqueOrThrow({ where: { id: window.id } })).globalUsed
@@ -123,6 +134,6 @@ it('does not oversubscribe a rate window when eight allocation snapshots overlap
   } finally {
     releaseGate();
     await Promise.allSettled([gate, completed]);
-    await gateClient.$disconnect();
+    await Promise.all([gateClient.$disconnect(), allocationClient.$disconnect()]);
   }
 }, 30_000);
