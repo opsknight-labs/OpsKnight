@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { executeAttempt } from '../../../agent/src/executor';
+import { executeAttempt, sliceUtf8Safe } from '../../../agent/src/executor';
 import type { AgentPolicy, ClaimedAttempt } from '../../../agent/src/types';
 
 const policy: AgentPolicy = {
@@ -126,5 +126,29 @@ describe('runbook Agent executor', () => {
     const execution = executeAttempt(write, policy, controller.signal);
     setTimeout(() => controller.abort('LEASE_LOST'), 50);
     expect(await execution).toMatchObject({ status: 'UNKNOWN', errorCode: 'LEASE_LOST' });
+  });
+
+  it('slices Unicode text safely without splitting surrogate pairs or multibyte UTF-8 sequences', () => {
+    // 4-byte emojis, 3-byte CJK, 2-byte Cyrillic
+    const unicodeString = 'Logs: 🚨 Server failure! 日本語ログ Привет мир 🔥🔥🔥';
+    const totalBytes = Buffer.byteLength(unicodeString, 'utf8');
+
+    // Safe decoder with fatal: true throws on any malformed sequence
+    const decoder = new TextDecoder('utf-8', { fatal: true });
+
+    // Test slicing across various byte boundaries
+    for (let targetBytes = 1; targetBytes <= totalBytes; targetBytes++) {
+      const sliced = sliceUtf8Safe(unicodeString, targetBytes);
+      const byteLength = Buffer.byteLength(sliced, 'utf8');
+      expect(byteLength).toBeLessThanOrEqual(targetBytes);
+
+      // Verify the sliced string encodes to completely valid UTF-8 without errors or replacement chars
+      const encoded = Buffer.from(sliced, 'utf8');
+      expect(() => decoder.decode(encoded)).not.toThrow();
+      expect(sliced).not.toContain('\uFFFD');
+    }
+
+    // Full string preserved when limit exceeds byte length
+    expect(sliceUtf8Safe(unicodeString, totalBytes + 100)).toBe(unicodeString);
   });
 });

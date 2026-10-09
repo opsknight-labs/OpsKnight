@@ -7,7 +7,7 @@ import { dirname } from 'node:path';
 import { AgentApiError, AgentClient, enrollAgent } from './client';
 import { LeaseAuthority } from './lease';
 import { verifyExecutionEnvelope, parseTrustedSigningKeys } from './envelope';
-import { executeAttempt } from './executor';
+import { executeAttempt, sliceUtf8Safe } from './executor';
 import { probeCapabilities } from './capabilities';
 import { assertPolicyAllows, loadPolicy } from './policy';
 import { ResultSpool } from './spool';
@@ -119,24 +119,23 @@ async function uploadOutput(
   output: string
 ): Promise<string | undefined> {
   if (Buffer.byteLength(output) <= 32_768) return undefined;
-  const rawBuffer = Buffer.from(output);
-  let content = gzipSync(rawBuffer);
-  let truncated = output.endsWith('[output truncated]');
+  let text = output;
+  let content = gzipSync(Buffer.from(text, 'utf8'));
+  let truncated = text.endsWith('[output truncated]');
   const MAX_ARTIFACT_SIZE = 10 * 1024 * 1024;
   if (content.length > MAX_ARTIFACT_SIZE) {
-    let sliceLen = Math.floor(rawBuffer.length * (9.5 * 1024 * 1024 / content.length));
-    while (sliceLen > 0) {
-      const sliced = Buffer.concat([
-        rawBuffer.subarray(0, sliceLen),
-        Buffer.from('\n[output truncated]'),
-      ]);
-      const compressed = gzipSync(sliced);
+    let targetRatio = (9.5 * 1024 * 1024) / content.length;
+    let maxBytes = Math.floor(Buffer.byteLength(text, 'utf8') * targetRatio);
+    while (maxBytes > 0) {
+      const sliced = sliceUtf8Safe(text, maxBytes);
+      const withMarker = `${sliced}\n[output truncated]`;
+      const compressed = gzipSync(Buffer.from(withMarker, 'utf8'));
       if (compressed.length <= MAX_ARTIFACT_SIZE) {
         content = compressed;
         truncated = true;
         break;
       }
-      sliceLen = Math.floor(sliceLen * 0.9);
+      maxBytes = Math.floor(maxBytes * 0.9);
     }
     if (content.length > MAX_ARTIFACT_SIZE) return undefined;
   }

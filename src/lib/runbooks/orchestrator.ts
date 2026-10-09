@@ -379,7 +379,7 @@ export async function startRunbookExecution(input: {
       const recentFailures = await tx.runbookExecution.count({
         where: {
           serviceId: resolvedServiceId,
-          status: 'FAILED',
+          status: { in: ['FAILED', 'TIMED_OUT'] },
           completedAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
         },
       });
@@ -1102,20 +1102,49 @@ export async function advanceExecution(executionId: string): Promise<void> {
         where: { executionStep: { executionId }, status: 'RUNNING' },
       });
       if (active === 0) {
-        const timedOut = await tx.runbookExecution.updateMany({
-          where: {
-            id: executionId,
-            status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
-          },
-          data: { status: 'TIMED_OUT', completedAt: new Date(), failureCode: 'EXECUTION_TIMEOUT' },
+        const hasUnknown = await tx.runbookExecutionStep.count({
+          where: { executionId, status: 'UNKNOWN' },
         });
-        if (timedOut.count === 1) {
-          await addIncidentRunbookEvent(
-            tx,
-            execution.incidentId,
-            'RUNBOOK_FAILED',
-            'Runbook execution timed out.'
-          );
+        if (hasUnknown > 0) {
+          const failed = await tx.runbookExecution.updateMany({
+            where: {
+              id: executionId,
+              status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
+            },
+            data: {
+              status: 'FAILED',
+              completedAt: new Date(),
+              failureCode: 'UNKNOWN_OUTCOME',
+              failureMessage:
+                'Execution timed out while one or more write steps had unverified outcomes.',
+            },
+          });
+          if (failed.count === 1) {
+            await addIncidentRunbookEvent(
+              tx,
+              execution.incidentId,
+              'RUNBOOK_FAILED',
+              'Runbook execution timed out with an unverified write outcome.'
+            );
+            await finalizeVerificationEvidence(tx, executionId);
+          }
+        } else {
+          const timedOut = await tx.runbookExecution.updateMany({
+            where: {
+              id: executionId,
+              status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
+            },
+            data: { status: 'TIMED_OUT', completedAt: new Date(), failureCode: 'EXECUTION_TIMEOUT' },
+          });
+          if (timedOut.count === 1) {
+            await addIncidentRunbookEvent(
+              tx,
+              execution.incidentId,
+              'RUNBOOK_FAILED',
+              'Runbook execution timed out.'
+            );
+            await finalizeVerificationEvidence(tx, executionId);
+          }
         }
       }
     });

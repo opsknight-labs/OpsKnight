@@ -1266,10 +1266,12 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       ],
     };
     const target = await createAgentTarget(definition);
+    const incident = await createTestIncident('Late result recovery', target.service.id);
     const execution = await startRunbookExecution({
       runbookId: target.runbook.id,
       serviceId: target.service.id,
       bindingId: target.binding.id,
+      incidentId: incident.id,
     });
     await advanceExecution(execution.id);
     const claim = await claimAgentAttempt(target.agent.id);
@@ -1318,6 +1320,29 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         select: { status: true },
       })
     ).toMatchObject({ status: 'SUCCEEDED' });
+
+    const auditLog = await testPrisma.auditLog.findFirst({
+      where: {
+        action: 'runbook.execution.late_result_reconciled',
+        entityId: execution.id,
+      },
+    });
+    expect(auditLog).not.toBeNull();
+    const details = auditLog?.details as Record<string, unknown>;
+    expect(details?.metadata).toMatchObject({
+      attemptId: claim!.attemptId,
+      agentId: target.agent.id,
+      recoveredStatus: 'SUCCEEDED',
+    });
+
+    const incidentEvent = await testPrisma.incidentEvent.findFirst({
+      where: {
+        incidentId: incident.id,
+        type: 'RUNBOOK_STEP_COMPLETED',
+      },
+    });
+    expect(incidentEvent).not.toBeNull();
+    expect(incidentEvent?.message).toContain('Late Agent result reconciled');
   });
 
   it('rejects a resolved target that becomes option-like after interpolation', async () => {
@@ -2325,5 +2350,111 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     });
     expect(finalExecution.status).toBe('FAILED');
     expect(finalExecution.failureCode).toBe('UNKNOWN_OUTCOME');
+  });
+
+  it('marks in-flight local write HTTP as UNKNOWN and parent execution as FAILED on deadline timeout', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'http_write_timeout',
+          name: 'HTTP Write Step Timeout',
+          type: 'HTTP',
+          riskClass: 'IDEMPOTENT_WRITE',
+          config: { url: 'https://example.com/api/restart', method: 'POST' },
+        },
+      ],
+    });
+    const execution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+    });
+
+    const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id, stepKey: 'http_write_timeout' },
+    });
+    await testPrisma.runbookExecutionStep.update({
+      where: { id: step.id },
+      data: { status: 'RUNNING', startedAt: new Date() },
+    });
+
+    // Simulate execution deadline reached
+    await testPrisma.runbookExecution.update({
+      where: { id: execution.id },
+      data: { deadlineAt: new Date(Date.now() - 5000) },
+    });
+
+    await advanceExecution(execution.id);
+
+    const updatedExecution = await testPrisma.runbookExecution.findUniqueOrThrow({
+      where: { id: execution.id },
+    });
+    expect(updatedExecution.status).toBe('FAILED');
+    expect(updatedExecution.failureCode).toBe('UNKNOWN_OUTCOME');
+    expect(updatedExecution.completedAt).not.toBeNull();
+
+    const updatedStep = await testPrisma.runbookExecutionStep.findUniqueOrThrow({
+      where: { id: step.id },
+    });
+    expect(updatedStep.status).toBe('UNKNOWN');
+    expect(updatedStep.errorCode).toBe('TIMED_OUT_WITH_UNKNOWN_OUTCOME');
+    expect(updatedStep.completedAt).not.toBeNull();
+
+    await assertTerminalExecutionInvariants(execution.id);
+  });
+
+  it('trips the automatic-remediation circuit breaker on repeated timeouts while permitting operator manual execution', async () => {
+    const target = await createAgentTarget({
+      steps: [
+        {
+          key: 'auto_step',
+          name: 'Auto Remediation Step',
+          type: 'SYSTEMD',
+          riskClass: 'IDEMPOTENT_WRITE',
+          config: { action: 'restart', unit: 'app.service' },
+        },
+      ],
+    });
+
+    // Create 3 timed-out executions for this service within the 15-minute window
+    for (let i = 0; i < 3; i++) {
+      const exec = await startRunbookExecution({
+        runbookId: target.runbook.id,
+        bindingId: target.binding.id,
+        serviceId: target.service.id,
+      });
+      await testPrisma.runbookExecutionStep.updateMany({
+        where: { executionId: exec.id },
+        data: { status: 'CANCELLED', completedAt: new Date() },
+      });
+      await testPrisma.runbookExecution.update({
+        where: { id: exec.id },
+        data: {
+          status: 'TIMED_OUT',
+          completedAt: new Date(),
+          failureCode: 'EXECUTION_TIMEOUT',
+        },
+      });
+    }
+
+    // 4th automatic run (no triggeredByUserId) should be rejected by the circuit breaker
+    await expect(
+      startRunbookExecution({
+        runbookId: target.runbook.id,
+        bindingId: target.binding.id,
+        serviceId: target.service.id,
+      })
+    ).rejects.toThrow(/AUTOMATION_CIRCUIT_OPEN: recent runbook failures require operator review/);
+
+    // Operator manual execution (with triggeredByUserId) should bypass the circuit breaker and succeed
+    const manualExecution = await startRunbookExecution({
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+      triggeredByUserId: target.actor.id,
+    });
+    expect(manualExecution).toBeDefined();
+    expect(manualExecution.id).toBeDefined();
+    expect(manualExecution.triggeredByUserId).toBe(target.actor.id);
   });
 });

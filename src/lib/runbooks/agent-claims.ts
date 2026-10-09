@@ -3,6 +3,7 @@ import 'server-only';
 import crypto from 'crypto';
 import { Prisma, type RunbookStepType } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { emitAuditEvent } from '@/lib/audit';
 import {
   agentArtifactSchema,
   agentJobResultSchema,
@@ -883,6 +884,36 @@ export async function submitAgentResult(agentId: string, raw: AgentJobResultInpu
             completedAt: null,
             failureCode: null,
             failureMessage: null,
+          },
+        });
+      }
+      await emitAuditEvent(
+        {
+          action: 'runbook.execution.late_result_reconciled',
+          source: 'AUTOMATION',
+          target: { type: 'RUNBOOK_EXECUTION', id: attempt.executionStep.executionId },
+          actor: { type: 'SYSTEM', id: agentId },
+          metadata: {
+            attemptId: attempt.id,
+            stepId: attempt.executionStepId,
+            stepKey: attempt.executionStep.stepKey,
+            agentId,
+            previousAttemptStatus: attempt.status,
+            previousStepStatus: attempt.executionStep.status,
+            recoveredStatus: stepStatus,
+            producedAt: producedAt?.toISOString(),
+            outputArtifactId: input.outputArtifactId ?? null,
+            cancellationRequested,
+          },
+        },
+        tx
+      );
+      if (attempt.executionStep.execution.incidentId) {
+        await tx.incidentEvent.create({
+          data: {
+            incidentId: attempt.executionStep.execution.incidentId,
+            type: 'RUNBOOK_STEP_COMPLETED',
+            message: `Late Agent result reconciled for runbook step "${attempt.executionStep.name}": recovered outcome is ${stepStatus}.`,
           },
         });
       }
