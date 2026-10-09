@@ -54,9 +54,9 @@ describe('automation concurrency: policy modification racing with captureRespond
       include: { steps: true },
     });
 
-    // Run 10 concurrent rounds where one transaction mutates policy steps
+    // Run 50 concurrent rounds where one transaction mutates policy steps
     // while parallel transactions capture the responder snapshot.
-    for (let round = 0; round < 10; round++) {
+    for (let round = 0; round < 50; round++) {
       const mutatePromise = db.$transaction(async tx => {
         // Clear and rebuild steps
         await tx.escalationRuleCondition.deleteMany({

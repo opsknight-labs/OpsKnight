@@ -30,17 +30,30 @@ export const responderSnapshotSchema = z.object({
 });
 
 export async function captureResponderSnapshot(client: Prisma.TransactionClient, policyId: string) {
-  const policy = await client.escalationPolicy.findUnique({
-    where: { id: policyId },
-    select: {
-      id: true,
-      name: true,
-      steps: {
-        include: { conditions: { select: { field: true, operator: true, values: true } } },
-        orderBy: { stepOrder: 'asc' },
-      },
-    },
-  });
+  // Prisma's relation reads use multiple statements under READ COMMITTED. A
+  // concurrent edit can otherwise pair old steps with new/deleted conditions.
+  // One SQL statement captures every level from the same PostgreSQL snapshot.
+  const rows = await client.$queryRaw<
+    Array<{ policy: { id: string; name: string; steps: unknown[] } }>
+  >`
+    SELECT jsonb_build_object(
+      'id', p.id, 'name', p.name,
+      'steps', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+          'id', r.id, 'policyId', r."policyId", 'delayMinutes', r."delayMinutes",
+          'stepOrder', r."stepOrder", 'targetType', r."targetType",
+          'targetUserId', r."targetUserId", 'targetTeamId', r."targetTeamId",
+          'targetScheduleId', r."targetScheduleId",
+          'notificationChannels', r."notificationChannels", 'notifyOnlyTeamLead', r."notifyOnlyTeamLead",
+          'conditions', COALESCE((
+            SELECT jsonb_agg(jsonb_build_object('field', c.field, 'operator', c.operator, 'values', c.values) ORDER BY c.id)
+            FROM "EscalationRuleCondition" c WHERE c."ruleId"=r.id
+          ), '[]'::jsonb)
+        ) ORDER BY r."stepOrder") FROM "EscalationRule" r WHERE r."policyId"=p.id
+      ), '[]'::jsonb)
+    ) AS policy FROM "EscalationPolicy" p WHERE p.id=${policyId}
+  `;
+  const policy = rows[0]?.policy;
   if (!policy) throw new Error('Pinned escalation policy is missing');
   if (policy.steps.length > MAX_ESCALATION_STEPS) {
     throw new Error(
