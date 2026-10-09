@@ -63,7 +63,7 @@ Selected channels are an allow-list. Delivery also respects recipient preference
 
 ## 3. Add fallbacks and verify timing
 
-A practical starting sequence is primary schedule at `0`, backup team at `5`, and incident commander at `10`. Each value is the wait before that timeline position; the policy header shows total duration. OpsKnight advances while the incident remains unacknowledged.
+A practical starting sequence is primary schedule at `0`, backup team at `5`, and incident commander at `10`. Each value is the wait before a reachable step at that timeline position; the policy header shows the maximum total duration. Steps whose conditions fail or whose targets have no eligible responders are skipped immediately, without waiting their configured delay. OpsKnight advances while the incident remains unacknowledged.
 
 Drag steps or use move controls to reorder them. Delays belong to timeline positions during reorder, so re-check timing after every move. Edit a step to change its target, conditions, channels, or delay.
 

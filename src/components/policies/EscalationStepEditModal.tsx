@@ -148,7 +148,8 @@ export default function EscalationStepEditModal({
             Edit Escalation Step {step.stepOrder + 1}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Configure who gets notified at this step and the wait time before escalation.
+            Configure who gets notified and the wait before this step. Conditions that fail or
+            targets without eligible responders skip immediately.
           </DialogDescription>
         </DialogHeader>
 

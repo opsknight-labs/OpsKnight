@@ -1,7 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
+import {
+  lockResponderPolicy,
+  assertResponderPolicySnapshotSafe,
+} from '@/lib/escalation/automation-snapshot';
 import { movePolicyStep, reorderPolicySteps, updatePolicyStep } from '@/app/(app)/policies/actions';
 import { ESCALATION_STEP_CHANNELS_SUBMITTED } from '@/lib/escalation/policy-validation';
+
+vi.mock('@/lib/escalation/automation-snapshot', () => ({
+  lockResponderPolicy: vi.fn(),
+  assertResponderPolicySnapshotSafe: vi.fn(),
+}));
 
 vi.mock('@/lib/rbac', () => ({
   assertAdmin: vi.fn().mockResolvedValue({ id: 'admin-1', role: 'ADMIN' }),
@@ -41,6 +50,8 @@ describe('Policy Step Actions', () => {
         return arg(prismaMock);
       }
     );
+    vi.mocked(lockResponderPolicy).mockResolvedValue(undefined);
+    vi.mocked(assertResponderPolicySnapshotSafe).mockResolvedValue({ id: 'pol-1', name: 'Policy', steps: [] });
     prismaMock.user.count.mockResolvedValue(1);
     prismaMock.team.count.mockResolvedValue(1);
     prismaMock.onCallSchedule.count.mockResolvedValue(1);

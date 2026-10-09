@@ -148,4 +148,29 @@ describe('responderSnapshotSchema and captureResponderSnapshot bounds', () => {
       `Referenced escalation policy "Policy With 60 Steps" exceeds maximum step limit of ${MAX_ESCALATION_STEPS}`
     );
   });
+  it('publication validates the complete responder snapshot byte size, not only step count', async () => {
+    const tx = {
+      escalationPolicy: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: 'large', name: 'Large policy', _count: { steps: 0 } }]),
+        findUnique: vi.fn().mockResolvedValue({ id: 'large', name: 'x'.repeat(70000), steps: [] }),
+      },
+    } as unknown as Prisma.TransactionClient;
+    const compiled = {
+      schemaVersion: 1,
+      fields: [],
+      rules: [
+        {
+          id: 'route',
+          name: 'Route',
+          phase: 'ROUTE',
+          enabled: true,
+          conditions: [],
+          actions: [{ type: 'USE_ESCALATION_POLICY', policyId: 'large' }],
+        },
+      ],
+    } as CompiledSnapshot;
+    await expect(validateReferences(tx, 'service', compiled)).rejects.toThrow('byte size limit');
+  });
 });

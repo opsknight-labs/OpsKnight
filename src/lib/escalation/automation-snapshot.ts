@@ -56,3 +56,10 @@ export async function captureResponderSnapshot(client: Prisma.TransactionClient,
   }
   return parsed;
 }
+
+/** Serialize policy mutations before checking the resulting complete definition. */
+export async function lockResponderPolicy(client: Prisma.TransactionClient, policyId: string) {
+  await client.$queryRaw`SELECT id FROM "EscalationPolicy" WHERE id=${policyId} FOR UPDATE`;
+}
+
+export const assertResponderPolicySnapshotSafe = captureResponderSnapshot;

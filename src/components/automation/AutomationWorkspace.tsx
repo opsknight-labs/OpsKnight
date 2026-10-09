@@ -829,7 +829,18 @@ export default function AutomationWorkspace({
             >
               Review recovered draft
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setLocalCopy(null)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                try {
+                  localStorage.removeItem(`automation-draft:${serviceId}`);
+                } catch {
+                  /* Browser storage may be unavailable. */
+                }
+                setLocalCopy(null);
+              }}
+            >
               Dismiss
             </Button>
           </div>

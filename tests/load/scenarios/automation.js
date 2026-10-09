@@ -28,7 +28,9 @@ export const options = {
       rate: Number(__ENV.AUTOMATION_RPS || 20),
       timeUnit: '1s',
       duration: __ENV.AUTOMATION_DURATION || '30s',
-      preAllocatedVUs: 20,
+      // Allocate the existing maximum up front so cold VU initialization cannot
+      // drop arrivals during sustained certification. The offered rate is unchanged.
+      preAllocatedVUs: 100,
       maxVUs: 100,
     },
   },

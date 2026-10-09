@@ -5,7 +5,13 @@ import { getAutomationArea, automationAction } from '@/app/(app)/services/[id]/a
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    return jsonOk(await getAutomationArea(id, req.nextUrl.searchParams.get('area') ?? 'overview'));
+    const pageText = req.nextUrl.searchParams.get('page') ?? '1';
+    const page = Number(pageText);
+    if (!Number.isSafeInteger(page) || page < 1 || page > 10000)
+      return jsonError('Invalid page', 400);
+    return jsonOk(
+      await getAutomationArea(id, req.nextUrl.searchParams.get('area') ?? 'overview', page)
+    );
   } catch {
     return jsonError('Automation access denied', 403);
   }

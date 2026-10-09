@@ -69,13 +69,14 @@ describe('V2 announcement fanout queue semantics', () => {
         status: 'PENDING_V2',
         scheduledAt: retryAt,
         startedAt: null,
+        claimToken: null,
         failedAt: null,
         error: null,
       },
     });
-    expect(
-      mocks.update.mock.calls.some(([call]) => call?.data?.status === 'CANCELLED')
-    ).toBe(false);
+    expect(mocks.update.mock.calls.some(([call]) => call?.data?.status === 'CANCELLED')).toBe(
+      false
+    );
   });
 
   it('terminally cancels a stale V2 generation', async () => {
@@ -105,6 +106,7 @@ describe('V2 announcement fanout queue semantics', () => {
         status: 'CANCELLED',
         completedAt: expect.any(Date),
         startedAt: null,
+        claimToken: null,
         error: 'Announcement generation was superseded',
       },
     });

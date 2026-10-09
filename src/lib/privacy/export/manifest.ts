@@ -20,6 +20,7 @@ export const EXCLUDED_DOMAINS = [
   'status-page-subscribers (no verified user relation)',
   'external identity/delivery/ChatOps/ticketing provider data',
   'application and infrastructure logs',
+  'service-automation context and responder history (operator-defined identifiers; manual subject attribution required)',
   'free-text fields outside the domains above (e.g. incident descriptions)',
 ] as const;
 

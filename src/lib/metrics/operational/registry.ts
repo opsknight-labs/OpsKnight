@@ -28,6 +28,7 @@ const FORBIDDEN_LABELS = new Set([
 ]);
 
 export const OPERATIONAL_METRICS = [
+  { name: 'opsknight_automation_decision_bytes', help: 'UTF-8 bytes in committed immutable Automation decision explanations', kind: 'histogram', labels: [], scope: 'counter', estimatedMaxSeries: 12, buckets: [1024, 4096, 16384, 65536, 131072, 262144] },
   { name: 'opsknight_automation_observation_queue_depth', help: 'Pending or processing Automation observation jobs', kind: 'gauge', labels: [], scope: 'cluster_snapshot', estimatedMaxSeries: 1 },
   { name: 'opsknight_automation_observation_oldest_age_seconds', help: 'Age of oldest unfinished Automation observation job', kind: 'gauge', labels: [], scope: 'cluster_snapshot', estimatedMaxSeries: 1 },
   { name: 'opsknight_automation_shadow_rollup_lag_seconds', help: 'Age of oldest unfinished Shadow rollup job', kind: 'gauge', labels: [], scope: 'cluster_snapshot', estimatedMaxSeries: 1 },

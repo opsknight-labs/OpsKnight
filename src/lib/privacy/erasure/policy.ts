@@ -309,7 +309,7 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
     blocking: false,
     manualReviewRequired: true,
     notes:
-      'Covers names/emails embedded in incident notes, postmortems and templates written by others (not captured by the author-count domains above), Notification message bodies / encrypted payloads / provider-side copies, AuditLog details JSON, and application/external log sinks. These surfaces are undiscoverable by ID — every erasure therefore requires explicit operator acknowledgement that any remaining free-text/log/external copies have been reviewed before the request is closed. See incident-content / audit-and-application-logs / notifications PARTIAL dispositions in src/lib/privacy/registry.ts.',
+      'Includes operator-defined Automation context and responder snapshots in IncidentAutomationDecision, AutomationTrace and AutomationContextObservation; these have no verified subject relation and require explicit export/minimization review while preserving immutable routing evidence. Covers names/emails embedded in incident notes, postmortems and templates written by others (not captured by the author-count domains above), Notification message bodies / encrypted payloads / provider-side copies, AuditLog details JSON, and application/external log sinks. These surfaces are undiscoverable by ID — every erasure therefore requires explicit operator acknowledgement that any remaining free-text/log/external copies have been reviewed before the request is closed. See incident-content / audit-and-application-logs / notifications PARTIAL dispositions in src/lib/privacy/registry.ts.',
   },
 
   // --- Retention holds: REVIEW (blocking if active holds exist) ---

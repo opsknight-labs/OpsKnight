@@ -116,6 +116,67 @@ describe('service automation transaction certification', () => {
   afterAll(async () => {
     await db.$disconnect();
   });
+  it('falls back before incident creation when a published route becomes snapshot-invalid', async () => {
+    const policy = await db.escalationPolicy.create({ data: { name: 'Later oversized route' } });
+    const definition: Snapshot = {
+      ...emptySnapshot,
+      rules: [
+        {
+          id: 'route',
+          name: 'Pinned route',
+          phase: 'ROUTE',
+          enabled: true,
+          conditions: [],
+          actions: [{ type: 'USE_ESCALATION_POLICY', policyId: policy.id }],
+        },
+      ],
+    };
+    const { service, actor } = await setup(definition);
+    await db.escalationRule.createMany({
+      data: Array.from({ length: 51 }, (_, stepOrder) => ({
+        policyId: policy.id,
+        stepOrder,
+        delayMinutes: 0,
+        targetType: 'USER' as const,
+        targetUserId: actor.id,
+        notificationChannels: [],
+      })),
+    });
+    await ingest(service.id);
+    const incident = await db.incident.findFirstOrThrow({ where: { serviceId: service.id } });
+    const decision = await db.incidentAutomationDecision.findUniqueOrThrow({
+      where: { incidentId: incident.id },
+    });
+    expect(decision.routeType).toBe('SERVICE_DEFAULT');
+    expect(decision.fallbackReason).toBe('VERSION_INVALID');
+    expect(decision.escalationPolicyId).toBeNull();
+    expect(decision.basePriority).toBe(decision.finalPriority);
+  });
+
+  it('rolls back Shadow ingestion atomically when diagnostic persistence fails and succeeds on replay', async () => {
+    const { service } = await setup(snapshot, 'SHADOW');
+    await db.$executeRawUnsafe(
+      `CREATE FUNCTION automation_cert_reject_trace() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected Shadow trace failure'; END $$`
+    );
+    await db.$executeRawUnsafe(
+      `CREATE TRIGGER automation_cert_reject_trace BEFORE INSERT ON "AutomationTrace" FOR EACH ROW EXECUTE FUNCTION automation_cert_reject_trace()`
+    );
+    try {
+      await expect(ingest(service.id)).rejects.toThrow();
+      expect(await db.incident.count({ where: { serviceId: service.id } })).toBe(0);
+      expect(await db.automationTrace.count({ where: { serviceId: service.id } })).toBe(0);
+      expect(await db.incidentAutomationDecision.count({ where: { serviceId: service.id } })).toBe(
+        0
+      );
+    } finally {
+      await db.$executeRawUnsafe('DROP TRIGGER automation_cert_reject_trace ON "AutomationTrace"');
+      await db.$executeRawUnsafe('DROP FUNCTION automation_cert_reject_trace()');
+    }
+    await ingest(service.id);
+    expect(await db.incident.count({ where: { serviceId: service.id } })).toBe(1);
+    expect(await db.automationTrace.count({ where: { serviceId: service.id } })).toBe(1);
+  });
+
   it('requires a separate LIVE override for Shadow errors even when no-traffic acknowledgement is supplied', async () => {
     const { service, actor, version } = await setup(emptySnapshot, 'SHADOW');
     await db.automationShadowAggregate.create({

@@ -8,6 +8,33 @@ import type { PersonalDataDomain } from './types';
  */
 export const personalDataRegistry = [
   {
+    domain: 'service-automation',
+    models: ['IncidentAutomationDecision', 'AutomationTrace', 'AutomationContextObservation'],
+    fields: [
+      'summary.normalization',
+      'summary.inputContext',
+      'summary.enrichedContext',
+      'summary.writes',
+      'summary.responderPolicy',
+      'detail',
+      'rawPreview',
+      'normalizedValue',
+    ],
+    purpose: ['Incident routing evidence', 'automation diagnostics', 'context discovery'],
+    classifications: ['INTERNAL', 'PERSONAL', 'SENSITIVE'],
+    locations: ['DATABASE'],
+    retention: {
+      current:
+        'Decisions follow incident lifetime; traces and observations use UI-configured retention (90 days by default).',
+      target:
+        'Preserve routing/audit integrity; review customer identifiers for approved minimization and retention holds.',
+    },
+    discoverable: 'NOT_COUNTED',
+    notes: [
+      'Operator-defined fields can contain customer identifiers without a verified user relation. Automated subject export and erasure cannot attribute these safely. Every privacy request requires manual review of this domain; never mutate immutable responder history silently.',
+    ],
+  },
+  {
     domain: 'user-profile',
     models: ['User', 'UserAvatar'],
     fields: [
