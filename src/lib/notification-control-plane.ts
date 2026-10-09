@@ -3,6 +3,7 @@ import 'server-only';
 import crypto from 'crypto';
 import { recoverAbandonedNotificationDispatches } from './notification-dispatch-recovery';
 import {
+  UNFINISHED_DISPATCH_OUTCOMES,
   notificationClaimAvailable,
   notificationClaimDeadlineSql,
   startNotificationClaimHeartbeat,
@@ -2053,7 +2054,9 @@ async function deliverCentralNotificationOwned(
         scheduledAt: { lte: now },
         nextAttemptAt: { lte: now },
         ...notificationClaimAvailable(now),
-        deliveryAttempts: { none: { outcome: 'IN_FLIGHT', finishedAt: null } },
+        deliveryAttempts: {
+          none: { outcome: { in: UNFINISHED_DISPATCH_OUTCOMES }, finishedAt: null },
+        },
       },
       data: {
         status: 'PENDING',
@@ -3075,7 +3078,7 @@ export async function processCentralNotificationQueue(
       AND NOT EXISTS (
         SELECT 1 FROM "NotificationDeliveryAttempt" attempt
         WHERE attempt."notificationId" = "Notification".id
-          AND attempt.outcome = 'IN_FLIGHT' AND attempt."finishedAt" IS NULL
+          AND attempt.outcome IN (${Prisma.join(UNFINISHED_DISPATCH_OUTCOMES)}) AND attempt."finishedAt" IS NULL
       )
       AND ("expiresAt" IS NULL OR "expiresAt" > ${now})
       AND (
@@ -3114,7 +3117,7 @@ export async function processCentralNotificationQueue(
       AND NOT EXISTS (
         SELECT 1 FROM "NotificationDeliveryAttempt" attempt
         WHERE attempt."notificationId" = notification.id
-          AND attempt.outcome = 'IN_FLIGHT' AND attempt."finishedAt" IS NULL
+          AND attempt.outcome IN (${Prisma.join(UNFINISHED_DISPATCH_OUTCOMES)}) AND attempt."finishedAt" IS NULL
       )
       AND notification."attempts" < notification."maxAttempts"
       AND notification."scheduledAt" <= ${now}

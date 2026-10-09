@@ -238,19 +238,26 @@ async function processStatusCallback(
     if (completed) {
       targetOutcome = 'COMPLETED';
       // Completed can only transition from active, non-terminal states
-      allowedPreviousOutcomes = ['IN_FLIGHT', 'ACCEPTED', 'RINGING', 'IN-PROGRESS', 'ANSWERED'];
+      allowedPreviousOutcomes = [
+        'IN_FLIGHT',
+        'UNKNOWN',
+        'ACCEPTED',
+        'RINGING',
+        'IN-PROGRESS',
+        'ANSWERED',
+      ];
     } else if (connected) {
       targetOutcome = callStatus === 'in-progress' ? 'IN-PROGRESS' : 'ANSWERED';
       // Connected can only transition from pre-connection states
-      allowedPreviousOutcomes = ['IN_FLIGHT', 'ACCEPTED', 'RINGING'];
+      allowedPreviousOutcomes = ['IN_FLIGHT', 'UNKNOWN', 'ACCEPTED', 'RINGING'];
     } else if (failed) {
       targetOutcome = callStatus.toUpperCase();
       // Human/network terminal failures can only transition from pre-connection states
-      allowedPreviousOutcomes = ['IN_FLIGHT', 'ACCEPTED', 'RINGING'];
+      allowedPreviousOutcomes = ['IN_FLIGHT', 'UNKNOWN', 'ACCEPTED', 'RINGING'];
     } else {
       targetOutcome = callStatus === 'ringing' ? 'RINGING' : 'ACCEPTED';
       // Ringing can only transition from initial dispatch states
-      allowedPreviousOutcomes = ['IN_FLIGHT', 'ACCEPTED'];
+      allowedPreviousOutcomes = ['IN_FLIGHT', 'UNKNOWN', 'ACCEPTED'];
     }
 
     const attemptFilter = attempt?.id

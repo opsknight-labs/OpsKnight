@@ -178,9 +178,14 @@ it('a replaced claim cannot dispatch after its provider admission resumes', asyn
   }
 });
 
-it.each(['queue', 'inline'] as const)(
-  'does not replay an abandoned dispatch through %s delivery',
-  async path => {
+it.each([
+  ['queue', 'IN_FLIGHT'],
+  ['inline', 'IN_FLIGHT'],
+  ['queue', 'RINGING'],
+  ['inline', 'ACCEPTED'],
+] as const)(
+  'does not replay an abandoned dispatch through %s delivery with an unfinished %s receipt',
+  async (path, outcome) => {
     const row = await intent(`abandoned-${path}`);
     const old = new Date(Date.now() - 21000);
     await db.notification.update({
@@ -192,7 +197,7 @@ it.each(['queue', 'inline'] as const)(
         claimToken: 'lost-owner',
         claimHeartbeatAt: old,
         deliveryAttempts: {
-          create: { ordinal: 1, outcome: 'IN_FLIGHT', provider: 'default', startedAt: old },
+          create: { ordinal: 1, outcome, provider: 'default', startedAt: old },
         },
       },
     });
