@@ -1,6 +1,9 @@
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
-import { notificationClaimDeadlineSql } from './notification-claim-lease';
+import {
+  notificationClaimDeadlineSql,
+  UNFINISHED_DISPATCH_OUTCOMES,
+} from './notification-claim-lease';
 
 /** A dispatch marker without a receipt is ambiguous after its owner disappears.
  * Change the parent and attempt together before allowing any replacement send. */
@@ -23,7 +26,7 @@ export async function recoverAbandonedNotificationDispatches(
         AND EXISTS (
           SELECT 1 FROM "NotificationDeliveryAttempt" attempt
           WHERE attempt."notificationId" = notification.id
-            AND attempt.outcome = 'IN_FLIGHT' AND attempt."finishedAt" IS NULL
+            AND attempt.outcome IN (${Prisma.join(UNFINISHED_DISPATCH_OUTCOMES)}) AND attempt."finishedAt" IS NULL
         )
       ORDER BY notification."lastAttemptAt", notification.id
       LIMIT ${Math.max(1, Math.min(limit, 500))} FOR UPDATE OF notification SKIP LOCKED
@@ -41,7 +44,7 @@ export async function recoverAbandonedNotificationDispatches(
           "errorMessage" = 'The dispatch owner disappeared before recording the provider outcome.',
           "reconciliationDeadline" = ${reviewAt}
       FROM recovered WHERE attempt."notificationId" = recovered.id
-        AND attempt.outcome = 'IN_FLIGHT' AND attempt."finishedAt" IS NULL
+        AND attempt.outcome IN (${Prisma.join(UNFINISHED_DISPATCH_OUTCOMES)}) AND attempt."finishedAt" IS NULL
       RETURNING attempt.id
     ) SELECT id FROM recovered
   `);

@@ -5,6 +5,13 @@ import { logger } from './logger';
 export const LEGACY_NOTIFICATION_CLAIM_MS = 10 * 60_000;
 export const URGENT_NOTIFICATION_CLAIM_MS = 20_000;
 export const NOTIFICATION_CLAIM_HEARTBEAT_MS = 5_000;
+export const UNFINISHED_DISPATCH_OUTCOMES = [
+  'IN_FLIGHT',
+  'ACCEPTED',
+  'RINGING',
+  'IN-PROGRESS',
+  'ANSWERED',
+];
 const urgent = ['CRITICAL', 'TRANSACTIONAL'] as const;
 
 export function notificationClaimAvailable(now: Date): Prisma.NotificationWhereInput {
