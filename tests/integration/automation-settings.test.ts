@@ -1,6 +1,11 @@
 import { beforeEach, afterAll, expect, it, vi } from 'vitest';
-import { testPrisma as db, resetDatabase, createTestUser } from '../helpers/test-db';
-import { getAutomationSettings } from '@/lib/automation/settings';
+import {
+  testPrisma as db,
+  resetDatabase,
+  createTestUser,
+  createTestService,
+} from '../helpers/test-db';
+import { getAutomationSettings, getIngestionAutomationConfig } from '@/lib/automation/settings';
 import { processAutomationJob } from '@/lib/automation/jobs';
 import { saveDraft, publishVersion, changeMode } from '@/lib/automation/versioning';
 import { emptySnapshot } from '@/lib/automation/contract';
@@ -21,6 +26,35 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await db.$disconnect();
+});
+it('reads ingestion configuration without caching the shared emergency switch', async () => {
+  const service = await createTestService('Ingestion settings');
+  await db.serviceAutomationConfig.create({ data: { serviceId: service.id } });
+  expect(await getIngestionAutomationConfig(db, service.id)).toBeNull();
+  await saveAutomationSettings({
+    automationEnabled: true,
+    automationTraceRetentionDays: 90,
+    expectedRevision: 0,
+  });
+  expect(await getIngestionAutomationConfig(db, service.id)).toEqual({
+    mode: 'DISABLED',
+    activeVersionId: null,
+  });
+  // Invalid legacy configurations must still reach the VERSION_MISSING fallback.
+  await db.serviceAutomationConfig.update({
+    where: { serviceId: service.id },
+    data: { mode: 'SHADOW' },
+  });
+  expect(await getIngestionAutomationConfig(db, service.id)).toEqual({
+    mode: 'SHADOW',
+    activeVersionId: null,
+  });
+  await saveAutomationSettings({
+    automationEnabled: false,
+    automationTraceRetentionDays: 90,
+    expectedRevision: 1,
+  });
+  expect(await getIngestionAutomationConfig(db, service.id)).toBeNull();
 });
 it('defaults off with 90 days and ignores deployment environment values', async () => {
   vi.stubEnv('OPSKNIGHT_AUTOMATION_ENABLED', 'true');

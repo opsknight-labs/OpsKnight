@@ -1,4 +1,4 @@
-# Integrated replicas include their workers; give the application eight CPUs.
+# Integrated replicas include their workers; give the application nine CPUs.
 services:
   web:
-    cpuset: '0-1,6-11'
+    cpuset: '0-2,6-11'
