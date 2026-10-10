@@ -28,7 +28,7 @@ import {
   type RunbookInputInput,
 } from '@/lib/runbooks/schemas';
 import { cloneStepRecursively, newBuilderStep } from '@/lib/runbooks/builder';
-import { flattenSteps } from '@/lib/runbooks/definition';
+import { flattenSteps, referencedStepInputKeys } from '@/lib/runbooks/definition';
 import {
   ActionForm,
   FormSelect,
@@ -43,40 +43,11 @@ import { validateRunbook } from './builder/validation';
 
 export function collectAllReferencedInputKeys(def: RunbookDefinition): Set<string> {
   const referenced = new Set<string>();
-  const steps = flattenSteps(def);
-
-  for (const step of steps) {
-    // 1. Template references anywhere in config, name, or description
-    const serialized = JSON.stringify({
-      config: step.config,
-      name: step.name,
-      description: step.description,
-    });
-    const templateMatches = serialized.matchAll(/\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}/g);
-    for (const match of templateMatches) {
-      referenced.add(match[1]);
-    }
-
-    // 2. Condition field references: input.<key> or inputs.<key>
-    if (step.type === 'CONDITION' && typeof step.config?.field === 'string') {
-      const field = step.config.field.trim();
-      if (field.startsWith('input.')) {
-        referenced.add(field.slice(6));
-      } else if (field.startsWith('inputs.')) {
-        referenced.add(field.slice(7));
-      }
-    }
-
-    // 3. Bash environment variable references: $OPSKNIGHT_INPUT_<KEY> or ${OPSKNIGHT_INPUT_<KEY>}
-    if (step.type === 'BASH' && typeof step.config?.command === 'string') {
-      const cmd = step.config.command;
-      const bashMatches = cmd.matchAll(/(?:\$|%)\{?OPSKNIGHT_INPUT_([A-Z0-9_]+)\}?/g);
-      for (const match of bashMatches) {
-        referenced.add(match[1].toLowerCase());
-      }
+  for (const step of flattenSteps(def)) {
+    for (const key of referencedStepInputKeys(step)) {
+      referenced.add(key);
     }
   }
-
   return referenced;
 }
 
@@ -85,39 +56,12 @@ export function getInputUsage(
   inputKey: string
 ): { isReferenced: boolean; stepNames: string[] } {
   if (!inputKey) return { isReferenced: false, stepNames: [] };
+  const normalizedKey = inputKey.trim().toLowerCase();
+  if (!normalizedKey) return { isReferenced: false, stepNames: [] };
   const stepNames: string[] = [];
-  const normalizedKey = inputKey.toLowerCase();
-  const upperKey = inputKey.toUpperCase();
-  const templateRegex = new RegExp(`\\$\\{\\{\\s*inputs\\.${inputKey}\\s*\\}\\}`, 'i');
-  const bashRegex = new RegExp(`(?:\\$|%)\\{?OPSKNIGHT_INPUT_${upperKey}\\}?(?:\\b|[^A-Za-z0-9_]|$)`);
 
   for (const step of flattenSteps(def)) {
-    let referenced = false;
-    const serialized = JSON.stringify({
-      config: step.config,
-      name: step.name,
-      description: step.description,
-    });
-
-    if (templateRegex.test(serialized)) {
-      referenced = true;
-    } else if (
-      step.type === 'CONDITION' &&
-      typeof step.config?.field === 'string' &&
-      (step.config.field === `input.${inputKey}` ||
-        step.config.field === `inputs.${inputKey}` ||
-        step.config.field.toLowerCase() === `input.${normalizedKey}`)
-    ) {
-      referenced = true;
-    } else if (
-      step.type === 'BASH' &&
-      typeof step.config?.command === 'string' &&
-      bashRegex.test(step.config.command)
-    ) {
-      referenced = true;
-    }
-
-    if (referenced) {
+    if (referencedStepInputKeys(step).has(normalizedKey)) {
       stepNames.push(step.name || step.key);
     }
   }
@@ -145,6 +89,10 @@ export function getNextUnusedInputKey(
   return `input_${counter}`;
 }
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export function refactorInputReference(
   def: RunbookDefinition,
   oldKey: string,
@@ -152,13 +100,14 @@ export function refactorInputReference(
 ): RunbookDefinition {
   if (!oldKey || !newKey || oldKey === newKey) return def;
 
-  const oldTemplateRegex = new RegExp(`\\$\\{\\{\\s*inputs\\.${oldKey}\\s*\\}\\}`, 'g');
+  const escapedOld = escapeRegex(oldKey);
+  const oldTemplateRegex = new RegExp(`\\$\\{\\{\\s*inputs\\.${escapedOld}\\s*\\}\\}`, 'g');
   const newTemplate = `\${{ inputs.${newKey} }}`;
 
   const oldUpper = oldKey.toUpperCase();
   const newUpper = newKey.toUpperCase();
-  const bashDirectRegex = new RegExp(`\\$OPSKNIGHT_INPUT_${oldUpper}\\b`, 'g');
-  const bashBracedRegex = new RegExp(`\\$\\{OPSKNIGHT_INPUT_${oldUpper}\\}`, 'g');
+  const escapedOldUpper = escapeRegex(oldUpper);
+  const bashWordRegex = new RegExp(`\\bOPSKNIGHT_INPUT_${escapedOldUpper}\\b`, 'g');
 
   function replaceInStep(step: RunbookStepDefinition): RunbookStepDefinition {
     // 1. Config serialization replacement for embedded templates
@@ -175,23 +124,16 @@ export function refactorInputReference(
       }
     }
 
-    // 3. Bash environment references: $OPSKNIGHT_INPUT_OLD_KEY -> $OPSKNIGHT_INPUT_NEW_KEY
+    // 3. Bash environment references: bare, $, ${}, %
     if (step.type === 'BASH' && typeof newConfig.command === 'string') {
-      let cmd = newConfig.command;
-      cmd = cmd.replace(bashDirectRegex, `$OPSKNIGHT_INPUT_${newUpper}`);
-      cmd = cmd.replace(bashBracedRegex, `\${OPSKNIGHT_INPUT_${newUpper}}`);
-      newConfig.command = cmd;
+      newConfig.command = newConfig.command.replace(bashWordRegex, `OPSKNIGHT_INPUT_${newUpper}`);
     }
 
     // 4. Update step name or description if template was used
-    let newName = step.name;
-    if (newName && oldTemplateRegex.test(newName)) {
-      newName = newName.replace(oldTemplateRegex, newTemplate);
-    }
-    let newDesc = step.description;
-    if (newDesc && oldTemplateRegex.test(newDesc)) {
-      newDesc = newDesc.replace(oldTemplateRegex, newTemplate);
-    }
+    const newName = step.name ? step.name.replace(oldTemplateRegex, newTemplate) : step.name;
+    const newDesc = step.description
+      ? step.description.replace(oldTemplateRegex, newTemplate)
+      : step.description;
 
     const updated: RunbookStepDefinition = {
       ...step,
@@ -509,8 +451,9 @@ export default function RunbookBuilder({
         </div>
       )}
       {inputs.map((input, index) => {
-        const usage = getInputUsage(definition, input.key);
         const identity = inputIdentities.at(index) ?? String(index);
+        const effectiveKey = committedInputKeys.get(identity) || input.key;
+        const usage = getInputUsage(definition, effectiveKey);
 
         const update = (patch: Partial<RunbookInputInput>) => {
           let nextDef = definition;
@@ -797,7 +740,14 @@ export default function RunbookBuilder({
               setStepIdentities(newIds);
               setSelectedStepId(newIds.at(0) ?? null);
               setInputs(parsedInputs);
-              setInputIdentities(parsedInputs.map(() => crypto.randomUUID()));
+              const newInputIds = parsedInputs.map(() => crypto.randomUUID());
+              setInputIdentities(newInputIds);
+              const newCommitted = new Map<string, string>();
+              parsedInputs.forEach((inp, idx) => {
+                const id = newInputIds.at(idx);
+                if (id) newCommitted.set(id, inp.key);
+              });
+              setCommittedInputKeys(newCommitted);
               setDirty(true);
               setJsonError('');
               setUnappliedJson(false);

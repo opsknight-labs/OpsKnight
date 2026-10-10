@@ -80,6 +80,14 @@ export function parseRunbookDefinition(
           }
         }
       }
+      const referenced = referencedStepInputKeys(step);
+      for (const refKey of referenced) {
+        if (!declared.has(refKey)) {
+          throw new RunbookDefinitionError(
+            `Step "${step.key}" references undeclared input "${refKey}".`
+          );
+        }
+      }
     }
   }
   return definition;
@@ -645,16 +653,19 @@ export function requiresAnyApproval(definition: RunbookDefinition): boolean {
 // ---------------------------------------------------------------------------
 
 const SECRET_REF_PREFIX = 'secret://';
-const INPUT_TEMPLATE_GLOBAL = /\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}/g;
+const INPUT_TEMPLATE_GLOBAL = /\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}/gi;
 
 export function referencedStepInputKeys(value: unknown): Set<string> {
   const keys = new Set<string>();
   const visit = (entry: unknown) => {
     if (typeof entry === 'string') {
-      for (const match of entry.matchAll(INPUT_TEMPLATE_GLOBAL)) keys.add(match[1]);
+      for (const match of entry.matchAll(INPUT_TEMPLATE_GLOBAL)) keys.add(match[1].toLowerCase());
       // Bash inputs can be consumed through the documented constrained environment.
-      for (const match of entry.matchAll(/\bOPSKNIGHT_INPUT_([A-Z0-9_]+)\b/g))
+      for (const match of entry.matchAll(/\bOPSKNIGHT_INPUT_([A-Z0-9_]+)\b/gi))
         keys.add(match[1].toLowerCase());
+      // Condition field references: input.<key> or inputs.<key>
+      const condMatch = entry.match(/^inputs?\.([a-z0-9_]+)$/i);
+      if (condMatch && condMatch[1]) keys.add(condMatch[1].toLowerCase());
     } else if (Array.isArray(entry)) entry.forEach(visit);
     else if (entry && typeof entry === 'object') Object.values(entry).forEach(visit);
   };

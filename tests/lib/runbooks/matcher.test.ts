@@ -182,4 +182,147 @@ describe('runbook trigger matcher', () => {
       })
     ).toBe(true);
   });
+
+  it('preserves strict equality for non-typed incident and service fields without type coercion', () => {
+    const triggerContext = {
+      incident: { id: '001', code: '042', priority: '1', active: 'true' },
+      service: { id: 100, teamId: '200' },
+    };
+
+    // Incident fields must NOT coerce numeric strings or booleans
+    expect(
+      matchesCondition(triggerContext, {
+        field: 'incident.id',
+        operator: 'EQUALS',
+        value: 1,
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(triggerContext, {
+        field: 'incident.id',
+        operator: 'EQUALS',
+        value: '001',
+      })
+    ).toBe(true);
+    expect(
+      matchesCondition(triggerContext, {
+        field: 'incident.priority',
+        operator: 'EQUALS',
+        value: 1,
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(triggerContext, {
+        field: 'incident.active',
+        operator: 'EQUALS',
+        value: true,
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(triggerContext, {
+        field: 'incident.id',
+        operator: 'IN',
+        value: [1, 2, 3],
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(triggerContext, {
+        field: 'incident.id',
+        operator: 'IN',
+        value: ['001', '002'],
+      })
+    ).toBe(true);
+
+    // Service fields must NOT coerce numeric strings
+    expect(
+      matchesCondition(triggerContext, {
+        field: 'service.id',
+        operator: 'EQUALS',
+        value: '100',
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(triggerContext, {
+        field: 'service.teamId',
+        operator: 'EQUALS',
+        value: 200,
+      })
+    ).toBe(false);
+
+    // Trigger matcher enforces strict matching across AND/OR logic
+    expect(
+      matchesTrigger(
+        triggerContext,
+        [{ field: 'incident.id', operator: 'EQUALS', value: 1 }],
+        'AND'
+      )
+    ).toBe(false);
+    expect(
+      matchesTrigger(
+        triggerContext,
+        [{ field: 'incident.id', operator: 'EQUALS', value: '001' }],
+        'AND'
+      )
+    ).toBe(true);
+  });
+
+  it('rejects number coercion for numeric strings with leading zeros even in typed input fields', () => {
+    const leadingZeroContext = {
+      inputs: {
+        zipCode: '001',
+        leadZero: '042',
+        exactZero: '0',
+        standardNum: '42',
+        numericVal: 1,
+      },
+    };
+
+    // Strings with leading zeros must not coerce to numbers
+    expect(
+      matchesCondition(leadingZeroContext, {
+        field: 'inputs.zipCode',
+        operator: 'EQUALS',
+        value: 1,
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(leadingZeroContext, {
+        field: 'inputs.numericVal',
+        operator: 'EQUALS',
+        value: '001',
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(leadingZeroContext, {
+        field: 'inputs.leadZero',
+        operator: 'EQUALS',
+        value: 42,
+      })
+    ).toBe(false);
+
+    // Exact string match still succeeds
+    expect(
+      matchesCondition(leadingZeroContext, {
+        field: 'inputs.zipCode',
+        operator: 'EQUALS',
+        value: '001',
+      })
+    ).toBe(true);
+
+    // Standard numbers without leading zeros still coerce properly
+    expect(
+      matchesCondition(leadingZeroContext, {
+        field: 'inputs.standardNum',
+        operator: 'EQUALS',
+        value: 42,
+      })
+    ).toBe(true);
+    expect(
+      matchesCondition(leadingZeroContext, {
+        field: 'inputs.exactZero',
+        operator: 'EQUALS',
+        value: 0,
+      })
+    ).toBe(true);
+  });
 });

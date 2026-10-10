@@ -17,6 +17,7 @@ import {
   computePlanDigest,
   computeTriggerFingerprint,
   validateDefinition,
+  referencedStepInputKeys,
 } from '@/lib/runbooks/definition';
 import {
   RunbookDefinitionError,
@@ -669,6 +670,121 @@ describe('Runbook Definition Module', () => {
 
       // scale rejects replica template bound to undeclared input
       expect(() => parseRunbookDefinition(templatedScaleDef, [])).toThrow(/undeclared replica input/);
+    });
+
+    it('referencedStepInputKeys extracts template references, bare and prefixed Bash env vars, and condition inputs', () => {
+      // 1. Template references in HTTP step
+      const httpStep = createMockStep({
+        type: 'HTTP',
+        config: {
+          method: 'POST',
+          url: 'https://api.internal/${{ inputs.target_host }}',
+          body: { apiKey: '${{ inputs.api_key }}' },
+        },
+      });
+      const httpKeys = referencedStepInputKeys(httpStep);
+      expect(httpKeys.has('target_host')).toBe(true);
+      expect(httpKeys.has('api_key')).toBe(true);
+
+      // 2. Bare, $, ${}, and % Bash environment references
+      const bashStep = createMockStep({
+        type: 'BASH',
+        config: {
+          command:
+            'echo "$OPSKNIGHT_INPUT_DB_HOST" && printenv OPSKNIGHT_INPUT_DB_PASS && echo ${OPSKNIGHT_INPUT_DB_PORT}',
+        },
+      });
+      const bashKeys = referencedStepInputKeys(bashStep);
+      expect(bashKeys.has('db_host')).toBe(true);
+      expect(bashKeys.has('db_pass')).toBe(true);
+      expect(bashKeys.has('db_port')).toBe(true);
+
+      // 3. Condition field inputs (input.<key> and inputs.<key>)
+      const condStep1 = createMockStep({
+        type: 'CONDITION',
+        config: { field: 'input.maintenance_window', operator: 'EQUALS', value: 'yes' },
+      });
+      const condStep2 = createMockStep({
+        type: 'CONDITION',
+        config: { field: 'inputs.service_flag', operator: 'EQUALS', value: true },
+      });
+      expect(referencedStepInputKeys(condStep1).has('maintenance_window')).toBe(true);
+      expect(referencedStepInputKeys(condStep2).has('service_flag')).toBe(true);
+    });
+
+    it('rejects undeclared inputs across all step types (HTTP, SYSTEMD, DOCKER, KUBERNETES, BASH)', () => {
+      // HTTP undeclared url template
+      const httpDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'HTTP',
+            config: { method: 'GET', url: 'https://internal.net/${{ inputs.unregistered_host }}' },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(httpDef, [])).toThrow(
+        /references undeclared input "unregistered_host"/
+      );
+      expect(
+        parseRunbookDefinition(httpDef, [{ key: 'unregistered_host', type: 'STRING' }])
+      ).toBeDefined();
+
+      // Systemd undeclared unit template
+      const systemdDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'SYSTEMD',
+            config: { action: 'status', unit: '${{ inputs.unregistered_unit }}' },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(systemdDef, [])).toThrow(
+        /references undeclared input "unregistered_unit"/
+      );
+
+      // Docker undeclared container template
+      const dockerDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'DOCKER',
+            config: { action: 'inspect', container: '${{ inputs.unregistered_container }}' },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(dockerDef, [])).toThrow(
+        /references undeclared input "unregistered_container"/
+      );
+
+      // Kubernetes undeclared namespace template
+      const k8sDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'KUBERNETES',
+            config: {
+              action: 'get',
+              resource: 'pods',
+              namespace: '${{ inputs.unregistered_namespace }}',
+            },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(k8sDef, [])).toThrow(
+        /references undeclared input "unregistered_namespace"/
+      );
+
+      // Bash undeclared bare environment variable
+      const bashDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'BASH',
+            riskClass: 'NON_IDEMPOTENT',
+            config: { command: 'printenv OPSKNIGHT_INPUT_UNREGISTERED_SECRET' },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(bashDef, [])).toThrow(
+        /references undeclared input "unregistered_secret"/
+      );
     });
   });
 });

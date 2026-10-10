@@ -1,6 +1,6 @@
 import type { RunbookDefinition, RunbookStepDefinition } from '@/lib/runbooks/types';
 import { runbookInputsSchema, type RunbookInputInput } from '@/lib/runbooks/schemas';
-import { flattenSteps } from '@/lib/runbooks/definition';
+import { flattenSteps, referencedStepInputKeys } from '@/lib/runbooks/definition';
 
 export const INPUT_TEMPLATE = /^\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}$/;
 export const SYSTEMD_UNIT =
@@ -393,49 +393,13 @@ export function validateRunbook(
   }
 
   flattened.forEach(step => {
-    const stepSeenRefs = new Set<string>();
-    const serialized = JSON.stringify(step.config ?? {});
-    const matches = serialized.matchAll(/\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}/g);
-    for (const match of matches) {
-      const refKey = match[1];
-      if (!declaredKeys.has(refKey) && !stepSeenRefs.has(refKey)) {
-        stepSeenRefs.add(refKey);
+    const referencedKeys = referencedStepInputKeys(step);
+    for (const refKey of referencedKeys) {
+      if (!declaredKeys.has(refKey)) {
         generalInputErrors.push(
           `Step "${step.name || step.key}" references undeclared input "${refKey}".`
         );
         errorCount++;
-      }
-    }
-
-    if (step.type === 'CONDITION') {
-      const field = String(step.config?.field ?? '');
-      const condMatch = field.match(/^inputs?\.([a-z0-9_]+)$/);
-      if (condMatch) {
-        const refKey = condMatch[1];
-        if (!declaredKeys.has(refKey) && !stepSeenRefs.has(refKey)) {
-          stepSeenRefs.add(refKey);
-          generalInputErrors.push(
-            `Step "${step.name || step.key}" references undeclared input "${refKey}".`
-          );
-          errorCount++;
-        }
-      }
-    }
-
-    if (step.type === 'BASH') {
-      const command = String(step.config?.command ?? '');
-      const envMatches = command.matchAll(
-        /(?:\$OPSKNIGHT_INPUT_|\${OPSKNIGHT_INPUT_|\bOPSKNIGHT_INPUT_)([A-Z0-9_]+)\b/g
-      );
-      for (const envMatch of envMatches) {
-        const refKey = envMatch[1].toLowerCase();
-        if (!declaredKeys.has(refKey) && !stepSeenRefs.has(refKey)) {
-          stepSeenRefs.add(refKey);
-          generalInputErrors.push(
-            `Step "${step.name || step.key}" references undeclared input "${refKey}".`
-          );
-          errorCount++;
-        }
       }
     }
   });

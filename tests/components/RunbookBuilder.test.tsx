@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import RunbookBuilder from '@/components/runbooks/RunbookBuilder';
+import RunbookBuilder, { getInputUsage } from '@/components/runbooks/RunbookBuilder';
 import { newBuilderStep } from '@/lib/runbooks/builder';
 import { parseRunbookDefinition } from '@/lib/runbooks/definition';
 import { validateRunbook, validateStep } from '@/components/runbooks/builder/validation';
@@ -1557,6 +1557,187 @@ describe('Runbook nested check builder', () => {
     // Changing body updates config.body
     fireEvent.change(bodyTextarea, { target: { value: '{"all": false}' } });
     expect(currentConfig.body).toEqual({ all: false });
+  });
+
+  it('does not crash when typing regex special characters like [ and ( into input key', () => {
+    const initialInputs: RunbookInputInput[] = [
+      {
+        key: 'normal_key',
+        label: 'My Input',
+        type: 'STRING',
+        description: '',
+        required: true,
+        sequence: 0,
+      },
+    ];
+    const initialStep = {
+      ...newBuilderStep('HTTP', 'step_1'),
+      name: 'Step 1',
+      config: { method: 'GET', url: 'https://api.internal/${{ inputs.normal_key }}' },
+    };
+
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [initialStep] }}
+        initialInputs={initialInputs}
+        action={async () => {}}
+      />
+    );
+
+    // Switch to inputs tab
+    const inputsTab = screen.getByRole('tab', { name: /inputs/i });
+    fireEvent.click(inputsTab);
+
+    const keyInput = screen.getByLabelText('Input 1 key');
+
+    // Typing unescaped regex special characters '[' and '(' must NOT crash the builder with SyntaxError
+    expect(() => {
+      fireEvent.change(keyInput, { target: { value: '[' } });
+    }).not.toThrow();
+
+    expect(() => {
+      fireEvent.change(keyInput, { target: { value: '(' } });
+    }).not.toThrow();
+
+    expect(() => {
+      fireEvent.change(keyInput, { target: { value: 'invalid[regex(test' } });
+    }).not.toThrow();
+
+    // Verify getInputUsage directly handles special characters safely
+    expect(() => getInputUsage({ steps: [initialStep] }, '[')).not.toThrow();
+    expect(() => getInputUsage({ steps: [initialStep] }, '(')).not.toThrow();
+  });
+
+  it('keeps delete parameter button disabled while input key is temporarily cleared', () => {
+    const initialInputs: RunbookInputInput[] = [
+      {
+        key: 'referenced_param',
+        label: 'Referenced Param',
+        type: 'STRING',
+        description: '',
+        required: true,
+        sequence: 0,
+      },
+    ];
+    const initialStep = {
+      ...newBuilderStep('HTTP', 'step_1'),
+      name: 'Step 1',
+      config: { method: 'GET', url: 'https://api.internal/${{ inputs.referenced_param }}' },
+    };
+
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [initialStep] }}
+        initialInputs={initialInputs}
+        action={async () => {}}
+      />
+    );
+
+    const inputsTab = screen.getByRole('tab', { name: /inputs/i });
+    fireEvent.click(inputsTab);
+
+    const removeBtn = screen.getByRole('button', { name: 'Remove input 1' });
+    expect(removeBtn).toBeDisabled();
+
+    // Clear the key input field
+    const keyInput = screen.getByLabelText('Input 1 key');
+    fireEvent.change(keyInput, { target: { value: '' } });
+
+    // The remove button MUST remain disabled even when input field is empty
+    expect(removeBtn).toBeDisabled();
+  });
+
+  it('preserves reference tracking and renaming after applying Advanced JSON', () => {
+    const initialStep = {
+      ...newBuilderStep('HTTP', 'step_1'),
+      name: 'Step 1',
+      config: { method: 'GET', url: 'https://api.internal/${{ inputs.original_key }}' },
+    };
+    const initialInputs: RunbookInputInput[] = [
+      {
+        key: 'original_key',
+        label: 'Original Key',
+        type: 'STRING',
+        description: '',
+        required: true,
+        sequence: 0,
+      },
+    ];
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [initialStep] }}
+        initialInputs={initialInputs}
+        action={async () => {}}
+      />
+    );
+
+    // Switch to Advanced tab
+    const advancedTab = screen.getByRole('tab', { name: /advanced/i });
+    fireEvent.click(advancedTab);
+
+    // Click Apply JSON to builder
+    const applyJsonBtn = screen.getByRole('button', { name: 'Apply JSON to builder' });
+    fireEvent.click(applyJsonBtn);
+
+    // Switch to Inputs tab
+    const inputsTab = screen.getByRole('tab', { name: /inputs/i });
+    fireEvent.click(inputsTab);
+
+    const keyInput = screen.getByLabelText('Input 1 key');
+
+    // Clear key temporarily
+    fireEvent.change(keyInput, { target: { value: '' } });
+
+    // Type new key
+    fireEvent.change(keyInput, { target: { value: 'reapplied_key' } });
+
+    const savedDef = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(savedDef.steps[0].config.url).toBe('https://api.internal/${{ inputs.reapplied_key }}');
+  });
+
+  it('detects bare Bash references as input dependencies and refactors them on rename', () => {
+    const bashStep = {
+      ...newBuilderStep('BASH', 'bash_step'),
+      name: 'Bash Step',
+      config: { command: 'printenv OPSKNIGHT_INPUT_API_TOKEN' },
+    };
+    const initialInputs: RunbookInputInput[] = [
+      {
+        key: 'api_token',
+        label: 'API Token',
+        type: 'STRING',
+        description: '',
+        required: true,
+        sequence: 0,
+      },
+    ];
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [bashStep] }}
+        initialInputs={initialInputs}
+        action={async () => {}}
+      />
+    );
+
+    const inputsTab = screen.getByRole('tab', { name: /inputs/i });
+    fireEvent.click(inputsTab);
+
+    // Remove button should be disabled because bare Bash reference is detected
+    const removeBtn = screen.getByRole('button', { name: 'Remove input 1' });
+    expect(removeBtn).toBeDisabled();
+
+    // Rename input
+    const keyInput = screen.getByLabelText('Input 1 key');
+    fireEvent.change(keyInput, { target: { value: 'new_token' } });
+
+    const savedDef = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(savedDef.steps[0].config.command).toBe('printenv OPSKNIGHT_INPUT_NEW_TOKEN');
   });
 });
 
