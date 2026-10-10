@@ -175,7 +175,7 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
     <EmptyState title="No definition available" />
   );
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 p-4 md:p-6">
+    <div className="mx-auto w-full max-w-[1600px] space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
       <RunbookPageHeader
         breadcrumbs={[
           { label: 'Runbooks', href: '/runbooks' },
@@ -312,6 +312,7 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
           { label: 'Executions', value: runbook._count.executions },
           { label: 'Versions', value: runbook._count.versions },
         ]}
+        className="hidden md:grid"
       />
       <RunbookModuleNav summary={navigation} />
       <DetailTabs

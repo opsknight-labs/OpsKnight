@@ -1,4 +1,5 @@
 import type { RunbookDefinition, RunbookStepDefinition, RunbookStepType } from './types';
+import type { RunbookInputInput } from './schemas';
 export { canonicalConditionField } from './conditions';
 
 export const RUNBOOK_TEMPLATES = [
@@ -89,7 +90,16 @@ export function runbookTemplate(template: (typeof RUNBOOK_TEMPLATES)[number]): R
   if (template === 'kubernetes-recovery')
     return {
       steps: [
-        newBuilderStep('KUBERNETES', 'inspect'),
+        {
+          ...newBuilderStep('KUBERNETES', 'inspect'),
+          name: 'Inspect deployment status',
+          config: {
+            action: 'get',
+            namespace: '${{ inputs.namespace }}',
+            resource: 'deployment',
+            name: '${{ inputs.deployment_name }}',
+          },
+        },
         {
           ...newBuilderStep('KUBERNETES', 'restart'),
           name: 'Restart deployment',
@@ -97,13 +107,115 @@ export function runbookTemplate(template: (typeof RUNBOOK_TEMPLATES)[number]): R
           requiresApproval: true,
           config: {
             action: 'rollout-restart',
-            namespace: 'default',
+            namespace: '${{ inputs.namespace }}',
             resource: 'deployment',
-            name: 'api',
+            name: '${{ inputs.deployment_name }}',
+          },
+          verification: {
+            steps: [
+              {
+                ...newBuilderStep('KUBERNETES', 'rollout_status'),
+                name: 'Verify rollout complete',
+                riskClass: 'READ_ONLY',
+                config: {
+                  action: 'rollout-status',
+                  namespace: '${{ inputs.namespace }}',
+                  resource: 'deployment',
+                  name: '${{ inputs.deployment_name }}',
+                },
+              },
+            ],
           },
         },
-        newBuilderStep('KUBERNETES', 'verify'),
+        {
+          ...newBuilderStep('KUBERNETES', 'verify'),
+          name: 'Verify deployment health',
+          config: {
+            action: 'get',
+            namespace: '${{ inputs.namespace }}',
+            resource: 'deployment',
+            name: '${{ inputs.deployment_name }}',
+          },
+        },
       ],
     };
   return { steps: [newBuilderStep('MANUAL', 'first_step')] };
 }
+
+export function runbookTemplateInputs(
+  template: (typeof RUNBOOK_TEMPLATES)[number]
+): RunbookInputInput[] {
+  if (template === 'kubernetes-recovery') {
+    return [
+      {
+        key: 'namespace',
+        label: 'Namespace',
+        type: 'STRING',
+        required: true,
+        defaultValue: 'default',
+        description: 'Target Kubernetes namespace',
+        sequence: 0,
+      },
+      {
+        key: 'deployment_name',
+        label: 'Deployment Name',
+        type: 'STRING',
+        required: true,
+        defaultValue: 'api',
+        description: 'Name of the deployment to recover',
+        sequence: 1,
+      },
+    ];
+  }
+  return [];
+}
+
+export function generateUniqueStepKey(baseKey: string, existingKeys: Set<string>): string {
+  const clean = baseKey
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '_')
+    .slice(0, 60);
+  let candidate = `${clean}_copy`;
+  if (candidate.length > 80) {
+    candidate = candidate.slice(0, 80);
+  }
+  let counter = 1;
+  while (existingKeys.has(candidate)) {
+    const suffix = `_copy_${counter}`;
+    const maxPrefixLen = Math.max(1, 80 - suffix.length);
+    candidate = `${clean.slice(0, maxPrefixLen)}${suffix}`;
+    counter++;
+  }
+  existingKeys.add(candidate);
+  return candidate;
+}
+
+export function cloneStepRecursively(
+  source: RunbookStepDefinition,
+  existingKeys: Set<string>
+): RunbookStepDefinition {
+  const newKey = generateUniqueStepKey(source.key, existingKeys);
+  const copySuffix = ' (Copy)';
+  const maxBaseLen = Math.max(1, 200 - copySuffix.length);
+  const baseName = (source.name || 'Untitled step').slice(0, maxBaseLen);
+  const cloned: RunbookStepDefinition = {
+    ...JSON.parse(JSON.stringify(source)),
+    key: newKey,
+    name: `${baseName}${copySuffix}`,
+  };
+
+  if (cloned.precheck?.steps) {
+    cloned.precheck.steps = cloned.precheck.steps.map(child =>
+      cloneStepRecursively(child, existingKeys)
+    );
+  }
+
+  if (cloned.verification?.steps) {
+    cloned.verification.steps = cloned.verification.steps.map(child =>
+      cloneStepRecursively(child, existingKeys)
+    );
+  }
+
+  return cloned;
+}
+

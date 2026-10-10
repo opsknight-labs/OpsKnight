@@ -34,7 +34,7 @@ import {
  */
 export function parseRunbookDefinition(
   raw: unknown,
-  inputs?: ReadonlyArray<{ key: string }>
+  inputs?: ReadonlyArray<{ key: string; type?: string }>
 ): RunbookDefinition {
   const result = runbookDefinitionSchema.safeParse(raw);
   if (!result.success) {
@@ -47,13 +47,46 @@ export function parseRunbookDefinition(
   validateDefinitionStructure(definition);
   if (inputs) {
     const declared = new Set(inputs.map(input => input.key));
+    const inputTypeMap = new Map(inputs.map(input => [input.key, input.type]));
     for (const step of flattenSteps(definition)) {
-      if (step.type !== 'CONDITION') continue;
-      const { field } = workflowConditionSchema.parse(step.config);
-      if (field.startsWith('input.') && !declared.has(field.slice(6))) {
-        throw new RunbookDefinitionError(
-          `Step "${step.key}" references undeclared CONDITION input "${field}".`
-        );
+      if (step.type === 'CONDITION') {
+        const { field } = workflowConditionSchema.parse(step.config);
+        if (field.startsWith('input.') && !declared.has(field.slice(6))) {
+          throw new RunbookDefinitionError(
+            `Step "${step.key}" references undeclared CONDITION input "${field}".`
+          );
+        }
+      }
+      if (step.type === 'KUBERNETES') {
+        const action = configuredString(step, 'action', 'get');
+        if (action === 'scale') {
+          const rawReplicas = step.config.replicas;
+          if (typeof rawReplicas === 'string') {
+            const match = rawReplicas.trim().match(INPUT_TEMPLATE);
+            if (match) {
+              const inputKey = match[1];
+              if (!declared.has(inputKey)) {
+                throw new RunbookDefinitionError(
+                  `Step "${step.key}" references undeclared replica input "${inputKey}".`
+                );
+              }
+              const inputType = inputTypeMap.get(inputKey);
+              if (inputType && inputType !== 'NUMBER') {
+                throw new RunbookDefinitionError(
+                  `Step "${step.key}" references input "${inputKey}" of type ${inputType} for Kubernetes replicas; must be NUMBER.`
+                );
+              }
+            }
+          }
+        }
+      }
+      const referenced = referencedStepInputKeys(step);
+      for (const refKey of referenced) {
+        if (!declared.has(refKey)) {
+          throw new RunbookDefinitionError(
+            `Step "${step.key}" references undeclared input "${refKey}".`
+          );
+        }
       }
     }
   }
@@ -620,16 +653,19 @@ export function requiresAnyApproval(definition: RunbookDefinition): boolean {
 // ---------------------------------------------------------------------------
 
 const SECRET_REF_PREFIX = 'secret://';
-const INPUT_TEMPLATE_GLOBAL = /\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}/g;
+const INPUT_TEMPLATE_GLOBAL = /\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}/gi;
 
 export function referencedStepInputKeys(value: unknown): Set<string> {
   const keys = new Set<string>();
   const visit = (entry: unknown) => {
     if (typeof entry === 'string') {
-      for (const match of entry.matchAll(INPUT_TEMPLATE_GLOBAL)) keys.add(match[1]);
+      for (const match of entry.matchAll(INPUT_TEMPLATE_GLOBAL)) keys.add(match[1].toLowerCase());
       // Bash inputs can be consumed through the documented constrained environment.
-      for (const match of entry.matchAll(/\bOPSKNIGHT_INPUT_([A-Z0-9_]+)\b/g))
+      for (const match of entry.matchAll(/\bOPSKNIGHT_INPUT_([A-Z0-9_]+)\b/gi))
         keys.add(match[1].toLowerCase());
+      // Condition field references: input.<key> or inputs.<key>
+      const condMatch = entry.match(/^inputs?\.([a-z0-9_]+)$/i);
+      if (condMatch && condMatch[1]) keys.add(condMatch[1].toLowerCase());
     } else if (Array.isArray(entry)) entry.forEach(visit);
     else if (entry && typeof entry === 'object') Object.values(entry).forEach(visit);
   };

@@ -20,6 +20,43 @@ function asComparableList(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [value];
 }
 
+function isValidNumericString(str: string): boolean {
+  const trimmed = str.trim();
+  if (trimmed === '' || Number.isNaN(Number(trimmed))) return false;
+  return /^-?(0|[1-9]\d*)(\.\d+)?([eE][-+]?\d+)?$/.test(trimmed);
+}
+
+export function normalizeComparisonPair(actual: unknown, expected: unknown): [unknown, unknown] {
+  if (typeof actual === 'number' && typeof expected === 'string') {
+    if (isValidNumericString(expected)) {
+      return [actual, Number(expected.trim())];
+    }
+  }
+  if (typeof actual === 'string' && typeof expected === 'number') {
+    if (isValidNumericString(actual)) {
+      return [Number(actual.trim()), expected];
+    }
+  }
+  if (typeof actual === 'boolean' && typeof expected === 'string') {
+    const lower = expected.trim().toLowerCase();
+    if (lower === 'true') return [actual, true];
+    if (lower === 'false') return [actual, false];
+  }
+  if (typeof actual === 'string' && typeof expected === 'boolean') {
+    const lower = actual.trim().toLowerCase();
+    if (lower === 'true') return [true, expected];
+    if (lower === 'false') return [false, expected];
+  }
+  return [actual, expected];
+}
+
+export function areEqual(a: unknown, b: unknown, allowTypeCoercion = false): boolean {
+  if (a === b) return true;
+  if (!allowTypeCoercion) return false;
+  const [normA, normB] = normalizeComparisonPair(a, b);
+  return normA === normB;
+}
+
 export function matchesCondition(
   context: Record<string, unknown>,
   condition: TriggerCondition
@@ -40,25 +77,41 @@ export function matchesCondition(
     return false;
   }
 
+  const isTypedInputField =
+    condition.field.startsWith('input.') || condition.field.startsWith('inputs.');
+
   switch (condition.operator) {
     case 'EQUALS':
-      return actual === condition.value;
+      return areEqual(actual, condition.value, isTypedInputField);
     case 'NOT_EQUALS':
-      return actual !== condition.value;
-    case 'CONTAINS':
-      return typeof actual === 'string' && typeof condition.value === 'string'
-        ? actual.includes(condition.value)
-        : Array.isArray(actual) && actual.includes(condition.value);
-    case 'STARTS_WITH':
-      return (
-        typeof actual === 'string' &&
-        typeof condition.value === 'string' &&
-        actual.startsWith(condition.value)
-      );
+      return !areEqual(actual, condition.value, isTypedInputField);
+    case 'CONTAINS': {
+      if (typeof actual === 'string') {
+        const valStr =
+          typeof condition.value === 'string' ? condition.value : String(condition.value);
+        return actual.includes(valStr);
+      }
+      if (Array.isArray(actual)) {
+        return actual.some(item => areEqual(item, condition.value, isTypedInputField));
+      }
+      return false;
+    }
+    case 'STARTS_WITH': {
+      if (typeof actual === 'string') {
+        const valStr =
+          typeof condition.value === 'string' ? condition.value : String(condition.value);
+        return actual.startsWith(valStr);
+      }
+      return false;
+    }
     case 'IN':
-      return asComparableList(condition.value).includes(actual);
+      return asComparableList(condition.value).some(item =>
+        areEqual(actual, item, isTypedInputField)
+      );
     case 'NOT_IN':
-      return !asComparableList(condition.value).includes(actual);
+      return !asComparableList(condition.value).some(item =>
+        areEqual(actual, item, isTypedInputField)
+      );
   }
 }
 

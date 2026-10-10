@@ -63,27 +63,20 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   runbookId = new URL(page.url()).pathname.split('/').at(-1)!;
   await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
   await expect(page.getByLabel('Definition JSON')).not.toBeVisible();
-  await page.getByRole('button', { name: 'Configure step' }).first().click();
   await page.getByLabel('Step name', { exact: true }).fill('Capture baseline diagnostics');
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('heading', { name: 'Capture baseline diagnostics' })).toBeVisible();
-  await page.getByRole('button', { name: 'Configure step' }).first().click();
+  await expect(
+    page.getByRole('list', { name: 'Runbook steps' }).getByRole('heading', { name: 'Capture baseline diagnostics' })
+  ).toBeVisible();
   await page.getByLabel('Step key', { exact: true }).fill('baseline_check');
-  await expect(page.getByRole('dialog')).toBeVisible();
-  const before = page
-    .getByRole('dialog')
-    .locator('.mt-6 > section[aria-label="Before action checks"]');
+  const before = page.locator('section[data-testid="action-precheck-checks"]');
   await before.getByRole('button', { name: 'Add precheck', exact: true }).click();
   await before.locator('summary').first().click();
   await before.getByLabel('Step name', { exact: true }).fill('Check service exists');
   await before.getByLabel('Service unit or input reference').fill('payments.service');
-  const after = page
-    .getByRole('dialog')
-    .locator('.mt-6 > section[aria-label="After action checks"]');
+  const after = page.locator('section[data-testid="action-verification-checks"]');
   await after.getByRole('button', { name: 'Add verification', exact: true }).click();
   await after.locator('summary').first().click();
   await after.getByLabel('Step name', { exact: true }).fill('Verify service recovered');
-  await page.keyboard.press('Escape');
   await page
     .getByRole('button', { name: 'Move Capture baseline diagnostics down', exact: true })
     .click();
@@ -129,6 +122,9 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await page.getByRole('button', { name: 'Publish draft', exact: true }).click();
   await expect(page.getByRole('alertdialog')).toContainText('Only the saved draft is published');
   await page.getByRole('button', { name: 'Keep unchanged', exact: true }).click();
+  await page.getByRole('tab', { name: 'Builder', exact: true }).click();
+  await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
+  await expect(page.locator('input[aria-label="Step name"]:visible').first()).toBeVisible();
   await noOverflow(page);
   await page.screenshot({ path: 'test-results/runbooks-builder-desktop.png', fullPage: true });
 });
@@ -400,7 +396,14 @@ test('390px infrastructure, health and builder have no horizontal overflow', asy
     await page.goto(route);
     await noOverflow(page);
     if (route === `/runbooks/${runbookId}`) {
+      await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
+      await expect(page.locator('input[aria-label="Step name"]:visible').first()).toBeVisible();
       await page.screenshot({ path: 'test-results/runbooks-builder-mobile.png', fullPage: true });
+      for (const width of [390, 768, 1024, 1280]) {
+        await page.setViewportSize({ width, height: 844 });
+        await page.screenshot({ path: `test-results/runbooks-builder-${width}.png`, fullPage: true });
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
     }
     if (route === '/runbooks/agents') {
       await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^pools/i }).click();
