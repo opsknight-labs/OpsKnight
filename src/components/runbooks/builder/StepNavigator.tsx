@@ -10,8 +10,6 @@ import {
   AlertCircle,
   ShieldAlert,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -48,15 +46,13 @@ export default function StepNavigator({
   onAddStep,
 }: StepNavigatorProps) {
   const [newStepType, setNewStepType] = useState<RunbookStepType>('SYSTEMD');
-  const [mobileExpanded, setMobileExpanded] = useState(false);
-  const selectedStep = steps.at(selectedIndex);
 
   return (
     <nav
       aria-label="Runbook steps navigation"
       className="flex flex-col h-full rounded-xl border bg-card/60 shadow-2xs overflow-hidden"
     >
-      <div className="flex items-center justify-between border-b px-3 sm:px-4 py-2.5 sm:py-3 bg-muted/20">
+      <div className="flex items-center justify-between border-b px-3 sm:px-4 py-2 sm:py-3 bg-muted/20">
         <div>
           <h3 className="font-semibold text-xs tracking-wider uppercase text-muted-foreground">
             Workflow Steps
@@ -65,60 +61,13 @@ export default function StepNavigator({
             {steps.length} {steps.length === 1 ? 'step' : 'steps'} configured
           </span>
         </div>
-
-        {/* Mobile toggle button */}
-        <div className="lg:hidden">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setMobileExpanded(!mobileExpanded)}
-            className="h-7 text-xs font-medium px-2 flex items-center gap-1"
-            aria-expanded={mobileExpanded}
-            aria-label={mobileExpanded ? 'Hide step list' : 'View all steps'}
-          >
-            <span>{mobileExpanded ? 'Hide steps' : 'Change step'}</span>
-            {mobileExpanded ? (
-              <ChevronUp className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronDown className="h-3.5 w-3.5" />
-            )}
-          </Button>
-        </div>
       </div>
 
-      {/* When collapsed on mobile, show compact current-step card */}
-      {!mobileExpanded && selectedStep && (
-        <div className="lg:hidden p-2.5 bg-card/60 border-b flex items-center justify-between gap-2">
-          <div className="min-w-0 flex items-center gap-2">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold bg-primary text-primary-foreground">
-              {selectedIndex + 1}
-            </span>
-            <span className="text-xs font-semibold truncate text-foreground">
-              {selectedStep.name || 'Untitled step'}
-            </span>
-            <Badge variant="outline" className="text-[10px] py-0 px-1 font-mono uppercase">
-              {selectedStep.type.replaceAll('_', ' ')}
-            </Badge>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-6 text-[11px] px-2 shrink-0"
-            onClick={() => setMobileExpanded(true)}
-          >
-            Change
-          </Button>
-        </div>
-      )}
-
-      <div className={mobileExpanded ? 'flex flex-col flex-1' : 'hidden lg:flex lg:flex-col lg:flex-1'}>
-        <ol
-          aria-label="Runbook steps"
-          className="flex-1 overflow-y-auto p-2 space-y-1.5 list-none max-h-56 sm:max-h-80 lg:max-h-[calc(100vh-16rem)]"
-          tabIndex={0}
-        >
+      <ol
+        aria-label="Runbook steps"
+        className="flex-1 overflow-y-auto p-1.5 sm:p-2 space-y-1.5 list-none max-h-40 sm:max-h-56 lg:max-h-[calc(100vh-16rem)]"
+        tabIndex={0}
+      >
           {steps.map((step, index) => {
             const isSelected = index === selectedIndex;
             const errors = stepErrors.get(index);
@@ -144,10 +93,7 @@ export default function StepNavigator({
                     type="button"
                     aria-current={isSelected ? 'step' : undefined}
                     aria-label={`Step ${index + 1}: ${step.name || 'Untitled step'}`}
-                    onClick={() => {
-                      onSelectStep(index);
-                      setMobileExpanded(false);
-                    }}
+                    onClick={() => onSelectStep(index)}
                     className="flex flex-col text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded p-0.5 cursor-pointer"
                   >
                   <div className="flex items-start justify-between gap-2 w-full">
@@ -299,17 +245,13 @@ export default function StepNavigator({
             variant="outline"
             size="sm"
             className="w-full text-xs font-semibold"
-            onClick={() => {
-              onAddStep(newStepType);
-              setMobileExpanded(false);
-            }}
+            onClick={() => onAddStep(newStepType)}
           >
             <Plus className="h-3.5 w-3.5 mr-1" />
             Add Step
           </Button>
         </div>
       )}
-      </div>
     </nav>
   );
 }
