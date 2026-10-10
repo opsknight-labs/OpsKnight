@@ -314,7 +314,7 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
         ]}
         className="hidden md:grid"
       />
-      <RunbookModuleNav summary={navigation} className="hidden md:flex" />
+      <RunbookModuleNav summary={navigation} />
       <DetailTabs
         tabs={[
           { id: 'builder', label: 'Builder & Inputs', content: builder },

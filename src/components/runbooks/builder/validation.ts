@@ -48,6 +48,10 @@ export function validateStep(
 
   switch (step.type) {
     case 'HTTP': {
+      const method = String(config.method ?? 'GET').toUpperCase();
+      if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+        errors.method = 'Unsupported HTTP method.';
+      }
       const url = String(config.url ?? '').trim();
       if (!url) {
         errors.url = 'HTTP URL or input reference is required.';
@@ -56,6 +60,8 @@ export function validateStep(
           const parsed = new URL(url);
           if (!['http:', 'https:'].includes(parsed.protocol)) {
             errors.url = 'URL must use http:// or https:// protocol.';
+          } else if (parsed.username || parsed.password) {
+            errors.url = 'HTTP URL must not contain embedded credentials.';
           }
         } catch {
           errors.url = 'Invalid URL format. Use full URL (e.g., https://api.service/health) or ${{ inputs.key }}.';
@@ -66,7 +72,7 @@ export function validateStep(
 
     case 'SYSTEMD': {
       const unit = String(config.unit ?? '').trim();
-      if (!unit) {
+      if (!unit || unit.startsWith('-')) {
         errors.unit = 'Service unit name is required (e.g. app.service).';
       } else if (!INPUT_TEMPLATE.test(unit) && !SYSTEMD_UNIT.test(unit)) {
         errors.unit = 'Unit must end in .service, .socket, .timer, etc. (e.g., payments.service).';
@@ -83,7 +89,7 @@ export function validateStep(
 
     case 'DOCKER': {
       const container = String(config.container ?? '').trim();
-      if (!container) {
+      if (!container || container.startsWith('-')) {
         errors.container = 'Container name or input reference is required.';
       } else if (!INPUT_TEMPLATE.test(container) && !DOCKER_NAME.test(container)) {
         errors.container = 'Invalid container name format.';
@@ -93,15 +99,20 @@ export function validateStep(
 
     case 'KUBERNETES': {
       const action = String(config.action ?? 'get');
-      const namespace = String(config.namespace ?? 'default').trim();
+      const rawNamespace = config.namespace;
+      const namespace = rawNamespace !== undefined ? String(rawNamespace).trim() : 'default';
       const resource = String(config.resource ?? '').trim();
       const name = String(config.name ?? '').trim();
 
-      if (namespace && !INPUT_TEMPLATE.test(namespace) && !KUBERNETES_NAME.test(namespace)) {
+      if (
+        !namespace ||
+        namespace.startsWith('-') ||
+        (!INPUT_TEMPLATE.test(namespace) && !KUBERNETES_NAME.test(namespace))
+      ) {
         errors.namespace = 'Invalid namespace format (DNS-1123 label).';
       }
 
-      if (!resource) {
+      if (!resource || resource.startsWith('-')) {
         errors.resource = 'Resource type is required (e.g., deployment, pod).';
       } else if (!INPUT_TEMPLATE.test(resource) && !KUBERNETES_NAME.test(resource)) {
         errors.resource = 'Invalid resource type format.';
@@ -152,14 +163,14 @@ export function validateStep(
 
       if (['logs', 'rollout-restart', 'rollout-status', 'scale'].includes(action) && !name) {
         errors.resourceName = `Resource name is required for Kubernetes ${action}.`;
-      } else if (name && !INPUT_TEMPLATE.test(name) && !KUBERNETES_NAME.test(name)) {
+      } else if (name && (name.startsWith('-') || (!INPUT_TEMPLATE.test(name) && !KUBERNETES_NAME.test(name)))) {
         errors.resourceName = 'Invalid resource name format (DNS-1123 label).';
       }
 
       if (action === 'scale') {
         if (config.replicas === undefined || config.replicas === null || String(config.replicas).trim() === '') {
           errors.replicas = 'Desired replicas is required for scale action.';
-        } else if (!INPUT_TEMPLATE.test(String(config.replicas))) {
+        } else if (!INPUT_TEMPLATE.test(String(config.replicas).trim())) {
           const replicas = Number(config.replicas);
           if (!Number.isInteger(replicas) || replicas < 0 || replicas > 10000) {
             errors.replicas = 'Desired replicas must be an integer between 0 and 10,000.';
@@ -271,11 +282,13 @@ export function validateRunbook(
 ): {
   stepErrors: Map<number, Record<string, string>>;
   inputErrors: Map<number, Record<string, string>>;
+  generalInputErrors: string[];
   hasErrors: boolean;
   errorCount: number;
 } {
   const stepErrors = new Map<number, Record<string, string>>();
   const inputErrors = new Map<number, Record<string, string>>();
+  const generalInputErrors: string[] = [];
   const allKeys = flattenSteps(definition).map(s => s.key);
   let errorCount = 0;
 
@@ -304,6 +317,8 @@ export function validateRunbook(
           current.general = issue.message;
         }
         inputErrors.set(index, current);
+      } else {
+        generalInputErrors.push(issue.message);
       }
     }
   }
@@ -311,6 +326,7 @@ export function validateRunbook(
   return {
     stepErrors,
     inputErrors,
+    generalInputErrors,
     hasErrors: errorCount > 0,
     errorCount,
   };

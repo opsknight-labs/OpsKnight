@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import {
+  AlertTriangle,
   Code2,
   ListOrdered,
   Plus,
@@ -64,6 +65,7 @@ export default function RunbookBuilder({
     initialInputs.map(() => crypto.randomUUID())
   );
   const [dirty, setDirty] = useState(false);
+  const [activeTab, setActiveTab] = useState('builder');
   const [advancedDefinition, setAdvancedDefinition] = useState(
     JSON.stringify(initialDefinition, null, 2)
   );
@@ -72,7 +74,10 @@ export default function RunbookBuilder({
   const [unappliedJson, setUnappliedJson] = useState(false);
 
   // Compute live validation results
-  const { stepErrors, inputErrors, errorCount } = validateRunbook(definition, inputs);
+  const { stepErrors, inputErrors, generalInputErrors, errorCount } = validateRunbook(
+    definition,
+    inputs
+  );
 
   // Derive active index and selected step from stable selectedStepId
   const foundIndex = selectedStepId ? stepIdentities.indexOf(selectedStepId) : -1;
@@ -86,6 +91,15 @@ export default function RunbookBuilder({
     if (id) {
       setSelectedStepId(id);
     }
+  }
+
+  function handleNavigateToStep(index: number) {
+    setActiveTab('builder');
+    handleSelectStep(index);
+  }
+
+  function handleNavigateToInputs() {
+    setActiveTab('inputs');
   }
 
   function updateStep(index: number, patch: Partial<RunbookStepDefinition>) {
@@ -249,6 +263,11 @@ export default function RunbookBuilder({
         dirty={dirty}
         unappliedJson={unappliedJson}
         draftRevision={draftRevision}
+        stepErrors={stepErrors}
+        inputErrors={inputErrors}
+        generalInputErrors={generalInputErrors}
+        onNavigateToStep={handleNavigateToStep}
+        onNavigateToInputs={handleNavigateToInputs}
       />
     </div>
   );
@@ -258,6 +277,22 @@ export default function RunbookBuilder({
       <p className="text-sm text-muted-foreground">
         Define reusable parameters for this runbook. Parameters can be bound to services, passed at manual launch, or evaluated from incident metadata.
       </p>
+      {generalInputErrors.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive space-y-1"
+        >
+          <p className="font-semibold flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            Parameter configuration issues:
+          </p>
+          <ul className="list-disc list-inside space-y-0.5 pl-1">
+            {generalInputErrors.map((err, i) => (
+              <li key={i}>{err}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {inputs.map((input, index) => {
         const update = (patch: Partial<RunbookInputInput>) => {
           setInputs(current =>
@@ -515,6 +550,8 @@ export default function RunbookBuilder({
 
       <DetailTabs
         urlParamName="editor"
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
         tabs={[
           {
             id: 'builder',

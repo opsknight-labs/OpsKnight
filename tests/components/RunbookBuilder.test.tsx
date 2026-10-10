@@ -6,6 +6,7 @@ import { newBuilderStep } from '@/lib/runbooks/builder';
 import { parseRunbookDefinition } from '@/lib/runbooks/definition';
 import { validateRunbook, validateStep } from '@/components/runbooks/builder/validation';
 import type { RunbookInputInput } from '@/lib/runbooks/schemas';
+import type { RunbookDefinition, RunbookStepDefinition } from '@/lib/runbooks/types';
 
 vi.mock('@/components/ui/DetailTabs', () => ({
   default: ({ tabs }: { tabs: { id: string; content: ReactNode }[] }) => (
@@ -476,6 +477,286 @@ describe('Runbook nested check builder', () => {
     const validResult = validateStep(validK8sStep);
     expect(validResult.isValid).toBe(true);
     expect(validResult.errors.resource).toBeUndefined();
+  });
+
+  it('loads, edits, saves and reloads a scale step using a replica template', () => {
+    const templatedScaleStep: RunbookStepDefinition = {
+      ...newBuilderStep('KUBERNETES', 'scale_step'),
+      name: 'Scale Checkout Service',
+      riskClass: 'IDEMPOTENT_WRITE',
+      config: {
+        action: 'scale',
+        namespace: 'production',
+        resource: 'deployment',
+        name: 'checkout-api',
+        replicas: '${{ inputs.target_replicas }}',
+      },
+    };
+
+    const runbookInputs: RunbookInputInput[] = [
+      {
+        key: 'target_replicas',
+        label: 'Target Replicas',
+        type: 'NUMBER',
+        description: '',
+        required: true,
+        sequence: 0,
+      },
+      {
+        key: 'fallback_replicas',
+        label: 'Fallback Replicas',
+        type: 'NUMBER',
+        description: '',
+        required: false,
+        sequence: 1,
+      },
+    ];
+
+    // 1. Initial Load: template must be visibly displayed in input reference field
+    const { container, unmount } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [templatedScaleStep] }}
+        initialInputs={runbookInputs}
+        action={async () => {}}
+      />
+    );
+
+    const templateInput = screen.getByLabelText(
+      'Desired replicas input reference'
+    ) as HTMLInputElement;
+    expect(templateInput.value).toBe('${{ inputs.target_replicas }}');
+
+    // 2. Edit template value
+    fireEvent.change(templateInput, {
+      target: { value: '${{ inputs.fallback_replicas }}' },
+    });
+
+    // 3. Save: check that serialized hidden definition contains the edited template
+    const savedDefinitionJson = (
+      container.querySelector('input[name="definition"]') as HTMLInputElement
+    ).value;
+    const savedDefinition = parseRunbookDefinition(JSON.parse(savedDefinitionJson));
+    expect(savedDefinition.steps[0].config.replicas).toBe('${{ inputs.fallback_replicas }}');
+
+    unmount();
+
+    // 4. Reload: verify that loading the saved definition renders the updated template visibly
+    const { container: reloadedContainer } = render(
+      <RunbookBuilder
+        initialDefinition={savedDefinition}
+        initialInputs={runbookInputs}
+        action={async () => {}}
+      />
+    );
+
+    const reloadedTemplateInput = screen.getByLabelText(
+      'Desired replicas input reference'
+    ) as HTMLInputElement;
+    expect(reloadedTemplateInput.value).toBe('${{ inputs.fallback_replicas }}');
+
+    // 5. Mode Switch: switch to Fixed count
+    const fixedModeBtn = screen.getByRole('button', { name: 'Fixed count' });
+    fireEvent.click(fixedModeBtn);
+
+    const fixedNumberInput = screen.getByLabelText(
+      'Desired replicas (Agent policy is authoritative)'
+    ) as HTMLInputElement;
+    fireEvent.change(fixedNumberInput, { target: { value: '4' } });
+
+    const fixedSaved = parseRunbookDefinition(
+      JSON.parse(
+        (reloadedContainer.querySelector('input[name="definition"]') as HTMLInputElement).value
+      )
+    );
+    expect(fixedSaved.steps[0].config.replicas).toBe(4);
+  });
+
+  it('rejects explicitly empty Kubernetes namespace locally to match server semantics', () => {
+    // Explicit empty namespace must fail
+    const stepEmptyNs = {
+      ...newBuilderStep('KUBERNETES', 'k8s_empty_ns'),
+      name: 'Get Pods',
+      config: {
+        action: 'get',
+        namespace: '',
+        resource: 'pods',
+      },
+    };
+    const resultEmpty = validateStep(stepEmptyNs);
+    expect(resultEmpty.isValid).toBe(false);
+    expect(resultEmpty.errors.namespace).toBeTruthy();
+
+    // Explicit whitespace namespace must fail
+    const stepWhitespaceNs = {
+      ...newBuilderStep('KUBERNETES', 'k8s_whitespace_ns'),
+      name: 'Get Pods',
+      config: {
+        action: 'get',
+        namespace: '   ',
+        resource: 'pods',
+      },
+    };
+    const resultWhitespace = validateStep(stepWhitespaceNs);
+    expect(resultWhitespace.isValid).toBe(false);
+    expect(resultWhitespace.errors.namespace).toBeTruthy();
+
+    // Omitted namespace legitimately defaults to 'default' and succeeds
+    const stepOmittedNs = {
+      ...newBuilderStep('KUBERNETES', 'k8s_omitted_ns'),
+      name: 'Get Pods',
+      config: {
+        action: 'get',
+        resource: 'pods',
+      },
+    };
+    const resultOmitted = validateStep(stepOmittedNs);
+    expect(resultOmitted.isValid).toBe(true);
+    expect(resultOmitted.errors.namespace).toBeUndefined();
+
+    // Input template namespace succeeds
+    const stepTemplateNs = {
+      ...newBuilderStep('KUBERNETES', 'k8s_template_ns'),
+      name: 'Get Pods',
+      config: {
+        action: 'get',
+        namespace: '${{ inputs.target_namespace }}',
+        resource: 'pods',
+      },
+    };
+    const resultTemplate = validateStep(stepTemplateNs);
+    expect(resultTemplate.isValid).toBe(true);
+    expect(resultTemplate.errors.namespace).toBeUndefined();
+  });
+
+  it('enforces validation parity across all step action types', () => {
+    // 1. HTTP: requires URL, rejects embedded credentials, supports input templates
+    const invalidHttpCreds = {
+      ...newBuilderStep('HTTP', 'http_creds'),
+      name: 'Call API',
+      config: { url: 'https://user:pass@api.internal/health' },
+    };
+    expect(validateStep(invalidHttpCreds).errors.url).toContain('credentials');
+
+    const validHttpTemplate = {
+      ...newBuilderStep('HTTP', 'http_tmpl'),
+      name: 'Call API',
+      config: { url: '${{ inputs.endpoint_url }}' },
+    };
+    expect(validateStep(validHttpTemplate).isValid).toBe(true);
+
+    // 2. SYSTEMD: rejects leading hyphen, validates unit suffix
+    const invalidSystemdHyphen = {
+      ...newBuilderStep('SYSTEMD', 'sys_hyphen'),
+      name: 'Unit Check',
+      config: { unit: '-invalid.service' },
+    };
+    expect(validateStep(invalidSystemdHyphen).isValid).toBe(false);
+
+    // 3. DOCKER: rejects leading hyphen, validates container name
+    const invalidDockerHyphen = {
+      ...newBuilderStep('DOCKER', 'docker_hyphen'),
+      name: 'Container Check',
+      config: { container: '-my-container' },
+    };
+    expect(validateStep(invalidDockerHyphen).isValid).toBe(false);
+
+    // 4. LINUX_DIAGNOSTICS: validates TCP port range
+    const invalidTcpPort = {
+      ...newBuilderStep('LINUX_DIAGNOSTICS', 'diag_tcp'),
+      name: 'TCP Check',
+      config: { diagnostic: 'tcp', host: '127.0.0.1', port: 70000 },
+    };
+    expect(validateStep(invalidTcpPort).errors.port).toBeTruthy();
+
+    // 5. WAIT: validates duration bounds 1-3600
+    const invalidWait = {
+      ...newBuilderStep('WAIT', 'wait_step'),
+      name: 'Pause',
+      config: { durationSeconds: 5000 },
+    };
+    expect(validateStep(invalidWait).errors.durationSeconds).toBeTruthy();
+
+    // 6. CONDITION: validates field and operator
+    const invalidCond = {
+      ...newBuilderStep('CONDITION', 'cond_step'),
+      name: 'Check Status',
+      config: { field: '', operator: 'EQUALS', value: 'UP' },
+    };
+    expect(validateStep(invalidCond).errors.field).toBeTruthy();
+  });
+
+  it('captures general input array errors in validateRunbook and provides clear destination', () => {
+    // Construct 31 inputs to exceed MAX_RUNBOOK_INPUTS (30)
+    const tooManyInputs: RunbookInputInput[] = Array.from({ length: 31 }, (_, i) => ({
+      key: `param_${i + 1}`,
+      label: `Param ${i + 1}`,
+      type: 'STRING',
+      description: '',
+      required: false,
+      sequence: i,
+    }));
+
+    const definition: RunbookDefinition = {
+      steps: [newBuilderStep('WAIT', 'wait_step')],
+    };
+
+    const { generalInputErrors, errorCount } = validateRunbook(definition, tooManyInputs);
+    expect(generalInputErrors.length).toBeGreaterThan(0);
+    expect(generalInputErrors[0]).toContain('at most 30 element(s)');
+    expect(errorCount).toBeGreaterThanOrEqual(1);
+
+    // Render in builder to ensure the form-level parameter alert renders
+    render(
+      <RunbookBuilder
+        initialDefinition={definition}
+        initialInputs={tooManyInputs}
+        action={async () => {}}
+      />
+    );
+
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.getByText('Parameter configuration issues:')).toBeTruthy();
+    expect(screen.getByText(/at most 30 element/i)).toBeTruthy();
+  });
+
+  it('renders compact readiness summary and expandable panel with actionable navigation', () => {
+    const invalidStep = {
+      ...newBuilderStep('HTTP', 'bad_http'),
+      name: 'Call Target',
+      config: { url: '' }, // Missing URL
+    };
+    const invalidInputs: RunbookInputInput[] = [
+      {
+        key: 'INVALID KEY!', // Invalid key format
+        label: 'My Input',
+        type: 'STRING',
+        description: '',
+        required: false,
+        sequence: 0,
+      },
+    ];
+
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [invalidStep] }}
+        initialInputs={invalidInputs}
+        action={async () => {}}
+      />
+    );
+
+    // Initial compact readiness bar must show issues count
+    const issuesBtn = screen.getByTitle('Toggle error details');
+    expect(issuesBtn).toBeTruthy();
+    expect(issuesBtn.textContent).toContain('issues');
+
+    // Click details to expand the actionable panel
+    const detailsBtn = screen.getByRole('button', { name: /Show summary details/i });
+    fireEvent.click(detailsBtn);
+
+    // Panel should now display the actionable issues list
+    expect(screen.getByText(/Actionable Issues/i)).toBeTruthy();
+    expect(screen.getByText(/"Call Target" \(url\)/i)).toBeTruthy();
+    expect(screen.getByText(/Parameter #1 \(key\)/i)).toBeTruthy();
   });
 });
 

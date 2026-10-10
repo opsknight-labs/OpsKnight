@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
+import { Button } from '@/components/ui/shadcn/button';
 import { FormSelect } from '../../RunbookControls';
 import type { RunbookInputInput } from '@/lib/runbooks/schemas';
 
@@ -85,13 +87,21 @@ export default function KubernetesActionEditor({
   onChange,
 }: KubernetesActionEditorProps) {
   const action = String(config.action ?? 'get');
-  const namespace = String(config.namespace ?? 'default');
+  const namespace = config.namespace !== undefined ? String(config.namespace) : 'default';
   const resource = String(config.resource ?? 'deployment');
   const name = String(config.name ?? '');
   const rawReplicas = config.replicas;
   const isScale = action === 'scale';
   const requiresName = ['logs', 'rollout-restart', 'rollout-status', 'scale'].includes(action);
   const resourceNameError = errors.resourceName;
+
+  const isTemplateReplica =
+    typeof rawReplicas === 'string' &&
+    (rawReplicas.trim().startsWith('${{') ||
+      /^\$\{\{\s*inputs\.[a-z0-9_]+\s*\}\}$/.test(rawReplicas.trim()));
+
+  const [modeOverride, setModeOverride] = useState<'fixed' | 'input' | null>(null);
+  const replicaMode = modeOverride ?? (isTemplateReplica ? 'input' : 'fixed');
 
   const handleActionChange = (nextAction: string) => {
     const nextConfig: Record<string, unknown> = {
@@ -116,6 +126,26 @@ export default function KubernetesActionEditor({
     } else {
       const parsed = Number(trimmed);
       nextConfig.replicas = Number.isNaN(parsed) ? trimmed : parsed;
+    }
+    onChange(nextConfig);
+  };
+
+  const handleSwitchToFixed = () => {
+    setModeOverride('fixed');
+    const nextConfig = { ...config };
+    if (typeof rawReplicas === 'string' && isTemplateReplica) {
+      delete nextConfig.replicas;
+    }
+    onChange(nextConfig);
+  };
+
+  const handleSwitchToInput = () => {
+    setModeOverride('input');
+    const nextConfig = { ...config };
+    if (!isTemplateReplica) {
+      const defaultParam =
+        inputs.find(i => i.type === 'NUMBER' || i.type === 'STRING')?.key || 'replicas';
+      nextConfig.replicas = `\${{ inputs.${defaultParam} }}`;
     }
     onChange(nextConfig);
   };
@@ -201,31 +231,113 @@ export default function KubernetesActionEditor({
       </div>
 
       {isScale && (
-        <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor={`k8s-replicas-${editorId}`} className="font-semibold text-foreground">
-              Desired Replicas <span className="text-destructive">*</span>
-            </Label>
-            <span className="text-xs text-muted-foreground">Must be integer 0–10,000</span>
+        <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <Label className="font-semibold text-foreground">
+                Desired Replicas <span className="text-destructive">*</span>
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {replicaMode === 'fixed'
+                  ? 'Must be integer 0–10,000'
+                  : 'Bound to a typed parameter'}
+              </p>
+            </div>
+            {!readOnly && (
+              <div className="flex items-center gap-1 rounded-lg border bg-background/80 p-0.5">
+                <Button
+                  type="button"
+                  variant={replicaMode === 'fixed' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-6 text-[11px] px-2 font-medium"
+                  onClick={handleSwitchToFixed}
+                >
+                  Fixed count
+                </Button>
+                <Button
+                  type="button"
+                  variant={replicaMode === 'input' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-6 text-[11px] px-2 font-medium"
+                  onClick={handleSwitchToInput}
+                >
+                  Typed input
+                </Button>
+              </div>
+            )}
           </div>
-          <Input
-            id={`k8s-replicas-${editorId}`}
-            aria-label="Desired replicas (Agent policy is authoritative)"
-            type="number"
-            min={0}
-            max={10000}
-            placeholder="e.g. 3 (leave empty while drafting; 0 is scale-to-zero)"
-            value={rawReplicas === undefined || rawReplicas === null ? '' : String(rawReplicas)}
-            disabled={readOnly}
-            onChange={e => handleReplicasChange(e.target.value)}
-            className={errors.replicas ? 'border-destructive' : ''}
-          />
-          {errors.replicas ? (
-            <p className="text-xs font-medium text-destructive">{errors.replicas}</p>
+
+          {replicaMode === 'fixed' ? (
+            <div className="space-y-1.5">
+              <Input
+                id={`k8s-replicas-${editorId}`}
+                aria-label="Desired replicas (Agent policy is authoritative)"
+                type="number"
+                min={0}
+                max={10000}
+                placeholder="e.g. 3 (leave empty while drafting; 0 is scale-to-zero)"
+                value={
+                  rawReplicas === undefined || rawReplicas === null || isTemplateReplica
+                    ? ''
+                    : String(rawReplicas)
+                }
+                disabled={readOnly}
+                onChange={e => handleReplicasChange(e.target.value)}
+                className={errors.replicas ? 'border-destructive' : ''}
+              />
+              {errors.replicas ? (
+                <p className="text-xs font-medium text-destructive">{errors.replicas}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  ⚠️ <strong>Safe Handling:</strong> Clearing this field keeps it unconfigured. Setting explicitly to <code className="font-mono font-bold">0</code> executes a scale-to-zero shutdown.
+                </p>
+              )}
+            </div>
           ) : (
-            <p className="text-xs text-muted-foreground">
-              ⚠️ <strong>Safe Handling:</strong> Clearing this field keeps it unconfigured. Setting explicitly to <code className="font-mono font-bold">0</code> executes a scale-to-zero shutdown.
-            </p>
+            <div className="space-y-2">
+              <Input
+                id={`k8s-replicas-input-${editorId}`}
+                aria-label="Desired replicas input reference"
+                placeholder="e.g. ${{ inputs.replicas }}"
+                value={typeof rawReplicas === 'string' ? rawReplicas : ''}
+                disabled={readOnly}
+                onChange={e => onChange({ ...config, replicas: e.target.value })}
+                className={`font-mono text-xs ${errors.replicas ? 'border-destructive' : ''}`}
+              />
+              {inputs.filter(i => i.type === 'NUMBER' || i.type === 'STRING').length > 0 &&
+                !readOnly && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <span className="text-[11px] text-muted-foreground">Suggested inputs:</span>
+                    {inputs
+                      .filter(i => i.type === 'NUMBER' || i.type === 'STRING')
+                      .map(i => {
+                        const templateVal = `\${{ inputs.${i.key} }}`;
+                        const isSelected = rawReplicas === templateVal;
+                        return (
+                          <button
+                            key={i.key}
+                            type="button"
+                            onClick={() => onChange({ ...config, replicas: templateVal })}
+                            className={`rounded px-1.5 py-0.5 font-mono text-[11px] border transition-colors ${
+                              isSelected
+                                ? 'bg-primary text-primary-foreground border-primary font-medium'
+                                : 'bg-background hover:bg-muted text-foreground'
+                            }`}
+                          >
+                            {templateVal}
+                          </button>
+                        );
+                      })}
+                  </div>
+                )}
+              {errors.replicas ? (
+                <p className="text-xs font-medium text-destructive">{errors.replicas}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Template reference evaluated safely at execution time from resolved runbook inputs.
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}
