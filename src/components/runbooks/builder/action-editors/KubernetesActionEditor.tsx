@@ -143,8 +143,7 @@ export default function KubernetesActionEditor({
     setModeOverride('input');
     const nextConfig = { ...config };
     if (!isTemplateReplica) {
-      const defaultParam =
-        inputs.find(i => i.type === 'NUMBER' || i.type === 'STRING')?.key || 'replicas';
+      const defaultParam = inputs.find(i => i.type === 'NUMBER')?.key || 'replicas';
       nextConfig.replicas = `\${{ inputs.${defaultParam} }}`;
     }
     onChange(nextConfig);
@@ -304,12 +303,12 @@ export default function KubernetesActionEditor({
                 onChange={e => onChange({ ...config, replicas: e.target.value })}
                 className={`font-mono text-xs ${errors.replicas ? 'border-destructive' : ''}`}
               />
-              {inputs.filter(i => i.type === 'NUMBER' || i.type === 'STRING').length > 0 &&
+              {inputs.filter(i => i.type === 'NUMBER').length > 0 &&
                 !readOnly && (
                   <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                     <span className="text-[11px] text-muted-foreground">Suggested inputs:</span>
                     {inputs
-                      .filter(i => i.type === 'NUMBER' || i.type === 'STRING')
+                      .filter(i => i.type === 'NUMBER')
                       .map(i => {
                         const templateVal = `\${{ inputs.${i.key} }}`;
                         const isSelected = rawReplicas === templateVal;

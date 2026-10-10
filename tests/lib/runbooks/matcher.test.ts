@@ -89,4 +89,97 @@ describe('runbook trigger matcher', () => {
       })
     ).toBe(true);
   });
+
+  it('matches typed NUMBER and BOOLEAN values with string representations across operators', () => {
+    const typedContext = {
+      inputs: {
+        replicas: 4,
+        threshold: '4',
+        enabled: true,
+        maintenance: false,
+        flagStr: 'true',
+      },
+    };
+
+    // NUMBER comparison (number vs string representation)
+    expect(
+      matchesCondition(typedContext, {
+        field: 'inputs.replicas',
+        operator: 'EQUALS',
+        value: '4',
+      })
+    ).toBe(true);
+    expect(
+      matchesCondition(typedContext, {
+        field: 'inputs.threshold',
+        operator: 'EQUALS',
+        value: 4,
+      })
+    ).toBe(true);
+    expect(
+      matchesCondition(typedContext, {
+        field: 'inputs.replicas',
+        operator: 'NOT_EQUALS',
+        value: '5',
+      })
+    ).toBe(true);
+    expect(
+      matchesCondition(typedContext, {
+        field: 'inputs.replicas',
+        operator: 'IN',
+        value: ['3', '4', '5'],
+      })
+    ).toBe(true);
+    expect(
+      matchesCondition(typedContext, {
+        field: 'inputs.replicas',
+        operator: 'IN',
+        value: [1, 2, 3],
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(typedContext, {
+        field: 'inputs.replicas',
+        operator: 'NOT_IN',
+        value: ['1', '2', '3'],
+      })
+    ).toBe(true);
+
+    // BOOLEAN comparison (boolean vs string representation)
+    expect(
+      matchesCondition(typedContext, {
+        field: 'inputs.enabled',
+        operator: 'EQUALS',
+        value: 'true',
+      })
+    ).toBe(true);
+    expect(
+      matchesCondition(typedContext, {
+        field: 'inputs.flagStr',
+        operator: 'EQUALS',
+        value: true,
+      })
+    ).toBe(true);
+    expect(
+      matchesCondition(typedContext, {
+        field: 'inputs.maintenance',
+        operator: 'EQUALS',
+        value: 'false',
+      })
+    ).toBe(true);
+    expect(
+      matchesCondition(typedContext, {
+        field: 'inputs.maintenance',
+        operator: 'NOT_EQUALS',
+        value: 'true',
+      })
+    ).toBe(true);
+    expect(
+      matchesCondition(typedContext, {
+        field: 'inputs.enabled',
+        operator: 'IN',
+        value: ['true', 'false'],
+      })
+    ).toBe(true);
+  });
 });

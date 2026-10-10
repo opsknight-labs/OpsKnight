@@ -39,6 +39,10 @@ export default function ConditionActionEditor({
   const rawValue = config.value;
   const isUnary = ['EXISTS', 'NOT_EXISTS'].includes(operator);
 
+  const targetInput = inputs.find(
+    inp => field === `input.${inp.key}` || field === `inputs.${inp.key}`
+  );
+
   const valueString =
     rawValue === undefined || rawValue === null
       ? ''
@@ -46,35 +50,94 @@ export default function ConditionActionEditor({
         ? rawValue.join(', ')
         : String(rawValue);
 
+  const coerceValue = (valStr: string, op: string) => {
+    if (['IN', 'NOT_IN'].includes(op)) {
+      const parts = valStr
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+      if (targetInput?.type === 'NUMBER') {
+        return parts.map(p => (!isNaN(Number(p)) && p !== '' ? Number(p) : p));
+      }
+      if (targetInput?.type === 'BOOLEAN') {
+        return parts.map(p => {
+          const lower = p.toLowerCase();
+          if (lower === 'true') return true;
+          if (lower === 'false') return false;
+          return p;
+        });
+      }
+      return parts;
+    }
+
+    if (targetInput?.type === 'NUMBER') {
+      const trimmed = valStr.trim();
+      if (trimmed !== '' && !isNaN(Number(trimmed))) {
+        return Number(trimmed);
+      }
+      return valStr;
+    }
+    if (targetInput?.type === 'BOOLEAN') {
+      const lower = valStr.trim().toLowerCase();
+      if (lower === 'true') return true;
+      if (lower === 'false') return false;
+      return valStr;
+    }
+    return valStr;
+  };
+
+  const handleFieldChange = (nextField: string) => {
+    const nextTargetInput = inputs.find(
+      inp => nextField === `input.${inp.key}` || nextField === `inputs.${inp.key}`
+    );
+    let nextValue = config.value;
+    if (valueString !== '' && !['EXISTS', 'NOT_EXISTS'].includes(operator)) {
+      if (nextTargetInput?.type === 'NUMBER') {
+        if (!isNaN(Number(valueString))) {
+          nextValue = Number(valueString);
+        }
+      } else if (nextTargetInput?.type === 'BOOLEAN') {
+        if (valueString.toLowerCase() === 'true') nextValue = true;
+        else if (valueString.toLowerCase() === 'false') nextValue = false;
+      }
+    }
+    onChange({ ...config, field: nextField, value: nextValue });
+  };
+
   const handleOperatorChange = (nextOp: string) => {
     const nextConfig: Record<string, unknown> = { ...config, operator: nextOp };
     if (['EXISTS', 'NOT_EXISTS'].includes(nextOp)) {
       nextConfig.value = null;
     } else if (['IN', 'NOT_IN'].includes(nextOp)) {
-      nextConfig.value = valueString
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
+      nextConfig.value = coerceValue(valueString, nextOp);
     } else {
-      // Scalar operators: EQUALS, NOT_EQUALS, CONTAINS, STARTS_WITH
+      let scalarStr = '';
       if (Array.isArray(rawValue)) {
-        nextConfig.value = rawValue.length > 0 ? String(rawValue[0]) : '';
+        scalarStr = rawValue.length > 0 ? String(rawValue[0]) : '';
       } else if (rawValue === null || rawValue === undefined) {
-        nextConfig.value = '';
+        scalarStr = '';
       } else {
-        nextConfig.value = String(rawValue);
+        scalarStr = String(rawValue);
       }
+      nextConfig.value = coerceValue(scalarStr, nextOp);
     }
     onChange(nextConfig);
   };
 
   const handleValueChange = (nextValStr: string) => {
-    let finalVal: unknown = nextValStr;
-    if (['IN', 'NOT_IN'].includes(operator)) {
-      finalVal = nextValStr.split(',').map(s => s.trim()).filter(Boolean);
-    }
+    const finalVal = coerceValue(nextValStr, operator);
     onChange({ ...config, value: finalVal });
   };
+
+  const placeholderText = ['IN', 'NOT_IN'].includes(operator)
+    ? targetInput?.type === 'NUMBER'
+      ? 'e.g. 1, 2, 3'
+      : 'e.g. P1, P2, CRITICAL'
+    : targetInput?.type === 'NUMBER'
+      ? 'e.g. 3'
+      : targetInput?.type === 'BOOLEAN'
+        ? 'true or false'
+        : 'e.g. P1';
 
   return (
     <div className="space-y-4">
@@ -87,7 +150,7 @@ export default function ConditionActionEditor({
               label="Condition field"
               value={field}
               disabled={readOnly}
-              onValueChange={(nextField: string) => onChange({ ...config, field: nextField })}
+              onValueChange={handleFieldChange}
               options={[
                 ...CONDITION_FIELDS,
                 ...inputs.map(input => ({
@@ -101,10 +164,10 @@ export default function ConditionActionEditor({
         </div>
 
         <div>
-          <Label htmlFor="condition-operator">Comparison Operator</Label>
+          <Label htmlFor={`condition-operator-${editorId}`}>Comparison Operator</Label>
           <div className="mt-1.5">
             <FormSelect
-              name="condition-operator"
+              name={`condition-operator-${editorId}`}
               label="Operator"
               value={operator}
               disabled={readOnly}
@@ -118,12 +181,12 @@ export default function ConditionActionEditor({
 
       {!isUnary && (
         <div>
-          <Label htmlFor="condition-value">Match Value</Label>
+          <Label htmlFor={`condition-value-${editorId}`}>Match Value</Label>
           <div className="mt-1.5">
             <Input
-              id="condition-value"
+              id={`condition-value-${editorId}`}
               aria-label="Match value (comma-separated for IN / NOT_IN)"
-              placeholder={['IN', 'NOT_IN'].includes(operator) ? 'e.g. P1, P2, CRITICAL' : 'e.g. P1'}
+              placeholder={placeholderText}
               value={valueString}
               disabled={readOnly}
               onChange={e => handleValueChange(e.target.value)}

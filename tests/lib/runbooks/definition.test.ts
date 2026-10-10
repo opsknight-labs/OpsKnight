@@ -642,6 +642,34 @@ describe('Runbook Definition Module', () => {
       expect(() => parseRunbookDefinition(invalidScaleDef)).toThrow(
         'Kubernetes scale action does not support resource "pod"'
       );
+
+      // scale accepts replica template bound to NUMBER input
+      const templatedScaleDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'KUBERNETES',
+            riskClass: 'IDEMPOTENT_WRITE',
+            config: {
+              action: 'scale',
+              resource: 'deployment',
+              name: 'my-deploy',
+              replicas: '${{ inputs.replica_count }}',
+            },
+          }),
+        ],
+      });
+      expect(() =>
+        parseRunbookDefinition(templatedScaleDef, [{ key: 'replica_count', type: 'NUMBER' }])
+      ).not.toThrow();
+
+      // scale rejects replica template bound to STRING input
+      expect(() =>
+        parseRunbookDefinition(templatedScaleDef, [{ key: 'replica_count', type: 'STRING' }])
+      ).toThrow(/must be NUMBER/);
+
+      // scale rejects replica template bound to undeclared input
+      expect(() => parseRunbookDefinition(templatedScaleDef, [])).toThrow(/undeclared replica input/);
     });
   });
 });
+

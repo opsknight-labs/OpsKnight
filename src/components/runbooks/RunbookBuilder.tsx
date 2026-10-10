@@ -41,8 +41,103 @@ import StepEditor from './builder/StepEditor';
 import ReadinessBar from './builder/ReadinessBar';
 import { validateRunbook } from './builder/validation';
 
-function getNextUnusedInputKey(existingInputs: RunbookInputInput[]): string {
+export function collectAllReferencedInputKeys(def: RunbookDefinition): Set<string> {
+  const referenced = new Set<string>();
+  const steps = flattenSteps(def);
+
+  for (const step of steps) {
+    // 1. Template references anywhere in config, name, or description
+    const serialized = JSON.stringify({
+      config: step.config,
+      name: step.name,
+      description: step.description,
+    });
+    const templateMatches = serialized.matchAll(/\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}/g);
+    for (const match of templateMatches) {
+      referenced.add(match[1]);
+    }
+
+    // 2. Condition field references: input.<key> or inputs.<key>
+    if (step.type === 'CONDITION' && typeof step.config?.field === 'string') {
+      const field = step.config.field.trim();
+      if (field.startsWith('input.')) {
+        referenced.add(field.slice(6));
+      } else if (field.startsWith('inputs.')) {
+        referenced.add(field.slice(7));
+      }
+    }
+
+    // 3. Bash environment variable references: $OPSKNIGHT_INPUT_<KEY> or ${OPSKNIGHT_INPUT_<KEY>}
+    if (step.type === 'BASH' && typeof step.config?.command === 'string') {
+      const cmd = step.config.command;
+      const bashMatches = cmd.matchAll(/(?:\$|%)\{?OPSKNIGHT_INPUT_([A-Z0-9_]+)\}?/g);
+      for (const match of bashMatches) {
+        referenced.add(match[1].toLowerCase());
+      }
+    }
+  }
+
+  return referenced;
+}
+
+export function getInputUsage(
+  def: RunbookDefinition,
+  inputKey: string
+): { isReferenced: boolean; stepNames: string[] } {
+  if (!inputKey) return { isReferenced: false, stepNames: [] };
+  const stepNames: string[] = [];
+  const normalizedKey = inputKey.toLowerCase();
+  const upperKey = inputKey.toUpperCase();
+  const templateRegex = new RegExp(`\\$\\{\\{\\s*inputs\\.${inputKey}\\s*\\}\\}`, 'i');
+  const bashRegex = new RegExp(`(?:\\$|%)\\{?OPSKNIGHT_INPUT_${upperKey}\\}?(?:\\b|[^A-Za-z0-9_]|$)`);
+
+  for (const step of flattenSteps(def)) {
+    let referenced = false;
+    const serialized = JSON.stringify({
+      config: step.config,
+      name: step.name,
+      description: step.description,
+    });
+
+    if (templateRegex.test(serialized)) {
+      referenced = true;
+    } else if (
+      step.type === 'CONDITION' &&
+      typeof step.config?.field === 'string' &&
+      (step.config.field === `input.${inputKey}` ||
+        step.config.field === `inputs.${inputKey}` ||
+        step.config.field.toLowerCase() === `input.${normalizedKey}`)
+    ) {
+      referenced = true;
+    } else if (
+      step.type === 'BASH' &&
+      typeof step.config?.command === 'string' &&
+      bashRegex.test(step.config.command)
+    ) {
+      referenced = true;
+    }
+
+    if (referenced) {
+      stepNames.push(step.name || step.key);
+    }
+  }
+
+  return {
+    isReferenced: stepNames.length > 0,
+    stepNames,
+  };
+}
+
+export function getNextUnusedInputKey(
+  existingInputs: RunbookInputInput[],
+  definition?: RunbookDefinition
+): string {
   const existingKeys = new Set(existingInputs.map(i => i.key));
+  if (definition) {
+    for (const key of collectAllReferencedInputKeys(definition)) {
+      existingKeys.add(key);
+    }
+  }
   let counter = 1;
   while (existingKeys.has(`input_${counter}`)) {
     counter++;
@@ -50,22 +145,61 @@ function getNextUnusedInputKey(existingInputs: RunbookInputInput[]): string {
   return `input_${counter}`;
 }
 
-function refactorInputReference(
+export function refactorInputReference(
   def: RunbookDefinition,
   oldKey: string,
   newKey: string
 ): RunbookDefinition {
   if (!oldKey || !newKey || oldKey === newKey) return def;
-  const oldTemplate = `\${{ inputs.${oldKey} }}`;
+
+  const oldTemplateRegex = new RegExp(`\\$\\{\\{\\s*inputs\\.${oldKey}\\s*\\}\\}`, 'g');
   const newTemplate = `\${{ inputs.${newKey} }}`;
 
+  const oldUpper = oldKey.toUpperCase();
+  const newUpper = newKey.toUpperCase();
+  const bashDirectRegex = new RegExp(`\\$OPSKNIGHT_INPUT_${oldUpper}\\b`, 'g');
+  const bashBracedRegex = new RegExp(`\\$\\{OPSKNIGHT_INPUT_${oldUpper}\\}`, 'g');
+
   function replaceInStep(step: RunbookStepDefinition): RunbookStepDefinition {
+    // 1. Config serialization replacement for embedded templates
     let serialized = JSON.stringify(step.config);
-    if (serialized.includes(oldTemplate)) {
-      serialized = serialized.replaceAll(oldTemplate, newTemplate);
+    serialized = serialized.replace(oldTemplateRegex, newTemplate);
+    const newConfig: Record<string, unknown> = JSON.parse(serialized);
+
+    // 2. Condition fields: input.oldKey -> input.newKey
+    if (step.type === 'CONDITION' && typeof newConfig.field === 'string') {
+      if (newConfig.field === `input.${oldKey}`) {
+        newConfig.field = `input.${newKey}`;
+      } else if (newConfig.field === `inputs.${oldKey}`) {
+        newConfig.field = `inputs.${newKey}`;
+      }
     }
-    const newConfig = JSON.parse(serialized);
-    const updated: RunbookStepDefinition = { ...step, config: newConfig };
+
+    // 3. Bash environment references: $OPSKNIGHT_INPUT_OLD_KEY -> $OPSKNIGHT_INPUT_NEW_KEY
+    if (step.type === 'BASH' && typeof newConfig.command === 'string') {
+      let cmd = newConfig.command;
+      cmd = cmd.replace(bashDirectRegex, `$OPSKNIGHT_INPUT_${newUpper}`);
+      cmd = cmd.replace(bashBracedRegex, `\${OPSKNIGHT_INPUT_${newUpper}}`);
+      newConfig.command = cmd;
+    }
+
+    // 4. Update step name or description if template was used
+    let newName = step.name;
+    if (newName && oldTemplateRegex.test(newName)) {
+      newName = newName.replace(oldTemplateRegex, newTemplate);
+    }
+    let newDesc = step.description;
+    if (newDesc && oldTemplateRegex.test(newDesc)) {
+      newDesc = newDesc.replace(oldTemplateRegex, newTemplate);
+    }
+
+    const updated: RunbookStepDefinition = {
+      ...step,
+      name: newName,
+      description: newDesc,
+      config: newConfig,
+    };
+
     if (updated.precheck?.steps) {
       updated.precheck = {
         ...updated.precheck,
@@ -107,9 +241,15 @@ export default function RunbookBuilder({
   );
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [inputs, setInputs] = useState(initialInputs);
-  const [inputIdentities, setInputIdentities] = useState(() =>
-    initialInputs.map(() => crypto.randomUUID())
-  );
+  const [initialIdentities] = useState(() => initialInputs.map(() => crypto.randomUUID()));
+  const [inputIdentities, setInputIdentities] = useState<string[]>(initialIdentities);
+  const [committedInputKeys, setCommittedInputKeys] = useState<Map<string, string>>(() => {
+    const map = new Map<string, string>();
+    initialInputs.forEach((inp, idx) => {
+      map.set(initialIdentities.at(idx) ?? String(idx), inp.key);
+    });
+    return map;
+  });
   const [dirty, setDirty] = useState(false);
   const [activeTab, setActiveTab] = useState('builder');
   const [advancedDefinition, setAdvancedDefinition] = useState(
@@ -159,18 +299,16 @@ export default function RunbookBuilder({
 
   function updateStep(index: number, patch: Partial<RunbookStepDefinition>) {
     setDirty(true);
-    setDefinition(current => {
-      const nextDef = {
-        ...current,
-        steps: current.steps.map((step, position) =>
-          position === index ? { ...step, ...patch } : step
-        ),
-      };
-      if (!unappliedJson) {
-        setAdvancedDefinition(JSON.stringify(nextDef, null, 2));
-      }
-      return nextDef;
-    });
+    const nextDef = {
+      ...definition,
+      steps: definition.steps.map((step, position) =>
+        position === index ? { ...step, ...patch } : step
+      ),
+    };
+    setDefinition(nextDef);
+    if (!unappliedJson) {
+      setAdvancedDefinition(JSON.stringify(nextDef, null, 2));
+    }
   }
 
   function moveStep(index: number, offset: number) {
@@ -371,12 +509,24 @@ export default function RunbookBuilder({
         </div>
       )}
       {inputs.map((input, index) => {
+        const usage = getInputUsage(definition, input.key);
+        const identity = inputIdentities.at(index) ?? String(index);
+
         const update = (patch: Partial<RunbookInputInput>) => {
           let nextDef = definition;
-          if (patch.key && patch.key !== input.key) {
-            nextDef = refactorInputReference(definition, input.key, patch.key);
-            setDefinition(nextDef);
+          const lastKey = committedInputKeys.get(identity) || input.key;
+
+          if (patch.key !== undefined) {
+            const nextKey = patch.key.trim();
+            if (nextKey !== '' && /^[a-z0-9_]+$/.test(nextKey)) {
+              if (lastKey && lastKey !== nextKey) {
+                nextDef = refactorInputReference(definition, lastKey, nextKey);
+                setDefinition(nextDef);
+                setCommittedInputKeys(prev => new Map(prev).set(identity, nextKey));
+              }
+            }
           }
+
           const nextInputs = inputs.map((item, position) =>
             position === index ? { ...item, ...patch } : item
           );
@@ -471,8 +621,24 @@ export default function RunbookBuilder({
                   variant="ghost"
                   size="sm"
                   aria-label={`Remove input ${index + 1}`}
-                  className="text-xs text-destructive hover:text-destructive h-7"
+                  disabled={usage.isReferenced}
+                  title={
+                    usage.isReferenced
+                      ? `Cannot remove parameter while referenced by: ${usage.stepNames.join(', ')}`
+                      : undefined
+                  }
+                  className={`text-xs h-7 ${
+                    usage.isReferenced
+                      ? 'text-muted-foreground cursor-not-allowed opacity-50'
+                      : 'text-destructive hover:text-destructive'
+                  }`}
                   onClick={() => {
+                    if (usage.isReferenced) return;
+                    setCommittedInputKeys(prev => {
+                      const next = new Map(prev);
+                      next.delete(identity);
+                      return next;
+                    });
                     const nextInputs = inputs.filter((_, position) => position !== index);
                     setInputs(nextInputs);
                     setInputIdentities(inputIdentities.filter((_, position) => position !== index));
@@ -487,6 +653,17 @@ export default function RunbookBuilder({
                 </Button>
               )}
             </div>
+            {usage.isReferenced && (
+              <div
+                role="status"
+                className="sm:col-span-2 text-[11px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md p-2 flex items-center gap-1.5"
+              >
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                <span>
+                  Referenced by <strong>{usage.stepNames.join(', ')}</strong>. Remove references from those steps before deleting this parameter.
+                </span>
+              </div>
+            )}
           </fieldset>
         );
       })}
@@ -506,7 +683,9 @@ export default function RunbookBuilder({
           size="sm"
           className="text-xs font-semibold"
           onClick={() => {
-            const nextKey = getNextUnusedInputKey(inputs);
+            const nextKey = getNextUnusedInputKey(inputs, definition);
+            const newId = crypto.randomUUID();
+            setCommittedInputKeys(prev => new Map(prev).set(newId, nextKey));
             const nextInputs = [
               ...inputs,
               {
@@ -519,7 +698,7 @@ export default function RunbookBuilder({
               },
             ];
             setInputs(nextInputs);
-            setInputIdentities([...inputIdentities, crypto.randomUUID()]);
+            setInputIdentities([...inputIdentities, newId]);
             if (!unappliedJson) {
               setAdvancedInputs(JSON.stringify(nextInputs, null, 2));
             }

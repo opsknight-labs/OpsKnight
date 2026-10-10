@@ -68,12 +68,12 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
     page.getByRole('list', { name: 'Runbook steps' }).getByRole('heading', { name: 'Capture baseline diagnostics' })
   ).toBeVisible();
   await page.getByLabel('Step key', { exact: true }).fill('baseline_check');
-  const before = page.locator('section[aria-label="Before action checks"]');
+  const before = page.locator('section[data-testid="action-precheck-checks"]');
   await before.getByRole('button', { name: 'Add precheck', exact: true }).click();
   await before.locator('summary').first().click();
   await before.getByLabel('Step name', { exact: true }).fill('Check service exists');
   await before.getByLabel('Service unit or input reference').fill('payments.service');
-  const after = page.locator('section[aria-label="After action checks"]');
+  const after = page.locator('section[data-testid="action-verification-checks"]');
   await after.getByRole('button', { name: 'Add verification', exact: true }).click();
   await after.locator('summary').first().click();
   await after.getByLabel('Step name', { exact: true }).fill('Verify service recovered');

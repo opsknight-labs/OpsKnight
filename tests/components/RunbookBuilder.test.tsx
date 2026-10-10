@@ -5,6 +5,8 @@ import RunbookBuilder from '@/components/runbooks/RunbookBuilder';
 import { newBuilderStep } from '@/lib/runbooks/builder';
 import { parseRunbookDefinition } from '@/lib/runbooks/definition';
 import { validateRunbook, validateStep } from '@/components/runbooks/builder/validation';
+import ConditionActionEditor from '@/components/runbooks/builder/action-editors/ConditionActionEditor';
+import HttpActionEditor from '@/components/runbooks/builder/action-editors/HttpActionEditor';
 import type { RunbookInputInput } from '@/lib/runbooks/schemas';
 import type { RunbookDefinition, RunbookStepDefinition } from '@/lib/runbooks/types';
 
@@ -44,17 +46,19 @@ vi.mock('@/components/runbooks/RunbookControls', () => ({
   ConfigureSheet: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   SubmitButton: ({ children }: { children: ReactNode }) => <button>{children}</button>,
   FormSelect: ({
+    name,
     label,
     value,
     options,
     onValueChange,
   }: {
+    name?: string;
     label: string;
     value: string;
     options: { value: string; label: string }[];
     onValueChange: (value: string) => void;
   }) => (
-    <select aria-label={label} value={value} onChange={event => onValueChange(event.target.value)}>
+    <select id={name} name={name} aria-label={label} value={value} onChange={event => onValueChange(event.target.value)}>
       {options.map(option => (
         <option key={option.value} value={option.value}>
           {option.label}
@@ -1168,6 +1172,391 @@ describe('Runbook nested check builder', () => {
     );
 
     expect(screen.getByText(/Requires Agent with BASH capability/i)).toBeTruthy();
+  });
+
+  it('blocks deletion of referenced inputs and warns operator with step names', () => {
+    const inputs: RunbookInputInput[] = [
+      {
+        key: 'app_name',
+        label: 'Application Name',
+        type: 'STRING',
+        description: '',
+        required: true,
+        sequence: 0,
+      },
+    ];
+    const stepWithRef = {
+      ...newBuilderStep('HTTP', 'deploy_step'),
+      name: 'Deploy Service',
+      config: {
+        method: 'POST',
+        url: 'https://api.internal/${{ inputs.app_name }}',
+      },
+    };
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [stepWithRef] }}
+        initialInputs={inputs}
+        action={async () => {}}
+      />
+    );
+
+    // Remove button should be disabled
+    const removeBtn = screen.getByRole('button', { name: 'Remove input 1' });
+    expect(removeBtn).toBeDisabled();
+    expect(removeBtn.getAttribute('title')).toContain('Deploy Service');
+
+    // Warning callout should explain reference
+    expect(screen.getByRole('status')).toHaveTextContent(/Referenced by Deploy Service/i);
+
+    // Clicking disabled button should not remove input
+    fireEvent.click(removeBtn);
+    const savedInputs = JSON.parse(
+      (container.querySelector('input[name="inputs"]') as HTMLInputElement).value
+    );
+    expect(savedInputs).toHaveLength(1);
+    expect(savedInputs[0].key).toBe('app_name');
+  });
+
+  it('avoids reusing keys in getNextUnusedInputKey that exist anywhere in definition', () => {
+    // Definition references input_1 even though inputs array is empty
+    const stepWithOrphanRef = {
+      ...newBuilderStep('HTTP', 'check_orphan'),
+      name: 'Check Orphan',
+      config: {
+        method: 'GET',
+        url: 'https://api.internal/${{ inputs.input_1 }}',
+      },
+    };
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [stepWithOrphanRef] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    // Click Add input: must NOT pick input_1 because definition already uses it!
+    const addBtn = screen.getByRole('button', { name: 'Add input' });
+    fireEvent.click(addBtn);
+
+    const savedInputs = JSON.parse(
+      (container.querySelector('input[name="inputs"]') as HTMLInputElement).value
+    );
+    expect(savedInputs[0].key).toBe('input_2');
+  });
+
+  it('refactors templates, condition fields, and bash variables upon input rename', () => {
+    const initialInputs: RunbookInputInput[] = [
+      {
+        key: 'target_cluster',
+        label: 'Target Cluster',
+        type: 'STRING',
+        description: '',
+        required: true,
+        sequence: 0,
+      },
+    ];
+    const steps = [
+      {
+        ...newBuilderStep('HTTP', 'http_step'),
+        name: 'HTTP Step',
+        config: {
+          method: 'GET',
+          url: 'https://api.internal/${{ inputs.target_cluster }}',
+        },
+      },
+      {
+        ...newBuilderStep('CONDITION', 'cond_step'),
+        name: 'Condition Step',
+        config: {
+          field: 'input.target_cluster',
+          operator: 'EQUALS',
+          value: 'prod',
+        },
+      },
+      {
+        ...newBuilderStep('BASH', 'bash_step'),
+        name: 'Bash Step',
+        config: {
+          command:
+            'echo "Cluster: $OPSKNIGHT_INPUT_TARGET_CLUSTER or ${OPSKNIGHT_INPUT_TARGET_CLUSTER}"',
+        },
+      },
+    ];
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps }}
+        initialInputs={initialInputs}
+        action={async () => {}}
+      />
+    );
+
+    // Rename target_cluster -> primary_cluster
+    const keyInput = screen.getByLabelText('Input 1 key');
+    fireEvent.change(keyInput, { target: { value: 'primary_cluster' } });
+
+    const savedDef = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+
+    // 1. Template replaced
+    expect(savedDef.steps[0].config.url).toBe('https://api.internal/${{ inputs.primary_cluster }}');
+    // 2. Condition field replaced
+    expect(savedDef.steps[1].config.field).toBe('input.primary_cluster');
+    // 3. Bash variables replaced
+    expect(savedDef.steps[2].config.command).toBe(
+      'echo "Cluster: $OPSKNIGHT_INPUT_PRIMARY_CLUSTER or ${OPSKNIGHT_INPUT_PRIMARY_CLUSTER}"'
+    );
+  });
+
+  it('preserves references across intermediate empty typing states', () => {
+    const initialInputs: RunbookInputInput[] = [
+      {
+        key: 'my_param',
+        label: 'My Parameter',
+        type: 'STRING',
+        description: '',
+        required: true,
+        sequence: 0,
+      },
+    ];
+    const stepWithRef = {
+      ...newBuilderStep('HTTP', 'step_ref'),
+      name: 'Step Ref',
+      config: {
+        method: 'GET',
+        url: 'https://api.internal/${{ inputs.my_param }}',
+      },
+    };
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [stepWithRef] }}
+        initialInputs={initialInputs}
+        action={async () => {}}
+      />
+    );
+
+    const keyInput = screen.getByLabelText('Input 1 key');
+
+    // Simulate user clearing input to retype
+    fireEvent.change(keyInput, { target: { value: '' } });
+
+    let savedDef = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    // Reference should NOT be destroyed or converted to ${{ inputs. }}
+    expect(savedDef.steps[0].config.url).toBe('https://api.internal/${{ inputs.my_param }}');
+
+    // Complete typing next key
+    fireEvent.change(keyInput, { target: { value: 'renamed_param' } });
+
+    savedDef = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(savedDef.steps[0].config.url).toBe('https://api.internal/${{ inputs.renamed_param }}');
+  });
+
+  it('restricts suggested replica inputs to NUMBER and validates replica input types', () => {
+    const inputs: RunbookInputInput[] = [
+      {
+        key: 'replica_count',
+        label: 'Replica Count',
+        type: 'NUMBER',
+        description: '',
+        required: true,
+        sequence: 0,
+      },
+      {
+        key: 'cluster_name',
+        label: 'Cluster Name',
+        type: 'STRING',
+        description: '',
+        required: true,
+        sequence: 1,
+      },
+    ];
+
+    const scaleStep = {
+      ...newBuilderStep('KUBERNETES', 'scale_step'),
+      name: 'Scale Deployment',
+      config: {
+        action: 'scale',
+        resource: 'deployment',
+        name: 'web',
+        replicas: '${{ inputs.replica_count }}',
+      },
+    };
+
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [scaleStep] }}
+        initialInputs={inputs}
+        action={async () => {}}
+      />
+    );
+
+    // Switch to typed input view
+    expect(screen.getByText('Suggested inputs:')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '${{ inputs.replica_count }}' })).toBeTruthy();
+    // STRING input must NOT be suggested
+    expect(screen.queryByRole('button', { name: '${{ inputs.cluster_name }}' })).toBeNull();
+
+    // validateStep checks:
+    const validResult = validateStep(scaleStep, inputs);
+    expect(validResult.isValid).toBe(true);
+
+    const invalidTypeStep = {
+      ...scaleStep,
+      config: { ...scaleStep.config, replicas: '${{ inputs.cluster_name }}' },
+    };
+    const invalidResult = validateStep(invalidTypeStep, inputs);
+    expect(invalidResult.isValid).toBe(false);
+    expect(invalidResult.errors.replicas).toContain('must be of type NUMBER');
+  });
+
+  it('detects undeclared condition inputs, bash env variables, and global limits in validateRunbook', () => {
+    // 1. Undeclared condition input
+    const condDef: RunbookDefinition = {
+      steps: [
+        {
+          ...newBuilderStep('CONDITION', 'cond_undef'),
+          name: 'Condition Step',
+          config: { field: 'input.missing_flag', operator: 'EQUALS', value: 'yes' },
+        },
+      ],
+    };
+    const resCond = validateRunbook(condDef, []);
+    expect(resCond.generalInputErrors.some(err => err.includes('missing_flag'))).toBe(true);
+
+    // 2. Undeclared bash env variable
+    const bashDef: RunbookDefinition = {
+      steps: [
+        {
+          ...newBuilderStep('BASH', 'bash_undef'),
+          name: 'Bash Step',
+          config: { command: 'echo $OPSKNIGHT_INPUT_UNSET_VAR' },
+        },
+      ],
+    };
+    const resBash = validateRunbook(bashDef, []);
+    expect(resBash.generalInputErrors.some(err => err.includes('unset_var'))).toBe(true);
+
+    // 3. Step count limit > 50
+    const manyStepsDef: RunbookDefinition = {
+      steps: Array.from({ length: 51 }, (_, i) => newBuilderStep('MANUAL', `step_${i}`)),
+    };
+    const resCount = validateRunbook(manyStepsDef, []);
+    expect(resCount.generalInputErrors.some(err => err.includes('maximum limit of 50'))).toBe(true);
+
+    // 4. Definition size limit > 256 KiB
+    const largeDef: RunbookDefinition = {
+      steps: [
+        {
+          ...newBuilderStep('MANUAL', 'step_large'),
+          description: 'a'.repeat(260 * 1024),
+        },
+      ],
+    };
+    const resSize = validateRunbook(largeDef, []);
+    expect(resSize.generalInputErrors.some(err => err.includes('256 KiB'))).toBe(true);
+  });
+
+  it('ConditionActionEditor scopes element IDs and coerces typed NUMBER and BOOLEAN values', () => {
+    const inputs: RunbookInputInput[] = [
+      {
+        key: 'threshold',
+        label: 'Threshold',
+        type: 'NUMBER',
+        description: '',
+        required: true,
+        sequence: 0,
+      },
+      {
+        key: 'enabled',
+        label: 'Enabled Flag',
+        type: 'BOOLEAN',
+        description: '',
+        required: true,
+        sequence: 1,
+      },
+    ];
+
+    let currentConfig: Record<string, unknown> = {
+      field: 'input.threshold',
+      operator: 'EQUALS',
+      value: 10,
+    };
+
+    const { rerender } = render(
+      <ConditionActionEditor
+        config={currentConfig}
+        inputs={inputs}
+        editorId="test_cond"
+        onChange={cfg => {
+          currentConfig = cfg;
+        }}
+      />
+    );
+
+    // Verify scoped element IDs
+    expect(document.getElementById('condition-value-test_cond')).toBeTruthy();
+    expect(document.getElementById('condition-operator-test_cond')).toBeTruthy();
+    expect(document.getElementById('condition-field-test_cond')).toBeTruthy();
+
+    // Type a number into match value
+    const matchValInput = document.getElementById('condition-value-test_cond') as HTMLInputElement;
+    fireEvent.change(matchValInput, { target: { value: '42' } });
+    expect(currentConfig.value).toBe(42);
+
+    // Switch to BOOLEAN input
+    rerender(
+      <ConditionActionEditor
+        config={{ ...currentConfig, field: 'input.enabled' }}
+        inputs={inputs}
+        editorId="test_cond"
+        onChange={cfg => {
+          currentConfig = cfg;
+        }}
+      />
+    );
+    fireEvent.change(matchValInput, { target: { value: 'true' } });
+    expect(currentConfig.value).toBe(true);
+
+    fireEvent.change(matchValInput, { target: { value: 'false' } });
+    expect(currentConfig.value).toBe(false);
+  });
+
+  it('HttpActionEditor permits request body for DELETE method', () => {
+    let currentConfig: Record<string, unknown> = {
+      method: 'DELETE',
+      url: 'https://api.internal/v1/sessions',
+      body: { all: true },
+    };
+
+    render(
+      <HttpActionEditor
+        config={currentConfig}
+        inputs={[]}
+        editorId="test_http"
+        onChange={cfg => {
+          currentConfig = cfg;
+        }}
+      />
+    );
+
+    // Body textarea should be visible for DELETE
+    const bodyTextarea = document.getElementById('http-body-test_http') as HTMLTextAreaElement;
+    expect(bodyTextarea).toBeTruthy();
+    expect(bodyTextarea.value).toBe('{\n  "all": true\n}');
+
+    // Changing body updates config.body
+    fireEvent.change(bodyTextarea, { target: { value: '{"all": false}' } });
+    expect(currentConfig.body).toEqual({ all: false });
   });
 });
 

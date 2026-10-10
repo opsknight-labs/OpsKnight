@@ -34,7 +34,7 @@ import {
  */
 export function parseRunbookDefinition(
   raw: unknown,
-  inputs?: ReadonlyArray<{ key: string }>
+  inputs?: ReadonlyArray<{ key: string; type?: string }>
 ): RunbookDefinition {
   const result = runbookDefinitionSchema.safeParse(raw);
   if (!result.success) {
@@ -47,13 +47,38 @@ export function parseRunbookDefinition(
   validateDefinitionStructure(definition);
   if (inputs) {
     const declared = new Set(inputs.map(input => input.key));
+    const inputTypeMap = new Map(inputs.map(input => [input.key, input.type]));
     for (const step of flattenSteps(definition)) {
-      if (step.type !== 'CONDITION') continue;
-      const { field } = workflowConditionSchema.parse(step.config);
-      if (field.startsWith('input.') && !declared.has(field.slice(6))) {
-        throw new RunbookDefinitionError(
-          `Step "${step.key}" references undeclared CONDITION input "${field}".`
-        );
+      if (step.type === 'CONDITION') {
+        const { field } = workflowConditionSchema.parse(step.config);
+        if (field.startsWith('input.') && !declared.has(field.slice(6))) {
+          throw new RunbookDefinitionError(
+            `Step "${step.key}" references undeclared CONDITION input "${field}".`
+          );
+        }
+      }
+      if (step.type === 'KUBERNETES') {
+        const action = configuredString(step, 'action', 'get');
+        if (action === 'scale') {
+          const rawReplicas = step.config.replicas;
+          if (typeof rawReplicas === 'string') {
+            const match = rawReplicas.trim().match(INPUT_TEMPLATE);
+            if (match) {
+              const inputKey = match[1];
+              if (!declared.has(inputKey)) {
+                throw new RunbookDefinitionError(
+                  `Step "${step.key}" references undeclared replica input "${inputKey}".`
+                );
+              }
+              const inputType = inputTypeMap.get(inputKey);
+              if (inputType && inputType !== 'NUMBER') {
+                throw new RunbookDefinitionError(
+                  `Step "${step.key}" references input "${inputKey}" of type ${inputType} for Kubernetes replicas; must be NUMBER.`
+                );
+              }
+            }
+          }
+        }
       }
     }
   }

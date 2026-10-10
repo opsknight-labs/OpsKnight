@@ -4,40 +4,55 @@ import {
   newBuilderStep,
   RUNBOOK_TEMPLATES,
   runbookTemplate,
+  runbookTemplateInputs,
   cloneStepRecursively,
 } from '@/lib/runbooks/builder';
 import { parseRunbookDefinition } from '@/lib/runbooks/definition';
 
 describe('Runbook authoring templates', () => {
   it.each(RUNBOOK_TEMPLATES)('creates a server-valid %s template', template => {
-    expect(() => parseRunbookDefinition(runbookTemplate(template))).not.toThrow();
+    expect(() =>
+      parseRunbookDefinition(runbookTemplate(template), runbookTemplateInputs(template))
+    ).not.toThrow();
     const writes = runbookTemplate(template).steps.filter(
       step => step.riskClass === 'NON_IDEMPOTENT'
     );
     expect(writes.every(step => step.requiresApproval)).toBe(true);
   });
 
-  it('hardens kubernetes-recovery template with named deployment and rollout-status verification', () => {
+  it('hardens kubernetes-recovery template with shared inputs and rollout-status verification', () => {
     const k8sTemplate = runbookTemplate('kubernetes-recovery');
+    const inputs = runbookTemplateInputs('kubernetes-recovery');
+
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0].key).toBe('namespace');
+    expect(inputs[0].type).toBe('STRING');
+    expect(inputs[1].key).toBe('deployment_name');
+    expect(inputs[1].type).toBe('STRING');
+
     expect(k8sTemplate.steps).toHaveLength(3);
 
     // Step 1: inspect
     expect(k8sTemplate.steps[0].config.resource).toBe('deployment');
-    expect(k8sTemplate.steps[0].config.name).toBe('api');
+    expect(k8sTemplate.steps[0].config.namespace).toBe('${{ inputs.namespace }}');
+    expect(k8sTemplate.steps[0].config.name).toBe('${{ inputs.deployment_name }}');
     expect(k8sTemplate.steps[0].config.action).toBe('get');
 
     // Step 2: rollout restart with nested rollout-status verification
     expect(k8sTemplate.steps[1].config.resource).toBe('deployment');
-    expect(k8sTemplate.steps[1].config.name).toBe('api');
+    expect(k8sTemplate.steps[1].config.namespace).toBe('${{ inputs.namespace }}');
+    expect(k8sTemplate.steps[1].config.name).toBe('${{ inputs.deployment_name }}');
     expect(k8sTemplate.steps[1].config.action).toBe('rollout-restart');
     expect(k8sTemplate.steps[1].verification?.steps).toHaveLength(1);
     expect(k8sTemplate.steps[1].verification?.steps[0].config.action).toBe('rollout-status');
     expect(k8sTemplate.steps[1].verification?.steps[0].config.resource).toBe('deployment');
-    expect(k8sTemplate.steps[1].verification?.steps[0].config.name).toBe('api');
+    expect(k8sTemplate.steps[1].verification?.steps[0].config.namespace).toBe('${{ inputs.namespace }}');
+    expect(k8sTemplate.steps[1].verification?.steps[0].config.name).toBe('${{ inputs.deployment_name }}');
 
     // Step 3: verify
     expect(k8sTemplate.steps[2].config.resource).toBe('deployment');
-    expect(k8sTemplate.steps[2].config.name).toBe('api');
+    expect(k8sTemplate.steps[2].config.namespace).toBe('${{ inputs.namespace }}');
+    expect(k8sTemplate.steps[2].config.name).toBe('${{ inputs.deployment_name }}');
     expect(k8sTemplate.steps[2].config.action).toBe('get');
   });
   it('derives authoring risk from executable semantics', () => {

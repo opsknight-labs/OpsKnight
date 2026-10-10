@@ -1,4 +1,5 @@
 import type { RunbookDefinition, RunbookStepDefinition, RunbookStepType } from './types';
+import type { RunbookInputInput } from './schemas';
 export { canonicalConditionField } from './conditions';
 
 export const RUNBOOK_TEMPLATES = [
@@ -94,9 +95,9 @@ export function runbookTemplate(template: (typeof RUNBOOK_TEMPLATES)[number]): R
           name: 'Inspect deployment status',
           config: {
             action: 'get',
-            namespace: 'default',
+            namespace: '${{ inputs.namespace }}',
             resource: 'deployment',
-            name: 'api',
+            name: '${{ inputs.deployment_name }}',
           },
         },
         {
@@ -106,9 +107,9 @@ export function runbookTemplate(template: (typeof RUNBOOK_TEMPLATES)[number]): R
           requiresApproval: true,
           config: {
             action: 'rollout-restart',
-            namespace: 'default',
+            namespace: '${{ inputs.namespace }}',
             resource: 'deployment',
-            name: 'api',
+            name: '${{ inputs.deployment_name }}',
           },
           verification: {
             steps: [
@@ -118,9 +119,9 @@ export function runbookTemplate(template: (typeof RUNBOOK_TEMPLATES)[number]): R
                 riskClass: 'READ_ONLY',
                 config: {
                   action: 'rollout-status',
-                  namespace: 'default',
+                  namespace: '${{ inputs.namespace }}',
                   resource: 'deployment',
-                  name: 'api',
+                  name: '${{ inputs.deployment_name }}',
                 },
               },
             ],
@@ -131,14 +132,42 @@ export function runbookTemplate(template: (typeof RUNBOOK_TEMPLATES)[number]): R
           name: 'Verify deployment health',
           config: {
             action: 'get',
-            namespace: 'default',
+            namespace: '${{ inputs.namespace }}',
             resource: 'deployment',
-            name: 'api',
+            name: '${{ inputs.deployment_name }}',
           },
         },
       ],
     };
   return { steps: [newBuilderStep('MANUAL', 'first_step')] };
+}
+
+export function runbookTemplateInputs(
+  template: (typeof RUNBOOK_TEMPLATES)[number]
+): RunbookInputInput[] {
+  if (template === 'kubernetes-recovery') {
+    return [
+      {
+        key: 'namespace',
+        label: 'Namespace',
+        type: 'STRING',
+        required: true,
+        defaultValue: 'default',
+        description: 'Target Kubernetes namespace',
+        sequence: 0,
+      },
+      {
+        key: 'deployment_name',
+        label: 'Deployment Name',
+        type: 'STRING',
+        required: true,
+        defaultValue: 'api',
+        description: 'Name of the deployment to recover',
+        sequence: 1,
+      },
+    ];
+  }
+  return [];
 }
 
 export function generateUniqueStepKey(baseKey: string, existingKeys: Set<string>): string {

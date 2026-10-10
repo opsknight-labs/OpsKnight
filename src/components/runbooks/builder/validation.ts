@@ -201,6 +201,15 @@ export function validateStep(
           if (!Number.isInteger(replicas) || replicas < 0 || replicas > 10000) {
             errors.replicas = 'Desired replicas must be an integer between 0 and 10,000.';
           }
+        } else {
+          const match = String(config.replicas).trim().match(INPUT_TEMPLATE);
+          if (match && inputs && inputs.length > 0) {
+            const inputKey = match[1];
+            const targetInput = inputs.find(i => i.key === inputKey);
+            if (targetInput && targetInput.type !== 'NUMBER') {
+              errors.replicas = `Replica parameter "${inputKey}" must be of type NUMBER (found ${targetInput.type}).`;
+            }
+          }
         }
       }
       break;
@@ -369,16 +378,64 @@ export function validateRunbook(
   // Track undeclared input references across all steps
   const declaredKeys = new Set(inputs.map(i => i.key));
   const flattened = flattenSteps(definition);
+
+  if (flattened.length > 50) {
+    generalInputErrors.push(
+      `Runbook contains ${flattened.length} steps, exceeding the maximum limit of 50.`
+    );
+    errorCount++;
+  }
+
+  const serializedDef = JSON.stringify(definition);
+  if (new TextEncoder().encode(serializedDef).length > 256 * 1024) {
+    generalInputErrors.push('Runbook definition exceeds maximum allowed size of 256 KiB.');
+    errorCount++;
+  }
+
   flattened.forEach(step => {
+    const stepSeenRefs = new Set<string>();
     const serialized = JSON.stringify(step.config ?? {});
     const matches = serialized.matchAll(/\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}/g);
     for (const match of matches) {
       const refKey = match[1];
-      if (!declaredKeys.has(refKey)) {
+      if (!declaredKeys.has(refKey) && !stepSeenRefs.has(refKey)) {
+        stepSeenRefs.add(refKey);
         generalInputErrors.push(
           `Step "${step.name || step.key}" references undeclared input "${refKey}".`
         );
         errorCount++;
+      }
+    }
+
+    if (step.type === 'CONDITION') {
+      const field = String(step.config?.field ?? '');
+      const condMatch = field.match(/^inputs?\.([a-z0-9_]+)$/);
+      if (condMatch) {
+        const refKey = condMatch[1];
+        if (!declaredKeys.has(refKey) && !stepSeenRefs.has(refKey)) {
+          stepSeenRefs.add(refKey);
+          generalInputErrors.push(
+            `Step "${step.name || step.key}" references undeclared input "${refKey}".`
+          );
+          errorCount++;
+        }
+      }
+    }
+
+    if (step.type === 'BASH') {
+      const command = String(step.config?.command ?? '');
+      const envMatches = command.matchAll(
+        /(?:\$OPSKNIGHT_INPUT_|\${OPSKNIGHT_INPUT_|\bOPSKNIGHT_INPUT_)([A-Z0-9_]+)\b/g
+      );
+      for (const envMatch of envMatches) {
+        const refKey = envMatch[1].toLowerCase();
+        if (!declaredKeys.has(refKey) && !stepSeenRefs.has(refKey)) {
+          stepSeenRefs.add(refKey);
+          generalInputErrors.push(
+            `Step "${step.name || step.key}" references undeclared input "${refKey}".`
+          );
+          errorCount++;
+        }
       }
     }
   });

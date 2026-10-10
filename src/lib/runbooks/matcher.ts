@@ -20,6 +20,38 @@ function asComparableList(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [value];
 }
 
+export function normalizeComparisonPair(actual: unknown, expected: unknown): [unknown, unknown] {
+  if (typeof actual === 'number' && typeof expected === 'string') {
+    const trimmed = expected.trim();
+    if (trimmed !== '' && !Number.isNaN(Number(trimmed))) {
+      return [actual, Number(trimmed)];
+    }
+  }
+  if (typeof actual === 'string' && typeof expected === 'number') {
+    const trimmed = actual.trim();
+    if (trimmed !== '' && !Number.isNaN(Number(trimmed))) {
+      return [Number(trimmed), expected];
+    }
+  }
+  if (typeof actual === 'boolean' && typeof expected === 'string') {
+    const lower = expected.trim().toLowerCase();
+    if (lower === 'true') return [actual, true];
+    if (lower === 'false') return [actual, false];
+  }
+  if (typeof actual === 'string' && typeof expected === 'boolean') {
+    const lower = actual.trim().toLowerCase();
+    if (lower === 'true') return [true, expected];
+    if (lower === 'false') return [false, expected];
+  }
+  return [actual, expected];
+}
+
+export function areEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  const [normA, normB] = normalizeComparisonPair(a, b);
+  return normA === normB;
+}
+
 export function matchesCondition(
   context: Record<string, unknown>,
   condition: TriggerCondition
@@ -42,23 +74,32 @@ export function matchesCondition(
 
   switch (condition.operator) {
     case 'EQUALS':
-      return actual === condition.value;
+      return areEqual(actual, condition.value);
     case 'NOT_EQUALS':
-      return actual !== condition.value;
-    case 'CONTAINS':
-      return typeof actual === 'string' && typeof condition.value === 'string'
-        ? actual.includes(condition.value)
-        : Array.isArray(actual) && actual.includes(condition.value);
-    case 'STARTS_WITH':
-      return (
-        typeof actual === 'string' &&
-        typeof condition.value === 'string' &&
-        actual.startsWith(condition.value)
-      );
+      return !areEqual(actual, condition.value);
+    case 'CONTAINS': {
+      if (typeof actual === 'string') {
+        const valStr =
+          typeof condition.value === 'string' ? condition.value : String(condition.value);
+        return actual.includes(valStr);
+      }
+      if (Array.isArray(actual)) {
+        return actual.some(item => areEqual(item, condition.value));
+      }
+      return false;
+    }
+    case 'STARTS_WITH': {
+      if (typeof actual === 'string') {
+        const valStr =
+          typeof condition.value === 'string' ? condition.value : String(condition.value);
+        return actual.startsWith(valStr);
+      }
+      return false;
+    }
     case 'IN':
-      return asComparableList(condition.value).includes(actual);
+      return asComparableList(condition.value).some(item => areEqual(actual, item));
     case 'NOT_IN':
-      return !asComparableList(condition.value).includes(actual);
+      return !asComparableList(condition.value).some(item => areEqual(actual, item));
   }
 }
 

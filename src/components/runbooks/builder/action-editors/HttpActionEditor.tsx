@@ -30,7 +30,7 @@ export default function HttpActionEditor({
   const rawBody = config.body;
   const isObjectBody = typeof rawBody === 'object' && rawBody !== null;
   const bodyString = isObjectBody ? JSON.stringify(rawBody, null, 2) : String(rawBody ?? '');
-  const isWriteMethod = ['POST', 'PUT', 'PATCH'].includes(method);
+  const isNoBodyMethod = ['GET', 'HEAD'].includes(method);
 
   const update = (patch: Record<string, unknown>) => {
     onChange({ ...config, ...patch });
@@ -38,9 +38,9 @@ export default function HttpActionEditor({
 
   const handleMethodChange = (nextMethod: string) => {
     const normalized = nextMethod.toUpperCase();
-    const nextIsWrite = ['POST', 'PUT', 'PATCH'].includes(normalized);
+    const nextIsNoBody = ['GET', 'HEAD'].includes(normalized);
     const nextConfig: Record<string, unknown> = { ...config, method: normalized };
-    if (!nextIsWrite) {
+    if (nextIsNoBody) {
       delete nextConfig.body;
     }
     onChange(nextConfig);
@@ -102,7 +102,7 @@ export default function HttpActionEditor({
         </div>
       </div>
 
-      {isWriteMethod && (
+      {!isNoBodyMethod && (
         <div>
           <div className="flex items-center justify-between">
             <Label htmlFor={`http-body-${editorId}`}>Request Body</Label>

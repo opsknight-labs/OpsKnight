@@ -465,9 +465,14 @@ function NestedChecks({
     commit(next);
   };
 
+  const sectionLabel =
+    depth === 1 ? `${label} checks` : `${label} checks for ${step.name || step.key}`;
+  const testId = depth === 1 ? `action-${phase}-checks` : `nested-${phase}-checks-${step.key}`;
+
   return (
     <section
-      aria-label={`${label} checks`}
+      aria-label={sectionLabel}
+      data-testid={testId}
       className={`rounded-xl border p-4 ${
         phase === 'precheck' ? 'bg-sky-500/5 border-sky-500/20' : 'bg-emerald-500/5 border-emerald-500/20'
       }`}

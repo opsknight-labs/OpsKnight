@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { RunbookError, RunbookDefinitionError } from '@/lib/runbooks/errors';
-import { RUNBOOK_TEMPLATES, runbookTemplate } from '@/lib/runbooks/builder';
+import { RUNBOOK_TEMPLATES, runbookTemplate, runbookTemplateInputs } from '@/lib/runbooks/builder';
 import { CAPABILITIES } from '@/lib/authorization';
 import { logAudit } from '@/lib/audit';
 import prisma from '@/lib/prisma';
@@ -70,14 +70,16 @@ function parseJson(value: string, label: string): unknown {
 
 export async function createRunbookAction(formData: FormData) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
+  const templateName = z
+    .enum(RUNBOOK_TEMPLATES)
+    .parse(readString(formData, 'template') || 'empty');
   const created = await createRunbook(
     {
       name: readString(formData, 'name'),
       slug: readString(formData, 'slug'),
       description: readString(formData, 'description'),
-      definition: runbookTemplate(
-        z.enum(RUNBOOK_TEMPLATES).parse(readString(formData, 'template') || 'empty')
-      ),
+      definition: runbookTemplate(templateName),
+      inputs: runbookTemplateInputs(templateName),
     },
     actor.id
   );
