@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import {
+  AlertCircle,
   ArrowDown,
   ArrowUp,
   Clock,
+  Info,
   Plus,
   ShieldAlert,
   ShieldCheck,
@@ -24,6 +26,7 @@ import {
 } from '@/lib/runbooks/types';
 import type { RunbookInputInput } from '@/lib/runbooks/schemas';
 import { newBuilderStep, builderRisk } from '@/lib/runbooks/builder';
+import { validateStep } from './validation';
 
 import HttpActionEditor from './action-editors/HttpActionEditor';
 import KubernetesActionEditor from './action-editors/KubernetesActionEditor';
@@ -33,6 +36,19 @@ import LinuxDiagnosticsEditor from './action-editors/LinuxDiagnosticsEditor';
 import BashActionEditor from './action-editors/BashActionEditor';
 import ConditionActionEditor from './action-editors/ConditionActionEditor';
 import WaitActionEditor from './action-editors/WaitActionEditor';
+
+const AGENT_PREREQUISITES: Record<RunbookStepType, string> = {
+  KUBERNETES: 'Requires Agent with KUBERNETES capability and cluster RBAC permissions in target namespace.',
+  DOCKER: 'Requires Agent with DOCKER capability and local container engine socket access.',
+  SYSTEMD: 'Requires Agent with SYSTEMD capability and systemctl/journalctl permissions on host.',
+  BASH: 'Requires Agent with BASH capability; command must match local bashCommandPatterns allowlist.',
+  LINUX_DIAGNOSTICS: 'Requires Agent with LINUX_DIAGNOSTICS capability on the host.',
+  HTTP: 'Executed by OpsKnight control plane via outbound network request (no host Agent required).',
+  WAIT: 'Executed by control-plane orchestrator timer.',
+  CONDITION: 'Evaluated directly against incident context by control plane.',
+  MANUAL: 'Assigned to a human operator during execution.',
+  APPROVAL: 'Gated on designated approver or role.',
+};
 import ManualActionEditor from './action-editors/ManualActionEditor';
 
 interface StepEditorProps {
@@ -121,7 +137,7 @@ export default function StepEditor({
   return (
     <>
       {/* Mini Sequence Header: Before Checks */}
-      {depth === 1 && (
+      {depth < 3 && (
         <NestedChecks
           key={`precheck-${editorId}`}
           phase="precheck"
@@ -144,7 +160,7 @@ export default function StepEditor({
               Define the physical command, probe, or mutation executed on the target.
             </p>
           </div>
-          <div className="w-48">
+          <div className="w-56">
             <FormSelect
               name={`step-type-${editorId}`}
               label="Step type"
@@ -156,6 +172,10 @@ export default function StepEditor({
                 label: type.replaceAll('_', ' '),
               }))}
             />
+            <p className="mt-1.5 text-[11px] text-muted-foreground flex items-start gap-1">
+              <Info className="h-3 w-3 shrink-0 text-muted-foreground/70 mt-0.5" />
+              <span>{AGENT_PREREQUISITES[step.type]}</span>
+            </p>
           </div>
         </div>
 
@@ -392,7 +412,7 @@ export default function StepEditor({
       </div>
 
       {/* Mini Sequence Footer: After Checks (Verification) */}
-      {depth === 1 && (
+      {depth < 3 && (
         <NestedChecks
           key={`verification-${editorId}`}
           phase="verification"
@@ -475,37 +495,51 @@ function NestedChecks({
 
       {checks.length > 0 && (
         <ol className="mt-3 space-y-2" aria-label={`${label} ordered checks`}>
-          {checks.map((check, index) => (
-            <li key={identities.at(index) ?? check.key} className="rounded-lg border bg-card p-3 shadow-2xs">
-              <details>
-                <summary className="cursor-pointer break-words text-sm font-medium flex items-center justify-between">
-                  <span>
-                    {index + 1}. {check.name}
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <Badge variant={check.riskClass === 'READ_ONLY' ? 'secondary' : 'warning'}>
-                      {check.riskClass === 'READ_ONLY' ? 'READ ONLY' : 'WRITE'}
-                    </Badge>
-                    {(check.requiresApproval || check.riskClass === 'NON_IDEMPOTENT') && (
-                      <Badge variant="warning">APPROVAL</Badge>
-                    )}
+          {checks.map((check, index) => {
+            const checkResult = validateStep(check, inputs);
+            const checkErrors = checkResult.errors;
+            const hasCheckErrors = Object.keys(checkErrors).length > 0;
+
+            return (
+              <li key={identities.at(index) ?? check.key} className="rounded-lg border bg-card p-3 shadow-2xs">
+                <details open={hasCheckErrors || undefined}>
+                  <summary className="cursor-pointer break-words text-sm font-medium flex items-center justify-between">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="truncate">
+                        {index + 1}. {check.name || 'Untitled check'}
+                      </span>
+                      {hasCheckErrors && (
+                        <Badge variant="destructive" className="text-[10px] py-0 px-1.5 shrink-0 flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          {Object.keys(checkErrors).length} {Object.keys(checkErrors).length === 1 ? 'issue' : 'issues'}
+                        </Badge>
+                      )}
+                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Badge variant={check.riskClass === 'READ_ONLY' ? 'secondary' : 'warning'}>
+                        {check.riskClass === 'READ_ONLY' ? 'READ ONLY' : 'WRITE'}
+                      </Badge>
+                      {(check.requiresApproval || check.riskClass === 'NON_IDEMPOTENT') && (
+                        <Badge variant="warning">APPROVAL</Badge>
+                      )}
+                    </div>
+                  </summary>
+                  <div className="mt-3 pt-3 border-t">
+                    <StepEditor
+                      step={check}
+                      inputs={inputs}
+                      editorId={identities.at(index) ?? check.key}
+                      depth={depth + 1}
+                      errors={checkErrors}
+                      readOnly={readOnly}
+                      onChange={patch =>
+                        commit(
+                          checks.map((item, pos) => (pos === index ? { ...item, ...patch } : item))
+                        )
+                      }
+                    />
                   </div>
-                </summary>
-                <div className="mt-3 pt-3 border-t">
-                  <StepEditor
-                    step={check}
-                    inputs={inputs}
-                    editorId={identities.at(index) ?? check.key}
-                    depth={depth + 1}
-                    readOnly={readOnly}
-                    onChange={patch =>
-                      commit(
-                        checks.map((item, pos) => (pos === index ? { ...item, ...patch } : item))
-                      )
-                    }
-                  />
-                </div>
-              </details>
+                </details>
 
               {!readOnly && (
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -545,9 +579,10 @@ function NestedChecks({
                 </div>
               )}
             </li>
-          ))}
-        </ol>
-      )}
+          );
+        })}
+      </ol>
+    )}
 
       {!readOnly && depth < 3 && checks.length < 10 && (
         <div className="mt-3 flex flex-wrap items-center gap-2">

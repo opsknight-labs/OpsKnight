@@ -15,6 +15,17 @@ export interface StepValidationResult {
   isValid: boolean;
 }
 
+export function checkInputTemplate(val: string, inputs?: RunbookInputInput[]): string | null {
+  const match = val.match(INPUT_TEMPLATE);
+  if (match && inputs && inputs.length > 0) {
+    const inputKey = match[1];
+    if (!inputs.some(i => i.key === inputKey)) {
+      return `Referenced input "${inputKey}" is not declared in the Inputs tab.`;
+    }
+  }
+  return null;
+}
+
 export function validateStep(
   step: RunbookStepDefinition,
   inputs: RunbookInputInput[] = [],
@@ -47,6 +58,7 @@ export function validateStep(
   const config = step.config ?? {};
 
   switch (step.type) {
+
     case 'HTTP': {
       const method = String(config.method ?? 'GET').toUpperCase();
       if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
@@ -65,6 +77,20 @@ export function validateStep(
           }
         } catch {
           errors.url = 'Invalid URL format. Use full URL (e.g., https://api.service/health) or ${{ inputs.key }}.';
+        }
+      } else {
+        const templateErr = checkInputTemplate(url, inputs);
+        if (templateErr) errors.url = templateErr;
+      }
+      if (config.headers !== undefined) {
+        if (typeof config.headers !== 'object' || config.headers === null || Array.isArray(config.headers)) {
+          errors.headers = 'HTTP headers must be an object.';
+        }
+      }
+      if (config.body !== undefined) {
+        const bodyStr = typeof config.body === 'string' ? config.body : JSON.stringify(config.body);
+        if (new TextEncoder().encode(bodyStr).length > 64 * 1024) {
+          errors.body = 'HTTP body exceeds maximum allowed size of 64 KiB.';
         }
       }
       break;
@@ -198,7 +224,29 @@ export function validateStep(
         }
       } else if (diagnostic === 'http') {
         const url = String(config.url ?? '').trim();
-        if (!url) errors.url = 'HTTP URL is required.';
+        if (!url) {
+          errors.url = 'HTTP URL is required.';
+        } else if (!INPUT_TEMPLATE.test(url)) {
+          try {
+            const parsed = new URL(url);
+            if (!['http:', 'https:'].includes(parsed.protocol)) {
+              errors.url = 'HTTP diagnostic URL must use HTTP(S) protocol.';
+            } else if (parsed.username || parsed.password) {
+              errors.url = 'HTTP diagnostic URL must not contain embedded credentials.';
+            }
+          } catch {
+            errors.url = 'HTTP diagnostic requires a valid URL.';
+          }
+        } else {
+          const err = checkInputTemplate(url, inputs);
+          if (err) errors.url = err;
+        }
+        if (config.expectedStatus !== undefined && String(config.expectedStatus).trim() !== '') {
+          const status = Number(config.expectedStatus);
+          if (!Number.isInteger(status) || status < 100 || status > 599) {
+            errors.expectedStatus = 'Expected HTTP status must be between 100 and 599.';
+          }
+        }
       } else if (diagnostic === 'journal') {
         const unit = String(config.unit ?? '').trim();
         if (!unit) errors.unit = 'Service unit is required for journal diagnostics.';
@@ -222,6 +270,8 @@ export function validateStep(
       const command = String(config.command ?? '').trim();
       if (!command) {
         errors.command = 'Allowlisted command script is required.';
+      } else if (new TextEncoder().encode(command).length > 8192) {
+        errors.command = 'Bash command exceeds maximum allowed size of 8 KiB.';
       }
       break;
     }
@@ -242,13 +292,27 @@ export function validateStep(
       const field = String(config.field ?? '').trim();
       if (!field) errors.field = 'Condition field is required.';
       const operator = String(config.operator ?? 'EQUALS');
-      if (!['EXISTS', 'NOT_EXISTS'].includes(operator)) {
+      if (['EXISTS', 'NOT_EXISTS'].includes(operator)) {
+        // Unary operator, no value needed
+      } else if (['IN', 'NOT_IN'].includes(operator)) {
+        if (!Array.isArray(config.value) || config.value.length === 0) {
+          errors.value = 'In list comparison requires at least one value.';
+        }
+      } else {
         if (config.value === undefined || config.value === null || String(config.value).trim() === '') {
           errors.value = 'Comparison value is required for this operator.';
+        } else if (Array.isArray(config.value)) {
+          errors.value = 'Comparison value must be a scalar string or number, not an array.';
         }
       }
       break;
     }
+  }
+
+  const serializedConfig = JSON.stringify(step.config ?? {});
+  const maxConfigBytes = step.type === 'HTTP' ? 96 * 1024 : 32 * 1024;
+  if (new TextEncoder().encode(serializedConfig).length > maxConfigBytes) {
+    errors.config = `Config exceeds maximum allowed size of ${step.type === 'HTTP' ? '96' : '32'} KiB.`;
   }
 
   // Prechecks & verifications validation
@@ -256,7 +320,8 @@ export function validateStep(
     step.precheck.steps.forEach((check, index) => {
       const sub = validateStep(check, inputs, allStepKeys);
       if (!sub.isValid) {
-        errors[`precheck_${index}`] = `Precheck "${check.name}" has configuration errors.`;
+        const errorList = Object.values(sub.errors).join('; ');
+        errors[`precheck_${index}`] = `Precheck "${check.name}": ${errorList}`;
       }
     });
   }
@@ -265,7 +330,8 @@ export function validateStep(
     step.verification.steps.forEach((check, index) => {
       const sub = validateStep(check, inputs, allStepKeys);
       if (!sub.isValid) {
-        errors[`verification_${index}`] = `Verification "${check.name}" has configuration errors.`;
+        const errorList = Object.values(sub.errors).join('; ');
+        errors[`verification_${index}`] = `Verification "${check.name}": ${errorList}`;
       }
     });
   }
@@ -297,6 +363,23 @@ export function validateRunbook(
     if (!result.isValid) {
       stepErrors.set(index, result.errors);
       errorCount += Object.keys(result.errors).length;
+    }
+  });
+
+  // Track undeclared input references across all steps
+  const declaredKeys = new Set(inputs.map(i => i.key));
+  const flattened = flattenSteps(definition);
+  flattened.forEach(step => {
+    const serialized = JSON.stringify(step.config ?? {});
+    const matches = serialized.matchAll(/\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}/g);
+    for (const match of matches) {
+      const refKey = match[1];
+      if (!declaredKeys.has(refKey)) {
+        generalInputErrors.push(
+          `Step "${step.name || step.key}" references undeclared input "${refKey}".`
+        );
+        errorCount++;
+      }
     }
   });
 

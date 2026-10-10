@@ -630,7 +630,7 @@ async function executeHttpStep(
           ? (config.headers as Record<string, string>)
           : undefined,
       body:
-        config.body === undefined
+        ['GET', 'HEAD'].includes(method) || config.body === undefined
           ? undefined
           : typeof config.body === 'string'
             ? config.body

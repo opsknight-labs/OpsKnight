@@ -16,6 +16,30 @@ describe('Runbook authoring templates', () => {
     );
     expect(writes.every(step => step.requiresApproval)).toBe(true);
   });
+
+  it('hardens kubernetes-recovery template with named deployment and rollout-status verification', () => {
+    const k8sTemplate = runbookTemplate('kubernetes-recovery');
+    expect(k8sTemplate.steps).toHaveLength(3);
+
+    // Step 1: inspect
+    expect(k8sTemplate.steps[0].config.resource).toBe('deployment');
+    expect(k8sTemplate.steps[0].config.name).toBe('api');
+    expect(k8sTemplate.steps[0].config.action).toBe('get');
+
+    // Step 2: rollout restart with nested rollout-status verification
+    expect(k8sTemplate.steps[1].config.resource).toBe('deployment');
+    expect(k8sTemplate.steps[1].config.name).toBe('api');
+    expect(k8sTemplate.steps[1].config.action).toBe('rollout-restart');
+    expect(k8sTemplate.steps[1].verification?.steps).toHaveLength(1);
+    expect(k8sTemplate.steps[1].verification?.steps[0].config.action).toBe('rollout-status');
+    expect(k8sTemplate.steps[1].verification?.steps[0].config.resource).toBe('deployment');
+    expect(k8sTemplate.steps[1].verification?.steps[0].config.name).toBe('api');
+
+    // Step 3: verify
+    expect(k8sTemplate.steps[2].config.resource).toBe('deployment');
+    expect(k8sTemplate.steps[2].config.name).toBe('api');
+    expect(k8sTemplate.steps[2].config.action).toBe('get');
+  });
   it('derives authoring risk from executable semantics', () => {
     expect(
       builderRisk({

@@ -9,12 +9,34 @@ import type { RunbookInputInput } from '@/lib/runbooks/schemas';
 import type { RunbookDefinition, RunbookStepDefinition } from '@/lib/runbooks/types';
 
 vi.mock('@/components/ui/DetailTabs', () => ({
-  default: ({ tabs }: { tabs: { id: string; content: ReactNode }[] }) => (
-    <>
+  default: ({
+    activeTab,
+    onTabChange,
+    tabs,
+  }: {
+    activeTab?: string;
+    onTabChange?: (tab: string) => void;
+    tabs: { id: string; label: string; content: ReactNode }[];
+  }) => (
+    <div>
+      <div role="tablist">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            onClick={() => onTabChange?.(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
       {tabs.map(tab => (
-        <div key={tab.id}>{tab.content}</div>
+        <div key={tab.id} data-tab-id={tab.id}>
+          {tab.content}
+        </div>
       ))}
-    </>
+    </div>
   ),
 }));
 vi.mock('@/components/runbooks/RunbookControls', () => ({
@@ -757,6 +779,395 @@ describe('Runbook nested check builder', () => {
     expect(screen.getByText(/Actionable Issues/i)).toBeTruthy();
     expect(screen.getByText(/"Call Target" \(url\)/i)).toBeTruthy();
     expect(screen.getByText(/Parameter #1 \(key\)/i)).toBeTruthy();
+  });
+
+  it('synchronizes visual builder edits to advanced JSON and reports conflicts when both are modified', () => {
+    const initialStep = newBuilderStep('MANUAL', 'step_1');
+    initialStep.name = 'Initial Name';
+    const initialInput: RunbookInputInput = {
+      key: 'param_1',
+      label: 'Parameter 1',
+      type: 'STRING',
+      description: '',
+      required: false,
+      sequence: 0,
+    };
+
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [initialStep] }}
+        initialInputs={[initialInput]}
+        action={async () => {}}
+      />
+    );
+
+    // 1. Edit visual builder: step name
+    const stepNameInput = screen.getByLabelText('Step name');
+    fireEvent.change(stepNameInput, { target: { value: 'Updated Name In Builder' } });
+
+    // Definition JSON textarea should automatically reflect the visual builder change
+    const defJsonTextarea = screen.getByLabelText('Definition JSON') as HTMLTextAreaElement;
+    expect(defJsonTextarea.value).toContain('Updated Name In Builder');
+
+    // 2. Add an input in builder
+    const addInputBtn = screen.getByRole('button', { name: 'Add input' });
+    fireEvent.click(addInputBtn);
+
+    const inputsJsonTextarea = screen.getByLabelText('Typed inputs JSON') as HTMLTextAreaElement;
+    expect(inputsJsonTextarea.value).toContain('input_1');
+
+    // 3. User edits JSON directly in Advanced tab -> unappliedJson becomes true
+    fireEvent.change(defJsonTextarea, {
+      target: {
+        value: JSON.stringify(
+          { steps: [{ ...initialStep, name: 'Conflict JSON Name' }] },
+          null,
+          2
+        ),
+      },
+    });
+
+    // Both visual builder and JSON have modifications -> conflict alert must appear!
+    const conflictAlert = screen.getByText(
+      'Conflict Warning: Visual Builder and JSON Editor Both Have Modifications'
+    );
+    expect(conflictAlert).toBeTruthy();
+
+    // 4. Click "Refresh JSON from builder" to discard JSON edits and restore builder state
+    const refreshBtn = screen.getByRole('button', { name: 'Refresh JSON from builder' });
+    fireEvent.click(refreshBtn);
+
+    expect(
+      screen.queryByText('Conflict Warning: Visual Builder and JSON Editor Both Have Modifications')
+    ).toBeNull();
+    expect(defJsonTextarea.value).toContain('Updated Name In Builder');
+  });
+
+  it('applies edited advanced JSON to the visual builder and refreshes step identities', () => {
+    const initialStep = newBuilderStep('MANUAL', 'step_1');
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [initialStep] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    const newDef: RunbookDefinition = {
+      steps: [
+        {
+          ...newBuilderStep('HTTP', 'applied_http_step'),
+          name: 'Applied From Advanced JSON',
+          config: { method: 'GET', url: 'https://status.example.com' },
+        },
+      ],
+    };
+    const newInputs: RunbookInputInput[] = [
+      {
+        key: 'applied_input',
+        label: 'Applied Input',
+        type: 'STRING',
+        description: '',
+        required: true,
+        sequence: 0,
+      },
+    ];
+
+    const defJsonTextarea = screen.getByLabelText('Definition JSON');
+    fireEvent.change(defJsonTextarea, { target: { value: JSON.stringify(newDef, null, 2) } });
+
+    const inputsJsonTextarea = screen.getByLabelText('Typed inputs JSON');
+    fireEvent.change(inputsJsonTextarea, { target: { value: JSON.stringify(newInputs, null, 2) } });
+
+    const applyBtn = screen.getByRole('button', { name: 'Apply JSON to builder' });
+    fireEvent.click(applyBtn);
+
+    // Verify visual builder updated
+    const saved = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(saved.steps[0].name).toBe('Applied From Advanced JSON');
+    expect(saved.steps[0].key).toBe('applied_http_step');
+
+    const savedInputs = JSON.parse(
+      (container.querySelector('input[name="inputs"]') as HTMLInputElement).value
+    );
+    expect(savedInputs[0].key).toBe('applied_input');
+  });
+
+  it('deletes config.body when switching HTTP method to GET or HEAD and formats object bodies cleanly', () => {
+    const postStep = {
+      ...newBuilderStep('HTTP', 'http_step'),
+      name: 'Post Data',
+      riskClass: 'NON_IDEMPOTENT' as const,
+      config: {
+        method: 'POST',
+        url: 'https://api.example.com/items',
+        headers: { 'Content-Type': 'application/json' },
+        body: { greeting: 'hello', count: 42 },
+      },
+    };
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [postStep] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    // Formatted JSON should be rendered in textarea instead of [object Object]
+    const bodyTextarea = screen.getByLabelText('Request body') as HTMLTextAreaElement;
+    expect(bodyTextarea.value).toContain('"greeting": "hello"');
+    expect(bodyTextarea.value).not.toContain('[object Object]');
+
+    // Switch method to GET
+    const methodSelect = screen.getByLabelText('HTTP Method');
+    fireEvent.change(methodSelect, { target: { value: 'GET' } });
+
+    // config.body must be deleted completely
+    const saved = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(saved.steps[0].config.method).toBe('GET');
+    expect(saved.steps[0].config.body).toBeUndefined();
+  });
+
+  it('normalizes condition operator values when switching between scalar, array, and unary operators', () => {
+    const conditionStep = {
+      ...newBuilderStep('CONDITION', 'cond_step'),
+      name: 'Check Severity',
+      config: {
+        field: 'incident.priority',
+        operator: 'IN',
+        value: ['P1', 'P2'],
+      },
+    };
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [conditionStep] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    const operatorSelect = screen.getByLabelText('Operator');
+
+    // 1. Switch from IN (array) to EQUALS (scalar): should normalize to first element 'P1'
+    fireEvent.change(operatorSelect, { target: { value: 'EQUALS' } });
+    let saved = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(saved.steps[0].config.operator).toBe('EQUALS');
+    expect(saved.steps[0].config.value).toBe('P1');
+
+    // 2. Switch from EQUALS to EXISTS (unary): should normalize value to null
+    fireEvent.change(operatorSelect, { target: { value: 'EXISTS' } });
+    saved = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(saved.steps[0].config.operator).toBe('EXISTS');
+    expect(saved.steps[0].config.value).toBeNull();
+
+    // 3. Switch back to IN: should normalize value to array
+    fireEvent.change(operatorSelect, { target: { value: 'IN' } });
+    saved = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(saved.steps[0].config.operator).toBe('IN');
+    expect(Array.isArray(saved.steps[0].config.value)).toBe(true);
+  });
+
+  it('displays accurate bash execution copy, allowlist guidance, and environment variable helpers', () => {
+    const bashStep = {
+      ...newBuilderStep('BASH', 'bash_step'),
+      name: 'Run Cleanup',
+      config: { command: 'echo "hello"' },
+    };
+    const inputs: RunbookInputInput[] = [
+      {
+        key: 'target_dir',
+        label: 'Target Directory',
+        type: 'STRING',
+        description: '',
+        required: false,
+        sequence: 0,
+      },
+    ];
+
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [bashStep] }}
+        initialInputs={inputs}
+        action={async () => {}}
+      />
+    );
+
+    // Verifies the accurate execution copy
+    expect(screen.getAllByText(/bash --noprofile --norc -c/i).length).toBeGreaterThan(0);
+
+    // Verifies allowlist guidance and env helper button
+    expect(screen.getAllByText(/Allowlist matching/i).length).toBeGreaterThan(0);
+    const envHelperBtn = screen.getByRole('button', { name: '"$OPSKNIGHT_INPUT_TARGET_DIR"' });
+    expect(envHelperBtn).toBeTruthy();
+
+    // Clicking env helper appends it to the command
+    const commandTextarea = screen.getByLabelText('Exact allowlisted command') as HTMLTextAreaElement;
+    fireEvent.click(envHelperBtn);
+    expect(commandTextarea.value).toContain('"$OPSKNIGHT_INPUT_TARGET_DIR"');
+  });
+
+  it('generates next unused input key after deletions and refactors input references on key change', () => {
+    const initialInputs: RunbookInputInput[] = [
+      {
+        key: 'input_1',
+        label: 'First',
+        type: 'STRING',
+        description: '',
+        required: false,
+        sequence: 0,
+      },
+      {
+        key: 'input_2',
+        label: 'Second',
+        type: 'STRING',
+        description: '',
+        required: false,
+        sequence: 1,
+      },
+    ];
+    const stepWithRef = {
+      ...newBuilderStep('HTTP', 'api_call'),
+      name: 'Call API',
+      config: {
+        method: 'GET',
+        url: 'https://api.internal/${{ inputs.input_2 }}',
+      },
+    };
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [stepWithRef] }}
+        initialInputs={initialInputs}
+        action={async () => {}}
+      />
+    );
+
+    // 1. Delete parameter 1 (input_1)
+    const removeBtn = screen.getByRole('button', { name: 'Remove input 1' });
+    fireEvent.click(removeBtn);
+
+    // 2. Add a new input: should pick input_1 because it's now unused!
+    const addInputBtn = screen.getByRole('button', { name: 'Add input' });
+    fireEvent.click(addInputBtn);
+
+    const savedInputs = JSON.parse(
+      (container.querySelector('input[name="inputs"]') as HTMLInputElement).value
+    );
+    expect(savedInputs.some((inp: RunbookInputInput) => inp.key === 'input_1')).toBe(true);
+
+    // 3. Rename input_2 to target_cluster: should automatically refactor step reference
+    const input2KeyInput = screen.getByLabelText('Input 1 key'); // input_2 is now at position 0
+    fireEvent.change(input2KeyInput, { target: { value: 'target_cluster' } });
+
+    const savedDef = parseRunbookDefinition(
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
+    );
+    expect(savedDef.steps[0].config.url).toBe('https://api.internal/${{ inputs.target_cluster }}');
+  });
+
+  it('surfaces nested check errors with issue badges and detects undeclared input references', () => {
+    const stepWithFailingNested = {
+      ...newBuilderStep('MANUAL', 'parent_step'),
+      name: 'Parent with precheck',
+      precheck: {
+        steps: [
+          {
+            ...newBuilderStep('SYSTEMD', 'nested_sys'),
+            name: 'Nested Service Check',
+            config: { action: 'status', unit: '' }, // empty unit is an error
+          },
+        ],
+      },
+    };
+
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [stepWithFailingNested] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    // Nested check should display an issue count badge
+    expect(screen.getByText('1 issue')).toBeTruthy();
+
+    // Undeclared input references:
+    const stepWithGhostInput = {
+      ...newBuilderStep('BASH', 'ghost_step'),
+      name: 'Ghost Step',
+      config: { command: 'cat ${{ inputs.ghost_param }}' },
+    };
+    const valResult = validateRunbook({ steps: [stepWithGhostInput] }, []);
+    expect(valResult.generalInputErrors.some(err => err.includes('ghost_param'))).toBe(true);
+  });
+
+  it('enforces client-server validation parity for status codes, port bounds, and byte sizes', () => {
+    // 1. Linux Diagnostics HTTP: invalid status code 700
+    const invalidStatusStep = {
+      ...newBuilderStep('LINUX_DIAGNOSTICS', 'diag_http'),
+      config: { diagnostic: 'http', url: 'https://example.com', expectedStatus: 700 },
+    };
+    expect(validateStep(invalidStatusStep).errors.expectedStatus).toBeTruthy();
+
+    // 2. Linux Diagnostics HTTP: URL credentials
+    const invalidUrlCreds = {
+      ...newBuilderStep('LINUX_DIAGNOSTICS', 'diag_http_creds'),
+      config: { diagnostic: 'http', url: 'https://user:pass@example.com' },
+    };
+    expect(validateStep(invalidUrlCreds).errors.url).toContain('credentials');
+
+    // 3. Linux Diagnostics TCP: invalid port 0
+    const invalidPort0 = {
+      ...newBuilderStep('LINUX_DIAGNOSTICS', 'diag_port0'),
+      config: { diagnostic: 'tcp', host: '127.0.0.1', port: 0 },
+    };
+    expect(validateStep(invalidPort0).errors.port).toBeTruthy();
+
+    // 4. Bash command size limit 8 KiB
+    const oversizedBash = {
+      ...newBuilderStep('BASH', 'oversized_bash'),
+      config: { command: 'a'.repeat(9 * 1024) },
+    };
+    expect(validateStep(oversizedBash).errors.command).toContain('8 KiB');
+
+    // 5. HTTP body size limit 64 KiB
+    const oversizedHttpBody = {
+      ...newBuilderStep('HTTP', 'oversized_http'),
+      config: { url: 'https://example.com', method: 'POST', body: 'x'.repeat(65 * 1024) },
+    };
+    expect(validateStep(oversizedHttpBody).errors.body).toContain('64 KiB');
+
+    // 6. Condition scalar operator with array value
+    const invalidConditionShape = {
+      ...newBuilderStep('CONDITION', 'bad_cond'),
+      config: { field: 'incident.priority', operator: 'EQUALS', value: ['P1', 'P2'] },
+    };
+    expect(validateStep(invalidConditionShape).errors.value).toContain('array');
+  });
+
+  it('renders agent prerequisites banner for agent-backed step types', () => {
+    const bashStep = newBuilderStep('BASH', 'step_bash');
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [bashStep] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+
+    expect(screen.getByText(/Requires Agent with BASH capability/i)).toBeTruthy();
   });
 });
 

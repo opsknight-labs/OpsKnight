@@ -89,7 +89,16 @@ export function runbookTemplate(template: (typeof RUNBOOK_TEMPLATES)[number]): R
   if (template === 'kubernetes-recovery')
     return {
       steps: [
-        newBuilderStep('KUBERNETES', 'inspect'),
+        {
+          ...newBuilderStep('KUBERNETES', 'inspect'),
+          name: 'Inspect deployment status',
+          config: {
+            action: 'get',
+            namespace: 'default',
+            resource: 'deployment',
+            name: 'api',
+          },
+        },
         {
           ...newBuilderStep('KUBERNETES', 'restart'),
           name: 'Restart deployment',
@@ -101,8 +110,32 @@ export function runbookTemplate(template: (typeof RUNBOOK_TEMPLATES)[number]): R
             resource: 'deployment',
             name: 'api',
           },
+          verification: {
+            steps: [
+              {
+                ...newBuilderStep('KUBERNETES', 'rollout_status'),
+                name: 'Verify rollout complete',
+                riskClass: 'READ_ONLY',
+                config: {
+                  action: 'rollout-status',
+                  namespace: 'default',
+                  resource: 'deployment',
+                  name: 'api',
+                },
+              },
+            ],
+          },
         },
-        newBuilderStep('KUBERNETES', 'verify'),
+        {
+          ...newBuilderStep('KUBERNETES', 'verify'),
+          name: 'Verify deployment health',
+          config: {
+            action: 'get',
+            namespace: 'default',
+            resource: 'deployment',
+            name: 'api',
+          },
+        },
       ],
     };
   return { steps: [newBuilderStep('MANUAL', 'first_step')] };

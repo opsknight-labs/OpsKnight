@@ -27,11 +27,39 @@ export default function HttpActionEditor({
 }: HttpActionEditorProps) {
   const method = String(config.method ?? 'GET').toUpperCase();
   const url = String(config.url ?? '');
-  const body = String(config.body ?? '');
+  const rawBody = config.body;
+  const isObjectBody = typeof rawBody === 'object' && rawBody !== null;
+  const bodyString = isObjectBody ? JSON.stringify(rawBody, null, 2) : String(rawBody ?? '');
   const isWriteMethod = ['POST', 'PUT', 'PATCH'].includes(method);
 
   const update = (patch: Record<string, unknown>) => {
     onChange({ ...config, ...patch });
+  };
+
+  const handleMethodChange = (nextMethod: string) => {
+    const normalized = nextMethod.toUpperCase();
+    const nextIsWrite = ['POST', 'PUT', 'PATCH'].includes(normalized);
+    const nextConfig: Record<string, unknown> = { ...config, method: normalized };
+    if (!nextIsWrite) {
+      delete nextConfig.body;
+    }
+    onChange(nextConfig);
+  };
+
+  const handleBodyChange = (text: string) => {
+    let finalVal: unknown = text;
+    const trimmed = text.trim();
+    if (
+      (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+      (trimmed.startsWith('[') && trimmed.endsWith(']'))
+    ) {
+      try {
+        finalVal = JSON.parse(text);
+      } catch {
+        finalVal = text;
+      }
+    }
+    update({ body: finalVal });
   };
 
   return (
@@ -45,7 +73,7 @@ export default function HttpActionEditor({
               label="HTTP Method"
               value={method}
               disabled={readOnly}
-              onValueChange={(nextMethod: string) => update({ method: nextMethod })}
+              onValueChange={handleMethodChange}
               options={HTTP_METHODS.map(m => ({ value: m, label: m }))}
             />
           </div>
@@ -78,16 +106,18 @@ export default function HttpActionEditor({
         <div>
           <div className="flex items-center justify-between">
             <Label htmlFor={`http-body-${editorId}`}>Request Body</Label>
-            <span className="text-xs text-muted-foreground">JSON or plaintext payload</span>
+            <span className="text-xs text-muted-foreground">
+              {isObjectBody ? 'Structured JSON payload' : 'JSON or plaintext payload'}
+            </span>
           </div>
           <div className="mt-1.5">
             <Textarea
               id={`http-body-${editorId}`}
               aria-label="Request body"
               placeholder='{"status": "maintenance"}'
-              value={body}
+              value={bodyString}
               disabled={readOnly}
-              onChange={e => update({ body: e.target.value })}
+              onChange={e => handleBodyChange(e.target.value)}
               className="font-mono text-xs min-h-24"
               spellCheck={false}
             />

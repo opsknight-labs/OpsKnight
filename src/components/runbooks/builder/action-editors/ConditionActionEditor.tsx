@@ -51,7 +51,19 @@ export default function ConditionActionEditor({
     if (['EXISTS', 'NOT_EXISTS'].includes(nextOp)) {
       nextConfig.value = null;
     } else if (['IN', 'NOT_IN'].includes(nextOp)) {
-      nextConfig.value = valueString.split(',').map(s => s.trim()).filter(Boolean);
+      nextConfig.value = valueString
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+    } else {
+      // Scalar operators: EQUALS, NOT_EQUALS, CONTAINS, STARTS_WITH
+      if (Array.isArray(rawValue)) {
+        nextConfig.value = rawValue.length > 0 ? String(rawValue[0]) : '';
+      } else if (rawValue === null || rawValue === undefined) {
+        nextConfig.value = '';
+      } else {
+        nextConfig.value = String(rawValue);
+      }
     }
     onChange(nextConfig);
   };

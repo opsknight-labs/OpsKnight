@@ -41,6 +41,52 @@ import StepEditor from './builder/StepEditor';
 import ReadinessBar from './builder/ReadinessBar';
 import { validateRunbook } from './builder/validation';
 
+function getNextUnusedInputKey(existingInputs: RunbookInputInput[]): string {
+  const existingKeys = new Set(existingInputs.map(i => i.key));
+  let counter = 1;
+  while (existingKeys.has(`input_${counter}`)) {
+    counter++;
+  }
+  return `input_${counter}`;
+}
+
+function refactorInputReference(
+  def: RunbookDefinition,
+  oldKey: string,
+  newKey: string
+): RunbookDefinition {
+  if (!oldKey || !newKey || oldKey === newKey) return def;
+  const oldTemplate = `\${{ inputs.${oldKey} }}`;
+  const newTemplate = `\${{ inputs.${newKey} }}`;
+
+  function replaceInStep(step: RunbookStepDefinition): RunbookStepDefinition {
+    let serialized = JSON.stringify(step.config);
+    if (serialized.includes(oldTemplate)) {
+      serialized = serialized.replaceAll(oldTemplate, newTemplate);
+    }
+    const newConfig = JSON.parse(serialized);
+    const updated: RunbookStepDefinition = { ...step, config: newConfig };
+    if (updated.precheck?.steps) {
+      updated.precheck = {
+        ...updated.precheck,
+        steps: updated.precheck.steps.map(replaceInStep),
+      };
+    }
+    if (updated.verification?.steps) {
+      updated.verification = {
+        ...updated.verification,
+        steps: updated.verification.steps.map(replaceInStep),
+      };
+    }
+    return updated;
+  }
+
+  return {
+    ...def,
+    steps: def.steps.map(replaceInStep),
+  };
+}
+
 export default function RunbookBuilder({
   initialDefinition,
   initialInputs,
@@ -93,23 +139,38 @@ export default function RunbookBuilder({
     }
   }
 
+  function handleTabChange(nextTab: string) {
+    if (nextTab === 'advanced' && !unappliedJson) {
+      setAdvancedDefinition(JSON.stringify(definition, null, 2));
+      setAdvancedInputs(JSON.stringify(inputs, null, 2));
+      setJsonError('');
+    }
+    setActiveTab(nextTab);
+  }
+
   function handleNavigateToStep(index: number) {
-    setActiveTab('builder');
+    handleTabChange('builder');
     handleSelectStep(index);
   }
 
   function handleNavigateToInputs() {
-    setActiveTab('inputs');
+    handleTabChange('inputs');
   }
 
   function updateStep(index: number, patch: Partial<RunbookStepDefinition>) {
     setDirty(true);
-    setDefinition(current => ({
-      ...current,
-      steps: current.steps.map((step, position) =>
-        position === index ? { ...step, ...patch } : step
-      ),
-    }));
+    setDefinition(current => {
+      const nextDef = {
+        ...current,
+        steps: current.steps.map((step, position) =>
+          position === index ? { ...step, ...patch } : step
+        ),
+      };
+      if (!unappliedJson) {
+        setAdvancedDefinition(JSON.stringify(nextDef, null, 2));
+      }
+      return nextDef;
+    });
   }
 
   function moveStep(index: number, offset: number) {
@@ -122,8 +183,12 @@ export default function RunbookBuilder({
     const id = nextIdentities.splice(index, 1).at(0);
     if (id) nextIdentities.splice(index + offset, 0, id);
 
+    const nextDef = { ...definition, steps: nextSteps };
     setStepIdentities(nextIdentities);
-    setDefinition({ ...definition, steps: nextSteps });
+    setDefinition(nextDef);
+    if (!unappliedJson) {
+      setAdvancedDefinition(JSON.stringify(nextDef, null, 2));
+    }
     // Stable selectedStepId ensures the selected step stays selected regardless of move
     setDirty(true);
   }
@@ -140,9 +205,13 @@ export default function RunbookBuilder({
     const nextIds = [...stepIdentities];
     nextIds.splice(index + 1, 0, newId);
 
-    setDefinition({ ...definition, steps: nextSteps });
+    const nextDef = { ...definition, steps: nextSteps };
+    setDefinition(nextDef);
     setStepIdentities(nextIds);
     setSelectedStepId(newId);
+    if (!unappliedJson) {
+      setAdvancedDefinition(JSON.stringify(nextDef, null, 2));
+    }
     setDirty(true);
   }
 
@@ -154,7 +223,8 @@ export default function RunbookBuilder({
     const nextSteps = definition.steps.filter((_, position) => position !== index);
     const nextIds = stepIdentities.filter((_, position) => position !== index);
 
-    setDefinition({ ...definition, steps: nextSteps });
+    const nextDef = { ...definition, steps: nextSteps };
+    setDefinition(nextDef);
     setStepIdentities(nextIds);
 
     if (removedId === currentlySelectedId) {
@@ -162,6 +232,9 @@ export default function RunbookBuilder({
       setSelectedStepId(nextIds.at(nextIndex) ?? null);
     } else {
       setSelectedStepId(currentlySelectedId ?? null);
+    }
+    if (!unappliedJson) {
+      setAdvancedDefinition(JSON.stringify(nextDef, null, 2));
     }
     setDirty(true);
   }
@@ -175,9 +248,13 @@ export default function RunbookBuilder({
     const key = `step_${sequence}`;
     const newStep = newBuilderStep(type, key);
     const newId = crypto.randomUUID();
-    setDefinition({ ...definition, steps: [...definition.steps, newStep] });
+    const nextDef = { ...definition, steps: [...definition.steps, newStep] };
+    setDefinition(nextDef);
     setStepIdentities([...stepIdentities, newId]);
     setSelectedStepId(newId);
+    if (!unappliedJson) {
+      setAdvancedDefinition(JSON.stringify(nextDef, null, 2));
+    }
     setDirty(true);
   }
 
@@ -295,9 +372,19 @@ export default function RunbookBuilder({
       )}
       {inputs.map((input, index) => {
         const update = (patch: Partial<RunbookInputInput>) => {
-          setInputs(current =>
-            current.map((item, position) => (position === index ? { ...item, ...patch } : item))
+          let nextDef = definition;
+          if (patch.key && patch.key !== input.key) {
+            nextDef = refactorInputReference(definition, input.key, patch.key);
+            setDefinition(nextDef);
+          }
+          const nextInputs = inputs.map((item, position) =>
+            position === index ? { ...item, ...patch } : item
           );
+          setInputs(nextInputs);
+          if (!unappliedJson) {
+            setAdvancedDefinition(JSON.stringify(nextDef, null, 2));
+            setAdvancedInputs(JSON.stringify(nextInputs, null, 2));
+          }
           setDirty(true);
         };
         const currentErrors = inputErrors.get(index);
@@ -386,8 +473,12 @@ export default function RunbookBuilder({
                   aria-label={`Remove input ${index + 1}`}
                   className="text-xs text-destructive hover:text-destructive h-7"
                   onClick={() => {
-                    setInputs(inputs.filter((_, position) => position !== index));
+                    const nextInputs = inputs.filter((_, position) => position !== index);
+                    setInputs(nextInputs);
                     setInputIdentities(inputIdentities.filter((_, position) => position !== index));
+                    if (!unappliedJson) {
+                      setAdvancedInputs(JSON.stringify(nextInputs, null, 2));
+                    }
                     setDirty(true);
                   }}
                 >
@@ -415,18 +506,23 @@ export default function RunbookBuilder({
           size="sm"
           className="text-xs font-semibold"
           onClick={() => {
-            setInputs([
+            const nextKey = getNextUnusedInputKey(inputs);
+            const nextInputs = [
               ...inputs,
               {
-                key: `input_${inputs.length + 1}`,
+                key: nextKey,
                 label: 'New input',
-                type: 'STRING',
+                type: 'STRING' as const,
                 required: false,
                 description: '',
                 sequence: inputs.length,
               },
-            ]);
+            ];
+            setInputs(nextInputs);
             setInputIdentities([...inputIdentities, crypto.randomUUID()]);
+            if (!unappliedJson) {
+              setAdvancedInputs(JSON.stringify(nextInputs, null, 2));
+            }
             setDirty(true);
           }}
         >
@@ -443,6 +539,22 @@ export default function RunbookBuilder({
         Advanced JSON editing remains compatible with all builder checks. Apply JSON to synchronize
         with the builder before saving draft.
       </p>
+
+      {unappliedJson && dirty && (
+        <div
+          role="alert"
+          className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning-foreground space-y-1"
+        >
+          <p className="font-semibold text-foreground">
+            Conflict Warning: Visual Builder and JSON Editor Both Have Modifications
+          </p>
+          <p>
+            You have unapplied edits in the JSON editor and modifications in the visual builder.
+            Click <strong>Apply JSON to builder</strong> to overwrite visual edits with the JSON above,
+            or click <strong>Refresh JSON from builder</strong> to discard unapplied JSON edits.
+          </p>
+        </div>
+      )}
 
       <Button
         type="button"
@@ -551,7 +663,7 @@ export default function RunbookBuilder({
       <DetailTabs
         urlParamName="editor"
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         tabs={[
           {
             id: 'builder',
