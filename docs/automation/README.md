@@ -118,3 +118,16 @@ and the queue drained in 102.8 seconds with no duplicate provider deliveries.
 This result does not certify native-mode capacity. The retained integrated Kind
 fixture and explicit recovery topology support a separate fresh allocation test;
 short diagnostics do not establish sustained capacity.
+
+The integrated Kind batch-100 matrix completed all six 20-RPS/120-second
+profiles. It accepted and persisted every arrival, recorded zero drops,
+automation fallbacks, deadlocks or duplicate provider deliveries, and drained
+each profile within 180 seconds. It **failed** the 30-second observation queue
+age gate (52–77 seconds), so it does not certify capacity. The restart held one
+SMTP attempt in `UNKNOWN` for manual receipt review without automatic replay.
+The preceding default-capacity and provisioned batch-25 failures are retained
+with their actual settings. Operational workers now reserve at most eight
+claims, and no more than a quarter of their batch, for automation observations;
+ordinary jobs retain the remaining batch budget. Claims, heartbeat fencing,
+service-batched observation receipts, and concurrency limits remain in effect.
+A fresh sustained matrix must verify this scheduling change.

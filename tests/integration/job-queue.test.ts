@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
-import { scheduleJob, claimPendingJobs, markJobFailed, processJob } from '@/lib/jobs/queue';
+import {
+  scheduleJob,
+  claimPendingJobs,
+  claimPendingOperationalJobs,
+  markJobFailed,
+  processJob,
+} from '@/lib/jobs/queue';
 import { testPrisma, resetDatabase } from '../helpers/test-db';
 
 const describeIfRealDB =
@@ -49,6 +55,33 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
       });
       expect(processingCount).toBe(5);
     });
+  });
+
+  it('claims bounded observations past an older ordinary backlog without stealing unrelated tasks', async () => {
+    const older = new Date(Date.now() - 60000);
+    for (let i = 0; i < 12; i++) await scheduleJob('SCHEDULED_TASK', older, { task: 'ORDINARY' });
+    for (let i = 0; i < 6; i++)
+      await scheduleJob('SCHEDULED_TASK', new Date(Date.now() - 1000), {
+        task: 'AUTOMATION_OBSERVE',
+      });
+    const [first, second] = await Promise.all([
+      claimPendingJobs(2, 'SCHEDULED_TASK', [], { automationObservationsOnly: true }),
+      claimPendingJobs(2, 'SCHEDULED_TASK', [], { automationObservationsOnly: true }),
+    ]);
+    const claimed = [...first, ...second];
+    expect(claimed).toHaveLength(4);
+    expect(new Set(claimed.map(job => job.id)).size).toBe(4);
+    expect(
+      claimed.every(job => (job.payload as { task: string }).task === 'AUTOMATION_OBSERVE')
+    ).toBe(true);
+    const batch = await claimPendingOperationalJobs(8, []);
+    expect(batch).toHaveLength(8);
+    expect(
+      batch.filter(job => (job.payload as { task: string }).task === 'AUTOMATION_OBSERVE')
+    ).toHaveLength(2);
+    expect(batch.filter(job => (job.payload as { task: string }).task === 'ORDINARY')).toHaveLength(
+      6
+    );
   });
 
   describe('Retry Logic and Exponential Backoff', () => {
@@ -180,7 +213,9 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
       // 1. Create 5 pending SCHEDULED_TASK jobs
       const scheduledIds: string[] = [];
       for (let i = 0; i < 5; i++) {
-        const id = await scheduleJob('SCHEDULED_TASK', new Date(Date.now() - 1000), { task: `isolated-task-${i}` });
+        const id = await scheduleJob('SCHEDULED_TASK', new Date(Date.now() - 1000), {
+          task: `isolated-task-${i}`,
+        });
         scheduledIds.push(id);
       }
 

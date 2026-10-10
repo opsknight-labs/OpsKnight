@@ -66,7 +66,7 @@ The alternative `values-automation-integrated.yaml` gives four integrated
 replicas two exclusive CPUs and 1 GiB each, with two exclusive CPUs and 2 GiB
 for PostgreSQL. It uses direct PostgreSQL connections. Patch Deployment
 `automation` to the same non-surging strategy, and additionally set
-`DATABASE_POOL_SIZE_INTEGRATED=24`, `OPSKNIGHT_WORKER_BATCH_SIZE=25`, and
+`DATABASE_POOL_SIZE_INTEGRATED=24`, `OPSKNIGHT_WORKER_BATCH_SIZE=100`, and
 `OPSKNIGHT_WORKER_CONCURRENCY=15`. Set `AUTOMATION_K8S_RUNTIME_MODE=integrated`
 on the certification runner. Its recovery drill deletes one physical integrated
 replica, exercising the web and worker roles in that process together. Split

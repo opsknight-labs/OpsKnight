@@ -301,6 +301,7 @@ export interface QueueMaintenanceResult {
 
 export interface ClaimJobsOptions {
   readonly runMaintenance?: boolean;
+  readonly automationObservationsOnly?: boolean;
 }
 
 export async function runQueueMaintenance(prismaClient = prisma): Promise<QueueMaintenanceResult> {
@@ -382,6 +383,10 @@ export async function claimPendingJobs(
         excludeTypes.map(value => Prisma.sql`${value}::"JobType"`)
       )})`
     : Prisma.empty;
+  const observationFilter = options?.automationObservationsOnly
+    ? Prisma.sql`AND candidate."type"='SCHEDULED_TASK'::"JobType"
+        AND candidate.payload->>'task'='AUTOMATION_OBSERVE'`
+    : Prisma.empty;
   return prisma.$queryRaw<QueuedJob[]>(Prisma.sql`
     WITH cte AS (
       SELECT candidate."id" FROM "BackgroundJob" AS candidate
@@ -408,7 +413,7 @@ export async function claimPendingJobs(
             )
           )
         )
-        AND candidate."scheduledAt"<=NOW() AND candidate."attempts"<candidate."maxAttempts" ${typeFilter} ${excludedTypeFilter}
+        AND candidate."scheduledAt"<=NOW() AND candidate."attempts"<candidate."maxAttempts" ${typeFilter} ${excludedTypeFilter} ${observationFilter}
         AND (
           candidate."type"<>'SCHEDULED_TASK'::"JobType"
           OR candidate."payload"->>'task' IS DISTINCT FROM 'EVENT_SIDE_EFFECT'
@@ -1543,6 +1548,19 @@ function heartbeatClaimedBatch(jobs: QueuedJob[]) {
   return () => clearInterval(timer);
 }
 
+/** Reserve a bounded observation slice without increasing the worker batch or
+ * concurrency. Ordinary work retains at least three quarters of every batch. */
+export async function claimPendingOperationalJobs(limit: number, excludeTypes: readonly JobType[]) {
+  const reserved = Math.min(8, Math.floor(limit / 4));
+  if (!reserved || excludeTypes.includes('SCHEDULED_TASK'))
+    return claimPendingJobs(limit, undefined, excludeTypes);
+  const observations = await claimPendingJobs(reserved, 'SCHEDULED_TASK', [], {
+    automationObservationsOnly: true,
+  });
+  const ordinary = await claimPendingJobs(limit - observations.length, undefined, excludeTypes);
+  return [...observations, ...ordinary];
+}
+
 export async function processPendingJobs(
   limit: number = 50,
   concurrency: number = 10,
@@ -1556,7 +1574,7 @@ export async function processPendingJobs(
       ]
     : [];
   excludeTypes.push(...additionalExcludedTypes);
-  const pendingJobs = await claimPendingJobs(limit, undefined, excludeTypes);
+  const pendingJobs = await claimPendingOperationalJobs(limit, excludeTypes);
   let processed = 0;
   let failed = 0;
   const stopHeartbeat = heartbeatClaimedBatch(pendingJobs);
@@ -1585,9 +1603,7 @@ export async function processPendingGeneralJobs(
   limit: number = 50,
   concurrency: number = 10
 ): Promise<{ processed: number; failed: number; total: number }> {
-  const pendingJobs = await claimPendingJobs(limit, undefined, [
-    ...GENERAL_WORKER_EXCLUDED_JOB_TYPES,
-  ]);
+  const pendingJobs = await claimPendingOperationalJobs(limit, GENERAL_WORKER_EXCLUDED_JOB_TYPES);
   let processed = 0;
   let failed = 0;
   const stopHeartbeat = heartbeatClaimedBatch(pendingJobs);
