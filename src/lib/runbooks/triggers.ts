@@ -2,10 +2,9 @@ import 'server-only';
 
 import prisma from '@/lib/prisma';
 import { computeTriggerFingerprint } from './definition';
-import { matchesTrigger } from './matcher';
+import { validateAndMatchTrigger } from './matcher';
 import { startTriggeredRunbookExecution } from './orchestrator';
 import { RunbookArchivedError, RunbookDefinitionError, RunbookError } from './errors';
-import { conditionContextFieldSchema, conditionOperatorSchema } from './conditions';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
 import { lockRunbookForShare } from './locking';
 import type { Prisma } from '@prisma/client';
@@ -65,20 +64,9 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
   const transientFailures: unknown[] = [];
   for (const binding of bindings) {
     try {
-      const trigger = binding.triggers.find(candidate => {
-        // Stored legacy/out-of-band conditions must fail closed too, before OR evaluation.
-        if (
-          candidate.conditions.some(
-            condition =>
-              !conditionContextFieldSchema.safeParse(condition.field).success ||
-              !conditionOperatorSchema.safeParse(condition.operator).success
-          )
-        )
-          throw new RunbookDefinitionError(
-            'Trigger has an unsupported condition field or operator.'
-          );
-        return matchesTrigger(context, candidate.conditions, candidate.conditionLogic);
-      });
+      const trigger = binding.triggers.find(candidate =>
+        validateAndMatchTrigger(context, candidate.conditions, candidate.conditionLogic)
+      );
       if (!trigger) continue;
       matched++;
       const versionId =
@@ -167,7 +155,7 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
             include: { inputs: true },
           });
           const trigger = binding.triggers.find(candidate =>
-            matchesTrigger(context, candidate.conditions, candidate.conditionLogic)
+            validateAndMatchTrigger(context, candidate.conditions, candidate.conditionLogic)
           )!;
           const fingerprint = computeTriggerFingerprint({
             sourceEventId,

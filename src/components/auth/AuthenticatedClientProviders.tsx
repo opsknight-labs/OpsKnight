@@ -6,6 +6,7 @@ import type { Session } from 'next-auth';
 import { SessionProvider } from 'next-auth/react';
 import ActivityTracker from '@/components/auth/ActivityTracker';
 import { onSessionExpired } from '@/lib/client-auth-recovery';
+import { installNavigationHistoryTracking } from '@/lib/client-navigation-guard';
 
 function SessionExpirationWatcher() {
   const router = useRouter();
@@ -27,6 +28,8 @@ export default function AuthenticatedClientProviders({
   children: React.ReactNode;
   initialSession?: Session | null;
 }) {
+  useEffect(installNavigationHistoryTracking, []);
+
   return (
     <SessionProvider session={initialSession} refetchInterval={0} refetchOnWindowFocus={false}>
       <ActivityTracker />

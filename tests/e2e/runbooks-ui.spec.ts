@@ -296,9 +296,13 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   await page.locator('input[name="conditionValue"]').fill('HIGH');
   await page.getByRole('button', { name: 'Save trigger', exact: true }).click();
   await expect(
-    page.getByRole('dialog').locator('form').filter({
-      has: page.getByRole('button', { name: 'Save trigger', exact: true }),
-    }).getByRole('status')
+    page
+      .getByRole('dialog')
+      .locator('form')
+      .filter({
+        has: page.getByRole('button', { name: 'Save trigger', exact: true }),
+      })
+      .getByRole('status')
   ).toHaveText('Changes saved.');
   const binding = await prisma.serviceRunbookBinding.findFirstOrThrow({
     where: { serviceId, runbookId: id },
@@ -475,9 +479,15 @@ test('390px infrastructure, health and builder have no horizontal overflow', asy
 
 test('large workflows retain keyboard navigation, theme layout and zoom-equivalent viewport', async ({
   page,
+  browserName,
 }) => {
   await login(page);
-  await page.goto(`/runbooks/${runbookId}`);
+  await page.locator(`a[href="/runbooks/${runbookId}"]`).first().click();
+  await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
+  // Preserve a real forward entry before making the draft dirty.
+  await page.evaluate(() => history.pushState(null, '', `${location.pathname}?history=forward`));
+  await page.goBack();
+  await expect(page).not.toHaveURL(/history=forward/);
   for (const count of [1, 10, 25, 50]) {
     await page.getByRole('tab', { name: /^Advanced/ }).click();
     await page.getByLabel('Definition JSON', { exact: true }).fill(
@@ -523,6 +533,39 @@ test('large workflows retain keyboard navigation, theme layout and zoom-equivale
   await page.getByRole('button', { name: 'Back to steps' }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
+  const draftUrl = page.url();
+  await page.evaluate(() => history.back());
+  await expect(page.getByRole('alertdialog')).toContainText('Leave this draft');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing' }).click();
+  await expect(page).toHaveURL(draftUrl);
+  await expect(
+    page.getByRole('list', { name: 'Runbook steps' }).getByRole('button', { name: /^Step \d+:/ })
+  ).toHaveCount(50);
+  await page.evaluate(() => history.forward());
+  await expect(page.getByRole('alertdialog')).toContainText('Leave this draft');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing' }).click();
+  await expect(page).toHaveURL(draftUrl);
+  if (browserName === 'chromium') {
+    // Native document exits are separate from App Router history transitions.
+    page.removeAllListeners('dialog');
+    const refreshPrompt = page.waitForEvent('dialog');
+    const reload = page.evaluate(() => location.reload());
+    const refreshDialog = await refreshPrompt;
+    expect(refreshDialog.type()).toBe('beforeunload');
+    await refreshDialog.dismiss();
+    await reload;
+    await expect(
+      page.getByRole('list', { name: 'Runbook steps' }).getByRole('button', { name: /^Step \d+:/ })
+    ).toHaveCount(50);
+    const closePrompt = page.waitForEvent('dialog');
+    const close = page.close({ runBeforeUnload: true });
+    const closeDialog = await closePrompt;
+    expect(closeDialog.type()).toBe('beforeunload');
+    await closeDialog.dismiss();
+    await close;
+    expect(page.isClosed()).toBe(false);
+    page.on('dialog', dialog => dialog.accept());
+  }
   const library = page
     .getByRole('navigation', { name: 'Runbook navigation' })
     .getByRole('link', { name: 'Library', exact: true });
@@ -533,6 +576,24 @@ test('large workflows retain keyboard navigation, theme layout and zoom-equivale
     page.getByRole('list', { name: 'Runbook steps' }).getByRole('button', { name: /^Step \d+:/ })
   ).toHaveCount(50);
   await library.click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
+  await expect(page.getByRole('heading', { name: 'Runbooks', exact: true })).toBeVisible();
+  // Confirm Forward and Back independently after returning to the saved builder.
+  await page.goBack();
+  await page.getByRole('button', { name: /^Step 1:/ }).click();
+  await page
+    .locator('input[aria-label="Step name"]:visible')
+    .first()
+    .fill('Unsaved forward change');
+  await page.evaluate(() => history.forward());
+  await expect(page.getByRole('alertdialog')).toContainText('Leave this draft');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
+  await expect(page.getByRole('heading', { name: 'Runbooks', exact: true })).toBeVisible();
+  await page.goBack();
+  await page.getByRole('button', { name: /^Step 1:/ }).click();
+  await page.locator('input[aria-label="Step name"]:visible').first().fill('Unsaved back change');
+  await page.evaluate(() => history.back());
+  await expect(page.getByRole('alertdialog')).toContainText('Leave this draft');
   await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
   await expect(page.getByRole('heading', { name: 'Runbooks', exact: true })).toBeVisible();
 });

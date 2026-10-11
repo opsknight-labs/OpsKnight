@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Code2, ListOrdered, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import DetailTabs from '@/components/ui/DetailTabs';
+import { registerNavigationGuard } from '@/lib/client-navigation-guard';
 import EmptyState from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -199,9 +200,19 @@ export default function RunbookBuilder({
         },
       });
     };
+    const unregisterHistoryGuard = registerNavigationGuard(resume => {
+      setDiscardPrompt({
+        title: 'Leave this draft and discard unsaved changes?',
+        onConfirm: () => {
+          window.removeEventListener('beforeunload', warn);
+          resume();
+        },
+      });
+    });
     window.addEventListener('beforeunload', warn);
     document.addEventListener('click', guard, true);
     return () => {
+      unregisterHistoryGuard();
       window.removeEventListener('beforeunload', warn);
       document.removeEventListener('click', guard, true);
     };

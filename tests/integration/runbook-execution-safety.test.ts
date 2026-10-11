@@ -402,6 +402,81 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     }
   );
 
+  it('keeps sensitive step metadata redacted from preview through history and incident events', async () => {
+    const name = 'Inspect ${{ inputs.credential }} for ${{ inputs.label }}';
+    const target = await createAgentTarget(
+      {
+        steps: [
+          {
+            key: 'inspect',
+            name,
+            type: 'MANUAL',
+            riskClass: 'READ_ONLY',
+            requiresApproval: true,
+            config: {},
+          },
+        ],
+      },
+      [
+        { key: 'credential', label: 'Credential', type: 'SECRET_REF' },
+        { key: 'label', label: 'Label', type: 'STRING' },
+      ]
+    );
+    const incident = await createTestIncident('Confidential display metadata', target.service.id);
+    const inputValues = { credential: 'secret://production-api-token', label: 'Payments' };
+    await testPrisma.serviceRunbookBinding.update({
+      where: { id: target.binding.id },
+      data: { inputValues },
+    });
+    const request = {
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+      incidentId: incident.id,
+      triggeredByUserId: target.actor.id,
+      inputValues,
+    };
+    const preview = await previewRunbookExecution(request);
+    expect(preview.steps[0]?.name).toBe('Inspect [REDACTED] for Payments');
+    const execution = await startAuthorizedExecution({
+      ...request,
+      expectedPlanDigest: preview.digest,
+      previewAuthorizationToken: preview.authorizationToken,
+    });
+    await advanceExecution(execution.id);
+    const step = await testPrisma.runbookExecutionStep.findFirstOrThrow({
+      where: { executionId: execution.id },
+    });
+    expect(step.name).toBe(preview.steps[0]?.name);
+    await approveExecutionStep({
+      executionId: execution.id,
+      stepId: step.id,
+      actorId: target.actor.id,
+      planDigest: computePlanDigest({
+        stepKey: step.stepKey,
+        stepType: step.type,
+        riskClass: step.riskClass,
+        config: {},
+        agentPoolId: target.pool.id,
+        agentId: undefined,
+        inputValues,
+        versionChecksum: target.version.checksum,
+      }),
+    });
+    const events = await testPrisma.incidentEvent.findMany({ where: { incidentId: incident.id } });
+    expect(
+      events.filter(event =>
+        ['RUNBOOK_APPROVAL_REQUIRED', 'RUNBOOK_APPROVED'].includes(event.type ?? '')
+      )
+    ).toHaveLength(2);
+    expect(JSON.stringify(events)).toContain('Inspect [REDACTED] for Payments');
+    expect(JSON.stringify(events)).not.toContain('production-api-token');
+    const version = await testPrisma.runbookVersion.findUniqueOrThrow({
+      where: { id: target.version.id },
+    });
+    expect(JSON.stringify(version.definition)).toContain(name);
+  });
+
   it('atomically reserves the per-incident budget under concurrent starts', async () => {
     const target = await createAgentTarget({
       steps: [

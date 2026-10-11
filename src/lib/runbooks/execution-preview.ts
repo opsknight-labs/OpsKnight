@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { sortJsonValue, resolveInputTemplates, isSecretReference } from './shared-definition';
 import { stepRequiresApproval } from './safety';
 import { redactRunbookOutput } from './redaction';
+import { redactRunbookDisplayName } from './display-name';
 import { DEFAULT_STEP_TIMEOUT_SECONDS, requiresAgent, type RunbookStepDefinition } from './types';
 
 export interface ExecutionPreview {
@@ -62,7 +63,7 @@ export function buildExecutionPreview(plan: {
   plan.steps.forEach(markChecks);
   const steps = plan.steps.map(step => ({
     key: step.key,
-    name: String(resolveInputTemplates(step.name, plan.inputValues)),
+    name: redactRunbookDisplayName(step.name, plan.inputValues, plan.inputTypes),
     type: step.type,
     risk: step.riskClass,
     purpose: purposes.get(step.key) ?? 'Workflow action',

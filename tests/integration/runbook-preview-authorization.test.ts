@@ -259,6 +259,7 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
     'wrongVersion',
     'wrongFingerprint',
     'nonMatchingCondition',
+    'invalidOrCondition',
   ] as const)('rejects automatic execution with %s', async change => {
     const target = await fixture();
     await testPrisma.serviceRunbookBinding.update({
@@ -318,6 +319,30 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
       ).id;
     if (change === 'wrongVersion') request.runbookVersionId = target.runbook.id;
     if (change === 'wrongFingerprint') request.triggerFingerprint = '0'.repeat(64);
+    if (change === 'invalidOrCondition') {
+      await testPrisma.runbookTrigger.update({
+        where: { id: trigger.id },
+        data: { conditionLogic: 'OR' },
+      });
+      await testPrisma.runbookTriggerCondition.createMany({
+        data: [
+          {
+            triggerId: trigger.id,
+            field: 'incident.title',
+            operator: 'EQUALS',
+            value: 'Identical context',
+            sequence: 0,
+          },
+          {
+            triggerId: trigger.id,
+            field: 'incident.severityTYPO',
+            operator: 'NOT_EXISTS',
+            value: 'ignored',
+            sequence: 1,
+          },
+        ],
+      });
+    }
     if (change === 'nonMatchingCondition')
       await testPrisma.runbookTriggerCondition.create({
         data: {
@@ -331,7 +356,7 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
       startTriggeredRunbookExecution(
         request as Parameters<typeof startTriggeredRunbookExecution>[0]
       )
-    ).rejects.toThrow(/AUTOMATION_NOT_AUTHORIZED|valid execution boundary/);
+    ).rejects.toThrow(/AUTOMATION_NOT_AUTHORIZED|valid execution boundary|unsupported condition/);
     await expectNoWork();
   });
 

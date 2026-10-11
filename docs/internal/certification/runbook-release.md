@@ -13,7 +13,7 @@ policy, signature, output, and runtime tests:
 
 ```sh
 npx tsc --noEmit --incremental false
-npx vitest run --no-file-parallelism --maxWorkers=1 tests/lib/runbooks tests/components/RunbookBuilder.test.tsx tests/components/RunbookExecutionPreview.test.tsx tests/integration/runbook-agent-runtime.test.ts tests/lib/deployment-config-unit.test.ts
+npx vitest run --no-file-parallelism --maxWorkers=1 tests/lib/runbooks tests/lib/client-navigation-guard.test.ts tests/components/RunbookBuilder.test.tsx tests/components/RunbookExecutionPreview.test.tsx tests/integration/runbook-agent-runtime.test.ts tests/lib/deployment-config-unit.test.ts
 npx vitest run tests/lib/rbac.test.ts tests/lib/rbac-read-guards.test.ts tests/architecture/rbac-page-guards.test.ts
 node --test tests/ci/runbook-change-gates.test.cjs
 npm run docs:lint
@@ -73,6 +73,17 @@ deployment gates cover that boundary.
 - Secret access: claiming tests check required grants, confidential transport,
   scoped input delivery, and revocation. Preview checks grant metadata without
   retrieving plaintext; local policy and transport remain dispatch checks.
+
+Execution step names use the same metadata-aware redaction in preview, persistence,
+history rendering and incident approval events. The database suite verifies that
+secret identifiers never enter these display records and that definitions stay
+immutable. Stored trigger fields and operators are validated before any AND/OR
+matching at both evaluation and authorization boundaries.
+
+The browser matrix verifies cancel/confirm for App Router Back, Forward and links.
+Chromium separately verifies cancelled refresh and tab closing via beforeunload.
+History tracking preserves Next.js state and restores the current entry while the
+discard dialog is open; manual cross-document/device checks remain release gates.
 
 ## Deployment certification to record before release
 

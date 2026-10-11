@@ -19,7 +19,8 @@ import {
   resolveInputTemplates,
   validateResolvedStepConfig,
 } from './definition';
-import { matchesCondition, matchesTrigger } from './matcher';
+import { matchesCondition, validateAndMatchTrigger } from './matcher';
+import { redactRunbookDisplayName } from './display-name';
 import { finalizeVerificationEvidence } from './verification-evidence';
 import { workflowConditionSchema } from './conditions';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
@@ -236,7 +237,7 @@ async function prepareRunbookExecution(
       if (
         !trigger ||
         !incident ||
-        !matchesTrigger(
+        !validateAndMatchTrigger(
           {
             incident: { ...incident, tags: incident.tags.map(item => item.tag.name) },
             service: incident.service,
@@ -763,7 +764,7 @@ async function prepareRunbookExecution(
           create: steps.map(step => ({
             stepKey: step.key,
             sequence: step.sequence,
-            name: String(resolveInputTemplates(step.name, resolvedInputs)),
+            name: redactRunbookDisplayName(step.name, resolvedInputs, version.inputs),
             type: step.type,
             containerRuntime:
               step.type === 'DOCKER' &&
@@ -965,7 +966,7 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
             tx,
             execution.incidentId,
             'RUNBOOK_APPROVAL_REQUIRED',
-            `Runbook approval required: ${step.name}`
+            `Runbook approval required: ${redactRunbookDisplayName(step.name)}`
           );
         }
       }
@@ -1622,7 +1623,7 @@ export async function approveExecutionStep(input: {
       tx,
       step.execution.incidentId,
       'RUNBOOK_APPROVED',
-      `Runbook step approved: ${step.name}`
+      `Runbook step approved: ${redactRunbookDisplayName(step.name)}`
     );
     await logAudit(
       {

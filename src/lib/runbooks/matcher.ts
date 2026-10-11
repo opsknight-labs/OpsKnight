@@ -1,3 +1,5 @@
+import { conditionContextFieldSchema, conditionOperatorSchema } from './conditions';
+import { RunbookDefinitionError } from './errors';
 import type { RunbookConditionLogic, RunbookConditionOperator } from './types';
 
 export type TriggerCondition = {
@@ -156,4 +158,25 @@ export function matchesTrigger(
   return logic === 'AND'
     ? conditions.every(condition => matchesCondition(context, condition, inputTypes))
     : conditions.some(condition => matchesCondition(context, condition, inputTypes));
+}
+
+/** Validate every stored condition before evaluating AND/OR, including legacy database records. */
+export function validateAndMatchTrigger(
+  context: Record<string, unknown>,
+  conditions: TriggerCondition[],
+  logic: RunbookConditionLogic
+): boolean {
+  if (
+    !['AND', 'OR'].includes(logic) ||
+    conditions.some(
+      condition =>
+        !conditionContextFieldSchema.safeParse(condition.field).success ||
+        !conditionOperatorSchema.safeParse(condition.operator).success
+    )
+  ) {
+    throw new RunbookDefinitionError(
+      'Trigger has an unsupported condition field, operator or logic.'
+    );
+  }
+  return matchesTrigger(context, conditions, logic);
 }

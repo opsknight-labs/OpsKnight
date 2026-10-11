@@ -1,3 +1,4 @@
+import { redactRunbookDisplayName } from '@/lib/runbooks/display-name';
 import ExecutionTroubleshooting from '@/components/runbooks/executions/ExecutionTroubleshooting';
 import { getExecutionProgress, TRIGGER_LABELS } from '@/lib/runbooks/presentation/contracts';
 import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
@@ -229,7 +230,7 @@ export default async function ExecutionDetailPage({ params }: { params: Promise<
                 <div className="flex items-center gap-2.5">
                   <span className="font-mono text-xs text-muted-foreground">Step {index + 1}</span>
                   <span className="font-semibold text-sm">
-                    {step.name} · {step.stepKey}
+                    {redactRunbookDisplayName(step.name)} · {step.stepKey}
                   </span>
                   <Badge variant="outline" className="text-[11px]">
                     {step.type}

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { matchesCondition, matchesTrigger } from '@/lib/runbooks/matcher';
+import { matchesCondition, matchesTrigger, validateAndMatchTrigger } from '@/lib/runbooks/matcher';
 
 describe('runbook trigger matcher', () => {
   const context = {
@@ -543,4 +543,24 @@ describe('runbook trigger matcher', () => {
       )
     ).toBe(false);
   });
+});
+
+it('validates all stored OR conditions before allowing a matching branch', () => {
+  const context = { incident: { urgency: 'HIGH' } };
+  const matching = { field: 'incident.urgency', operator: 'EQUALS' as const, value: 'HIGH' };
+  expect(validateAndMatchTrigger(context, [matching], 'OR')).toBe(true);
+  expect(() =>
+    validateAndMatchTrigger(
+      context,
+      [
+        matching,
+        {
+          field: 'incident.severityTYPO',
+          operator: 'NOT_EXISTS',
+          value: null,
+        },
+      ],
+      'OR'
+    )
+  ).toThrow('unsupported condition');
 });
