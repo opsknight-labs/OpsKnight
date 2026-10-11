@@ -176,3 +176,10 @@ claimed. Normalization now reuses a bounded UTF-8 encoder/scratch buffer, with
 Unicode and successive-value regression coverage. A nine-round local benchmark
 of 20,000 maximum-size string fields improved median runtime from 94.3ms to
 88.7ms; this does not establish end-to-end throughput.
+
+The bounded-normalization matrix completed all six 20-RPS/120-second profiles
+with every arrival accepted and persisted, zero drops, evaluation fallbacks,
+duplicate deliveries and deadlocks. SHADOW and all LIVE profiles passed their
+comparative gates, including restart recovery. Only service-disabled exceeded
+1.25x OFF HTTP latency, so capacity is still **not certified**. The same image
+and allocation require a fresh complete repeat; no gates are relaxed.
