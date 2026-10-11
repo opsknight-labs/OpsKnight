@@ -146,6 +146,7 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
           triggerId: trigger.id,
           inputValues: binding.inputValues as Record<string, unknown>,
           triggerFingerprint: fingerprint,
+          sourceEventId,
         });
         started++;
       } catch (error) {

@@ -354,6 +354,21 @@ describe('Runbook Definition Module', () => {
       expect(extractSecretName(ref)).toBe('my-secret-key');
     });
 
+    it.each([
+      'secret://',
+      'secret://-a',
+      'secret://a-',
+      'secret://a--b',
+      'secret://A',
+      'secret://a_b',
+    ])('rejects malformed secret group boundaries: %s', reference => {
+      expect(isSecretReference(reference)).toBe(false);
+    });
+
+    it('rejects long malformed secret references without nested regex repetitions', () => {
+      expect(isSecretReference(`secret://a${'-'.repeat(20000)}b`)).toBe(false);
+    });
+
     it('should reject invalid secret references', () => {
       const notRef = 'not-a-secret';
       expect(isSecretReference(notRef)).toBe(false);

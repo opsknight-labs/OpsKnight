@@ -14,7 +14,7 @@ import {
   validateConditionComparison,
 } from './conditions';
 import { stepRequiresApproval } from './safety';
-import { SECRET_REFERENCE } from './input-values';
+import { isSecretReferenceValue } from './input-values';
 import { runbookDefinitionSchema } from './schemas';
 import {
   RunbookDefinitionError,
@@ -148,19 +148,17 @@ function validateDefinitionStructure(definition: RunbookDefinition): void {
   }
 }
 
-const RISK_RANK: Record<RunbookRiskClass, number> = {
-  READ_ONLY: 0,
-  IDEMPOTENT_WRITE: 1,
-  NON_IDEMPOTENT: 2,
-};
+const RISK_RANK = new Map<RunbookRiskClass, number>([
+  ['READ_ONLY', 0],
+  ['IDEMPOTENT_WRITE', 1],
+  ['NON_IDEMPOTENT', 2],
+]);
 
 const INPUT_TEMPLATE = /^\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}$/;
 const SYSTEMD_UNIT =
   /^[A-Za-z0-9][A-Za-z0-9_.@:-]*\.(?:service|socket|timer|target|mount|path|slice|scope|device|automount|swap)$/;
 const DOCKER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
-// Linear character scan; the final optional group only checks the last character.
-// eslint-disable-next-line security/detect-unsafe-regex
-const KUBERNETES_NAME = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
+const KUBERNETES_NAME = /^(?:[a-z0-9]|[a-z0-9][a-z0-9.-]*[a-z0-9])$/;
 
 function configuredString(step: RunbookStepDefinition, key: string, fallback = ''): string {
   const value = Object.entries(step.config).find(([name]) => name === key)?.[1];
@@ -296,9 +294,7 @@ function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates 
       Number(step.config.lines) > 500)
   )
     throw new RunbookDefinitionError('Journal lines must be an integer between 1 and 500.');
-  // Both keys are validated enum values, indexing only a fixed risk table.
-  // eslint-disable-next-line security/detect-object-injection
-  if (RISK_RANK[step.riskClass] < RISK_RANK[minimumRisk]) {
+  if (RISK_RANK.get(step.riskClass)! < RISK_RANK.get(minimumRisk)!) {
     throw new RunbookDefinitionError(
       `Step "${step.key}" declares ${step.riskClass}, but ${step.type} ${configuredString(step, 'action', configuredString(step, 'method')) || 'execution'} requires at least ${minimumRisk}.`
     );
@@ -671,9 +667,7 @@ export function getMaxRiskClass(definition: RunbookDefinition): RunbookRiskClass
   let maxRisk: RunbookRiskClass = 'READ_ONLY';
 
   for (const step of flattenSteps(definition)) {
-    // Validated risk enums cannot address arbitrary properties.
-    // eslint-disable-next-line security/detect-object-injection
-    if (RISK_RANK[step.riskClass] > RISK_RANK[maxRisk]) {
+    if (RISK_RANK.get(step.riskClass)! > RISK_RANK.get(maxRisk)!) {
       maxRisk = step.riskClass;
     }
   }
@@ -799,7 +793,7 @@ export function referencedStepInputKeys(
  * Checks if a value is a secret reference (e.g., "secret://prod-db-password").
  */
 export function isSecretReference(value: unknown): value is string {
-  return typeof value === 'string' && SECRET_REFERENCE.test(value);
+  return isSecretReferenceValue(value);
 }
 
 /**
@@ -851,15 +845,13 @@ export function resolveInputTemplates(
     if (!Object.prototype.hasOwnProperty.call(inputValues, exact[1])) {
       throw new RunbookDefinitionError(`Missing required runbook input "${exact[1]}".`);
     }
-    return inputValues[exact[1]];
+    return Object.getOwnPropertyDescriptor(inputValues, exact[1])?.value as unknown;
   }
   return value.replace(INPUT_TEMPLATE_GLOBAL, (_match, key: string) => {
     if (!Object.prototype.hasOwnProperty.call(inputValues, key)) {
       throw new RunbookDefinitionError(`Missing required runbook input "${key}".`);
     }
-    // The own-property guard above excludes prototype values.
-    // eslint-disable-next-line security/detect-object-injection
-    const resolved = inputValues[key];
+    const resolved: unknown = Object.getOwnPropertyDescriptor(inputValues, key)?.value;
     if (!['string', 'number', 'boolean'].includes(typeof resolved)) {
       throw new RunbookDefinitionError(
         `Runbook input "${key}" must be scalar when embedded in text.`

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Code2, ListOrdered, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import DetailTabs from '@/components/ui/DetailTabs';
 import EmptyState from '@/components/ui/EmptyState';
@@ -9,6 +9,15 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Textarea } from '@/components/ui/shadcn/textarea';
 import { Badge } from '@/components/ui/shadcn/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 import {
   RUNBOOK_INPUT_TYPES,
   type RunbookDefinition,
@@ -143,6 +152,11 @@ export default function RunbookBuilder({
   const [advancedInputs, setAdvancedInputs] = useState(JSON.stringify(initialInputs, null, 2));
   const [jsonError, setJsonError] = useState('');
   const [unappliedJson, setUnappliedJson] = useState(false);
+  const bypassNavigationGuard = useRef(false);
+  const [discardPrompt, setDiscardPrompt] = useState<{
+    title: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   // Compute live validation results
   const { stepErrors, inputErrors, generalInputErrors, errorCount } = useMemo(
@@ -158,14 +172,32 @@ export default function RunbookBuilder({
     };
     const guard = (event: MouseEvent) => {
       const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
-      // Native confirmation also covers navigation links outside the builder.
       if (
-        link &&
-        !link.getAttribute('href')?.startsWith('#') &&
-        // eslint-disable-next-line no-alert
-        !window.confirm('Leave this draft and discard unsaved changes?')
+        !link ||
+        bypassNavigationGuard.current ||
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey ||
+        link.getAttribute('href')?.startsWith('#') ||
+        link.getAttribute('target') === '_blank' ||
+        link.hasAttribute('download')
       )
-        event.preventDefault();
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      setDiscardPrompt({
+        title: 'Leave this draft and discard unsaved changes?',
+        onConfirm: () => {
+          // Replay the original link so its Next.js navigation behavior is preserved.
+          window.removeEventListener('beforeunload', warn);
+          bypassNavigationGuard.current = true;
+          (link as HTMLAnchorElement).click();
+          bypassNavigationGuard.current = false;
+        },
+      });
     };
     window.addEventListener('beforeunload', warn);
     document.addEventListener('click', guard, true);
@@ -772,6 +804,54 @@ export default function RunbookBuilder({
     </div>
   );
 
+  function refreshAdvancedJson() {
+    setAdvancedDefinition(JSON.stringify(definition, null, 2));
+    setAdvancedInputs(JSON.stringify(inputs, null, 2));
+    setJsonError('');
+    setUnappliedJson(false);
+  }
+
+  function applyAdvancedJson() {
+    try {
+      const parsedDefinition = runbookDefinitionSchema.parse(JSON.parse(advancedDefinition));
+      const parsedInputs = runbookInputsSchema.parse(JSON.parse(advancedInputs));
+      setEditor({
+        definition: parsedDefinition as RunbookDefinition,
+        inputs: parsedInputs,
+      });
+      setPendingKeys(new Map());
+      setRenameErrors(new Map());
+      const newIds = parsedDefinition.steps.map(
+        step =>
+          stepIdentities[definition.steps.findIndex(existing => existing.key === step.key)] ??
+          crypto.randomUUID()
+      );
+      setStepIdentities(newIds);
+      setSelectedStepId(
+        selectedStepId && newIds.includes(selectedStepId) ? selectedStepId : (newIds.at(0) ?? null)
+      );
+      const newInputIds = parsedInputs.map(
+        input =>
+          inputIdentities[inputs.findIndex(existing => existing.key === input.key)] ??
+          crypto.randomUUID()
+      );
+      setInputIdentities(newInputIds);
+      const newCommitted = new Map<string, string>();
+      parsedInputs.forEach((inp, idx) => {
+        const id = newInputIds.at(idx);
+        if (id) newCommitted.set(id, inp.key);
+      });
+      setCommittedInputKeys(newCommitted);
+      setDirty(true);
+      setJsonError('');
+      setUnappliedJson(false);
+    } catch {
+      setJsonError(
+        'Invalid definition or inputs. Check JSON syntax, unique keys and supported fields.'
+      );
+    }
+  }
+
   const advanced = (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
@@ -802,12 +882,12 @@ export default function RunbookBuilder({
         size="sm"
         className="text-xs"
         onClick={() => {
-          // eslint-disable-next-line no-alert -- Explicit protection against discarding JSON edits.
-          if (unappliedJson && !window.confirm('Discard unapplied JSON changes?')) return;
-          setAdvancedDefinition(JSON.stringify(definition, null, 2));
-          setAdvancedInputs(JSON.stringify(inputs, null, 2));
-          setJsonError('');
-          setUnappliedJson(false);
+          if (unappliedJson) {
+            setDiscardPrompt({
+              title: 'Discard unapplied JSON changes?',
+              onConfirm: refreshAdvancedJson,
+            });
+          } else refreshAdvancedJson();
         }}
       >
         Refresh JSON from builder
@@ -850,56 +930,12 @@ export default function RunbookBuilder({
           size="sm"
           className="text-xs font-semibold"
           onClick={() => {
-            try {
-              if (
-                unappliedJson &&
-                dirty &&
-                // eslint-disable-next-line no-alert -- Explicit protection against overwriting a modified draft.
-                !window.confirm('Replace the visual draft with this JSON?')
-              )
-                return;
-              const parsedDefinition = runbookDefinitionSchema.parse(
-                JSON.parse(advancedDefinition)
-              );
-              const parsedInputs = runbookInputsSchema.parse(JSON.parse(advancedInputs));
-              setEditor({
-                definition: parsedDefinition as RunbookDefinition,
-                inputs: parsedInputs,
+            if (unappliedJson && dirty) {
+              setDiscardPrompt({
+                title: 'Replace the visual draft with this JSON?',
+                onConfirm: applyAdvancedJson,
               });
-              setPendingKeys(new Map());
-              setRenameErrors(new Map());
-              const newIds = parsedDefinition.steps.map(
-                step =>
-                  stepIdentities[
-                    definition.steps.findIndex(existing => existing.key === step.key)
-                  ] ?? crypto.randomUUID()
-              );
-              setStepIdentities(newIds);
-              setSelectedStepId(
-                selectedStepId && newIds.includes(selectedStepId)
-                  ? selectedStepId
-                  : (newIds.at(0) ?? null)
-              );
-              const newInputIds = parsedInputs.map(
-                input =>
-                  inputIdentities[inputs.findIndex(existing => existing.key === input.key)] ??
-                  crypto.randomUUID()
-              );
-              setInputIdentities(newInputIds);
-              const newCommitted = new Map<string, string>();
-              parsedInputs.forEach((inp, idx) => {
-                const id = newInputIds.at(idx);
-                if (id) newCommitted.set(id, inp.key);
-              });
-              setCommittedInputKeys(newCommitted);
-              setDirty(true);
-              setJsonError('');
-              setUnappliedJson(false);
-            } catch {
-              setJsonError(
-                'Invalid definition or inputs. Check JSON syntax, unique keys and supported fields.'
-              );
-            }
+            } else applyAdvancedJson();
           }}
         >
           Apply JSON to builder
@@ -925,6 +961,33 @@ export default function RunbookBuilder({
         }
       }}
     >
+      <AlertDialog
+        open={discardPrompt !== null}
+        onOpenChange={open => {
+          if (!open) setDiscardPrompt(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{discardPrompt?.title}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your unsaved edits will be discarded. Choose Keep editing to preserve them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const confirm = discardPrompt?.onConfirm;
+                setDiscardPrompt(null);
+                confirm?.();
+              }}
+            >
+              Discard changes
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
       <input type="hidden" name="draftRevision" value={draftRevision} />
       <input type="hidden" name="definition" value={JSON.stringify(definition)} />
       <input

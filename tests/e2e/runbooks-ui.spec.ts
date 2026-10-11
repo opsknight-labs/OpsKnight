@@ -113,6 +113,8 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toBeDisabled();
   await page.getByRole('tab', { name: /^Advanced/ }).click();
   await page.getByRole('button', { name: 'Apply JSON to builder' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('Replace the visual draft');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
   await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toBeEnabled();
   await page.getByRole('tab', { name: /^Inputs/ }).click();
   await page.getByRole('button', { name: 'Add input', exact: true }).click();
@@ -293,6 +295,11 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   await page.getByRole('option', { name: 'Incident urgency', exact: true }).click();
   await page.locator('input[name="conditionValue"]').fill('HIGH');
   await page.getByRole('button', { name: 'Save trigger', exact: true }).click();
+  await expect(
+    page.getByRole('dialog').locator('form').filter({
+      has: page.getByRole('button', { name: 'Save trigger', exact: true }),
+    }).getByRole('status')
+  ).toHaveText('Changes saved.');
   const binding = await prisma.serviceRunbookBinding.findFirstOrThrow({
     where: { serviceId, runbookId: id },
   });
@@ -485,6 +492,10 @@ test('large workflows retain keyboard navigation, theme layout and zoom-equivale
       })
     );
     await page.getByRole('button', { name: 'Apply JSON to builder' }).click();
+    if (count > 1) {
+      await expect(page.getByRole('alertdialog')).toContainText('Replace the visual draft');
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
+    }
     await page.getByRole('tab', { name: 'Builder', exact: true }).click();
     const steps = page.getByRole('list', { name: 'Runbook steps' });
     await expect(steps.getByRole('button', { name: /^Step \d+:/ })).toHaveCount(count);
@@ -512,6 +523,18 @@ test('large workflows retain keyboard navigation, theme layout and zoom-equivale
   await page.getByRole('button', { name: 'Back to steps' }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
+  const library = page
+    .getByRole('navigation', { name: 'Runbook navigation' })
+    .getByRole('link', { name: 'Library', exact: true });
+  await library.click();
+  await expect(page.getByRole('alertdialog')).toContainText('Leave this draft');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing' }).click();
+  await expect(
+    page.getByRole('list', { name: 'Runbook steps' }).getByRole('button', { name: /^Step \d+:/ })
+  ).toHaveCount(50);
+  await library.click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
+  await expect(page.getByRole('heading', { name: 'Runbooks', exact: true })).toBeVisible();
 });
 
 test('server pagination, administrator labels, effective capabilities and budget settings', async ({

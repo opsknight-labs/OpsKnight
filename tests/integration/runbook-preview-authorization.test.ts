@@ -1,9 +1,14 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
+import { reconcileRunbooks } from '@/lib/runbooks/reconciler';
 import * as actions from '@/components/incident/runbook-actions';
-import { startRunbookExecution } from '@/lib/runbooks/orchestrator';
-import { computeDefinitionChecksum, parseRunbookDefinition } from '@/lib/runbooks/definition';
+import { startRunbookExecution, startTriggeredRunbookExecution } from '@/lib/runbooks/orchestrator';
+import {
+  computeDefinitionChecksum,
+  computeTriggerFingerprint,
+  parseRunbookDefinition,
+} from '@/lib/runbooks/definition';
 import {
   createTestIncident,
   createTestService,
@@ -230,6 +235,178 @@ describeIfRealDB('incident server-action preview authorization (PostgreSQL)', ()
       await expectNoWork();
     }
   );
+
+  it('rejects a bare actor-less manual entry point even for an agent-free runbook', async () => {
+    const target = await fixture();
+    await expect(startRunbookExecution({ runbookId: target.runbook.id })).rejects.toThrow(
+      'PREVIEW_AUTHORIZATION_REQUIRED'
+    );
+    await expectNoWork();
+  });
+
+  it.each([
+    'missingIncident',
+    'missingBinding',
+    'missingTrigger',
+    'missingFingerprint',
+    'manualBinding',
+    'suggestedBinding',
+    'disabledBinding',
+    'latestVersion',
+    'wrongTrigger',
+    'disabledTrigger',
+    'wrongIncidentService',
+    'wrongVersion',
+    'wrongFingerprint',
+    'nonMatchingCondition',
+  ] as const)('rejects automatic execution with %s', async change => {
+    const target = await fixture();
+    await testPrisma.serviceRunbookBinding.update({
+      where: { id: target.binding.id },
+      data: { mode: 'AUTOMATIC', versionStrategy: 'PINNED', runbookVersionId: target.version.id },
+    });
+    const trigger = await testPrisma.runbookTrigger.create({
+      data: { bindingId: target.binding.id, event: 'INCIDENT_CREATED' },
+    });
+    const request: Partial<Parameters<typeof startTriggeredRunbookExecution>[0]> = {
+      runbookId: target.runbook.id,
+      runbookVersionId: target.version.id,
+      incidentId: target.incident.id,
+      serviceId: target.service.id,
+      bindingId: target.binding.id,
+      triggerId: trigger.id,
+      sourceEventId: 'automatic-source',
+      triggerFingerprint: computeTriggerFingerprint({
+        sourceEventId: 'automatic-source',
+        bindingId: target.binding.id,
+        runbookVersionId: target.version.id,
+      }),
+    };
+    if (change === 'missingIncident') delete request.incidentId;
+    if (change === 'missingBinding') delete request.bindingId;
+    if (change === 'missingTrigger') delete request.triggerId;
+    if (change === 'missingFingerprint') delete request.triggerFingerprint;
+    if (change === 'manualBinding')
+      await testPrisma.serviceRunbookBinding.update({
+        where: { id: target.binding.id },
+        data: { mode: 'MANUAL' },
+      });
+    if (change === 'suggestedBinding')
+      await testPrisma.serviceRunbookBinding.update({
+        where: { id: target.binding.id },
+        data: { mode: 'SUGGESTED' },
+      });
+    if (change === 'disabledBinding')
+      await testPrisma.serviceRunbookBinding.update({
+        where: { id: target.binding.id },
+        data: { enabled: false },
+      });
+    if (change === 'latestVersion')
+      await testPrisma.serviceRunbookBinding.update({
+        where: { id: target.binding.id },
+        data: { versionStrategy: 'LATEST_PUBLISHED' },
+      });
+    if (change === 'wrongTrigger') request.triggerId = target.binding.id;
+    if (change === 'disabledTrigger')
+      await testPrisma.runbookTrigger.update({
+        where: { id: trigger.id },
+        data: { enabled: false },
+      });
+    if (change === 'wrongIncidentService')
+      request.incidentId = (
+        await createTestIncident('Other service', (await createTestService('Other service')).id)
+      ).id;
+    if (change === 'wrongVersion') request.runbookVersionId = target.runbook.id;
+    if (change === 'wrongFingerprint') request.triggerFingerprint = '0'.repeat(64);
+    if (change === 'nonMatchingCondition')
+      await testPrisma.runbookTriggerCondition.create({
+        data: {
+          triggerId: trigger.id,
+          field: 'incident.status',
+          operator: 'EQUALS',
+          value: 'RESOLVED',
+        },
+      });
+    await expect(
+      startTriggeredRunbookExecution(
+        request as Parameters<typeof startTriggeredRunbookExecution>[0]
+      )
+    ).rejects.toThrow(/AUTOMATION_NOT_AUTHORIZED|valid execution boundary/);
+    await expectNoWork();
+  });
+
+  it('starts a matching enabled automatic trigger and retains its exact fingerprint', async () => {
+    const target = await fixture();
+    await testPrisma.serviceRunbookBinding.update({
+      where: { id: target.binding.id },
+      data: { mode: 'AUTOMATIC', versionStrategy: 'PINNED', runbookVersionId: target.version.id },
+    });
+    const trigger = await testPrisma.runbookTrigger.create({
+      data: { bindingId: target.binding.id, event: 'INCIDENT_CREATED' },
+    });
+    const triggerFingerprint = computeTriggerFingerprint({
+      sourceEventId: 'valid-event',
+      bindingId: target.binding.id,
+      runbookVersionId: target.version.id,
+    });
+    const request = {
+      runbookId: target.runbook.id,
+      runbookVersionId: target.version.id,
+      serviceId: target.service.id,
+      incidentId: target.incident.id,
+      bindingId: target.binding.id,
+      triggerId: trigger.id,
+      sourceEventId: 'valid-event',
+      triggerFingerprint,
+    };
+    await expect(startRunbookExecution(request)).rejects.toThrow('PREVIEW_AUTHORIZATION_REQUIRED');
+    const execution = await startTriggeredRunbookExecution(request);
+    expect(execution).toMatchObject({
+      triggeredByType: 'TRIGGER',
+      triggeredByUserId: null,
+      triggerId: trigger.id,
+      triggerFingerprint,
+      incidentId: target.incident.id,
+    });
+  });
+
+  it('purges authorization records in bounded batches after retention while preserving durable audit links', async () => {
+    const target = await fixture();
+    await actions.executePreviewedIncidentRunbookAction(
+      target.incident.id,
+      target.binding.id,
+      undefined,
+      target.form()
+    );
+    const consumed = await testPrisma.runbookPreviewAuthorization.findFirstOrThrow({
+      where: { consumedAt: { not: null } },
+    });
+    await testPrisma.runbookPreviewAuthorization.update({
+      where: { id: consumed.id },
+      data: { expiresAt: new Date(Date.now() - 31 * 86_400_000) },
+    });
+    const oldUnused = await actions.previewIncidentRunbookAction(
+      target.incident.id,
+      target.binding.id
+    );
+    await testPrisma.runbookPreviewAuthorization.updateMany({
+      where: { consumedAt: null },
+      data: { expiresAt: new Date(Date.now() - 31 * 86_400_000) },
+    });
+    expect(oldUnused.preview).toBeDefined();
+    await actions.previewIncidentRunbookAction(target.incident.id, target.binding.id);
+    const auditsBefore = await testPrisma.auditLog.count();
+    expect((await reconcileRunbooks(1)).previewAuthorizationsDeleted).toBe(1);
+    expect(await testPrisma.runbookPreviewAuthorization.count()).toBe(2);
+    expect((await reconcileRunbooks(1)).previewAuthorizationsDeleted).toBe(1);
+    expect(await testPrisma.runbookPreviewAuthorization.count()).toBe(1);
+    expect(await testPrisma.auditLog.count()).toBe(auditsBefore);
+    const audit = await testPrisma.auditLog.findFirstOrThrow({
+      where: { action: 'runbook.execution.started', entityId: consumed.executionId! },
+    });
+    expect(JSON.stringify(audit)).toContain(consumed.id);
+    expect(JSON.stringify(audit)).toContain(consumed.executionId!);
+  });
 
   it('atomically consumes one authorization and audits the responder, scope and plan without the bearer token', async () => {
     const target = await fixture();

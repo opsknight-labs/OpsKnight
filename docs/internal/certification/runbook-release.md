@@ -13,7 +13,8 @@ policy, signature, output, and runtime tests:
 
 ```sh
 npx tsc --noEmit --incremental false
-npx vitest run --no-file-parallelism --maxWorkers=1 tests/lib/runbooks tests/components/RunbookBuilder.test.tsx tests/integration/runbook-agent-runtime.test.ts tests/lib/deployment-config-unit.test.ts
+npx vitest run --no-file-parallelism --maxWorkers=1 tests/lib/runbooks tests/components/RunbookBuilder.test.tsx tests/components/RunbookExecutionPreview.test.tsx tests/integration/runbook-agent-runtime.test.ts tests/lib/deployment-config-unit.test.ts
+npx vitest run tests/lib/rbac.test.ts tests/lib/rbac-read-guards.test.ts tests/architecture/rbac-page-guards.test.ts
 node --test tests/ci/runbook-change-gates.test.cjs
 npm run docs:lint
 ```
@@ -23,7 +24,7 @@ truncates tables between tests; never point it at a development or production
 database containing useful data. Run database and browser suites sequentially.
 
 ```sh
-VITEST_USE_REAL_DB=1 npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/runbook-execution-safety.test.ts tests/integration/runbook-lifecycle-database.test.ts
+VITEST_USE_REAL_DB=1 npx vitest run --no-file-parallelism --maxWorkers=1 tests/integration/runbook-execution-safety.test.ts tests/integration/runbook-lifecycle-database.test.ts tests/integration/runbook-preview-authorization.test.ts
 npm run build
 PLAYWRIGHT_PRODUCTION_SERVER=true npx playwright test --config playwright.runbooks.config.ts
 ```
@@ -42,6 +43,14 @@ deployment gates cover that boundary.
 
 ## Failure contracts and evidence
 
+- Preview authorization: `runbook-preview-authorization.test.ts` calls real server
+  actions against PostgreSQL and covers missing, forged, expired, cross-incident,
+  cross-responder and reused authorizations, changed context and concurrent starts.
+  Separate incident RBAC tests verify permission denial. Automatic execution must
+  have an incident, enabled pinned AUTOMATIC binding, matching enabled trigger and
+  source-event fingerprint; direct actor-less manual requests are rejected.
+  Reconciliation purges at most 1,000 authorization records per pass after 30 days
+  beyond expiry. Issuance/consumption audit events retain scope and execution links.
 - Agent/runtime crash: `runbook-agent-runtime.test.ts` crashes during artifact
   upload and restarts with the persisted spool; one successful result is delivered.
   Renewal loss self-fences an in-flight write.
@@ -93,7 +102,8 @@ claim that those deployment environments were executed locally.
 - Physical iOS Safari and Android Chrome: create, reorder, rename, validate, save,
   publish, preview, approve, cancel, and troubleshoot a workflow.
 - Desktop Chrome, Firefox, Safari: keyboard-only tabs/step navigation, focus visibility,
-  accessible names, native unsaved-change prompts, and screen-reader announcements.
+  accessible names, discard-confirmation dialogs, tab/refresh unsaved-change prompts,
+  and screen-reader announcements.
 - Actual 200% zoom, long wrapped labels, light/dark themes, 320/375/390/430/768/1024/1440px,
   and maximum-depth nested checks. Inspect target sizes and overflow in the focused
   mobile editor as well as the step list.

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RunbookBuilder, { getInputUsage } from '@/components/runbooks/RunbookBuilder';
@@ -73,7 +74,6 @@ vi.mock('@/components/runbooks/RunbookControls', () => ({
     </select>
   ),
 }));
-vi.spyOn(window, 'confirm').mockReturnValue(true);
 afterEach(cleanup);
 
 describe('Runbook nested check builder', () => {
@@ -195,6 +195,39 @@ describe('Runbook nested check builder', () => {
     );
     expect(zeroSaved.steps[0].config.replicas).toBe(0);
   });
+
+  it.each(['job', 'secret', 'ingress', 'widgets.example.com', '${{ inputs.resource }}'])(
+    'preserves configured Kubernetes resource %s when switching generic actions',
+    resource => {
+      const inputs: RunbookInputInput[] = [
+        {
+          key: 'resource',
+          label: 'Resource',
+          type: 'STRING',
+          required: false,
+          description: '',
+          sequence: 0,
+        },
+      ];
+      const step = {
+        ...newBuilderStep('KUBERNETES', 'custom_resource'),
+        config: { action: 'get', namespace: 'prod', resource, name: 'example' },
+      };
+      const { container } = render(
+        <RunbookBuilder
+          initialDefinition={{ steps: [step] }}
+          initialInputs={inputs}
+          action={async () => {}}
+        />
+      );
+      fireEvent.change(screen.getByLabelText('Action'), { target: { value: 'describe' } });
+      const saved = parseRunbookDefinition(
+        JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value),
+        inputs
+      );
+      expect(saved.steps[0].config).toMatchObject({ action: 'describe', resource });
+    }
+  );
 
   it('strips replicas when switching Kubernetes action away from scale', () => {
     const k8sStep = {
@@ -862,11 +895,61 @@ describe('Runbook nested check builder', () => {
     // 4. Click "Refresh JSON from builder" to discard JSON edits and restore builder state
     const refreshBtn = screen.getByRole('button', { name: 'Refresh JSON from builder' });
     fireEvent.click(refreshBtn);
+    const discardDialog = screen.getByRole('alertdialog');
+    fireEvent.click(within(discardDialog).getByRole('button', { name: 'Keep editing' }));
+    expect(defJsonTextarea.value).toContain('Conflict JSON Name');
+    fireEvent.click(refreshBtn);
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
 
     expect(
       screen.queryByText('Conflict Warning: Visual Builder and JSON Editor Both Have Modifications')
     ).toBeNull();
     expect(defJsonTextarea.value).toContain('Updated Name In Builder');
+  });
+
+  it('keeps unsaved drafts when navigation is cancelled and replays the link only on confirmation', () => {
+    render(
+      <>
+        <Link href="/runbooks">Leave builder</Link>
+        <RunbookBuilder
+          initialDefinition={{ steps: [newBuilderStep('MANUAL', 'step_1')] }}
+          initialInputs={[]}
+          action={async () => {}}
+        />
+      </>
+    );
+    fireEvent.change(screen.getByLabelText('Step name'), { target: { value: 'Unsaved name' } });
+    const link = screen.getByRole('link', { name: 'Leave builder' });
+    const replay = vi.spyOn(link as HTMLAnchorElement, 'click').mockImplementation(() => {});
+    expect(fireEvent.click(link)).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(replay).not.toHaveBeenCalled();
+    expect((screen.getByLabelText('Step name') as HTMLInputElement).value).toBe('Unsaved name');
+    expect(fireEvent.click(link)).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect(replay).toHaveBeenCalledTimes(1);
+    replay.mockRestore();
+  });
+
+  it('requires confirmation before advanced JSON replaces a modified visual draft', () => {
+    const step = newBuilderStep('MANUAL', 'step_1');
+    render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [step] }}
+        initialInputs={[]}
+        action={async () => {}}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('Step name'), { target: { value: 'Visual draft' } });
+    fireEvent.change(screen.getByLabelText('Definition JSON'), {
+      target: { value: JSON.stringify({ steps: [{ ...step, name: 'JSON draft' }] }) },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply JSON to builder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect((screen.getByLabelText('Step name') as HTMLInputElement).value).toBe('Visual draft');
+    fireEvent.click(screen.getByRole('button', { name: 'Apply JSON to builder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }));
+    expect((screen.getByLabelText('Step name') as HTMLInputElement).value).toBe('JSON draft');
   });
 
   it('applies edited advanced JSON to the visual builder and refreshes step identities', () => {

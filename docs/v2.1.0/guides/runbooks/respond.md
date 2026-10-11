@@ -62,8 +62,11 @@ and rejects a changed version, target, inputs, action plan or incident context
 (title, description, status, urgency, priority, tags and service context). Each
 preview issues a five-minute, single-use authorization bound to your account,
 incident, service binding and suggestion. Another responder or incident cannot
-reuse it. Preview issuance and consumption are recorded in the audit trail,
-without storing the bearer token. Conditions continue to evaluate live incident
+reuse it. The preview marks expiry and disables Execute until you preview again.
+Preview issuance and consumption are recorded in the audit trail,
+without storing the bearer token. Temporary authorization records are purged
+in bounded reconciliation batches 30 days after expiry; audit events retain
+the responder, scope, digest and execution link. Conditions continue to evaluate live incident
 context after execution starts. Preview again after
 a stale-plan or readiness error. A successful preview is not a dry run or a
 successful action. To test real actions, use an explicitly authorized test service

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 import { ActionForm, SubmitButton, type RunbookFormAction } from './RunbookControls';
 import type { ExecutionPreview } from '@/lib/runbooks/execution-preview';
@@ -16,6 +16,15 @@ export default function RunbookExecutionPreview({
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [expired, setExpired] = useState(false);
+  useEffect(() => {
+    if (!preview?.expiresAt) return;
+    const timer = window.setTimeout(
+      () => setExpired(true),
+      Math.max(0, Date.parse(preview.expiresAt) - Date.now())
+    );
+    return () => window.clearTimeout(timer);
+  }, [preview]);
   return (
     <div className="w-full min-w-0 space-y-3">
       <Button
@@ -26,6 +35,7 @@ export default function RunbookExecutionPreview({
         onClick={async () => {
           setPending(true);
           setError('');
+          setExpired(false);
           setPreview(undefined);
           setConfirmed(false);
           try {
@@ -116,6 +126,11 @@ export default function RunbookExecutionPreview({
               </span>
             </label>
           )}
+          {expired && (
+            <p role="alert" className="text-destructive">
+              This preview expired. Preview again before executing.
+            </p>
+          )}
           <ActionForm action={executeAction} onSuccess={() => setPreview(undefined)}>
             <input type="hidden" name="previewDigest" value={preview.digest} />
             <input
@@ -126,6 +141,7 @@ export default function RunbookExecutionPreview({
             <SubmitButton
               pendingLabel="Starting…"
               disabled={
+                expired ||
                 preview.readiness?.some(check => check.state === 'blocked') ||
                 (preview.steps.some(step => step.risk !== 'READ_ONLY') && !confirmed)
               }

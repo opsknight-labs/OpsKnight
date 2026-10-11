@@ -9,10 +9,8 @@ export type TriggerCondition = {
 function readPath(source: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((current, segment) => {
     if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined;
-    if (!Object.prototype.hasOwnProperty.call(current, segment)) return undefined;
-    // The own-property guard above prevents prototype traversal.
-    // eslint-disable-next-line security/detect-object-injection
-    return (current as Record<string, unknown>)[segment];
+    // Inspect own data properties only; never traverse prototypes or invoke accessors.
+    return Object.getOwnPropertyDescriptor(current, segment)?.value as unknown;
   }, source);
 }
 
@@ -22,8 +20,13 @@ function asComparableList(value: unknown): unknown[] {
 
 function isValidNumericString(str: string): boolean {
   const trimmed = str.trim();
-  if (trimmed === '' || Number.isNaN(Number(trimmed))) return false;
-  return /^-?(0|[1-9]\d*)(\.\d+)?([eE][-+]?\d+)?$/.test(trimmed);
+  if (trimmed === '') return false;
+  try {
+    // JSON's numeric grammar rejects leading zeros, hex, incomplete fractions and signs.
+    return typeof JSON.parse(trimmed) === 'number';
+  } catch {
+    return false;
+  }
 }
 
 export function normalizeComparisonPair(actual: unknown, expected: unknown): [unknown, unknown] {
@@ -91,7 +94,7 @@ export function matchesCondition(
     declaredType =
       resolvedInputTypes instanceof Map
         ? resolvedInputTypes.get(inputKey)
-        : resolvedInputTypes[inputKey];
+        : Object.entries(resolvedInputTypes).find(([key]) => key === inputKey)?.[1];
   }
 
   // Coercion is only allowed for typed inputs that are not declared as STRING.
@@ -104,7 +107,10 @@ export function matchesCondition(
       return !areEqual(actual, condition.value, allowCoercion);
     case 'CONTAINS': {
       if (typeof actual === 'string') {
-        if ((!isTypedInputField || declaredType === 'STRING') && typeof condition.value !== 'string') {
+        if (
+          (!isTypedInputField || declaredType === 'STRING') &&
+          typeof condition.value !== 'string'
+        ) {
           return false;
         }
         const valStr =
@@ -121,7 +127,10 @@ export function matchesCondition(
     }
     case 'STARTS_WITH': {
       if (typeof actual === 'string') {
-        if ((!isTypedInputField || declaredType === 'STRING') && typeof condition.value !== 'string') {
+        if (
+          (!isTypedInputField || declaredType === 'STRING') &&
+          typeof condition.value !== 'string'
+        ) {
           return false;
         }
         const valStr =
@@ -131,13 +140,9 @@ export function matchesCondition(
       return false;
     }
     case 'IN':
-      return asComparableList(condition.value).some(item =>
-        areEqual(actual, item, allowCoercion)
-      );
+      return asComparableList(condition.value).some(item => areEqual(actual, item, allowCoercion));
     case 'NOT_IN':
-      return !asComparableList(condition.value).some(item =>
-        areEqual(actual, item, allowCoercion)
-      );
+      return !asComparableList(condition.value).some(item => areEqual(actual, item, allowCoercion));
   }
 }
 

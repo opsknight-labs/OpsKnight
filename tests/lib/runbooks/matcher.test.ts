@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { matchesCondition, matchesTrigger } from '@/lib/runbooks/matcher';
 
 describe('runbook trigger matcher', () => {
@@ -21,6 +21,36 @@ describe('runbook trigger matcher', () => {
         value: 'production',
       })
     ).toBe(true);
+  });
+
+  it.each([
+    ['42', true],
+    ['4.2e1', true],
+    [' 42 ', true],
+    ['042', false],
+    ['+42', false],
+    ['0x2a', false],
+    ['42.', false],
+    ['[42]', false],
+    ['"42"', false],
+    ['null', false],
+  ])('checks numeric grammar for %s without regex backtracking', (value, expected) => {
+    expect(
+      matchesCondition(
+        { input: { count: 42 } },
+        { field: 'input.count', operator: 'EQUALS', value },
+        new Map([['count', 'NUMBER']])
+      )
+    ).toBe(expected);
+  });
+
+  it('does not invoke accessor properties while resolving a condition path', () => {
+    const getter = vi.fn(() => 42);
+    const input = Object.defineProperty({}, 'count', { get: getter, enumerable: true });
+    expect(
+      matchesCondition({ input }, { field: 'input.count', operator: 'EXISTS', value: null })
+    ).toBe(false);
+    expect(getter).not.toHaveBeenCalled();
   });
 
   it('supports AND and OR condition logic', () => {

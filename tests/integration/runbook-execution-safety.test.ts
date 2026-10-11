@@ -4,12 +4,14 @@ import { generateKeyPairSync } from 'node:crypto';
 import {
   computeDefinitionChecksum,
   computePlanDigest,
+  computeTriggerFingerprint,
   parseRunbookDefinition,
 } from '@/lib/runbooks/definition';
 import { createServiceBinding, updateServiceBinding } from '@/lib/runbooks/bindings';
 import {
   advanceExecution,
   startRunbookExecution as startAuthorizedExecution,
+  startTriggeredRunbookExecution,
   type RunbookExecutionRequest,
   previewRunbookExecution,
   cancelExecution,
@@ -46,11 +48,49 @@ import {
   testPrisma,
 } from '../helpers/test-db';
 
+/** Explicitly provision legitimate automatic fixtures; actor-less production calls stay rejected. */
 async function startRunbookExecution(input: RunbookExecutionRequest) {
-  if (!input.triggeredByUserId || input.expectedPlanDigest) return startAuthorizedExecution(input);
-  const preview = await previewRunbookExecution(input);
-  return startAuthorizedExecution({
+  const binding =
+    !input.triggeredByUserId && input.bindingId
+      ? await testPrisma.serviceRunbookBinding.findUnique({ where: { id: input.bindingId } })
+      : null;
+  if (binding) {
+    const trigger = input.triggerId
+      ? { id: input.triggerId }
+      : await testPrisma.runbookTrigger.upsert({
+          where: { id: binding.id },
+          update: {},
+          create: { id: binding.id, bindingId: binding.id, event: 'INCIDENT_CREATED' },
+        });
+    const incidentId =
+      input.incidentId ??
+      (await createTestIncident('Automatic safety fixture', binding.serviceId)).id;
+    const runbookVersionId = input.runbookVersionId ?? binding.runbookVersionId!;
+    const sourceEventId = input.sourceEventId ?? input.triggerFingerprint ?? crypto.randomUUID();
+    return startTriggeredRunbookExecution({
+      runbookId: input.runbookId,
+      bindingId: binding.id,
+      serviceId: input.serviceId ?? binding.serviceId,
+      incidentId,
+      runbookVersionId,
+      sourceEventId,
+      triggerId: trigger.id,
+      triggerFingerprint: computeTriggerFingerprint({
+        sourceEventId,
+        bindingId: binding.id,
+        runbookVersionId,
+      }),
+      inputValues: input.inputValues,
+    });
+  }
+  const request = {
     ...input,
+    triggeredByUserId: input.triggeredByUserId ?? (await createTestUser()).id,
+  };
+  if (request.expectedPlanDigest) return startAuthorizedExecution(request);
+  const preview = await previewRunbookExecution(request);
+  return startAuthorizedExecution({
+    ...request,
     expectedPlanDigest: preview.digest,
     previewAuthorizationToken: preview.authorizationToken,
   });
@@ -145,6 +185,7 @@ async function createAgentTarget(
       runbookId: runbook.id,
       runbookVersionId: version.id,
       versionStrategy: 'PINNED',
+      mode: 'AUTOMATIC',
       defaultAgentPoolId: pool.id,
     },
   });
@@ -372,6 +413,9 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
           config: { action: 'status', unit: 'api.service' },
         },
       ],
+    });
+    await testPrisma.runbookTrigger.create({
+      data: { id: target.binding.id, bindingId: target.binding.id, event: 'INCIDENT_CREATED' },
     });
     const incident = await createTestIncident('Budget concurrency', target.service.id);
     await testPrisma.systemSettings.create({
@@ -1177,6 +1221,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       startRunbookExecution({
         runbookId: target.runbook.id,
         bindingId: target.binding.id,
+        triggeredByUserId: target.actor.id,
         serviceId: target.service.id,
       })
     ).rejects.toThrow(/checksum/);
@@ -1597,15 +1642,30 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         },
       ],
     };
-    const { runbook } = await createPublishedRunbook(definition);
+    const target = await createAgentTarget(definition);
+    await testPrisma.runbookTrigger.create({
+      data: { id: target.binding.id, bindingId: target.binding.id, event: 'INCIDENT_CREATED' },
+    });
+    const incident = await createTestIncident('Trigger deduplication', target.service.id);
+    const sourceEventId = 'same-event';
+    const request = {
+      runbookId: target.runbook.id,
+      bindingId: target.binding.id,
+      serviceId: target.service.id,
+      incidentId: incident.id,
+      sourceEventId,
+    };
     const starts = await Promise.allSettled([
-      startRunbookExecution({ runbookId: runbook.id, triggerFingerprint: 'same-event' }),
-      startRunbookExecution({ runbookId: runbook.id, triggerFingerprint: 'same-event' }),
+      startRunbookExecution(request),
+      startRunbookExecution(request),
     ]);
     expect(starts.filter(result => result.status === 'fulfilled')).toHaveLength(1);
-    expect(
-      await testPrisma.runbookExecution.count({ where: { triggerFingerprint: 'same-event' } })
-    ).toBe(1);
+    const triggerFingerprint = computeTriggerFingerprint({
+      sourceEventId,
+      bindingId: target.binding.id,
+      runbookVersionId: target.version.id,
+    });
+    expect(await testPrisma.runbookExecution.count({ where: { triggerFingerprint } })).toBe(1);
   });
 
   it.each(['LOCAL_HOSTS', 'SHARED_TARGET'] as const)(
@@ -2035,6 +2095,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       ],
     });
     const execution = await startRunbookExecution({
+      triggeredByUserId: target.actor.id,
       runbookId: target.runbook.id,
       bindingId: target.binding.id,
       serviceId: target.service.id,
@@ -2145,6 +2206,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       ],
     });
     const execution = await startRunbookExecution({
+      triggeredByUserId: target.actor.id,
       runbookId: target.runbook.id,
       bindingId: target.binding.id,
       serviceId: target.service.id,
@@ -2335,6 +2397,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       ],
     });
     const execution = await startRunbookExecution({
+      triggeredByUserId: target.actor.id,
       runbookId: target.runbook.id,
       bindingId: target.binding.id,
       serviceId: target.service.id,

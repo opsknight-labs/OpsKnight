@@ -1,8 +1,11 @@
 import type { RunbookInputType } from './types';
 
-// Hyphen-separated groups cannot overlap: alphanumeric groups exclude '-'.
-// eslint-disable-next-line security/detect-unsafe-regex
-export const SECRET_REFERENCE = /^secret:\/\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** Secret IDs contain nonempty alphanumeric groups separated by single hyphens. */
+export function isSecretReferenceValue(value: unknown): boolean {
+  if (typeof value !== 'string' || !value.startsWith('secret://')) return false;
+  const id = value.slice('secret://'.length);
+  return /^[a-z0-9-]+$/.test(id) && !id.startsWith('-') && !id.endsWith('-') && !id.includes('--');
+}
 
 /** Browser and server share the same scalar value contract. No secret lookup occurs here. */
 export function isValidInputValue(type: RunbookInputType | 'SELECT', value: unknown): boolean {
@@ -25,7 +28,7 @@ export function isValidInputValue(type: RunbookInputType | 'SELECT', value: unkn
     case 'DURATION':
       return typeof value === 'string' && /^\d+(?:ms|s|m|h|d)$/.test(value);
     case 'SECRET_REF':
-      return typeof value === 'string' && SECRET_REFERENCE.test(value);
+      return isSecretReferenceValue(value);
   }
 }
 

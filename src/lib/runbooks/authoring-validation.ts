@@ -44,10 +44,10 @@ export function validateAuthoringDefinition(raw: unknown, inputs: unknown): Auth
           path.splice(0, path.length, ...candidate);
           return true;
         }
-        for (const kind of ['precheck', 'verification'] as const) {
-          // Only the fixed precheck/verification property names are selected.
-          // eslint-disable-next-line security/detect-object-injection
-          const nested = step[kind]?.steps;
+        for (const [kind, nested] of [
+          ['precheck', step.precheck?.steps],
+          ['verification', step.verification?.steps],
+        ] as const) {
           if (nested && findStep(nested, [...candidate, kind, 'steps'])) return true;
         }
       }

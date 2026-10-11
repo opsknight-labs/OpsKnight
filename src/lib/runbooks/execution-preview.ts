@@ -164,7 +164,7 @@ export async function checkExecutionReadiness(
     const { collectSecretReferences, referencedStepInputKeys } =
       await import('./shared-definition');
     const stepSecrets = eligibleSteps.map(entry => {
-      const referenced = referencedStepInputKeys(entry.step, undefined, false);
+      const referenced = referencedStepInputKeys(entry.step.config, entry.step.type, false);
       return {
         agents: entry.agents,
         secrets: [

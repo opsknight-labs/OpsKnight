@@ -51,6 +51,49 @@ describe('runbook authoring and execution contract', () => {
       'deferred',
     ]);
   });
+  it('does not require Agent secret grants for descriptive metadata alone', async () => {
+    let secretQueries = 0;
+    const tx = {
+      runbookAgent: {
+        findMany: async () => [{ id: 'linux', capabilities: ['RUNBOOK_LINUX_DIAGNOSTICS'] }],
+      },
+      runbookSecret: {
+        findMany: async () => {
+          secretQueries++;
+          return [];
+        },
+      },
+    } as unknown as import('@prisma/client').Prisma.TransactionClient;
+    const step = {
+      ...newBuilderStep('LINUX_DIAGNOSTICS', 'inspect'),
+      name: 'Inspect ${{ inputs.token }}',
+      description: 'Reference ${{ inputs.token }}',
+      config: { action: 'uptime' },
+    };
+    const plan = {
+      agentId: 'linux',
+      agentPoolId: null,
+      inputValues: { token: 'secret://token' },
+      steps: [step],
+    };
+    expect((await checkExecutionReadiness(tx, plan)).map(check => check.state)).toEqual([
+      'passed',
+      'deferred',
+    ]);
+    expect(secretQueries).toBe(0);
+    const executableStep = {
+      ...step,
+      config: { action: 'uptime', annotation: '${{ inputs.token }}' },
+    };
+    plan.steps = [executableStep];
+    expect((await checkExecutionReadiness(tx, plan)).map(check => check.state)).toEqual([
+      'passed',
+      'blocked',
+      'deferred',
+    ]);
+    expect(secretQueries).toBe(1);
+  });
+
   it.each([
     ['NUMBER', 'abc'],
     ['NUMBER', 'Infinity'],

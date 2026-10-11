@@ -10,6 +10,7 @@ import { safeOutboundFetch } from '@/lib/network-security';
 import {
   computePlanDigest,
   computeDefinitionChecksum,
+  computeTriggerFingerprint,
   containsSecretReference,
   referencedStepInputKeys,
   isSecretReference,
@@ -18,7 +19,7 @@ import {
   resolveInputTemplates,
   validateResolvedStepConfig,
 } from './definition';
-import { matchesCondition } from './matcher';
+import { matchesCondition, matchesTrigger } from './matcher';
 import { finalizeVerificationEvidence } from './verification-evidence';
 import { workflowConditionSchema } from './conditions';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
@@ -105,42 +106,72 @@ export interface RunbookExecutionRequest {
   triggeredByUserId?: string;
   triggerFingerprint?: string;
   triggerId?: string;
+  sourceEventId?: string;
   expectedPlanDigest?: string;
   previewAuthorizationToken?: string;
 }
 
+/** Responder entry point. Absence of an actor never authorizes an automatic execution. */
 export async function startRunbookExecution(input: RunbookExecutionRequest) {
-  if (input.triggeredByUserId && (!input.expectedPlanDigest || !input.previewAuthorizationToken)) {
+  if (!input.triggeredByUserId || !input.expectedPlanDigest || !input.previewAuthorizationToken) {
     throw new RunbookDefinitionError(
-      'PREVIEW_AUTHORIZATION_REQUIRED: Preview the runbook before executing.'
+      'PREVIEW_AUTHORIZATION_REQUIRED: An authorized responder and preview are required.'
     );
   }
-  const result = await prepareRunbookExecution(input, false);
+  const result = await prepareRunbookExecution(input, false, 'MANUAL');
   if (!('id' in result)) throw new Error('Execution was not created.');
   return result;
 }
 
-/** Internal automatic-trigger path; responder execution always requires preview authorization. */
+const automaticExecutionSchema = z
+  .object({
+    runbookId: z.string().cuid(),
+    runbookVersionId: z.string().cuid(),
+    incidentId: z.string().cuid(),
+    serviceId: z.string().cuid(),
+    bindingId: z.string().cuid(),
+    triggerId: z.string().cuid(),
+    triggerFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    sourceEventId: z.string().min(1).max(200),
+    inputValues: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+
+/** Internal trigger entry point; the transaction verifies the full automatic contract. */
 export async function startTriggeredRunbookExecution(
-  input: Omit<
-    RunbookExecutionRequest,
-    'triggeredByUserId' | 'previewAuthorizationToken' | 'expectedPlanDigest'
-  > & { triggerId: string; triggerFingerprint: string }
+  input: z.infer<typeof automaticExecutionSchema>
 ) {
-  if ('triggeredByUserId' in input || !input.triggerId || !input.triggerFingerprint) {
-    throw new RunbookDefinitionError('Invalid automatic trigger execution request.');
+  const request = automaticExecutionSchema.safeParse(input);
+  if (!request.success)
+    throw new RunbookDefinitionError(
+      'AUTOMATION_NOT_AUTHORIZED: Complete automatic trigger metadata is required.'
+    );
+  if (request.data.triggerFingerprint !== computeTriggerFingerprint(request.data)) {
+    throw new RunbookDefinitionError(
+      'AUTOMATION_NOT_AUTHORIZED: Trigger fingerprint does not match its source event, binding and version.'
+    );
   }
-  return startRunbookExecution(input);
+  const result = await prepareRunbookExecution(request.data, false, 'AUTOMATIC');
+  if (!('id' in result)) throw new Error('Execution was not created.');
+  return result;
 }
 
-/** Resolves through the identical transaction and preflight used by Execute, without creating work. */
+/** Resolves the execution preflight and issues a responder-bound preview capability. */
 export async function previewRunbookExecution(input: RunbookExecutionRequest) {
-  const result = await prepareRunbookExecution(input, true);
+  if (!input.triggeredByUserId)
+    throw new RunbookDefinitionError(
+      'PREVIEW_AUTHORIZATION_REQUIRED: An authorized responder is required.'
+    );
+  const result = await prepareRunbookExecution(input, true, 'MANUAL');
   if (!('digest' in result)) throw new Error('Preview was not generated.');
   return result;
 }
 
-async function prepareRunbookExecution(input: RunbookExecutionRequest, previewOnly: boolean) {
+async function prepareRunbookExecution(
+  input: RunbookExecutionRequest,
+  previewOnly: boolean,
+  mode: 'MANUAL' | 'AUTOMATIC'
+) {
   return prisma.$transaction(async tx => {
     await lockRunbookForShare(tx, input.runbookId, { action: 'execute' });
     const runbook = await tx.runbook.findFirst({
@@ -168,6 +199,56 @@ async function prepareRunbookExecution(input: RunbookExecutionRequest, previewOn
     }
     if (input.triggerId && !input.bindingId) {
       throw new RunbookDefinitionError('A trigger execution requires its service binding.');
+    }
+    if (mode === 'AUTOMATIC') {
+      if (
+        !binding ||
+        binding.mode !== 'AUTOMATIC' ||
+        binding.versionStrategy !== 'PINNED' ||
+        binding.runbookVersionId !== input.runbookVersionId
+      ) {
+        throw new RunbookDefinitionError(
+          'AUTOMATION_NOT_AUTHORIZED: An enabled AUTOMATIC binding pinned to this version is required.'
+        );
+      }
+      const trigger = await tx.runbookTrigger.findFirst({
+        where: {
+          id: input.triggerId,
+          bindingId: binding.id,
+          enabled: true,
+          event: 'INCIDENT_CREATED',
+        },
+        include: { conditions: { orderBy: { sequence: 'asc' } } },
+      });
+      const incident = await tx.incident.findFirst({
+        where: { id: input.incidentId, serviceId: binding.serviceId },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          status: true,
+          urgency: true,
+          priority: true,
+          tags: { select: { tag: { select: { name: true } } } },
+          service: { select: { id: true, name: true, teamId: true } },
+        },
+      });
+      if (
+        !trigger ||
+        !incident ||
+        !matchesTrigger(
+          {
+            incident: { ...incident, tags: incident.tags.map(item => item.tag.name) },
+            service: incident.service,
+          },
+          trigger.conditions,
+          trigger.conditionLogic
+        )
+      ) {
+        throw new RunbookDefinitionError(
+          'AUTOMATION_NOT_AUTHORIZED: Incident, service and matching enabled trigger are required.'
+        );
+      }
     }
     const suggestion = input.suggestionId
       ? await tx.runbookSuggestion.findFirst({
