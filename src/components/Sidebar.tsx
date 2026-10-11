@@ -137,7 +137,9 @@ export default function Sidebar({
         href={item.href}
         aria-current={active ? 'page' : undefined}
         aria-label={
-          isDesktopCollapsed ? `${item.label}${hasIncidents ? ` (${badgeText})` : ''}` : undefined
+          isDesktopCollapsed
+            ? `${item.label}${item.releaseStage ? ` (${item.releaseStage})` : ''}${hasIncidents ? ` (${badgeText})` : ''}`
+            : undefined
         }
         className={cn(
           'group relative flex items-center rounded-lg font-medium transition-all duration-150 select-none',
@@ -171,6 +173,16 @@ export default function Sidebar({
 
         {/* Label (expanded only) */}
         {!isDesktopCollapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+
+        {!isDesktopCollapsed && item.releaseStage && (
+          <Badge
+            variant="outline"
+            size="xs"
+            className="shrink-0 border-amber-400/40 bg-amber-400/10 text-amber-300"
+          >
+            {item.releaseStage}
+          </Badge>
+        )}
 
         {/* Incident Badge */}
         {hasIncidents &&
@@ -207,6 +219,15 @@ export default function Sidebar({
             className="text-xs py-1 px-2.5 flex items-center gap-2 bg-slate-900 text-white border-slate-700 shadow-xl"
           >
             <span className="font-medium">{item.label}</span>
+            {item.releaseStage && (
+              <Badge
+                variant="outline"
+                size="xs"
+                className="border-amber-400/40 bg-amber-400/10 text-amber-300"
+              >
+                {item.releaseStage}
+              </Badge>
+            )}
             {hasIncidents && (
               <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white">
                 {badgeText}
