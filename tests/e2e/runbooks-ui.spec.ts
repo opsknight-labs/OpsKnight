@@ -226,6 +226,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   const poolCard = page.locator('.bg-card').filter({ hasText: poolName });
   await poolCard.getByRole('button', { name: 'Manage pool' }).click();
   await page.getByRole('combobox', { name: 'Agent to add' }).click();
+  await page.getByPlaceholder('Search agent to add…').fill(agentName);
   await page.getByRole('option', { name: agentName, exact: true }).click();
   await page.getByRole('button', { name: 'Add Agent', exact: true }).click();
   await expect
@@ -240,6 +241,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   await page.getByLabel('Secret name', { exact: true }).fill(secretName);
   await page.getByLabel('Secret value', { exact: true }).fill('ui-credential-initial');
   await page.getByRole('combobox', { name: 'Initial secret grant' }).click();
+  await page.getByPlaceholder('Search initial secret grant…').fill(agentName);
   await page.getByRole('option', { name: `Agent · ${agentName}`, exact: true }).click();
   await page.getByRole('button', { name: 'Create encrypted secret', exact: true }).click();
   await expect
@@ -252,6 +254,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   await expect(secretCard.getByLabel('Secret value hidden')).toBeVisible();
   await secretCard.getByRole('button', { name: 'Manage grants / Rotate' }).click();
   await page.getByRole('combobox', { name: 'Grant to target' }).click();
+  await page.getByPlaceholder('Search grant to target…').fill(poolName);
   await page.getByRole('option', { name: `Pool · ${poolName}`, exact: true }).click();
   await page.getByRole('button', { name: 'Grant access', exact: true }).click();
   await expect
