@@ -7,7 +7,13 @@ audience: [administrator, responder]
 verification:
   level: test
   verified_at: 2026-10-11
-  evidence: [src/components/service/ServiceRunbooks.tsx, src/components/incident/IncidentRunbooks.tsx, tests/e2e/runbooks-ui.spec.ts, src/lib/runbooks/triggers.ts]
+  evidence:
+    [
+      src/components/service/ServiceRunbooks.tsx,
+      src/components/incident/IncidentRunbooks.tsx,
+      tests/e2e/runbooks-ui.spec.ts,
+      src/lib/runbooks/triggers.ts,
+    ]
 ---
 
 # Bind Runbooks and respond to incidents
@@ -52,7 +58,13 @@ platform permissions remain dispatch checks.
 
 For writes, confirm that you reviewed the target and authorize the plan, then
 select **Execute this plan**. Execution resolves the plan again in its transaction
-and rejects a changed version, target, inputs or action plan. Preview again after
+and rejects a changed version, target, inputs, action plan or incident context
+(title, description, status, urgency, priority, tags and service context). Each
+preview issues a five-minute, single-use authorization bound to your account,
+incident, service binding and suggestion. Another responder or incident cannot
+reuse it. Preview issuance and consumption are recorded in the audit trail,
+without storing the bearer token. Conditions continue to evaluate live incident
+context after execution starts. Preview again after
 a stale-plan or readiness error. A successful preview is not a dry run or a
 successful action. To test real actions, use an explicitly authorized test service
 and Agent; preview itself does not provide an execution sandbox.

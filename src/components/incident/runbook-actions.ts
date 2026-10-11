@@ -41,68 +41,6 @@ async function assertExecutionBelongsToIncident(executionId: string, incidentId:
   if (!execution) throw new Error('Runbook execution does not belong to this incident.');
 }
 
-export async function startIncidentRunbookAction(incidentId: string, bindingId: string) {
-  const [actor] = await Promise.all([
-    assertCapability(CAPABILITIES.RUNBOOK_EXECUTE),
-    assertCanViewIncident(idSchema.parse(incidentId)),
-  ]);
-  const binding = await prisma.serviceRunbookBinding.findFirst({
-    where: {
-      id: idSchema.parse(bindingId),
-      enabled: true,
-      service: { incidents: { some: { id: incidentId } } },
-    },
-    include: { runbook: { select: { publishedVersionId: true } } },
-  });
-  if (!binding) throw new Error('Runbook is not available for this incident service.');
-  const versionId =
-    binding.versionStrategy === 'PINNED'
-      ? binding.runbookVersionId
-      : binding.runbook.publishedVersionId;
-  if (!versionId) throw new Error('Runbook has no executable published version.');
-  await startRunbookExecution({
-    runbookId: binding.runbookId,
-    runbookVersionId: versionId,
-    incidentId,
-    serviceId: binding.serviceId,
-    bindingId: binding.id,
-    inputValues: binding.inputValues as Record<string, unknown>,
-    triggeredByUserId: actor.id,
-  });
-  revalidatePath(`/incidents/${incidentId}`);
-}
-
-export async function startIncidentRunbookSuggestionAction(
-  incidentId: string,
-  suggestionId: string
-) {
-  const [actor] = await Promise.all([
-    assertCapability(CAPABILITIES.RUNBOOK_EXECUTE),
-    assertCanViewIncident(idSchema.parse(incidentId)),
-  ]);
-  const suggestion = await prisma.runbookSuggestion.findFirst({
-    where: {
-      id: idSchema.parse(suggestionId),
-      incidentId,
-      state: 'SUGGESTED',
-      binding: { enabled: true, service: { incidents: { some: { id: incidentId } } } },
-    },
-    include: { binding: true },
-  });
-  if (!suggestion) throw new Error('Runbook suggestion is unavailable or already handled.');
-  await startRunbookExecution({
-    runbookId: suggestion.binding.runbookId,
-    runbookVersionId: suggestion.runbookVersionId,
-    suggestionId: suggestion.id,
-    incidentId,
-    serviceId: suggestion.binding.serviceId,
-    bindingId: suggestion.binding.id,
-    inputValues: suggestion.binding.inputValues as Record<string, unknown>,
-    triggeredByUserId: actor.id,
-  });
-  revalidatePath(`/incidents/${incidentId}`);
-}
-
 export async function approveIncidentRunbookStepAction(
   incidentId: string,
   executionId: string,
@@ -197,6 +135,10 @@ export async function executePreviewedIncidentRunbookAction(
     await startRunbookExecution({
       ...(await incidentExecutionRequest(incidentId, bindingId, suggestionId)),
       expectedPlanDigest,
+      previewAuthorizationToken: z
+        .string()
+        .regex(/^[a-f0-9]{64}$/)
+        .parse(data.get('previewAuthorizationToken')),
     });
     revalidatePath(`/incidents/${incidentId}`);
   } catch (error) {

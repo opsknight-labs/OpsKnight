@@ -14,7 +14,7 @@ import {
   buildRunbookLibraryWhere,
 } from '@/lib/runbooks/lifecycle';
 import { createServiceBinding, replaceBindingTrigger } from '@/lib/runbooks/bindings';
-import { startRunbookExecution } from '@/lib/runbooks/orchestrator';
+import { startRunbookExecution, previewRunbookExecution } from '@/lib/runbooks/orchestrator';
 import { RunbookArchivedError, RunbookCannotDeleteError } from '@/lib/runbooks/errors';
 import {
   createTestIncident,
@@ -388,6 +388,12 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
       actor.id
     );
 
+    const preview = await previewRunbookExecution({
+      runbookId: runbook.id,
+      serviceId: service.id,
+      bindingId: binding.id,
+      triggeredByUserId: actor.id,
+    });
     // Concurrently trigger archive and startRunbookExecution
     const [archiveResult, execResult] = await Promise.allSettled([
       archiveRunbook(runbook.id, actor.id),
@@ -396,6 +402,8 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
         serviceId: service.id,
         bindingId: binding.id,
         triggeredByUserId: actor.id,
+        expectedPlanDigest: preview.digest,
+        previewAuthorizationToken: preview.authorizationToken,
       }),
     ]);
 
@@ -420,6 +428,8 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
         serviceId: service.id,
         bindingId: binding.id,
         triggeredByUserId: actor.id,
+        expectedPlanDigest: preview.digest,
+        previewAuthorizationToken: preview.authorizationToken,
       })
     ).rejects.toThrow();
   });

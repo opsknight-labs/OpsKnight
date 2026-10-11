@@ -7,6 +7,8 @@ import { DEFAULT_STEP_TIMEOUT_SECONDS, requiresAgent, type RunbookStepDefinition
 
 export interface ExecutionPreview {
   digest: string;
+  authorizationToken?: string;
+  expiresAt?: string;
   readiness?: { state: 'passed' | 'blocked' | 'deferred'; message: string }[];
   versionId: string;
   version: number;
@@ -29,6 +31,7 @@ export interface ExecutionPreview {
 }
 
 export function buildExecutionPreview(plan: {
+  authorizationContext?: unknown;
   runbookId: string;
   versionId: string;
   version: number;

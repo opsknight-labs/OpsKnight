@@ -589,6 +589,8 @@ test('server pagination, administrator labels, effective capabilities and budget
     .getByRole('spinbutton', { name: 'Automatic non-idempotent actions per incident', exact: true })
     .fill('0');
   await page.getByRole('button', { name: 'Save remediation budgets' }).click();
+  // Later browsers may already have these DB values; wait for the action's UI response too.
+  await expect(page.getByRole('status').filter({ hasText: 'Changes saved.' })).toBeVisible();
   await expect
     .poll(
       async () =>

@@ -106,12 +106,31 @@ export interface RunbookExecutionRequest {
   triggerFingerprint?: string;
   triggerId?: string;
   expectedPlanDigest?: string;
+  previewAuthorizationToken?: string;
 }
 
 export async function startRunbookExecution(input: RunbookExecutionRequest) {
+  if (input.triggeredByUserId && (!input.expectedPlanDigest || !input.previewAuthorizationToken)) {
+    throw new RunbookDefinitionError(
+      'PREVIEW_AUTHORIZATION_REQUIRED: Preview the runbook before executing.'
+    );
+  }
   const result = await prepareRunbookExecution(input, false);
   if (!('id' in result)) throw new Error('Execution was not created.');
   return result;
+}
+
+/** Internal automatic-trigger path; responder execution always requires preview authorization. */
+export async function startTriggeredRunbookExecution(
+  input: Omit<
+    RunbookExecutionRequest,
+    'triggeredByUserId' | 'previewAuthorizationToken' | 'expectedPlanDigest'
+  > & { triggerId: string; triggerFingerprint: string }
+) {
+  if ('triggeredByUserId' in input || !input.triggerId || !input.triggerFingerprint) {
+    throw new RunbookDefinitionError('Invalid automatic trigger execution request.');
+  }
+  return startRunbookExecution(input);
 }
 
 /** Resolves through the identical transaction and preflight used by Execute, without creating work. */
@@ -500,7 +519,43 @@ async function prepareRunbookExecution(input: RunbookExecutionRequest, previewOn
         );
       }
     }
+    // Hash precisely the live fields available to workflow conditions, plus the request scope.
+    const incidentContext = input.incidentId
+      ? await tx.incident.findUniqueOrThrow({
+          where: { id: input.incidentId },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            status: true,
+            urgency: true,
+            priority: true,
+            tags: { select: { tag: { select: { name: true } } } },
+          },
+        })
+      : null;
+    const serviceContext = resolvedServiceId
+      ? await tx.service.findUniqueOrThrow({
+          where: { id: resolvedServiceId },
+          select: { id: true, name: true, teamId: true },
+        })
+      : null;
+    const authorizationScope = {
+      actorId: input.triggeredByUserId ?? null,
+      runbookId: runbook.id,
+      incidentId: input.incidentId ?? null,
+      serviceId: resolvedServiceId ?? null,
+      bindingId: input.bindingId ?? null,
+      suggestionId: input.suggestionId ?? null,
+    };
     const preview = buildExecutionPreview({
+      authorizationContext: {
+        ...authorizationScope,
+        incident: incidentContext
+          ? { ...incidentContext, tags: incidentContext.tags.map(item => item.tag.name).sort() }
+          : null,
+        service: serviceContext,
+      },
       runbookId: runbook.id,
       versionId: version.id,
       version: version.version,
@@ -522,7 +577,7 @@ async function prepareRunbookExecution(input: RunbookExecutionRequest, previewOn
         .parse(input.expectedPlanDigest) !== preview.digest
     ) {
       throw new RunbookDefinitionError(
-        'PREVIEW_STALE: version, inputs or target changed. Preview the runbook again before executing.'
+        'PREVIEW_STALE: version, inputs, target, responder or incident context changed. Preview the runbook again before executing.'
       );
     }
     if (previewOnly || input.expectedPlanDigest) {
@@ -538,7 +593,67 @@ async function prepareRunbookExecution(input: RunbookExecutionRequest, previewOn
         );
       }
     }
-    if (previewOnly) return preview;
+    if (previewOnly) {
+      if (input.triggeredByUserId) {
+        const token = crypto.randomBytes(32).toString('hex');
+        const grant = await tx.runbookPreviewAuthorization.create({
+          data: {
+            ...authorizationScope,
+            actorId: input.triggeredByUserId,
+            id: crypto.createHash('sha256').update(token).digest('hex'),
+            planDigest: preview.digest,
+            expiresAt: new Date(Date.now() + 5 * 60_000),
+          },
+        });
+        preview.authorizationToken = token;
+        preview.expiresAt = grant.expiresAt.toISOString();
+        await logAudit(
+          {
+            action: 'runbook.execution.previewed',
+            entityType: 'RUNBOOK',
+            entityId: runbook.id,
+            actorId: input.triggeredByUserId,
+            details: {
+              ...authorizationScope,
+              previewGrantId: grant.id,
+              planDigest: preview.digest,
+              expiresAt: grant.expiresAt.toISOString(),
+            },
+          },
+          tx
+        );
+      }
+      return preview;
+    }
+    const authorization = input.triggeredByUserId
+      ? await tx.runbookPreviewAuthorization.findUnique({
+          where: {
+            id: crypto
+              .createHash('sha256')
+              .update(
+                z
+                  .string()
+                  .regex(/^[a-f0-9]{64}$/)
+                  .parse(input.previewAuthorizationToken)
+              )
+              .digest('hex'),
+          },
+        })
+      : null;
+    if (
+      input.triggeredByUserId &&
+      (!authorization ||
+        authorization.consumedAt ||
+        authorization.expiresAt.getTime() <= Date.now() ||
+        authorization.planDigest !== preview.digest ||
+        Object.entries(authorizationScope).some(
+          ([key, value]) => authorization[key as keyof typeof authorization] !== value
+        ))
+    ) {
+      throw new RunbookDefinitionError(
+        'PREVIEW_AUTHORIZATION_INVALID: Preview authorization is invalid, expired, already used or belongs to another responder or incident. Preview again.'
+      );
+    }
     const execution = await tx.runbookExecution.create({
       data: {
         runbookId: runbook.id,
@@ -584,6 +699,16 @@ async function prepareRunbookExecution(input: RunbookExecutionRequest, previewOn
         },
       },
     });
+    if (authorization) {
+      const consumed = await tx.runbookPreviewAuthorization.updateMany({
+        where: { id: authorization.id, consumedAt: null, expiresAt: { gt: new Date() } },
+        data: { consumedAt: new Date(), executionId: execution.id },
+      });
+      if (consumed.count !== 1)
+        throw new RunbookDefinitionError(
+          'PREVIEW_AUTHORIZATION_INVALID: Preview expired or was already used. Preview again.'
+        );
+    }
     if (suggestion) {
       const startedSuggestion = await tx.runbookSuggestion.updateMany({
         where: { id: suggestion.id, state: 'SUGGESTED' },
@@ -609,6 +734,17 @@ async function prepareRunbookExecution(input: RunbookExecutionRequest, previewOn
         details: {
           runbookId: runbook.id,
           versionId: version.id,
+          previewGrant: authorization
+            ? {
+                id: authorization.id,
+                planDigest: authorization.planDigest,
+                actorId: authorization.actorId,
+                bindingId: authorization.bindingId,
+                suggestionId: authorization.suggestionId,
+                issuedAt: authorization.createdAt.toISOString(),
+                expiresAt: authorization.expiresAt.toISOString(),
+              }
+            : null,
           incidentId: input.incidentId ?? null,
           serviceId: resolvedServiceId ?? null,
         },

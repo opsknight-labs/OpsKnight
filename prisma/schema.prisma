@@ -3831,3 +3831,22 @@ model RunbookArtifact {
   @@index([attemptId, createdAt])
   @@index([createdAt])
 }
+
+// Opaque preview capabilities: only the token hash is stored. Scope IDs are retained for audit.
+model RunbookPreviewAuthorization {
+  id           String    @id
+  actorId      String
+  runbookId    String
+  incidentId   String?
+  serviceId    String?
+  bindingId    String?
+  suggestionId String?
+  planDigest   String
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  executionId  String?   @unique
+
+  @@index([expiresAt])
+  @@index([actorId, createdAt])
+}

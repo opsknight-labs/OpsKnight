@@ -24,8 +24,8 @@ vi.mock('@/components/incident/runbook-actions', () => ({
   approveIncidentRunbookStepAction: vi.fn(),
   cancelIncidentRunbookAction: vi.fn(),
   dismissIncidentRunbookSuggestionAction: vi.fn(),
-  startIncidentRunbookAction: vi.fn(),
-  startIncidentRunbookSuggestionAction: vi.fn(),
+  executePreviewedIncidentRunbookAction: vi.fn(),
+  previewIncidentRunbookAction: vi.fn(),
 }));
 import IncidentRunbooks from '@/components/incident/IncidentRunbooks';
 

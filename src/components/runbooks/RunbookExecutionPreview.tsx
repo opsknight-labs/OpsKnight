@@ -95,7 +95,13 @@ export default function RunbookExecutionPreview({
           </ol>
           <p className="text-xs text-muted-foreground">
             Preview resolves configuration without executing actions. Local policy, secret access
-            and live availability are checked at dispatch. Execution rejects changes to this plan.
+            and live availability are checked at dispatch. Execution rejects changes to this plan or
+            incident context before starting. Conditions continue to evaluate live context after
+            execution starts.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            This preview can be used once and expires after five minutes. Preview again if it
+            expires.
           </p>
           {preview.steps.some(step => step.risk !== 'READ_ONLY') && (
             <label className="flex min-h-11 items-start gap-2 py-2">
@@ -112,6 +118,11 @@ export default function RunbookExecutionPreview({
           )}
           <ActionForm action={executeAction} onSuccess={() => setPreview(undefined)}>
             <input type="hidden" name="previewDigest" value={preview.digest} />
+            <input
+              type="hidden"
+              name="previewAuthorizationToken"
+              value={preview.authorizationToken ?? ''}
+            />
             <SubmitButton
               pendingLabel="Starting…"
               disabled={

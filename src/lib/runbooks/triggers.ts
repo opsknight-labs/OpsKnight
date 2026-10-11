@@ -3,7 +3,7 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { computeTriggerFingerprint } from './definition';
 import { matchesTrigger } from './matcher';
-import { startRunbookExecution } from './orchestrator';
+import { startTriggeredRunbookExecution } from './orchestrator';
 import { RunbookArchivedError, RunbookDefinitionError, RunbookError } from './errors';
 import { conditionContextFieldSchema, conditionOperatorSchema } from './conditions';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
@@ -137,7 +137,7 @@ export async function evaluateIncidentTriggers(incidentId: string, sourceEventId
         continue;
       }
       try {
-        await startRunbookExecution({
+        await startTriggeredRunbookExecution({
           runbookId: binding.runbookId,
           runbookVersionId: versionId,
           serviceId: incident.serviceId,

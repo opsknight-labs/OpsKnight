@@ -9,7 +9,8 @@ import {
 import { createServiceBinding, updateServiceBinding } from '@/lib/runbooks/bindings';
 import {
   advanceExecution,
-  startRunbookExecution,
+  startRunbookExecution as startAuthorizedExecution,
+  type RunbookExecutionRequest,
   previewRunbookExecution,
   cancelExecution,
   completeStep,
@@ -44,6 +45,16 @@ import {
   resetDatabase,
   testPrisma,
 } from '../helpers/test-db';
+
+async function startRunbookExecution(input: RunbookExecutionRequest) {
+  if (!input.triggeredByUserId || input.expectedPlanDigest) return startAuthorizedExecution(input);
+  const preview = await previewRunbookExecution(input);
+  return startAuthorizedExecution({
+    ...input,
+    expectedPlanDigest: preview.digest,
+    previewAuthorizationToken: preview.authorizationToken,
+  });
+}
 
 const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
@@ -167,12 +178,17 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     expect(await testPrisma.runbookExecution.count()).toBe(0);
     expect(await testPrisma.backgroundJob.count()).toBe(jobs);
     await expect(
-      startRunbookExecution({ ...request, expectedPlanDigest: 'a'.repeat(64) })
+      startRunbookExecution({
+        ...request,
+        expectedPlanDigest: 'a'.repeat(64),
+        previewAuthorizationToken: preview.authorizationToken,
+      })
     ).rejects.toThrow('PREVIEW_STALE');
     expect(await testPrisma.runbookExecution.count()).toBe(0);
     const execution = await startRunbookExecution({
       ...request,
       expectedPlanDigest: preview.digest,
+      previewAuthorizationToken: preview.authorizationToken,
     });
     expect(execution.definitionChecksum).toBe(preview.checksum);
     expect(execution.inputValues).toEqual(preview.inputs);
