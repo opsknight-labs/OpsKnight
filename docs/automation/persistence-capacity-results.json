@@ -4547,6 +4547,324 @@
         "automaticReplay": false,
         "manualReceiptReviewRequired": true
       }
+    },
+    {
+      "topology": "kind-helm-integrated-audit20-reserved-observations-batch100-four-two-cpu-20rps",
+      "generatedAt": "2026-10-11T05:48:36.040Z",
+      "rps": 20,
+      "drainBudgetMs": 180000,
+      "durationPerProfile": "120s",
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "providerCapacityProfile": "provisioned-200",
+        "providerTelemetryResetBeforeRun": true,
+        "providerBudgets": {
+          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "providers": {
+            "EMAIL": "smtp",
+            "PUSH": "web-push",
+            "WEBHOOK": "default"
+          },
+          "ratePerSecond": 200,
+          "maxInFlight": 40
+        },
+        "publicFanout": "Dedicated status-fanout suite",
+        "historicalFixtureTimers": "Disabled before first profile; real alert/responder escalation unchanged",
+        "comparisonValidity": "Queues drained between profiles",
+        "stopReason": null
+      },
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "live-small: queue age exceeds 30000ms",
+          "live-medium: 1 automation fallbacks",
+          "live-medium: queue age exceeds 30000ms",
+          "live-worst: 7 automation fallbacks",
+          "live-worst: queue age exceeds 30000ms",
+          "service-disabled: HTTP latency exceeds 1.25x global-off",
+          "shadow-small: HTTP latency exceeds 1.25x global-off",
+          "live-small: HTTP latency exceeds 1.25x global-off",
+          "live-small: queue age exceeds 30000ms",
+          "live-medium: HTTP latency exceeds 1.25x global-off",
+          "live-medium: queue age exceeds 30000ms",
+          "live-worst: HTTP latency exceeds 1.25x global-off",
+          "live-worst: queue age exceeds 30000ms"
+        ]
+      },
+      "sourceRevision": "7103268709c7339bfc6112c2f8e716d0106f0d97",
+      "imageDigest": "sha256:ec3635e4646ef3fc2a60aa4d02c58d0292063b9f0fc0d6c480e90f2e69537c0c",
+      "scope": "FULL_MATRIX_LATENCY_OBSERVATION_AGE_AND_FALLBACK_FAILED",
+      "runtime": "integrated",
+      "generalBatchSize": 100,
+      "generalConcurrency": 15,
+      "reservedObservationClaims": 8,
+      "builderHeapMiB": 3072,
+      "bootstrap": "Temporarily scaled integrated replicas from four to three until the 100m migration job completed, restored four before seeding and timed load.",
+      "profiles": [
+        {
+          "profile": "global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 6943,
+          "recoveryDrainMs": 70372,
+          "criticalNotificationLatency": {
+            "p95Ms": 257,
+            "p99Ms": 375,
+            "sent": 7284,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "service-disabled",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 6104,
+          "recoveryDrainMs": 74836,
+          "criticalNotificationLatency": {
+            "p95Ms": 307,
+            "p99Ms": 495.28999999999996,
+            "sent": 6672,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "shadow-small",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 2401,
+          "traceJsonBytes": 12189877,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 6154,
+          "recoveryDrainMs": 76370,
+          "criticalNotificationLatency": {
+            "p95Ms": 293,
+            "p99Ms": 420.2599999999999,
+            "sent": 6638,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 5.203417000011541,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "live-small",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 2401,
+          "traceJsonBytes": 1543414,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 5395,
+          "recoveryDrainMs": 87480,
+          "criticalNotificationLatency": {
+            "p95Ms": 398,
+            "p99Ms": 627.3999999999995,
+            "sent": 5587,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 36.74900000006892,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "live-medium",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 1,
+          "traceCount": 2401,
+          "traceJsonBytes": 2178777,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 4814,
+          "recoveryDrainMs": 93986,
+          "criticalNotificationLatency": {
+            "p95Ms": 566,
+            "p99Ms": 1042.4999999999993,
+            "sent": 4571,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 53.03737499995623,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "live-worst",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 7,
+          "traceCount": 2401,
+          "traceJsonBytes": 3849227,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 5482,
+          "recoveryDrainMs": 103375,
+          "criticalNotificationLatency": {
+            "p95Ms": 374,
+            "p99Ms": 600.2099999999998,
+            "sent": 5494,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 72.88879100000486,
+          "deadlocksDelta": 0
+        }
+      ],
+      "comparisons": [
+        {
+          "profile": "service-disabled",
+          "acceptedRatio": 1.0004166666666667,
+          "p95Ratio": 1.2627644133314324,
+          "p99Ratio": 1.5723293878850522,
+          "p95RatioToServiceDisabled": 1,
+          "p99RatioToServiceDisabled": 1,
+          "peakCriticalQueueAgeMs": 2345,
+          "peakAutomationObservationQueueAgeMs": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 74836,
+          "transactionRetryCount": 6104,
+          "peakDatabaseConnections": 107,
+          "peakDatabaseLockWaits": 4,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 307,
+            "p99Ms": 495.28999999999996,
+            "sent": 6672,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "profile": "shadow-small",
+          "acceptedRatio": 1.0004166666666667,
+          "p95Ratio": 1.2405620054313438,
+          "p99Ratio": 1.4839817127614376,
+          "p95RatioToServiceDisabled": 0.9824176167258989,
+          "p99RatioToServiceDisabled": 0.9438109623820925,
+          "peakCriticalQueueAgeMs": 1423,
+          "peakAutomationObservationQueueAgeMs": 23610,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 76370,
+          "transactionRetryCount": 6154,
+          "peakDatabaseConnections": 106,
+          "peakDatabaseLockWaits": 6,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 293,
+            "p99Ms": 420.2599999999999,
+            "sent": 6638,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "profile": "live-small",
+          "acceptedRatio": 1.0004166666666667,
+          "p95Ratio": 1.759210648219635,
+          "p99Ratio": 2.0780867926529565,
+          "p95RatioToServiceDisabled": 1.3931424022145789,
+          "p99RatioToServiceDisabled": 1.3216612299336343,
+          "peakCriticalQueueAgeMs": 5830,
+          "peakAutomationObservationQueueAgeMs": 30784,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 87480,
+          "transactionRetryCount": 5395,
+          "peakDatabaseConnections": 107,
+          "peakDatabaseLockWaits": 0,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 398,
+            "p99Ms": 627.3999999999995,
+            "sent": 5587,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "profile": "live-medium",
+          "acceptedRatio": 1.0004166666666667,
+          "p95Ratio": 2.7935445464144655,
+          "p99Ratio": 3.3237998762824312,
+          "p95RatioToServiceDisabled": 2.21224522715565,
+          "p99RatioToServiceDisabled": 2.1139335700856487,
+          "peakCriticalQueueAgeMs": 4395,
+          "peakAutomationObservationQueueAgeMs": 48639,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 93986,
+          "transactionRetryCount": 4814,
+          "peakDatabaseConnections": 107,
+          "peakDatabaseLockWaits": 6,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 566,
+            "p99Ms": 1042.4999999999993,
+            "sent": 4571,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "profile": "live-worst",
+          "acceptedRatio": 1.0004166666666667,
+          "p95Ratio": 2.207556046460132,
+          "p99Ratio": 7.192375464506215,
+          "p95RatioToServiceDisabled": 1.7481931096206178,
+          "p99RatioToServiceDisabled": 4.574343976474747,
+          "peakCriticalQueueAgeMs": 4723,
+          "peakAutomationObservationQueueAgeMs": 34970,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 103375,
+          "transactionRetryCount": 5482,
+          "peakDatabaseConnections": 108,
+          "peakDatabaseLockWaits": 6,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 374,
+            "p99Ms": 600.2099999999998,
+            "sent": 5494,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        }
+      ]
     }
   ],
   "initialImage": "opsknight-automation:audit2",

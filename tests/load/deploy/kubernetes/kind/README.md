@@ -73,3 +73,16 @@ replica, exercising the web and worker roles in that process together. Split
 mode deletes one replica of each of the three roles. A missing target or an
 unsupported runtime mode fails the drill. Screening diagnostics are separate
 from the unchanged six-profile sustained certification.
+
+
+The `values-automation-isolated-workers.yaml` fixture isolates two Web pods,
+four general workers and two critical workers (one guaranteed CPU each), with
+two guaranteed PostgreSQL CPUs. General workers use batch 100/concurrency 15
+and pool 24; Web pools are 24 and critical pools 12. PgBouncer is disabled.
+This fixture has not passed capacity certification.
+
+On the eleven-CPU allocatable Kind node, install with `--set web.replicaCount=1`
+until the migration job completes, then restore Web to two replicas before
+seeding or timed traffic. The transient 100m migration request otherwise
+prevents scheduling alongside ten exclusive CPUs and system requests. Record
+this bootstrap and verify all final replica counts before load.

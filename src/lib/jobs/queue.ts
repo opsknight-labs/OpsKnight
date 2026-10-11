@@ -1551,7 +1551,7 @@ function heartbeatClaimedBatch(jobs: QueuedJob[]) {
 /** Reserve a bounded observation slice without increasing the worker batch or
  * concurrency. Ordinary work retains at least three quarters of every batch. */
 export async function claimPendingOperationalJobs(limit: number, excludeTypes: readonly JobType[]) {
-  const reserved = Math.min(8, Math.floor(limit / 4));
+  const reserved = Math.min(16, Math.floor(limit / 4));
   if (!reserved || excludeTypes.includes('SCHEDULED_TASK'))
     return claimPendingJobs(limit, undefined, excludeTypes);
   const observations = await claimPendingJobs(reserved, 'SCHEDULED_TASK', [], {

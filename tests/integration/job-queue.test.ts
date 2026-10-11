@@ -84,6 +84,35 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
     );
   });
 
+  it('keeps ordinary work moving when observations arrive behind a full operational batch', async () => {
+    const older = new Date(Date.now() - 60000);
+    const newer = new Date(Date.now() - 1000);
+    await testPrisma.backgroundJob.createMany({
+      data: [
+        ...Array.from({ length: 100 }, () => ({
+          type: 'SCHEDULED_TASK' as const,
+          scheduledAt: older,
+          payload: { task: 'ORDINARY' },
+        })),
+        ...Array.from({ length: 32 }, () => ({
+          type: 'SCHEDULED_TASK' as const,
+          scheduledAt: newer,
+          payload: { task: 'AUTOMATION_OBSERVE' },
+        })),
+      ],
+    });
+    const batch = await claimPendingOperationalJobs(100, []);
+    expect(batch).toHaveLength(100);
+    expect(new Set(batch.map(job => job.id)).size).toBe(100);
+    expect(batch.filter(job => (job.payload as { task: string }).task === 'ORDINARY')).toHaveLength(
+      84
+    );
+    expect(
+      batch.filter(job => (job.payload as { task: string }).task === 'AUTOMATION_OBSERVE')
+    ).toHaveLength(16);
+    expect(await testPrisma.backgroundJob.count({ where: { status: 'PENDING' } })).toBe(32);
+  });
+
   describe('Retry Logic and Exponential Backoff', () => {
     it('should reschedule failed jobs with backoff and eventually mark as FAILED', async () => {
       // Schedule job 1 second in the past to ensure it's immediately claimable

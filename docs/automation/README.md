@@ -126,8 +126,19 @@ each profile within 180 seconds. It **failed** the 30-second observation queue
 age gate (52–77 seconds), so it does not certify capacity. The restart held one
 SMTP attempt in `UNKNOWN` for manual receipt review without automatic replay.
 The preceding default-capacity and provisioned batch-25 failures are retained
-with their actual settings. Operational workers now reserve at most eight
+with their actual settings. Operational workers now reserve at most sixteen
 claims, and no more than a quarter of their batch, for automation observations;
 ordinary jobs retain the remaining batch budget. Claims, heartbeat fencing,
 service-batched observation receipts, and concurrency limits remain in effect.
-A fresh sustained matrix must verify this scheduling change.
+The eight-slot reservation matrix also completed all six profiles with every
+arrival accepted and persisted, no drops, duplicate deliveries or deadlocks,
+and all queues drained within 180 seconds. It failed latency comparisons,
+observation age (up to 48.6 seconds), and eight evaluation-timeout fallbacks
+across medium and worst profiles. Capacity remains **not certified**.
+
+The next fixture isolates two API processes, four general workers, and two
+critical workers with one guaranteed CPU each, plus two PostgreSQL CPUs.
+Observation reservation is capped at sixteen claims while ordinary jobs retain
+at least three quarters of the batch. A fresh sustained matrix must verify
+this change; total CPU budget and all evaluation and certification gates stay
+unchanged.
