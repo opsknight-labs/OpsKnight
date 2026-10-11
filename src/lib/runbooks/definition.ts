@@ -51,7 +51,8 @@ export function parseRunbookDefinition(
     for (const step of flattenSteps(definition)) {
       if (step.type === 'CONDITION') {
         const { field } = workflowConditionSchema.parse(step.config);
-        if (field.startsWith('input.') && !declared.has(field.slice(6))) {
+        const condMatch = field.match(/^inputs?\.([a-z0-9_]+)$/);
+        if (condMatch && !declared.has(condMatch[1])) {
           throw new RunbookDefinitionError(
             `Step "${step.key}" references undeclared CONDITION input "${field}".`
           );
@@ -206,6 +207,31 @@ function validateTarget(
 
 function validateStepSemantics(step: RunbookStepDefinition, allowInputTemplates = true): void {
   const serializedConfig = JSON.stringify(step.config);
+  for (const match of serializedConfig.matchAll(/\$\{\{\s*inputs\.([A-Za-z0-9_]+)\s*\}\}/g)) {
+    if (/[A-Z]/.test(match[1])) {
+      throw new RunbookDefinitionError(
+        `Step "${step.key}" contains uppercase placeholder "${match[0]}". Input placeholder keys must be lowercase.`
+      );
+    }
+  }
+  if (step.name) {
+    for (const match of step.name.matchAll(/\$\{\{\s*inputs\.([A-Za-z0-9_]+)\s*\}\}/g)) {
+      if (/[A-Z]/.test(match[1])) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" contains uppercase placeholder "${match[0]}". Input placeholder keys must be lowercase.`
+        );
+      }
+    }
+  }
+  if (step.description) {
+    for (const match of step.description.matchAll(/\$\{\{\s*inputs\.([A-Za-z0-9_]+)\s*\}\}/g)) {
+      if (/[A-Z]/.test(match[1])) {
+        throw new RunbookDefinitionError(
+          `Step "${step.key}" contains uppercase placeholder "${match[0]}". Input placeholder keys must be lowercase.`
+        );
+      }
+    }
+  }
   const maxConfigBytes = step.type === 'HTTP' ? 96 * 1024 : 32 * 1024;
   if (Buffer.byteLength(serializedConfig, 'utf8') > maxConfigBytes) {
     throw new RunbookDefinitionError(
@@ -653,23 +679,87 @@ export function requiresAnyApproval(definition: RunbookDefinition): boolean {
 // ---------------------------------------------------------------------------
 
 const SECRET_REF_PREFIX = 'secret://';
-const INPUT_TEMPLATE_GLOBAL = /\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}/gi;
+const INPUT_TEMPLATE_GLOBAL = /\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}/g;
 
-export function referencedStepInputKeys(value: unknown): Set<string> {
+export function referencedStepInputKeys(value: unknown, explicitType?: string): Set<string> {
   const keys = new Set<string>();
-  const visit = (entry: unknown) => {
-    if (typeof entry === 'string') {
-      for (const match of entry.matchAll(INPUT_TEMPLATE_GLOBAL)) keys.add(match[1].toLowerCase());
-      // Bash inputs can be consumed through the documented constrained environment.
-      for (const match of entry.matchAll(/\bOPSKNIGHT_INPUT_([A-Z0-9_]+)\b/gi))
+  if (!value) return keys;
+
+  const isStep =
+    typeof value === 'object' && value !== null && 'type' in value && 'config' in value;
+  let stepType = explicitType ?? (isStep ? String((value as Record<string, unknown>).type) : undefined);
+  const config = isStep ? (value as Record<string, unknown>).config : value;
+
+  if (isStep) {
+    const stepObj = value as RunbookStepDefinition;
+    if (typeof stepObj.name === 'string') {
+      for (const match of stepObj.name.matchAll(INPUT_TEMPLATE_GLOBAL)) {
         keys.add(match[1].toLowerCase());
-      // Condition field references: input.<key> or inputs.<key>
-      const condMatch = entry.match(/^inputs?\.([a-z0-9_]+)$/i);
-      if (condMatch && condMatch[1]) keys.add(condMatch[1].toLowerCase());
-    } else if (Array.isArray(entry)) entry.forEach(visit);
-    else if (entry && typeof entry === 'object') Object.values(entry).forEach(visit);
-  };
-  visit(value);
+      }
+    }
+    if (typeof stepObj.description === 'string') {
+      for (const match of stepObj.description.matchAll(INPUT_TEMPLATE_GLOBAL)) {
+        keys.add(match[1].toLowerCase());
+      }
+    }
+    if (stepObj.precheck?.steps) {
+      for (const pre of stepObj.precheck.steps) {
+        for (const k of referencedStepInputKeys(pre)) keys.add(k);
+      }
+    }
+    if (stepObj.verification?.steps) {
+      for (const ver of stepObj.verification.steps) {
+        for (const k of referencedStepInputKeys(ver)) keys.add(k);
+      }
+    }
+  }
+
+  if (!stepType && config && typeof config === 'object') {
+    if ('command' in config && typeof (config as Record<string, unknown>).command === 'string') {
+      stepType = 'BASH';
+    } else if ('field' in config && 'operator' in config) {
+      stepType = 'CONDITION';
+    }
+  }
+
+  if (stepType === 'CONDITION') {
+    if (config && typeof config === 'object') {
+      const field = (config as Record<string, unknown>).field;
+      if (typeof field === 'string') {
+        const condMatch = field.match(/^inputs?\.([a-z0-9_]+)$/);
+        if (condMatch && condMatch[1]) keys.add(condMatch[1].toLowerCase());
+      }
+    }
+  } else if (stepType === 'BASH') {
+    if (config && typeof config === 'object') {
+      const command = (config as Record<string, unknown>).command;
+      if (typeof command === 'string') {
+        for (const match of command.matchAll(INPUT_TEMPLATE_GLOBAL)) {
+          keys.add(match[1].toLowerCase());
+        }
+        for (const match of command.matchAll(/\bOPSKNIGHT_INPUT_([A-Z0-9_]+)\b/g)) {
+          keys.add(match[1].toLowerCase());
+        }
+      }
+    }
+  } else {
+    const visit = (entry: unknown) => {
+      if (typeof entry === 'string') {
+        for (const match of entry.matchAll(INPUT_TEMPLATE_GLOBAL)) {
+          keys.add(match[1].toLowerCase());
+        }
+      } else if (Array.isArray(entry)) {
+        entry.forEach(visit);
+      } else if (entry && typeof entry === 'object') {
+        for (const [k, v] of Object.entries(entry)) {
+          if (k === 'precheck' || k === 'verification') continue;
+          visit(v);
+        }
+      }
+    };
+    visit(config);
+  }
+
   return keys;
 }
 

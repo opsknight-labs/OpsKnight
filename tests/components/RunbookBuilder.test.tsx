@@ -1739,6 +1739,71 @@ describe('Runbook nested check builder', () => {
     );
     expect(savedDef.steps[0].config.command).toBe('printenv OPSKNIGHT_INPUT_NEW_TOKEN');
   });
+
+  it('guards against duplicate-key rename collision and prevents retargeting unrelated references on subsequent rename', () => {
+    const step1 = {
+      ...newBuilderStep('HTTP', 'step_foo'),
+      name: 'Step Foo',
+      config: { url: 'https://api.internal/${{ inputs.foo }}' },
+    };
+    const step2 = {
+      ...newBuilderStep('HTTP', 'step_bar'),
+      name: 'Step Bar',
+      config: { url: 'https://api.internal/${{ inputs.bar }}' },
+    };
+    const initialInputs: RunbookInputInput[] = [
+      {
+        key: 'foo',
+        label: 'Foo Parameter',
+        type: 'STRING',
+        description: '',
+        required: true,
+        sequence: 0,
+      },
+      {
+        key: 'bar',
+        label: 'Bar Parameter',
+        type: 'STRING',
+        description: '',
+        required: true,
+        sequence: 1,
+      },
+    ];
+
+    const { container } = render(
+      <RunbookBuilder
+        initialDefinition={{ steps: [step1, step2] }}
+        initialInputs={initialInputs}
+        action={async () => {}}
+      />
+    );
+
+    const inputsTab = screen.getByRole('tab', { name: /inputs/i });
+    fireEvent.click(inputsTab);
+
+    const input1KeyField = screen.getByLabelText('Input 1 key');
+
+    // 1. Rename input 1 ('foo') to 'bar' (collides with input 2)
+    fireEvent.change(input1KeyField, { target: { value: 'bar' } });
+
+    let currentDef = JSON.parse(
+      (container.querySelector('input[name="definition"]') as HTMLInputElement).value
+    );
+    // Collision guard must NOT have refactored 'foo' to 'bar'
+    expect(currentDef.steps[0].config.url).toBe('https://api.internal/${{ inputs.foo }}');
+    expect(currentDef.steps[1].config.url).toBe('https://api.internal/${{ inputs.bar }}');
+
+    // 2. Now rename input 1 to 'baz' (unique key)
+    fireEvent.change(input1KeyField, { target: { value: 'baz' } });
+
+    currentDef = JSON.parse(
+      (container.querySelector('input[name="definition"]') as HTMLInputElement).value
+    );
+    // Input 1's references should be refactored from 'foo' to 'baz'
+    expect(currentDef.steps[0].config.url).toBe('https://api.internal/${{ inputs.baz }}');
+    // Input 2's references to 'bar' MUST REMAIN COMPLETELY UNTOUCHED (not retargeted to 'baz')
+    expect(currentDef.steps[1].config.url).toBe('https://api.internal/${{ inputs.bar }}');
+  });
 });
 
 

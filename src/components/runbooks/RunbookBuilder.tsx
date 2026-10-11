@@ -461,7 +461,10 @@ export default function RunbookBuilder({
 
           if (patch.key !== undefined) {
             const nextKey = patch.key.trim();
-            if (nextKey !== '' && /^[a-z0-9_]+$/.test(nextKey)) {
+            const otherExistingKeys = new Set(
+              inputs.filter((_, pos) => pos !== index).map(item => item.key)
+            );
+            if (nextKey !== '' && /^[a-z0-9_]+$/.test(nextKey) && !otherExistingKeys.has(nextKey)) {
               if (lastKey && lastKey !== nextKey) {
                 nextDef = refactorInputReference(definition, lastKey, nextKey);
                 setDefinition(nextDef);

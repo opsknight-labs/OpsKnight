@@ -343,7 +343,7 @@ export async function claimAgentAttempt(
                 }
               }
 
-              const keys = referencedStepInputKeys(candidate.executionStep.config);
+              const keys = referencedStepInputKeys(candidate.executionStep.config, candidate.executionStep.type);
               const inputs = candidate.executionStep.execution.inputValues as Record<string, unknown>;
               const hasSecrets = Object.entries(inputs).some(
                 ([key, value]) => keys.has(key) && isSecretReference(value)
@@ -435,7 +435,10 @@ export async function claimAgentAttempt(
             string,
             unknown
           >;
-          const referencedKeys = referencedStepInputKeys(attempt.executionStep.config);
+          const referencedKeys = referencedStepInputKeys(
+            attempt.executionStep.config,
+            attempt.executionStep.type
+          );
           const rawInputValues = Object.fromEntries(
             Object.entries(allInputValues).filter(([key]) => referencedKeys.has(key))
           );

@@ -325,4 +325,192 @@ describe('runbook trigger matcher', () => {
       })
     ).toBe(true);
   });
+
+  it('requires string comparison values for CONTAINS and STARTS_WITH on non-input incident and service fields', () => {
+    const stringContext = {
+      incident: {
+        title: '503 Service Unavailable in production',
+        tags: ['production', '503', 'payments'],
+      },
+      service: {
+        name: '404 handler',
+      },
+    };
+
+    // Incident title contains/starts_with: numeric value 503 must NOT match
+    expect(
+      matchesCondition(stringContext, {
+        field: 'incident.title',
+        operator: 'CONTAINS',
+        value: 503,
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(stringContext, {
+        field: 'incident.title',
+        operator: 'STARTS_WITH',
+        value: 503,
+      })
+    ).toBe(false);
+
+    // Incident title contains/starts_with: string value '503' DOES match
+    expect(
+      matchesCondition(stringContext, {
+        field: 'incident.title',
+        operator: 'CONTAINS',
+        value: '503',
+      })
+    ).toBe(true);
+    expect(
+      matchesCondition(stringContext, {
+        field: 'incident.title',
+        operator: 'STARTS_WITH',
+        value: '503',
+      })
+    ).toBe(true);
+
+    // Incident tags contains: numeric value 503 must NOT match
+    expect(
+      matchesCondition(stringContext, {
+        field: 'incident.tags',
+        operator: 'CONTAINS',
+        value: 503,
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(stringContext, {
+        field: 'incident.tags',
+        operator: 'CONTAINS',
+        value: '503',
+      })
+    ).toBe(true);
+
+    // Service name: numeric value 404 must NOT match
+    expect(
+      matchesCondition(stringContext, {
+        field: 'service.name',
+        operator: 'STARTS_WITH',
+        value: 404,
+      })
+    ).toBe(false);
+    expect(
+      matchesCondition(stringContext, {
+        field: 'service.name',
+        operator: 'STARTS_WITH',
+        value: '404',
+      })
+    ).toBe(true);
+  });
+
+  it('disallows numeric coercion on typed inputs when declared type is STRING', () => {
+    const inputContext = {
+      input: {
+        releaseVersion: '12',
+        serverCount: '12',
+      },
+    };
+
+    const declaredTypes = {
+      releaseVersion: 'STRING',
+      serverCount: 'NUMBER',
+    };
+
+    // releaseVersion is declared STRING: numeric 12 must NOT match
+    expect(
+      matchesCondition(
+        inputContext,
+        { field: 'input.releaseVersion', operator: 'EQUALS', value: 12 },
+        declaredTypes
+      )
+    ).toBe(false);
+    expect(
+      matchesCondition(
+        inputContext,
+        { field: 'input.releaseVersion', operator: 'NOT_EQUALS', value: 12 },
+        declaredTypes
+      )
+    ).toBe(true);
+    expect(
+      matchesCondition(
+        inputContext,
+        { field: 'input.releaseVersion', operator: 'IN', value: [11, 12, 13] },
+        declaredTypes
+      )
+    ).toBe(false);
+    expect(
+      matchesCondition(
+        inputContext,
+        { field: 'input.releaseVersion', operator: 'CONTAINS', value: 12 },
+        declaredTypes
+      )
+    ).toBe(false);
+    expect(
+      matchesCondition(
+        inputContext,
+        { field: 'input.releaseVersion', operator: 'STARTS_WITH', value: 12 },
+        declaredTypes
+      )
+    ).toBe(false);
+
+    // releaseVersion exact string '12' DOES match
+    expect(
+      matchesCondition(
+        inputContext,
+        { field: 'input.releaseVersion', operator: 'EQUALS', value: '12' },
+        declaredTypes
+      )
+    ).toBe(true);
+    expect(
+      matchesCondition(
+        inputContext,
+        { field: 'input.releaseVersion', operator: 'IN', value: ['11', '12', '13'] },
+        declaredTypes
+      )
+    ).toBe(true);
+
+    // serverCount is declared NUMBER: numeric coercion is allowed
+    expect(
+      matchesCondition(
+        inputContext,
+        { field: 'input.serverCount', operator: 'EQUALS', value: 12 },
+        declaredTypes
+      )
+    ).toBe(true);
+
+    // Works with Map input types
+    const typeMap = new Map<string, string>([
+      ['releaseVersion', 'STRING'],
+      ['serverCount', 'NUMBER'],
+    ]);
+    expect(
+      matchesCondition(
+        inputContext,
+        { field: 'input.releaseVersion', operator: 'EQUALS', value: 12 },
+        typeMap
+      )
+    ).toBe(false);
+
+    // Works with context.__inputTypes
+    const contextWithTypes = {
+      ...inputContext,
+      __inputTypes: declaredTypes,
+    };
+    expect(
+      matchesCondition(contextWithTypes, {
+        field: 'input.releaseVersion',
+        operator: 'EQUALS',
+        value: 12,
+      })
+    ).toBe(false);
+
+    // Works with matchesTrigger
+    expect(
+      matchesTrigger(
+        inputContext,
+        [{ field: 'input.releaseVersion', operator: 'EQUALS', value: 12 }],
+        'AND',
+        declaredTypes
+      )
+    ).toBe(false);
+  });
 });

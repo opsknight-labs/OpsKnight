@@ -786,6 +786,64 @@ describe('Runbook Definition Module', () => {
         /references undeclared input "unregistered_secret"/
       );
     });
+
+    it('does not extract literal condition values or non-template container names as input dependencies', () => {
+      // 1. Literal condition value "input.owner" is not an input reference
+      const condStep = createMockStep({
+        key: 'cond_step',
+        type: 'CONDITION',
+        config: { field: 'incident.urgency', operator: 'EQUALS', value: 'input.owner' },
+      });
+      const condKeys = referencedStepInputKeys(condStep);
+      expect(condKeys.has('owner')).toBe(false);
+
+      // 2. Literal Docker container "input.secret" is not an input reference
+      const dockerStep = createMockStep({
+        key: 'docker_step',
+        type: 'DOCKER',
+        config: { action: 'inspect', container: 'input.secret' },
+      });
+      const dockerKeys = referencedStepInputKeys(dockerStep);
+      expect(dockerKeys.has('secret')).toBe(false);
+
+      // 3. Non-BASH step text mentioning OPSKNIGHT_INPUT_ is not an input reference
+      const httpStep = createMockStep({
+        key: 'http_step',
+        type: 'HTTP',
+        riskClass: 'NON_IDEMPOTENT',
+        config: {
+          method: 'POST',
+          url: 'https://api.internal/endpoint',
+          body: { note: 'Refer to OPSKNIGHT_INPUT_SECRET' },
+        },
+      });
+      const httpKeys = referencedStepInputKeys(httpStep);
+      expect(httpKeys.has('secret')).toBe(false);
+
+      // 4. Runbook definition containing literal "input.secret" and "input.owner" parses without declaring them
+      const safeDef = createMockDefinition({
+        steps: [condStep, dockerStep, httpStep],
+      });
+      expect(() => parseRunbookDefinition(safeDef, [])).not.toThrow();
+    });
+
+    it('rejects uppercase input template placeholder syntax on validation', () => {
+      const uppercaseDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'HTTP',
+            config: {
+              method: 'GET',
+              url: 'https://api.internal/${{ inputs.TARGET_HOST }}',
+            },
+          }),
+        ],
+      });
+
+      expect(() => parseRunbookDefinition(uppercaseDef)).toThrow(/uppercase placeholder/);
+      expect(() =>
+        parseRunbookDefinition(uppercaseDef, [{ key: 'target_host', type: 'STRING' }])
+      ).toThrow(/uppercase placeholder/);
+    });
   });
 });
-

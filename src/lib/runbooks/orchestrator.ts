@@ -711,6 +711,16 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
       where: { id: executionId },
       select: {
         inputValues: true,
+        runbookVersion: {
+          select: {
+            inputs: {
+              select: {
+                key: true,
+                type: true,
+              },
+            },
+          },
+        },
         incident: {
           select: {
             id: true,
@@ -726,6 +736,9 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
       },
     });
     const config = workflowConditionSchema.parse(step.config);
+    const inputTypeMap = new Map<string, string>(
+      execution.runbookVersion?.inputs?.map(input => [input.key, input.type]) ?? []
+    );
     const matched = matchesCondition(
       {
         input: execution.inputValues,
@@ -738,7 +751,8 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
         field: config.field,
         operator: config.operator,
         value: config.value,
-      }
+      },
+      inputTypeMap
     );
     await prisma.$transaction(async tx => {
       const executionState = await tx.runbookExecution.findUnique({
@@ -840,7 +854,7 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
           execution.inputValues as Record<string, unknown>
         ).some(
           ([key, value]) =>
-            referencedStepInputKeys(step.config).has(key) && isSecretReference(value)
+            referencedStepInputKeys(step.config, step.type).has(key) && isSecretReference(value)
         ),
         targetAgentId: execution.resolvedTargetAgentId,
         targetAgentPoolId: execution.resolvedTargetAgentPoolId,

@@ -16,6 +16,10 @@ export interface StepValidationResult {
 }
 
 export function checkInputTemplate(val: string, inputs?: RunbookInputInput[]): string | null {
+  const upperMatch = val.match(/\$\{\{\s*inputs\.([A-Za-z0-9_]+)\s*\}\}/);
+  if (upperMatch && /[A-Z]/.test(upperMatch[1])) {
+    return 'Input placeholder keys must be lowercase.';
+  }
   const match = val.match(INPUT_TEMPLATE);
   if (match && inputs && inputs.length > 0) {
     const inputKey = match[1];
@@ -393,6 +397,15 @@ export function validateRunbook(
   }
 
   flattened.forEach(step => {
+    const serialized = JSON.stringify(step.config);
+    for (const match of serialized.matchAll(/\$\{\{\s*inputs\.([A-Za-z0-9_]+)\s*\}\}/g)) {
+      if (/[A-Z]/.test(match[1])) {
+        generalInputErrors.push(
+          `Step "${step.name || step.key}" contains uppercase placeholder "${match[0]}". Input placeholder keys must be lowercase.`
+        );
+        errorCount++;
+      }
+    }
     const referencedKeys = referencedStepInputKeys(step);
     for (const refKey of referencedKeys) {
       if (!declaredKeys.has(refKey)) {
