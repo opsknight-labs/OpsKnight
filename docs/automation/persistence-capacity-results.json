@@ -229,7 +229,11 @@
         "responderUsers": 2,
         "providerCapacityProfile": "provisioned-200",
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "ratePerSecond": 200,
           "maxInFlight": 40
         },
@@ -285,7 +289,11 @@
         "responderUsers": 2,
         "providerCapacityProfile": "provisioned-200",
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -355,7 +363,11 @@
         "responderUsers": 2,
         "providerCapacityProfile": "provisioned-200",
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -642,7 +654,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -706,7 +722,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -780,7 +800,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -1395,7 +1419,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -1706,7 +1734,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -2025,7 +2057,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -2289,7 +2325,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -2605,7 +2645,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -2922,7 +2966,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -3244,7 +3292,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -3328,7 +3380,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -3559,7 +3615,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -3738,7 +3798,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -3900,7 +3964,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -4040,7 +4108,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -4208,7 +4280,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -4346,7 +4422,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -4563,7 +4643,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -4926,7 +5010,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -5239,7 +5327,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -5667,7 +5759,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -5688,7 +5784,9 @@
           "queueAgeMs": 30000,
           "notificationP99Ms": 30000
         },
-        "failures": ["service-disabled: HTTP latency exceeds 1.25x global-off"]
+        "failures": [
+          "service-disabled: HTTP latency exceeds 1.25x global-off"
+        ]
       },
       "comparisons": [
         {
@@ -5966,7 +6064,11 @@
         "providerCapacityProfile": "provisioned-200",
         "providerTelemetryResetBeforeRun": true,
         "providerBudgets": {
-          "channels": ["EMAIL", "PUSH", "WEBHOOK"],
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
           "providers": {
             "EMAIL": "smtp",
             "PUSH": "web-push",
@@ -6249,6 +6351,487 @@
             "failed": 0
           },
           "traceRuntimeP99Ms": 93.81183299981058,
+          "deadlocksDelta": 0
+        }
+      ]
+    },
+    {
+      "topology": "kind-helm-split-audit27-rebased-fairness-interleaved-20rps",
+      "generatedAt": "2026-10-11T14:20:03.869Z",
+      "rps": 20,
+      "drainBudgetMs": 180000,
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "providerCapacityProfile": "provisioned-200",
+        "providerTelemetryResetBeforeRun": true,
+        "providerBudgets": {
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
+          "providers": {
+            "EMAIL": "smtp",
+            "PUSH": "web-push",
+            "WEBHOOK": "default"
+          },
+          "ratePerSecond": 200,
+          "maxInFlight": 40
+        },
+        "publicFanout": "Dedicated status-fanout suite",
+        "historicalFixtureTimers": "Disabled before first profile; real alert/responder escalation unchanged",
+        "comparisonValidity": "Queues drained between profiles",
+        "stopReason": null
+      },
+      "baselineMode": "interleaved",
+      "schedule": [
+        {
+          "profile": "global-off",
+          "runId": "01-global-off"
+        },
+        {
+          "profile": "service-disabled",
+          "runId": "02-service-disabled"
+        },
+        {
+          "profile": "global-off",
+          "runId": "03-global-off"
+        },
+        {
+          "profile": "shadow-small",
+          "runId": "04-shadow-small"
+        },
+        {
+          "profile": "global-off",
+          "runId": "05-global-off"
+        },
+        {
+          "profile": "live-small",
+          "runId": "06-live-small"
+        },
+        {
+          "profile": "global-off",
+          "runId": "07-global-off"
+        },
+        {
+          "profile": "live-medium",
+          "runId": "08-live-medium"
+        },
+        {
+          "profile": "global-off",
+          "runId": "09-global-off"
+        },
+        {
+          "profile": "live-worst",
+          "runId": "10-live-worst"
+        }
+      ],
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "service-disabled: HTTP latency exceeds 1.25x global-off",
+          "shadow-small: HTTP latency exceeds 1.25x global-off",
+          "live-small: HTTP latency exceeds 1.25x global-off",
+          "live-medium: HTTP latency exceeds 1.25x global-off",
+          "live-worst: HTTP latency exceeds 1.25x global-off"
+        ]
+      },
+      "comparisons": [
+        {
+          "runId": "02-service-disabled",
+          "baselineRunId": "01-global-off",
+          "profile": "service-disabled",
+          "acceptedRatio": 0.9995835068721366,
+          "p95Ratio": 1.1272456373099284,
+          "p99Ratio": 4.684985311096123,
+          "p95RatioToServiceDisabled": 1,
+          "p99RatioToServiceDisabled": 1,
+          "peakCriticalQueueAgeMs": 1794,
+          "peakAutomationObservationQueueAgeMs": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 92185,
+          "transactionRetryCount": 5063,
+          "peakDatabaseConnections": 111,
+          "peakDatabaseLockWaits": 0,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 142,
+            "p99Ms": 203.95999999999987,
+            "sent": 8003,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "runId": "04-shadow-small",
+          "baselineRunId": "03-global-off",
+          "profile": "shadow-small",
+          "acceptedRatio": 1.0004166666666667,
+          "p95Ratio": 1.4726219717649593,
+          "p99Ratio": 1.4139084002925246,
+          "p95RatioToServiceDisabled": 1.0920451788359111,
+          "p99RatioToServiceDisabled": 0.20746878348809025,
+          "peakCriticalQueueAgeMs": 1761,
+          "peakAutomationObservationQueueAgeMs": 913,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 102645,
+          "transactionRetryCount": 5355,
+          "peakDatabaseConnections": 111,
+          "peakDatabaseLockWaits": 4,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 145.04999999999964,
+            "p99Ms": 188,
+            "sent": 8160,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "runId": "06-live-small",
+          "baselineRunId": "05-global-off",
+          "profile": "live-small",
+          "acceptedRatio": 0.9995835068721366,
+          "p95Ratio": 2.0273126847170646,
+          "p99Ratio": 2.604631185807655,
+          "p95RatioToServiceDisabled": 1.695337084958375,
+          "p99RatioToServiceDisabled": 0.4492185380307587,
+          "peakCriticalQueueAgeMs": 20587,
+          "peakAutomationObservationQueueAgeMs": 2708,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 109063,
+          "transactionRetryCount": 4993,
+          "peakDatabaseConnections": 112,
+          "peakDatabaseLockWaits": 4,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 162,
+            "p99Ms": 220.94999999999993,
+            "sent": 7706,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "runId": "08-live-medium",
+          "baselineRunId": "07-global-off",
+          "profile": "live-medium",
+          "acceptedRatio": 0.9995835068721366,
+          "p95Ratio": 1.341130212490972,
+          "p99Ratio": 1.38333519082721,
+          "p95RatioToServiceDisabled": 1.2776207056386648,
+          "p99RatioToServiceDisabled": 0.27862150821086484,
+          "peakCriticalQueueAgeMs": 1155,
+          "peakAutomationObservationQueueAgeMs": 1616,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 125243,
+          "transactionRetryCount": 5155,
+          "peakDatabaseConnections": 111,
+          "peakDatabaseLockWaits": 9,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 170,
+            "p99Ms": 223,
+            "sent": 7830,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "runId": "10-live-worst",
+          "baselineRunId": "09-global-off",
+          "profile": "live-worst",
+          "acceptedRatio": 1,
+          "p95Ratio": 2.110842524539787,
+          "p99Ratio": 1.6936511417373752,
+          "p95RatioToServiceDisabled": 1.9526556507946875,
+          "p99RatioToServiceDisabled": 0.3674588968766897,
+          "peakCriticalQueueAgeMs": 1271,
+          "peakAutomationObservationQueueAgeMs": 1864,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 94588,
+          "transactionRetryCount": 5182,
+          "peakDatabaseConnections": 111,
+          "peakDatabaseLockWaits": 6,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 174,
+            "p99Ms": 231.64999999999992,
+            "sent": 7836,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        }
+      ],
+      "sourceRevision": "d5aee5313a7464e8cd9ec82524f68828b2e85a4e",
+      "imageDigest": "sha256:5d2c1b398dba575f1be3c6b6ac0a47a4fbb665ceb36ca19140572731c627e95a",
+      "scope": "FULL_INTERLEAVED_MATRIX_REBASED_FAIRNESS_ALL_LATENCY_COMPARISONS_FAILED",
+      "buildOverrides": {
+        "nodeBuildHeapMiB": 3072,
+        "experimentalWebpackBuildWorker": true,
+        "typeChecksSkipped": false,
+        "runtimeOverrides": false
+      },
+      "runtimeEvidence": "artifacts/load-certification/automation/kind-helm-split-audit27-rebased-fairness-interleaved-20rps/kind-runtime.json",
+      "ciEvidence": {
+        "sourceRevision": "d5aee5313a7464e8cd9ec82524f68828b2e85a4e",
+        "tests": {
+          "runId": 38142189892,
+          "conclusion": "success"
+        },
+        "serviceAutomation": {
+          "runId": 38142166890,
+          "conclusion": "success"
+        },
+        "runbookProtocol": {
+          "runId": 38142167242,
+          "conclusion": "success"
+        }
+      },
+      "profiles": [
+        {
+          "profile": "global-off",
+          "runId": "01-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 5453,
+          "recoveryDrainMs": 92101,
+          "criticalNotificationLatency": {
+            "p95Ms": 150,
+            "p99Ms": 214.32999999999993,
+            "sent": 8168,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "service-disabled",
+          "runId": "02-service-disabled",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 5063,
+          "recoveryDrainMs": 92185,
+          "criticalNotificationLatency": {
+            "p95Ms": 142,
+            "p99Ms": 203.95999999999987,
+            "sent": 8003,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "global-off",
+          "runId": "03-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 5052,
+          "recoveryDrainMs": 94454,
+          "criticalNotificationLatency": {
+            "p95Ms": 140,
+            "p99Ms": 183.55999999999992,
+            "sent": 8245,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "shadow-small",
+          "runId": "04-shadow-small",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 2401,
+          "traceJsonBytes": 12189877,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 5355,
+          "recoveryDrainMs": 102645,
+          "criticalNotificationLatency": {
+            "p95Ms": 145.04999999999964,
+            "p99Ms": 188,
+            "sent": 8160,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 2.047958999988623,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "global-off",
+          "runId": "05-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 5288,
+          "recoveryDrainMs": 108879,
+          "criticalNotificationLatency": {
+            "p95Ms": 144,
+            "p99Ms": 197,
+            "sent": 8181,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "live-small",
+          "runId": "06-live-small",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 2400,
+          "traceJsonBytes": 1482092,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 4993,
+          "recoveryDrainMs": 109063,
+          "criticalNotificationLatency": {
+            "p95Ms": 162,
+            "p99Ms": 220.94999999999993,
+            "sent": 7706,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 11.65891700005159,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "global-off",
+          "runId": "07-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 5233,
+          "recoveryDrainMs": 114845,
+          "criticalNotificationLatency": {
+            "p95Ms": 158,
+            "p99Ms": 217,
+            "sent": 7978,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "live-medium",
+          "runId": "08-live-medium",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 2400,
+          "traceJsonBytes": 2057960,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 5155,
+          "recoveryDrainMs": 125243,
+          "criticalNotificationLatency": {
+            "p95Ms": 170,
+            "p99Ms": 223,
+            "sent": 7830,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 9.404290999984369,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "global-off",
+          "runId": "09-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 4963,
+          "recoveryDrainMs": 89266,
+          "criticalNotificationLatency": {
+            "p95Ms": 175,
+            "p99Ms": 238.62999999999994,
+            "sent": 7638,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "live-worst",
+          "runId": "10-live-worst",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 2401,
+          "traceJsonBytes": 3570228,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 5182,
+          "recoveryDrainMs": 94588,
+          "criticalNotificationLatency": {
+            "p95Ms": 174,
+            "p99Ms": 231.64999999999992,
+            "sent": 7836,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 23.90587500005495,
           "deadlocksDelta": 0
         }
       ]

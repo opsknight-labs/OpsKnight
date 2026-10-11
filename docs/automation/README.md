@@ -202,3 +202,22 @@ Final certification can use `AUTOMATION_BASELINE_MODE=interleaved`: a fresh
 OFF precedes each disabled/SHADOW/LIVE profile, with unique numbered artifacts
 and an explicit baseline ID per comparison. Every OFF still passes absolute
 gates, all queues drain between runs, and the 1.25x limit remains unchanged.
+
+The rebased fairness build `d5aee5313a7464e8cd9ec82524f68828b2e85a4e` passed
+the full Tests workflow (38142189892), service automation validation
+(38142166890), and runbook protocol validation (38142167242). It includes
+main's Runbook Phase 0 and safe-authoring changes without modifying their
+separate worktrees.
+
+Audit 27 completed all ten interleaved 20-RPS/120-second profiles on that build:
+24,006 acknowledged events were persisted, with zero dropped arrivals,
+fallbacks, incident/provider duplicates, deadlocks, and failed critical
+notifications. Every queue drained within 126 seconds. Peak observation queue
+age was 2.708 seconds; peak critical queue age during pod replacement was
+20.587 seconds. Web, general, and critical replacements recovered successfully.
+All five non-OFF profiles nevertheless exceeded at least one 1.25x paired
+latency gate, so capacity remains **not certified**. The complete measurements,
+explicit baseline IDs, runtime revision/digest, and build-only overrides are
+retained in `persistence-capacity-results.json`. The image was built with a
+3Gi build heap and Next.js webpack build worker after local Docker VM OOM;
+type checking remained enabled and runtime settings were unchanged.
