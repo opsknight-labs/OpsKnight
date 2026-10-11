@@ -1,5 +1,6 @@
 import 'server-only';
 import { getAutomationSettings } from './settings';
+import { lockAutomationService as lock } from './locking';
 import type { Prisma } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { emitAuditEvent } from '@/lib/audit';
@@ -18,9 +19,6 @@ export class AutomationConflict extends Error {
 }
 export const asJson = (value: unknown): Prisma.InputJsonValue =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-async function lock(tx: Prisma.TransactionClient, serviceId: string) {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`automation:${serviceId}`}, 0))`;
-}
 async function audit(
   tx: Prisma.TransactionClient,
   serviceId: string,

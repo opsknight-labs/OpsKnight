@@ -8,8 +8,22 @@ on:
     paths:
       - 'src/lib/automation/**'
       - 'src/components/automation/**'
-      - 'src/app/(app)/services/[id]/automation/**'
-      - 'prisma/migrations/*automation*/**'
+      - 'src/app/(app)/services/*/automation/**'
+      - 'src/app/(app)/services/actions.ts'
+      - 'src/app/(app)/settings/system/automation-actions.ts'
+      - 'src/app/(app)/policies/actions.ts'
+      - 'src/lib/event-outbox.ts'
+      - 'src/lib/event-side-effects.ts'
+      - 'src/lib/events.ts'
+      - 'src/lib/events/**'
+      - 'src/lib/incidents/**'
+      - 'src/lib/escalation.ts'
+      - 'src/lib/escalation/**'
+      - 'src/lib/jobs/**'
+      - 'src/lib/notification*.ts'
+      - 'src/lib/notifications/**'
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/**'
       - 'tests/**/automation*'
       - 'playwright.automation.config.ts'
       - '.github/workflows/automation-validation.yml'
@@ -54,9 +68,9 @@ jobs:
       - name: Typecheck and automation unit contracts
         run: |
           npx tsc --noEmit
-          npx vitest run -c vitest.unit.config.ts tests/lib/automation-*.test.ts tests/components/automation-authoring.test.tsx
+          npx vitest run -c vitest.unit.config.ts tests/lib/automation-*.test.ts tests/components/automation-*.test.tsx tests/unit/automation-*.test.ts
       - name: PostgreSQL automation and queue certification
-        run: npx vitest run -c vitest.int.config.ts tests/integration/automation-certification.test.ts tests/integration/automation-settings.test.ts tests/integration/automation-load-certification.test.ts tests/integration/notification-claim-race.test.ts tests/integration/notification-claim-recovery.test.ts tests/integration/escalation-job-lookup.test.ts tests/integration/provider-quota-reservation.test.ts tests/integration/automation-operational-recovery.test.ts tests/integration/automation-policy-mutations.test.ts tests/integration/automation-concurrency.test.ts tests/integration/automation-history-guard.test.ts tests/integration/job-queue.test.ts --no-file-parallelism --maxWorkers=1
+        run: npx vitest run -c vitest.int.config.ts tests/integration/automation-certification.test.ts tests/integration/automation-settings.test.ts tests/integration/automation-load-certification.test.ts tests/integration/notification-claim-race.test.ts tests/integration/notification-claim-recovery.test.ts tests/integration/escalation-job-lookup.test.ts tests/integration/provider-quota-reservation.test.ts tests/integration/automation-operational-recovery.test.ts tests/integration/automation-policy-mutations.test.ts tests/integration/automation-service-policy.test.ts tests/integration/automation-concurrency.test.ts tests/integration/automation-history-guard.test.ts tests/integration/job-queue.test.ts --no-file-parallelism --maxWorkers=1
       - name: Production build
         run: npm run build
       - name: Install browser

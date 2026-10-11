@@ -142,6 +142,16 @@ test('100-rule policy remains bounded, keyboard editable, searchable and recover
   const workspace = page.getByRole('region', { name: 'Service automation' });
   await workspace.getByRole('button', { name: 'Rules', exact: true }).click();
   await expect(workspace.getByRole('button', { name: /^Configure Rule / })).toHaveCount(100);
+  const health = workspace.getByRole('region', { name: 'Configuration health' });
+  await expect(health).toBeVisible();
+  const warnings = health.locator('details').first();
+  await expect(warnings).not.toHaveAttribute('open', '');
+  await health.getByText('Review warnings', { exact: true }).click();
+  const unusedFields = health.getByText(/^Unused fields \(\d+\)$/);
+  await expect(unusedFields).toBeVisible();
+  await unusedFields.click();
+  await expect(health.locator('li').first()).toBeVisible();
+  await health.getByText('Review warnings', { exact: true }).click();
   timing.initialRulesMs = Date.now() - start;
   await workspace.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(

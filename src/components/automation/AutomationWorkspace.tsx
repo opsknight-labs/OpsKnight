@@ -637,10 +637,10 @@ export default function AutomationWorkspace({
           </Button>
         </div>
       )}
-      <fieldset disabled={busy} className="min-w-0 space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <fieldset disabled={busy} className="min-w-0 space-y-3 sm:space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-xl font-semibold flex items-center gap-2">
+            <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
               <Workflow className="h-5 w-5" />
               Automation <Badge>{data?.mode ?? 'Loading…'}</Badge>
             </h2>
@@ -848,13 +848,16 @@ export default function AutomationWorkspace({
         <nav
           aria-label="Automation sections"
           className={
-            mobile ? 'grid grid-cols-3 gap-1 border-b pb-2' : 'flex gap-1 overflow-x-auto border-b'
+            mobile
+              ? 'flex gap-1 overflow-x-auto border-b pb-1'
+              : 'flex gap-1 overflow-x-auto border-b'
           }
         >
           {(['overview', 'context', 'rules', 'test', 'activity'] as Area[]).map(tab => (
             <Button
               key={tab}
               variant={area === tab ? 'secondary' : 'ghost'}
+              size="sm"
               aria-pressed={area === tab}
               className="capitalize shrink-0"
               onClick={() => setArea(tab)}

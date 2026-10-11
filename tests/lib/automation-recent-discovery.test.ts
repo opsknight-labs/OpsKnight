@@ -7,6 +7,19 @@ beforeEach(() => {
   db.alerts.mockReset();
   db.access.mockReset().mockResolvedValue({ id: 'operator', role: 'RESPONDER' });
 });
+it('rejects oversized UTF-8 action input before schema parsing or service access', async () => {
+  const response = await automationAction({
+    action: 'discover',
+    serviceId: 'service-a',
+    sample: '😀'.repeat(70000),
+  });
+  expect(response).toMatchObject({ ok: false, error: 'Sample or draft is too large' });
+  expect(db.access).not.toHaveBeenCalled();
+  expect(await automationAction({ action: 'invalid', sample: 'é'.repeat(140000) })).toMatchObject({
+    ok: false,
+    error: 'Sample or draft is too large',
+  });
+});
 it('discovers bounded service-owned recent fields as event mappings without credential exposure', async () => {
   db.alerts.mockResolvedValue([
     { payload: { custom_details: { environment: 'prd', region: 'eu', token: 'private' } } },

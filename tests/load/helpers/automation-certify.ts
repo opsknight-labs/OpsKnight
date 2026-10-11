@@ -10,6 +10,7 @@ import { countAutomationBacklog } from './automation-backlog';
 import { providerDuplicateDelta } from './automation-provider-telemetry';
 import { automationComparisonSchedule, precedingAutomationBaseline } from './automation-comparison';
 import { collectSingleTelemetrySample } from './metrics';
+import { captureAutomationTimings, summarizeAutomationTimings } from './automation-timings';
 import type { LoadSeedManifest } from './seed';
 type CertificationSummary = {
   metrics: {
@@ -22,6 +23,7 @@ type CertificationSummary = {
 };
 type CertificationSample = Awaited<ReturnType<typeof collectSingleTelemetrySample>>;
 type CertificationResult = {
+  componentTimings: ReturnType<typeof summarizeAutomationTimings>;
   profile: string;
   runId: string;
   k6ExitCode: number | null;
@@ -239,6 +241,12 @@ async function main() {
     const [before] = await db.$queryRaw<
       Array<{ deadlocks: bigint }>
     >`SELECT deadlocks FROM pg_stat_database WHERE datname = current_database()`;
+    const timingOptions = {
+      namespace: process.env.AUTOMATION_K8S_NAMESPACE,
+      baseUrl: process.env.BASE_URL || manifest.baseUrl,
+      metricsToken: process.env.LOAD_METRICS_TOKEN,
+    };
+    const componentTimingsBefore = await captureAutomationTimings(timingOptions);
     const started = new Date();
     const summaryPath = path.join(outputDir, `${runId}.json`);
     const samples: Awaited<ReturnType<typeof collectSingleTelemetrySample>>[] = [];
@@ -275,6 +283,7 @@ async function main() {
       await inFlightSample;
     }
     await sample();
+    const componentTimingsAfter = await captureAutomationTimings(timingOptions);
     // Drain finite certification incidents before the next profile so delayed
     // escalation from earlier traffic cannot bias the OFF/SHADOW/LIVE comparison.
     for (;;) {
@@ -374,6 +383,7 @@ async function main() {
       FROM "Notification" WHERE "createdAt" >= ${started} AND "trafficClass" = 'CRITICAL'
     `;
     results.push({
+      componentTimings: summarizeAutomationTimings(componentTimingsBefore, componentTimingsAfter),
       profile,
       runId,
       k6ExitCode,

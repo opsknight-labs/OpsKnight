@@ -77,8 +77,10 @@ const actionSchema = z.discriminatedUnion('action', [
 ]);
 export async function automationAction(raw: unknown) {
   try {
+    const serialized = JSON.stringify(raw);
+    if (serialized && Buffer.byteLength(serialized, 'utf8') > 256 * 1024)
+      throw new Error('Sample or draft is too large');
     const input = actionSchema.parse(raw);
-    if (JSON.stringify(raw).length > 256 * 1024) throw new Error('Sample or draft is too large');
     const capability =
       input.action === 'save'
         ? 'automation.edit'

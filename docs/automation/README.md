@@ -221,3 +221,26 @@ explicit baseline IDs, runtime revision/digest, and build-only overrides are
 retained in `persistence-capacity-results.json`. The image was built with a
 3Gi build heap and Next.js webpack build worker after local Docker VM OOM;
 type checking remained enabled and runtime settings were unchanged.
+
+The subsequent review fixes service-default assignment under the same service
+advisory lock as LIVE activation. LIVE assignments validate the complete proposed
+policy snapshot; DISABLED services retain support for legacy policies. Concurrent
+activation and unsafe assignment cannot leave an unsafe LIVE default.
+
+`NO_ESCALATION` suppresses initial automatic responder paging. Explicit later
+user/team assignments and lifecycle notifications remain enabled. Database tests
+exercise both manual handoff audiences through the actual assignment action and
+notification worker, including persisted email intents and in-app delivery.
+
+Raw Server Action inputs are checked against the 256KiB UTF-8 limit before schema
+validation. Canonical ENUM values, alias keys and alias targets share the runtime
+256-byte UTF-8 boundary. Configuration health groups collapsible warnings while
+keeping blocking errors visible and rule-specific warnings on their rule cards.
+
+The capacity runner now retains per-Web-replica histograms for version loading,
+extraction, pure evaluation, policy lookup, responder snapshot, decision and trace
+persistence, and the complete incident transaction. It subtracts pre-profile
+traffic, combines replica counters, and explicitly marks coverage incomplete when
+pod replacement, counter resets or scrape failures lose measurements. These
+diagnostics do not change the 1.25x latency gate or 15ms evaluation guard. A fresh
+capacity certification is still required; Audit 27 remains NOT CERTIFIED.

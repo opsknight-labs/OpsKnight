@@ -40,6 +40,8 @@ export type RuntimeEvaluation = {
   evaluatorMs: number;
   policyLookupMs: number;
   responderSnapshotMs: number;
+  decisionPersistenceMs?: number;
+  tracePersistenceMs?: number;
   responderPolicy?: Awaited<ReturnType<typeof captureResponderSnapshot>> | null;
   result: Evaluation | null;
   fallbackReason: string | null;
@@ -294,6 +296,7 @@ export async function persistAutomation(
     destinationNames,
   };
   if (runtime.mode === 'LIVE') {
+    const decisionPersistenceStarted = performance.now();
     const responderPolicy = runtime.responderPolicy;
     const summary = encodeExplanation(
       {
@@ -325,6 +328,7 @@ export async function persistAutomation(
         summary,
       },
     });
+    runtime.decisionPersistenceMs = performance.now() - decisionPersistenceStarted;
     if (result?.tags.length) {
       await tx.tag.createMany({ data: result.tags.map(name => ({ name })), skipDuplicates: true });
       const tags = await tx.tag.findMany({
@@ -350,6 +354,7 @@ export async function persistAutomation(
         if (destination) destinationNames.push(destination);
       }
   }
+  const tracePersistenceStarted = performance.now();
   const trace = await tx.automationTrace.create({
     data: {
       incidentId,
@@ -387,6 +392,7 @@ export async function persistAutomation(
       ),
     },
   });
+  runtime.tracePersistenceMs = performance.now() - tracePersistenceStarted;
   if (
     trace?.detail &&
     typeof trace.detail === 'object' &&
@@ -417,6 +423,18 @@ export async function persistAutomation(
 }
 export function recordAutomationMetrics(runtime: RuntimeEvaluation | null) {
   if (!runtime) return;
+  if (runtime.decisionPersistenceMs !== undefined)
+    observeOperationalHistogram(
+      'opsknight_automation_decision_persistence_ms',
+      runtime.decisionPersistenceMs,
+      {}
+    );
+  if (runtime.tracePersistenceMs !== undefined)
+    observeOperationalHistogram(
+      'opsknight_automation_trace_persistence_ms',
+      runtime.tracePersistenceMs,
+      {}
+    );
   if (runtime.decisionBytes !== undefined)
     observeOperationalHistogram('opsknight_automation_decision_bytes', runtime.decisionBytes, {});
   if (runtime.detailedTraceBytes)

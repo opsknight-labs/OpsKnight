@@ -11,6 +11,8 @@ import { type Snapshot, type Rule, type Field } from '@/lib/automation/contract'
 
 import { RuleConditionsEditor } from './RuleConditionsEditor';
 import { RuleActionsEditor } from './RuleActionsEditor';
+import { ConfigurationHealth } from './ConfigurationHealth';
+import type { LintIssue } from '@/lib/automation/compiler';
 
 import type { Data } from './presentation-types';
 const controlClass = 'rounded-md border border-input bg-background px-3 py-2 text-sm max-w-full';
@@ -51,7 +53,7 @@ export function AutomationRules({
   mobile: boolean;
   createTemplate: (kind: string) => void;
   newRule: (phase: Rule['phase']) => Rule;
-  issues: Array<{ level: 'ERROR' | 'WARNING'; message: string }>;
+  issues: LintIssue[];
 }) {
   const ruleIndexes = useMemo(
     () => new Map(draft.rules.map((rule, index) => [rule.id, index])),
@@ -120,15 +122,7 @@ export function AutomationRules({
           </CardContent>
         </Card>
       )}
-      {issues.map((issue, i) => (
-        <p
-          key={i}
-          role={issue.level === 'ERROR' ? 'alert' : undefined}
-          className={`rounded-md border p-2 text-sm ${issue.level === 'ERROR' ? 'text-destructive' : 'text-muted-foreground'}`}
-        >
-          {issue.level}: {issue.message}
-        </p>
-      ))}
+      <ConfigurationHealth issues={issues} />
       {(['ENRICH', 'ROUTE'] as const).map(phase => (
         <div key={phase} className="space-y-3">
           <h3 className="font-semibold">
@@ -180,6 +174,9 @@ export function AutomationRules({
                       <span className="font-semibold text-sm">
                         {(phaseIndexes.get(rule.id) ?? 0) + 1}. {rule.name}{' '}
                         <Badge variant="secondary">{rule.enabled ? 'Enabled' : 'Disabled'}</Badge>
+                        {issues.some(
+                          issue => issue.level === 'WARNING' && issue.ruleId === rule.id
+                        ) && <Badge variant="outline">Review warnings</Badge>}
                       </span>
                       <span className="block mt-1 text-sm text-muted-foreground">
                         IF{' '}
@@ -204,6 +201,16 @@ export function AutomationRules({
                     </button>
                     {expandedRules.has(rule.id) && (
                       <div className="space-y-3 border-t pt-3">
+                        {issues
+                          .filter(issue => issue.ruleId === rule.id)
+                          .map((issue, index) => (
+                            <p
+                              key={index}
+                              className={`text-sm ${issue.level === 'ERROR' ? 'text-destructive' : 'text-muted-foreground'}`}
+                            >
+                              {issue.message}
+                            </p>
+                          ))}
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge>{(phaseIndexes.get(rule.id) ?? 0) + 1}</Badge>
                           {data.canEdit && (

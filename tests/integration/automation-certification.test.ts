@@ -19,6 +19,11 @@ import { processAutomationJob, scheduleAutomationRetention } from '@/lib/automat
 import { emptySnapshot, type Snapshot } from '@/lib/automation/contract';
 import { checksum } from '@/lib/automation/cache';
 import { countAutomationBacklog } from '../load/helpers/automation-backlog';
+import { reassignIncident } from '@/app/(app)/incidents/actions';
+vi.mock('@/lib/rbac', () => ({
+  assertResponderOrAbove: vi.fn(async () => ({ id: 'operator', role: 'ADMIN' })),
+}));
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/lib/slack', () => ({ sendSlackMessageToChannel: vi.fn() }));
 vi.mock('@/lib/notification-control-plane', async importOriginal => ({
   ...(await importOriginal<typeof import('@/lib/notification-control-plane')>()),
@@ -995,6 +1000,75 @@ describe('service automation transaction certification', () => {
     ).toBe(1);
     expect(await db.backgroundJob.count({ where: { type: 'ESCALATION' } })).toBe(0);
   });
+  it.each(['user', 'team'] as const)(
+    'NO_ESCALATION permits later explicit %s assignment and lifecycle notifications',
+    async audience => {
+      const { service, actor } = await setup();
+      const recipient = await createTestUser({ emailNotificationsEnabled: true });
+      await createTestNotificationProvider('smtp', {
+        host: '127.0.0.1',
+        port: 2525,
+        user: 'automation-local',
+        password: 'automation-local-only',
+        fromEmail: 'automation@example.com',
+      });
+      const triggered = await ingest(service.id);
+      const incidentId = triggered.incident!.id;
+      expect(await db.notification.count({ where: { incidentId } })).toBe(0);
+      expect(await db.backgroundJob.count({ where: { type: 'ESCALATION' } })).toBe(0);
+      if (audience === 'team') {
+        const team = await db.team.create({
+          data: {
+            name: 'Manual handoff team',
+            members: { create: { userId: recipient.id, role: 'MEMBER' } },
+          },
+        });
+        await reassignIncident(incidentId, '', team.id);
+      } else await reassignIncident(incidentId, recipient.id);
+      const effect =
+        audience === 'team'
+          ? 'INCIDENT_ASSIGNED_TO_TEAM_NOTIFICATION'
+          : 'INCIDENT_ASSIGNED_TO_USER_NOTIFICATION';
+      const jobs = await claimPendingJobs(100, undefined, GENERAL_WORKER_EXCLUDED_JOB_TYPES);
+      const assignment = jobs.find(job => (job.payload as { effect?: string }).effect === effect);
+      expect(assignment).toBeTruthy();
+      await processJob(assignment!);
+      expect(
+        await db.inAppNotification.count({
+          where: {
+            userId: recipient.id,
+            entityId: incidentId,
+            title:
+              audience === 'team' ? 'Incident Assigned to Your Team' : 'Incident Assigned to You',
+          },
+        })
+      ).toBe(1);
+      expect(
+        await db.notification.count({
+          where: { incidentId, userId: recipient.id, channel: 'EMAIL' },
+        })
+      ).toBeGreaterThan(0);
+      await db.$transaction(tx =>
+        applyIncidentLifecycleCommand(tx, {
+          incidentId,
+          command: 'ACKNOWLEDGE',
+          source: 'WEB',
+          actor: { id: actor.id },
+        })
+      );
+      expect(
+        await db.backgroundJob.count({
+          where: { payload: { path: ['effect'], equals: 'LIFECYCLE_USER_NOTIFICATION' } },
+        })
+      ).toBeGreaterThan(0);
+      expect(await db.backgroundJob.count({ where: { type: 'ESCALATION' } })).toBe(0);
+      expect(
+        await db.backgroundJob.count({
+          where: { payload: { path: ['effect'], equals: 'TRIGGER_ESCALATION_NOTIFICATIONS' } },
+        })
+      ).toBe(0);
+    }
+  );
   it('NO_ESCALATION delivers one supplemental Slack intent under retries and no personal intent', async () => {
     process.env.ENCRYPTION_KEY = '0123456789abcdef'.repeat(4);
     const { service, actor, draft, version } = await setup();

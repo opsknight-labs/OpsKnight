@@ -44,6 +44,9 @@ export const OPERATIONAL_METRICS = [
   { name: 'opsknight_automation_evaluator_ms', help: 'Automation pure evaluator duration in milliseconds', kind: 'histogram', labels: [], scope: 'counter', estimatedMaxSeries: 32, buckets: [0.1, 0.5, 1, 3, 8, 15, 30] },
   { name: 'opsknight_automation_policy_lookup_ms', help: 'Automation escalation policy lookup duration in milliseconds', kind: 'histogram', labels: [], scope: 'counter', estimatedMaxSeries: 32, buckets: [0.1, 0.5, 1, 3, 8, 15, 30] },
   { name: 'opsknight_automation_responder_snapshot_ms', help: 'Automation responder snapshot duration in milliseconds', kind: 'histogram', labels: [], scope: 'counter', estimatedMaxSeries: 32, buckets: [0.1, 0.5, 1, 3, 8, 15, 30] },
+  { name: 'opsknight_automation_decision_persistence_ms', help: 'Committed Automation decision encoding and insertion duration in milliseconds', kind: 'histogram', labels: [], scope: 'counter', estimatedMaxSeries: 16, buckets: [0.1, 0.5, 1, 3, 8, 15, 30, 60, 120, 250, 500] },
+  { name: 'opsknight_automation_trace_persistence_ms', help: 'Committed Automation trace encoding and insertion duration in milliseconds', kind: 'histogram', labels: [], scope: 'counter', estimatedMaxSeries: 16, buckets: [0.1, 0.5, 1, 3, 8, 15, 30, 60, 120, 250, 500] },
+  { name: 'opsknight_event_transaction_duration_ms', help: 'Committed event incident transaction duration including retry and commit time in milliseconds', kind: 'histogram', labels: ['action'], scope: 'counter', estimatedMaxSeries: 100, buckets: [1, 5, 15, 30, 60, 120, 250, 500, 1000, 3000, 10000] },
   {
     name: 'opsknight_chatops_invokes_total',
     help: 'Authenticated ChatOps invokes by provider, verb, and outcome',

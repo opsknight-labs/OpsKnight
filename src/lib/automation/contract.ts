@@ -20,7 +20,20 @@ export type FieldState =
   | { state: 'RECOGNIZED'; value: Scalar };
 export type Context = Record<string, FieldState>;
 export type Truth = 'TRUE' | 'FALSE' | 'UNKNOWN';
-export const scalarSchema = z.union([z.string().max(2048), z.number().finite(), z.boolean()]);
+const utf8Encoder = new TextEncoder();
+const byteLimitedString = (maxBytes: number) =>
+  z
+    .string()
+    .max(maxBytes)
+    .refine(value => utf8Encoder.encode(value).byteLength <= maxBytes, {
+      message: `Must contain at most ${maxBytes} UTF-8 bytes`,
+    });
+const enumValueSchema = byteLimitedString(LIMITS.enumBytes);
+export const scalarSchema = z.union([
+  byteLimitedString(LIMITS.stringBytes),
+  z.number().finite(),
+  z.boolean(),
+]);
 const identifier = z.string().min(1).max(100);
 export const fieldSchema = z
   .object({
@@ -29,8 +42,11 @@ export const fieldSchema = z
     label: z.string().min(1).max(100),
     type: z.enum(['STRING', 'ENUM', 'NUMBER', 'BOOLEAN']),
     caseSensitive: z.boolean().default(false),
-    allowedValues: z.array(z.string().min(1).max(256)).max(200).optional(),
-    aliases: z.record(z.string().max(256)).default({}),
+    allowedValues: z
+      .array(enumValueSchema.refine(value => value.length > 0))
+      .max(200)
+      .optional(),
+    aliases: z.record(enumValueSchema, enumValueSchema).default({}),
     mappings: z
       .array(
         z

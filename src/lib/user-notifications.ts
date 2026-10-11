@@ -426,9 +426,13 @@ export async function sendIncidentNotifications(
       };
     }
 
-    if (prisma.incidentAutomationDecision) {
-      const decision = await prisma.incidentAutomationDecision.findUnique({ where: { incidentId }, select: { routeType: true, mode: true } });
-      if (decision?.mode === 'LIVE' && decision.routeType === 'NO_ESCALATION') return { success: true, outcome: 'SKIPPED', disposition: 'SKIPPED' };
+    if (eventType === 'triggered' && prisma.incidentAutomationDecision) {
+      const decision = await prisma.incidentAutomationDecision.findUnique({
+        where: { incidentId },
+        select: { routeType: true, mode: true },
+      });
+      if (decision?.mode === 'LIVE' && decision.routeType === 'NO_ESCALATION')
+        return { success: true, outcome: 'SKIPPED', disposition: 'SKIPPED' };
     }
     const incidentRecord = incidentData;
     if (eventType === 'triggered' && incidentRecord.status !== 'OPEN') {

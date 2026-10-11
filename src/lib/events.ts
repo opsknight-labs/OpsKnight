@@ -1,5 +1,10 @@
 /* eslint-disable security/detect-object-injection -- Urgency keys are constrained by IncidentUrgency. */
-import { prepareAutomation, persistAutomation, recordAutomationMetrics, type IntegrationEventEnvelope } from './automation/runtime';
+import {
+  prepareAutomation,
+  persistAutomation,
+  recordAutomationMetrics,
+  type IntegrationEventEnvelope,
+} from './automation/runtime';
 import { Prisma, IncidentUrgency } from '@prisma/client';
 import { logger } from './logger';
 import { EVENT_TRANSACTION_MAX_ATTEMPTS } from './config';
@@ -13,7 +18,7 @@ import { deriveNewIncidentSlaTransition } from './incident-sla/next-transition';
 import { resolveSupportHours } from './incidents/support-hours';
 import { resolveIncidentEngagement } from './incidents/engagement';
 import { reconcileIncidentEngagementAfterUrgencyChange } from './incidents/engagement-reconciliation';
-import { addOperationalMetric } from './metrics/operational/registry';
+import { addOperationalMetric, observeOperationalHistogram } from './metrics/operational/registry';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
 
@@ -146,7 +151,14 @@ export async function processEvent(
   integrationId: string,
   envelopeInput?: IntegrationEventEnvelope
 ) {
-  const envelope: IntegrationEventEnvelope = envelopeInput ?? { serviceId, integrationId, integrationType: 'EVENTS_API', event: payload, providerPayload: payload, receivedAt: new Date() };
+  const envelope: IntegrationEventEnvelope = envelopeInput ?? {
+    serviceId,
+    integrationId,
+    integrationType: 'EVENTS_API',
+    event: payload,
+    providerPayload: payload,
+    receivedAt: new Date(),
+  };
   const { event_action, dedup_key: rawDedupKey, payload: eventData } = payload;
   const dedupKeys = normalizeDedupKeys(rawDedupKey, integrationId, eventData);
   const dedup_key = dedupKeys.primary;
@@ -167,6 +179,7 @@ export async function processEvent(
 
   const normalizedSource = truncateString(normalizeText(eventData.source.trim()), 500);
 
+  const transactionStarted = performance.now();
   const result = await runReadCommittedTransaction(async tx => {
     // 1. Validate serviceId exists (prevents orphaned incidents)
     const service = await tx.service.findUnique({
@@ -648,6 +661,11 @@ export async function processEvent(
     });
     return { action: 'ignored', reason: `Unknown event action: ${event_action}` };
   }, EVENT_TRANSACTION_MAX_ATTEMPTS);
+  observeOperationalHistogram(
+    'opsknight_event_transaction_duration_ms',
+    performance.now() - transactionStarted,
+    { action: result.action }
+  );
 
   const telemetry = 'telemetry' in result ? result.telemetry : undefined;
   if (telemetry) {
@@ -665,7 +683,9 @@ export async function processEvent(
   // External side-effects are persisted above in the same transaction and are
   // executed by the durable PostgreSQL job worker. The API no longer waits for
   // webhook, notification, Slack, or ChatOps network calls before returning.
-  recordAutomationMetrics('automationTelemetry' in result ? result.automationTelemetry ?? null : null);
+  recordAutomationMetrics(
+    'automationTelemetry' in result ? (result.automationTelemetry ?? null) : null
+  );
   if ('automationTelemetry' in result) delete result.automationTelemetry;
   return result;
 }
