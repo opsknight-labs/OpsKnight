@@ -154,3 +154,16 @@ latency, dropped arrivals in LIVE-small/worst, and recorded 65 evaluation
 timeouts. The next fixture moves two worker CPUs to Web: two Web pods at
 two CPUs each, two general pods and two critical pods at one CPU each, plus
 two PostgreSQL CPUs. Total allocated CPU stays ten; certification is pending.
+
+The two-CPU Web matrix accepted and persisted all arrivals across all six
+profiles with zero drops, duplicate deliveries and deadlocks. Five profiles
+passed the comparative gates. LIVE-medium failed with one evaluation timeout,
+queue age above 30 seconds, and HTTP latency above 1.25x OFF. Capacity remains
+not certified. Oversized explanation encoding now accounts for removed UTF-8
+bytes rather than repeatedly serializing the full diagnostic object; a fresh
+production-image matrix is required to measure its effect.
+
+A local before/after microbenchmark of 800 distinct 2KB enrichment writes
+(12 measured iterations after one warm-up) reduced median oversized explanation
+encoding from 623ms to 5.8ms, with identical serialized output. This measures
+that encoder path only; it does not establish end-to-end capacity.

@@ -46,6 +46,31 @@ describe('bounded Automation explanations', () => {
     expect(encoded.outcome).toEqual(input.outcome);
     expect(encoded.omittedValues).not.toEqual([]);
   });
+  it('accounts exactly for escaped UTF-8 values and multi-digit omitted indexes', () => {
+    const input = {
+      outcome: { type: 'SERVICE_DEFAULT' },
+      writes: Array.from({ length: 32 }, (_, i) => `${i}😀\n${'é'.repeat(300)}`),
+    };
+    const full = encodeExplanation(input, 100000);
+    const values = [...(full.valueTable as string[])];
+    const expected = {
+      ...full,
+      valueTable: values as Array<string | null>,
+      omittedValues: [] as number[],
+    };
+    const budget = Buffer.byteLength(JSON.stringify(full), 'utf8') - 4500;
+    for (
+      let i = values.length - 1;
+      Buffer.byteLength(JSON.stringify(expected), 'utf8') > budget;
+      i--
+    ) {
+      expected.valueTable.splice(i, 1, null);
+      expected.omittedValues.push(i);
+    }
+    expect(encodeExplanation(input, budget)).toEqual(expected);
+    expect(Buffer.byteLength(JSON.stringify(expected), 'utf8')).toBeLessThanOrEqual(budget);
+  });
+
   it('preserves legacy explanations without an encoding marker', () => {
     const input = { inputContext: { priority: { state: 'RECOGNIZED', value: 'P1' } } };
     expect(decodeExplanation(input)).toBe(input);

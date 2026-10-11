@@ -38,15 +38,17 @@ export function encodeExplanation(input: unknown, maxBytes: number): Prisma.Inpu
   };
   // Escaped control characters and many distinct enrichment writes can exceed the
   // valid scalar bounds in aggregate. Omit diagnostic values, never routing state.
-  for (
-    let position = values.length - 1;
-    Buffer.byteLength(JSON.stringify(output), 'utf8') > maxBytes && position >= 0;
-    position--
-  ) {
+  let outputBytes = Buffer.byteLength(JSON.stringify(output), 'utf8');
+  for (let position = values.length - 1; outputBytes > maxBytes && position >= 0; position--) {
+    // Only these two array entries change. Account for escaped UTF-8 strings,
+    // the replacement null, and the index/comma added to omittedValues.
+    const removedBytes = Buffer.byteLength(JSON.stringify(values.at(position)), 'utf8');
+    const indexBytes = String(position).length + (output.omittedValues.length ? 1 : 0);
     values.splice(position, 1, null);
     output.omittedValues.push(position);
+    outputBytes += 4 - removedBytes + indexBytes;
   }
-  if (Buffer.byteLength(JSON.stringify(output), 'utf8') > maxBytes) {
+  if (outputBytes > maxBytes) {
     // Keep the complete pinned policy and explicitly report omitted diagnostics.
     const source = input as Record<string, unknown>;
     return {
