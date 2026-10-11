@@ -84,6 +84,10 @@ The browser matrix verifies cancel/confirm for App Router Back, Forward and link
 Chromium separately verifies cancelled refresh and tab closing via beforeunload.
 History tracking preserves Next.js state and restores the current entry while the
 discard dialog is open; manual cross-document/device checks remain release gates.
+The production browser matrix also exercises clean Back/Forward navigation across
+Incidents, Services, Settings and Reports, checking both URL and rendered heading.
+It verifies expired-session redirects for historical and fresh protected requests,
+then repeats Back/Forward after signing in again.
 
 ## Deployment certification to record before release
 

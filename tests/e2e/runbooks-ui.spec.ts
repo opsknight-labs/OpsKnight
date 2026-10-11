@@ -59,6 +59,60 @@ async function noOverflow(page: Page) {
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)
   ).toBe(true);
 }
+test('global history stays synchronized across application pages and authentication redirects', async ({
+  page,
+  context,
+}) => {
+  await login(page);
+  const destinations = [
+    { path: '/incidents', title: 'Incidents' },
+    { path: '/services', title: 'Services' },
+    { path: '/settings', title: 'Settings' },
+    { path: '/reports', title: 'Reports & Dashboards' },
+  ];
+  const sidebar = page.locator('#app-sidebar');
+  async function assertDestination(destination: (typeof destinations)[number]) {
+    await expect(page).toHaveURL(new URL(destination.path, page.url()).href);
+    await expect(page.getByRole('heading', { level: 1, name: destination.title, exact: true }))
+      .toBeVisible();
+    await expect(page.getByRole('alertdialog')).not.toBeVisible();
+  }
+  // Real Next links exercise the global tracker without a dirty runbook guard.
+  for (const destination of destinations) {
+    await sidebar.locator(`a[href="${destination.path}"]`).click();
+    await assertDestination(destination);
+  }
+  for (const destination of destinations.slice(0, -1).reverse()) {
+    await page.goBack();
+    await assertDestination(destination);
+  }
+  for (const destination of destinations.slice(1)) {
+    await page.goForward();
+    await assertDestination(destination);
+  }
+  // Expired authentication must redirect a historical protected page as well
+  // as a fresh request, rather than leave stale authenticated UI on screen.
+  await context.clearCookies();
+  await page.goBack();
+  await page.reload();
+  await expect(page).toHaveURL(/\/login(?:\?|$)/);
+  await expect(page.locator('input[type="email"]')).toBeVisible();
+  await expect(sidebar).not.toBeVisible();
+  await page.goto('/reports');
+  await expect(page).toHaveURL(/\/login(?:\?|$)/);
+  await page.locator('input[type="email"]').fill(EMAIL);
+  await page.locator('input[type="password"]').fill(PASSWORD);
+  await page.locator('form button[type="submit"]').click();
+  await expect(page).not.toHaveURL(/\/login/);
+  await sidebar.locator('a[href="/incidents"]').click();
+  await assertDestination(destinations[0]);
+  await sidebar.locator('a[href="/services"]').click();
+  await assertDestination(destinations[1]);
+  await page.goBack();
+  await assertDestination(destinations[0]);
+  await page.goForward();
+  await assertDestination(destinations[1]);
+});
 test('library, ordered builder, typed inputs and publish confirmation', async ({ page }) => {
   await login(page);
   await page.getByRole('button', { name: 'New Runbook', exact: true }).first().click();
