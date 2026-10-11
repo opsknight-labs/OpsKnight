@@ -5527,6 +5527,130 @@
           "deadlocksDelta": 0
         }
       ]
+    },
+    {
+      "topology": "kind-helm-split-audit24-linear-explanations-web-two-cpu-20rps",
+      "sourceRevision": "cf4f4d9e838481e2d43f1275420d3c0ce539c316",
+      "imageDigest": "sha256:837c0e8b69050034115b81165eb35ebedea63f8480d33bef32f80b4c82777633",
+      "scope": "INCOMPLETE_FIVE_PROFILE_MATRIX_RUNNER_ENDED_BEFORE_WORST",
+      "comparisonGate": {
+        "passed": false,
+        "failures": [
+          "SHADOW recorded two evaluation-timeout fallbacks; matrix ended before worst-case result."
+        ]
+      },
+      "profiles": [
+        {
+          "profile": "global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 4898,
+          "recoveryDrainMs": 92093,
+          "criticalNotificationLatency": {
+            "p95Ms": 196,
+            "p99Ms": 314.6999999999999,
+            "sent": 7516,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "service-disabled",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 4890,
+          "recoveryDrainMs": 95222,
+          "criticalNotificationLatency": {
+            "p95Ms": 178,
+            "p99Ms": 281.3599999999998,
+            "sent": 7689,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "shadow-small",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 2,
+          "traceCount": 2401,
+          "traceJsonBytes": 12180219,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 3616,
+          "recoveryDrainMs": 101538,
+          "criticalNotificationLatency": {
+            "p95Ms": 369,
+            "p99Ms": 646.0799999999996,
+            "sent": 5625,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 6.755999999993946,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "live-small",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 2401,
+          "traceJsonBytes": 1627780,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 4954,
+          "recoveryDrainMs": 112952,
+          "criticalNotificationLatency": {
+            "p95Ms": 173,
+            "p99Ms": 276.15999999999985,
+            "sent": 8043,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 39.39420800004154,
+          "deadlocksDelta": 0
+        },
+        {
+          "profile": "live-medium",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 2400,
+          "traceJsonBytes": 2014900,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 4402,
+          "recoveryDrainMs": 146798,
+          "criticalNotificationLatency": {
+            "p95Ms": 236,
+            "p99Ms": 377.1599999999998,
+            "sent": 7029,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 28.86020800005645,
+          "deadlocksDelta": 0
+        }
+      ]
     }
   ],
   "initialImage": "opsknight-automation:audit2",

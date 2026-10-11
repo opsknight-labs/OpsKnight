@@ -167,3 +167,12 @@ A local before/after microbenchmark of 800 distinct 2KB enrichment writes
 (12 measured iterations after one warm-up) reduced median oversized explanation
 encoding from 623ms to 5.8ms, with identical serialized output. This measures
 that encoder path only; it does not establish end-to-end capacity.
+
+The linear-explanation run retained five completed profiles before its runner
+ended; worst-case has no result and the matrix is incomplete. All retained
+profiles accepted and persisted every arrival without drops and drained within
+147 seconds. SHADOW recorded two evaluation timeouts; no capacity pass is
+claimed. Normalization now reuses a bounded UTF-8 encoder/scratch buffer, with
+Unicode and successive-value regression coverage. A nine-round local benchmark
+of 20,000 maximum-size string fields improved median runtime from 94.3ms to
+88.7ms; this does not establish end-to-end throughput.

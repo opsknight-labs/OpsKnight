@@ -1,6 +1,15 @@
 /* eslint-disable security/detect-object-injection -- Keys are schema-validated or derived from compiled field definitions. */
 import { isSensitiveValue } from './privacy';
 import { LIMITS, type Field, type FieldState, type Scalar } from '../contract';
+// Normalization is synchronous; reuse bounded scratch space instead of allocating
+// an encoder and a byte array for every extracted field.
+const utf8Encoder = new TextEncoder();
+const utf8Scratch = new Uint8Array(Math.max(LIMITS.stringBytes, LIMITS.enumBytes) + 4);
+function exceedsUtf8Limit(value: string, limit: number): boolean {
+  const { read, written } = utf8Encoder.encodeInto(value, utf8Scratch);
+  return read < value.length || written > limit;
+}
+
 export function normalizedString(value: string, field: Pick<Field, 'caseSensitive'>): string {
   const trimmed = value.trim();
   return field.caseSensitive ? trimmed : trimmed.toLowerCase();
@@ -11,8 +20,7 @@ export function normalizeValue(raw: unknown, field: Field): FieldState {
   if (!['string', 'number', 'boolean'].includes(typeof raw)) throw new Error('EXTRACTION_LIMIT');
   if (
     typeof raw === 'string' &&
-    new TextEncoder().encode(raw).length >
-      (field.type === 'ENUM' ? LIMITS.enumBytes : LIMITS.stringBytes)
+    exceedsUtf8Limit(raw, field.type === 'ENUM' ? LIMITS.enumBytes : LIMITS.stringBytes)
   )
     throw new Error('EXTRACTION_LIMIT');
   if (typeof raw === 'string' && isSensitiveValue(raw)) throw new Error('EXTRACTION_LIMIT');

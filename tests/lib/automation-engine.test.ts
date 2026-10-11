@@ -32,6 +32,24 @@ describe('automation semantics', () => {
     for (const missing of ['', '  ', null, undefined])
       expect(normalizeValue(missing, number).state).toBe('MISSING');
   });
+  it('enforces byte limits for Unicode, escaped scalars and consecutive shorter values', () => {
+    const field = { ...builtinFields[0], type: 'STRING' as const };
+    for (const raw of [
+      'x'.repeat(2048),
+      'é'.repeat(1024),
+      '😀'.repeat(512),
+      '\ud800'.repeat(682),
+    ]) {
+      expect(normalizeValue(raw, field).state).toBe('RECOGNIZED');
+      expect(() => normalizeValue(`${raw}😀`, field)).toThrow('EXTRACTION_LIMIT');
+      expect(normalizeValue('short', field)).toEqual({ state: 'RECOGNIZED', value: 'short' });
+    }
+    expect(() => normalizeValue('x'.repeat(100000), field)).toThrow('EXTRACTION_LIMIT');
+    const enumField = { ...field, type: 'ENUM' as const, allowedValues: ['é'.repeat(128)] };
+    expect(normalizeValue('é'.repeat(128), enumField).state).toBe('RECOGNIZED');
+    expect(() => normalizeValue('é'.repeat(129), enumField)).toThrow('EXTRACTION_LIMIT');
+  });
+
   it('blocks unsafe paths', () => {
     for (const path of ['a.__proto__.b', '$.Authorization', 'a.token', '$.a[*]', 'a..b'])
       expect(() => compilePath(path)).toThrow();
