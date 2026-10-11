@@ -84,10 +84,12 @@ export async function prepareAutomation(
     normalization: [],
   };
   // Load routing state once before invoking the evaluator. No condition performs IO.
+  const defaultPolicyLookupStarted = performance.now();
   const service = await tx.service.findUnique({
     where: { id: envelope.serviceId },
     select: { policy: { select: { id: true, name: true } } },
   });
+  runtime.policyLookupMs = performance.now() - defaultPolicyLookupStarted;
   const engineStartedAt = performance.now();
   try {
     const versionLoadStart = performance.now();
@@ -144,7 +146,7 @@ export async function prepareAutomation(
             select: { id: true, name: true },
           })
         : service?.policy;
-    runtime.policyLookupMs = performance.now() - policyLookupStart;
+    runtime.policyLookupMs += performance.now() - policyLookupStart;
     if (result.outcome.type === 'ESCALATION_POLICY' && !policy) throw new Error('POLICY_MISSING');
     runtime.result = result;
     runtime.policyId = result.outcome.type === 'NO_ESCALATION' ? null : (policy?.id ?? null);
@@ -276,7 +278,7 @@ export async function persistAutomation(
     const bucketDate = new Date(runtime.evaluationAt.toISOString().slice(0, 10));
     shadow = { versionId: runtime.versionId, bucketDate: bucketDate.toISOString(), ...counts };
   }
-  const detail = {
+  const fullDetail = () => ({
     result: result
       ? {
           ...result,
@@ -294,7 +296,7 @@ export async function persistAutomation(
     normalization: runtime.normalization,
     policyName: runtime.policyName,
     destinationNames,
-  };
+  });
   if (runtime.mode === 'LIVE') {
     const decisionPersistenceStarted = performance.now();
     const responderPolicy = runtime.responderPolicy;
@@ -311,6 +313,7 @@ export async function persistAutomation(
     );
     runtime.decisionBytes = Buffer.byteLength(JSON.stringify(summary), 'utf8');
     await tx.incidentAutomationDecision.create({
+      select: { incidentId: true },
       data: {
         incidentId,
         serviceId: envelope.serviceId,
@@ -355,7 +358,34 @@ export async function persistAutomation(
       }
   }
   const tracePersistenceStarted = performance.now();
-  const trace = await tx.automationTrace.create({
+  const encodedDetail = encodeExplanation(
+    runtime.shadowDifferent ||
+      runtime.fallbackReason ||
+      runtime.normalization.some(field => field.canonical.state === 'UNMAPPED') ||
+      incidentId.charCodeAt(incidentId.length - 1) % 20 === 0
+      ? { ...fullDetail(), diagnosticLevel: 'FULL' }
+      : {
+          diagnosticLevel: 'COMPACT',
+          policyName: runtime.policyName,
+          destinationNames,
+          actual,
+          fallbackReason: runtime.fallbackReason,
+          shadowDifferent: runtime.shadowDifferent,
+          normalization: runtime.normalization.filter(n => n.canonical.state === 'UNMAPPED'),
+          result: result
+            ? {
+                outcome: result.outcome,
+                matchedRule: result.matchedRule,
+                enrichedContext: { priority: result.enrichedContext.priority },
+                tags: result.tags,
+                supplementalActions: result.supplementalActions,
+              }
+            : null,
+        },
+    MAX_AUTOMATION_TRACE_BYTES
+  );
+  await tx.automationTrace.create({
+    select: { id: true },
     data: {
       incidentId,
       serviceId: envelope.serviceId,
@@ -364,46 +394,16 @@ export async function persistAutomation(
       evaluationAt: runtime.evaluationAt,
       durationMs: runtime.durationMs,
       fallbackReason: runtime.fallbackReason,
-      detail: encodeExplanation(
-        runtime.shadowDifferent ||
-          runtime.fallbackReason ||
-          runtime.normalization.some(field => field.canonical.state === 'UNMAPPED') ||
-          incidentId.charCodeAt(incidentId.length - 1) % 20 === 0
-          ? { ...detail, diagnosticLevel: 'FULL' }
-          : {
-              diagnosticLevel: 'COMPACT',
-              policyName: runtime.policyName,
-              destinationNames,
-              actual,
-              fallbackReason: runtime.fallbackReason,
-              shadowDifferent: runtime.shadowDifferent,
-              normalization: runtime.normalization.filter(n => n.canonical.state === 'UNMAPPED'),
-              result: result
-                ? {
-                    outcome: result.outcome,
-                    matchedRule: result.matchedRule,
-                    enrichedContext: { priority: result.enrichedContext.priority },
-                    tags: result.tags,
-                    supplementalActions: result.supplementalActions,
-                  }
-                : null,
-            },
-        MAX_AUTOMATION_TRACE_BYTES
-      ),
+      detail: encodedDetail,
     },
   });
   runtime.tracePersistenceMs = performance.now() - tracePersistenceStarted;
-  if (
-    trace?.detail &&
-    typeof trace.detail === 'object' &&
-    !Array.isArray(trace.detail) &&
-    'diagnosticLevel' in trace.detail &&
-    trace.detail.diagnosticLevel === 'FULL'
-  )
-    runtime.detailedTraceBytes = Buffer.byteLength(JSON.stringify(trace.detail), 'utf8');
+  if (encodedDetail.diagnosticLevel === 'FULL')
+    runtime.detailedTraceBytes = Buffer.byteLength(JSON.stringify(encodedDetail), 'utf8');
   // Store bounded scalar discovery candidates, never provider payloads or headers.
   if (runtime.observations.length || shadow)
     await tx.backgroundJob.create({
+      select: { id: true },
       data: {
         id: `AUTOMATION_OBSERVE:${incidentId}`,
         type: 'SCHEDULED_TASK',

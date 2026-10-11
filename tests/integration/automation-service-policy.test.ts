@@ -86,6 +86,17 @@ it('retains legacy assignment support while DISABLED and rejects subsequent LIVE
   await f.assign(f.unsafe.id);
   await expect(f.activate()).rejects.toThrow('unsafe for LIVE');
 });
+it('rejects an oversized legacy snapshot after LIVE without changing the safe default', async () => {
+  const f = await fixture();
+  await f.activate();
+  const oversized = await db.escalationPolicy.create({
+    data: { name: 'é'.repeat(33000) },
+  });
+  await expect(f.assign(oversized.id)).rejects.toThrow('byte size limit');
+  expect(
+    (await db.service.findUniqueOrThrow({ where: { id: f.service.id } })).escalationPolicyId
+  ).toBe(f.safe.id);
+});
 it.each([false, true])(
   'serializes racing LIVE activation and unsafe assignment (reverse=%s)',
   async reverse => {

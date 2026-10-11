@@ -244,3 +244,27 @@ traffic, combines replica counters, and explicitly marks coverage incomplete whe
 pod replacement, counter resets or scrape failures lose measurements. These
 diagnostics do not change the 1.25x latency gate or 15ms evaluation guard. A fresh
 capacity certification is still required; Audit 27 remains NOT CERTIFIED.
+
+Review fixes at `0bf145bb061327ade8c22d421b0703d651385de9` passed full Tests
+(38151226274), service automation validation (38151212214), and runbook protocol
+validation (38151212398). The production image also passed all eight local browser
+journeys across desktop, Android, iPhone and tablet. With 100 rules, search took
+21–36ms and expansion 62–79ms; the collapsed workspace contained about 700 elements.
+
+Audit 28 completed ten fresh interleaved 20-RPS profiles on that revision:
+24,007 acknowledged alerts became 24,007 persisted incidents, with zero dropped
+arrivals, fallbacks, incident/provider duplicates, deadlocks, failed critical
+notifications or remaining jobs. Pod replacement recovered. SHADOW and LIVE-medium
+passed their paired latency gates; disabled-service p99, LIVE-small p95/p99 and
+LIVE-worst p99 failed. Capacity remains **NOT CERTIFIED**. All eight component
+timing summaries are retained with the results, and raw replica histograms remain
+in the referenced artifacts. LIVE-small timings are explicitly partial after Web
+pod deletion. The initial policy-read time was included only in whole-transaction
+timing in this run; subsequent instrumentation includes it in policy lookup too.
+
+The follow-up persistence change requests only IDs from decision, trace and
+observation inserts, avoiding the return and decoding of JSON already available
+in memory. Compact traces also avoid constructing unused full rule summaries.
+Stored explanations, immutable routing snapshots, byte bounds and trace sampling
+remain the same. This change requires fresh capacity measurements; Audit 28
+certifies correctness and recovery for the preceding runtime only.

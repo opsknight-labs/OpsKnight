@@ -6835,6 +6835,968 @@
           "deadlocksDelta": 0
         }
       ]
+    },
+    {
+      "topology": "kind-helm-split-audit28-review-boundaries-interleaved-20rps",
+      "generatedAt": "2026-10-11T16:18:25.021Z",
+      "rps": 20,
+      "drainBudgetMs": 180000,
+      "workload": {
+        "seedProfile": "medium",
+        "internalServices": 31,
+        "integrationKeys": 123,
+        "interactiveUsers": 2,
+        "responderUsers": 2,
+        "providerCapacityProfile": "provisioned-200",
+        "providerTelemetryResetBeforeRun": true,
+        "providerBudgets": {
+          "channels": [
+            "EMAIL",
+            "PUSH",
+            "WEBHOOK"
+          ],
+          "providers": {
+            "EMAIL": "smtp",
+            "PUSH": "web-push",
+            "WEBHOOK": "default"
+          },
+          "ratePerSecond": 200,
+          "maxInFlight": 40
+        },
+        "publicFanout": "Dedicated status-fanout suite",
+        "historicalFixtureTimers": "Disabled before first profile; real alert/responder escalation unchanged",
+        "comparisonValidity": "Queues drained between profiles",
+        "stopReason": null
+      },
+      "baselineMode": "interleaved",
+      "schedule": [
+        {
+          "profile": "global-off",
+          "runId": "01-global-off"
+        },
+        {
+          "profile": "service-disabled",
+          "runId": "02-service-disabled"
+        },
+        {
+          "profile": "global-off",
+          "runId": "03-global-off"
+        },
+        {
+          "profile": "shadow-small",
+          "runId": "04-shadow-small"
+        },
+        {
+          "profile": "global-off",
+          "runId": "05-global-off"
+        },
+        {
+          "profile": "live-small",
+          "runId": "06-live-small"
+        },
+        {
+          "profile": "global-off",
+          "runId": "07-global-off"
+        },
+        {
+          "profile": "live-medium",
+          "runId": "08-live-medium"
+        },
+        {
+          "profile": "global-off",
+          "runId": "09-global-off"
+        },
+        {
+          "profile": "live-worst",
+          "runId": "10-live-worst"
+        }
+      ],
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "service-disabled: HTTP latency exceeds 1.25x global-off",
+          "live-small: HTTP latency exceeds 1.25x global-off",
+          "live-worst: HTTP latency exceeds 1.25x global-off"
+        ]
+      },
+      "comparisons": [
+        {
+          "runId": "02-service-disabled",
+          "baselineRunId": "01-global-off",
+          "profile": "service-disabled",
+          "acceptedRatio": 0.9995835068721366,
+          "p95Ratio": 1.1378463722965741,
+          "p99Ratio": 1.3303045048394144,
+          "p95RatioToServiceDisabled": 1,
+          "p99RatioToServiceDisabled": 1,
+          "peakCriticalQueueAgeMs": 630,
+          "peakAutomationObservationQueueAgeMs": 0,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 95394,
+          "transactionRetryCount": 5002,
+          "peakDatabaseConnections": 111,
+          "peakDatabaseLockWaits": 1,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 158,
+            "p99Ms": 220.33999999999992,
+            "sent": 7967,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "runId": "04-shadow-small",
+          "baselineRunId": "03-global-off",
+          "profile": "shadow-small",
+          "acceptedRatio": 0.9995835068721366,
+          "p95Ratio": 0.8057433462700259,
+          "p99Ratio": 0.7106060435414294,
+          "p95RatioToServiceDisabled": 2.337525156058358,
+          "p99RatioToServiceDisabled": 1.889094610972434,
+          "peakCriticalQueueAgeMs": 731,
+          "peakAutomationObservationQueueAgeMs": 1416,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 118507,
+          "transactionRetryCount": 4734,
+          "peakDatabaseConnections": 112,
+          "peakDatabaseLockWaits": 11,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 199,
+            "p99Ms": 295,
+            "sent": 7330,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "runId": "06-live-small",
+          "baselineRunId": "05-global-off",
+          "profile": "live-small",
+          "acceptedRatio": 1.0004166666666667,
+          "p95Ratio": 2.8541040505089588,
+          "p99Ratio": 3.2247413576845645,
+          "p95RatioToServiceDisabled": 4.033481188716303,
+          "p99RatioToServiceDisabled": 4.678274209345467,
+          "peakCriticalQueueAgeMs": 1967,
+          "peakAutomationObservationQueueAgeMs": 4051,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 117327,
+          "transactionRetryCount": 4272,
+          "peakDatabaseConnections": 110,
+          "peakDatabaseLockWaits": 8,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 201.09999999999968,
+            "p99Ms": 330.41999999999996,
+            "sent": 7359,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "runId": "08-live-medium",
+          "baselineRunId": "07-global-off",
+          "profile": "live-medium",
+          "acceptedRatio": 1,
+          "p95Ratio": 1.0976408286017472,
+          "p99Ratio": 0.88360031575806,
+          "p95RatioToServiceDisabled": 2.032562951842853,
+          "p99RatioToServiceDisabled": 1.8321020032445041,
+          "peakCriticalQueueAgeMs": 1603,
+          "peakAutomationObservationQueueAgeMs": 3055,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 136421,
+          "transactionRetryCount": 4826,
+          "peakDatabaseConnections": 111,
+          "peakDatabaseLockWaits": 6,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 183,
+            "p99Ms": 265.8399999999999,
+            "sent": 7517,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        },
+        {
+          "runId": "10-live-worst",
+          "baselineRunId": "09-global-off",
+          "profile": "live-worst",
+          "acceptedRatio": 1,
+          "p95Ratio": 1.1558479847742595,
+          "p99Ratio": 1.3114430186501682,
+          "p95RatioToServiceDisabled": 4.089106227713431,
+          "p99RatioToServiceDisabled": 3.583722719610797,
+          "peakCriticalQueueAgeMs": 3248,
+          "peakAutomationObservationQueueAgeMs": 9351,
+          "pendingAfterDrain": 0,
+          "recoveryDrainMs": 168543,
+          "transactionRetryCount": 3873,
+          "peakDatabaseConnections": 111,
+          "peakDatabaseLockWaits": 11,
+          "peakDatabaseCpuPercent": null,
+          "criticalNotificationLatency": {
+            "p95Ms": 271,
+            "p99Ms": 409.5599999999999,
+            "sent": 5473,
+            "failed": 0
+          },
+          "deadlocksDelta": 0,
+          "providerDuplicateDeliveriesDelta": 0
+        }
+      ],
+      "sourceRevision": "0bf145bb061327ade8c22d421b0703d651385de9",
+      "imageDigest": "sha256:dfefbf5801181e8662b351d8bb0ecb17c4299b76c04fce28163f3fc38eaedb2e",
+      "scope": "Isolated Kind split deployment, review boundary fixes, unchanged interleaved 20-RPS latency gates",
+      "buildOverrides": {
+        "nodeBuildHeapMiB": 3072,
+        "experimentalWebpackBuildWorker": true,
+        "typeChecksSkipped": false,
+        "runtimeOverrides": false
+      },
+      "runtimeEvidence": "artifacts/load-certification/automation/kind-helm-split-audit28-review-boundaries-interleaved-20rps/kind-runtime.json",
+      "ciEvidence": {
+        "tests": "https://github.com/opsknight-labs/OpsKnight/actions/runs/38151226274",
+        "automation": "https://github.com/opsknight-labs/OpsKnight/actions/runs/38151212214",
+        "runbooks": "https://github.com/opsknight-labs/OpsKnight/actions/runs/38151212398"
+      },
+      "profiles": [
+        {
+          "profile": "global-off",
+          "runId": "01-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 5253,
+          "recoveryDrainMs": 90049,
+          "criticalNotificationLatency": {
+            "p95Ms": 150,
+            "p99Ms": 214,
+            "sent": 8172,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0,
+          "componentTimings": {
+            "complete": true,
+            "lostInstances": [],
+            "counterResets": [],
+            "components": {
+              "versionLoad": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "extraction": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "evaluator": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "policyLookup": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "responderSnapshot": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "decisionPersistence": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "tracePersistence": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "incidentTransaction": {
+                "count": 2401,
+                "sumMs": 93897.22843899965,
+                "meanMs": 39.107550370262246
+              }
+            },
+            "scrapeErrors": [],
+            "rawHistogramEvidence": "artifacts/load-certification/automation/kind-helm-split-audit28-review-boundaries-interleaved-20rps/profiles.json"
+          }
+        },
+        {
+          "profile": "service-disabled",
+          "runId": "02-service-disabled",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 5002,
+          "recoveryDrainMs": 95394,
+          "criticalNotificationLatency": {
+            "p95Ms": 158,
+            "p99Ms": 220.33999999999992,
+            "sent": 7967,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0,
+          "componentTimings": {
+            "complete": true,
+            "lostInstances": [],
+            "counterResets": [],
+            "components": {
+              "versionLoad": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "extraction": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "evaluator": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "policyLookup": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "responderSnapshot": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "decisionPersistence": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "tracePersistence": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "incidentTransaction": {
+                "count": 2400,
+                "sumMs": 100212.4674509977,
+                "meanMs": 41.755194771249045
+              }
+            },
+            "scrapeErrors": [],
+            "rawHistogramEvidence": "artifacts/load-certification/automation/kind-helm-split-audit28-review-boundaries-interleaved-20rps/profiles.json"
+          }
+        },
+        {
+          "profile": "global-off",
+          "runId": "03-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 4383,
+          "recoveryDrainMs": 109009,
+          "criticalNotificationLatency": {
+            "p95Ms": 241.09999999999968,
+            "p99Ms": 392.03999999999985,
+            "sent": 6899,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0,
+          "componentTimings": {
+            "complete": true,
+            "lostInstances": [],
+            "counterResets": [],
+            "components": {
+              "versionLoad": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "extraction": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "evaluator": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "policyLookup": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "responderSnapshot": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "decisionPersistence": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "tracePersistence": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "incidentTransaction": {
+                "count": 2401,
+                "sumMs": 195772.16818600014,
+                "meanMs": 81.5377626763849
+              }
+            },
+            "scrapeErrors": [],
+            "rawHistogramEvidence": "artifacts/load-certification/automation/kind-helm-split-audit28-review-boundaries-interleaved-20rps/profiles.json"
+          }
+        },
+        {
+          "profile": "shadow-small",
+          "runId": "04-shadow-small",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 2400,
+          "traceJsonBytes": 12184800,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 4734,
+          "recoveryDrainMs": 118507,
+          "criticalNotificationLatency": {
+            "p95Ms": 199,
+            "p99Ms": 295,
+            "sent": 7330,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 2.854125000070781,
+          "deadlocksDelta": 0,
+          "componentTimings": {
+            "complete": true,
+            "lostInstances": [],
+            "counterResets": [],
+            "components": {
+              "versionLoad": {
+                "count": 2400,
+                "sumMs": 187.79565599909984,
+                "meanMs": 0.07824818999962493
+              },
+              "extraction": {
+                "count": 2400,
+                "sumMs": 46.28466099954676,
+                "meanMs": 0.019285275416477815
+              },
+              "evaluator": {
+                "count": 2400,
+                "sumMs": 210.03911800147034,
+                "meanMs": 0.08751629916727931
+              },
+              "policyLookup": {
+                "count": 2400,
+                "sumMs": 1.3787639985093847,
+                "meanMs": 0.0005744849993789102
+              },
+              "responderSnapshot": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "decisionPersistence": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "tracePersistence": {
+                "count": 2400,
+                "sumMs": 14541.839005001239,
+                "meanMs": 6.059099585417183
+              },
+              "incidentTransaction": {
+                "count": 2400,
+                "sumMs": 184927.17366500187,
+                "meanMs": 77.05298902708411
+              }
+            },
+            "scrapeErrors": [],
+            "rawHistogramEvidence": "artifacts/load-certification/automation/kind-helm-split-audit28-review-boundaries-interleaved-20rps/profiles.json"
+          }
+        },
+        {
+          "profile": "global-off",
+          "runId": "05-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 4884,
+          "recoveryDrainMs": 111788,
+          "criticalNotificationLatency": {
+            "p95Ms": 173,
+            "p99Ms": 266,
+            "sent": 7936,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0,
+          "componentTimings": {
+            "complete": true,
+            "lostInstances": [],
+            "counterResets": [],
+            "components": {
+              "versionLoad": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "extraction": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "evaluator": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "policyLookup": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "responderSnapshot": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "decisionPersistence": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "tracePersistence": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "incidentTransaction": {
+                "count": 2400,
+                "sumMs": 123646.75398900628,
+                "meanMs": 51.51948082875261
+              }
+            },
+            "scrapeErrors": [],
+            "rawHistogramEvidence": "artifacts/load-certification/automation/kind-helm-split-audit28-review-boundaries-interleaved-20rps/profiles.json"
+          }
+        },
+        {
+          "profile": "live-small",
+          "runId": "06-live-small",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 2401,
+          "traceJsonBytes": 1463735,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 4272,
+          "recoveryDrainMs": 117327,
+          "criticalNotificationLatency": {
+            "p95Ms": 201.09999999999968,
+            "p99Ms": 330.41999999999996,
+            "sent": 7359,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 24.55945900012739,
+          "deadlocksDelta": 0,
+          "componentTimings": {
+            "complete": false,
+            "lostInstances": [
+              "af872bc4-42a8-48a1-b4e0-91f529c333c5:containerd://9d69ad353b38d1e08d19c0f6bcb281c9e310ae2832db82842fe5fc3b9b919879"
+            ],
+            "counterResets": [],
+            "components": {
+              "versionLoad": {
+                "count": 2349,
+                "sumMs": 202.4110280009918,
+                "meanMs": 0.08616902000893648
+              },
+              "extraction": {
+                "count": 2349,
+                "sumMs": 43.90246900287457,
+                "meanMs": 0.01868985483306708
+              },
+              "evaluator": {
+                "count": 2349,
+                "sumMs": 209.2414489965886,
+                "meanMs": 0.0890768194962063
+              },
+              "policyLookup": {
+                "count": 2349,
+                "sumMs": 8.053282998269424,
+                "meanMs": 0.0034283878238694867
+              },
+              "responderSnapshot": {
+                "count": 2349,
+                "sumMs": 8118.572398999706,
+                "meanMs": 3.456182375053089
+              },
+              "decisionPersistence": {
+                "count": 2349,
+                "sumMs": 19386.021095990436,
+                "meanMs": 8.25288254405723
+              },
+              "tracePersistence": {
+                "count": 2349,
+                "sumMs": 10458.794225996826,
+                "meanMs": 4.452445392080386
+              },
+              "incidentTransaction": {
+                "count": 2349,
+                "sumMs": 308147.9861309977,
+                "meanMs": 131.1826250025533
+              }
+            },
+            "scrapeErrors": [],
+            "rawHistogramEvidence": "artifacts/load-certification/automation/kind-helm-split-audit28-review-boundaries-interleaved-20rps/profiles.json"
+          }
+        },
+        {
+          "profile": "global-off",
+          "runId": "07-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 4838,
+          "recoveryDrainMs": 130602,
+          "criticalNotificationLatency": {
+            "p95Ms": 205,
+            "p99Ms": 311.81999999999994,
+            "sent": 7319,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0,
+          "componentTimings": {
+            "complete": true,
+            "lostInstances": [],
+            "counterResets": [],
+            "components": {
+              "versionLoad": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "extraction": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "evaluator": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "policyLookup": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "responderSnapshot": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "decisionPersistence": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "tracePersistence": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "incidentTransaction": {
+                "count": 2401,
+                "sumMs": 157426.82920599586,
+                "meanMs": 65.56719250562094
+              }
+            },
+            "scrapeErrors": [],
+            "rawHistogramEvidence": "artifacts/load-certification/automation/kind-helm-split-audit28-review-boundaries-interleaved-20rps/profiles.json"
+          }
+        },
+        {
+          "profile": "live-medium",
+          "runId": "08-live-medium",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 2401,
+          "traceJsonBytes": 1929171,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 4826,
+          "recoveryDrainMs": 136421,
+          "criticalNotificationLatency": {
+            "p95Ms": 183,
+            "p99Ms": 265.8399999999999,
+            "sent": 7517,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 13.94087499997113,
+          "deadlocksDelta": 0,
+          "componentTimings": {
+            "complete": true,
+            "lostInstances": [],
+            "counterResets": [],
+            "components": {
+              "versionLoad": {
+                "count": 2401,
+                "sumMs": 381.3812910001725,
+                "meanMs": 0.1588426867972397
+              },
+              "extraction": {
+                "count": 2401,
+                "sumMs": 44.447876994498074,
+                "meanMs": 0.018512235316325728
+              },
+              "evaluator": {
+                "count": 2401,
+                "sumMs": 298.954657999333,
+                "meanMs": 0.1245125605994723
+              },
+              "policyLookup": {
+                "count": 2401,
+                "sumMs": 1.9057639937382191,
+                "meanMs": 0.0007937376067214573
+              },
+              "responderSnapshot": {
+                "count": 2401,
+                "sumMs": 4125.488761006622,
+                "meanMs": 1.7182377180369104
+              },
+              "decisionPersistence": {
+                "count": 2401,
+                "sumMs": 17401.32566299115,
+                "meanMs": 7.247532554348666
+              },
+              "tracePersistence": {
+                "count": 2401,
+                "sumMs": 7006.390341002494,
+                "meanMs": 2.918113428155974
+              },
+              "incidentTransaction": {
+                "count": 2401,
+                "sumMs": 174133.7576879979,
+                "meanMs": 72.52551340607992
+              }
+            },
+            "scrapeErrors": [],
+            "rawHistogramEvidence": "artifacts/load-certification/automation/kind-helm-split-audit28-review-boundaries-interleaved-20rps/profiles.json"
+          }
+        },
+        {
+          "profile": "global-off",
+          "runId": "09-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 3943,
+          "recoveryDrainMs": 167288,
+          "criticalNotificationLatency": {
+            "p95Ms": 312.2499999999998,
+            "p99Ms": 486.84999999999997,
+            "sent": 5216,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0,
+          "componentTimings": {
+            "complete": true,
+            "lostInstances": [],
+            "counterResets": [],
+            "components": {
+              "versionLoad": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "extraction": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "evaluator": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "policyLookup": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "responderSnapshot": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "decisionPersistence": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "tracePersistence": {
+                "count": 0,
+                "sumMs": 0,
+                "meanMs": null
+              },
+              "incidentTransaction": {
+                "count": 2401,
+                "sumMs": 268626.08205399953,
+                "meanMs": 111.880917140358
+              }
+            },
+            "scrapeErrors": [],
+            "rawHistogramEvidence": "artifacts/load-certification/automation/kind-helm-split-audit28-review-boundaries-interleaved-20rps/profiles.json"
+          }
+        },
+        {
+          "profile": "live-worst",
+          "runId": "10-live-worst",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 2401,
+          "traceJsonBytes": 3750867,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 3873,
+          "recoveryDrainMs": 168543,
+          "criticalNotificationLatency": {
+            "p95Ms": 271,
+            "p99Ms": 409.5599999999999,
+            "sent": 5473,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 38.71054199989885,
+          "deadlocksDelta": 0,
+          "componentTimings": {
+            "complete": true,
+            "lostInstances": [],
+            "counterResets": [],
+            "components": {
+              "versionLoad": {
+                "count": 2401,
+                "sumMs": 2117.63003498991,
+                "meanMs": 0.8819783569304083
+              },
+              "extraction": {
+                "count": 2401,
+                "sumMs": 177.43934298912063,
+                "meanMs": 0.07390226696756377
+              },
+              "evaluator": {
+                "count": 2401,
+                "sumMs": 1108.3394929950591,
+                "meanMs": 0.4616157821720363
+              },
+              "policyLookup": {
+                "count": 2401,
+                "sumMs": 2.0600040045101196,
+                "meanMs": 0.0008579775112495291
+              },
+              "responderSnapshot": {
+                "count": 2401,
+                "sumMs": 7055.783970986726,
+                "meanMs": 2.938685535604634
+              },
+              "decisionPersistence": {
+                "count": 2401,
+                "sumMs": 42730.76110099931,
+                "meanMs": 17.797068346938488
+              },
+              "tracePersistence": {
+                "count": 2401,
+                "sumMs": 13728.707549993647,
+                "meanMs": 5.7179123490185955
+              },
+              "incidentTransaction": {
+                "count": 2401,
+                "sumMs": 366169.3822609943,
+                "meanMs": 152.50703134568693
+              }
+            },
+            "scrapeErrors": [],
+            "rawHistogramEvidence": "artifacts/load-certification/automation/kind-helm-split-audit28-review-boundaries-interleaved-20rps/profiles.json"
+          }
+        }
+      ],
+      "timingScope": "Policy lookup currently measures conditional selected-policy lookup; initial service/default-policy reads remain included in the whole incident transaction. Deleted-pod metrics are explicitly partial."
     }
   ],
   "initialImage": "opsknight-automation:audit2",
