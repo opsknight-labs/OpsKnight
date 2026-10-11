@@ -3653,6 +3653,7 @@ model RunbookStepAttempt {
   targetAgentId     String?
   targetAgentPoolId String?
   claimedAgentId    String?
+  claimedAt         DateTime?
   leaseToken        String?
   leaseExpiresAt    DateTime?
   availableAt       DateTime             @default(now())

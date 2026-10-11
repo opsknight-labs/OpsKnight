@@ -1,5 +1,10 @@
 'use client';
 
+import {
+  conditionValueType,
+  normalizeConditionValue,
+  supportedConditionOperators,
+} from '@/lib/runbooks/conditions';
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
 import { FormSelect } from '../../RunbookControls';
@@ -87,21 +92,18 @@ export default function ConditionActionEditor({
   };
 
   const handleFieldChange = (nextField: string) => {
-    const nextTargetInput = inputs.find(
-      inp => nextField === `input.${inp.key}` || nextField === `inputs.${inp.key}`
-    );
-    let nextValue = config.value;
-    if (valueString !== '' && !['EXISTS', 'NOT_EXISTS'].includes(operator)) {
-      if (nextTargetInput?.type === 'NUMBER') {
-        if (!isNaN(Number(valueString))) {
-          nextValue = Number(valueString);
-        }
-      } else if (nextTargetInput?.type === 'BOOLEAN') {
-        if (valueString.toLowerCase() === 'true') nextValue = true;
-        else if (valueString.toLowerCase() === 'false') nextValue = false;
-      }
-    }
-    onChange({ ...config, field: nextField, value: nextValue });
+    const previousType = conditionValueType(field, inputs);
+    const nextType = conditionValueType(nextField, inputs);
+    const nextOperator = supportedConditionOperators(nextType).includes(operator)
+      ? operator
+      : 'EQUALS';
+    const nextValue = normalizeConditionValue({
+      previousValue: config.value,
+      previousType,
+      nextType,
+      operator: nextOperator,
+    });
+    onChange({ ...config, field: nextField, operator: nextOperator, value: nextValue });
   };
 
   const handleOperatorChange = (nextOp: string) => {
@@ -172,7 +174,11 @@ export default function ConditionActionEditor({
               value={operator}
               disabled={readOnly}
               onValueChange={handleOperatorChange}
-              options={CONDITION_OPERATORS}
+              options={CONDITION_OPERATORS.filter(option =>
+                supportedConditionOperators(conditionValueType(field, inputs)).includes(
+                  option.value
+                )
+              )}
             />
           </div>
           {errors.operator && <p className="mt-1 text-xs text-destructive">{errors.operator}</p>}

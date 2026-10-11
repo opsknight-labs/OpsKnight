@@ -1,14 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import {
-  AlertTriangle,
-  Code2,
-  ListOrdered,
-  Plus,
-  ShieldCheck,
-  Trash2,
-} from 'lucide-react';
+import { useEffect, useId, useMemo, useState } from 'react';
+import { AlertTriangle, Code2, ListOrdered, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import DetailTabs from '@/components/ui/DetailTabs';
 import EmptyState from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/shadcn/button';
@@ -27,14 +20,15 @@ import {
   runbookInputsSchema,
   type RunbookInputInput,
 } from '@/lib/runbooks/schemas';
-import { cloneStepRecursively, newBuilderStep } from '@/lib/runbooks/builder';
-import { flattenSteps, referencedStepInputKeys } from '@/lib/runbooks/definition';
 import {
-  ActionForm,
-  FormSelect,
-  SubmitButton,
-  type RunbookFormAction,
-} from './RunbookControls';
+  normalizeConditionValue,
+  conditionValueType,
+  supportedConditionOperators,
+} from '@/lib/runbooks/conditions';
+import { rewriteInputReferences } from '@/lib/runbooks/input-references';
+import { cloneStepRecursively, newBuilderStep } from '@/lib/runbooks/builder';
+import { flattenSteps, referencedStepInputKeys } from '@/lib/runbooks/shared-definition';
+import { ActionForm, FormSelect, SubmitButton, type RunbookFormAction } from './RunbookControls';
 
 import StepNavigator from './builder/StepNavigator';
 import StepEditor from './builder/StepEditor';
@@ -89,101 +83,47 @@ export function getNextUnusedInputKey(
   return `input_${counter}`;
 }
 
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-export function refactorInputReference(
-  def: RunbookDefinition,
-  oldKey: string,
-  newKey: string
-): RunbookDefinition {
-  if (!oldKey || !newKey || oldKey === newKey) return def;
-
-  const escapedOld = escapeRegex(oldKey);
-  const oldTemplateRegex = new RegExp(`\\$\\{\\{\\s*inputs\\.${escapedOld}\\s*\\}\\}`, 'g');
-  const newTemplate = `\${{ inputs.${newKey} }}`;
-
-  const oldUpper = oldKey.toUpperCase();
-  const newUpper = newKey.toUpperCase();
-  const escapedOldUpper = escapeRegex(oldUpper);
-  const bashWordRegex = new RegExp(`\\bOPSKNIGHT_INPUT_${escapedOldUpper}\\b`, 'g');
-
-  function replaceInStep(step: RunbookStepDefinition): RunbookStepDefinition {
-    // 1. Config serialization replacement for embedded templates
-    let serialized = JSON.stringify(step.config);
-    serialized = serialized.replace(oldTemplateRegex, newTemplate);
-    const newConfig: Record<string, unknown> = JSON.parse(serialized);
-
-    // 2. Condition fields: input.oldKey -> input.newKey
-    if (step.type === 'CONDITION' && typeof newConfig.field === 'string') {
-      if (newConfig.field === `input.${oldKey}`) {
-        newConfig.field = `input.${newKey}`;
-      } else if (newConfig.field === `inputs.${oldKey}`) {
-        newConfig.field = `inputs.${newKey}`;
-      }
-    }
-
-    // 3. Bash environment references: bare, $, ${}, %
-    if (step.type === 'BASH' && typeof newConfig.command === 'string') {
-      newConfig.command = newConfig.command.replace(bashWordRegex, `OPSKNIGHT_INPUT_${newUpper}`);
-    }
-
-    // 4. Update step name or description if template was used
-    const newName = step.name ? step.name.replace(oldTemplateRegex, newTemplate) : step.name;
-    const newDesc = step.description
-      ? step.description.replace(oldTemplateRegex, newTemplate)
-      : step.description;
-
-    const updated: RunbookStepDefinition = {
-      ...step,
-      name: newName,
-      description: newDesc,
-      config: newConfig,
-    };
-
-    if (updated.precheck?.steps) {
-      updated.precheck = {
-        ...updated.precheck,
-        steps: updated.precheck.steps.map(replaceInStep),
-      };
-    }
-    if (updated.verification?.steps) {
-      updated.verification = {
-        ...updated.verification,
-        steps: updated.verification.steps.map(replaceInStep),
-      };
-    }
-    return updated;
-  }
-
-  return {
-    ...def,
-    steps: def.steps.map(replaceInStep),
-  };
-}
+export { rewriteInputReferences as refactorInputReference } from '@/lib/runbooks/input-references';
 
 export default function RunbookBuilder({
   initialDefinition,
   initialInputs,
   initialDraftRevision = 0,
+  initialEditorTab = 'builder',
+  initialStepIdentities,
+  initialInputIdentities,
   action,
   readOnly = false,
 }: {
   initialDefinition: RunbookDefinition;
   initialInputs: RunbookInputInput[];
   initialDraftRevision?: number;
+  initialEditorTab?: string;
+  initialStepIdentities?: string[];
+  initialInputIdentities?: string[];
   action: RunbookFormAction;
   readOnly?: boolean;
 }) {
-  const [definition, setDefinition] = useState(initialDefinition);
+  const editorSeed = useId();
+  const [editor, setEditor] = useState({ definition: initialDefinition, inputs: initialInputs });
+  const { definition, inputs } = editor;
+  const setDefinition = (next: RunbookDefinition) =>
+    setEditor(prev => ({ ...prev, definition: next }));
+  const setInputs = (next: RunbookInputInput[]) => setEditor(prev => ({ ...prev, inputs: next }));
+  const [pendingKeys, setPendingKeys] = useState<Map<string, string>>(new Map());
+  const [renameErrors, setRenameErrors] = useState<Map<string, string>>(new Map());
   const [draftRevision, setDraftRevision] = useState(initialDraftRevision);
-  const [stepIdentities, setStepIdentities] = useState<string[]>(() =>
-    initialDefinition.steps.map(() => crypto.randomUUID())
+  const [stepIdentities, setStepIdentities] = useState<string[]>(
+    () =>
+      initialStepIdentities ??
+      initialDefinition.steps.map((_, index) => `${editorSeed}-step-${index}`)
   );
+  const [expandedChecks, setExpandedChecks] = useState<Set<string>>(new Set());
+  const [mobileEditorOpen, setMobileEditorOpen] = useState(false);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
-  const [inputs, setInputs] = useState(initialInputs);
-  const [initialIdentities] = useState(() => initialInputs.map(() => crypto.randomUUID()));
+  const [initialIdentities] = useState(
+    () => initialInputIdentities ?? initialInputs.map((_, index) => `${editorSeed}-input-${index}`)
+  );
   const [inputIdentities, setInputIdentities] = useState<string[]>(initialIdentities);
   const [committedInputKeys, setCommittedInputKeys] = useState<Map<string, string>>(() => {
     const map = new Map<string, string>();
@@ -193,7 +133,10 @@ export default function RunbookBuilder({
     return map;
   });
   const [dirty, setDirty] = useState(false);
-  const [activeTab, setActiveTab] = useState('builder');
+  const [validationMessage, setValidationMessage] = useState('');
+  const [activeTab, setActiveTab] = useState(
+    ['builder', 'inputs', 'advanced'].includes(initialEditorTab) ? initialEditorTab : 'builder'
+  );
   const [advancedDefinition, setAdvancedDefinition] = useState(
     JSON.stringify(initialDefinition, null, 2)
   );
@@ -202,19 +145,88 @@ export default function RunbookBuilder({
   const [unappliedJson, setUnappliedJson] = useState(false);
 
   // Compute live validation results
-  const { stepErrors, inputErrors, generalInputErrors, errorCount } = validateRunbook(
-    definition,
-    inputs
+  const { stepErrors, inputErrors, generalInputErrors, errorCount } = useMemo(
+    () => validateRunbook(definition, inputs),
+    [definition, inputs]
   );
+
+  useEffect(() => {
+    if (!dirty && !unappliedJson && pendingKeys.size === 0) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    const guard = (event: MouseEvent) => {
+      const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+      // Native confirmation also covers navigation links outside the builder.
+      if (
+        link &&
+        !link.getAttribute('href')?.startsWith('#') &&
+        // eslint-disable-next-line no-alert
+        !window.confirm('Leave this draft and discard unsaved changes?')
+      )
+        event.preventDefault();
+    };
+    window.addEventListener('beforeunload', warn);
+    document.addEventListener('click', guard, true);
+    return () => {
+      window.removeEventListener('beforeunload', warn);
+      document.removeEventListener('click', guard, true);
+    };
+  }, [dirty, unappliedJson, pendingKeys.size]);
+
+  function commitInputKey(identity: string, index: number) {
+    const nextKey = pendingKeys.get(identity)?.trim();
+    if (nextKey === undefined) return;
+    const occupied = inputs.some(
+      (input, position) =>
+        position !== index &&
+        (input.key === nextKey ||
+          pendingKeys.get(inputIdentities.at(position) ?? '')?.trim() === nextKey)
+    );
+    if (!/^[a-z0-9_]{1,80}$/.test(nextKey) || occupied) {
+      setRenameErrors(prev =>
+        new Map(prev).set(
+          identity,
+          occupied
+            ? 'Another input already uses or is editing this key.'
+            : 'Use 1–80 lowercase letters, numbers or underscores.'
+        )
+      );
+      return;
+    }
+    setEditor(prev => {
+      const current = prev.inputs.at(index);
+      if (!current) return prev;
+      return {
+        definition: rewriteInputReferences(prev.definition, current.key, nextKey),
+        inputs: prev.inputs.map((input, position) =>
+          position === index ? { ...input, key: nextKey } : input
+        ),
+      };
+    });
+    setCommittedInputKeys(prev => new Map(prev).set(identity, nextKey));
+    setPendingKeys(prev => {
+      const next = new Map(prev);
+      next.delete(identity);
+      return next;
+    });
+    setRenameErrors(prev => {
+      const next = new Map(prev);
+      next.delete(identity);
+      return next;
+    });
+    setDirty(true);
+  }
 
   // Derive active index and selected step from stable selectedStepId
   const foundIndex = selectedStepId ? stepIdentities.indexOf(selectedStepId) : -1;
-  const selectedStepIndex =
-    foundIndex >= 0 ? foundIndex : definition.steps.length > 0 ? 0 : 0;
+  const selectedStepIndex = foundIndex >= 0 ? foundIndex : definition.steps.length > 0 ? 0 : 0;
   const selectedStep = definition.steps.at(selectedStepIndex);
   const activeStepId = stepIdentities.at(selectedStepIndex) ?? selectedStep?.key ?? 'active-step';
 
   function handleSelectStep(index: number) {
+    setMobileEditorOpen(true);
     const id = stepIdentities.at(index);
     if (id) {
       setSelectedStepId(id);
@@ -338,17 +350,24 @@ export default function RunbookBuilder({
     setDirty(true);
   }
 
+  useEffect(() => {
+    if (selectedStepId) document.getElementById(`step-heading-${selectedStepId}`)?.focus();
+  }, [selectedStepId]);
+
   const builderView = (
     <div className="space-y-6">
       <div className="rounded-xl border bg-muted/20 p-3 sm:p-4 text-xs text-muted-foreground hidden sm:flex flex-wrap items-center justify-between gap-3">
         <span>
-          Steps execute in strict top-to-bottom sequence. Mutations require explicit approval or non-idempotent safeguards. Agent policy remains authoritative.
+          Steps execute in strict top-to-bottom sequence. Mutations require explicit approval or
+          non-idempotent safeguards. Agent policy remains authoritative.
         </span>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* Left column: Step navigator */}
-        <div className="lg:col-span-5 xl:col-span-4 min-w-0">
+        <div
+          className={`lg:col-span-5 xl:col-span-4 min-w-0 ${mobileEditorOpen ? 'hidden lg:block' : 'block'}`}
+        >
           <StepNavigator
             steps={definition.steps}
             stepIdentities={stepIdentities}
@@ -364,12 +383,26 @@ export default function RunbookBuilder({
         </div>
 
         {/* Right column: Active step editor */}
-        <div className="lg:col-span-7 xl:col-span-8 min-w-0">
+        <div
+          className={`lg:col-span-7 xl:col-span-8 min-w-0 ${mobileEditorOpen ? 'block' : 'hidden lg:block'}`}
+        >
+          <Button
+            type="button"
+            variant="outline"
+            className="mb-3 min-h-11 lg:hidden"
+            onClick={() => setMobileEditorOpen(false)}
+          >
+            Back to steps
+          </Button>
           {selectedStep ? (
             <div className="rounded-xl border bg-card p-4 sm:p-6 shadow-2xs space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
                 <div>
-                  <h2 className="text-base font-semibold text-foreground">
+                  <h2
+                    id={`step-heading-${activeStepId}`}
+                    tabIndex={-1}
+                    className="text-base font-semibold text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                  >
                     Step {selectedStepIndex + 1}: {selectedStep.name || 'Untitled step'}
                   </h2>
                   <p className="text-xs text-muted-foreground mt-0.5 font-mono">
@@ -399,6 +432,16 @@ export default function RunbookBuilder({
                 inputs={inputs}
                 editorId={activeStepId}
                 depth={1}
+                expandedChecks={expandedChecks}
+                onToggleCheck={(key, open) =>
+                  setExpandedChecks(prev => {
+                    if (prev.has(key) === open) return prev;
+                    const next = new Set(prev);
+                    if (open) next.add(key);
+                    else next.delete(key);
+                    return next;
+                  })
+                }
                 errors={stepErrors.get(selectedStepIndex) ?? {}}
                 readOnly={readOnly}
                 onChange={patch => updateStep(selectedStepIndex, patch)}
@@ -432,7 +475,8 @@ export default function RunbookBuilder({
   const inputEditor = (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Define reusable parameters for this runbook. Parameters can be bound to services, passed at manual launch, or evaluated from incident metadata.
+        Define reusable parameters for this runbook. Parameters can be bound to services, passed at
+        manual launch, or evaluated from incident metadata.
       </p>
       {generalInputErrors.length > 0 && (
         <div
@@ -456,29 +500,56 @@ export default function RunbookBuilder({
         const usage = getInputUsage(definition, effectiveKey);
 
         const update = (patch: Partial<RunbookInputInput>) => {
-          let nextDef = definition;
-          const lastKey = committedInputKeys.get(identity) || input.key;
-
-          if (patch.key !== undefined) {
-            const nextKey = patch.key.trim();
-            const otherExistingKeys = new Set(
-              inputs.filter((_, pos) => pos !== index).map(item => item.key)
-            );
-            if (nextKey !== '' && /^[a-z0-9_]+$/.test(nextKey) && !otherExistingKeys.has(nextKey)) {
-              if (lastKey && lastKey !== nextKey) {
-                nextDef = refactorInputReference(definition, lastKey, nextKey);
-                setDefinition(nextDef);
-                setCommittedInputKeys(prev => new Map(prev).set(identity, nextKey));
-              }
-            }
-          }
-
           const nextInputs = inputs.map((item, position) =>
             position === index ? { ...item, ...patch } : item
           );
-          setInputs(nextInputs);
+          let nextDefinition = definition;
+          if (patch.type && patch.type !== input.type) {
+            const normalize = (step: RunbookStepDefinition): RunbookStepDefinition => {
+              let config = step.config;
+              if (
+                step.type === 'CONDITION' &&
+                [`input.${input.key}`, `inputs.${input.key}`].includes(String(config.field))
+              ) {
+                const previousType = conditionValueType(String(config.field), inputs);
+                const nextType = conditionValueType(String(config.field), nextInputs);
+                const operator = supportedConditionOperators(nextType).includes(
+                  String(config.operator)
+                )
+                  ? String(config.operator)
+                  : 'EQUALS';
+                config = {
+                  ...config,
+                  operator,
+                  value: normalizeConditionValue({
+                    previousValue: config.value,
+                    previousType,
+                    nextType,
+                    operator,
+                  }),
+                };
+              }
+              return {
+                ...step,
+                config,
+                ...(step.precheck
+                  ? { precheck: { ...step.precheck, steps: step.precheck.steps.map(normalize) } }
+                  : {}),
+                ...(step.verification
+                  ? {
+                      verification: {
+                        ...step.verification,
+                        steps: step.verification.steps.map(normalize),
+                      },
+                    }
+                  : {}),
+              };
+            };
+            nextDefinition = { ...definition, steps: definition.steps.map(normalize) };
+          }
+          setEditor({ definition: nextDefinition, inputs: nextInputs });
           if (!unappliedJson) {
-            setAdvancedDefinition(JSON.stringify(nextDef, null, 2));
+            setAdvancedDefinition(JSON.stringify(nextDefinition, null, 2));
             setAdvancedInputs(JSON.stringify(nextInputs, null, 2));
           }
           setDirty(true);
@@ -497,11 +568,31 @@ export default function RunbookBuilder({
               <Label>Key</Label>
               <Input
                 aria-label={`Input ${index + 1} key`}
-                value={input.key}
+                value={pendingKeys.get(identity) ?? input.key}
                 disabled={readOnly}
-                onChange={e => update({ key: e.target.value })}
-                className={currentErrors?.key ? 'border-destructive' : ''}
+                onChange={e => {
+                  setPendingKeys(prev => new Map(prev).set(identity, e.target.value));
+                  setDirty(true);
+                }}
+                onBlur={() => commitInputKey(identity, index)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitInputKey(identity, index);
+                  }
+                }}
+                className={
+                  renameErrors.has(identity) || currentErrors?.key ? 'border-destructive' : ''
+                }
               />
+              {renameErrors.has(identity) && (
+                <p role="alert" className="text-xs text-destructive">
+                  {renameErrors.get(identity)}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Rename applies on blur or Enter. References change together.
+              </p>
               {currentErrors?.key && (
                 <p className="text-xs text-destructive">{currentErrors.key}</p>
               )}
@@ -539,9 +630,14 @@ export default function RunbookBuilder({
                 aria-label={`Input ${index + 1} default`}
                 value={input.defaultValue ?? ''}
                 disabled={readOnly}
-                onChange={e => update({ defaultValue: e.target.value || undefined })}
+                onChange={e => update({ defaultValue: e.target.value })}
               />
             </div>
+            {currentErrors?.general && (
+              <p role="alert" className="text-xs text-destructive sm:col-span-2">
+                {currentErrors.general}
+              </p>
+            )}
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Help text</Label>
               <Input
@@ -580,6 +676,16 @@ export default function RunbookBuilder({
                   }`}
                   onClick={() => {
                     if (usage.isReferenced) return;
+                    setPendingKeys(prev => {
+                      const next = new Map(prev);
+                      next.delete(identity);
+                      return next;
+                    });
+                    setRenameErrors(prev => {
+                      const next = new Map(prev);
+                      next.delete(identity);
+                      return next;
+                    });
                     setCommittedInputKeys(prev => {
                       const next = new Map(prev);
                       next.delete(identity);
@@ -606,7 +712,8 @@ export default function RunbookBuilder({
               >
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
                 <span>
-                  Referenced by <strong>{usage.stepNames.join(', ')}</strong>. Remove references from those steps before deleting this parameter.
+                  Referenced by <strong>{usage.stepNames.join(', ')}</strong>. Remove references
+                  from those steps before deleting this parameter.
                 </span>
               </div>
             )}
@@ -629,7 +736,14 @@ export default function RunbookBuilder({
           size="sm"
           className="text-xs font-semibold"
           onClick={() => {
-            const nextKey = getNextUnusedInputKey(inputs, definition);
+            const reserved = [
+              ...inputs,
+              ...inputs.map((input, index) => ({
+                ...input,
+                key: pendingKeys.get(inputIdentities.at(index) ?? '') ?? input.key,
+              })),
+            ];
+            const nextKey = getNextUnusedInputKey(reserved, definition);
             const newId = crypto.randomUUID();
             setCommittedInputKeys(prev => new Map(prev).set(newId, nextKey));
             const nextInputs = [
@@ -675,8 +789,9 @@ export default function RunbookBuilder({
           </p>
           <p>
             You have unapplied edits in the JSON editor and modifications in the visual builder.
-            Click <strong>Apply JSON to builder</strong> to overwrite visual edits with the JSON above,
-            or click <strong>Refresh JSON from builder</strong> to discard unapplied JSON edits.
+            Click <strong>Apply JSON to builder</strong> to overwrite visual edits with the JSON
+            above, or click <strong>Refresh JSON from builder</strong> to discard unapplied JSON
+            edits.
           </p>
         </div>
       )}
@@ -687,6 +802,8 @@ export default function RunbookBuilder({
         size="sm"
         className="text-xs"
         onClick={() => {
+          // eslint-disable-next-line no-alert -- Explicit protection against discarding JSON edits.
+          if (unappliedJson && !window.confirm('Discard unapplied JSON changes?')) return;
           setAdvancedDefinition(JSON.stringify(definition, null, 2));
           setAdvancedInputs(JSON.stringify(inputs, null, 2));
           setJsonError('');
@@ -734,16 +851,40 @@ export default function RunbookBuilder({
           className="text-xs font-semibold"
           onClick={() => {
             try {
+              if (
+                unappliedJson &&
+                dirty &&
+                // eslint-disable-next-line no-alert -- Explicit protection against overwriting a modified draft.
+                !window.confirm('Replace the visual draft with this JSON?')
+              )
+                return;
               const parsedDefinition = runbookDefinitionSchema.parse(
                 JSON.parse(advancedDefinition)
               );
               const parsedInputs = runbookInputsSchema.parse(JSON.parse(advancedInputs));
-              setDefinition(parsedDefinition as RunbookDefinition);
-              const newIds = parsedDefinition.steps.map(() => crypto.randomUUID());
+              setEditor({
+                definition: parsedDefinition as RunbookDefinition,
+                inputs: parsedInputs,
+              });
+              setPendingKeys(new Map());
+              setRenameErrors(new Map());
+              const newIds = parsedDefinition.steps.map(
+                step =>
+                  stepIdentities[
+                    definition.steps.findIndex(existing => existing.key === step.key)
+                  ] ?? crypto.randomUUID()
+              );
               setStepIdentities(newIds);
-              setSelectedStepId(newIds.at(0) ?? null);
-              setInputs(parsedInputs);
-              const newInputIds = parsedInputs.map(() => crypto.randomUUID());
+              setSelectedStepId(
+                selectedStepId && newIds.includes(selectedStepId)
+                  ? selectedStepId
+                  : (newIds.at(0) ?? null)
+              );
+              const newInputIds = parsedInputs.map(
+                input =>
+                  inputIdentities[inputs.findIndex(existing => existing.key === input.key)] ??
+                  crypto.randomUUID()
+              );
               setInputIdentities(newInputIds);
               const newCommitted = new Map<string, string>();
               parsedInputs.forEach((inp, idx) => {
@@ -776,7 +917,7 @@ export default function RunbookBuilder({
   return (
     <ActionForm
       action={action}
-      className="space-y-6"
+      className="space-y-6 max-sm:[&_input]:min-h-11 max-sm:[&_button]:min-h-11 max-sm:[&_[role=combobox]]:min-h-11"
       onSuccess={result => {
         setDirty(false);
         if (typeof result?.draftRevision === 'number') {
@@ -822,10 +963,32 @@ export default function RunbookBuilder({
 
       {!readOnly && (
         <div className="flex flex-wrap items-center gap-3 border-t pt-4">
-          <SubmitButton pendingLabel="Saving draft…" disabled={unappliedJson}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (errorCount > 0) handleNavigateToStep(0);
+              setValidationMessage(
+                errorCount > 0
+                  ? 'Draft has configuration issues. Review the checks below.'
+                  : 'Draft configuration checks passed. Validation does not execute actions or check live Agent policy.'
+              );
+            }}
+          >
+            Validate draft
+          </Button>
+          <SubmitButton
+            pendingLabel="Saving draft…"
+            disabled={unappliedJson || pendingKeys.size > 0 || errorCount > 0}
+          >
             <ShieldCheck className="h-4 w-4" />
             Save draft
           </SubmitButton>
+          {validationMessage && (
+            <p role="status" className="text-xs text-muted-foreground">
+              {validationMessage}
+            </p>
+          )}
           <span aria-live="polite" className="text-xs text-muted-foreground font-medium">
             {dirty ? 'Unsaved changes' : 'Saved draft'}
           </span>

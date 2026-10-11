@@ -6,7 +6,7 @@ product_area: runbooks
 audience: [administrator, operator, developer]
 verification:
   level: source
-  verified_at: 2026-10-04
+  verified_at: 2026-10-11
   evidence: [src/lib/runbooks/types.ts, src/lib/runbooks/definition.ts, src/lib/runbooks/schemas.ts, src/lib/authorization.ts]
 ---
 
@@ -143,7 +143,19 @@ Stored triggers with invalid paths are suppressed before matching, including
 A false CONDITION skips itself and all remaining pending workflow steps.
 It is a workflow gate, not an if/else branch. Operators use strict type
 comparison: numeric inputs require JSON numbers, not quoted strings.
-Use Advanced JSON for non-string comparison values.
+The condition editor produces typed scalar and list values. Changing a field
+normalizes each comparison value or clears it for re-entry. STRING comparisons
+support equals, not equals, contains, starts with, in and not in; NUMBER and
+BOOLEAN support equals, not equals, in and not in. EXISTS and NOT_EXISTS clear
+the comparison. Incident tags support CONTAINS with a string member, and existence
+checks. Missing fields never satisfy value comparisons, including negative ones.
+Automatic incident triggers retain strict comparison behavior.
+
+HTTP actions accept a string-valued headers object and optional expected status
+from 100–599. Without an expected status, any 2xx response succeeds. GET and HEAD
+cannot contain request bodies. Control-plane HTTP cannot consume SECRET_REF
+inputs. WAIT uses an integer `durationSeconds` from 0–86400, subject to its step
+timeout and overall deadline. Fields named `seconds` are not WAIT duration controls.
 
 Control-plane HTTP steps reject private, loopback, link-local, and metadata
 endpoints through safe outbound fetching. Internal remediation needs an

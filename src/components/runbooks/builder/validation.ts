@@ -1,6 +1,8 @@
+import { conditionValueType, validateConditionComparison } from '@/lib/runbooks/conditions';
+import { validateAuthoringDefinition } from '@/lib/runbooks/authoring-validation';
 import type { RunbookDefinition, RunbookStepDefinition } from '@/lib/runbooks/types';
 import { runbookInputsSchema, type RunbookInputInput } from '@/lib/runbooks/schemas';
-import { flattenSteps, referencedStepInputKeys } from '@/lib/runbooks/definition';
+import { flattenSteps, referencedStepInputKeys } from '@/lib/runbooks/shared-definition';
 
 export const INPUT_TEMPLATE = /^\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}$/;
 export const SYSTEMD_UNIT =
@@ -53,7 +55,11 @@ export function validateStep(
   }
 
   if (step.timeoutSeconds !== undefined) {
-    if (!Number.isInteger(step.timeoutSeconds) || step.timeoutSeconds < 1 || step.timeoutSeconds > 86400) {
+    if (
+      !Number.isInteger(step.timeoutSeconds) ||
+      step.timeoutSeconds < 1 ||
+      step.timeoutSeconds > 86400
+    ) {
       errors.timeoutSeconds = 'Timeout must be an integer between 1 and 86,400 seconds.';
     }
   }
@@ -62,7 +68,6 @@ export function validateStep(
   const config = step.config ?? {};
 
   switch (step.type) {
-
     case 'HTTP': {
       const method = String(config.method ?? 'GET').toUpperCase();
       if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
@@ -80,14 +85,19 @@ export function validateStep(
             errors.url = 'HTTP URL must not contain embedded credentials.';
           }
         } catch {
-          errors.url = 'Invalid URL format. Use full URL (e.g., https://api.service/health) or ${{ inputs.key }}.';
+          errors.url =
+            'Invalid URL format. Use full URL (e.g., https://api.service/health) or ${{ inputs.key }}.';
         }
       } else {
         const templateErr = checkInputTemplate(url, inputs);
         if (templateErr) errors.url = templateErr;
       }
       if (config.headers !== undefined) {
-        if (typeof config.headers !== 'object' || config.headers === null || Array.isArray(config.headers)) {
+        if (
+          typeof config.headers !== 'object' ||
+          config.headers === null ||
+          Array.isArray(config.headers)
+        ) {
           errors.headers = 'HTTP headers must be an object.';
         }
       }
@@ -193,12 +203,19 @@ export function validateStep(
 
       if (['logs', 'rollout-restart', 'rollout-status', 'scale'].includes(action) && !name) {
         errors.resourceName = `Resource name is required for Kubernetes ${action}.`;
-      } else if (name && (name.startsWith('-') || (!INPUT_TEMPLATE.test(name) && !KUBERNETES_NAME.test(name)))) {
+      } else if (
+        name &&
+        (name.startsWith('-') || (!INPUT_TEMPLATE.test(name) && !KUBERNETES_NAME.test(name)))
+      ) {
         errors.resourceName = 'Invalid resource name format (DNS-1123 label).';
       }
 
       if (action === 'scale') {
-        if (config.replicas === undefined || config.replicas === null || String(config.replicas).trim() === '') {
+        if (
+          config.replicas === undefined ||
+          config.replicas === null ||
+          String(config.replicas).trim() === ''
+        ) {
           errors.replicas = 'Desired replicas is required for scale action.';
         } else if (!INPUT_TEMPLATE.test(String(config.replicas).trim())) {
           const replicas = Number(config.replicas);
@@ -227,7 +244,11 @@ export function validateStep(
       } else if (diagnostic === 'tcp') {
         const host = String(config.host ?? '').trim();
         if (!host) errors.host = 'TCP host is required.';
-        if (config.port === undefined || config.port === null || String(config.port).trim() === '') {
+        if (
+          config.port === undefined ||
+          config.port === null ||
+          String(config.port).trim() === ''
+        ) {
           errors.port = 'TCP port is required.';
         } else {
           const port = Number(config.port);
@@ -290,12 +311,16 @@ export function validateStep(
     }
 
     case 'WAIT': {
-      if (config.durationSeconds === undefined || config.durationSeconds === null || String(config.durationSeconds).trim() === '') {
+      if (
+        config.durationSeconds === undefined ||
+        config.durationSeconds === null ||
+        String(config.durationSeconds).trim() === ''
+      ) {
         errors.durationSeconds = 'Duration in seconds is required.';
       } else {
         const duration = Number(config.durationSeconds);
-        if (!Number.isInteger(duration) || duration < 1 || duration > 3600) {
-          errors.durationSeconds = 'Duration must be an integer between 1 and 3,600 seconds.';
+        if (!Number.isInteger(duration) || duration < 0 || duration > 86400) {
+          errors.durationSeconds = 'Duration must be an integer between 0 and 86,400 seconds.';
         }
       }
       break;
@@ -304,6 +329,12 @@ export function validateStep(
     case 'CONDITION': {
       const field = String(config.field ?? '').trim();
       if (!field) errors.field = 'Condition field is required.';
+      const comparisonIssue = validateConditionComparison(
+        config,
+        conditionValueType(field, inputs),
+        inputs
+      );
+      if (comparisonIssue) errors.value = comparisonIssue;
       const operator = String(config.operator ?? 'EQUALS');
       if (['EXISTS', 'NOT_EXISTS'].includes(operator)) {
         // Unary operator, no value needed
@@ -312,7 +343,11 @@ export function validateStep(
           errors.value = 'In list comparison requires at least one value.';
         }
       } else {
-        if (config.value === undefined || config.value === null || String(config.value).trim() === '') {
+        if (
+          config.value === undefined ||
+          config.value === null ||
+          String(config.value).trim() === ''
+        ) {
           errors.value = 'Comparison value is required for this operator.';
         } else if (Array.isArray(config.value)) {
           errors.value = 'Comparison value must be a scalar string or number, not an array.';
@@ -437,6 +472,19 @@ export function validateRunbook(
       } else {
         generalInputErrors.push(issue.message);
       }
+    }
+  }
+
+  for (const issue of validateAuthoringDefinition(definition, inputs)) {
+    if (!generalInputErrors.includes(issue.message)) {
+      const index =
+        issue.path[1] === 'steps' && typeof issue.path[2] === 'number' ? issue.path[2] : undefined;
+      if (index !== undefined) {
+        const errors = stepErrors.get(index) ?? {};
+        errors.definition = issue.message;
+        stepErrors.set(index, errors);
+      } else generalInputErrors.push(issue.message);
+      errorCount++;
     }
   }
 

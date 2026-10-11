@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { getRunbookNavigationSummary } from '@/lib/runbooks/presentation/summaries';
 import { RunbookModuleNav } from '@/components/runbooks/RunbookModuleNav';
 import { RunbookPagination, runbookPageQuery } from '@/components/runbooks/RunbookPagination';
@@ -40,7 +41,13 @@ import { Textarea } from '@/components/ui/shadcn/textarea';
 import { formatDateTime, getUserTimeZone } from '@/lib/timezone';
 
 export const revalidate = 0;
-export default async function RunbookDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+export default async function RunbookDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await assertCapability(CAPABILITIES.RUNBOOK_READ_ALL);
   const { id } = await params;
   const { query, page: rawVersionPage } = runbookPageQuery(await searchParams);
@@ -57,8 +64,14 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
   });
   if (!runbookMeta) notFound();
 
-  const versionPage = Math.min(rawVersionPage, Math.max(1, Math.ceil(runbookMeta._count.versions / 20)));
-  const bindingPage = Math.min(rawBindingPage, Math.max(1, Math.ceil(runbookMeta._count.bindings / 20)));
+  const versionPage = Math.min(
+    rawVersionPage,
+    Math.max(1, Math.ceil(runbookMeta._count.versions / 20))
+  );
+  const bindingPage = Math.min(
+    rawBindingPage,
+    Math.max(1, Math.ceil(runbookMeta._count.bindings / 20))
+  );
 
   const [permissions, user, runbook, navigation] = await Promise.all([
     permissionsPromise,
@@ -103,11 +116,8 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
   const isArchived = Boolean(runbook.archivedAt);
   const hasManageCapability = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_MANAGE);
   const canManage = hasManageCapability && !isArchived;
-  const canPublish =
-    permissions.capabilities.includes(CAPABILITIES.RUNBOOK_PUBLISH) && !isArchived;
-  const deleteEligibility = hasManageCapability
-    ? await checkRunbookDeleteEligibility(id)
-    : null;
+  const canPublish = permissions.capabilities.includes(CAPABILITIES.RUNBOOK_PUBLISH) && !isArchived;
+  const deleteEligibility = hasManageCapability ? await checkRunbookDeleteEligibility(id) : null;
 
   const runbookSlug = runbook.slug;
   const runbookName = runbook.name;
@@ -130,7 +140,8 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
         return { error: err.message };
       }
       return {
-        error: 'This runbook cannot be deleted. Check its execution history and published versions, then try again.',
+        error:
+          'This runbook cannot be deleted. Check its execution history and published versions, then try again.',
       };
     }
     redirect('/runbooks');
@@ -140,7 +151,12 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
     'use server';
     await restoreRunbookAction(id);
   }
-  const selectedVersion = query.version ? await prisma.runbookVersion.findFirst({ where: { id: query.version, runbookId: id }, include: { inputs: { orderBy: { sequence: 'asc' } } } }) : null;
+  const selectedVersion = query.version
+    ? await prisma.runbookVersion.findFirst({
+        where: { id: query.version, runbookId: id },
+        include: { inputs: { orderBy: { sequence: 'asc' } } },
+      })
+    : null;
   const source = selectedVersion ?? runbook.draftVersion ?? runbook.publishedVersion;
   const builder = source ? (
     <div className="space-y-4">
@@ -154,6 +170,11 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
       )}
       <RunbookBuilder
         key={source.id}
+        initialEditorTab={query.editor}
+        initialStepIdentities={parseRunbookDefinition(source.definition).steps.map(() =>
+          randomUUID()
+        )}
+        initialInputIdentities={source.inputs.map(() => randomUUID())}
         initialDefinition={parseRunbookDefinition(source.definition)}
         initialInputs={source.inputs.map(
           ({ key, label, type, required, defaultValue, description, sequence }) => ({
@@ -177,10 +198,7 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
       <RunbookPageHeader
-        breadcrumbs={[
-          { label: 'Runbooks', href: '/runbooks' },
-          { label: runbook.name },
-        ]}
+        breadcrumbs={[{ label: 'Runbooks', href: '/runbooks' }, { label: runbook.name }]}
         title={runbook.name}
         description={runbook.description || runbook.slug}
         badge={
@@ -215,8 +233,8 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
                   runbook.draftVersion
                     ? `Creates a new draft copy of this runbook based on its current draft (v${runbook.draftVersion.version}).`
                     : runbook.publishedVersion
-                    ? `Creates a new draft copy of this runbook based on its published version (v${runbook.publishedVersion.version}).`
-                    : 'Creates a new draft copy of this runbook with identical metadata.'
+                      ? `Creates a new draft copy of this runbook based on its published version (v${runbook.publishedVersion.version}).`
+                      : 'Creates a new draft copy of this runbook with identical metadata.'
                 }
               />
             )}
@@ -291,7 +309,8 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
             <div>
               <p className="font-semibold text-sm">This runbook is archived</p>
               <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                Archived runbooks cannot be edited, published, or executed. Historical executions are preserved.
+                Archived runbooks cannot be edited, published, or executed. Historical executions
+                are preserved.
               </p>
             </div>
             {hasManageCapability && (
@@ -325,14 +344,25 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
             count: runbook._count.versions,
             content: (
               <section className="space-y-3">
-                <RunbookPagination page={versionPage} total={runbook._count.versions} query={query} />
+                <RunbookPagination
+                  page={versionPage}
+                  total={runbook._count.versions}
+                  query={query}
+                />
                 {runbook.versions.map(version => (
                   <div
                     key={version.id}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4"
                   >
                     <div className="space-y-1">
-                      <h2 className="font-semibold"><Link className="text-primary hover:underline" href={`/runbooks/${id}?version=${version.id}&tab=builder`}>Version {version.version}</Link></h2>
+                      <h2 className="font-semibold">
+                        <Link
+                          className="text-primary hover:underline"
+                          href={`/runbooks/${id}?version=${version.id}&tab=builder`}
+                        >
+                          Version {version.version}
+                        </Link>
+                      </h2>
                       <p className="break-all text-xs text-muted-foreground">
                         {version._count.executions} executions · checksum{' '}
                         {version.checksum.slice(0, 12)}
@@ -353,16 +383,24 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
                 {runbook._count.bindings > 20 && (
                   <div className="flex items-center justify-between text-xs text-muted-foreground pb-2">
                     <span>
-                      Showing {(bindingPage - 1) * 20 + 1}–{Math.min(bindingPage * 20, runbook._count.bindings)} of {runbook._count.bindings} bindings
+                      Showing {(bindingPage - 1) * 20 + 1}–
+                      {Math.min(bindingPage * 20, runbook._count.bindings)} of{' '}
+                      {runbook._count.bindings} bindings
                     </span>
                     <div className="flex gap-2">
                       {bindingPage > 1 && (
-                        <Link className="text-primary hover:underline" href={`/runbooks/${id}?tab=bindings&bindingPage=${bindingPage - 1}`}>
+                        <Link
+                          className="text-primary hover:underline"
+                          href={`/runbooks/${id}?tab=bindings&bindingPage=${bindingPage - 1}`}
+                        >
                           Previous
                         </Link>
                       )}
                       {bindingPage * 20 < runbook._count.bindings && (
-                        <Link className="text-primary hover:underline" href={`/runbooks/${id}?tab=bindings&bindingPage=${bindingPage + 1}`}>
+                        <Link
+                          className="text-primary hover:underline"
+                          href={`/runbooks/${id}?tab=bindings&bindingPage=${bindingPage + 1}`}
+                        >
                           Next
                         </Link>
                       )}
@@ -394,7 +432,12 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
             count: runbook._count.executions,
             content: (
               <section className="space-y-3">
-                <Link className="text-sm text-primary hover:underline" href={`/runbooks/executions?runbook=${runbook.id}`}>View all executions</Link>
+                <Link
+                  className="text-sm text-primary hover:underline"
+                  href={`/runbooks/executions?runbook=${runbook.id}`}
+                >
+                  View all executions
+                </Link>
                 {runbook.executions.map(execution => (
                   <div
                     key={execution.id}
@@ -404,7 +447,12 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
                       <p className="text-sm">
                         {formatDateTime(execution.createdAt, userTimeZone, { format: 'datetime' })}
                       </p>
-                      <Link className="block text-sm text-primary hover:underline" href={`/runbooks/executions/${execution.id}`}>Open full execution</Link>
+                      <Link
+                        className="block text-sm text-primary hover:underline"
+                        href={`/runbooks/executions/${execution.id}`}
+                      >
+                        Open full execution
+                      </Link>
                       {execution.incidentId && (
                         <Link
                           className="text-sm text-primary hover:underline"
@@ -474,11 +522,13 @@ export default async function RunbookDetailPage({ params, searchParams }: { para
                 <p className="text-xs font-medium text-destructive">Permanently delete runbook</p>
                 {deleteEligibility?.canDelete ? (
                   <p className="text-xs text-muted-foreground">
-                    This runbook has zero published versions and zero executions. Deletion is permanent and cannot be undone.
+                    This runbook has zero published versions and zero executions. Deletion is
+                    permanent and cannot be undone.
                   </p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    {deleteEligibility?.reason ?? 'This runbook has historical executions or published versions and cannot be deleted. Archive it instead.'}
+                    {deleteEligibility?.reason ??
+                      'This runbook has historical executions or published versions and cannot be deleted. Archive it instead.'}
                   </p>
                 )}
               </div>

@@ -58,7 +58,13 @@ vi.mock('@/components/runbooks/RunbookControls', () => ({
     options: { value: string; label: string }[];
     onValueChange: (value: string) => void;
   }) => (
-    <select id={name} name={name} aria-label={label} value={value} onChange={event => onValueChange(event.target.value)}>
+    <select
+      id={name}
+      name={name}
+      aria-label={label}
+      value={value}
+      onChange={event => onValueChange(event.target.value)}
+    >
       {options.map(option => (
         <option key={option.value} value={option.value}>
           {option.label}
@@ -67,6 +73,7 @@ vi.mock('@/components/runbooks/RunbookControls', () => ({
     </select>
   ),
 }));
+vi.spyOn(window, 'confirm').mockReturnValue(true);
 afterEach(cleanup);
 
 describe('Runbook nested check builder', () => {
@@ -128,7 +135,7 @@ describe('Runbook nested check builder', () => {
       />
     );
     expect(screen.queryByRole('button', { name: 'Add precheck' })).toBeNull();
-    expect(screen.getByText(/Before: Systemd/)).toBeTruthy();
+    expect(screen.getByText(/Before: 1/)).toBeTruthy();
   });
 
   it('renders draftRevision hidden input and initializes from prop', () => {
@@ -311,9 +318,30 @@ describe('Runbook nested check builder', () => {
   it('reports input validation errors in validateRunbook and readiness summary', () => {
     const validStep = newBuilderStep('MANUAL', 'step_1');
     const invalidInputs: RunbookInputInput[] = [
-      { key: 'INVALID KEY WITH SPACES', label: 'My Param', description: '', type: 'STRING', required: false, sequence: 0 },
-      { key: 'duplicate_key', label: 'First', description: '', type: 'STRING', required: false, sequence: 1 },
-      { key: 'duplicate_key', label: 'Second', description: '', type: 'STRING', required: false, sequence: 2 },
+      {
+        key: 'INVALID KEY WITH SPACES',
+        label: 'My Param',
+        description: '',
+        type: 'STRING',
+        required: false,
+        sequence: 0,
+      },
+      {
+        key: 'duplicate_key',
+        label: 'First',
+        description: '',
+        type: 'STRING',
+        required: false,
+        sequence: 1,
+      },
+      {
+        key: 'duplicate_key',
+        label: 'Second',
+        description: '',
+        type: 'STRING',
+        required: false,
+        sequence: 2,
+      },
     ];
 
     const result = validateRunbook({ steps: [validStep] }, invalidInputs);
@@ -326,9 +354,7 @@ describe('Runbook nested check builder', () => {
     const stepWithPrecheck = {
       ...newBuilderStep('MANUAL', 'parent_step'),
       precheck: {
-        steps: [
-          newBuilderStep('SYSTEMD', 'shared_key'),
-        ],
+        steps: [newBuilderStep('SYSTEMD', 'shared_key')],
       },
     };
     const secondStep = newBuilderStep('WAIT', 'shared_key');
@@ -353,7 +379,9 @@ describe('Runbook nested check builder', () => {
       />
     );
 
-    const resourceError = screen.getByText('Resource name is required for Kubernetes rollout-restart.');
+    const resourceError = screen.getByText(
+      'Resource name is required for Kubernetes rollout-restart.'
+    );
     expect(resourceError).toBeTruthy();
 
     const stepNameInput = screen.getByLabelText('Step name');
@@ -449,9 +477,7 @@ describe('Runbook nested check builder', () => {
       ...newBuilderStep('MANUAL', 'step_1'),
       name: 'Parent step',
       precheck: {
-        steps: [
-          { ...newBuilderStep('SYSTEMD', 'step_2'), name: 'Nested check with step_2 key' },
-        ],
+        steps: [{ ...newBuilderStep('SYSTEMD', 'step_2'), name: 'Nested check with step_2 key' }],
       },
     };
 
@@ -694,11 +720,11 @@ describe('Runbook nested check builder', () => {
     };
     expect(validateStep(invalidTcpPort).errors.port).toBeTruthy();
 
-    // 5. WAIT: validates duration bounds 1-3600
+    // 5. WAIT: matches runtime duration bounds 0-86400
     const invalidWait = {
       ...newBuilderStep('WAIT', 'wait_step'),
       name: 'Pause',
-      config: { durationSeconds: 5000 },
+      config: { durationSeconds: 86401 },
     };
     expect(validateStep(invalidWait).errors.durationSeconds).toBeTruthy();
 
@@ -823,11 +849,7 @@ describe('Runbook nested check builder', () => {
     // 3. User edits JSON directly in Advanced tab -> unappliedJson becomes true
     fireEvent.change(defJsonTextarea, {
       target: {
-        value: JSON.stringify(
-          { steps: [{ ...initialStep, name: 'Conflict JSON Name' }] },
-          null,
-          2
-        ),
+        value: JSON.stringify({ steps: [{ ...initialStep, name: 'Conflict JSON Name' }] }, null, 2),
       },
     });
 
@@ -1017,7 +1039,9 @@ describe('Runbook nested check builder', () => {
     expect(envHelperBtn).toBeTruthy();
 
     // Clicking env helper appends it to the command
-    const commandTextarea = screen.getByLabelText('Exact allowlisted command') as HTMLTextAreaElement;
+    const commandTextarea = screen.getByLabelText(
+      'Exact allowlisted command'
+    ) as HTMLTextAreaElement;
     fireEvent.click(envHelperBtn);
     expect(commandTextarea.value).toContain('"$OPSKNIGHT_INPUT_TARGET_DIR"');
   });
@@ -1074,6 +1098,7 @@ describe('Runbook nested check builder', () => {
     // 3. Rename input_2 to target_cluster: should automatically refactor step reference
     const input2KeyInput = screen.getByLabelText('Input 1 key'); // input_2 is now at position 0
     fireEvent.change(input2KeyInput, { target: { value: 'target_cluster' } });
+    fireEvent.blur(input2KeyInput);
 
     const savedDef = parseRunbookDefinition(
       JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
@@ -1298,6 +1323,7 @@ describe('Runbook nested check builder', () => {
     // Rename target_cluster -> primary_cluster
     const keyInput = screen.getByLabelText('Input 1 key');
     fireEvent.change(keyInput, { target: { value: 'primary_cluster' } });
+    fireEvent.blur(keyInput);
 
     const savedDef = parseRunbookDefinition(
       JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
@@ -1354,6 +1380,7 @@ describe('Runbook nested check builder', () => {
 
     // Complete typing next key
     fireEvent.change(keyInput, { target: { value: 'renamed_param' } });
+    fireEvent.blur(keyInput);
 
     savedDef = parseRunbookDefinition(
       JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
@@ -1593,14 +1620,17 @@ describe('Runbook nested check builder', () => {
     // Typing unescaped regex special characters '[' and '(' must NOT crash the builder with SyntaxError
     expect(() => {
       fireEvent.change(keyInput, { target: { value: '[' } });
+      fireEvent.blur(keyInput);
     }).not.toThrow();
 
     expect(() => {
       fireEvent.change(keyInput, { target: { value: '(' } });
+      fireEvent.blur(keyInput);
     }).not.toThrow();
 
     expect(() => {
       fireEvent.change(keyInput, { target: { value: 'invalid[regex(test' } });
+      fireEvent.blur(keyInput);
     }).not.toThrow();
 
     // Verify getInputUsage directly handles special characters safely
@@ -1691,6 +1721,7 @@ describe('Runbook nested check builder', () => {
 
     // Type new key
     fireEvent.change(keyInput, { target: { value: 'reapplied_key' } });
+    fireEvent.blur(keyInput);
 
     const savedDef = parseRunbookDefinition(
       JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
@@ -1733,6 +1764,7 @@ describe('Runbook nested check builder', () => {
     // Rename input
     const keyInput = screen.getByLabelText('Input 1 key');
     fireEvent.change(keyInput, { target: { value: 'new_token' } });
+    fireEvent.blur(keyInput);
 
     const savedDef = parseRunbookDefinition(
       JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value)
@@ -1785,6 +1817,7 @@ describe('Runbook nested check builder', () => {
 
     // 1. Rename input 1 ('foo') to 'bar' (collides with input 2)
     fireEvent.change(input1KeyField, { target: { value: 'bar' } });
+    fireEvent.blur(input1KeyField);
 
     let currentDef = JSON.parse(
       (container.querySelector('input[name="definition"]') as HTMLInputElement).value
@@ -1795,6 +1828,7 @@ describe('Runbook nested check builder', () => {
 
     // 2. Now rename input 1 to 'baz' (unique key)
     fireEvent.change(input1KeyField, { target: { value: 'baz' } });
+    fireEvent.blur(input1KeyField);
 
     currentDef = JSON.parse(
       (container.querySelector('input[name="definition"]') as HTMLInputElement).value
@@ -1806,4 +1840,82 @@ describe('Runbook nested check builder', () => {
   });
 });
 
+describe('atomic input edit transactions', () => {
+  it('keeps pending and committed keys reserved during interleaved renames', () => {
+    const inputs: RunbookInputInput[] = ['foo', 'bar'].map((key, sequence) => ({
+      key,
+      label: key,
+      type: 'STRING',
+      required: false,
+      description: '',
+      sequence,
+    }));
+    const { container } = render(
+      <RunbookBuilder
+        initialInputs={inputs}
+        action={async () => {}}
+        initialDefinition={{
+          steps: inputs.map(input => ({
+            ...newBuilderStep('HTTP', input.key),
+            config: { url: `https://api.example.com/\${{ inputs.${input.key} }}` },
+          })),
+        }}
+      />
+    );
+    const definition = () =>
+      JSON.parse((container.querySelector('input[name="definition"]') as HTMLInputElement).value);
+    const first = screen.getByLabelText('Input 1 key');
+    const second = screen.getByLabelText('Input 2 key');
+    fireEvent.change(first, { target: { value: 'bar' } });
+    fireEvent.change(second, { target: { value: 'foo' } });
+    fireEvent.blur(first);
+    fireEvent.blur(second);
+    expect(definition().steps.map((step: RunbookStepDefinition) => step.config.url)).toEqual([
+      'https://api.example.com/${{ inputs.foo }}',
+      'https://api.example.com/${{ inputs.bar }}',
+    ]);
+    fireEvent.change(first, { target: { value: 'baz' } });
+    expect(definition().steps[0].config.url).toContain('inputs.foo');
+    fireEvent.keyDown(first, { key: 'Enter' });
+    fireEvent.blur(second);
+    expect(definition().steps.map((step: RunbookStepDefinition) => step.config.url)).toEqual([
+      'https://api.example.com/${{ inputs.baz }}',
+      'https://api.example.com/${{ inputs.foo }}',
+    ]);
+  });
 
+  it('normalizes conditions atomically when an input declaration changes type', () => {
+    const inputs: RunbookInputInput[] = [
+      {
+        key: 'count',
+        label: 'Count',
+        type: 'NUMBER',
+        required: false,
+        description: '',
+        sequence: 0,
+      },
+    ];
+    const { container } = render(
+      <RunbookBuilder
+        initialInputs={inputs}
+        action={async () => {}}
+        initialDefinition={{
+          steps: [
+            {
+              ...newBuilderStep('CONDITION', 'check'),
+              config: { field: 'input.count', operator: 'IN', value: [0, 2] },
+            },
+          ],
+        }}
+      />
+    );
+    fireEvent.change(screen.getByLabelText('Input 1 type'), { target: { value: 'STRING' } });
+    const definition = JSON.parse(
+      (container.querySelector('input[name="definition"]') as HTMLInputElement).value
+    );
+    expect(definition.steps[0].config.value).toEqual(['0', '2']);
+    expect(screen.getByLabelText('Match value (comma-separated for IN / NOT_IN)')).toHaveValue(
+      '0, 2'
+    );
+  });
+});

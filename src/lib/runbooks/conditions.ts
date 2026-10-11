@@ -15,6 +15,7 @@ export const CONDITION_CONTEXT_FIELDS = [
 ] as const;
 
 export function canonicalConditionField(field: string): string {
+  if (field.startsWith('inputs.')) return field.replace(/^inputs\./, 'input.');
   return ['priority', 'urgency', 'status', 'title', 'description', 'tags'].includes(field)
     ? `incident.${field}`
     : field;
@@ -34,3 +35,99 @@ export const workflowConditionSchema = z.object({
   operator: conditionOperatorSchema.default('EQUALS'),
   value: z.unknown().optional(),
 });
+
+export type ConditionValueType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'TAGS';
+
+export function conditionValueType(
+  field: string,
+  inputs: ReadonlyArray<{ key: string; type: string }>
+): ConditionValueType {
+  if (field === 'incident.tags') return 'TAGS';
+  const input = inputs.find(
+    input => field === `input.${input.key}` || field === `inputs.${input.key}`
+  );
+  return input?.type === 'NUMBER' || input?.type === 'BOOLEAN' ? input.type : 'STRING';
+}
+
+export function supportedConditionOperators(type: ConditionValueType): readonly string[] {
+  const common = ['EQUALS', 'NOT_EQUALS', 'IN', 'NOT_IN', 'EXISTS', 'NOT_EXISTS'];
+  return type === 'STRING'
+    ? [...common, 'CONTAINS', 'STARTS_WITH']
+    : type === 'TAGS'
+      ? ['CONTAINS', 'EXISTS', 'NOT_EXISTS']
+      : common;
+}
+
+/** Conversion belongs to authoring. Runtime/incident-trigger comparisons stay strict. */
+export function normalizeConditionValue({
+  previousValue,
+  nextType,
+  operator,
+}: {
+  previousValue: unknown;
+  previousType: ConditionValueType;
+  nextType: ConditionValueType;
+  operator: string;
+}): unknown {
+  if (['EXISTS', 'NOT_EXISTS'].includes(operator)) return undefined;
+  const scalar = (value: unknown): unknown => {
+    if (value === undefined || value === null) return undefined;
+    if (nextType === 'NUMBER') {
+      const text = String(value).trim();
+      return text !== '' && Number.isFinite(Number(text)) ? Number(text) : undefined;
+    }
+    if (nextType === 'BOOLEAN') {
+      if (value === true || value === 'true') return true;
+      if (value === false || value === 'false') return false;
+      return undefined;
+    }
+    return String(value);
+  };
+  if (['IN', 'NOT_IN'].includes(operator)) {
+    const list = Array.isArray(previousValue)
+      ? previousValue
+      : previousValue === undefined
+        ? []
+        : [previousValue];
+    const converted = list.map(scalar);
+    return converted.some(value => value === undefined) ? undefined : converted;
+  }
+  return scalar(Array.isArray(previousValue) ? previousValue.at(0) : previousValue);
+}
+
+export function validateConditionComparison(
+  config: Record<string, unknown>,
+  type: ConditionValueType,
+  inputs: ReadonlyArray<{ key: string; type?: string }> = []
+): string | undefined {
+  const operator = String(config.operator ?? 'EQUALS');
+  if (!supportedConditionOperators(type).includes(operator))
+    return `Operator ${operator} is not supported for ${type}.`;
+  if (['EXISTS', 'NOT_EXISTS'].includes(operator)) return undefined;
+  const values = ['IN', 'NOT_IN'].includes(operator) ? config.value : [config.value];
+  if (!Array.isArray(values) || values.length === 0) return 'Provide a non-empty comparison list.';
+  const expectedType = type === 'NUMBER' ? 'number' : type === 'BOOLEAN' ? 'boolean' : 'string';
+  if (
+    values.some(value => {
+      const template =
+        typeof value === 'string' ? /^\$\{\{\s*inputs\.([a-z0-9_]+)\s*\}\}$/.exec(value) : null;
+      if (template) {
+        const input = inputs.find(input => input.key === template[1]);
+        return (
+          !input ||
+          (expectedType === 'number'
+            ? input.type !== 'NUMBER'
+            : expectedType === 'boolean'
+              ? input.type !== 'BOOLEAN'
+              : ['NUMBER', 'BOOLEAN'].includes(input.type ?? 'STRING'))
+        );
+      }
+      return (
+        typeof value !== expectedType || (typeof value === 'number' && !Number.isFinite(value))
+      );
+    })
+  ) {
+    return `Comparison values must be ${expectedType}s.`;
+  }
+  return undefined;
+}

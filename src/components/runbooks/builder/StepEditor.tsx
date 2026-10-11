@@ -20,6 +20,8 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { FormSelect } from '../RunbookControls';
 import {
   RUNBOOK_STEP_TYPES,
+  DEFAULT_STEP_TIMEOUT_SECONDS,
+  DEFAULT_LEASE_DURATION_SECONDS,
   type RunbookRiskClass,
   type RunbookStepDefinition,
   type RunbookStepType,
@@ -38,7 +40,8 @@ import ConditionActionEditor from './action-editors/ConditionActionEditor';
 import WaitActionEditor from './action-editors/WaitActionEditor';
 
 const AGENT_PREREQUISITES: Record<RunbookStepType, string> = {
-  KUBERNETES: 'Requires Agent with KUBERNETES capability and cluster RBAC permissions in target namespace.',
+  KUBERNETES:
+    'Requires Agent with KUBERNETES capability and cluster RBAC permissions in target namespace.',
   DOCKER: 'Requires Agent with DOCKER capability and local container engine socket access.',
   SYSTEMD: 'Requires Agent with SYSTEMD capability and systemctl/journalctl permissions on host.',
   BASH: 'Requires Agent with BASH capability; command must match local bashCommandPatterns allowlist.',
@@ -47,7 +50,7 @@ const AGENT_PREREQUISITES: Record<RunbookStepType, string> = {
   WAIT: 'Executed by control-plane orchestrator timer.',
   CONDITION: 'Evaluated directly against incident context by control plane.',
   MANUAL: 'Assigned to a human operator during execution.',
-  APPROVAL: 'Gated on designated approver or role.',
+  APPROVAL: 'Requires a responder with runbook.approve and access to the incident.',
 };
 import ManualActionEditor from './action-editors/ManualActionEditor';
 
@@ -59,6 +62,8 @@ interface StepEditorProps {
   errors?: Record<string, string>;
   readOnly?: boolean;
   onChange: (patch: Partial<RunbookStepDefinition>) => void;
+  expandedChecks?: ReadonlySet<string>;
+  onToggleCheck?: (key: string, open: boolean) => void;
 }
 
 function getRiskRank(risk: RunbookRiskClass): number {
@@ -75,9 +80,12 @@ export default function StepEditor({
   errors = {},
   readOnly = false,
   onChange,
+  expandedChecks,
+  onToggleCheck,
 }: StepEditorProps) {
   const minRisk = builderRisk(step);
-  const isMandatoryApproval = step.riskClass === 'NON_IDEMPOTENT' || step.type === 'APPROVAL';
+  const isMandatoryApproval =
+    step.riskClass === 'NON_IDEMPOTENT' || ['APPROVAL', 'MANUAL'].includes(step.type);
 
   const handleTypeChange = (nextType: RunbookStepType) => {
     const template = newBuilderStep(nextType, step.key);
@@ -146,6 +154,8 @@ export default function StepEditor({
           depth={depth}
           readOnly={readOnly}
           onChange={onChange}
+          expandedChecks={expandedChecks}
+          onToggleCheck={onToggleCheck}
         />
       )}
 
@@ -356,7 +366,8 @@ export default function StepEditor({
               />
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Required minimum: <strong>{minRisk.replaceAll('_', ' ')}</strong> based on step action.
+              Required minimum: <strong>{minRisk.replaceAll('_', ' ')}</strong> based on step
+              action.
             </p>
           </div>
 
@@ -372,7 +383,9 @@ export default function StepEditor({
               />
               <div>
                 <span className="font-semibold text-foreground">
-                  {isMandatoryApproval ? 'Mandatory Approval Gate' : 'Require Explicit Human Approval'}
+                  {isMandatoryApproval
+                    ? 'Mandatory Approval Gate'
+                    : 'Require Explicit Human Approval'}
                 </span>
                 <p className="text-muted-foreground">
                   {isMandatoryApproval
@@ -395,15 +408,24 @@ export default function StepEditor({
                 type="number"
                 min={1}
                 max={86400}
-                value={step.timeoutSeconds === undefined || step.timeoutSeconds === null ? 300 : String(step.timeoutSeconds)}
+                value={
+                  step.timeoutSeconds === undefined || step.timeoutSeconds === null
+                    ? DEFAULT_STEP_TIMEOUT_SECONDS
+                    : String(step.timeoutSeconds)
+                }
                 disabled={readOnly}
                 onChange={e => handleTimeoutChange(e.target.value)}
                 className={`w-32 ${errors.timeoutSeconds ? 'border-destructive' : ''}`}
               />
               <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" /> default 300s (5m)
+                <Clock className="h-3.5 w-3.5" /> default {DEFAULT_STEP_TIMEOUT_SECONDS}s
               </span>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              The overall runbook deadline and Agent policy maximum runtime can shorten this
+              timeout. Agent claims use a {DEFAULT_LEASE_DURATION_SECONDS}s renewable lease; this is
+              not the execution timeout.
+            </p>
             {errors.timeoutSeconds && (
               <p className="mt-1 text-xs text-destructive">{errors.timeoutSeconds}</p>
             )}
@@ -421,6 +443,8 @@ export default function StepEditor({
           depth={depth}
           readOnly={readOnly}
           onChange={onChange}
+          expandedChecks={expandedChecks}
+          onToggleCheck={onToggleCheck}
         />
       )}
     </>
@@ -434,6 +458,8 @@ function NestedChecks({
   depth,
   readOnly = false,
   onChange,
+  expandedChecks,
+  onToggleCheck,
 }: {
   phase: 'precheck' | 'verification';
   step: RunbookStepDefinition;
@@ -441,6 +467,8 @@ function NestedChecks({
   depth: number;
   readOnly?: boolean;
   onChange: (patch: Partial<RunbookStepDefinition>) => void;
+  expandedChecks?: ReadonlySet<string>;
+  onToggleCheck?: (key: string, open: boolean) => void;
 }) {
   const group = phase === 'precheck' ? step.precheck : step.verification;
   const checks = group?.steps ?? [];
@@ -474,7 +502,9 @@ function NestedChecks({
       aria-label={sectionLabel}
       data-testid={testId}
       className={`rounded-xl border p-4 ${
-        phase === 'precheck' ? 'bg-sky-500/5 border-sky-500/20' : 'bg-emerald-500/5 border-emerald-500/20'
+        phase === 'precheck'
+          ? 'bg-sky-500/5 border-sky-500/20'
+          : 'bg-emerald-500/5 border-emerald-500/20'
       }`}
     >
       <div className="flex items-center justify-between gap-3">
@@ -506,17 +536,27 @@ function NestedChecks({
             const hasCheckErrors = Object.keys(checkErrors).length > 0;
 
             return (
-              <li key={identities.at(index) ?? check.key} className="rounded-lg border bg-card p-3 shadow-2xs">
-                <details open={hasCheckErrors || undefined}>
+              <li
+                key={identities.at(index) ?? check.key}
+                className="rounded-lg border bg-card p-3 shadow-2xs"
+              >
+                <details
+                  open={hasCheckErrors || expandedChecks?.has(check.key) || undefined}
+                  onToggle={event => onToggleCheck?.(check.key, event.currentTarget.open)}
+                >
                   <summary className="cursor-pointer break-words text-sm font-medium flex items-center justify-between">
                     <span className="flex items-center gap-2 min-w-0">
                       <span className="truncate">
                         {index + 1}. {check.name || 'Untitled check'}
                       </span>
                       {hasCheckErrors && (
-                        <Badge variant="destructive" className="text-[10px] py-0 px-1.5 shrink-0 flex items-center gap-1">
+                        <Badge
+                          variant="destructive"
+                          className="text-[10px] py-0 px-1.5 shrink-0 flex items-center gap-1"
+                        >
                           <AlertCircle className="h-3 w-3" />
-                          {Object.keys(checkErrors).length} {Object.keys(checkErrors).length === 1 ? 'issue' : 'issues'}
+                          {Object.keys(checkErrors).length}{' '}
+                          {Object.keys(checkErrors).length === 1 ? 'issue' : 'issues'}
                         </Badge>
                       )}
                     </span>
@@ -537,6 +577,8 @@ function NestedChecks({
                       depth={depth + 1}
                       errors={checkErrors}
                       readOnly={readOnly}
+                      expandedChecks={expandedChecks}
+                      onToggleCheck={onToggleCheck}
                       onChange={patch =>
                         commit(
                           checks.map((item, pos) => (pos === index ? { ...item, ...patch } : item))
@@ -546,48 +588,48 @@ function NestedChecks({
                   </div>
                 </details>
 
-              {!readOnly && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Move ${check.name} up in ${label}`}
-                    disabled={index === 0}
-                    onClick={() => move(index, -1)}
-                  >
-                    <ArrowUp className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Move ${check.name} down in ${label}`}
-                    disabled={index === checks.length - 1}
-                    onClick={() => move(index, 1)}
-                  >
-                    <ArrowDown className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Remove ${check.name} from ${label}`}
-                    onClick={() => {
-                      setIdentities(identities.filter((_, pos) => pos !== index));
-                      commit(checks.filter((_, pos) => pos !== index));
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Remove
-                  </Button>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-    )}
+                {!readOnly && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Move ${check.name} up in ${label}`}
+                      disabled={index === 0}
+                      onClick={() => move(index, -1)}
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Move ${check.name} down in ${label}`}
+                      disabled={index === checks.length - 1}
+                      onClick={() => move(index, 1)}
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Remove ${check.name} from ${label}`}
+                      onClick={() => {
+                        setIdentities(identities.filter((_, pos) => pos !== index));
+                        commit(checks.filter((_, pos) => pos !== index));
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Remove
+                    </Button>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      )}
 
       {!readOnly && depth < 3 && checks.length < 10 && (
         <div className="mt-3 flex flex-wrap items-center gap-2">

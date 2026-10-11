@@ -1,4 +1,5 @@
 import 'server-only';
+import { assertAuthoringDefinition } from './authoring-validation';
 
 import type { Prisma, RunbookInput, RunbookVersion } from '@prisma/client';
 import prisma from '@/lib/prisma';
@@ -64,6 +65,7 @@ export async function createRunbook(
   },
   actorId: string
 ) {
+  assertAuthoringDefinition(input.definition ?? EMPTY_DEFINITION, input.inputs ?? []);
   const metadata = createRunbookSchema.parse(input);
   const inputs = runbookInputsSchema.parse(input.inputs ?? []);
   const definition = parseRunbookDefinition(input.definition ?? EMPTY_DEFINITION, inputs);
@@ -135,6 +137,7 @@ export async function updateDraftVersion(
   input: { definition: unknown; inputs?: RunbookInputInput[]; expectedDraftRevision: number },
   actorId: string
 ) {
+  assertAuthoringDefinition(input.definition, input.inputs ?? []);
   const inputs = runbookInputsSchema.parse(input.inputs ?? []);
   const definition = parseRunbookDefinition(input.definition, inputs);
   const checksum = computeDefinitionChecksum(definition);
@@ -210,7 +213,20 @@ export async function publishDraftVersion(versionId: string, actorId: string) {
     await lockRunbookForUpdate(tx, draft.runbookId, { action: 'publish' });
     if (draft.state !== 'DRAFT') throw new RunbookVersionImmutableError(versionId, draft.state);
 
-    const parsed = parseRunbookDefinition(draft.definition, draft.inputs);
+    const draftInputs = draft.inputs.map(
+      ({ key, label, type, required, defaultValue, description, sequence }) => ({
+        key,
+        label,
+        type,
+        required,
+        defaultValue: defaultValue ?? undefined,
+        description: description ?? '',
+        sequence,
+      })
+    );
+    assertAuthoringDefinition(draft.definition, draftInputs);
+    const validatedInputs = runbookInputsSchema.parse(draftInputs);
+    const parsed = parseRunbookDefinition(draft.definition, validatedInputs);
     const checksum = computeDefinitionChecksum(parsed);
     if (checksum !== draft.checksum) {
       throw new RunbookDefinitionError(

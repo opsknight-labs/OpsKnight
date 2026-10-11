@@ -12,7 +12,7 @@ import {
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import type { RunbookDefinition } from '@/lib/runbooks/types';
-import { flattenSteps } from '@/lib/runbooks/definition';
+import { flattenSteps } from '@/lib/runbooks/shared-definition';
 import { stepRequiresApproval } from '@/lib/runbooks/safety';
 
 interface ReadinessBarProps {
@@ -109,7 +109,11 @@ export default function ReadinessBar({
             aria-label={expanded ? 'Hide summary details' : 'Show summary details'}
           >
             <span>{expanded ? 'Hide details' : 'Details'}</span>
-            {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+            {expanded ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronUp className="h-3.5 w-3.5" />
+            )}
           </Button>
 
           <span aria-live="polite" className="text-xs font-medium">

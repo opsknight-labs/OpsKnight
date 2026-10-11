@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { stepRequiresApproval } from '@/lib/runbooks/safety';
 import {
   ArrowDown,
   ArrowUp,
@@ -68,34 +69,33 @@ export default function StepNavigator({
         className="flex-1 overflow-y-auto p-1.5 sm:p-2 space-y-1.5 list-none max-h-40 sm:max-h-56 lg:max-h-[calc(100vh-16rem)]"
         tabIndex={0}
       >
-          {steps.map((step, index) => {
-            const isSelected = index === selectedIndex;
-            const errors = stepErrors.get(index);
-            const hasErrors = errors && Object.keys(errors).length > 0;
-            const isApprovalRequired =
-              step.riskClass === 'NON_IDEMPOTENT' || step.requiresApproval || step.type === 'APPROVAL';
-            const hasNestedChecks = Boolean(
-              (step.precheck?.steps && step.precheck.steps.length > 0) ||
-                (step.verification?.steps && step.verification.steps.length > 0)
-            );
+        {steps.map((step, index) => {
+          const isSelected = index === selectedIndex;
+          const errors = stepErrors.get(index);
+          const hasErrors = errors && Object.keys(errors).length > 0;
+          const isApprovalRequired = stepRequiresApproval(step);
+          const hasNestedChecks = Boolean(
+            (step.precheck?.steps && step.precheck.steps.length > 0) ||
+            (step.verification?.steps && step.verification.steps.length > 0)
+          );
 
-            return (
-              <li key={stepIdentities.at(index) ?? step.key} className="list-none">
-                <div
-                  className={`group relative flex flex-col rounded-lg border p-2.5 transition-all text-left ${
-                    isSelected
-                      ? 'border-primary bg-primary/5 shadow-2xs ring-1 ring-primary/20'
-                      : 'border-border/60 hover:border-border hover:bg-muted/40'
-                  }`}
+          return (
+            <li key={stepIdentities.at(index) ?? step.key} className="list-none">
+              <div
+                className={`group relative flex flex-col rounded-lg border p-2.5 transition-all text-left ${
+                  isSelected
+                    ? 'border-primary bg-primary/5 shadow-2xs ring-1 ring-primary/20'
+                    : 'border-border/60 hover:border-border hover:bg-muted/40'
+                }`}
+              >
+                {/* Semantic selection button */}
+                <button
+                  type="button"
+                  aria-current={isSelected ? 'step' : undefined}
+                  aria-label={`Step ${index + 1}: ${step.name || 'Untitled step'}`}
+                  onClick={() => onSelectStep(index)}
+                  className="flex flex-col text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded p-0.5 cursor-pointer"
                 >
-                  {/* Semantic selection button */}
-                  <button
-                    type="button"
-                    aria-current={isSelected ? 'step' : undefined}
-                    aria-label={`Step ${index + 1}: ${step.name || 'Untitled step'}`}
-                    onClick={() => onSelectStep(index)}
-                    className="flex flex-col text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded p-0.5 cursor-pointer"
-                  >
                   <div className="flex items-start justify-between gap-2 w-full">
                     <div className="flex items-center gap-2 min-w-0">
                       <span
@@ -110,12 +110,17 @@ export default function StepNavigator({
                         {index + 1}
                       </span>
                       <h4 className="truncate text-xs font-semibold text-foreground">
-                        {step.name || <em className="text-muted-foreground font-normal">Untitled step</em>}
+                        {step.name || (
+                          <em className="text-muted-foreground font-normal">Untitled step</em>
+                        )}
                       </h4>
                     </div>
 
                     {hasErrors ? (
-                      <span title={`${Object.keys(errors).length} validation issues`} className="text-destructive shrink-0">
+                      <span
+                        title={`${Object.keys(errors).length} validation issues`}
+                        className="text-destructive shrink-0"
+                      >
                         <AlertCircle className="h-4 w-4" />
                       </span>
                     ) : isSelected ? (
@@ -124,7 +129,10 @@ export default function StepNavigator({
                   </div>
 
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 uppercase font-mono">
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] py-0 px-1.5 uppercase font-mono"
+                    >
                       {step.type.replaceAll('_', ' ')}
                     </Badge>
 
@@ -154,20 +162,38 @@ export default function StepNavigator({
 
                     {hasNestedChecks && (
                       <span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">
-                        VERIFIED
+                        Has safety checks
                       </span>
                     )}
                   </div>
 
-                  {(step.precheck?.steps?.length || step.verification?.steps?.length) && (
-                    <p className="mt-1.5 text-[11px] text-muted-foreground truncate w-full">
-                      {step.precheck?.steps?.length ? `Before: ${step.precheck.steps.map(c => c.name).join(' → ')}` : ''}
-                      {step.precheck?.steps?.length && step.verification?.steps?.length ? ' · ' : ''}
-                      {step.verification?.steps?.length ? `After: ${step.verification.steps.map(c => c.name).join(' → ')}` : ''}
+                  {hasNestedChecks && (
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                      Before: {step.precheck?.steps.length ?? 0} · After:{' '}
+                      {step.verification?.steps.length ?? 0}
                     </p>
                   )}
                 </button>
 
+                {hasNestedChecks && (
+                  <details className="mt-2 text-xs">
+                    <summary className="min-h-11 cursor-pointer py-3">
+                      Before and after checks
+                    </summary>
+                    <ul className="space-y-1 pl-3">
+                      {['precheck', 'verification'].flatMap(phase => {
+                        const checks =
+                          phase === 'precheck' ? step.precheck?.steps : step.verification?.steps;
+                        return (checks ?? []).map(check => (
+                          <li key={check.key} className="break-words">
+                            {phase === 'precheck' ? 'Before' : 'After'}: {check.name} ·{' '}
+                            {check.type.replaceAll('_', ' ')}
+                          </li>
+                        ));
+                      })}
+                    </ul>
+                  </details>
+                )}
                 {/* Separate Actions Toolbar */}
                 {!readOnly && (
                   <div className="mt-2 flex items-center justify-end gap-1 border-t border-border/40 pt-1.5">
@@ -176,7 +202,7 @@ export default function StepNavigator({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6"
+                        className="h-11 w-11 sm:h-8 sm:w-8"
                         title={`Move ${step.name} up`}
                         aria-label={`Move ${step.name} up`}
                         disabled={index === 0}
@@ -188,7 +214,7 @@ export default function StepNavigator({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6"
+                        className="h-11 w-11 sm:h-8 sm:w-8"
                         title={`Move ${step.name} down`}
                         aria-label={`Move ${step.name} down`}
                         disabled={index === steps.length - 1}
@@ -200,7 +226,7 @@ export default function StepNavigator({
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6"
+                        className="h-11 w-11 sm:h-8 sm:w-8"
                         title={`Duplicate ${step.name}`}
                         aria-label={`Duplicate ${step.name}`}
                         onClick={() => onDuplicateStep(index)}

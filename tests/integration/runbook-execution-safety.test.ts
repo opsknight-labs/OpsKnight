@@ -1,11 +1,16 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Prisma, RunbookInputType } from '@prisma/client';
 import { generateKeyPairSync } from 'node:crypto';
-import { computeDefinitionChecksum, computePlanDigest, parseRunbookDefinition } from '@/lib/runbooks/definition';
+import {
+  computeDefinitionChecksum,
+  computePlanDigest,
+  parseRunbookDefinition,
+} from '@/lib/runbooks/definition';
 import { createServiceBinding, updateServiceBinding } from '@/lib/runbooks/bindings';
 import {
   advanceExecution,
   startRunbookExecution,
+  previewRunbookExecution,
   cancelExecution,
   completeStep,
   approveExecutionStep,
@@ -54,7 +59,10 @@ async function createPublishedRunbook(
     sequence?: number;
   }>
 ) {
-  const parsed = parseRunbookDefinition(definition as unknown as Prisma.InputJsonValue, inputs ?? []);
+  const parsed = parseRunbookDefinition(
+    definition as unknown as Prisma.InputJsonValue,
+    inputs ?? []
+  );
   const runbook = await testPrisma.runbook.create({
     data: { name: `Safety ${crypto.randomUUID()}`, slug: `safety-${crypto.randomUUID()}` },
   });
@@ -135,6 +143,41 @@ async function createAgentTarget(
 describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
   beforeEach(async () => resetDatabase(), 30000);
   afterAll(async () => testPrisma.$disconnect());
+
+  it('previews without creating work and executes only an unchanged plan', async () => {
+    const { runbook, version } = await createPublishedRunbook({
+      steps: [
+        {
+          key: 'wait',
+          name: 'Wait',
+          type: 'WAIT',
+          riskClass: 'READ_ONLY',
+          config: { durationSeconds: 0 },
+        },
+      ],
+    });
+    const actor = await createTestUser({ role: 'ADMIN' });
+    const request = {
+      runbookId: runbook.id,
+      runbookVersionId: version.id,
+      triggeredByUserId: actor.id,
+    };
+    const jobs = await testPrisma.backgroundJob.count();
+    const preview = await previewRunbookExecution(request);
+    expect(await testPrisma.runbookExecution.count()).toBe(0);
+    expect(await testPrisma.backgroundJob.count()).toBe(jobs);
+    await expect(
+      startRunbookExecution({ ...request, expectedPlanDigest: 'a'.repeat(64) })
+    ).rejects.toThrow('PREVIEW_STALE');
+    expect(await testPrisma.runbookExecution.count()).toBe(0);
+    const execution = await startRunbookExecution({
+      ...request,
+      expectedPlanDigest: preview.digest,
+    });
+    expect(execution.definitionChecksum).toBe(preview.checksum);
+    expect(execution.inputValues).toEqual(preview.inputs);
+    expect(execution.resolvedTargetAgentId).toBe(preview.agentId);
+  });
 
   it('converts budget exhaustion into one frozen suggestion rather than dropping remediation', async () => {
     const target = await createAgentTarget({
@@ -1186,6 +1229,11 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
     ]);
     expect(claims.filter(Boolean)).toHaveLength(1);
     expect(await testPrisma.runbookStepAttempt.count({ where: { status: 'CLAIMED' } })).toBe(1);
+    const claimed = await testPrisma.runbookStepAttempt.findFirstOrThrow({
+      where: { status: 'CLAIMED' },
+    });
+    expect(claimed.claimedAt).toBeInstanceOf(Date);
+    expect(claimed.startedAt).toBeNull();
   });
 
   it('does not duplicate dispatch when two workers advance the same execution', async () => {
@@ -1815,7 +1863,9 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
       where: { id: executionId },
       include: { steps: { include: { attempts: true } } },
     });
-    expect(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'UNKNOWN']).toContain(execution.status);
+    expect(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'UNKNOWN']).toContain(
+      execution.status
+    );
     for (const step of execution.steps) {
       expect(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'SKIPPED', 'UNKNOWN']).toContain(
         step.status
@@ -1824,7 +1874,9 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
         step.status
       );
       for (const attempt of step.attempts) {
-        expect(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'UNKNOWN']).toContain(attempt.status);
+        expect(['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT', 'UNKNOWN']).toContain(
+          attempt.status
+        );
         expect(['PENDING', 'CLAIMED', 'RUNNING']).not.toContain(attempt.status);
       }
     }
@@ -1838,7 +1890,7 @@ describeIfRealDB('runbook execution safety (real PostgreSQL)', () => {
           name: 'Wait step',
           type: 'WAIT',
           riskClass: 'READ_ONLY',
-          config: { seconds: 120 },
+          config: { durationSeconds: 120 },
         },
       ],
     });

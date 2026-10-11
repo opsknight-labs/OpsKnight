@@ -7,6 +7,7 @@
  */
 
 import { z } from 'zod';
+import { parseInputDefault } from './input-values';
 import { runbookEvidenceSchema } from './evidence';
 import { schedulingLabelsSchema } from './labels';
 import { conditionContextFieldSchema } from './conditions';
@@ -91,7 +92,7 @@ export type RunbookStepDefinitionInput = z.infer<typeof runbookStepDefinitionSch
 // Full runbook definition (stored as RunbookVersion.definition)
 // ---------------------------------------------------------------------------
 
-export const runbookDefinitionSchema = z
+const runbookDefinitionShape = z
   .object({
     steps: z
       .array(runbookStepDefinitionSchema)
@@ -117,6 +118,58 @@ export const runbookDefinitionSchema = z
       keys.add(step.key);
     }
   });
+
+/** Bound recursion before invoking lazy schemas or serializing untrusted JSON. */
+export const runbookDefinitionSchema = z
+  .unknown()
+  .superRefine((raw, ctx) => {
+    const values = [{ value: raw, depth: 0 }];
+    let visited = 0;
+    while (values.length) {
+      const { value, depth } = values.pop()!;
+      if (++visited > 100000 || depth > 24) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Runbook JSON is nested too deeply or exceeds supported complexity.',
+        });
+        return;
+      }
+      if (value && typeof value === 'object') {
+        for (const nested of Object.values(value)) values.push({ value: nested, depth: depth + 1 });
+      }
+    }
+    if (!raw || typeof raw !== 'object' || !('steps' in raw) || !Array.isArray(raw.steps)) return;
+    const steps = raw.steps.map((step: unknown, index: number) => ({
+      step,
+      depth: 1,
+      path: ['steps', index] as (string | number)[],
+    }));
+    let count = 0;
+    while (steps.length) {
+      const { step, depth, path } = steps.pop()!;
+      if (++count > MAX_RUNBOOK_STEPS || depth > 3) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path,
+          message:
+            depth > 3
+              ? 'Runbook steps may not be nested more than three levels.'
+              : `Maximum ${MAX_RUNBOOK_STEPS} total steps allowed, including nested checks.`,
+        });
+        return;
+      }
+      if (!step || typeof step !== 'object') continue;
+      for (const kind of ['precheck', 'verification'] as const) {
+        const group = Object.entries(step).find(([key]) => key === kind)?.[1];
+        if (group && typeof group === 'object' && 'steps' in group && Array.isArray(group.steps)) {
+          group.steps.forEach((nested: unknown, index: number) =>
+            steps.push({ step: nested, depth: depth + 1, path: [...path, kind, 'steps', index] })
+          );
+        }
+      }
+    }
+  })
+  .pipe(runbookDefinitionShape);
 
 export type RunbookDefinitionInput = z.infer<typeof runbookDefinitionSchema>;
 
@@ -175,7 +228,18 @@ export const runbookInputSchema = z
     description: z.string().trim().max(1000).default(''),
     sequence: z.number().int().min(0).default(0),
   })
-  .strict();
+  .strict()
+  .superRefine((input, ctx) => {
+    try {
+      parseInputDefault(input);
+    } catch (error) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['defaultValue'],
+        message: error instanceof Error ? error.message : 'Invalid default value.',
+      });
+    }
+  });
 
 export type RunbookInputInput = z.infer<typeof runbookInputSchema>;
 

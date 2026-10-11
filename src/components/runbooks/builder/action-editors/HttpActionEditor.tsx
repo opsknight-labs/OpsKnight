@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -25,6 +26,8 @@ export default function HttpActionEditor({
   readOnly = false,
   onChange,
 }: HttpActionEditorProps) {
+  const [headerError, setHeaderError] = useState('');
+  const [headerText, setHeaderText] = useState(() => JSON.stringify(config.headers ?? {}, null, 2));
   const method = String(config.method ?? 'GET').toUpperCase();
   const url = String(config.url ?? '');
   const rawBody = config.body;
@@ -96,10 +99,71 @@ export default function HttpActionEditor({
             <p className="mt-1 text-xs text-destructive">{errors.url}</p>
           ) : (
             <p className="mt-1 text-xs text-muted-foreground">
-              Absolute URL or parameter template like <code className="text-[11px] font-mono">{'${{ inputs.api_url }}'}</code>.
+              Absolute URL or parameter template like{' '}
+              <code className="text-[11px] font-mono">{'${{ inputs.api_url }}'}</code>.
             </p>
           )}
         </div>
+      </div>
+
+      <div>
+        <Label htmlFor={`http-headers-${editorId}`}>Request headers (JSON object)</Label>
+        <Textarea
+          id={`http-headers-${editorId}`}
+          aria-label="Request headers"
+          disabled={readOnly}
+          value={headerText}
+          className="mt-1.5 font-mono text-xs"
+          onChange={event => {
+            setHeaderText(event.target.value);
+            try {
+              const headers: unknown = JSON.parse(event.target.value || '{}');
+              if (
+                !headers ||
+                typeof headers !== 'object' ||
+                Array.isArray(headers) ||
+                Object.values(headers).some(value => typeof value !== 'string')
+              )
+                throw new Error();
+              setHeaderError('');
+              update({ headers });
+            } catch {
+              setHeaderError('Use a JSON object with string header values.');
+              update({ headers: event.target.value });
+            }
+          }}
+        />
+        {(headerError || errors.headers) && (
+          <p role="alert" className="text-xs text-destructive">
+            {headerError || errors.headers}
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Control-plane HTTP cannot consume SECRET_REF inputs. Use a scoped Agent action for
+          secret-backed requests.
+        </p>
+      </div>
+      <div>
+        <Label htmlFor={`http-status-${editorId}`}>Expected HTTP status (optional)</Label>
+        <Input
+          id={`http-status-${editorId}`}
+          aria-label="Expected HTTP status"
+          type="number"
+          min={100}
+          max={599}
+          disabled={readOnly}
+          value={String(config.expectedStatus ?? '')}
+          onChange={event => {
+            const next = { ...config };
+            if (event.target.value === '') delete next.expectedStatus;
+            else next.expectedStatus = Number(event.target.value);
+            onChange(next);
+          }}
+        />
+        <p className="text-xs text-muted-foreground">
+          Without an expected status, any 2xx response succeeds. Output is bounded; redirects are
+          rejected.
+        </p>
       </div>
 
       {!isNoBodyMethod && (
@@ -135,7 +199,11 @@ export default function HttpActionEditor({
                 key={input.key}
                 type="button"
                 disabled={readOnly}
-                onClick={() => update({ url: url ? `${url}\${{ inputs.${input.key} }}` : `\${{ inputs.${input.key} }}` })}
+                onClick={() =>
+                  update({
+                    url: url ? `${url}\${{ inputs.${input.key} }}` : `\${{ inputs.${input.key} }}`,
+                  })
+                }
                 className="rounded border bg-background px-1.5 py-0.5 font-mono text-[11px] hover:bg-muted"
                 title={`Click to append \${{ inputs.${input.key} }}`}
               >

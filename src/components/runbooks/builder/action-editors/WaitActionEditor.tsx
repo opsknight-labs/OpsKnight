@@ -52,8 +52,8 @@ export default function WaitActionEditor({
             id={`wait-duration-${editorId}`}
             aria-label="Wait duration (seconds)"
             type="number"
-            min={1}
-            max={3600}
+            min={0}
+            max={86400}
             placeholder="e.g. 30"
             value={rawDuration === undefined || rawDuration === null ? '' : String(rawDuration)}
             disabled={readOnly}
@@ -66,11 +66,16 @@ export default function WaitActionEditor({
         )}
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        Waiting is durable across worker restarts and remains subject to the overall deadline and
+        step timeout.
+      </p>
       {hasValidNum && (
         <div className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
           <Clock className="h-4 w-4 shrink-0 text-primary" />
           <span>
-            Pauses workflow execution for <strong>{formatDuration(numDuration)}</strong> before continuing to the next step.
+            Pauses workflow execution for <strong>{formatDuration(numDuration)}</strong> before
+            continuing to the next step.
           </span>
         </div>
       )}

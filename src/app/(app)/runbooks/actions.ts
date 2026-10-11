@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { RunbookError, RunbookDefinitionError } from '@/lib/runbooks/errors';
+import { assertAuthoringDefinition } from '@/lib/runbooks/authoring-validation';
 import { RUNBOOK_TEMPLATES, runbookTemplate, runbookTemplateInputs } from '@/lib/runbooks/builder';
 import { CAPABILITIES } from '@/lib/authorization';
 import { logAudit } from '@/lib/audit';
@@ -70,9 +71,7 @@ function parseJson(value: string, label: string): unknown {
 
 export async function createRunbookAction(formData: FormData) {
   const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
-  const templateName = z
-    .enum(RUNBOOK_TEMPLATES)
-    .parse(readString(formData, 'template') || 'empty');
+  const templateName = z.enum(RUNBOOK_TEMPLATES).parse(readString(formData, 'template') || 'empty');
   const created = await createRunbook(
     {
       name: readString(formData, 'name'),
@@ -108,12 +107,11 @@ export async function saveDraftAction(versionId: string, runbookId: string, form
     const actor = await assertCapability(CAPABILITIES.RUNBOOK_MANAGE);
     const parsedVersionId = idSchema.parse(versionId);
     const parsedRunbookId = idSchema.parse(runbookId);
-    const definition = runbookDefinitionSchema.parse(
-      parseJson(readString(formData, 'definition'), 'Definition')
-    );
-    const inputs = runbookInputsSchema.parse(
-      parseJson(readString(formData, 'inputs') || '[]', 'Inputs')
-    );
+    const rawDefinition = parseJson(readString(formData, 'definition'), 'Definition');
+    const rawInputs = parseJson(readString(formData, 'inputs') || '[]', 'Inputs');
+    assertAuthoringDefinition(rawDefinition, rawInputs);
+    const definition = runbookDefinitionSchema.parse(rawDefinition);
+    const inputs = runbookInputsSchema.parse(rawInputs);
     const draftRevisionRaw = formData.get('draftRevision');
     if (draftRevisionRaw === null || draftRevisionRaw === '') {
       throw new Error('Draft revision is required for optimistic locking.');
@@ -131,7 +129,7 @@ export async function saveDraftAction(versionId: string, runbookId: string, form
     revalidatePath(`/runbooks/${parsedRunbookId}`);
     return { saved: true, draftRevision: updated.draftRevision };
   } catch (error) {
-    if (error instanceof RunbookError) return { error: error.userMessage };
+    if (error instanceof RunbookError) return { error: error.userMessage, issues: error.fields };
     if (error instanceof z.ZodError)
       return {
         error:

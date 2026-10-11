@@ -19,7 +19,12 @@ import {
   resolveInputTemplates,
   validateResolvedStepConfig,
 } from './definition';
-import { DEFAULT_LEASE_DURATION_SECONDS, isRetryable, isSafeToRetryAfterUnknown } from './types';
+import {
+  DEFAULT_STEP_TIMEOUT_SECONDS,
+  DEFAULT_LEASE_DURATION_SECONDS,
+  isRetryable,
+  isSafeToRetryAfterUnknown,
+} from './types';
 import { agentSupportsStep, isRetryableFailure, retryDelayMs } from './safety';
 import { signExecutionEnvelope } from './execution-signing';
 import {
@@ -343,8 +348,14 @@ export async function claimAgentAttempt(
                 }
               }
 
-              const keys = referencedStepInputKeys(candidate.executionStep.config, candidate.executionStep.type);
-              const inputs = candidate.executionStep.execution.inputValues as Record<string, unknown>;
+              const keys = referencedStepInputKeys(
+                candidate.executionStep.config,
+                candidate.executionStep.type
+              );
+              const inputs = candidate.executionStep.execution.inputValues as Record<
+                string,
+                unknown
+              >;
               const hasSecrets = Object.entries(inputs).some(
                 ([key, value]) => keys.has(key) && isSecretReference(value)
               );
@@ -417,6 +428,7 @@ export async function claimAgentAttempt(
               data: {
                 status: 'CLAIMED',
                 claimedAgentId: agentId,
+                claimedAt: now,
                 leaseToken: sha256(token),
                 leaseExpiresAt: expiresAt,
               },
@@ -493,7 +505,7 @@ export async function claimAgentAttempt(
               timeoutSeconds: Math.max(
                 1,
                 Math.min(
-                  attempt.executionStep.timeoutSeconds ?? DEFAULT_LEASE_DURATION_SECONDS,
+                  attempt.executionStep.timeoutSeconds ?? DEFAULT_STEP_TIMEOUT_SECONDS,
                   Math.floor(
                     (attempt.executionStep.execution.deadlineAt.getTime() - now.getTime()) / 1000
                   )

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import crypto from 'crypto';
+import { buildExecutionPreview, checkExecutionReadiness } from './execution-preview';
 import type { IncidentEventType, Prisma, RunbookExecutionStep } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
@@ -93,7 +94,7 @@ function executionSteps(definition: ReturnType<typeof parseRunbookDefinition>) {
   return flattenSteps(definition).map((step, sequence) => ({ ...step, sequence }));
 }
 
-export async function startRunbookExecution(input: {
+export interface RunbookExecutionRequest {
   runbookId: string;
   runbookVersionId?: string;
   serviceId?: string;
@@ -104,7 +105,23 @@ export async function startRunbookExecution(input: {
   triggeredByUserId?: string;
   triggerFingerprint?: string;
   triggerId?: string;
-}) {
+  expectedPlanDigest?: string;
+}
+
+export async function startRunbookExecution(input: RunbookExecutionRequest) {
+  const result = await prepareRunbookExecution(input, false);
+  if (!('id' in result)) throw new Error('Execution was not created.');
+  return result;
+}
+
+/** Resolves through the identical transaction and preflight used by Execute, without creating work. */
+export async function previewRunbookExecution(input: RunbookExecutionRequest) {
+  const result = await prepareRunbookExecution(input, true);
+  if (!('digest' in result)) throw new Error('Preview was not generated.');
+  return result;
+}
+
+async function prepareRunbookExecution(input: RunbookExecutionRequest, previewOnly: boolean) {
   return prisma.$transaction(async tx => {
     await lockRunbookForShare(tx, input.runbookId, { action: 'execute' });
     const runbook = await tx.runbook.findFirst({
@@ -361,7 +378,16 @@ export async function startRunbookExecution(input: {
         where: {
           serviceId: resolvedServiceId,
           triggeredByUserId: null,
-          status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'CANCEL_REQUESTED', 'PAUSED'] },
+          status: {
+            in: [
+              'QUEUED',
+              'RUNNING',
+              'WAITING_AGENT',
+              'WAITING_APPROVAL',
+              'CANCEL_REQUESTED',
+              'PAUSED',
+            ],
+          },
           steps: {
             some: {
               riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
@@ -449,7 +475,16 @@ export async function startRunbookExecution(input: {
             { resolvedTargetAgentPoolId },
             { targetSelection: { path: ['sourcePoolId'], equals: resolvedTargetAgentPoolId } },
           ],
-          status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'CANCEL_REQUESTED', 'PAUSED'] },
+          status: {
+            in: [
+              'QUEUED',
+              'RUNNING',
+              'WAITING_AGENT',
+              'WAITING_APPROVAL',
+              'CANCEL_REQUESTED',
+              'PAUSED',
+            ],
+          },
           steps: {
             some: {
               riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
@@ -465,6 +500,45 @@ export async function startRunbookExecution(input: {
         );
       }
     }
+    const preview = buildExecutionPreview({
+      runbookId: runbook.id,
+      versionId: version.id,
+      version: version.version,
+      checksum: version.checksum,
+      agentId: resolvedTargetAgentId,
+      agentPoolId: resolvedTargetAgentId ? null : resolvedTargetAgentPoolId,
+      selectedLabels,
+      sourceAgentPoolId: resolvedTargetAgentPoolId,
+      timeoutSeconds: executionTimeoutSeconds,
+      inputValues: resolvedInputs,
+      inputTypes: version.inputs,
+      steps,
+    });
+    if (
+      input.expectedPlanDigest &&
+      z
+        .string()
+        .regex(/^[a-f0-9]{64}$/)
+        .parse(input.expectedPlanDigest) !== preview.digest
+    ) {
+      throw new RunbookDefinitionError(
+        'PREVIEW_STALE: version, inputs or target changed. Preview the runbook again before executing.'
+      );
+    }
+    if (previewOnly || input.expectedPlanDigest) {
+      preview.readiness = await checkExecutionReadiness(tx, {
+        steps,
+        inputValues: resolvedInputs,
+        agentId: resolvedTargetAgentId,
+        agentPoolId: resolvedTargetAgentPoolId,
+      });
+      if (!previewOnly && preview.readiness.some(check => check.state === 'blocked')) {
+        throw new RunbookDefinitionError(
+          'EXECUTION_NOT_READY: target capability, availability or secret access changed. Preview again before executing.'
+        );
+      }
+    }
+    if (previewOnly) return preview;
     const execution = await tx.runbookExecution.create({
       data: {
         runbookId: runbook.id,
@@ -493,7 +567,7 @@ export async function startRunbookExecution(input: {
           create: steps.map(step => ({
             stepKey: step.key,
             sequence: step.sequence,
-            name: step.name,
+            name: String(resolveInputTemplates(step.name, resolvedInputs)),
             type: step.type,
             containerRuntime:
               step.type === 'DOCKER' &&
@@ -566,7 +640,10 @@ function resolvedPlanDigest(
   });
 }
 
-export async function readBoundedResponseBody(response: Response, maxBytes: number): Promise<string> {
+export async function readBoundedResponseBody(
+  response: Response,
+  maxBytes: number
+): Promise<string> {
   if (!response.body) return '';
   if (typeof response.body.getReader !== 'function') {
     throw new Error(
@@ -639,7 +716,10 @@ async function executeHttpStep(
       redirect: 'error',
     });
     const body = await readBoundedResponseBody(response, MAX_OUTPUT_PREVIEW_BYTES);
-    if (!response.ok) throw new Error(`HTTP ${response.status}: ${body.slice(0, 512)}`);
+    const expectedStatus = config.expectedStatus;
+    if (expectedStatus === undefined ? !response.ok : response.status !== expectedStatus) {
+      throw new Error(`HTTP ${response.status}: ${body.slice(0, 512)}`);
+    }
     return `HTTP ${response.status}\n${body}`;
   } finally {
     clearTimeout(timer);
@@ -735,7 +815,9 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
         service: { select: { id: true, name: true, teamId: true } },
       },
     });
-    const config = workflowConditionSchema.parse(step.config);
+    const config = workflowConditionSchema.parse(
+      resolveInputTemplates(step.config, execution.inputValues as Record<string, unknown>)
+    );
     const inputTypeMap = new Map<string, string>(
       execution.runbookVersion?.inputs?.map(input => [input.key, input.type]) ?? []
     );
@@ -909,11 +991,7 @@ export async function completeStep(
       data: { status: 'RUNNING' },
     });
     if (transitioned.count !== 1) {
-      throw new RunbookExecutionInvalidTransitionError(
-        executionId,
-        execution.status,
-        'RUNNING'
-      );
+      throw new RunbookExecutionInvalidTransitionError(executionId, execution.status, 'RUNNING');
     }
     await enqueueAdvance(tx, executionId);
   });
@@ -984,15 +1062,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           executionId,
           status: 'RUNNING',
           type: {
-            notIn: [
-              'HTTP',
-              'WAIT',
-              'LINUX_DIAGNOSTICS',
-              'SYSTEMD',
-              'DOCKER',
-              'KUBERNETES',
-              'BASH',
-            ],
+            notIn: ['HTTP', 'WAIT', 'LINUX_DIAGNOSTICS', 'SYSTEMD', 'DOCKER', 'KUBERNETES', 'BASH'],
           },
         },
         data: { status: 'CANCELLED', completedAt: new Date() },
@@ -1099,15 +1169,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           executionId,
           status: 'RUNNING',
           type: {
-            notIn: [
-              'HTTP',
-              'WAIT',
-              'LINUX_DIAGNOSTICS',
-              'SYSTEMD',
-              'DOCKER',
-              'KUBERNETES',
-              'BASH',
-            ],
+            notIn: ['HTTP', 'WAIT', 'LINUX_DIAGNOSTICS', 'SYSTEMD', 'DOCKER', 'KUBERNETES', 'BASH'],
           },
         },
         data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
@@ -1148,7 +1210,11 @@ export async function advanceExecution(executionId: string): Promise<void> {
               id: executionId,
               status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
             },
-            data: { status: 'TIMED_OUT', completedAt: new Date(), failureCode: 'EXECUTION_TIMEOUT' },
+            data: {
+              status: 'TIMED_OUT',
+              completedAt: new Date(),
+              failureCode: 'EXECUTION_TIMEOUT',
+            },
           });
           if (timedOut.count === 1) {
             await addIncidentRunbookEvent(
@@ -1178,9 +1244,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           status: 'FAILED',
           completedAt: new Date(),
           failureCode:
-            failed.status === 'UNKNOWN'
-              ? 'UNKNOWN_OUTCOME'
-              : failed.errorCode ?? 'STEP_FAILED',
+            failed.status === 'UNKNOWN' ? 'UNKNOWN_OUTCOME' : (failed.errorCode ?? 'STEP_FAILED'),
           failureMessage: failed.errorMessage,
         },
       });

@@ -9,6 +9,16 @@ let runbookId = '';
 let serviceId = '';
 let incidentId = '';
 test.describe.configure({ mode: 'serial' });
+test.beforeEach(async ({ page }) => {
+  page.on('dialog', dialog => dialog.accept());
+  // Incident alerts from earlier matrix fixtures can cover top-right controls.
+  await page.addLocatorHandler(
+    page.getByRole('button', { name: /^Dismiss (all incident alerts|incident alert)$/ }).first(),
+    async button => {
+      await button.click();
+    }
+  );
+});
 test.beforeAll(async () => {
   if (new URL(process.env.DATABASE_URL!).pathname !== '/runbook_ui_test')
     throw new Error('Dedicated test database required');
@@ -65,7 +75,9 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await expect(page.getByLabel('Definition JSON')).not.toBeVisible();
   await page.getByLabel('Step name', { exact: true }).fill('Capture baseline diagnostics');
   await expect(
-    page.getByRole('list', { name: 'Runbook steps' }).getByRole('heading', { name: 'Capture baseline diagnostics' })
+    page
+      .getByRole('list', { name: 'Runbook steps' })
+      .getByRole('heading', { name: 'Capture baseline diagnostics' })
   ).toBeVisible();
   await page.getByLabel('Step key', { exact: true }).fill('baseline_check');
   const before = page.locator('section[data-testid="action-precheck-checks"]');
@@ -144,7 +156,10 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   const agent = await prisma.runbookAgent.findFirstOrThrow({ where: { name: agentName } });
   expect(agent.enrollmentTokenHash).toBeTruthy();
   await page.keyboard.press('Escape');
-  await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^pools/i }).click();
+  await page
+    .getByRole('navigation', { name: 'Infrastructure sections' })
+    .getByRole('link', { name: /^pools/i })
+    .click();
   await page.getByRole('button', { name: 'Create pool', exact: true }).click();
   await page.getByLabel('Pool name', { exact: true }).fill(poolName);
   await page.getByRole('dialog').getByRole('button', { name: 'Create pool', exact: true }).click();
@@ -161,7 +176,10 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
     .poll(async () => prisma.runbookAgentPoolMember.count({ where: { agentId: agent.id } }))
     .toBe(1);
   await page.keyboard.press('Escape');
-  await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^secrets/i }).click();
+  await page
+    .getByRole('navigation', { name: 'Infrastructure sections' })
+    .getByRole('link', { name: /^secrets/i })
+    .click();
   await page.getByRole('button', { name: 'Create secret', exact: true }).click();
   await page.getByLabel('Secret name', { exact: true }).fill(secretName);
   await page.getByLabel('Secret value', { exact: true }).fill('ui-credential-initial');
@@ -246,6 +264,11 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
       async () => (await prisma.runbook.findUniqueOrThrow({ where: { id } })).publishedVersionId
     )
     .not.toBeNull();
+  await expect(page.getByText('Published v1', { exact: true })).toBeVisible();
+  await expect(page.getByRole('alertdialog')).not.toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Create next editable draft', exact: true })
+  ).toBeVisible();
   await page.goto(`/services/${serviceId}`);
   await page.getByRole('tab', { name: /^Runbooks/ }).click();
   await page.getByRole('button', { name: `Attach ${name}`, exact: true }).click();
@@ -315,7 +338,20 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   await page.goto(`/incidents/${incident.id}`);
   await page.getByRole('tab', { name: /^Runbooks/ }).click();
   await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
-  await page.getByRole('button', { name: 'Start suggestion', exact: true }).click();
+  await prisma.runbookAgent.update({
+    where: { id: agent.id },
+    data: { lastHeartbeatAt: new Date() },
+  });
+  await page.getByRole('button', { name: 'Preview execution', exact: true }).first().click();
+  await expect(page.getByRole('region', { name: 'Execution preview' })).toContainText(
+    'Human approval required'
+  );
+  await page
+    .getByLabel(
+      'I reviewed the target and authorize the planned writes. Step approvals and Agent policy still apply.'
+    )
+    .check();
+  await page.getByRole('button', { name: 'Execute this plan', exact: true }).click();
   await expect
     .poll(async () =>
       prisma.runbookExecution.count({ where: { incidentId: incident.id, runbookId: id } })
@@ -397,22 +433,85 @@ test('390px infrastructure, health and builder have no horizontal overflow', asy
     await noOverflow(page);
     if (route === `/runbooks/${runbookId}`) {
       await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
+      await page
+        .getByRole('list', { name: 'Runbook steps' })
+        .getByRole('button', { name: /^Step 1:/ })
+        .click();
       await expect(page.locator('input[aria-label="Step name"]:visible').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Back to steps' }).click();
       await page.screenshot({ path: 'test-results/runbooks-builder-mobile.png', fullPage: true });
-      for (const width of [390, 768, 1024, 1280]) {
+      for (const width of [320, 375, 390, 430, 768, 1024, 1440]) {
         await page.setViewportSize({ width, height: 844 });
-        await page.screenshot({ path: `test-results/runbooks-builder-${width}.png`, fullPage: true });
+        await noOverflow(page);
+        await page.screenshot({
+          path: `test-results/runbooks-builder-${width}.png`,
+          fullPage: true,
+        });
       }
       await page.setViewportSize({ width: 390, height: 844 });
     }
     if (route === '/runbooks/agents') {
-      await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^pools/i }).click();
+      await page
+        .getByRole('navigation', { name: 'Infrastructure sections' })
+        .getByRole('link', { name: /^pools/i })
+        .click();
       await noOverflow(page);
-      await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^secrets/i }).click();
+      await page
+        .getByRole('navigation', { name: 'Infrastructure sections' })
+        .getByRole('link', { name: /^secrets/i })
+        .click();
       await noOverflow(page);
     }
   }
   await page.screenshot({ path: 'test-results/runbooks-incident-mobile.png', fullPage: true });
+});
+
+test('large workflows retain keyboard navigation, theme layout and zoom-equivalent viewport', async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto(`/runbooks/${runbookId}`);
+  for (const count of [1, 10, 25, 50]) {
+    await page.getByRole('tab', { name: /^Advanced/ }).click();
+    await page.getByLabel('Definition JSON', { exact: true }).fill(
+      JSON.stringify({
+        steps: Array.from({ length: count }, (_, index) => ({
+          key: `check_${index}`,
+          name: `Inspect ${index + 1}: a long operational description that must remain readable`,
+          type: 'WAIT',
+          riskClass: 'READ_ONLY',
+          config: { durationSeconds: 0 },
+        })),
+      })
+    );
+    await page.getByRole('button', { name: 'Apply JSON to builder' }).click();
+    await page.getByRole('tab', { name: 'Builder', exact: true }).click();
+    const steps = page.getByRole('list', { name: 'Runbook steps' });
+    await expect(steps.getByRole('button', { name: /^Step \d+:/ })).toHaveCount(count);
+    const last = steps.getByRole('button', { name: /^Step \d+:/ }).nth(count - 1);
+    await last.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByLabel('Step name', { exact: true })).toHaveValue(
+      `Inspect ${count}: a long operational description that must remain readable`
+    );
+    await noOverflow(page);
+  }
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.evaluate(value => {
+      document.documentElement.classList.remove('light', 'dark');
+      document.documentElement.classList.add(value);
+    }, theme);
+    await noOverflow(page);
+    await page.screenshot({ path: `test-results/runbooks-50-steps-${theme}.png`, fullPage: true });
+  }
+  // A 1440px desktop at 200% browser zoom has a 720px CSS viewport.
+  await page.setViewportSize({ width: 720, height: 450 });
+  await noOverflow(page);
+  await expect(page.getByRole('button', { name: 'Back to steps' })).toBeVisible();
+  await page.getByRole('button', { name: 'Back to steps' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
 });
 
 test('server pagination, administrator labels, effective capabilities and budget settings', async ({
@@ -501,7 +600,13 @@ test('server pagination, administrator labels, effective capabilities and budget
     .getByText('Pinned execution public key', { exact: true })
     .filter({ visible: true })
     .click();
-  await page.getByRole('button', { name: 'Stage next signing identity' }).click();
+  const stageIdentity = page.getByRole('button', { name: 'Stage next signing identity' });
+  if ((await prisma.runbookExecutionSigningKey.count({ where: { state: 'NEXT' } })) === 0) {
+    await stageIdentity.click();
+  } else {
+    // The matrix shares global signing settings; an existing staged key is authoritative.
+    await expect(stageIdentity).toBeDisabled();
+  }
   await expect
     .poll(async () => prisma.runbookExecutionSigningKey.count({ where: { state: 'NEXT' } }))
     .toBe(1);

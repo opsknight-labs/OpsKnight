@@ -6,7 +6,7 @@
  * and UI components can use for targeted messaging.
  */
 
-import { AppError } from '@/lib/errors';
+import { AppError, type ErrorField } from '@/lib/errors';
 import type { AppErrorCode } from '@/lib/errors/registry';
 
 // ---------------------------------------------------------------------------
@@ -18,6 +18,7 @@ export class RunbookError extends AppError {
     code: AppErrorCode;
     userMessage: string;
     details?: Record<string, unknown>;
+    fields?: ErrorField[];
   }) {
     super(input);
     this.name = 'RunbookError';
@@ -34,6 +35,19 @@ export class RunbookDefinitionError extends RunbookError {
       code: 'RUNBOOK_DEFINITION_INVALID',
       userMessage: message,
       details,
+      fields: Array.isArray(details?.issues)
+        ? details.issues.flatMap((issue: unknown) => {
+            if (!issue || typeof issue !== 'object' || !('message' in issue) || !('path' in issue))
+              return [];
+            return [
+              {
+                field: Array.isArray(issue.path) ? issue.path.join('.') : '',
+                code: 'code' in issue ? String(issue.code) : undefined,
+                message: String(issue.message),
+              },
+            ];
+          })
+        : undefined,
     });
     this.name = 'RunbookDefinitionError';
   }

@@ -20,6 +20,7 @@ Read [Runbooks and safe remediation](../../concepts/runbooks) before enabling wr
 3. [Manage Agents, pools, and scoped secrets](./agents-pools-secrets).
 4. [Install and operate outbound Agents](../../operate/deploy/agent-operations).
 5. [Troubleshoot execution and Agent health](../../troubleshooting/runbooks/).
+6. [Configure action examples and local policy](./examples).
 
 Use [Runbook reference](../../reference/runbooks) for step types, input types,
 permissions, and limits. Begin with diagnostics and a manual binding before

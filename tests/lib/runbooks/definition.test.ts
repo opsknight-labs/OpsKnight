@@ -341,7 +341,7 @@ describe('Runbook Definition Module', () => {
 
     it('should return false if no steps require approval', () => {
       const def = createMockDefinition({
-        steps: [createMockStep({ requiresApproval: false, type: 'MANUAL' })],
+        steps: [createMockStep({ requiresApproval: false, type: 'WAIT' })],
       });
       expect(requiresAnyApproval(def)).toBe(false);
     });
@@ -669,7 +669,9 @@ describe('Runbook Definition Module', () => {
       ).toThrow(/must be NUMBER/);
 
       // scale rejects replica template bound to undeclared input
-      expect(() => parseRunbookDefinition(templatedScaleDef, [])).toThrow(/undeclared replica input/);
+      expect(() => parseRunbookDefinition(templatedScaleDef, [])).toThrow(
+        /undeclared replica input/
+      );
     });
 
     it('referencedStepInputKeys extracts template references, bare and prefixed Bash env vars, and condition inputs', () => {

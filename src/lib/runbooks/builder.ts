@@ -1,3 +1,4 @@
+import { minimumRiskForStep } from './shared-definition';
 import type { RunbookDefinition, RunbookStepDefinition, RunbookStepType } from './types';
 import type { RunbookInputInput } from './schemas';
 export { canonicalConditionField } from './conditions';
@@ -49,23 +50,7 @@ export function newBuilderStep(type: RunbookStepType, key: string): RunbookStepD
 }
 
 export function builderRisk(step: RunbookStepDefinition): RunbookStepDefinition['riskClass'] {
-  const action = String(step.config.action ?? '');
-  if (step.type === 'BASH' || action === 'restart' || action === 'rollout-restart')
-    return 'NON_IDEMPOTENT';
-  if (step.type === 'HTTP') {
-    const method = String(step.config.method ?? 'GET');
-    return ['GET', 'HEAD'].includes(method)
-      ? 'READ_ONLY'
-      : ['PUT', 'DELETE'].includes(method)
-        ? 'IDEMPOTENT_WRITE'
-        : 'NON_IDEMPOTENT';
-  }
-  if (
-    (['SYSTEMD', 'DOCKER'].includes(step.type) && ['start', 'stop'].includes(action)) ||
-    (step.type === 'KUBERNETES' && action === 'scale')
-  )
-    return 'IDEMPOTENT_WRITE';
-  return 'READ_ONLY';
+  return minimumRiskForStep(step);
 }
 
 export function runbookTemplate(template: (typeof RUNBOOK_TEMPLATES)[number]): RunbookDefinition {
@@ -218,4 +203,3 @@ export function cloneStepRecursively(
 
   return cloned;
 }
-

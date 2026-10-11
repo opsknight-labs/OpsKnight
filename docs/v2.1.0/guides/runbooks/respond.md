@@ -6,7 +6,7 @@ product_area: runbooks
 audience: [administrator, responder]
 verification:
   level: test
-  verified_at: 2026-10-04
+  verified_at: 2026-10-11
   evidence: [src/components/service/ServiceRunbooks.tsx, src/components/incident/IncidentRunbooks.tsx, tests/e2e/runbooks-ui.spec.ts, src/lib/runbooks/triggers.ts]
 ---
 
@@ -43,8 +43,21 @@ inputs, and target even if its service binding is later edited.
 
 ## Start and approve
 
-Open the incident's **Runbooks** tab. Start a suggestion or an available manual
-binding. Read the ordered execution timeline. When a step waits for approval,
+Open the incident's **Runbooks** tab and select **Preview execution** on a
+suggestion or available workflow. Review the immutable version/checksum,
+resolved target, redacted inputs, ordered actions, risk and approval gates.
+Preview creates no execution or queued work. It reports current Agent capability
+and secret-grant checks; local policy, confidential transport, network access and
+platform permissions remain dispatch checks.
+
+For writes, confirm that you reviewed the target and authorize the plan, then
+select **Execute this plan**. Execution resolves the plan again in its transaction
+and rejects a changed version, target, inputs or action plan. Preview again after
+a stale-plan or readiness error. A successful preview is not a dry run or a
+successful action. To test real actions, use an explicitly authorized test service
+and Agent; preview itself does not provide an execution sandbox.
+
+Read the ordered execution timeline. When a step waits for approval,
 inspect its action, resolved parameters, risk, target Agent/pool, version
 checksum, and timeout. Choose **Approve exact plan** and confirm only if that
 specific action and target are appropriate.

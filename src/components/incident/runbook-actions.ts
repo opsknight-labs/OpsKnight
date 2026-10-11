@@ -132,3 +132,75 @@ export async function cancelIncidentRunbookAction(incidentId: string, executionI
   await cancelExecution(idSchema.parse(executionId), actor.id, 'Cancelled by incident responder.');
   revalidatePath(`/incidents/${incidentId}`);
 }
+
+async function incidentExecutionRequest(
+  incidentId: string,
+  bindingId: string,
+  suggestionId?: string
+) {
+  const [actor] = await Promise.all([
+    assertCapability(CAPABILITIES.RUNBOOK_EXECUTE),
+    assertCanViewIncident(idSchema.parse(incidentId)),
+  ]);
+  const binding = await prisma.serviceRunbookBinding.findFirst({
+    where: {
+      id: idSchema.parse(bindingId),
+      enabled: true,
+      service: { incidents: { some: { id: incidentId } } },
+    },
+    include: { runbook: { select: { publishedVersionId: true } } },
+  });
+  if (!binding) throw new Error('Runbook is unavailable for this incident.');
+  return {
+    runbookId: binding.runbookId,
+    bindingId: binding.id,
+    serviceId: binding.serviceId,
+    incidentId,
+    runbookVersionId:
+      (binding.versionStrategy === 'PINNED'
+        ? binding.runbookVersionId
+        : binding.runbook.publishedVersionId) ?? undefined,
+    suggestionId: suggestionId ? idSchema.parse(suggestionId) : undefined,
+    triggeredByUserId: actor.id,
+  };
+}
+
+export async function previewIncidentRunbookAction(
+  incidentId: string,
+  bindingId: string,
+  suggestionId?: string
+) {
+  try {
+    const { previewRunbookExecution } = await import('@/lib/runbooks/orchestrator');
+    return {
+      preview: await previewRunbookExecution(
+        await incidentExecutionRequest(incidentId, bindingId, suggestionId)
+      ),
+    };
+  } catch (error) {
+    const { toPublicAppError } = await import('@/lib/errors');
+    return { error: toPublicAppError(error).message };
+  }
+}
+
+export async function executePreviewedIncidentRunbookAction(
+  incidentId: string,
+  bindingId: string,
+  suggestionId: string | undefined,
+  data: FormData
+) {
+  try {
+    const expectedPlanDigest = z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .parse(data.get('previewDigest'));
+    await startRunbookExecution({
+      ...(await incidentExecutionRequest(incidentId, bindingId, suggestionId)),
+      expectedPlanDigest,
+    });
+    revalidatePath(`/incidents/${incidentId}`);
+  } catch (error) {
+    const { toPublicAppError } = await import('@/lib/errors');
+    return { error: toPublicAppError(error).message };
+  }
+}

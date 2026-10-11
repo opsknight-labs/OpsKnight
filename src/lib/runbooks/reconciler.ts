@@ -2,7 +2,7 @@ import 'server-only';
 
 import crypto from 'crypto';
 import prisma from '@/lib/prisma';
-import { isSafeToRetryAfterUnknown } from './types';
+import { DEFAULT_STEP_TIMEOUT_SECONDS, isSafeToRetryAfterUnknown } from './types';
 import { retryDelayMs } from './safety';
 
 export async function reconcileRunbooks(limit = 100) {
@@ -279,7 +279,8 @@ export async function reconcileRunbooks(limit = 100) {
   let localRecovered = 0;
   for (const step of localRunning) {
     const timeoutAt = new Date(
-      (step.startedAt?.getTime() ?? now.getTime()) + (step.timeoutSeconds ?? 300) * 1000
+      (step.startedAt?.getTime() ?? now.getTime()) +
+        (step.timeoutSeconds ?? DEFAULT_STEP_TIMEOUT_SECONDS) * 1000
     );
     if (timeoutAt >= now) continue;
     await prisma.$transaction(async tx => {

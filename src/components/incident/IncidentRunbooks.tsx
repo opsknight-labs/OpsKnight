@@ -1,5 +1,7 @@
 import Link from 'next/link';
-import { CheckCircle2, Circle, Clock3, Download, Lightbulb, Play, XCircle } from 'lucide-react';
+import ExecutionTroubleshooting from '@/components/runbooks/executions/ExecutionTroubleshooting';
+import RunbookExecutionPreview from '@/components/runbooks/RunbookExecutionPreview';
+import { CheckCircle2, Circle, Clock3, Download, Lightbulb, XCircle } from 'lucide-react';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCanViewIncident, getCurrentUser, getUserPermissions } from '@/lib/rbac';
@@ -31,8 +33,8 @@ import {
   approveIncidentRunbookStepAction,
   cancelIncidentRunbookAction,
   dismissIncidentRunbookSuggestionAction,
-  startIncidentRunbookAction,
-  startIncidentRunbookSuggestionAction,
+  previewIncidentRunbookAction,
+  executePreviewedIncidentRunbookAction,
 } from './runbook-actions';
 
 export default async function IncidentRunbooks({
@@ -145,21 +147,22 @@ export default async function IncidentRunbooks({
                 </div>
                 {canExecute && (
                   <div className="flex gap-2">
-                    <ActionForm
-                      action={startIncidentRunbookSuggestionAction.bind(
-                        null,
-                        incidentId,
-                        suggestion.id
-                      )}
-                    >
-                      <SubmitButton
-                        pendingLabel="Starting…"
-                        size="sm"
-                        disabled={!suggestion.planSnapshot}
-                      >
-                        <Play /> Start suggestion
-                      </SubmitButton>
-                    </ActionForm>
+                    {suggestion.planSnapshot && (
+                      <RunbookExecutionPreview
+                        previewAction={previewIncidentRunbookAction.bind(
+                          null,
+                          incidentId,
+                          suggestion.bindingId,
+                          suggestion.id
+                        )}
+                        executeAction={executePreviewedIncidentRunbookAction.bind(
+                          null,
+                          incidentId,
+                          suggestion.bindingId,
+                          suggestion.id
+                        )}
+                      />
+                    )}
                     {!suggestion.planSnapshot && (
                       <span className="text-xs text-muted-foreground">
                         Generate a new suggestion to freeze its plan.
@@ -211,13 +214,20 @@ export default async function IncidentRunbooks({
                     </div>
                   </div>
                   {canExecute && (
-                    <ActionForm
-                      action={startIncidentRunbookAction.bind(null, incidentId, binding.id)}
-                    >
-                      <SubmitButton pendingLabel="Starting…" size="sm">
-                        <Play /> Start
-                      </SubmitButton>
-                    </ActionForm>
+                    <RunbookExecutionPreview
+                      previewAction={previewIncidentRunbookAction.bind(
+                        null,
+                        incidentId,
+                        binding.id,
+                        undefined
+                      )}
+                      executeAction={executePreviewedIncidentRunbookAction.bind(
+                        null,
+                        incidentId,
+                        binding.id,
+                        undefined
+                      )}
+                    />
                   )}
                 </div>
               ))}
@@ -237,6 +247,7 @@ export default async function IncidentRunbooks({
                 </CardDescription>
               </div>
               <StatusBadge status={execution.status} />
+              <ExecutionTroubleshooting status={execution.status} code={execution.failureCode} />
             </div>
           </CardHeader>
           <CardContent className="space-y-4">

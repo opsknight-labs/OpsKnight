@@ -39,7 +39,8 @@ export default function ManualActionEditor({
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        Manual steps pause execution until an assigned responder acknowledges and marks completion in the web console or incident war room.
+        Manual steps pause execution until a responder with runbook approval permission acknowledges
+        and marks completion in the web console or incident war room.
       </p>
     </div>
   );
