@@ -113,6 +113,47 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
     expect(await testPrisma.backgroundJob.count({ where: { status: 'PENDING' } })).toBe(32);
   });
 
+  it('protects ordinary capacity from older observations across concurrent workers', async () => {
+    await testPrisma.backgroundJob.createMany({
+      data: [
+        ...Array.from({ length: 200 }, () => ({
+          type: 'SCHEDULED_TASK' as const,
+          scheduledAt: new Date(Date.now() - 60000),
+          payload: { task: 'AUTOMATION_OBSERVE' },
+        })),
+        ...Array.from({ length: 200 }, (_, index) => ({
+          type: 'SCHEDULED_TASK' as const,
+          scheduledAt: new Date(Date.now() - 1000),
+          payload: index % 2 ? { task: 'ORDINARY' } : {},
+        })),
+      ],
+    });
+    const batches = await Promise.all([
+      claimPendingOperationalJobs(100, []),
+      claimPendingOperationalJobs(100, []),
+    ]);
+    for (const batch of batches) {
+      expect(batch).toHaveLength(100);
+      const observations = batch.filter(
+        job => (job.payload as { task?: string }).task === 'AUTOMATION_OBSERVE'
+      );
+      expect(observations).toHaveLength(16);
+      expect(batch.length - observations.length).toBe(84);
+    }
+    expect(new Set(batches.flat().map(job => job.id)).size).toBe(200);
+    expect(await testPrisma.backgroundJob.count({ where: { status: 'PENDING' } })).toBe(200);
+  });
+
+  it('does not let observation-only backlogs exceed the reserved slice or consume tiny batches', async () => {
+    for (let i = 0; i < 24; i++)
+      await scheduleJob('SCHEDULED_TASK', new Date(Date.now() - 1000), {
+        task: 'AUTOMATION_OBSERVE',
+      });
+    expect(await claimPendingOperationalJobs(100, [])).toHaveLength(16);
+    expect(await claimPendingOperationalJobs(3, [])).toHaveLength(0);
+    expect(await claimPendingOperationalJobs(100, ['SCHEDULED_TASK'])).toHaveLength(0);
+  });
+
   describe('Retry Logic and Exponential Backoff', () => {
     it('should reschedule failed jobs with backoff and eventually mark as FAILED', async () => {
       // Schedule job 1 second in the past to ensure it's immediately claimable

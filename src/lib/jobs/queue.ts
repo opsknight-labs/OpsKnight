@@ -302,6 +302,7 @@ export interface QueueMaintenanceResult {
 export interface ClaimJobsOptions {
   readonly runMaintenance?: boolean;
   readonly automationObservationsOnly?: boolean;
+  readonly excludeAutomationObservations?: boolean;
 }
 
 export async function runQueueMaintenance(prismaClient = prisma): Promise<QueueMaintenanceResult> {
@@ -387,6 +388,10 @@ export async function claimPendingJobs(
     ? Prisma.sql`AND candidate."type"='SCHEDULED_TASK'::"JobType"
         AND candidate.payload->>'task'='AUTOMATION_OBSERVE'`
     : Prisma.empty;
+  const excludedObservationFilter = options?.excludeAutomationObservations
+    ? Prisma.sql`AND NOT (candidate."type"='SCHEDULED_TASK'::"JobType"
+        AND candidate.payload->>'task' IS NOT DISTINCT FROM 'AUTOMATION_OBSERVE')`
+    : Prisma.empty;
   return prisma.$queryRaw<QueuedJob[]>(Prisma.sql`
     WITH cte AS (
       SELECT candidate."id" FROM "BackgroundJob" AS candidate
@@ -413,7 +418,7 @@ export async function claimPendingJobs(
             )
           )
         )
-        AND candidate."scheduledAt"<=NOW() AND candidate."attempts"<candidate."maxAttempts" ${typeFilter} ${excludedTypeFilter} ${observationFilter}
+        AND candidate."scheduledAt"<=NOW() AND candidate."attempts"<candidate."maxAttempts" ${typeFilter} ${excludedTypeFilter} ${observationFilter} ${excludedObservationFilter}
         AND (
           candidate."type"<>'SCHEDULED_TASK'::"JobType"
           OR candidate."payload"->>'task' IS DISTINCT FROM 'EVENT_SIDE_EFFECT'
@@ -1553,11 +1558,15 @@ function heartbeatClaimedBatch(jobs: QueuedJob[]) {
 export async function claimPendingOperationalJobs(limit: number, excludeTypes: readonly JobType[]) {
   const reserved = Math.min(16, Math.floor(limit / 4));
   if (!reserved || excludeTypes.includes('SCHEDULED_TASK'))
-    return claimPendingJobs(limit, undefined, excludeTypes);
+    return claimPendingJobs(limit, undefined, excludeTypes, {
+      excludeAutomationObservations: true,
+    });
   const observations = await claimPendingJobs(reserved, 'SCHEDULED_TASK', [], {
     automationObservationsOnly: true,
   });
-  const ordinary = await claimPendingJobs(limit - observations.length, undefined, excludeTypes);
+  const ordinary = await claimPendingJobs(limit - observations.length, undefined, excludeTypes, {
+    excludeAutomationObservations: true,
+  });
   return [...observations, ...ordinary];
 }
 

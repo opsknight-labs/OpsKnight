@@ -191,3 +191,14 @@ service-disabled latency failure did not recur. Instead, LIVE-small and
 LIVE-worst failed latency comparisons, and worst-case recorded six evaluation
 timeouts. Queue-age gates passed. Consistent capacity remains **not certified**;
 API CPU/allocation profiling is the remaining performance investigation.
+
+The operational claim now explicitly excludes `AUTOMATION_OBSERVE` from the
+ordinary slice. PostgreSQL regressions cover older observations versus newer
+ordinary jobs, concurrent claimers, missing task keys, and tiny/observation-only
+batches. The reservation is a capacity boundary even when observations are
+older; unused ordinary capacity is not backfilled with observations.
+
+Final certification can use `AUTOMATION_BASELINE_MODE=interleaved`: a fresh
+OFF precedes each disabled/SHADOW/LIVE profile, with unique numbered artifacts
+and an explicit baseline ID per comparison. Every OFF still passes absolute
+gates, all queues drain between runs, and the 1.25x limit remains unchanged.

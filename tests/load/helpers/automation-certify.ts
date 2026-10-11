@@ -8,9 +8,46 @@ import { configureAutomationLoadProfile, provisionAutomationProviderCapacity } f
 import { kubernetesRecoveryTargets, requireRecoveryTarget } from './automation-recovery';
 import { countAutomationBacklog } from './automation-backlog';
 import { providerDuplicateDelta } from './automation-provider-telemetry';
-import { AUTOMATION_LOAD_PROFILES } from '../fixtures/automation';
+import { automationComparisonSchedule, precedingAutomationBaseline } from './automation-comparison';
 import { collectSingleTelemetrySample } from './metrics';
 import type { LoadSeedManifest } from './seed';
+type CertificationSummary = {
+  metrics: {
+    iterations: { count: number };
+    checks: { passes: number; fails: number };
+    automation_accepted_events: { count: number };
+    automation_ingestion_latency_ms: { 'p(95)': number; 'p(99)': number };
+    dropped_iterations?: { count: number };
+  };
+};
+type CertificationSample = Awaited<ReturnType<typeof collectSingleTelemetrySample>>;
+type CertificationResult = {
+  profile: string;
+  runId: string;
+  k6ExitCode: number | null;
+  acceptedEvents: number;
+  persistedIncidents: number;
+  duplicateGroups: number;
+  providerDuplicateDeliveriesDelta: number | null;
+  fallbackCount: number;
+  traceCount: number;
+  traceJsonBytes: number;
+  pendingAfterDrain: number;
+  transactionRetryCount: number;
+  recoveryDrainMs: number;
+  deadlocksDelta: number;
+  criticalNotificationLatency: {
+    p95Ms: number | null;
+    p99Ms: number | null;
+    sent: number;
+    failed: number;
+  };
+  telemetrySamples: CertificationSample[];
+  traceRuntimeP99Ms: number | null;
+  summary: CertificationSummary;
+  telemetry: CertificationSample;
+};
+
 const exec = promisify(execFile);
 const db = new PrismaClient();
 const composeArgs = [
@@ -140,7 +177,7 @@ async function main() {
   const topology = process.env.AUTOMATION_TOPOLOGY || 'compose-split';
   const outputDir = path.resolve('artifacts/load-certification/automation', topology);
   await fs.mkdir(outputDir, { recursive: true });
-  const results = [];
+  const results: CertificationResult[] = [];
   const providerCapacityProfile = process.env.AUTOMATION_PROVIDER_CAPACITY_PROFILE || 'defaults';
   if (!['defaults', 'provisioned-200'].includes(providerCapacityProfile))
     throw new Error('Unknown automation provider capacity profile');
@@ -159,8 +196,10 @@ async function main() {
     );
     if (!response.ok) throw new Error(`Provider telemetry reset failed (${response.status})`);
   }
+  const baselineMode = process.env.AUTOMATION_BASELINE_MODE || 'single';
+  const schedule = automationComparisonSchedule(baselineMode);
   let stopReason: string | null = null;
-  for (const profile of AUTOMATION_LOAD_PROFILES.filter(profile => profile !== 'disabled')) {
+  for (const { profile, runId } of schedule) {
     if (results.length && results.at(-1)!.pendingAfterDrain > 0) {
       stopReason = 'Previous profile did not drain';
       process.stderr.write(
@@ -168,7 +207,10 @@ async function main() {
       );
       break;
     }
-    const off = results.length ? results[0] : undefined;
+    const off = results
+      .slice()
+      .reverse()
+      .find(result => result.profile === 'global-off');
     if (
       off &&
       (off.k6ExitCode !== 0 ||
@@ -198,7 +240,7 @@ async function main() {
       Array<{ deadlocks: bigint }>
     >`SELECT deadlocks FROM pg_stat_database WHERE datname = current_database()`;
     const started = new Date();
-    const summaryPath = path.join(outputDir, `${profile}.json`);
+    const summaryPath = path.join(outputDir, `${runId}.json`);
     const samples: Awaited<ReturnType<typeof collectSingleTelemetrySample>>[] = [];
     let sampling = false;
     let inFlightSample: Promise<void> | undefined;
@@ -289,15 +331,7 @@ async function main() {
         title: 'Automation capacity certification',
       },
     });
-    const summary = JSON.parse(await fs.readFile(summaryPath, 'utf8')) as {
-      metrics: {
-        iterations: { count: number };
-        checks: { passes: number; fails: number };
-        automation_accepted_events: { count: number };
-        automation_ingestion_latency_ms: { 'p(95)': number; 'p(99)': number };
-        dropped_iterations?: { count: number };
-      };
-    };
+    const summary = JSON.parse(await fs.readFile(summaryPath, 'utf8')) as CertificationSummary;
     const duplicates = await db.$queryRaw<
       Array<{ count: bigint }>
     >`SELECT COUNT(*)::bigint AS count FROM (SELECT "serviceId", "dedupKey" FROM "Incident" WHERE "createdAt" >= ${started} AND title = 'Automation capacity certification' GROUP BY "serviceId", "dedupKey" HAVING COUNT(*) > 1) duplicate_groups`;
@@ -341,6 +375,7 @@ async function main() {
     `;
     results.push({
       profile,
+      runId,
       k6ExitCode,
       acceptedEvents: summary.metrics.automation_accepted_events.count,
       persistedIncidents: incidents,
@@ -382,63 +417,70 @@ async function main() {
       break;
     }
   }
-  const baseline = results[0];
   const serviceDisabled = results.find(result => result.profile === 'service-disabled');
-  const incomplete = results.length !== AUTOMATION_LOAD_PROFILES.length - 1;
-  const comparisons = results.slice(1).map(result => ({
-    profile: result.profile,
-    acceptedRatio: result.acceptedEvents / Math.max(1, baseline.acceptedEvents),
-    p95Ratio:
-      result.summary.metrics.automation_ingestion_latency_ms['p(95)'] /
-      baseline.summary.metrics.automation_ingestion_latency_ms['p(95)'],
-    p99Ratio:
-      result.summary.metrics.automation_ingestion_latency_ms['p(99)'] /
-      baseline.summary.metrics.automation_ingestion_latency_ms['p(99)'],
-    p95RatioToServiceDisabled: serviceDisabled
-      ? result.summary.metrics.automation_ingestion_latency_ms['p(95)'] /
-        serviceDisabled.summary.metrics.automation_ingestion_latency_ms['p(95)']
-      : null,
-    p99RatioToServiceDisabled: serviceDisabled
-      ? result.summary.metrics.automation_ingestion_latency_ms['p(99)'] /
-        serviceDisabled.summary.metrics.automation_ingestion_latency_ms['p(99)']
-      : null,
-    peakCriticalQueueAgeMs: Math.max(
-      ...result.telemetrySamples.map(
-        sample => sample.postgres.oldestPendingCriticalNotificationAgeMs
-      )
-    ),
-    peakAutomationObservationQueueAgeMs: Math.max(
-      ...result.telemetrySamples.map(
-        sample => sample.postgres.oldestPendingAutomationObservationAgeMs
-      )
-    ),
-    pendingAfterDrain: result.pendingAfterDrain,
-    recoveryDrainMs: result.recoveryDrainMs,
-    transactionRetryCount: result.transactionRetryCount,
-    peakDatabaseConnections: Math.max(
-      ...result.telemetrySamples.map(
-        sample =>
-          sample.postgres.activeConnections +
-          sample.postgres.idleConnections +
-          sample.postgres.idleInTxConnections
-      )
-    ),
-    peakDatabaseLockWaits: Math.max(
-      ...result.telemetrySamples.map(sample => sample.postgres.waitingOnLockCount)
-    ),
-    peakDatabaseCpuPercent: topology.startsWith('compose-')
-      ? Math.max(
-          ...result.telemetrySamples.flatMap(sample =>
-            sample.containers
-              .filter(container => container.name === 'opsknight-automation-cert-db-1')
-              .map(container => Number.parseFloat(container.cpuPercent))
+  const incomplete = results.length !== schedule.length;
+  const comparisons = results.flatMap((result, index) => {
+    if (result.profile === 'global-off') return [];
+    const baseline = precedingAutomationBaseline(results, index);
+    return [
+      {
+        runId: result.runId,
+        baselineRunId: baseline.runId,
+        profile: result.profile,
+        acceptedRatio: result.acceptedEvents / Math.max(1, baseline.acceptedEvents),
+        p95Ratio:
+          result.summary.metrics.automation_ingestion_latency_ms['p(95)'] /
+          baseline.summary.metrics.automation_ingestion_latency_ms['p(95)'],
+        p99Ratio:
+          result.summary.metrics.automation_ingestion_latency_ms['p(99)'] /
+          baseline.summary.metrics.automation_ingestion_latency_ms['p(99)'],
+        p95RatioToServiceDisabled: serviceDisabled
+          ? result.summary.metrics.automation_ingestion_latency_ms['p(95)'] /
+            serviceDisabled.summary.metrics.automation_ingestion_latency_ms['p(95)']
+          : null,
+        p99RatioToServiceDisabled: serviceDisabled
+          ? result.summary.metrics.automation_ingestion_latency_ms['p(99)'] /
+            serviceDisabled.summary.metrics.automation_ingestion_latency_ms['p(99)']
+          : null,
+        peakCriticalQueueAgeMs: Math.max(
+          ...result.telemetrySamples.map(
+            sample => sample.postgres.oldestPendingCriticalNotificationAgeMs
           )
-        )
-      : null,
-    criticalNotificationLatency: result.criticalNotificationLatency,
-    deadlocksDelta: result.deadlocksDelta,
-    providerDuplicateDeliveriesDelta: result.providerDuplicateDeliveriesDelta,
-  }));
+        ),
+        peakAutomationObservationQueueAgeMs: Math.max(
+          ...result.telemetrySamples.map(
+            sample => sample.postgres.oldestPendingAutomationObservationAgeMs
+          )
+        ),
+        pendingAfterDrain: result.pendingAfterDrain,
+        recoveryDrainMs: result.recoveryDrainMs,
+        transactionRetryCount: result.transactionRetryCount,
+        peakDatabaseConnections: Math.max(
+          ...result.telemetrySamples.map(
+            sample =>
+              sample.postgres.activeConnections +
+              sample.postgres.idleConnections +
+              sample.postgres.idleInTxConnections
+          )
+        ),
+        peakDatabaseLockWaits: Math.max(
+          ...result.telemetrySamples.map(sample => sample.postgres.waitingOnLockCount)
+        ),
+        peakDatabaseCpuPercent: topology.startsWith('compose-')
+          ? Math.max(
+              ...result.telemetrySamples.flatMap(sample =>
+                sample.containers
+                  .filter(container => container.name === 'opsknight-automation-cert-db-1')
+                  .map(container => Number.parseFloat(container.cpuPercent))
+              )
+            )
+          : null,
+        criticalNotificationLatency: result.criticalNotificationLatency,
+        deadlocksDelta: result.deadlocksDelta,
+        providerDuplicateDeliveriesDelta: result.providerDuplicateDeliveriesDelta,
+      },
+    ];
+  });
   const limits = {
     latencyRatio: Number(process.env.AUTOMATION_MAX_LATENCY_RATIO || 1.25),
     queueAgeMs: Number(process.env.AUTOMATION_MAX_QUEUE_AGE_MS || 30000),
@@ -534,6 +576,8 @@ async function main() {
             : 'Queues drained between profiles',
           stopReason,
         },
+        baselineMode,
+        schedule,
         durationPerProfile: process.env.AUTOMATION_DURATION || '30s',
         comparisonGate: { passed: failures.length === 0, limits, failures },
         comparisons,
