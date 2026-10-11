@@ -183,3 +183,11 @@ duplicate deliveries and deadlocks. SHADOW and all LIVE profiles passed their
 comparative gates, including restart recovery. Only service-disabled exceeded
 1.25x OFF HTTP latency, so capacity is still **not certified**. The same image
 and allocation require a fresh complete repeat; no gates are relaxed.
+
+The unchanged bounded-normalization repeat completed all six profiles with
+2,401 arrivals accepted/persisted per profile, zero drops, duplicate deliveries,
+deadlocks and failed critical notifications; every queue drained. The
+service-disabled latency failure did not recur. Instead, LIVE-small and
+LIVE-worst failed latency comparisons, and worst-case recorded six evaluation
+timeouts. Queue-age gates passed. Consistent capacity remains **not certified**;
+API CPU/allocation profiling is the remaining performance investigation.
