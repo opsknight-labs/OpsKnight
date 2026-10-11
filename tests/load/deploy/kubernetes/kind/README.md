@@ -78,7 +78,10 @@ from the unchanged six-profile sustained certification.
 The `values-automation-isolated-workers.yaml` fixture isolates two Web pods,
 four general workers and two critical workers (one guaranteed CPU each), with
 two guaranteed PostgreSQL CPUs. General workers use batch 100/concurrency 15
-and pool 24; Web pools are 24 and critical pools 12. PgBouncer is disabled.
+and pool 16; Web pools are 16 and critical pools 12. PostgreSQL has 2.5Gi
+of memory. PgBouncer is disabled. The initial pool-24/2Gi allocation was
+OOM-killed during service-disabled after its OFF baseline passed; that
+incomplete run is retained.
 This fixture has not passed capacity certification.
 
 On the eleven-CPU allocatable Kind node, install with `--set web.replicaCount=1`

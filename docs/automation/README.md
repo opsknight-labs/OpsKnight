@@ -142,3 +142,9 @@ Observation reservation is capped at sixteen claims while ordinary jobs retain
 at least three quarters of the batch. A fresh sustained matrix must verify
 this change; total CPU budget and all evaluation and certification gates stay
 unchanged.
+
+The first split allocation passed OFF but PostgreSQL was OOM-killed at 2Gi
+during service-disabled. It is retained as an incomplete failed run. The
+fixture now bounds Web/general pools at 16 connections each and allocates
+2.5Gi to PostgreSQL on the same Docker host; this configuration still requires
+a fresh complete matrix.

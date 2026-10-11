@@ -4865,6 +4865,51 @@
           "providerDuplicateDeliveriesDelta": 0
         }
       ]
+    },
+    {
+      "topology": "kind-helm-split-audit21-isolated-workers-reserved16-20rps",
+      "sourceRevision": "37a971fc8c482f2dcac24a07d96e261658d308b2",
+      "imageDigest": "sha256:10f6959b4aa1cc272a0615f4d20195f1bfcdf0414ed7c64d5566bcc3b6279c2a",
+      "scope": "PARTIAL_MATRIX_POSTGRES_OOM_KILLED",
+      "comparisonGate": {
+        "passed": false,
+        "failures": [
+          "PostgreSQL OOMKilled at 2Gi during service-disabled; telemetry disconnected during crash recovery; matrix incomplete."
+        ]
+      },
+      "profiles": [
+        {
+          "profile": "global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "traceCount": 0,
+          "traceJsonBytes": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 5498,
+          "recoveryDrainMs": 95220,
+          "criticalNotificationLatency": {
+            "p95Ms": 376.49999999999966,
+            "p99Ms": 587.3,
+            "sent": 7771,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0
+        }
+      ],
+      "runtime": "split",
+      "poolProfile": {
+        "web": 24,
+        "general": 24,
+        "critical": 12
+      },
+      "postgresMemory": "2Gi",
+      "rps": 20,
+      "durationPerProfile": "120s"
     }
   ],
   "initialImage": "opsknight-automation:audit2",

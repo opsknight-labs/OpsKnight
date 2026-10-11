@@ -23,10 +23,10 @@ postgresql:
   resources:
     requests:
       cpu: 2000m
-      memory: 2048Mi
+      memory: 2560Mi
     limits:
       cpu: 2000m
-      memory: 2048Mi
+      memory: 2560Mi
 scheduler:
   replicaCount: 1
   resources:
@@ -68,7 +68,7 @@ database:
 web:
   replicaCount: 2
   database:
-    poolSize: 24
+    poolSize: 16
   resources:
     requests:
       cpu: 1000m
@@ -95,7 +95,7 @@ generalWorker:
     idlePollMs: 1000
     busyPollMs: 100
   database:
-    poolSize: 24
+    poolSize: 16
   resources:
     requests:
       cpu: 1000m
