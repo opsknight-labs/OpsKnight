@@ -148,3 +148,9 @@ during service-disabled. It is retained as an incomplete failed run. The
 fixture now bounds Web/general pools at 16 connections each and allocates
 2.5Gi to PostgreSQL on the same Docker host; this configuration still requires
 a fresh complete matrix.
+
+The pool-16/2.5Gi split matrix completed with no database restarts, but failed
+latency, dropped arrivals in LIVE-small/worst, and recorded 65 evaluation
+timeouts. The next fixture moves two worker CPUs to Web: two Web pods at
+two CPUs each, two general pods and two critical pods at one CPU each, plus
+two PostgreSQL CPUs. Total allocated CPU stays ten; certification is pending.

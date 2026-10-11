@@ -71,10 +71,10 @@ web:
     poolSize: 16
   resources:
     requests:
-      cpu: 1000m
+      cpu: 2000m
       memory: 512Mi
     limits:
-      cpu: 1000m
+      cpu: 2000m
       memory: 512Mi
 criticalWorker:
   replicaCount: 2
@@ -88,7 +88,7 @@ criticalWorker:
       cpu: 1000m
       memory: 384Mi
 generalWorker:
-  replicaCount: 4
+  replicaCount: 2
   worker:
     batchSize: 100
     concurrency: 15

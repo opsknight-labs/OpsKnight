@@ -89,3 +89,8 @@ until the migration job completes, then restore Web to two replicas before
 seeding or timed traffic. The transient 100m migration request otherwise
 prevents scheduling alongside ten exclusive CPUs and system requests. Record
 this bootstrap and verify all final replica counts before load.
+
+Following the retained full pool-16 matrix failure, the fixture allocates two
+CPUs to each of two Web pods and reduces general replicas to two. Critical
+replicas remain two at one CPU each; PostgreSQL retains two CPUs/2.5Gi.
+This still totals ten exclusive CPUs and has not passed certification.
