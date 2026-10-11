@@ -1,6 +1,7 @@
 import 'server-only';
 
 import crypto from 'crypto';
+import { buildExecutionPreview, checkExecutionReadiness } from './execution-preview';
 import type { IncidentEventType, Prisma, RunbookExecutionStep } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
@@ -9,6 +10,7 @@ import { safeOutboundFetch } from '@/lib/network-security';
 import {
   computePlanDigest,
   computeDefinitionChecksum,
+  computeTriggerFingerprint,
   containsSecretReference,
   referencedStepInputKeys,
   isSecretReference,
@@ -17,7 +19,8 @@ import {
   resolveInputTemplates,
   validateResolvedStepConfig,
 } from './definition';
-import { matchesCondition } from './matcher';
+import { matchesCondition, validateAndMatchTrigger } from './matcher';
+import { redactRunbookDisplayName } from './display-name';
 import { finalizeVerificationEvidence } from './verification-evidence';
 import { workflowConditionSchema } from './conditions';
 import { applyRunbookInputDefaults, validateBindingInputValues } from './bindings';
@@ -93,7 +96,7 @@ function executionSteps(definition: ReturnType<typeof parseRunbookDefinition>) {
   return flattenSteps(definition).map((step, sequence) => ({ ...step, sequence }));
 }
 
-export async function startRunbookExecution(input: {
+export interface RunbookExecutionRequest {
   runbookId: string;
   runbookVersionId?: string;
   serviceId?: string;
@@ -104,7 +107,72 @@ export async function startRunbookExecution(input: {
   triggeredByUserId?: string;
   triggerFingerprint?: string;
   triggerId?: string;
-}) {
+  sourceEventId?: string;
+  expectedPlanDigest?: string;
+  previewAuthorizationToken?: string;
+}
+
+/** Responder entry point. Absence of an actor never authorizes an automatic execution. */
+export async function startRunbookExecution(input: RunbookExecutionRequest) {
+  if (!input.triggeredByUserId || !input.expectedPlanDigest || !input.previewAuthorizationToken) {
+    throw new RunbookDefinitionError(
+      'PREVIEW_AUTHORIZATION_REQUIRED: An authorized responder and preview are required.'
+    );
+  }
+  const result = await prepareRunbookExecution(input, false, 'MANUAL');
+  if (!('id' in result)) throw new Error('Execution was not created.');
+  return result;
+}
+
+const automaticExecutionSchema = z
+  .object({
+    runbookId: z.string().cuid(),
+    runbookVersionId: z.string().cuid(),
+    incidentId: z.string().cuid(),
+    serviceId: z.string().cuid(),
+    bindingId: z.string().cuid(),
+    triggerId: z.string().cuid(),
+    triggerFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    sourceEventId: z.string().min(1).max(200),
+    inputValues: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+
+/** Internal trigger entry point; the transaction verifies the full automatic contract. */
+export async function startTriggeredRunbookExecution(
+  input: z.infer<typeof automaticExecutionSchema>
+) {
+  const request = automaticExecutionSchema.safeParse(input);
+  if (!request.success)
+    throw new RunbookDefinitionError(
+      'AUTOMATION_NOT_AUTHORIZED: Complete automatic trigger metadata is required.'
+    );
+  if (request.data.triggerFingerprint !== computeTriggerFingerprint(request.data)) {
+    throw new RunbookDefinitionError(
+      'AUTOMATION_NOT_AUTHORIZED: Trigger fingerprint does not match its source event, binding and version.'
+    );
+  }
+  const result = await prepareRunbookExecution(request.data, false, 'AUTOMATIC');
+  if (!('id' in result)) throw new Error('Execution was not created.');
+  return result;
+}
+
+/** Resolves the execution preflight and issues a responder-bound preview capability. */
+export async function previewRunbookExecution(input: RunbookExecutionRequest) {
+  if (!input.triggeredByUserId)
+    throw new RunbookDefinitionError(
+      'PREVIEW_AUTHORIZATION_REQUIRED: An authorized responder is required.'
+    );
+  const result = await prepareRunbookExecution(input, true, 'MANUAL');
+  if (!('digest' in result)) throw new Error('Preview was not generated.');
+  return result;
+}
+
+async function prepareRunbookExecution(
+  input: RunbookExecutionRequest,
+  previewOnly: boolean,
+  mode: 'MANUAL' | 'AUTOMATIC'
+) {
   return prisma.$transaction(async tx => {
     await lockRunbookForShare(tx, input.runbookId, { action: 'execute' });
     const runbook = await tx.runbook.findFirst({
@@ -132,6 +200,56 @@ export async function startRunbookExecution(input: {
     }
     if (input.triggerId && !input.bindingId) {
       throw new RunbookDefinitionError('A trigger execution requires its service binding.');
+    }
+    if (mode === 'AUTOMATIC') {
+      if (
+        !binding ||
+        binding.mode !== 'AUTOMATIC' ||
+        binding.versionStrategy !== 'PINNED' ||
+        binding.runbookVersionId !== input.runbookVersionId
+      ) {
+        throw new RunbookDefinitionError(
+          'AUTOMATION_NOT_AUTHORIZED: An enabled AUTOMATIC binding pinned to this version is required.'
+        );
+      }
+      const trigger = await tx.runbookTrigger.findFirst({
+        where: {
+          id: input.triggerId,
+          bindingId: binding.id,
+          enabled: true,
+          event: 'INCIDENT_CREATED',
+        },
+        include: { conditions: { orderBy: { sequence: 'asc' } } },
+      });
+      const incident = await tx.incident.findFirst({
+        where: { id: input.incidentId, serviceId: binding.serviceId },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          status: true,
+          urgency: true,
+          priority: true,
+          tags: { select: { tag: { select: { name: true } } } },
+          service: { select: { id: true, name: true, teamId: true } },
+        },
+      });
+      if (
+        !trigger ||
+        !incident ||
+        !validateAndMatchTrigger(
+          {
+            incident: { ...incident, tags: incident.tags.map(item => item.tag.name) },
+            service: incident.service,
+          },
+          trigger.conditions,
+          trigger.conditionLogic
+        )
+      ) {
+        throw new RunbookDefinitionError(
+          'AUTOMATION_NOT_AUTHORIZED: Incident, service and matching enabled trigger are required.'
+        );
+      }
     }
     const suggestion = input.suggestionId
       ? await tx.runbookSuggestion.findFirst({
@@ -361,7 +479,16 @@ export async function startRunbookExecution(input: {
         where: {
           serviceId: resolvedServiceId,
           triggeredByUserId: null,
-          status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'CANCEL_REQUESTED', 'PAUSED'] },
+          status: {
+            in: [
+              'QUEUED',
+              'RUNNING',
+              'WAITING_AGENT',
+              'WAITING_APPROVAL',
+              'CANCEL_REQUESTED',
+              'PAUSED',
+            ],
+          },
           steps: {
             some: {
               riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
@@ -449,7 +576,16 @@ export async function startRunbookExecution(input: {
             { resolvedTargetAgentPoolId },
             { targetSelection: { path: ['sourcePoolId'], equals: resolvedTargetAgentPoolId } },
           ],
-          status: { in: ['QUEUED', 'RUNNING', 'WAITING_AGENT', 'WAITING_APPROVAL', 'CANCEL_REQUESTED', 'PAUSED'] },
+          status: {
+            in: [
+              'QUEUED',
+              'RUNNING',
+              'WAITING_AGENT',
+              'WAITING_APPROVAL',
+              'CANCEL_REQUESTED',
+              'PAUSED',
+            ],
+          },
           steps: {
             some: {
               riskClass: { in: ['IDEMPOTENT_WRITE', 'NON_IDEMPOTENT'] },
@@ -464,6 +600,141 @@ export async function startRunbookExecution(input: {
           'AGENT_POOL_CONCURRENCY_LIMIT: too many write actions are active for this Agent pool.'
         );
       }
+    }
+    // Hash precisely the live fields available to workflow conditions, plus the request scope.
+    const incidentContext = input.incidentId
+      ? await tx.incident.findUniqueOrThrow({
+          where: { id: input.incidentId },
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            status: true,
+            urgency: true,
+            priority: true,
+            tags: { select: { tag: { select: { name: true } } } },
+          },
+        })
+      : null;
+    const serviceContext = resolvedServiceId
+      ? await tx.service.findUniqueOrThrow({
+          where: { id: resolvedServiceId },
+          select: { id: true, name: true, teamId: true },
+        })
+      : null;
+    const authorizationScope = {
+      actorId: input.triggeredByUserId ?? null,
+      runbookId: runbook.id,
+      incidentId: input.incidentId ?? null,
+      serviceId: resolvedServiceId ?? null,
+      bindingId: input.bindingId ?? null,
+      suggestionId: input.suggestionId ?? null,
+    };
+    const preview = buildExecutionPreview({
+      authorizationContext: {
+        ...authorizationScope,
+        incident: incidentContext
+          ? { ...incidentContext, tags: incidentContext.tags.map(item => item.tag.name).sort() }
+          : null,
+        service: serviceContext,
+      },
+      runbookId: runbook.id,
+      versionId: version.id,
+      version: version.version,
+      checksum: version.checksum,
+      agentId: resolvedTargetAgentId,
+      agentPoolId: resolvedTargetAgentId ? null : resolvedTargetAgentPoolId,
+      selectedLabels,
+      sourceAgentPoolId: resolvedTargetAgentPoolId,
+      timeoutSeconds: executionTimeoutSeconds,
+      inputValues: resolvedInputs,
+      inputTypes: version.inputs,
+      steps,
+    });
+    if (
+      input.expectedPlanDigest &&
+      z
+        .string()
+        .regex(/^[a-f0-9]{64}$/)
+        .parse(input.expectedPlanDigest) !== preview.digest
+    ) {
+      throw new RunbookDefinitionError(
+        'PREVIEW_STALE: version, inputs, target, responder or incident context changed. Preview the runbook again before executing.'
+      );
+    }
+    if (previewOnly || input.expectedPlanDigest) {
+      preview.readiness = await checkExecutionReadiness(tx, {
+        steps,
+        inputValues: resolvedInputs,
+        agentId: resolvedTargetAgentId,
+        agentPoolId: resolvedTargetAgentPoolId,
+      });
+      if (!previewOnly && preview.readiness.some(check => check.state === 'blocked')) {
+        throw new RunbookDefinitionError(
+          'EXECUTION_NOT_READY: target capability, availability or secret access changed. Preview again before executing.'
+        );
+      }
+    }
+    if (previewOnly) {
+      if (input.triggeredByUserId) {
+        const token = crypto.randomBytes(32).toString('hex');
+        const grant = await tx.runbookPreviewAuthorization.create({
+          data: {
+            ...authorizationScope,
+            actorId: input.triggeredByUserId,
+            id: crypto.createHash('sha256').update(token).digest('hex'),
+            planDigest: preview.digest,
+            expiresAt: new Date(Date.now() + 5 * 60_000),
+          },
+        });
+        preview.authorizationToken = token;
+        preview.expiresAt = grant.expiresAt.toISOString();
+        await logAudit(
+          {
+            action: 'runbook.execution.previewed',
+            entityType: 'RUNBOOK',
+            entityId: runbook.id,
+            actorId: input.triggeredByUserId,
+            details: {
+              ...authorizationScope,
+              previewGrantId: grant.id,
+              planDigest: preview.digest,
+              expiresAt: grant.expiresAt.toISOString(),
+            },
+          },
+          tx
+        );
+      }
+      return preview;
+    }
+    const authorization = input.triggeredByUserId
+      ? await tx.runbookPreviewAuthorization.findUnique({
+          where: {
+            id: crypto
+              .createHash('sha256')
+              .update(
+                z
+                  .string()
+                  .regex(/^[a-f0-9]{64}$/)
+                  .parse(input.previewAuthorizationToken)
+              )
+              .digest('hex'),
+          },
+        })
+      : null;
+    if (
+      input.triggeredByUserId &&
+      (!authorization ||
+        authorization.consumedAt ||
+        authorization.expiresAt.getTime() <= Date.now() ||
+        authorization.planDigest !== preview.digest ||
+        Object.entries(authorizationScope).some(
+          ([key, value]) => authorization[key as keyof typeof authorization] !== value
+        ))
+    ) {
+      throw new RunbookDefinitionError(
+        'PREVIEW_AUTHORIZATION_INVALID: Preview authorization is invalid, expired, already used or belongs to another responder or incident. Preview again.'
+      );
     }
     const execution = await tx.runbookExecution.create({
       data: {
@@ -493,7 +764,7 @@ export async function startRunbookExecution(input: {
           create: steps.map(step => ({
             stepKey: step.key,
             sequence: step.sequence,
-            name: step.name,
+            name: redactRunbookDisplayName(step.name, resolvedInputs, version.inputs),
             type: step.type,
             containerRuntime:
               step.type === 'DOCKER' &&
@@ -510,6 +781,16 @@ export async function startRunbookExecution(input: {
         },
       },
     });
+    if (authorization) {
+      const consumed = await tx.runbookPreviewAuthorization.updateMany({
+        where: { id: authorization.id, consumedAt: null, expiresAt: { gt: new Date() } },
+        data: { consumedAt: new Date(), executionId: execution.id },
+      });
+      if (consumed.count !== 1)
+        throw new RunbookDefinitionError(
+          'PREVIEW_AUTHORIZATION_INVALID: Preview expired or was already used. Preview again.'
+        );
+    }
     if (suggestion) {
       const startedSuggestion = await tx.runbookSuggestion.updateMany({
         where: { id: suggestion.id, state: 'SUGGESTED' },
@@ -535,6 +816,17 @@ export async function startRunbookExecution(input: {
         details: {
           runbookId: runbook.id,
           versionId: version.id,
+          previewGrant: authorization
+            ? {
+                id: authorization.id,
+                planDigest: authorization.planDigest,
+                actorId: authorization.actorId,
+                bindingId: authorization.bindingId,
+                suggestionId: authorization.suggestionId,
+                issuedAt: authorization.createdAt.toISOString(),
+                expiresAt: authorization.expiresAt.toISOString(),
+              }
+            : null,
           incidentId: input.incidentId ?? null,
           serviceId: resolvedServiceId ?? null,
         },
@@ -566,7 +858,10 @@ function resolvedPlanDigest(
   });
 }
 
-export async function readBoundedResponseBody(response: Response, maxBytes: number): Promise<string> {
+export async function readBoundedResponseBody(
+  response: Response,
+  maxBytes: number
+): Promise<string> {
   if (!response.body) return '';
   if (typeof response.body.getReader !== 'function') {
     throw new Error(
@@ -630,7 +925,7 @@ async function executeHttpStep(
           ? (config.headers as Record<string, string>)
           : undefined,
       body:
-        config.body === undefined
+        ['GET', 'HEAD'].includes(method) || config.body === undefined
           ? undefined
           : typeof config.body === 'string'
             ? config.body
@@ -639,7 +934,10 @@ async function executeHttpStep(
       redirect: 'error',
     });
     const body = await readBoundedResponseBody(response, MAX_OUTPUT_PREVIEW_BYTES);
-    if (!response.ok) throw new Error(`HTTP ${response.status}: ${body.slice(0, 512)}`);
+    const expectedStatus = config.expectedStatus;
+    if (expectedStatus === undefined ? !response.ok : response.status !== expectedStatus) {
+      throw new Error(`HTTP ${response.status}: ${body.slice(0, 512)}`);
+    }
     return `HTTP ${response.status}\n${body}`;
   } finally {
     clearTimeout(timer);
@@ -668,7 +966,7 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
             tx,
             execution.incidentId,
             'RUNBOOK_APPROVAL_REQUIRED',
-            `Runbook approval required: ${step.name}`
+            `Runbook approval required: ${redactRunbookDisplayName(step.name)}`
           );
         }
       }
@@ -711,6 +1009,16 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
       where: { id: executionId },
       select: {
         inputValues: true,
+        runbookVersion: {
+          select: {
+            inputs: {
+              select: {
+                key: true,
+                type: true,
+              },
+            },
+          },
+        },
         incident: {
           select: {
             id: true,
@@ -725,7 +1033,12 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
         service: { select: { id: true, name: true, teamId: true } },
       },
     });
-    const config = workflowConditionSchema.parse(step.config);
+    const config = workflowConditionSchema.parse(
+      resolveInputTemplates(step.config, execution.inputValues as Record<string, unknown>)
+    );
+    const inputTypeMap = new Map<string, string>(
+      execution.runbookVersion?.inputs?.map(input => [input.key, input.type]) ?? []
+    );
     const matched = matchesCondition(
       {
         input: execution.inputValues,
@@ -738,7 +1051,8 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
         field: config.field,
         operator: config.operator,
         value: config.value,
-      }
+      },
+      inputTypeMap
     );
     await prisma.$transaction(async tx => {
       const executionState = await tx.runbookExecution.findUnique({
@@ -840,7 +1154,7 @@ async function processCurrentStep(executionId: string, step: RunbookExecutionSte
           execution.inputValues as Record<string, unknown>
         ).some(
           ([key, value]) =>
-            referencedStepInputKeys(step.config).has(key) && isSecretReference(value)
+            referencedStepInputKeys(step.config, step.type).has(key) && isSecretReference(value)
         ),
         targetAgentId: execution.resolvedTargetAgentId,
         targetAgentPoolId: execution.resolvedTargetAgentPoolId,
@@ -895,11 +1209,7 @@ export async function completeStep(
       data: { status: 'RUNNING' },
     });
     if (transitioned.count !== 1) {
-      throw new RunbookExecutionInvalidTransitionError(
-        executionId,
-        execution.status,
-        'RUNNING'
-      );
+      throw new RunbookExecutionInvalidTransitionError(executionId, execution.status, 'RUNNING');
     }
     await enqueueAdvance(tx, executionId);
   });
@@ -970,15 +1280,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           executionId,
           status: 'RUNNING',
           type: {
-            notIn: [
-              'HTTP',
-              'WAIT',
-              'LINUX_DIAGNOSTICS',
-              'SYSTEMD',
-              'DOCKER',
-              'KUBERNETES',
-              'BASH',
-            ],
+            notIn: ['HTTP', 'WAIT', 'LINUX_DIAGNOSTICS', 'SYSTEMD', 'DOCKER', 'KUBERNETES', 'BASH'],
           },
         },
         data: { status: 'CANCELLED', completedAt: new Date() },
@@ -1085,15 +1387,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           executionId,
           status: 'RUNNING',
           type: {
-            notIn: [
-              'HTTP',
-              'WAIT',
-              'LINUX_DIAGNOSTICS',
-              'SYSTEMD',
-              'DOCKER',
-              'KUBERNETES',
-              'BASH',
-            ],
+            notIn: ['HTTP', 'WAIT', 'LINUX_DIAGNOSTICS', 'SYSTEMD', 'DOCKER', 'KUBERNETES', 'BASH'],
           },
         },
         data: { status: 'CANCELLED', completedAt: new Date(), errorCode: 'EXECUTION_TIMEOUT' },
@@ -1134,7 +1428,11 @@ export async function advanceExecution(executionId: string): Promise<void> {
               id: executionId,
               status: { notIn: ['SUCCEEDED', 'FAILED', 'CANCELLED', 'TIMED_OUT'] },
             },
-            data: { status: 'TIMED_OUT', completedAt: new Date(), failureCode: 'EXECUTION_TIMEOUT' },
+            data: {
+              status: 'TIMED_OUT',
+              completedAt: new Date(),
+              failureCode: 'EXECUTION_TIMEOUT',
+            },
           });
           if (timedOut.count === 1) {
             await addIncidentRunbookEvent(
@@ -1164,9 +1462,7 @@ export async function advanceExecution(executionId: string): Promise<void> {
           status: 'FAILED',
           completedAt: new Date(),
           failureCode:
-            failed.status === 'UNKNOWN'
-              ? 'UNKNOWN_OUTCOME'
-              : failed.errorCode ?? 'STEP_FAILED',
+            failed.status === 'UNKNOWN' ? 'UNKNOWN_OUTCOME' : (failed.errorCode ?? 'STEP_FAILED'),
           failureMessage: failed.errorMessage,
         },
       });
@@ -1327,7 +1623,7 @@ export async function approveExecutionStep(input: {
       tx,
       step.execution.incidentId,
       'RUNBOOK_APPROVED',
-      `Runbook step approved: ${step.name}`
+      `Runbook step approved: ${redactRunbookDisplayName(step.name)}`
     );
     await logAudit(
       {

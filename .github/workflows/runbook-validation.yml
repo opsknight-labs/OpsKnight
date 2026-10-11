@@ -37,9 +37,9 @@ jobs:
   runbook-ui:
     needs: changes
     if: needs.changes.outputs.runbooks == 'true'
-    name: Runbook authoring and mobile UI
+    name: Runbook authoring and browser matrix
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:15-alpine
@@ -69,10 +69,10 @@ jobs:
       - name: Apply migrations to isolated UI database
         run: npx prisma migrate deploy
       - name: Install browser
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox webkit
       - name: Production build
         run: npm run build
-      - name: Authoring and 390px browser checks
+      - name: Authoring, execution preview and responsive browser checks
         run: npx playwright test --config playwright.runbooks.config.ts
       - uses: actions/upload-artifact@v4
         if: always()
@@ -116,7 +116,7 @@ jobs:
       - name: Agent runtime and authorization regressions
         run: >-
           npx vitest run --no-file-parallelism --maxWorkers=1
-          tests/lib/runbooks tests/components/RunbookBuilder.test.tsx tests/lib/deployment-config-unit.test.ts
+          tests/lib/runbooks tests/lib/client-navigation-guard.test.ts tests/components/RunbookBuilder.test.tsx tests/components/RunbookExecutionPreview.test.tsx tests/lib/deployment-config-unit.test.ts
           tests/api/runbook-artifacts.test.ts tests/api/metrics.test.ts
           tests/lib/operational-metric-registry.test.ts
           tests/unit/encryption-registry.test.ts tests/lib/encryption-keyring-rotation.test.ts
@@ -126,6 +126,8 @@ jobs:
         run: >-
           npx vitest run --no-file-parallelism --maxWorkers=1
           tests/integration/runbook-execution-safety.test.ts
+          tests/integration/runbook-preview-authorization.test.ts
+          tests/integration/runbook-lifecycle-database.test.ts
           tests/integration/encryption-migration.test.ts
 
   native-agent-artifacts:

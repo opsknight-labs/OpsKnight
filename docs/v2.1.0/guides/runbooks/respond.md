@@ -6,8 +6,14 @@ product_area: runbooks
 audience: [administrator, responder]
 verification:
   level: test
-  verified_at: 2026-10-04
-  evidence: [src/components/service/ServiceRunbooks.tsx, src/components/incident/IncidentRunbooks.tsx, tests/e2e/runbooks-ui.spec.ts, src/lib/runbooks/triggers.ts]
+  verified_at: 2026-10-11
+  evidence:
+    [
+      src/components/service/ServiceRunbooks.tsx,
+      src/components/incident/IncidentRunbooks.tsx,
+      tests/e2e/runbooks-ui.spec.ts,
+      src/lib/runbooks/triggers.ts,
+    ]
 ---
 
 # Bind Runbooks and respond to incidents
@@ -43,8 +49,30 @@ inputs, and target even if its service binding is later edited.
 
 ## Start and approve
 
-Open the incident's **Runbooks** tab. Start a suggestion or an available manual
-binding. Read the ordered execution timeline. When a step waits for approval,
+Open the incident's **Runbooks** tab and select **Preview execution** on a
+suggestion or available workflow. Review the immutable version/checksum,
+resolved target, redacted inputs, ordered actions, risk and approval gates.
+Preview creates no execution or queued work. It reports current Agent capability
+and secret-grant checks; local policy, confidential transport, network access and
+platform permissions remain dispatch checks.
+
+For writes, confirm that you reviewed the target and authorize the plan, then
+select **Execute this plan**. Execution resolves the plan again in its transaction
+and rejects a changed version, target, inputs, action plan or incident context
+(title, description, status, urgency, priority, tags and service context). Each
+preview issues a five-minute, single-use authorization bound to your account,
+incident, service binding and suggestion. Another responder or incident cannot
+reuse it. The preview marks expiry and disables Execute until you preview again.
+Preview issuance and consumption are recorded in the audit trail,
+without storing the bearer token. Temporary authorization records are purged
+in bounded reconciliation batches 30 days after expiry; audit events retain
+the responder, scope, digest and execution link. Conditions continue to evaluate live incident
+context after execution starts. Preview again after
+a stale-plan or readiness error. A successful preview is not a dry run or a
+successful action. To test real actions, use an explicitly authorized test service
+and Agent; preview itself does not provide an execution sandbox.
+
+Read the ordered execution timeline. When a step waits for approval,
 inspect its action, resolved parameters, risk, target Agent/pool, version
 checksum, and timeout. Choose **Approve exact plan** and confirm only if that
 specific action and target are appropriate.

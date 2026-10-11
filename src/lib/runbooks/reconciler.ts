@@ -2,11 +2,27 @@ import 'server-only';
 
 import crypto from 'crypto';
 import prisma from '@/lib/prisma';
-import { isSafeToRetryAfterUnknown } from './types';
+import { DEFAULT_STEP_TIMEOUT_SECONDS, isSafeToRetryAfterUnknown } from './types';
 import { retryDelayMs } from './safety';
 
 export async function reconcileRunbooks(limit = 100) {
   const now = new Date();
+  // Capability records are temporary. Audit events keep issuance/consumption scope and execution IDs.
+  const previewRetentionCutoff = new Date(now.getTime() - 30 * 86_400_000);
+  const expiredPreviewBatch = await prisma.runbookPreviewAuthorization.findMany({
+    where: { expiresAt: { lt: previewRetentionCutoff } },
+    orderBy: [{ expiresAt: 'asc' }, { id: 'asc' }],
+    take: Math.min(1000, Math.max(1, Math.trunc(limit) || 100)),
+    select: { id: true },
+  });
+  const previewAuthorizationsDeleted = expiredPreviewBatch.length
+    ? await prisma.runbookPreviewAuthorization.deleteMany({
+        where: {
+          id: { in: expiredPreviewBatch.map(record => record.id) },
+          expiresAt: { lt: previewRetentionCutoff },
+        },
+      })
+    : { count: 0 };
   const overdueExecutions = await prisma.runbookExecution.findMany({
     where: {
       deadlineAt: { lte: now },
@@ -279,7 +295,8 @@ export async function reconcileRunbooks(limit = 100) {
   let localRecovered = 0;
   for (const step of localRunning) {
     const timeoutAt = new Date(
-      (step.startedAt?.getTime() ?? now.getTime()) + (step.timeoutSeconds ?? 300) * 1000
+      (step.startedAt?.getTime() ?? now.getTime()) +
+        (step.timeoutSeconds ?? DEFAULT_STEP_TIMEOUT_SECONDS) * 1000
     );
     if (timeoutAt >= now) continue;
     await prisma.$transaction(async tx => {
@@ -359,5 +376,6 @@ export async function reconcileRunbooks(limit = 100) {
     localRecovered,
     agentsOffline: offline.count,
     artifactsDeleted: artifactsDeleted.count,
+    previewAuthorizationsDeleted: previewAuthorizationsDeleted.count,
   };
 }

@@ -6,7 +6,7 @@ product_area: runbooks
 audience: [responder, administrator, operator]
 verification:
   level: source
-  verified_at: 2026-10-04
+  verified_at: 2026-10-11
   evidence: [src/lib/runbooks/agent-claims.ts, src/lib/runbooks/reconciler.ts, src/app/(app)/runbooks/health/page.tsx, agent/src/lease.ts]
 ---
 
@@ -61,3 +61,22 @@ and logs separately: web-process status is not fleet-wide worker health.
 Apply Advanced JSON to the builder before saving. The unapplied-changes warning
 blocks saving across tabs. Refresh JSON from the builder only if you intend to
 discard unapplied edits. Publishing publishes the saved draft, not unsaved editor contents.
+
+## Preview changed or prerequisites are blocked
+
+`PREVIEW_STALE` means the immutable version selection, resolved inputs, target,
+or planned actions changed after preview. Generate a fresh preview and review
+it before executing. A blocked capability/secret check prevents execution from
+the preview panel; check Agent heartbeat, capabilities and the target's current
+grants. A passing check can change before dispatch, which always rechecks live
+policy and secret authority.
+
+## Use the execution evidence
+
+The execution detail page shows step and attempt status, queue time, recorded
+claim time, start/completion, claimed Agent, target, lease expiry, approval
+identity/digest, bounded output and artifacts. Attempts created before claim-time
+recording was introduced display an unknown claim time. Troubleshooting guidance
+separates configuration errors, policy rejection, infrastructure failures,
+verification failure and uncertain writes. A failed verification does not undo a
+write; inspect the observed target state before repeating remediation.

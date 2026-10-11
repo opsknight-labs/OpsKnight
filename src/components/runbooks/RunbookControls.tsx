@@ -212,7 +212,7 @@ export function FormSelect({
       onValueChange={onValueChange}
       disabled={disabled}
     >
-      <SelectTrigger aria-label={label}>
+      <SelectTrigger id={name} aria-label={label}>
         <SelectValue placeholder={label} />
       </SelectTrigger>
       <SelectContent>

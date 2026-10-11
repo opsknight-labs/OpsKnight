@@ -2,6 +2,7 @@ import React, { type ReactNode } from 'react';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/shadcn/badge';
 
 export type RunbookPageHeaderProps = {
   title: string;
@@ -53,6 +54,12 @@ export function RunbookPageHeader({
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
               {title}
             </h1>
+            <Badge
+              variant="outline"
+              className="shrink-0 border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+            >
+              Beta
+            </Badge>
             {badge}
           </div>
           {description && (

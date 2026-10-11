@@ -36,21 +36,16 @@ export function RunbookCard({ runbook, userTimeZone }: RunbookCardProps) {
   const isArchived = Boolean(runbook.archivedAt);
   const isPublished = !isArchived && runbook.publishedVersion !== null;
 
-  const statusLabel = isArchived
-    ? 'ARCHIVED'
-    : isPublished
-      ? 'PUBLISHED'
-      : 'DRAFT';
+  const statusLabel = isArchived ? 'ARCHIVED' : isPublished ? 'PUBLISHED' : 'DRAFT';
 
   // Last execution summary
   const lastExec = runbook.lastExecution;
   const lastExecDurationSec =
-    lastExec?.startedAt
+    lastExec?.startedAt && lastExec.completedAt
       ? Math.max(
           0,
           Math.round(
-            ((lastExec.completedAt ? new Date(lastExec.completedAt) : new Date()).getTime() -
-              new Date(lastExec.startedAt).getTime()) /
+            (new Date(lastExec.completedAt).getTime() - new Date(lastExec.startedAt).getTime()) /
               1000
           )
         )
@@ -88,7 +83,10 @@ export function RunbookCard({ runbook, userTimeZone }: RunbookCardProps) {
               </Badge>
             )}
             {runbook.draftVersion && isPublished && (
-              <Badge variant="secondary" className="text-[11px] px-1.5 py-0 text-amber-600 dark:text-amber-400">
+              <Badge
+                variant="secondary"
+                className="text-[11px] px-1.5 py-0 text-amber-600 dark:text-amber-400"
+              >
                 draft v{runbook.draftVersion} pending
               </Badge>
             )}

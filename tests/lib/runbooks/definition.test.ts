@@ -17,6 +17,7 @@ import {
   computePlanDigest,
   computeTriggerFingerprint,
   validateDefinition,
+  referencedStepInputKeys,
 } from '@/lib/runbooks/definition';
 import {
   RunbookDefinitionError,
@@ -340,7 +341,7 @@ describe('Runbook Definition Module', () => {
 
     it('should return false if no steps require approval', () => {
       const def = createMockDefinition({
-        steps: [createMockStep({ requiresApproval: false, type: 'MANUAL' })],
+        steps: [createMockStep({ requiresApproval: false, type: 'WAIT' })],
       });
       expect(requiresAnyApproval(def)).toBe(false);
     });
@@ -351,6 +352,21 @@ describe('Runbook Definition Module', () => {
       const ref = 'secret://my-secret-key';
       expect(isSecretReference(ref)).toBe(true);
       expect(extractSecretName(ref)).toBe('my-secret-key');
+    });
+
+    it.each([
+      'secret://',
+      'secret://-a',
+      'secret://a-',
+      'secret://a--b',
+      'secret://A',
+      'secret://a_b',
+    ])('rejects malformed secret group boundaries: %s', reference => {
+      expect(isSecretReference(reference)).toBe(false);
+    });
+
+    it('rejects long malformed secret references without nested regex repetitions', () => {
+      expect(isSecretReference(`secret://a${'-'.repeat(20000)}b`)).toBe(false);
     });
 
     it('should reject invalid secret references', () => {
@@ -642,6 +658,209 @@ describe('Runbook Definition Module', () => {
       expect(() => parseRunbookDefinition(invalidScaleDef)).toThrow(
         'Kubernetes scale action does not support resource "pod"'
       );
+
+      // scale accepts replica template bound to NUMBER input
+      const templatedScaleDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'KUBERNETES',
+            riskClass: 'IDEMPOTENT_WRITE',
+            config: {
+              action: 'scale',
+              resource: 'deployment',
+              name: 'my-deploy',
+              replicas: '${{ inputs.replica_count }}',
+            },
+          }),
+        ],
+      });
+      expect(() =>
+        parseRunbookDefinition(templatedScaleDef, [{ key: 'replica_count', type: 'NUMBER' }])
+      ).not.toThrow();
+
+      // scale rejects replica template bound to STRING input
+      expect(() =>
+        parseRunbookDefinition(templatedScaleDef, [{ key: 'replica_count', type: 'STRING' }])
+      ).toThrow(/must be NUMBER/);
+
+      // scale rejects replica template bound to undeclared input
+      expect(() => parseRunbookDefinition(templatedScaleDef, [])).toThrow(
+        /undeclared replica input/
+      );
+    });
+
+    it('referencedStepInputKeys extracts template references, bare and prefixed Bash env vars, and condition inputs', () => {
+      // 1. Template references in HTTP step
+      const httpStep = createMockStep({
+        type: 'HTTP',
+        config: {
+          method: 'POST',
+          url: 'https://api.internal/${{ inputs.target_host }}',
+          body: { apiKey: '${{ inputs.api_key }}' },
+        },
+      });
+      const httpKeys = referencedStepInputKeys(httpStep);
+      expect(httpKeys.has('target_host')).toBe(true);
+      expect(httpKeys.has('api_key')).toBe(true);
+
+      // 2. Bare, $, ${}, and % Bash environment references
+      const bashStep = createMockStep({
+        type: 'BASH',
+        config: {
+          command:
+            'echo "$OPSKNIGHT_INPUT_DB_HOST" && printenv OPSKNIGHT_INPUT_DB_PASS && echo ${OPSKNIGHT_INPUT_DB_PORT}',
+        },
+      });
+      const bashKeys = referencedStepInputKeys(bashStep);
+      expect(bashKeys.has('db_host')).toBe(true);
+      expect(bashKeys.has('db_pass')).toBe(true);
+      expect(bashKeys.has('db_port')).toBe(true);
+
+      // 3. Condition field inputs (input.<key> and inputs.<key>)
+      const condStep1 = createMockStep({
+        type: 'CONDITION',
+        config: { field: 'input.maintenance_window', operator: 'EQUALS', value: 'yes' },
+      });
+      const condStep2 = createMockStep({
+        type: 'CONDITION',
+        config: { field: 'inputs.service_flag', operator: 'EQUALS', value: true },
+      });
+      expect(referencedStepInputKeys(condStep1).has('maintenance_window')).toBe(true);
+      expect(referencedStepInputKeys(condStep2).has('service_flag')).toBe(true);
+    });
+
+    it('rejects undeclared inputs across all step types (HTTP, SYSTEMD, DOCKER, KUBERNETES, BASH)', () => {
+      // HTTP undeclared url template
+      const httpDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'HTTP',
+            config: { method: 'GET', url: 'https://internal.net/${{ inputs.unregistered_host }}' },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(httpDef, [])).toThrow(
+        /references undeclared input "unregistered_host"/
+      );
+      expect(
+        parseRunbookDefinition(httpDef, [{ key: 'unregistered_host', type: 'STRING' }])
+      ).toBeDefined();
+
+      // Systemd undeclared unit template
+      const systemdDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'SYSTEMD',
+            config: { action: 'status', unit: '${{ inputs.unregistered_unit }}' },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(systemdDef, [])).toThrow(
+        /references undeclared input "unregistered_unit"/
+      );
+
+      // Docker undeclared container template
+      const dockerDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'DOCKER',
+            config: { action: 'inspect', container: '${{ inputs.unregistered_container }}' },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(dockerDef, [])).toThrow(
+        /references undeclared input "unregistered_container"/
+      );
+
+      // Kubernetes undeclared namespace template
+      const k8sDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'KUBERNETES',
+            config: {
+              action: 'get',
+              resource: 'pods',
+              namespace: '${{ inputs.unregistered_namespace }}',
+            },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(k8sDef, [])).toThrow(
+        /references undeclared input "unregistered_namespace"/
+      );
+
+      // Bash undeclared bare environment variable
+      const bashDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'BASH',
+            riskClass: 'NON_IDEMPOTENT',
+            config: { command: 'printenv OPSKNIGHT_INPUT_UNREGISTERED_SECRET' },
+          }),
+        ],
+      });
+      expect(() => parseRunbookDefinition(bashDef, [])).toThrow(
+        /references undeclared input "unregistered_secret"/
+      );
+    });
+
+    it('does not extract literal condition values or non-template container names as input dependencies', () => {
+      // 1. Literal condition value "input.owner" is not an input reference
+      const condStep = createMockStep({
+        key: 'cond_step',
+        type: 'CONDITION',
+        config: { field: 'incident.urgency', operator: 'EQUALS', value: 'input.owner' },
+      });
+      const condKeys = referencedStepInputKeys(condStep);
+      expect(condKeys.has('owner')).toBe(false);
+
+      // 2. Literal Docker container "input.secret" is not an input reference
+      const dockerStep = createMockStep({
+        key: 'docker_step',
+        type: 'DOCKER',
+        config: { action: 'inspect', container: 'input.secret' },
+      });
+      const dockerKeys = referencedStepInputKeys(dockerStep);
+      expect(dockerKeys.has('secret')).toBe(false);
+
+      // 3. Non-BASH step text mentioning OPSKNIGHT_INPUT_ is not an input reference
+      const httpStep = createMockStep({
+        key: 'http_step',
+        type: 'HTTP',
+        riskClass: 'NON_IDEMPOTENT',
+        config: {
+          method: 'POST',
+          url: 'https://api.internal/endpoint',
+          body: { note: 'Refer to OPSKNIGHT_INPUT_SECRET' },
+        },
+      });
+      const httpKeys = referencedStepInputKeys(httpStep);
+      expect(httpKeys.has('secret')).toBe(false);
+
+      // 4. Runbook definition containing literal "input.secret" and "input.owner" parses without declaring them
+      const safeDef = createMockDefinition({
+        steps: [condStep, dockerStep, httpStep],
+      });
+      expect(() => parseRunbookDefinition(safeDef, [])).not.toThrow();
+    });
+
+    it('rejects uppercase input template placeholder syntax on validation', () => {
+      const uppercaseDef = createMockDefinition({
+        steps: [
+          createMockStep({
+            type: 'HTTP',
+            config: {
+              method: 'GET',
+              url: 'https://api.internal/${{ inputs.TARGET_HOST }}',
+            },
+          }),
+        ],
+      });
+
+      expect(() => parseRunbookDefinition(uppercaseDef)).toThrow(/uppercase placeholder/);
+      expect(() =>
+        parseRunbookDefinition(uppercaseDef, [{ key: 'target_host', type: 'STRING' }])
+      ).toThrow(/uppercase placeholder/);
     });
   });
 });

@@ -6,7 +6,7 @@ product_area: runbooks
 audience: [administrator, operator]
 verification:
   level: test
-  verified_at: 2026-10-04
+  verified_at: 2026-10-11
   evidence: [src/components/runbooks/RunbookBuilder.tsx, src/components/runbooks/RunbookLibrary.tsx, tests/e2e/runbooks-ui.spec.ts]
 ---
 
@@ -27,7 +27,7 @@ Use library search and the published/draft filter to find existing workflows.
 
 ## Configure ordered steps
 
-In **Builder & Inputs → Builder**, add a step and open **Configure step**.
+In **Builder & Inputs → Builder**, select a step from the workflow list. On mobile, select a step to open its full-width editor and use **Back to steps** to return.
 Set its name, unique key, instructions, action-specific parameters, timeout,
 and approval requirement. Move steps up or down to change execution order.
 For service recovery, configure diagnostics, inspect the actual unit, restart
@@ -44,6 +44,19 @@ required flag. Use the supported input types in the [reference](../../reference/
 Service bindings provide concrete values. Configurable fields can reference
 inputs using `${{ inputs.unit }}`. Secrets use `SECRET_REF` values such as
 `secret://payments-api-token`, never plaintext credentials.
+
+Input keys are committed on blur or Enter. Until then, the old key and its
+references stay intact. A rename that collides with another committed or pending
+key is rejected; resolve the collision before saving. Changing an input type also
+normalizes its condition comparison values, or clears values requiring re-entry.
+Defaults are validated during authoring, saving and publication. Numeric zero,
+boolean false and empty optional defaults preserve their meanings. Secret
+availability is checked separately from declaration validity.
+
+**Validate draft** checks configuration without executing actions. The default
+step timeout is 600 seconds; the overall deadline defaults to 3600 seconds.
+Agent claims use a renewable 300-second lease. Agent policy can impose a tighter
+maximum runtime. A lease is not a step timeout.
 
 ## Prechecks, verification, and Advanced JSON
 
@@ -84,8 +97,7 @@ For example, a restart step can contain a read-only Systemd precheck and verific
 Before editing JSON, select **Refresh JSON from builder** to include current
 builder changes. After editing, select **Apply JSON to builder**, then **Save draft**.
 Unapplied JSON displays a warning and disables saving, including after switching tabs.
-Refresh discards unapplied JSON edits. Invalid JSON or definitions display an error;
-final domain validation occurs when saving.
+Refresh asks before discarding unapplied JSON edits. Applying JSON asks before overwriting a modified visual draft. Browser and server use the same structural validation; runtime availability and policy checks remain separate.
 
 ## Save, publish, and verify
 

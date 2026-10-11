@@ -9,6 +9,11 @@ export default defineConfig({
   testMatch: /runbooks-ui\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  ],
   timeout: 120000,
   expect: { timeout: 30000 },
   reporter: 'line',
@@ -29,6 +34,8 @@ export default defineConfig({
     timeout: 120000,
     env: {
       DATABASE_URL: databaseUrl,
+      // Planner/Agent boundaries are seeded explicitly by this UI suite.
+      OPSKNIGHT_PROCESS_ROLE: 'web',
       DIRECT_URL: databaseUrl,
       NEXTAUTH_URL: 'http://127.0.0.1:3205',
       NEXT_PUBLIC_APP_URL: 'http://127.0.0.1:3205',

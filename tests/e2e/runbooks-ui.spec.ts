@@ -9,6 +9,16 @@ let runbookId = '';
 let serviceId = '';
 let incidentId = '';
 test.describe.configure({ mode: 'serial' });
+test.beforeEach(async ({ page }) => {
+  page.on('dialog', dialog => dialog.accept());
+  // Incident alerts from earlier matrix fixtures can cover top-right controls.
+  await page.addLocatorHandler(
+    page.getByRole('button', { name: /^Dismiss (all incident alerts|incident alert)$/ }).first(),
+    async button => {
+      await button.click();
+    }
+  );
+});
 test.beforeAll(async () => {
   if (new URL(process.env.DATABASE_URL!).pathname !== '/runbook_ui_test')
     throw new Error('Dedicated test database required');
@@ -49,6 +59,60 @@ async function noOverflow(page: Page) {
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)
   ).toBe(true);
 }
+test('global history stays synchronized across application pages and authentication redirects', async ({
+  page,
+  context,
+}) => {
+  await login(page);
+  const destinations = [
+    { path: '/incidents', title: 'Incidents' },
+    { path: '/services', title: 'Services' },
+    { path: '/settings', title: 'Settings' },
+    { path: '/reports', title: 'Reports & Dashboards' },
+  ];
+  const sidebar = page.locator('#app-sidebar');
+  async function assertDestination(destination: (typeof destinations)[number]) {
+    await expect(page).toHaveURL(new URL(destination.path, page.url()).href);
+    await expect(page.getByRole('heading', { level: 1, name: destination.title, exact: true }))
+      .toBeVisible();
+    await expect(page.getByRole('alertdialog')).not.toBeVisible();
+  }
+  // Real Next links exercise the global tracker without a dirty runbook guard.
+  for (const destination of destinations) {
+    await sidebar.locator(`a[href="${destination.path}"]`).click();
+    await assertDestination(destination);
+  }
+  for (const destination of destinations.slice(0, -1).reverse()) {
+    await page.goBack();
+    await assertDestination(destination);
+  }
+  for (const destination of destinations.slice(1)) {
+    await page.goForward();
+    await assertDestination(destination);
+  }
+  // Expired authentication must redirect a historical protected page as well
+  // as a fresh request, rather than leave stale authenticated UI on screen.
+  await context.clearCookies();
+  await page.goBack();
+  await page.reload();
+  await expect(page).toHaveURL(/\/login(?:\?|$)/);
+  await expect(page.locator('input[type="email"]')).toBeVisible();
+  await expect(sidebar).not.toBeVisible();
+  await page.goto('/reports');
+  await expect(page).toHaveURL(/\/login(?:\?|$)/);
+  await page.locator('input[type="email"]').fill(EMAIL);
+  await page.locator('input[type="password"]').fill(PASSWORD);
+  await page.locator('form button[type="submit"]').click();
+  await expect(page).not.toHaveURL(/\/login/);
+  await sidebar.locator('a[href="/incidents"]').click();
+  await assertDestination(destinations[0]);
+  await sidebar.locator('a[href="/services"]').click();
+  await assertDestination(destinations[1]);
+  await page.goBack();
+  await assertDestination(destinations[0]);
+  await page.goForward();
+  await assertDestination(destinations[1]);
+});
 test('library, ordered builder, typed inputs and publish confirmation', async ({ page }) => {
   await login(page);
   await page.getByRole('button', { name: 'New Runbook', exact: true }).first().click();
@@ -63,27 +127,22 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   runbookId = new URL(page.url()).pathname.split('/').at(-1)!;
   await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
   await expect(page.getByLabel('Definition JSON')).not.toBeVisible();
-  await page.getByRole('button', { name: 'Configure step' }).first().click();
   await page.getByLabel('Step name', { exact: true }).fill('Capture baseline diagnostics');
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('heading', { name: 'Capture baseline diagnostics' })).toBeVisible();
-  await page.getByRole('button', { name: 'Configure step' }).first().click();
+  await expect(
+    page
+      .getByRole('list', { name: 'Runbook steps' })
+      .getByRole('heading', { name: 'Capture baseline diagnostics' })
+  ).toBeVisible();
   await page.getByLabel('Step key', { exact: true }).fill('baseline_check');
-  await expect(page.getByRole('dialog')).toBeVisible();
-  const before = page
-    .getByRole('dialog')
-    .locator('.mt-6 > section[aria-label="Before action checks"]');
+  const before = page.locator('section[data-testid="action-precheck-checks"]');
   await before.getByRole('button', { name: 'Add precheck', exact: true }).click();
   await before.locator('summary').first().click();
   await before.getByLabel('Step name', { exact: true }).fill('Check service exists');
   await before.getByLabel('Service unit or input reference').fill('payments.service');
-  const after = page
-    .getByRole('dialog')
-    .locator('.mt-6 > section[aria-label="After action checks"]');
+  const after = page.locator('section[data-testid="action-verification-checks"]');
   await after.getByRole('button', { name: 'Add verification', exact: true }).click();
   await after.locator('summary').first().click();
   await after.getByLabel('Step name', { exact: true }).fill('Verify service recovered');
-  await page.keyboard.press('Escape');
   await page
     .getByRole('button', { name: 'Move Capture baseline diagnostics down', exact: true })
     .click();
@@ -108,6 +167,8 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toBeDisabled();
   await page.getByRole('tab', { name: /^Advanced/ }).click();
   await page.getByRole('button', { name: 'Apply JSON to builder' }).click();
+  await expect(page.getByRole('alertdialog')).toContainText('Replace the visual draft');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
   await expect(page.getByRole('button', { name: 'Save draft', exact: true })).toBeEnabled();
   await page.getByRole('tab', { name: /^Inputs/ }).click();
   await page.getByRole('button', { name: 'Add input', exact: true }).click();
@@ -129,6 +190,9 @@ test('library, ordered builder, typed inputs and publish confirmation', async ({
   await page.getByRole('button', { name: 'Publish draft', exact: true }).click();
   await expect(page.getByRole('alertdialog')).toContainText('Only the saved draft is published');
   await page.getByRole('button', { name: 'Keep unchanged', exact: true }).click();
+  await page.getByRole('tab', { name: 'Builder', exact: true }).click();
+  await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
+  await expect(page.locator('input[aria-label="Step name"]:visible').first()).toBeVisible();
   await noOverflow(page);
   await page.screenshot({ path: 'test-results/runbooks-builder-desktop.png', fullPage: true });
 });
@@ -148,7 +212,10 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   const agent = await prisma.runbookAgent.findFirstOrThrow({ where: { name: agentName } });
   expect(agent.enrollmentTokenHash).toBeTruthy();
   await page.keyboard.press('Escape');
-  await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^pools/i }).click();
+  await page
+    .getByRole('navigation', { name: 'Infrastructure sections' })
+    .getByRole('link', { name: /^pools/i })
+    .click();
   await page.getByRole('button', { name: 'Create pool', exact: true }).click();
   await page.getByLabel('Pool name', { exact: true }).fill(poolName);
   await page.getByRole('dialog').getByRole('button', { name: 'Create pool', exact: true }).click();
@@ -159,17 +226,22 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   const poolCard = page.locator('.bg-card').filter({ hasText: poolName });
   await poolCard.getByRole('button', { name: 'Manage pool' }).click();
   await page.getByRole('combobox', { name: 'Agent to add' }).click();
+  await page.getByPlaceholder('Search agent to add…').fill(agentName);
   await page.getByRole('option', { name: agentName, exact: true }).click();
   await page.getByRole('button', { name: 'Add Agent', exact: true }).click();
   await expect
     .poll(async () => prisma.runbookAgentPoolMember.count({ where: { agentId: agent.id } }))
     .toBe(1);
   await page.keyboard.press('Escape');
-  await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^secrets/i }).click();
+  await page
+    .getByRole('navigation', { name: 'Infrastructure sections' })
+    .getByRole('link', { name: /^secrets/i })
+    .click();
   await page.getByRole('button', { name: 'Create secret', exact: true }).click();
   await page.getByLabel('Secret name', { exact: true }).fill(secretName);
   await page.getByLabel('Secret value', { exact: true }).fill('ui-credential-initial');
   await page.getByRole('combobox', { name: 'Initial secret grant' }).click();
+  await page.getByPlaceholder('Search initial secret grant…').fill(agentName);
   await page.getByRole('option', { name: `Agent · ${agentName}`, exact: true }).click();
   await page.getByRole('button', { name: 'Create encrypted secret', exact: true }).click();
   await expect
@@ -182,6 +254,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   await expect(secretCard.getByLabel('Secret value hidden')).toBeVisible();
   await secretCard.getByRole('button', { name: 'Manage grants / Rotate' }).click();
   await page.getByRole('combobox', { name: 'Grant to target' }).click();
+  await page.getByPlaceholder('Search grant to target…').fill(poolName);
   await page.getByRole('option', { name: `Pool · ${poolName}`, exact: true }).click();
   await page.getByRole('button', { name: 'Grant access', exact: true }).click();
   await expect
@@ -250,6 +323,11 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
       async () => (await prisma.runbook.findUniqueOrThrow({ where: { id } })).publishedVersionId
     )
     .not.toBeNull();
+  await expect(page.getByText('Published v1', { exact: true })).toBeVisible();
+  await expect(page.getByRole('alertdialog')).not.toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Create next editable draft', exact: true })
+  ).toBeVisible();
   await page.goto(`/services/${serviceId}`);
   await page.getByRole('tab', { name: /^Runbooks/ }).click();
   await page.getByRole('button', { name: `Attach ${name}`, exact: true }).click();
@@ -274,6 +352,15 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   await page.getByRole('option', { name: 'Incident urgency', exact: true }).click();
   await page.locator('input[name="conditionValue"]').fill('HIGH');
   await page.getByRole('button', { name: 'Save trigger', exact: true }).click();
+  await expect(
+    page
+      .getByRole('dialog')
+      .locator('form')
+      .filter({
+        has: page.getByRole('button', { name: 'Save trigger', exact: true }),
+      })
+      .getByRole('status')
+  ).toHaveText('Changes saved.');
   const binding = await prisma.serviceRunbookBinding.findFirstOrThrow({
     where: { serviceId, runbookId: id },
   });
@@ -319,7 +406,20 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   await page.goto(`/incidents/${incident.id}`);
   await page.getByRole('tab', { name: /^Runbooks/ }).click();
   await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
-  await page.getByRole('button', { name: 'Start suggestion', exact: true }).click();
+  await prisma.runbookAgent.update({
+    where: { id: agent.id },
+    data: { lastHeartbeatAt: new Date() },
+  });
+  await page.getByRole('button', { name: 'Preview execution', exact: true }).first().click();
+  await expect(page.getByRole('region', { name: 'Execution preview' })).toContainText(
+    'Human approval required'
+  );
+  await page
+    .getByLabel(
+      'I reviewed the target and authorize the planned writes. Step approvals and Agent policy still apply.'
+    )
+    .check();
+  await page.getByRole('button', { name: 'Execute this plan', exact: true }).click();
   await expect
     .poll(async () =>
       prisma.runbookExecution.count({ where: { incidentId: incident.id, runbookId: id } })
@@ -400,16 +500,159 @@ test('390px infrastructure, health and builder have no horizontal overflow', asy
     await page.goto(route);
     await noOverflow(page);
     if (route === `/runbooks/${runbookId}`) {
+      await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
+      await page
+        .getByRole('list', { name: 'Runbook steps' })
+        .getByRole('button', { name: /^Step 1:/ })
+        .click();
+      await expect(page.locator('input[aria-label="Step name"]:visible').first()).toBeVisible();
+      await page.getByRole('button', { name: 'Back to steps' }).click();
       await page.screenshot({ path: 'test-results/runbooks-builder-mobile.png', fullPage: true });
+      for (const width of [320, 375, 390, 430, 768, 1024, 1440]) {
+        await page.setViewportSize({ width, height: 844 });
+        await noOverflow(page);
+        await page.screenshot({
+          path: `test-results/runbooks-builder-${width}.png`,
+          fullPage: true,
+        });
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
     }
     if (route === '/runbooks/agents') {
-      await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^pools/i }).click();
+      await page
+        .getByRole('navigation', { name: 'Infrastructure sections' })
+        .getByRole('link', { name: /^pools/i })
+        .click();
       await noOverflow(page);
-      await page.getByRole('navigation', { name: 'Infrastructure sections' }).getByRole('link', { name: /^secrets/i }).click();
+      await page
+        .getByRole('navigation', { name: 'Infrastructure sections' })
+        .getByRole('link', { name: /^secrets/i })
+        .click();
       await noOverflow(page);
     }
   }
   await page.screenshot({ path: 'test-results/runbooks-incident-mobile.png', fullPage: true });
+});
+
+test('large workflows retain keyboard navigation, theme layout and zoom-equivalent viewport', async ({
+  page,
+  browserName,
+}) => {
+  await login(page);
+  await page.locator(`a[href="/runbooks/${runbookId}"]`).first().click();
+  await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
+  // Preserve a real forward entry before making the draft dirty.
+  await page.evaluate(() => history.pushState(null, '', `${location.pathname}?history=forward`));
+  await page.goBack();
+  await expect(page).not.toHaveURL(/history=forward/);
+  for (const count of [1, 10, 25, 50]) {
+    await page.getByRole('tab', { name: /^Advanced/ }).click();
+    await page.getByLabel('Definition JSON', { exact: true }).fill(
+      JSON.stringify({
+        steps: Array.from({ length: count }, (_, index) => ({
+          key: `check_${index}`,
+          name: `Inspect ${index + 1}: a long operational description that must remain readable`,
+          type: 'WAIT',
+          riskClass: 'READ_ONLY',
+          config: { durationSeconds: 0 },
+        })),
+      })
+    );
+    await page.getByRole('button', { name: 'Apply JSON to builder' }).click();
+    if (count > 1) {
+      await expect(page.getByRole('alertdialog')).toContainText('Replace the visual draft');
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
+    }
+    await page.getByRole('tab', { name: 'Builder', exact: true }).click();
+    const steps = page.getByRole('list', { name: 'Runbook steps' });
+    await expect(steps.getByRole('button', { name: /^Step \d+:/ })).toHaveCount(count);
+    const last = steps.getByRole('button', { name: /^Step \d+:/ }).nth(count - 1);
+    await last.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByLabel('Step name', { exact: true })).toHaveValue(
+      `Inspect ${count}: a long operational description that must remain readable`
+    );
+    await noOverflow(page);
+  }
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.evaluate(value => {
+      document.documentElement.classList.remove('light', 'dark');
+      document.documentElement.classList.add(value);
+    }, theme);
+    await noOverflow(page);
+    await page.screenshot({ path: `test-results/runbooks-50-steps-${theme}.png`, fullPage: true });
+  }
+  // A 1440px desktop at 200% browser zoom has a 720px CSS viewport.
+  await page.setViewportSize({ width: 720, height: 450 });
+  await noOverflow(page);
+  await expect(page.getByRole('button', { name: 'Back to steps' })).toBeVisible();
+  await page.getByRole('button', { name: 'Back to steps' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('list', { name: 'Runbook steps' })).toBeVisible();
+  const draftUrl = page.url();
+  await page.evaluate(() => history.back());
+  await expect(page.getByRole('alertdialog')).toContainText('Leave this draft');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing' }).click();
+  await expect(page).toHaveURL(draftUrl);
+  await expect(
+    page.getByRole('list', { name: 'Runbook steps' }).getByRole('button', { name: /^Step \d+:/ })
+  ).toHaveCount(50);
+  await page.evaluate(() => history.forward());
+  await expect(page.getByRole('alertdialog')).toContainText('Leave this draft');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing' }).click();
+  await expect(page).toHaveURL(draftUrl);
+  if (browserName === 'chromium') {
+    // Native document exits are separate from App Router history transitions.
+    page.removeAllListeners('dialog');
+    const refreshPrompt = page.waitForEvent('dialog');
+    const reload = page.evaluate(() => location.reload());
+    const refreshDialog = await refreshPrompt;
+    expect(refreshDialog.type()).toBe('beforeunload');
+    await refreshDialog.dismiss();
+    await reload;
+    await expect(
+      page.getByRole('list', { name: 'Runbook steps' }).getByRole('button', { name: /^Step \d+:/ })
+    ).toHaveCount(50);
+    const closePrompt = page.waitForEvent('dialog');
+    const close = page.close({ runBeforeUnload: true });
+    const closeDialog = await closePrompt;
+    expect(closeDialog.type()).toBe('beforeunload');
+    await closeDialog.dismiss();
+    await close;
+    expect(page.isClosed()).toBe(false);
+    page.on('dialog', dialog => dialog.accept());
+  }
+  const library = page
+    .getByRole('navigation', { name: 'Runbook navigation' })
+    .getByRole('link', { name: 'Library', exact: true });
+  await library.click();
+  await expect(page.getByRole('alertdialog')).toContainText('Leave this draft');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Keep editing' }).click();
+  await expect(
+    page.getByRole('list', { name: 'Runbook steps' }).getByRole('button', { name: /^Step \d+:/ })
+  ).toHaveCount(50);
+  await library.click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
+  await expect(page.getByRole('heading', { name: 'Runbooks', exact: true })).toBeVisible();
+  // Confirm Forward and Back independently after returning to the saved builder.
+  await page.goBack();
+  await page.getByRole('button', { name: /^Step 1:/ }).click();
+  await page
+    .locator('input[aria-label="Step name"]:visible')
+    .first()
+    .fill('Unsaved forward change');
+  await page.evaluate(() => history.forward());
+  await expect(page.getByRole('alertdialog')).toContainText('Leave this draft');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
+  await expect(page.getByRole('heading', { name: 'Runbooks', exact: true })).toBeVisible();
+  await page.goBack();
+  await page.getByRole('button', { name: /^Step 1:/ }).click();
+  await page.locator('input[aria-label="Step name"]:visible').first().fill('Unsaved back change');
+  await page.evaluate(() => history.back());
+  await expect(page.getByRole('alertdialog')).toContainText('Leave this draft');
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
+  await expect(page.getByRole('heading', { name: 'Runbooks', exact: true })).toBeVisible();
 });
 
 test('server pagination, administrator labels, effective capabilities and budget settings', async ({
@@ -487,6 +730,8 @@ test('server pagination, administrator labels, effective capabilities and budget
     .getByRole('spinbutton', { name: 'Automatic non-idempotent actions per incident', exact: true })
     .fill('0');
   await page.getByRole('button', { name: 'Save remediation budgets' }).click();
+  // Later browsers may already have these DB values; wait for the action's UI response too.
+  await expect(page.getByRole('status').filter({ hasText: 'Changes saved.' })).toBeVisible();
   await expect
     .poll(
       async () =>
@@ -498,7 +743,13 @@ test('server pagination, administrator labels, effective capabilities and budget
     .getByText('Pinned execution public key', { exact: true })
     .filter({ visible: true })
     .click();
-  await page.getByRole('button', { name: 'Stage next signing identity' }).click();
+  const stageIdentity = page.getByRole('button', { name: 'Stage next signing identity' });
+  if ((await prisma.runbookExecutionSigningKey.count({ where: { state: 'NEXT' } })) === 0) {
+    await stageIdentity.click();
+  } else {
+    // The matrix shares global signing settings; an existing staged key is authoritative.
+    await expect(stageIdentity).toBeDisabled();
+  }
   await expect
     .poll(async () => prisma.runbookExecutionSigningKey.count({ where: { state: 'NEXT' } }))
     .toBe(1);

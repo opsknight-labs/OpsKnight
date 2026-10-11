@@ -1,4 +1,5 @@
 import 'server-only';
+import { isValidInputValue, parseInputDefault } from './input-values';
 
 import type { Prisma, RunbookInput } from '@prisma/client';
 import prisma from '@/lib/prisma';
@@ -11,14 +12,10 @@ import {
   createRunbookTriggerSchema,
   type CreateRunbookTriggerInput,
 } from './schemas';
-import { flattenSteps, isSecretReference, parseRunbookDefinition } from './definition';
+import { flattenSteps, parseRunbookDefinition } from './definition';
 import { RunbookDefinitionError, RunbookVersionNotFoundError } from './errors';
 import { lockRunbookForUpdate } from './locking';
 import { requiresAgent } from './types';
-
-function isDuration(value: string): boolean {
-  return /^\d+(?:ms|s|m|h|d)$/.test(value);
-}
 
 export function validateBindingInputValues(
   definitions: Pick<RunbookInput, 'key' | 'type' | 'required'>[],
@@ -35,28 +32,7 @@ export function validateBindingInputValues(
         throw new RunbookDefinitionError(`Runbook input "${input.key}" is required.`);
       continue;
     }
-    const valid =
-      input.type === 'STRING' || input.type === 'SELECT'
-        ? typeof value === 'string'
-        : input.type === 'NUMBER'
-          ? typeof value === 'number' && Number.isFinite(value)
-          : input.type === 'BOOLEAN'
-            ? typeof value === 'boolean'
-            : input.type === 'URL'
-              ? typeof value === 'string' &&
-                (() => {
-                  try {
-                    const url = new URL(value);
-                    return url.protocol === 'http:' || url.protocol === 'https:';
-                  } catch {
-                    return false;
-                  }
-                })()
-              : input.type === 'DURATION'
-                ? typeof value === 'string' && isDuration(value)
-                : input.type === 'SECRET_REF'
-                  ? isSecretReference(value)
-                  : false;
+    const valid = isValidInputValue(input.type, value);
     if (!valid)
       throw new RunbookDefinitionError(
         `Runbook input "${input.key}" is not a valid ${input.type.toLowerCase()}.`
@@ -77,18 +53,11 @@ export function applyRunbookInputDefaults(
     ) {
       continue;
     }
-    if (
-      (input.type === 'BOOLEAN' && !['true', 'false'].includes(input.defaultValue)) ||
-      (input.type === 'NUMBER' && input.defaultValue.trim() === '')
-    ) {
-      throw new RunbookDefinitionError(`Runbook input "${input.key}" has an invalid default.`);
+    try {
+      normalized[input.key] = parseInputDefault(input);
+    } catch (error) {
+      throw new RunbookDefinitionError(error instanceof Error ? error.message : 'Invalid default.');
     }
-    normalized[input.key] =
-      input.type === 'NUMBER'
-        ? Number(input.defaultValue)
-        : input.type === 'BOOLEAN'
-          ? input.defaultValue === 'true'
-          : input.defaultValue;
   }
   return normalized;
 }

@@ -79,6 +79,7 @@ export interface NavItemConfig {
   requiresRole?: string[];
   shortcut?: string;
   badgeKey?: 'incidents';
+  releaseStage?: 'Beta';
 }
 
 export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
@@ -105,6 +106,7 @@ export const NAVIGATION_ITEMS: readonly NavItemConfig[] = [
   {
     href: '/runbooks',
     label: 'Runbooks',
+    releaseStage: 'Beta',
     icon: Workflow,
     section: 'MAIN',
     requiresRole: ['ADMIN', 'RESPONDER', 'AUDITOR'],

@@ -13,15 +13,9 @@ import {
   duplicateRunbook,
   buildRunbookLibraryWhere,
 } from '@/lib/runbooks/lifecycle';
-import {
-  createServiceBinding,
-  replaceBindingTrigger,
-} from '@/lib/runbooks/bindings';
-import { startRunbookExecution } from '@/lib/runbooks/orchestrator';
-import {
-  RunbookArchivedError,
-  RunbookCannotDeleteError,
-} from '@/lib/runbooks/errors';
+import { createServiceBinding, replaceBindingTrigger } from '@/lib/runbooks/bindings';
+import { startRunbookExecution, previewRunbookExecution } from '@/lib/runbooks/orchestrator';
+import { RunbookArchivedError, RunbookCannotDeleteError } from '@/lib/runbooks/errors';
 import {
   createTestIncident,
   createTestService,
@@ -33,6 +27,46 @@ const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
 
 describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
+  it('rejects an invalid stored default at publish without promoting the draft', async () => {
+    const actor = await createTestUser();
+    const runbook = await createRunbook(
+      {
+        name: 'Default revalidation',
+        description: '',
+        slug: `default-${crypto.randomUUID()}`,
+        inputs: [
+          {
+            key: 'count',
+            label: 'Count',
+            type: 'NUMBER',
+            required: false,
+            defaultValue: '0',
+            description: '',
+            sequence: 0,
+          },
+        ],
+      },
+      actor.id
+    );
+    await testPrisma.runbookInput.updateMany({
+      where: { runbookVersionId: runbook.draftVersionId! },
+      data: { defaultValue: 'invalid' },
+    });
+    await expect(publishDraftVersion(runbook.draftVersionId!, actor.id)).rejects.toThrow(
+      'invalid number default'
+    );
+    expect(
+      (
+        await testPrisma.runbookVersion.findUniqueOrThrow({
+          where: { id: runbook.draftVersionId! },
+        })
+      ).state
+    ).toBe('DRAFT');
+    expect(
+      (await testPrisma.runbook.findUniqueOrThrow({ where: { id: runbook.id } })).publishedVersionId
+    ).toBeNull();
+  });
+
   it('certifies concurrent publish-vs-delete race protection', async () => {
     const actor = await createTestUser();
     const slug = `race-pub-del-${crypto.randomUUID().slice(0, 8)}`;
@@ -187,7 +221,14 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
         {
           definition: {
             description: 'concurrent modification',
-            steps: [{ key: 'step_concurrent', name: 'Concurrent Step', type: 'MANUAL', riskClass: 'READ_ONLY' }],
+            steps: [
+              {
+                key: 'step_concurrent',
+                name: 'Concurrent Step',
+                type: 'MANUAL',
+                riskClass: 'READ_ONLY',
+              },
+            ],
           },
           expectedDraftRevision: 0,
         },
@@ -347,6 +388,12 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
       actor.id
     );
 
+    const preview = await previewRunbookExecution({
+      runbookId: runbook.id,
+      serviceId: service.id,
+      bindingId: binding.id,
+      triggeredByUserId: actor.id,
+    });
     // Concurrently trigger archive and startRunbookExecution
     const [archiveResult, execResult] = await Promise.allSettled([
       archiveRunbook(runbook.id, actor.id),
@@ -355,6 +402,8 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
         serviceId: service.id,
         bindingId: binding.id,
         triggeredByUserId: actor.id,
+        expectedPlanDigest: preview.digest,
+        previewAuthorizationToken: preview.authorizationToken,
       }),
     ]);
 
@@ -366,7 +415,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
       const err = (execResult as PromiseRejectedResult).reason;
       expect(
         err instanceof RunbookArchivedError ||
-        (err instanceof Error && err.message.includes('archived'))
+          (err instanceof Error && err.message.includes('archived'))
       ).toBe(true);
     } else {
       expect(execResult.status).toBe('fulfilled');
@@ -379,6 +428,8 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
         serviceId: service.id,
         bindingId: binding.id,
         triggeredByUserId: actor.id,
+        expectedPlanDigest: preview.digest,
+        previewAuthorizationToken: preview.authorizationToken,
       })
     ).rejects.toThrow();
   });
@@ -485,9 +536,7 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     );
 
     // Direct database deletion MUST be rejected by foreign key constraint (onDelete: Restrict)
-    await expect(
-      testPrisma.runbook.delete({ where: { id: runbook.id } })
-    ).rejects.toThrow();
+    await expect(testPrisma.runbook.delete({ where: { id: runbook.id } })).rejects.toThrow();
   });
 
   it('certifies transaction rollback on delete rejection', async () => {
@@ -503,9 +552,9 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     );
 
     // Provide incorrect confirmation text to force rejection
-    await expect(
-      deleteRunbook(runbook.id, actor.id, 'incorrect-confirmation')
-    ).rejects.toThrow(RunbookCannotDeleteError);
+    await expect(deleteRunbook(runbook.id, actor.id, 'incorrect-confirmation')).rejects.toThrow(
+      RunbookCannotDeleteError
+    );
 
     // Verify all rows remain completely untouched
     const after = await testPrisma.runbook.findUnique({
@@ -560,14 +609,10 @@ describeIfRealDB('Runbook Lifecycle PostgreSQL Certification Tests', () => {
     ).rejects.toThrow(RunbookArchivedError);
 
     // 3. publishDraftVersion MUST reject
-    await expect(
-      publishDraftVersion(draftId, actor.id)
-    ).rejects.toThrow(RunbookArchivedError);
+    await expect(publishDraftVersion(draftId, actor.id)).rejects.toThrow(RunbookArchivedError);
 
     // 4. cloneVersionToDraft MUST reject
-    await expect(
-      cloneVersionToDraft(draftId, actor.id)
-    ).rejects.toThrow(RunbookArchivedError);
+    await expect(cloneVersionToDraft(draftId, actor.id)).rejects.toThrow(RunbookArchivedError);
 
     // Confirm database state was unchanged by the rejected mutations
     const verified = await testPrisma.runbook.findUnique({
