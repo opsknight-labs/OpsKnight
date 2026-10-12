@@ -233,16 +233,27 @@ async function run() {
   let cachedClockSkew: number | null = null;
 
   const getActiveBlockingCondition = async (): Promise<string | null> => {
+    if (operationalError && !operationalError.startsWith('Spool storage inaccessible')) {
+      return `Execution claims paused due to local storage failure: ${operationalError}`;
+    }
     const isDraining = await checkDraining();
-    const deadLetterStats = await spool.deadLetterStats();
-    const spoolStats = await spool.stats();
-    return determineActiveBlockingCondition({
-      clockError,
-      deadLetterStats,
-      spoolStats,
-      isDraining,
-      limits: safetyLimits,
-    });
+    try {
+      const deadLetterStats = await spool.deadLetterStats();
+      const spoolStats = await spool.stats();
+      if (operationalError?.startsWith('Spool storage inaccessible')) {
+        operationalError = null;
+      }
+      return determineActiveBlockingCondition({
+        clockError,
+        deadLetterStats,
+        spoolStats,
+        isDraining,
+        limits: safetyLimits,
+      });
+    } catch (fsErr) {
+      operationalError = `Spool storage inaccessible: ${fsErr instanceof Error ? fsErr.message : String(fsErr)}`;
+      return `Execution claims paused due to local storage failure: ${operationalError}`;
+    }
   };
 
   const getEffectiveLastError = async (): Promise<string | null> => {
@@ -259,34 +270,42 @@ async function run() {
   const flushSpool = async () => {
     let submitFailed = false;
     let submittedCount = 0;
-    for (const record of await spool.list()) {
-      try {
-        const { localOutput, ...result } = record;
-        if (localOutput && !result.outputArtifactId) {
-          const artifactId = await uploadOutput(client, record, localOutput);
-          if (artifactId) {
-            result.outputArtifactId = artifactId;
-            await spool.put({ ...record, outputArtifactId: artifactId });
-          }
-        }
-        await client.submit(result);
-        await spool.remove(record.attemptId);
-        submittedCount += 1;
-      } catch (error) {
-        submitFailed = true;
-        transientCommunicationError = error instanceof Error ? error.message : String(error);
-        if (error instanceof AgentApiError && error.terminal) {
-          await spool.quarantine(record.attemptId);
-          process.stderr.write(`Result ${record.attemptId} quarantined: HTTP ${error.status}\n`);
-          continue;
-        }
-        break;
+    try {
+      const records = await spool.list();
+      if (operationalError?.startsWith('Spool storage inaccessible')) {
+        operationalError = null;
       }
-    }
-    // Only clear communication error if we actually submitted records and fully drained the spool
-    if (!submitFailed && submittedCount > 0 && (await spool.depth()) === 0) {
-      transientCommunicationError = null;
-      operationalError = null;
+      for (const record of records) {
+        try {
+          const { localOutput, ...result } = record;
+          if (localOutput && !result.outputArtifactId) {
+            const artifactId = await uploadOutput(client, record, localOutput);
+            if (artifactId) {
+              result.outputArtifactId = artifactId;
+              await spool.put({ ...record, outputArtifactId: artifactId });
+            }
+          }
+          await client.submit(result);
+          await spool.remove(record.attemptId);
+          submittedCount += 1;
+        } catch (error) {
+          submitFailed = true;
+          transientCommunicationError = error instanceof Error ? error.message : String(error);
+          if (error instanceof AgentApiError && error.terminal) {
+            await spool.quarantine(record.attemptId);
+            process.stderr.write(`Result ${record.attemptId} quarantined: HTTP ${error.status}\n`);
+            continue;
+          }
+          break;
+        }
+      }
+      // Only clear communication error if we actually submitted records and fully drained the spool
+      if (!submitFailed && submittedCount > 0 && (await spool.depth()) === 0) {
+        transientCommunicationError = null;
+      }
+    } catch (fsErr) {
+      operationalError = `Spool storage inaccessible: ${fsErr instanceof Error ? fsErr.message : String(fsErr)}`;
+      process.stderr.write(`[Agent Storage Error] ${operationalError}\n`);
     }
   };
 
@@ -316,6 +335,18 @@ async function run() {
   const heartbeat = async () => {
     await checkClock(false);
     const effective = await probeCapabilities(policy);
+    let spoolDepth = 0;
+    let deadLetterDepth = 0;
+    try {
+      spoolDepth = await spool.depth();
+      deadLetterDepth = await spool.deadLetterDepth();
+      if (operationalError?.startsWith('Spool storage inaccessible')) {
+        operationalError = null;
+      }
+    } catch (spoolErr) {
+      operationalError = `Spool storage inaccessible: ${spoolErr instanceof Error ? spoolErr.message : String(spoolErr)}`;
+      process.stderr.write(`[Agent Storage Error] ${operationalError}\n`);
+    }
     const lastError = await getEffectiveLastError();
     await client.heartbeat({
       capabilities: effective.capabilities,
@@ -323,8 +354,8 @@ async function run() {
       trustedSigningKeys:
         typeof executionPublicKey === 'object' ? Object.keys(executionPublicKey) : ['default'],
       policyHash,
-      spoolDepth: await spool.depth(),
-      deadLetterDepth: await spool.deadLetterDepth(),
+      spoolDepth,
+      deadLetterDepth,
       activeAttemptCount: active,
       lastError,
     });
@@ -347,14 +378,20 @@ async function run() {
         JSON.stringify({
           pid: process.pid,
           updatedAt: Date.now(),
-          ready: !draining && clockError === null,
+          ready: !draining && clockError === null && operationalError === null,
           draining,
           activeAttemptCount: active,
           version: getAgentVersion(),
+          operationalError,
         }),
         { mode: 0o600 }
       );
       await rename(temporary, `${dataDirectory}/health.json`);
+      if (operationalError?.startsWith('Agent data directory inaccessible')) {
+        operationalError = null;
+      }
+    } catch (healthErr) {
+      operationalError = `Agent data directory inaccessible: ${healthErr instanceof Error ? healthErr.message : String(healthErr)}`;
     } finally {
       publishingHealth = false;
     }

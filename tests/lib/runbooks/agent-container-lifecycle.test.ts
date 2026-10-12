@@ -152,6 +152,8 @@ describe('Agent Container & Process Lifecycle Tests', () => {
         agentImage,
         '-c',
         `
+        set -eu
+        trap 'kill "$PID" 2>/dev/null || true' EXIT
         node -e "
         const http = require('node:http');
         const server = http.createServer((req, res) => {
@@ -196,13 +198,16 @@ describe('Agent Container & Process Lifecycle Tests', () => {
         server.listen('/tmp/podman.sock');
         " &
         PID=$!
-        while [ ! -S /tmp/podman.sock ]; do sleep 0.05; done
+        for i in $(seq 1 50); do
+          if [ -S /tmp/podman.sock ]; then break; fi
+          sleep 0.05
+        done
+        [ -S /tmp/podman.sock ]
         export CONTAINER_HOST=unix:///tmp/podman.sock
         podman info --format "{{.Version.Version}}" | grep -q "5.0.0"
         podman inspect test-c1 --format "{{.State.Status}}" | grep -q "running"
         podman logs test-c1 | grep -q "service ready and healthy"
         podman restart test-c1 | grep -q "test-c1"
-        kill $PID
         `,
       ],
       { encoding: 'utf8', timeout: 15000 }

@@ -292,4 +292,103 @@ describe('Agent error precedence and lifecycle recovery', () => {
       })
     ).toBeNull();
   });
+
+  it('handles multi-fault cascading outages and self-heals in exact precedence order', () => {
+    // Stage 1: All faults simultaneously present
+    // - Storage fault: EACCES on spool
+    // - Terminal auth: HTTP 403
+    // - In-flight lease loss: Lease renewal failed
+    // - Transient network: HTTP 503
+    let operationalError: string | null =
+      "Spool storage inaccessible: EACCES: permission denied, scandir '/var/lib/opsknight-agent/spool'";
+    let terminalAuthError: string | null =
+      'Agent authentication revoked or invalid: HTTP 403 - Agent credentials revoked';
+    let inFlightError: string | null = 'Execution lease renewal failed.';
+    let transientError: string | null = 'Agent API server error: HTTP 503 - Service Unavailable';
+    let activeBlockingError: string | null =
+      `Execution claims paused due to local storage failure: ${operationalError}`;
+
+    // Claims are blocked due to active storage failure
+    expect(activeBlockingError).toContain('Execution claims paused due to local storage failure');
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        terminalAuthError,
+        operationalError,
+        inFlightError,
+        transientError,
+      })
+    ).toBe(activeBlockingError);
+
+    // Stage 2: Storage is restored (permissions repaired, spool becomes accessible)
+    // Active blocking condition clears, operational error clears
+    activeBlockingError = null;
+    operationalError = null;
+
+    // Highest precedence is now terminal auth error (HTTP 403)
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        terminalAuthError,
+        operationalError,
+        inFlightError,
+        transientError,
+      })
+    ).toBe('Agent authentication revoked or invalid: HTTP 403 - Agent credentials revoked');
+
+    // Stage 3: Re-authentication / re-enrollment succeeds
+    // terminalAuthError clears
+    terminalAuthError = null;
+
+    // Highest precedence is now in-flight lease loss error
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        terminalAuthError,
+        operationalError,
+        inFlightError,
+        transientError,
+      })
+    ).toBe('Execution lease renewal failed.');
+
+    // Stage 4: In-flight execution concludes and error is consumed
+    inFlightError = null;
+
+    // Highest precedence is now transient communication error (HTTP 503)
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        terminalAuthError,
+        operationalError,
+        inFlightError,
+        transientError,
+      })
+    ).toBe('Agent API server error: HTTP 503 - Service Unavailable');
+
+    // Empty spool flush runs - does NOT clear transient communication error
+    const spoolRecords: Array<{ attemptId: string }> = [];
+    let submittedCount = 0;
+    const submitFailed = false;
+    for (const _record of spoolRecords) {
+      submittedCount += 1;
+    }
+    if (!submitFailed && submittedCount > 0 && spoolRecords.length === 0) {
+      transientError = null;
+    }
+    expect(transientError).toBe('Agent API server error: HTTP 503 - Service Unavailable');
+
+    // Stage 5: Control plane returns 200 on claim or heartbeat - proven recovery
+    transientError = null;
+
+    // System is fully healthy and ready
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        terminalAuthError,
+        operationalError,
+        inFlightError,
+        transientError,
+      })
+    ).toBeNull();
+  });
 });

@@ -493,6 +493,12 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       ? availableRunbookAgentPoolsResult.value
       : [];
 
+  const runbooksLoadError =
+    serviceRunbookBindingsResult.status === 'rejected' ||
+    availableRunbooksResult.status === 'rejected' ||
+    availableRunbookAgentsResult.status === 'rejected' ||
+    availableRunbookAgentPoolsResult.status === 'rejected';
+
   if (serviceRunbookBindingsResult.status === 'rejected') {
     logger.warn('[Service Detail] Failed to load service runbook bindings', {
       error: serviceRunbookBindingsResult.reason,
@@ -1287,7 +1293,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         defaultTab={activeTab}
         activeIncidentCount={activeIncidentsCount ?? 0}
         integrationCount={service.integrations?.length || 0}
-        runbooksCount={serviceRunbookBindings.length}
+        runbooksCount={runbooksLoadError ? undefined : serviceRunbookBindings.length}
         notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}
         escalationContent={escalationContent}
@@ -1299,6 +1305,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             availableAgents={availableRunbookAgents}
             availableAgentPools={availableRunbookAgentPools}
             canManage={canManageService}
+            loadError={runbooksLoadError}
           />
         }
         integrationsContent={integrationsContent}

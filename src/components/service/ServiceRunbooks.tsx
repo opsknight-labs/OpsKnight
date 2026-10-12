@@ -20,6 +20,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { requiresAgent } from '@/lib/runbooks/types';
+import { minimumRiskForStep } from '@/lib/runbooks/definition';
 import EmptyState from '@/components/ui/EmptyState';
 import {
   ActionForm,
@@ -98,6 +99,7 @@ export default function ServiceRunbooks({
   availableAgents,
   availableAgentPools,
   canManage,
+  loadError,
 }: {
   serviceId: string;
   bindings: ServiceRunbookBinding[];
@@ -105,6 +107,7 @@ export default function ServiceRunbooks({
   availableAgents: ServiceRunbookAgent[];
   availableAgentPools: ServiceRunbookAgentPool[];
   canManage: boolean;
+  loadError?: boolean;
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [modeFilter, setModeFilter] = useState<'ALL' | 'AUTOMATIC' | 'MANUAL' | 'SUGGESTED'>('ALL');
@@ -146,6 +149,18 @@ export default function ServiceRunbooks({
     (sum, b) => sum + (b._count?.executions ?? b.executions?.length ?? 0),
     0
   );
+
+  if (loadError) {
+    return (
+      <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+        <AlertCircle className="mx-auto h-8 w-8 text-destructive" />
+        <h3 className="mt-2 text-sm font-semibold text-foreground">Service runbooks unavailable</h3>
+        <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
+          Failed to load attached workflows from the database. Workflow bindings and triggers could not be retrieved. Please check database connectivity or refresh the page.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -504,10 +519,10 @@ export default function ServiceRunbooks({
                 {/* Actions Toolbar */}
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
                   <div className="flex items-center gap-2">
-                    <Button asChild size="sm" variant="default" className="h-8 gap-1.5 shadow-2xs">
-                      <Link href={`/runbooks/${binding.runbookId}?serviceId=${serviceId}`}>
-                        <Play className="h-3.5 w-3.5 fill-current" />
-                        <span>Run Workflow</span>
+                    <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
+                      <Link href={`/runbooks/${binding.runbookId}`}>
+                        <BookOpen className="h-3.5 w-3.5" />
+                        <span>View Runbook</span>
                       </Link>
                     </Button>
 
@@ -850,37 +865,59 @@ function TriggerConditionRow({
 }
 
 /**
- * Resilient, high-performance check for agent write operations.
- * Never throws RunbookDefinitionError even if a historical definition has a risk class mismatch.
+ * Fail-closed, centralized risk detection for agent write operations.
+ * Traverses both precheck and verification child steps and derives minimum executable risk.
+ * Returns true (fails closed requiring specific Agent assignment) if definition is corrupt or uninterpretable.
  */
 function hasAgentWrites(definition: unknown): boolean {
-  if (!definition || typeof definition !== 'object') return false;
+  if (!definition || typeof definition !== 'object') return true; // Fail closed
   try {
     const rawSteps = (definition as { steps?: unknown[] }).steps;
-    if (!Array.isArray(rawSteps)) return false;
+    if (!Array.isArray(rawSteps) || rawSteps.length === 0) return true; // Fail closed
 
     const checkStep = (stepObj: unknown): boolean => {
-      if (!stepObj || typeof stepObj !== 'object') return false;
+      if (!stepObj || typeof stepObj !== 'object') return true; // Fail closed on corrupt step
       const step = stepObj as {
         type?: string;
         riskClass?: string;
+        config?: Record<string, unknown>;
         precheck?: { steps?: unknown[] };
+        verification?: { steps?: unknown[] };
       };
+
       if (
         typeof step.type === 'string' &&
-        requiresAgent(step.type as import('@/lib/runbooks/types').RunbookStepType) &&
-        step.riskClass !== 'READ_ONLY'
+        requiresAgent(step.type as import('@/lib/runbooks/types').RunbookStepType)
       ) {
-        return true;
+        // Derive minimum required risk from executable action semantics
+        const derivedRisk = minimumRiskForStep({
+          key: 'check',
+          name: 'check',
+          type: step.type as import('@/lib/runbooks/types').RunbookStepType,
+          riskClass: (step.riskClass as import('@/lib/runbooks/types').RunbookRiskClass) ?? 'READ_ONLY',
+          config: step.config ?? {},
+        });
+        const declaredRisk = step.riskClass;
+        if (derivedRisk !== 'READ_ONLY' || (declaredRisk && declaredRisk !== 'READ_ONLY')) {
+          return true;
+        }
       }
+
+      // Recursively traverse prechecks:
       if (step.precheck && Array.isArray(step.precheck.steps)) {
         if (step.precheck.steps.some(checkStep)) return true;
       }
+
+      // Recursively traverse verification steps:
+      if (step.verification && Array.isArray(step.verification.steps)) {
+        if (step.verification.steps.some(checkStep)) return true;
+      }
+
       return false;
     };
 
     return rawSteps.some(checkStep);
   } catch {
-    return false;
+    return true; // Fail closed on any interpretation failure
   }
 }
