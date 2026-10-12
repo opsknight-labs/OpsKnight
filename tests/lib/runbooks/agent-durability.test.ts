@@ -1,5 +1,6 @@
+/* eslint-disable security/detect-non-literal-fs-filename */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chmod, mkdtemp, rm, writeFile, utimes } from 'node:fs/promises';
+import { chmod, mkdtemp, rm, writeFile, utimes, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateKeyPairSync, sign } from 'node:crypto';
@@ -24,11 +25,8 @@ describe('Agent authority and durable recovery', () => {
       await spool.markStarted('recent');
       const expired = new Date(Date.now() - 3 * 86400000);
       // Paths are confined to this test's freshly allocated temporary directory.
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       await utimes(join(directory, 'dispatched', 'old.started'), expired, expired);
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       await writeFile(join(directory, 'broken.json'), '{invalid');
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       await writeFile(
         join(directory, 'broken2.json'),
         JSON.stringify({
@@ -369,7 +367,6 @@ describe('Agent authority and durable recovery', () => {
     // If the directory path is an invalid target (e.g. points to a regular file where directory is expected)
     const tempDir = await mkdtemp(join(tmpdir(), 'opsknight-not-a-dir-'));
     // Paths are confined to this test's freshly allocated temporary directory.
-    // eslint-disable-next-line security/detect-non-literal-fs-filename
     await writeFile(join(tempDir, 'file'), 'not-a-directory');
     const filePath = join(tempDir, 'file');
     try {
@@ -415,22 +412,53 @@ describe('Agent authority and durable recovery', () => {
       await spool.initialize();
 
       // 1. Unwritable directory (0o500: read/execute only, no write)
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       await chmod(directory, 0o500);
       await expect(spool.probeStorageIntegrity()).rejects.toThrow();
 
       // 2. Unreadable directory (0o300: write/execute only, no read)
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       await chmod(directory, 0o300);
       await expect(spool.probeStorageIntegrity()).rejects.toThrow();
 
       // 3. Restored directory (0o700: full permissions) -> succeeds!
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       await chmod(directory, 0o700);
       await expect(spool.probeStorageIntegrity()).resolves.toBeUndefined();
     } finally {
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       await chmod(directory, 0o700).catch(() => undefined);
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('probeStorageIntegrity cleans up temporary probe files even if writeFile or fsync fails', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'opsknight-spool-probe-cleanup-'));
+    try {
+      const spool = new ResultSpool(directory);
+      await spool.initialize();
+
+      // 1. Simulate a writeFile failure on the probe file (e.g. disk full ENOSPC)
+      await expect(
+        spool.probeStorageIntegrity({ simulateWriteFailure: true })
+      ).rejects.toThrow('Simulated ENOSPC during probe write');
+
+      // Assert that NO temporary .probe-*.tmp files were left abandoned on disk
+      const filesAfterWrite = await readdir(directory);
+      expect(filesAfterWrite.filter(f => f.startsWith('.probe-'))).toHaveLength(0);
+
+      // 2. Simulate an fsync failure on the probe file (e.g. storage I/O error EIO)
+      await expect(
+        spool.probeStorageIntegrity({ simulateSyncFailure: true })
+      ).rejects.toThrow('Simulated EIO during probe fsync');
+
+      const filesAfterSync = await readdir(directory);
+      expect(filesAfterSync.filter(f => f.startsWith('.probe-'))).toHaveLength(0);
+
+      // 3. Stale probe files from prior crashed processes are cleaned up automatically
+      const staleProbePath = join(directory, '.probe-99999-stale.tmp');
+      await writeFile(staleProbePath, 'stale-data');
+      expect((await readdir(directory)).filter(f => f.startsWith('.probe-'))).toHaveLength(1);
+
+      await expect(spool.probeStorageIntegrity()).resolves.toBeUndefined();
+      expect((await readdir(directory)).filter(f => f.startsWith('.probe-'))).toHaveLength(0);
+    } finally {
       await rm(directory, { recursive: true, force: true });
     }
   });

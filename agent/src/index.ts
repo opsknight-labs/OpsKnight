@@ -213,6 +213,7 @@ export interface RunAgentOptions {
   pollIntervalMs?: number;
   skipHeartbeat?: boolean;
   skipHealth?: boolean;
+  onIteration?: (iterationIndex: number) => Promise<void> | void;
 }
 
 export async function run(options: RunAgentOptions = {}) {
@@ -484,6 +485,9 @@ export async function run(options: RunAgentOptions = {}) {
   let iterationsRun = 0;
   try {
     while (!shuttingDown) {
+      if (options.onIteration) {
+        await options.onIteration(iterationsRun);
+      }
       if (options.maxIterations !== undefined) {
         if (iterationsRun >= options.maxIterations) {
           break;

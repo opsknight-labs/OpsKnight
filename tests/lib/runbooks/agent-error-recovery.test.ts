@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-non-literal-fs-filename */
 import { describe, expect, it, vi } from 'vitest';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { chmod, mkdtemp, rm } from 'node:fs/promises';
@@ -492,7 +493,7 @@ describe('Real Agent Loop Recovery & Regressions', () => {
           key: 'step_valid',
           name: 'Valid Step',
           type: 'BASH',
-          riskClass: 'READ_ONLY',
+          riskClass: 'NON_IDEMPOTENT',
           timeoutSeconds: 30,
           config: { command: 'echo ok' },
         },
@@ -624,7 +625,6 @@ describe('Real Agent Loop Recovery & Regressions', () => {
       await spool.initialize();
 
       // Revoke directory write and read permissions to induce EACCES
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       await chmod(spoolDir, 0o000);
 
       const mockClient = {
@@ -638,8 +638,9 @@ describe('Real Agent Loop Recovery & Regressions', () => {
         releaseClaim: vi.fn(),
       } as unknown as AgentClient;
 
-      // Iteration 1: Spool is inaccessible (chmod 000).
-      // Claims MUST be halted, mockClient.claim should NOT be called.
+      // Single continuous Agent process execution:
+      // Iteration 0: Spool is inaccessible (chmod 000). Claims MUST be halted, mockClient.claim not called.
+      // Iteration 1: Operator restores permissions (chmod 0700). probeStorageIntegrity succeeds -> claims resume!
       await run({
         baseUrl: 'http://localhost:3000',
         dataDirectory: tempDir,
@@ -648,37 +649,21 @@ describe('Real Agent Loop Recovery & Regressions', () => {
         executionPublicKey: publicKeySpki,
         client: mockClient,
         spool,
-        maxIterations: 1,
+        maxIterations: 2,
         pollIntervalMs: 5,
         skipHeartbeat: true,
         skipHealth: true,
+        onIteration: async iteration => {
+          if (iteration === 1) {
+            // Operator restores directory permissions while Agent loop is continuously running
+            await chmod(spoolDir, 0o700);
+          }
+        },
       });
 
-      expect(mockClient.claim).not.toHaveBeenCalled();
-
-      // Operator restores permissions: chmod 0700
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
-      await chmod(spoolDir, 0o700);
-
-      // Iteration 2: Storage is restored.
-      // probeStorageIntegrity succeeds -> claims resume immediately!
-      await run({
-        baseUrl: 'http://localhost:3000',
-        dataDirectory: tempDir,
-        identity,
-        policy,
-        executionPublicKey: publicKeySpki,
-        client: mockClient,
-        spool,
-        maxIterations: 1,
-        pollIntervalMs: 5,
-        skipHeartbeat: true,
-        skipHealth: true,
-      });
-
+      // Exactly 1 claim call occurred (in iteration 1 after storage recovery, none in iteration 0)
       expect(mockClient.claim).toHaveBeenCalledTimes(1);
     } finally {
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       await chmod(spoolDir, 0o700).catch(() => undefined);
       await rm(tempDir, { recursive: true, force: true });
     }

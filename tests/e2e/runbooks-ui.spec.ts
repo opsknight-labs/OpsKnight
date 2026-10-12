@@ -330,7 +330,9 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   ).toBeVisible();
   await page.goto(`/services/${serviceId}`);
   await page.getByRole('tab', { name: /^Runbooks/ }).click();
-  await page.getByRole('button', { name: `Attach ${name}`, exact: true }).click();
+  await page.getByRole('button', { name: 'Attach Runbook', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Choose workflow' }).click();
+  await page.getByRole('option', { name: `${name} (v1)` }).click();
   await page.getByRole('combobox', { name: 'Execution mode' }).click();
   await page.getByRole('option', { name: 'Suggested', exact: true }).click();
   await page.getByRole('combobox', { name: 'Execution target' }).click();

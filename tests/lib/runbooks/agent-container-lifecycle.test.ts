@@ -1,3 +1,4 @@
+/* eslint-disable security/detect-non-literal-fs-filename */
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -226,7 +227,6 @@ describe('Agent Container & Process Lifecycle Tests', () => {
         privateKey: 'mock-private-key-ed25519',
         enrolledAt: new Date().toISOString(),
       };
-      // eslint-disable-next-line security/detect-non-literal-fs-filename
       await writeFile(identityFile, JSON.stringify(mockIdentity));
 
       // 1. Process 1: write identity & write attempt to spool via dedicated Node execution

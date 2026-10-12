@@ -1,5 +1,5 @@
 // Paths stay inside the operator-configured spool; attempt IDs and enumerated filenames are validated.
-import { mkdir, readdir, readFile, rename, unlink, open, stat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, unlink, open, stat, type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { SpoolRecord } from './types';
@@ -210,35 +210,62 @@ export class ResultSpool {
    * without mutating or clobbering existing execution records.
    * Fails closed by throwing if any filesystem operation fails.
    */
-  async probeStorageIntegrity(): Promise<void> {
+  async probeStorageIntegrity(testHooks?: {
+    simulateWriteFailure?: boolean;
+    simulateSyncFailure?: boolean;
+  }): Promise<void> {
     await this.initialize();
-    // 1. Verify reading directory and listing/decoding existing records
-    await this.list();
-    // 2. Verify write, sync, readback and unlink capabilities
-    const probePath = join(this.directory, `.probe-${process.pid}-${randomUUID()}.tmp`);
-    const file = await open(probePath, 'wx', 0o600);
+    // 1. Clean up any stale probe files from previous crashed runs
     try {
-      await file.writeFile(Buffer.from('opsknight-storage-probe'));
-      await file.sync();
-    } finally {
-      await file.close();
+      const names = await readdir(this.directory);
+      for (const name of names) {
+        if (/^\.probe-.*\.tmp$/i.test(name)) {
+          await unlink(join(this.directory, name)).catch(() => undefined);
+        }
+      }
+    } catch {
+      // Directory listing errors will be caught below
     }
+
+    // 2. Verify reading directory and listing/decoding existing records
+    await this.list();
+
+    // 3. Verify write, sync, readback and unlink capabilities inside a robust try/finally
+    const probePath = join(this.directory, `.probe-${process.pid}-${randomUUID()}.tmp`);
+    let file: FileHandle | null = null;
     try {
+      file = await open(probePath, 'wx', 0o600);
+      if (testHooks?.simulateWriteFailure) {
+        throw new Error('Simulated ENOSPC during probe write');
+      }
+      await file.writeFile(Buffer.from('opsknight-storage-probe'));
+      if (testHooks?.simulateSyncFailure) {
+        throw new Error('Simulated EIO during probe fsync');
+      }
+      await file.sync();
+      await file.close();
+      file = null;
+
       const readBack = await readFile(probePath, 'utf8');
       if (readBack !== 'opsknight-storage-probe') {
         throw new Error('Storage probe data verification failed');
       }
     } finally {
+      if (file) {
+        await file.close().catch(() => undefined);
+      }
       await unlink(probePath).catch(() => undefined);
     }
-    // 3. Verify directory metadata sync
+
+    // 4. Verify directory metadata sync
     const directory = await open(this.directory, 'r');
     try {
       await directory.sync();
     } finally {
       await directory.close();
     }
-    // 4. Verify dead-letter directory accessibility
+
+    // 5. Verify dead-letter directory accessibility
     const deadLetterDir = join(this.directory, 'dead-letter');
     await mkdir(deadLetterDir, { recursive: true, mode: 0o700 });
     await readdir(deadLetterDir);
