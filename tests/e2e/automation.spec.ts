@@ -204,6 +204,175 @@ test('supported ingestion displays pinned context and intentional paging suppres
   expect(await readerHtml.text()).not.toContain('x'.repeat(1200));
 });
 
+test('P1 ingestion pins its policy through later edits and archival', async ({ page }) => {
+  const csrf = await (await page.request.get('/api/auth/csrf')).json();
+  await page.request.post('/api/auth/callback/credentials', {
+    form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
+  });
+  const actor = await db.user.findUniqueOrThrow({ where: { email } });
+  const service = await db.service.create({ data: { name: `P1 journey ${randomUUID()}` } });
+  const policy = await db.escalationPolicy.create({
+    data: {
+      name: `Critical policy ${randomUUID()}`,
+      steps: {
+        create: {
+          stepOrder: 0,
+          delayMinutes: 5,
+          targetType: 'USER',
+          targetUserId: actor.id,
+          notificationChannels: ['EMAIL'],
+        },
+      },
+    },
+  });
+  const integration = await db.integration.create({
+    data: { serviceId: service.id, name: 'P1 journey', key: randomUUID(), type: 'EVENTS_API_V2' },
+  });
+  const slack = await db.slackDestination.create({
+    data: { serviceId: service.id, workspaceId: randomUUID(), channelId: 'C_P1_BROWSER' },
+  });
+  const snapshot = {
+    schemaVersion: 1 as const,
+    fields: [
+      {
+        fieldId: 'environment',
+        key: 'environment',
+        label: 'Environment',
+        type: 'STRING' as const,
+        caseSensitive: false,
+        aliases: { prod: 'production' },
+        mappings: [{ source: 'EVENT' as const, path: 'payload.custom_details.environment' }],
+      },
+    ],
+    rules: [
+      {
+        id: 'production',
+        name: 'Production critical alerts',
+        phase: 'ROUTE' as const,
+        enabled: true,
+        conditions: [{ fieldKey: 'environment', operator: 'EQ' as const, value: 'production' }],
+        actions: [
+          { type: 'USE_ESCALATION_POLICY' as const, policyId: policy.id },
+          { type: 'NOTIFY_CHANNEL' as const, provider: 'SLACK' as const, destinationId: slack.id },
+        ],
+      },
+    ],
+  };
+  const { compiled, issues } = compileAutomation(snapshot);
+  expect(issues.filter(issue => issue.level === 'ERROR')).toHaveLength(0);
+  const version = await db.automationVersion.create({
+    data: {
+      serviceId: service.id,
+      versionNumber: 1,
+      snapshot,
+      compiledSnapshot: compiled,
+      checksum: checksum(compiled),
+      lintReport: [],
+      publishedBy: actor.id,
+      policyRefs: { create: { escalationPolicyId: policy.id, policyNameSnapshot: policy.name } },
+    },
+  });
+  await db.serviceAutomationConfig.create({
+    data: { serviceId: service.id, activeVersionId: version.id, mode: 'LIVE' },
+  });
+  await db.systemSettings.upsert({
+    where: { id: 'default' },
+    create: { id: 'default', automationEnabled: true },
+    update: { automationEnabled: true },
+  });
+  const response = await page.request.post('/api/events', {
+    headers: { Authorization: `Token token=${integration.key}` },
+    data: {
+      event_action: 'trigger',
+      dedup_key: randomUUID(),
+      payload: {
+        summary: 'Production P1 browser journey',
+        source: 'browser-certification',
+        severity: 'critical',
+        custom_details: { environment: 'PROD' },
+      },
+    },
+  });
+  expect(response.status()).toBe(202);
+  const accepted = (await response.json()) as { data: { result: { incident: { id: string } } } };
+  const incident = await db.incident.findUniqueOrThrow({
+    where: { id: accepted.data.result.incident.id },
+  });
+  expect(incident.priority).toBe('P1');
+  expect(
+    await db.backgroundJob.count({
+      where: { type: 'ESCALATION', payload: { path: ['incidentId'], equals: incident.id } },
+    })
+  ).toBe(1);
+  expect(
+    await db.notification.count({
+      where: { incidentId: incident.id, channel: 'SLACK', sourceType: 'AUTOMATION' },
+    })
+  ).toBe(1);
+  const missingResponse = await page.request.post('/api/events', {
+    headers: { Authorization: `Token token=${integration.key}` },
+    data: {
+      event_action: 'trigger',
+      dedup_key: randomUUID(),
+      payload: {
+        summary: 'Missing context browser journey',
+        source: 'browser-certification',
+        severity: 'info',
+        custom_details: {},
+      },
+    },
+  });
+  expect(missingResponse.status()).toBe(202);
+  const missing = (await missingResponse.json()) as {
+    data: { result: { incident: { id: string } } };
+  };
+  const unmatched = await db.incidentAutomationDecision.findUniqueOrThrow({
+    where: { incidentId: missing.data.result.incident.id },
+  });
+  expect(unmatched.routeType).toBe('SERVICE_DEFAULT');
+  expect(unmatched.finalPriority).toBe(unmatched.basePriority);
+  expect(
+    await db.notification.count({
+      where: { incidentId: missing.data.result.incident.id, sourceType: 'AUTOMATION' },
+    })
+  ).toBe(0);
+  await page.goto(`/incidents/${missing.data.result.incident.id}`);
+  await expect(page.getByText('Not provided', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('No routing rule matched; service-default routing was used.', { exact: true })
+  ).toBeVisible();
+  await db.escalationPolicy.update({
+    where: { id: policy.id },
+    data: { name: `Changed after ingestion ${randomUUID()}` },
+  });
+  const replacementSnapshot = { schemaVersion: 1 as const, fields: [], rules: [] };
+  const replacement = await db.automationVersion.create({
+    data: {
+      serviceId: service.id,
+      versionNumber: 2,
+      snapshot: replacementSnapshot,
+      compiledSnapshot: replacementSnapshot,
+      checksum: checksum(replacementSnapshot),
+      lintReport: [],
+      publishedBy: actor.id,
+    },
+  });
+  await db.serviceAutomationConfig.update({
+    where: { serviceId: service.id },
+    data: { activeVersionId: replacement.id },
+  });
+  await page.goto(`/policies/${policy.id}?tab=dependencies`);
+  await page.getByRole('button', { name: 'Archive policy', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Policy Dependencies · Archived' })).toBeVisible();
+  await page.goto(`/incidents/${incident.id}`);
+  await expect(page.getByText('production', { exact: true })).toBeVisible();
+  await expect(page.getByText('Responder route:', { exact: false })).toContainText(policy.name);
+  expect(
+    (await db.incidentAutomationDecision.findUniqueOrThrow({ where: { incidentId: incident.id } }))
+      .versionId
+  ).toBe(version.id);
+});
+
 test('administrator archives and restores an unreferenced policy through Dependencies', async ({
   page,
 }) => {
