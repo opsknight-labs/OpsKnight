@@ -1,5 +1,5 @@
 import IncidentAlertContextCard from './IncidentAlertContextCard';
-import { snapshotSchema } from '@/lib/automation/contract';
+import { builtinFields, snapshotSchema } from '@/lib/automation/contract';
 import { decodeExplanation } from '@/lib/automation/explanation';
 import prisma from '@/lib/prisma';
 import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
@@ -40,6 +40,25 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
   const version = snapshotSchema.safeParse(decision.version?.snapshot);
   const fields = version.success ? version.data.fields : [];
   const context = summary.enrichedContext ?? summary.inputContext ?? {};
+  const matchedRule = version.success
+    ? version.data.rules.find(
+        rule => rule.id === decision.matchedRouteRuleId && rule.phase === 'ROUTE'
+      )
+    : undefined;
+  const fieldLabels = new Map([...builtinFields, ...fields].map(field => [field.key, field.label]));
+  const operators = new Map([
+    ['EQ', 'equals'],
+    ['NE', 'does not equal'],
+    ['IN', 'is one of'],
+    ['NOT_IN', 'is not one of'],
+    ['LT', 'is less than'],
+    ['LTE', 'is at most'],
+    ['GT', 'is greater than'],
+    ['GTE', 'is at least'],
+    ['IS_SET', 'is provided'],
+    ['IS_MISSING', 'is not provided'],
+    ['IS_UNMAPPED', 'is unrecognized'],
+  ]);
   return (
     <div className="space-y-4">
       <IncidentAlertContextCard
@@ -51,22 +70,39 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
       />
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">
+          <CardTitle role="heading" aria-level={2} className="text-base">
             Automation Decision{' '}
             <Badge variant="outline">Automation · v{decision.version?.versionNumber ?? '—'}</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <p>
-            {decision.matchedRouteRuleName
-              ? `Matched rule: ${decision.matchedRouteRuleName}`
+            {decision.matchedRouteRuleName || matchedRule?.name
+              ? `Matched rule: ${decision.matchedRouteRuleName ?? matchedRule?.name}`
               : decision.fallbackReason
                 ? 'Automation could not be applied; service-default routing was used.'
-                : 'No routing rule matched; service-default routing was used.'}
+                : decision.routeType === 'NO_ESCALATION'
+                  ? 'Personal paging was intentionally skipped by automation.'
+                  : decision.routeType === 'ESCALATION_POLICY'
+                    ? 'An escalation policy was selected by automation.'
+                    : 'No routing rule matched; service-default routing was used.'}
           </p>
           <p>
             Priority: {decision.basePriority ?? 'Unset'} → {decision.finalPriority ?? 'Unset'}
           </p>
+          {sensitive && !!matchedRule?.conditions.length && (
+            <ul className="list-disc pl-5 break-words">
+              {matchedRule.conditions.map((condition, index) => (
+                <li key={index}>
+                  {fieldLabels.get(condition.fieldKey) ?? condition.fieldKey}{' '}
+                  {operators.get(condition.operator)}
+                  {condition.value === undefined
+                    ? ''
+                    : ` ${Array.isArray(condition.value) ? condition.value.join(', ') : String(condition.value)}`}
+                </li>
+              ))}
+            </ul>
+          )}
           <p>
             Responder route:{' '}
             {decision.routeType === 'NO_ESCALATION'

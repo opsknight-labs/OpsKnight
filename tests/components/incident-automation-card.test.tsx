@@ -86,6 +86,7 @@ it('shows pinned human-readable labels and enriched values outside the evaluatio
   });
   mocks.decision.mockResolvedValue({
     routeType: 'SERVICE_DEFAULT',
+    matchedRouteRuleId: 'production-route',
     summary: {
       inputContext: { environment: { state: 'RECOGNIZED', value: 'staging' } },
       enrichedContext: { environment: { state: 'RECOGNIZED', value: 'production' } },
@@ -103,7 +104,16 @@ it('shows pinned human-readable labels and enriched values outside the evaluatio
             mappings: [],
           },
         ],
-        rules: [],
+        rules: [
+          {
+            id: 'production-route',
+            name: 'Production route',
+            phase: 'ROUTE',
+            enabled: true,
+            conditions: [{ fieldKey: 'environment', operator: 'EQ', value: 'production' }],
+            actions: [{ type: 'USE_SERVICE_DEFAULT' }],
+          },
+        ],
       },
     },
   });
@@ -111,6 +121,7 @@ it('shows pinned human-readable labels and enriched values outside the evaluatio
   expect(html).toContain('Alert Context');
   expect(html.indexOf('Deployment environment')).toBeLessThan(html.indexOf('View evaluation'));
   expect(html).toContain('production');
+  expect(html).toContain('Deployment environment equals production');
 });
 
 it('keeps selected actions separate from actual queued, accepted and delivered records', async () => {

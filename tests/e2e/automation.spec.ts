@@ -114,9 +114,14 @@ test('supported ingestion displays pinned context and intentional paging suppres
     },
   });
   expect(ingestion.status()).toBe(202);
-  const incident = await db.incident.findFirstOrThrow({
-    where: { serviceId: service.id, dedupKey },
+  const accepted = (await ingestion.json()) as {
+    data: { result: { action: string; incident: { id: string } } };
+  };
+  expect(accepted.data.result.action).toBe('triggered');
+  const incident = await db.incident.findUniqueOrThrow({
+    where: { id: accepted.data.result.incident.id },
   });
+  expect(incident.serviceId).toBe(service.id);
   expect(incident.priority).toBe('P3');
   expect(
     (await db.incidentAutomationDecision.findUniqueOrThrow({ where: { incidentId: incident.id } }))
@@ -136,7 +141,7 @@ test('supported ingestion displays pinned context and intentional paging suppres
   await expect(
     page.getByText('No channel notification records are available.', { exact: true })
   ).toBeVisible();
-  await page.getByText('Show 1 more context fields', { exact: true }).click();
+  await page.getByText(/^Show \d+ more context fields$/).click();
   await expect(page.getByText('Captured field 6', { exact: true })).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2))

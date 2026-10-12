@@ -16,6 +16,12 @@ export default function IncidentAlertContextCard({
   sensitive: boolean;
   omitted: boolean;
 }) {
+  const relevant = fields.filter(
+    field => context[field.key] && context[field.key].state !== 'MISSING'
+  );
+  const visible = relevant.length ? relevant.slice(0, 6) : fields.slice(0, 6);
+  const visibleKeys = new Set(visible.map(field => field.key));
+  const remaining = fields.filter(field => !visibleKeys.has(field.key));
   function renderField(field: Field) {
     const value = context[field.key];
     const display =
@@ -36,7 +42,7 @@ export default function IncidentAlertContextCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">
+        <CardTitle role="heading" aria-level={2} className="text-base">
           Alert Context <Badge variant="outline">Automation · v{versionNumber ?? '—'}</Badge>
         </CardTitle>
       </CardHeader>
@@ -55,15 +61,13 @@ export default function IncidentAlertContextCard({
             )}
             {fields.length ? (
               <>
-                <dl className="grid gap-3 sm:grid-cols-2">{fields.slice(0, 6).map(renderField)}</dl>
-                {fields.length > 6 && (
+                <dl className="grid gap-3 sm:grid-cols-2">{visible.map(renderField)}</dl>
+                {!!remaining.length && (
                   <details className="mt-3">
                     <summary className="cursor-pointer py-2">
-                      Show {fields.length - 6} more context fields
+                      Show {remaining.length} more context fields
                     </summary>
-                    <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-                      {fields.slice(6).map(renderField)}
-                    </dl>
+                    <dl className="mt-3 grid gap-3 sm:grid-cols-2">{remaining.map(renderField)}</dl>
                   </details>
                 )}
               </>
