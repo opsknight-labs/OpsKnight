@@ -16,6 +16,7 @@ import { automationComparisonSchedule, precedingAutomationBaseline } from './aut
 import { collectSingleTelemetrySample } from './metrics';
 import { captureAutomationTimings, summarizeAutomationTimings } from './automation-timings';
 import type { LoadSeedManifest } from './seed';
+import { controlledK6Launch, controlledK6Target } from './automation-k6';
 type CertificationSummary = {
   metrics: {
     iterations: { count: number };
@@ -64,17 +65,40 @@ const composeArgs = [
   'tests/load/deploy/compose/automation.yml',
 ];
 async function runK6(profile: string, output: string) {
+  const runId = String(Date.now());
+  const launch = controlledK6Launch(process.env, profile, runId, output);
+  if (launch.target.mode === 'IN_CLUSTER') {
+    const base = ['--context', 'kind-opsknight-automation', '-n', launch.target.namespace];
+    await exec('kubectl', [...base, 'exec', launch.target.pod, '--', 'mkdir', '-p', '/work/results']);
+    await exec('kubectl', [
+      ...base,
+      'cp',
+      '--no-preserve',
+      'tests/load/scenarios',
+      `${launch.target.pod}:/work`,
+    ]);
+    const manifest = process.env.LOAD_SEED_MANIFEST;
+    if (!manifest) throw new Error('In-cluster load generation requires the real seeded manifest');
+    // Copy after profile preparation filters out the public fan-out integrations.
+    await exec('kubectl', [
+      ...base,
+      'cp',
+      '--no-preserve',
+      manifest,
+      `${launch.target.pod}:/work/seed-manifest.json`,
+    ]);
+  }
   const recoveryTargets = process.env.AUTOMATION_K8S_NAMESPACE
     ? kubernetesRecoveryTargets(process.env.AUTOMATION_K8S_RUNTIME_MODE)
     : ['web', 'critical', 'general'].map(role => ({ role, selector: '' }));
   const child = spawn(
-    process.env.K6_BINARY || 'k6',
-    ['run', '--summary-export', output, 'tests/load/scenarios/automation.js'],
+    launch.command,
+    launch.args,
     {
       env: {
         ...process.env,
         AUTOMATION_LOAD_PROFILE: profile,
-        AUTOMATION_RUN_ID: String(Date.now()),
+        AUTOMATION_RUN_ID: runId,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     }
@@ -135,6 +159,26 @@ async function runK6(profile: string, output: string) {
   if (fault) clearTimeout(fault);
   if (faultWork) await faultWork;
   await fs.writeFile(output.replace('.json', '.log'), chunks.join(''));
+  if (launch.target.mode === 'IN_CLUSTER') {
+    const summary = await exec(
+      'kubectl',
+      [
+        '--context',
+        'kind-opsknight-automation',
+        '-n',
+        launch.target.namespace,
+        'exec',
+        launch.target.pod,
+        '--',
+        'cat',
+        launch.summaryPath,
+      ],
+      { timeout: 10000, maxBuffer: 1024 * 1024 }
+    );
+    // Missing/malformed summaries fail the child; never substitute a host-client result.
+    JSON.parse(summary.stdout);
+    await fs.writeFile(output, summary.stdout);
+  }
   if (faultError) throw faultError;
   if (fault && !faultWork) throw new Error('Load ended before the recovery drill started');
   return code;
@@ -581,6 +625,7 @@ async function main() {
         rps: Number(process.env.AUTOMATION_RPS || 20),
         drainBudgetMs: Number(process.env.AUTOMATION_DRAIN_TIMEOUT_MS || 180000),
         workload: {
+          loadGenerator: controlledK6Target(process.env),
           seedProfile: manifest.scaleProfile,
           internalServices: manifest.capacityServiceIds.length,
           integrationKeys: manifest.capacityIntegrationKeys.length,

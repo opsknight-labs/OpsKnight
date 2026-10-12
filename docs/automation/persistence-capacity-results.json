@@ -10058,6 +10058,242 @@
           "componentTelemetryComplete": true
         }
       ]
+    },
+    {
+      "topology": "kind-helm-split-audit41-integrity-faultfree-bracketed-20rps-repeat-1-pair-1-service-disabled-1-global-off",
+      "generatedAt": "2026-10-12T17:35:56.251Z",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": []
+      },
+      "certificationStatus": "MEASUREMENT_ONLY",
+      "artifact": "artifacts/load-certification/automation/kind-helm-split-audit41-integrity-faultfree-bracketed-20rps-repeat-1-pair-1-service-disabled-1-global-off/certification.json",
+      "runtimeRevision": "6eae272cafa8ddc5e33a791dcb39dbc8442a49e5",
+      "harnessRevision": "75f6e89d374b0bc13a1590c92d570ffcc083e99d",
+      "scope": "First bracket INCONCLUSIVE; stopped between measurements after four complete runs before preparing a separate in-cluster-client topology",
+      "results": [
+        {
+          "profile": "global-off",
+          "runId": "01-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 155,
+          "recoveryDrainMs": 80904,
+          "criticalNotificationLatency": {
+            "p95Ms": 418.34999999999883,
+            "p99Ms": 1900.6899999999969,
+            "sent": 8892,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0,
+          "droppedIterations": 0,
+          "ingestionLatencyMs": {
+            "avg": 72.19875,
+            "min": 26,
+            "med": 46,
+            "max": 815,
+            "p(50)": 46,
+            "p(95)": 192.0499999999999,
+            "p(99)": 550.0499999999998
+          },
+          "componentTelemetryComplete": true,
+          "hostPaging": {
+            "availableSamples": 26,
+            "swapInBytes": 12861440,
+            "swapOutBytes": 0
+          }
+        }
+      ]
+    },
+    {
+      "topology": "kind-helm-split-audit41-integrity-faultfree-bracketed-20rps-repeat-1-pair-1-service-disabled-2-service-disabled",
+      "generatedAt": "2026-10-12T17:40:45.714Z",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": []
+      },
+      "certificationStatus": "MEASUREMENT_ONLY",
+      "artifact": "artifacts/load-certification/automation/kind-helm-split-audit41-integrity-faultfree-bracketed-20rps-repeat-1-pair-1-service-disabled-2-service-disabled/certification.json",
+      "runtimeRevision": "6eae272cafa8ddc5e33a791dcb39dbc8442a49e5",
+      "harnessRevision": "75f6e89d374b0bc13a1590c92d570ffcc083e99d",
+      "scope": "First bracket INCONCLUSIVE; stopped between measurements after four complete runs before preparing a separate in-cluster-client topology",
+      "results": [
+        {
+          "profile": "service-disabled",
+          "runId": "02-service-disabled",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2400,
+          "persistedIncidents": 2400,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 88,
+          "recoveryDrainMs": 80011,
+          "criticalNotificationLatency": {
+            "p95Ms": 362,
+            "p99Ms": 1332.409999999999,
+            "sent": 8944,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0,
+          "droppedIterations": 0,
+          "ingestionLatencyMs": {
+            "max": 913,
+            "p(50)": 46.5,
+            "p(95)": 142.0499999999999,
+            "p(99)": 298.2699999999994,
+            "avg": 63.98708333333333,
+            "min": 25,
+            "med": 46.5
+          },
+          "componentTelemetryComplete": true,
+          "hostPaging": {
+            "availableSamples": 26,
+            "swapInBytes": 17268736,
+            "swapOutBytes": 0
+          }
+        }
+      ]
+    },
+    {
+      "topology": "kind-helm-split-audit41-integrity-faultfree-bracketed-20rps-repeat-1-pair-1-service-disabled-3-global-off",
+      "generatedAt": "2026-10-12T17:45:51.178Z",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": []
+      },
+      "certificationStatus": "MEASUREMENT_ONLY",
+      "artifact": "artifacts/load-certification/automation/kind-helm-split-audit41-integrity-faultfree-bracketed-20rps-repeat-1-pair-1-service-disabled-3-global-off/certification.json",
+      "runtimeRevision": "6eae272cafa8ddc5e33a791dcb39dbc8442a49e5",
+      "harnessRevision": "75f6e89d374b0bc13a1590c92d570ffcc083e99d",
+      "scope": "First bracket INCONCLUSIVE; stopped between measurements after four complete runs before preparing a separate in-cluster-client topology",
+      "results": [
+        {
+          "profile": "global-off",
+          "runId": "01-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 122,
+          "recoveryDrainMs": 97324,
+          "criticalNotificationLatency": {
+            "p95Ms": 464.2499999999996,
+            "p99Ms": 2059.499999999999,
+            "sent": 8456,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0,
+          "droppedIterations": 0,
+          "ingestionLatencyMs": {
+            "min": 27,
+            "med": 58,
+            "max": 1280,
+            "p(50)": 58,
+            "p(95)": 471,
+            "p(99)": 820,
+            "avg": 119.16076634735526
+          },
+          "componentTelemetryComplete": true,
+          "hostPaging": {
+            "availableSamples": 26,
+            "swapInBytes": 200605696,
+            "swapOutBytes": 446889984
+          }
+        }
+      ]
+    },
+    {
+      "topology": "kind-helm-split-audit41-integrity-faultfree-bracketed-20rps-repeat-1-pair-2-shadow-small-1-global-off",
+      "generatedAt": "2026-10-12T17:50:56.005Z",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": []
+      },
+      "certificationStatus": "MEASUREMENT_ONLY",
+      "artifact": "artifacts/load-certification/automation/kind-helm-split-audit41-integrity-faultfree-bracketed-20rps-repeat-1-pair-2-shadow-small-1-global-off/certification.json",
+      "runtimeRevision": "6eae272cafa8ddc5e33a791dcb39dbc8442a49e5",
+      "harnessRevision": "75f6e89d374b0bc13a1590c92d570ffcc083e99d",
+      "scope": "First bracket INCONCLUSIVE; stopped between measurements after four complete runs before preparing a separate in-cluster-client topology",
+      "results": [
+        {
+          "profile": "global-off",
+          "runId": "01-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 121,
+          "recoveryDrainMs": 95154,
+          "criticalNotificationLatency": {
+            "p95Ms": 580,
+            "p99Ms": 2644.3199999999997,
+            "sent": 8079,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0,
+          "droppedIterations": 0,
+          "ingestionLatencyMs": {
+            "avg": 205.0828821324448,
+            "min": 29,
+            "med": 115,
+            "max": 2634,
+            "p(50)": 115,
+            "p(95)": 699,
+            "p(99)": 1729
+          },
+          "componentTelemetryComplete": true,
+          "hostPaging": {
+            "availableSamples": 26,
+            "swapInBytes": 49463296,
+            "swapOutBytes": 0
+          }
+        }
+      ]
     }
   ],
   "initialImage": "opsknight-automation:audit2",

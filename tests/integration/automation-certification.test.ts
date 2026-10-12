@@ -118,7 +118,7 @@ describe('service automation transaction certification', () => {
       create: { automationEnabled: true },
       update: { automationEnabled: true },
     });
-  });
+  }, 30_000);
   afterAll(async () => {
     await db.$disconnect();
   });

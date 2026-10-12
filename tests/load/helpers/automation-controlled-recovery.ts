@@ -29,8 +29,11 @@ async function main() {
     const environment = await captureControlledEnvironment();
     const provenance = JSON.parse(
       await fs.readFile(path.join(directory, 'kind-runtime.json'), 'utf8')
-    ) as { imageConfigDigest: string };
-    await verifyControlledImage(provenance.imageConfigDigest, environment);
+    ) as {
+      imageConfigDigest: string;
+      loadGenerator?: { pod: string; imageConfigDigest: string };
+    };
+    await verifyControlledImage(provenance.imageConfigDigest, environment, provenance.loadGenerator);
     let childExitCode: number | null = 0;
     const child = await exec(
       'npx',

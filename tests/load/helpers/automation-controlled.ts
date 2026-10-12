@@ -26,7 +26,12 @@ async function main() {
   await fs.mkdir(directory, { recursive: true });
   const provenance = JSON.parse(
     await fs.readFile(path.join(directory, 'kind-runtime.json'), 'utf8')
-  ) as { sourceRevision: string; imageDigest: string; imageConfigDigest: string };
+  ) as {
+    sourceRevision: string;
+    imageDigest: string;
+    imageConfigDigest: string;
+    loadGenerator?: { pod: string; imageConfigDigest: string };
+  };
   if (
     !/^[a-f0-9]{40}$/.test(provenance.sourceRevision) ||
     !/^sha256:[a-f0-9]{64}$/.test(provenance.imageDigest)
@@ -79,7 +84,7 @@ async function main() {
     for (const run of schedule) {
       await snapshot.restore();
       const environment = await captureControlledEnvironment();
-      await verifyControlledImage(provenance.imageConfigDigest, environment);
+      await verifyControlledImage(provenance.imageConfigDigest, environment, provenance.loadGenerator);
       const childTopology = `${topology}-${run.runId}`;
       const childArtifact = path.join(
         'artifacts/load-certification/automation',

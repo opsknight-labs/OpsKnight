@@ -123,8 +123,16 @@ export function assertControlledImageConfigs(expected: string, actual: string[])
 }
 export async function verifyControlledImage(
   expected: string,
-  environment: Awaited<ReturnType<typeof captureControlledEnvironment>>
+  environment: Awaited<ReturnType<typeof captureControlledEnvironment>>,
+  loadGenerator?: { pod: string; imageConfigDigest: string }
 ) {
+  const clientPod = process.env.AUTOMATION_K6_KUBERNETES_POD;
+  if (
+    (clientPod &&
+      (clientPod !== 'k6-automation-cert' || !loadGenerator || loadGenerator.pod !== clientPod)) ||
+    (loadGenerator && !clientPod)
+  )
+    throw new Error('Missing or inconsistent declared load-generator image provenance');
   const inventory = await exec('docker', [
     'exec',
     'opsknight-automation-control-plane',
@@ -142,22 +150,30 @@ export async function verifyControlledImage(
     p => p.name.startsWith('automation-') && !p.name.startsWith('automation-postgresql')
   );
   const configIds: string[] = [];
+  async function inspectConfig(reference: string | undefined) {
+    if (!reference || !/^[a-zA-Z0-9./_:@-]+$/.test(reference))
+      throw new Error('Missing deployed image identity');
+    const inspected = await exec('docker', [
+      'exec',
+      'opsknight-automation-control-plane',
+      'crictl',
+      'inspecti',
+      resolveControlledImageReference(reference, images),
+    ]);
+    const parsed = JSON.parse(inspected.stdout) as { status: { id: string } };
+    return parsed.status.id;
+  }
   for (const pod of application)
-    for (const container of pod.containers) {
-      const reference = container.status?.imageID;
-      if (!reference || !/^[a-zA-Z0-9./_:@-]+$/.test(reference))
-        throw new Error('Missing deployed image identity');
-      const inspected = await exec('docker', [
-        'exec',
-        'opsknight-automation-control-plane',
-        'crictl',
-        'inspecti',
-        resolveControlledImageReference(reference, images),
-      ]);
-      const parsed = JSON.parse(inspected.stdout) as { status: { id: string } };
-      configIds.push(parsed.status.id);
-    }
+    for (const container of pod.containers)
+      configIds.push(await inspectConfig(container.status?.imageID));
   assertControlledImageConfigs(expected, configIds);
+  if (loadGenerator) {
+    const pod = environment.pods.find(p => p.name === loadGenerator.pod);
+    if (!pod || pod.containers.length !== 1) throw new Error('Missing owned load-generator pod');
+    assertControlledImageConfigs(loadGenerator.imageConfigDigest, [
+      await inspectConfig(pod.containers[0].status?.imageID),
+    ]);
+  }
   return { expectedConfigDigest: expected, verifiedConfigDigests: configIds };
 }
 

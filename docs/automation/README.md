@@ -434,3 +434,39 @@ but the Kind topology name did not contain that word. Thus Audit 39 retained
 pre-run host snapshots and CPU placement, **not workload paging samples**. The
 sampler now also recognizes the explicitly owned `automation-cert` namespace.
 Audit 39 cannot substantiate a relationship between active paging and latency.
+
+Audit 41 retained workload paging samples successfully. Its first OFF baseline
+p95/p99 was 192.05/550.05ms, service-disabled was 142.05/298.27ms, and the next
+OFF baseline was 471/820ms. All three correctness measurements passed, but
+the bracket is **INCONCLUSIVE** because OFF drift exceeds the frozen limits.
+Service-disabled was faster than both OFF baselines in this bracket; the earlier
+slow disabled run does not establish an evaluator bottleneck. The run stopped
+between measurements after four complete measurements, with artifacts retained
+and the restored fixture verified clean. There is no complete matrix/certificate.
+The first two measurements recorded about 12.3/16.5MiB of swap-ins and zero
+swap-outs; those counters do not establish paging as the source of the latency
+variation. Both CI workflows passed at `75f6e89d3` after one database-setup rerun.
+
+An optional in-cluster k6 client is available through the owned
+`k6-automation-cert` Pod in `automation-cert`. Select it with
+`AUTOMATION_K6_KUBERNETES_POD=k6-automation-cert` and declare its exported image
+config digest in `kind-runtime.json` under `loadGenerator`. Every controlled
+measurement verifies both the application image and this independently declared
+client image. The Pod uses the official Linux/arm64 k6 2.3.0 manifest, pinned in
+`tests/load/deploy/kubernetes/kind/k6-automation.yaml`; its source commit matches
+the Mac client, but the platform and Go build differ, so this is a separate
+topology. The load generator is limited to 500m CPU/256MiB and does not change
+the ten application/PostgreSQL CPUs. No service-account token is mounted.
+
+The in-cluster client uses the same scenarios, 20 RPS, 120 seconds, 100 allocated
+ingestion VUs, two interactive users, two responders and unchanged thresholds.
+Each child copies the actual filtered seed manifest and retrieves a unique
+summary; missing/malformed summaries fail the run. Its endpoint is the owned
+application ClusterIP. This reduces the Mac-to-VM client path in the experiment;
+even a passing result would **not certify public NodePort/edge latency**. Do not
+mix its baselines with earlier host-client measurements. It is not yet certified.
+
+The automation integration fixture hook now allows 30 seconds, matching other
+PostgreSQL fixture suites, to avoid a timed-out reset continuing into the next
+test. The application evaluation deadline, test assertions, offered workload and
+frozen capacity gates are unchanged.
