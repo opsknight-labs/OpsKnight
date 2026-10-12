@@ -523,11 +523,13 @@ test('390px infrastructure, health and builder have no horizontal overflow', asy
         .getByRole('navigation', { name: 'Infrastructure sections' })
         .getByRole('link', { name: /^pools/i })
         .click();
+      await page.waitForURL('**/runbooks/agents?tab=pools**');
       await noOverflow(page);
       await page
         .getByRole('navigation', { name: 'Infrastructure sections' })
         .getByRole('link', { name: /^secrets/i })
         .click();
+      await page.waitForURL('**/runbooks/agents?tab=secrets**');
       await noOverflow(page);
     }
   }
