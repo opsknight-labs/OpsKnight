@@ -3,6 +3,9 @@ import AxeBuilder from '@axe-core/playwright';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { automationLoadSnapshot } from '../load/fixtures/automation';
+import { compileAutomation } from '@/lib/automation/compiler';
+import { checksum } from '@/lib/automation/cache';
+import { randomUUID } from 'node:crypto';
 const db = new PrismaClient();
 let email: string;
 const password = 'Automation-Local-Test-938!';
@@ -22,6 +25,150 @@ test.afterAll(async () => {
   await db.service.delete({ where: { id: serviceId } }).catch(() => {});
   await db.user.delete({ where: { email } }).catch(() => {});
   await db.$disconnect();
+});
+
+test('supported ingestion displays pinned context and intentional paging suppression', async ({
+  page,
+}, testInfo) => {
+  const csrf = await (await page.request.get('/api/auth/csrf')).json();
+  await page.request.post('/api/auth/callback/credentials', {
+    form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
+  });
+  const service = await db.service.create({ data: { name: `Context journey ${randomUUID()}` } });
+  const integration = await db.integration.create({
+    data: {
+      serviceId: service.id,
+      name: 'Context journey',
+      key: randomUUID(),
+      type: 'EVENTS_API_V2',
+    },
+  });
+  const snapshot = {
+    schemaVersion: 1 as const,
+    fields: Array.from({ length: 7 }, (_, i) => ({
+      fieldId: `context-${i}`,
+      key: `context_${i}`,
+      label: `Captured field ${i}`,
+      type: 'STRING' as const,
+      caseSensitive: false,
+      aliases: {},
+      mappings: [{ source: 'EVENT' as const, path: `payload.custom_details.context_${i}` }],
+    })),
+    rules: [
+      {
+        id: 'priority',
+        name: 'Low impact',
+        phase: 'ENRICH' as const,
+        enabled: true,
+        conditions: [],
+        actions: [{ type: 'SET_PRIORITY' as const, value: 'P3' as const }],
+      },
+      {
+        id: 'quiet',
+        name: 'Skip personal paging',
+        phase: 'ROUTE' as const,
+        enabled: true,
+        conditions: [],
+        actions: [{ type: 'NO_ESCALATION' as const }],
+      },
+    ],
+  };
+  const { compiled, issues } = compileAutomation(snapshot);
+  expect(issues.filter(issue => issue.level === 'ERROR')).toHaveLength(0);
+  const version = await db.automationVersion.create({
+    data: {
+      serviceId: service.id,
+      versionNumber: 1,
+      snapshot,
+      compiledSnapshot: compiled,
+      checksum: checksum(compiled),
+      lintReport: [],
+      publishedBy: 'browser-fixture',
+    },
+  });
+  await db.serviceAutomationConfig.create({
+    data: { serviceId: service.id, activeVersionId: version.id, mode: 'LIVE' },
+  });
+  await db.systemSettings.upsert({
+    where: { id: 'default' },
+    create: { id: 'default', automationEnabled: true },
+    update: { automationEnabled: true },
+  });
+  const dedupKey = randomUUID();
+  const ingestion = await page.request.post('/api/events', {
+    headers: { Authorization: `Token token=${integration.key}` },
+    data: {
+      event_action: 'trigger',
+      dedup_key: dedupKey,
+      payload: {
+        summary: 'Captured context browser journey',
+        source: 'browser-certification',
+        severity: 'critical',
+        custom_details: {
+          context_0: 'PRODUCTION',
+          context_1: '<script>alert(1)</script>',
+          context_2: 'x'.repeat(1200),
+          context_6: 'Historical evidence',
+        },
+      },
+    },
+  });
+  expect(ingestion.status()).toBe(202);
+  const incident = await db.incident.findFirstOrThrow({
+    where: { serviceId: service.id, dedupKey },
+  });
+  expect(incident.priority).toBe('P3');
+  expect(
+    (await db.incidentAutomationDecision.findUniqueOrThrow({ where: { incidentId: incident.id } }))
+      .routeType
+  ).toBe('NO_ESCALATION');
+  expect(
+    await db.backgroundJob.count({
+      where: { type: 'ESCALATION', payload: { path: ['incidentId'], equals: incident.id } },
+    })
+  ).toBe(0);
+  await page.goto(`/incidents/${incident.id}`);
+  await expect(page.getByRole('heading', { name: /Alert Context/ })).toBeVisible();
+  await expect(page.getByText('production', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Personal paging intentionally skipped', { exact: false })
+  ).toBeVisible();
+  await expect(
+    page.getByText('No channel notification records are available.', { exact: true })
+  ).toBeVisible();
+  await page.getByText('Show 1 more context fields', { exact: true }).click();
+  await expect(page.getByText('Captured field 6', { exact: true })).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2))
+    .toBe(true);
+  await page.screenshot({
+    path: `/tmp/automation-context-${testInfo.project.name}.png`,
+    fullPage: true,
+  });
+});
+
+test('administrator archives and restores an unreferenced policy through Dependencies', async ({
+  page,
+}) => {
+  const csrf = await (await page.request.get('/api/auth/csrf')).json();
+  await page.request.post('/api/auth/callback/credentials', {
+    form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
+  });
+  const policy = await db.escalationPolicy.create({
+    data: { name: `Archive journey ${randomUUID()}` },
+  });
+  await page.goto(`/policies/${policy.id}?tab=dependencies`);
+  await expect(page.getByRole('heading', { name: 'Policy Dependencies · Active' })).toBeVisible();
+  await page.getByRole('button', { name: 'Archive policy', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Policy Dependencies · Archived' })).toBeVisible();
+  expect(
+    (await db.escalationPolicy.findUniqueOrThrow({ where: { id: policy.id } })).archivedAt
+  ).not.toBeNull();
+  await page.getByRole('button', { name: 'Restore policy', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Policy Dependencies · Active' })).toBeVisible();
+  expect(
+    (await db.escalationPolicy.findUniqueOrThrow({ where: { id: policy.id } })).archivedAt
+  ).toBeNull();
 });
 test('operator authors, tests, publishes, and enables shadow on desktop and mobile', async ({
   page,
