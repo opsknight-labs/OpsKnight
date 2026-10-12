@@ -199,6 +199,48 @@ describe('central authentication policy', () => {
     expect(prisma.authenticationPolicy.create).not.toHaveBeenCalled();
   });
 
+  it('preserves ordinary administrator password access when Optional has break-glass variables', async () => {
+    vi.stubEnv('AUTH_LOCAL_LOGIN_ENABLED', 'true');
+    vi.stubEnv('AUTH_BREAK_GLASS_ENABLED', 'true');
+    vi.stubEnv('AUTH_BREAK_GLASS_EMAIL', 'Recovery@Example.com');
+    vi.mocked(prisma.authenticationPolicy.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.oidcConfig.findUnique).mockResolvedValue({
+      enabled: true,
+      configVersion: 7,
+    } as never);
+    vi.mocked(prisma.authenticationPolicy.create).mockResolvedValue({
+      ...policy,
+      version: 1,
+    } as never);
+    try {
+      await getAuthenticationPolicy();
+      expect(prisma.authenticationPolicy.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            mode: 'SSO_OPTIONAL',
+            legacyEmergencyEmail: null,
+            passwordSessionMinVersion: 0,
+          }),
+        })
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+  it('preserves an Optional password session even when an earlier import stored the break-glass email', () => {
+    const state = { ...policy, legacyEmergencyEmail: 'admin@example.com' };
+    expect(
+      evaluateAuthenticationPolicy(state, 'PASSWORD_LOGIN', { email: 'admin@example.com' }).allowed
+    ).toBe(true);
+    expect(
+      evaluateAuthenticationPolicy(
+        state,
+        'SESSION',
+        { email: 'admin@example.com' },
+        { method: 'credentials', policyVersion: 1 }
+      ).allowed
+    ).toBe(true);
+  });
   it('imports legacy controls atomically exactly once without converting a user', async () => {
     vi.stubEnv('AUTH_LOCAL_LOGIN_ENABLED', 'false');
     vi.stubEnv('AUTH_BREAK_GLASS_ENABLED', 'true');

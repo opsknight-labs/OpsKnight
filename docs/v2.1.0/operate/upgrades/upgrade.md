@@ -25,6 +25,11 @@ verification:
 
 An upgrade changes an immutable application image and may change the PostgreSQL schema. Treat those as separate operations with one migration owner, an explicit compatibility decision, a verified backup, and rollback criteria agreed before the window.
 
+For enterprise SSO 2.1, use the [existing SSO upgrade cutover](../../guides/identity/upgrade-existing-sso/)
+with downtime. Old/new application replicas must not overlap during migration. The
+Helm pre-upgrade gate verifies stopped application runtimes before the migration
+owner runs; other topologies must enforce the same stop-all sequence explicitly.
+
 ## Prerequisites
 
 Prepare:

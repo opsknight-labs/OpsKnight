@@ -270,6 +270,17 @@ export default function AuthenticationConsole({
           </AlertDescription>
         </Alert>
       )}
+      {data.providerCompatibilityWarning && (
+        <Alert>
+          <ShieldAlert className="h-4 w-4" />
+          <AlertTitle>Historical provider configuration needs review</AlertTitle>
+          <AlertDescription>
+            Existing SSO continues using its saved runtime configuration. Some saved values do not
+            meet the staging rules and cannot be edited or rolled back here. Review the upgrade
+            runbook and stage a complete validated replacement before changing production.
+          </AlertDescription>
+        </Alert>
+      )}
       {message && (
         <Alert
           variant={messageError ? 'destructive' : 'default'}
@@ -337,7 +348,9 @@ export default function AuthenticationConsole({
                       <dd>
                         {data.activeProvider
                           ? `${templates[data.activeProvider.providerType][0]} — configured`
-                          : 'Not configured'}
+                          : data.providerCompatibilityWarning
+                            ? 'Existing configuration requires review'
+                            : 'Not configured'}
                       </dd>
                     </div>
                     <div>

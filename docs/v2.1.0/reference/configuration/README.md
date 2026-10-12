@@ -1493,3 +1493,14 @@ Host/X-Forwarded-Host values or enables normal incident access. Database App URL
 repair requires fresh independent-key authorization and agreement between the pin,
 NEXTAUTH_URL and NEXT_PUBLIC_APP_URL. See
 [recovery procedure](../../guides/identity/sso-lockout-recovery/).
+
+## Existing SSO upgrade and rollout
+
+2.1 uses a stopped-runtime cutover with downtime. Integrated and split application
+Deployments use `Recreate`; a mandatory pre-upgrade Helm gate verifies desired
+replicas zero and complete application-pod shutdown before migration. This is not a
+rolling-upgrade compatibility certificate. HPA-managed web replicas require explicit
+reactivation after the new template is applied. See [Upgrade existing SSO](../../guides/identity/upgrade-existing-sso.md)
+for the stop/drain sequence, HPA handling, historical configuration, acceptance
+checks and database-aware rollback. Do not resume older binaries on a migrated
+database or use automatic Helm rollback as database rollback.

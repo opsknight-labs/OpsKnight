@@ -49,6 +49,7 @@ export function evaluateAuthenticationPolicy(
   )
     return deny('INVALID_AUTHENTICATION_METHOD');
   const legacyEmergency =
+    policy.mode === 'SSO_REQUIRED' &&
     policy.legacyEmergencyEmail != null &&
     principal.email?.trim().toLowerCase() === policy.legacyEmergencyEmail;
   const recoveryConfigured = Boolean(policy.passwordRecoveryUserId);

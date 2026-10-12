@@ -18,8 +18,8 @@ data:
   PORT: '3000'
   HOSTNAME: '0.0.0.0'
   NEXT_TELEMETRY_DISABLED: '1'
-  # Set to 'false' on old replicas during a rolling upgrade to hold them on the
-  # legacy direct-dispatch path. Remove after all replicas are updated.
+  # 2.1 requires a stopped-runtime compatibility cutover. Never use a mixed-version
+  # rollout to change authentication policy or notification enum semantics.
   NOTIFICATION_CONTROL_PLANE_PERSONAL: 'true'
   ALLOW_INSECURE_SECRETS: 'false'
   RUNBOOK_ARTIFACT_RETENTION_DAYS: '30'

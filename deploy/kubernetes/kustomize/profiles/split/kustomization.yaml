@@ -29,7 +29,4 @@ patches:
       - op: add
         path: /spec/strategy
         value:
-          type: RollingUpdate
-          rollingUpdate:
-            maxUnavailable: 0
-            maxSurge: 1
+          type: Recreate

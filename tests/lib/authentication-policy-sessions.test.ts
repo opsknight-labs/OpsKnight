@@ -78,9 +78,7 @@ describe('policy changes re-evaluate existing authenticated sessions', () => {
 
   it('fails protected requests closed during an outage but preserves the cookie for recovery', async () => {
     await getAuthOptions();
-    vi.mocked(prisma.authenticationPolicy.findUnique).mockRejectedValueOnce(
-      new Error('database down')
-    );
+    vi.mocked(prisma.authenticationPolicy.findUnique).mockRejectedValue(new Error('database down'));
     const token = await evaluate(passwordToken());
     expect(token.sub).toBe('admin-1');
     expect(token.error).toBe('AUTHENTICATION_POLICY_UNAVAILABLE');
@@ -96,6 +94,7 @@ describe('policy changes re-evaluate existing authenticated sessions', () => {
       trigger: 'update',
     });
     expect(session.user).toBeUndefined();
+    vi.mocked(prisma.authenticationPolicy.findUnique).mockResolvedValue(optionalPolicy as never);
     const recovered = await evaluate(token);
     expect(recovered.error).toBeUndefined();
   });

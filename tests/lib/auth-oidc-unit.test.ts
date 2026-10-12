@@ -855,3 +855,38 @@ describe('Auth JWT + OIDC callback contract', () => {
     });
   });
 });
+
+describe('provider activation across auth option caches', () => {
+  it('rejects a callback captured before rotation before resolving or creating any identity', async () => {
+    resetAuthOptionsCache();
+    const previous = await getAuthOptions();
+    const current = await getOidcConfig();
+    vi.mocked(getOidcConfig).mockResolvedValueOnce({
+      ...current!,
+      clientId: 'rotated-client',
+      configVersion: 2,
+    });
+    vi.mocked(resolveOidcIdentityForSignIn).mockClear();
+    const result = await previous.callbacks!.signIn!({
+      user: { id: 'external', email: 'real@example.com' },
+      account: { provider: 'oidc', type: 'oauth', providerAccountId: 'subject' },
+      profile: { sub: 'subject', email: 'real@example.com' },
+    });
+    expect(result).toBe('/login?error=OIDC_CONFIGURATION_CHANGED');
+    expect(resolveOidcIdentityForSignIn).not.toHaveBeenCalled();
+  });
+  it('rebuilds options on the next request without resetting another replica cache', async () => {
+    resetAuthOptionsCache();
+    const previous = await getAuthOptions();
+    const current = await getOidcConfig();
+    vi.mocked(getOidcConfig).mockResolvedValueOnce({
+      ...current!,
+      clientId: 'rotated-client',
+      configVersion: 2,
+    });
+    const changed = await getAuthOptions();
+    expect(changed).not.toBe(previous);
+    const converged = await getAuthOptions();
+    expect(converged).not.toBe(changed);
+  });
+});

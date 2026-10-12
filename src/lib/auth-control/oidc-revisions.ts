@@ -45,10 +45,10 @@ export function oidcTestClient(config: ProviderConfiguration, metadata: OidcRunt
   return client;
 }
 
-export function activeProviderConfiguration(
+export function storedProviderConfiguration(
   active: NonNullable<Awaited<ReturnType<typeof prisma.oidcConfig.findUnique>>>
-): ProviderConfiguration {
-  return providerConfigSchema.parse({
+) {
+  return {
     issuer: active.issuer,
     clientId: active.clientId,
     clientSecret: active.clientSecret,
@@ -67,15 +67,20 @@ export function activeProviderConfiguration(
         : {},
     sessionMaxAgeSeconds: active.sessionMaxAgeSeconds,
     sessionIdleTimeoutSeconds: active.sessionIdleTimeoutSeconds,
-  });
+  };
+}
+export function activeProviderConfiguration(
+  active: Parameters<typeof storedProviderConfiguration>[0]
+): ProviderConfiguration {
+  return providerConfigSchema.parse(storedProviderConfiguration(active));
 }
 function matchesActive(
   active: Parameters<typeof activeProviderConfiguration>[0] | null,
   config: ProviderConfiguration
 ) {
-  return Boolean(
-    active && JSON.stringify(activeProviderConfiguration(active)) === JSON.stringify(config)
-  );
+  if (!active) return false;
+  const parsed = providerConfigSchema.safeParse(storedProviderConfiguration(active));
+  return parsed.success && JSON.stringify(parsed.data) === JSON.stringify(config);
 }
 
 async function validate(config: ProviderConfiguration) {
@@ -485,7 +490,7 @@ export async function activateOidcRevision(
       if (data.active && !previousRevisionId) {
         const previous = await tx.oidcRevision.create({
           data: {
-            configuration: activeProviderConfiguration(data.active) as Prisma.InputJsonObject,
+            configuration: storedProviderConfiguration(data.active) as Prisma.InputJsonObject,
             baseConfigVersion: data.active.configVersion,
             createdBy: 'MIGRATION',
             activatedAt: new Date(),

@@ -2,7 +2,7 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { providerConfigSchema } from './provider-config';
-import { activeProviderConfiguration } from './oidc-revisions';
+import { storedProviderConfiguration } from './oidc-revisions';
 import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
@@ -114,6 +114,15 @@ export async function authenticationDashboard(
     const { clientSecret, ...publicConfig } = config;
     return { ...publicConfig, clientSecret: '', hasClientSecret: Boolean(clientSecret) };
   };
+  const activeParsed = active
+    ? providerConfigSchema.safeParse(storedProviderConfiguration(active))
+    : null;
+  const editableRevisions = revisions.filter(
+    revision => providerConfigSchema.safeParse(revision.configuration).success
+  );
+  const providerCompatibilityWarning = Boolean(
+    (activeParsed && !activeParsed.success) || editableRevisions.length !== revisions.length
+  );
   const registeredSessions = sessions.map(session => {
     let metadata: { expiresAt?: string; issuedUnderPolicyVersion?: number } = {};
     try {
@@ -157,9 +166,10 @@ export async function authenticationDashboard(
     policyVersion: policy.version,
     activeRevisionId: policy.activeRevisionId,
     legacyEmergencyConfigured: Boolean(policy.legacyEmergencyEmail),
-    activeProvider: active ? redact(activeProviderConfiguration(active)) : null,
+    activeProvider: activeParsed?.success ? redact(activeParsed.data) : null,
+    providerCompatibilityWarning,
     providerConfigVersion: active?.configVersion ?? 0,
-    revisions: revisions.map(revision => ({
+    revisions: editableRevisions.map(revision => ({
       id: revision.id,
       baseConfigVersion: revision.baseConfigVersion,
       configuration: redact(providerConfigSchema.parse(revision.configuration)),

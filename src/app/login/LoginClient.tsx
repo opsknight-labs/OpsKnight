@@ -37,6 +37,8 @@ function formatError(message: string | null | undefined) {
   // NextAuth appends ?error=SessionRequired on unauthenticated redirects — not a real error
   if (message === 'SessionRequired') return '';
   if (message === 'CredentialsSignin') return 'Invalid email or password';
+  if (message === 'OIDC_CONFIGURATION_CHANGED')
+    return 'SSO settings changed during sign-in. Please start a new sign-in.';
   if (message === 'AccessDenied') return 'Access denied';
   if (message === 'SessionExpired') return 'Your session has expired. Please sign in again.';
   if (message === 'OAuthSignin' || message === 'OAuthCallback')

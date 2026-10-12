@@ -4,7 +4,7 @@ import { hasOidcEmailLinkAssurance } from '@/lib/oidc-provider';
 import { isOidcLinkingApprovalUsable } from '@/lib/oidc-linking-approval';
 import { getOidcProviderPolicy, type OidcClaims } from '@/lib/oidc/provider-policy';
 import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
-import { getLegacyOidcIssuerVariants } from '@/lib/oidc/issuer-migration';
+import { normalizeOidcIssuer, getLegacyOidcIssuerVariants } from '@/lib/oidc/issuer-migration';
 
 export type OidcTargetUser = {
   id: string;
@@ -19,6 +19,7 @@ export type OidcTargetUser = {
 };
 
 export type OidcIdentityResolutionFailure =
+  | 'OIDC_CONFIGURATION_CHANGED'
   | 'OIDC_EMAIL_REQUIRED'
   | 'OIDC_EMAIL_ASSURANCE_REQUIRED'
   | 'OIDC_DOMAIN_NOT_ALLOWED'
@@ -56,6 +57,7 @@ type ResolveOidcIdentityInput = {
   providerConfigId?: string;
   clientId?: string;
   configVersion?: number;
+  requireCurrentRegistration?: boolean;
   organizationId?: string | null;
 };
 
@@ -94,7 +96,9 @@ export async function resolveOidcIdentityForSignIn(
     {
       ...(input.claims ?? {}),
       ...(email ? { email } : {}),
-      ...(input.emailVerifiedClaim !== undefined ? { email_verified: input.emailVerifiedClaim } : {}),
+      ...(input.emailVerifiedClaim !== undefined
+        ? { email_verified: input.emailVerifiedClaim }
+        : {}),
     },
     input.allowedDomains,
     input.organizationId
@@ -155,6 +159,26 @@ export async function resolveOidcIdentityForSignIn(
 
   try {
     return await runSerializableTransaction(async tx => {
+      if (input.requireCurrentRegistration) {
+        // Activation locks policy first. Share that order so a first-link/JIT
+        // transaction either precedes rotation or rejects it before any write.
+        const policies = await tx.$queryRaw<
+          Array<{ mode: string }>
+        >`SELECT "mode" FROM "AuthenticationPolicy" WHERE "id" = 'default' FOR SHARE`;
+        if (!policies[0] || policies[0].mode === 'PASSWORD_ONLY')
+          throw new Error('OIDC_CONFIGURATION_CHANGED');
+        const current = await tx.oidcConfig.findUnique({
+          where: { id: input.providerConfigId ?? 'default' },
+        });
+        if (
+          !current?.enabled ||
+          current.configVersion !== input.configVersion ||
+          current.clientId !== input.clientId ||
+          normalizeOidcIssuer(current.issuer) !== normalizeOidcIssuer(input.issuer)
+        )
+          throw new Error('OIDC_CONFIGURATION_CHANGED');
+      }
+
       // A concurrent callback may have created the identity after the fast
       // path. Recheck first and let the stable binding win unconditionally.
       let identityInsideTransaction = await tx.oidcIdentity.findUnique({
@@ -368,6 +392,7 @@ export async function resolveOidcIdentityForSignIn(
   } catch (error) {
     const reason = error instanceof Error ? error.message : '';
     const knownReasons = new Set<OidcIdentityResolutionFailure>([
+      'OIDC_CONFIGURATION_CHANGED',
       'OIDC_EMAIL_REQUIRED',
       'OIDC_EMAIL_ASSURANCE_REQUIRED',
       'OIDC_DOMAIN_NOT_ALLOWED',

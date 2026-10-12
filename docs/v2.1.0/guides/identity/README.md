@@ -23,3 +23,6 @@ and [test and enforce SSO](./test-and-enforce-sso/) after a staged login test.
 Use [credential rotation](./rotate-oidc-credentials/) for tested provider changes
 and [lockout recovery](./sso-lockout-recovery/) during an IdP outage. Emergency
 recovery needs PostgreSQL and never silently enables password fallback.
+
+For existing installations, follow [Upgrade existing SSO](./upgrade-existing-sso/)
+for preserved login behavior, controlled cutover and migration acceptance checks.

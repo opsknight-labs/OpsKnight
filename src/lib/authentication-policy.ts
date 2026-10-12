@@ -56,7 +56,9 @@ export async function initializeAuthenticationPolicy() {
         oidcConfigVersion: oidc?.configVersion ?? null,
         passwordSessionMinVersion: bootstrap || legacy.localLoginEnabled ? 0 : 1,
         legacyEmergencyEmail:
-          !bootstrap && legacy.breakGlassEnabled ? legacy.breakGlassEmail : null,
+          !bootstrap && !legacy.localLoginEnabled && legacy.breakGlassEnabled
+            ? legacy.breakGlassEmail
+            : null,
         legacySnapshot: snapshot,
         enforcedAt: !bootstrap && !legacy.localLoginEnabled ? new Date() : null,
       },

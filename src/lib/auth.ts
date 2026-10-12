@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { NextAuthOptions, User } from 'next-auth';
 import OIDCProvider from '@/lib/oidc';
 import CredentialsProvider from 'next-auth/providers/credentials';
@@ -135,30 +136,43 @@ function clearSessionToken(token: AugmentedJWT, reason: string) {
 let authOptionsCache:
   | {
       value: NextAuthOptions;
+      key: string;
       expiresAt: number;
     }
   | undefined;
-let authOptionsInFlight: Promise<NextAuthOptions> | undefined;
+let authOptionsInFlight: { key: string; promise: Promise<NextAuthOptions> } | undefined;
 
 export async function hashPassword(password: string) {
   return bcrypt.hash(password, 12);
 }
 
 export async function getAuthOptions(): Promise<NextAuthOptions> {
+  let localAuthPolicy: Awaited<ReturnType<typeof getDatabaseLocalAuthPolicy>>;
+  try {
+    localAuthPolicy = await getDatabaseLocalAuthPolicy();
+  } catch (error) {
+    // Retain decoding options during a brief DB outage. Every authorize/signIn/JWT
+    // callback still performs its own policy check and fails protected access closed.
+    if (authOptionsCache && authOptionsCache.expiresAt > Date.now()) return authOptionsCache.value;
+    throw error;
+  }
+  const oidcConfig = localAuthPolicy.oidcLoginEnabled ? await getOidcConfig() : null;
+  const registrationKey = createHash('sha256').update(JSON.stringify(oidcConfig)).digest('hex');
+  const key = createHash('sha256')
+    .update(JSON.stringify([localAuthPolicy, registrationKey]))
+    .digest('hex');
   const now = Date.now();
   // Module-level cache to avoid repeatedly constructing options (and reloading OIDC config)
   // across multiple server component renders / API calls within a short window.
-  if (authOptionsCache && authOptionsCache.expiresAt > now) {
+  if (authOptionsCache && authOptionsCache.key === key && authOptionsCache.expiresAt > now) {
     return authOptionsCache.value;
   }
 
-  if (authOptionsInFlight) {
-    return authOptionsInFlight;
+  if (authOptionsInFlight?.key === key) {
+    return authOptionsInFlight.promise;
   }
 
-  authOptionsInFlight = (async () => {
-    const localAuthPolicy = await getDatabaseLocalAuthPolicy();
-    const oidcConfig = localAuthPolicy.oidcLoginEnabled ? await getOidcConfig() : null;
+  const promise: Promise<NextAuthOptions> = (async () => {
     const oidcValidation = oidcConfig
       ? await getValidatedOidcRuntimeMetadata(oidcConfig.issuer, {
           tokenEndpointAuthMethod: oidcConfig.tokenEndpointAuthMethod,
@@ -309,7 +323,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   // Session trust is an explicit user choice. Form factor/user-agent
                   // must never silently turn a browser into a long-lived trusted device.
                   const currentPolicy = await getAuthenticationPolicy();
-                  const legacyEmergency = currentPolicy.legacyEmergencyEmail === email;
+                  const legacyEmergency =
+                    currentPolicy.mode === 'SSO_REQUIRED' &&
+                    currentPolicy.legacyEmergencyEmail === email;
                   const rememberMe =
                     !legacyEmergency &&
                     !currentPolicy.passwordRecoveryUserId &&
@@ -527,7 +543,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             if (account.provider === 'oidc') {
               try {
                 const activeConfig = await getOidcConfig();
-                if (!activeConfig) {
+                if (
+                  !activeConfig ||
+                  createHash('sha256').update(JSON.stringify(activeConfig)).digest('hex') !==
+                    registrationKey
+                ) {
                   return clearSessionToken(token as AugmentedJWT, 'OIDC_CONFIGURATION_UNAVAILABLE');
                 }
                 const issuer = activeConfig?.issuer ? normalizeIssuer(activeConfig.issuer) : null;
@@ -899,6 +919,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             return false;
           }
 
+          if (
+            createHash('sha256').update(JSON.stringify(activeConfig)).digest('hex') !==
+            registrationKey
+          )
+            return '/login?error=OIDC_CONFIGURATION_CHANGED';
           const claims = profileClaims(profile);
           const email =
             typeof user.email === 'string' && user.email.trim()
@@ -966,6 +991,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               allowedDomains: activeConfig.allowedDomains,
               claims,
               providerConfigId: 'default',
+              requireCurrentRegistration: true,
               clientId: activeConfig.clientId,
               configVersion: activeConfig.configVersion,
               organizationId: activeConfig.organizationId,
@@ -981,6 +1007,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           }
 
           if (!resolution.ok) {
+            if (resolution.reason === 'OIDC_CONFIGURATION_CHANGED')
+              return '/login?error=OIDC_CONFIGURATION_CHANGED';
             logger.warn('[Auth] OIDC sign-in rejected by identity policy', {
               component: 'auth:signIn',
               issuer,
@@ -1151,15 +1179,17 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
       },
     };
   })();
+  authOptionsInFlight = { key, promise };
   try {
-    const value = await authOptionsInFlight;
+    const value = await promise;
     authOptionsCache = {
       value,
+      key,
       expiresAt: Date.now() + AUTH_TTL_MS,
     };
     return value;
   } finally {
-    authOptionsInFlight = undefined;
+    if (authOptionsInFlight?.promise === promise) authOptionsInFlight = undefined;
   }
 }
 

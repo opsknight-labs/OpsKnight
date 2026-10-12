@@ -261,3 +261,69 @@ isolated database; production secret checks stayed enabled. No production deploy
 external provider tenant, real physical key or multi-replica release certification
 is implied. Those acceptance requirements remain listed above. All changes remain
 on `feat/enterprise-sso-2.1`; no PR is created.
+
+## Regression audit follow-up (reviewed input: 022dc69)
+
+The supplied audit is preserved in `enterprise-sso-2.1-regression-audit.md`.
+
+- Import now creates the legacy recovery-only designation only when local login was
+  disabled. Optional administrators named in break-glass environment settings keep
+  ordinary credentials login and existing credentials sessions. The evaluator and
+  credentials callback also handle already-imported Optional policies that contain
+  that email, without replaying import or changing authoritative policy state.
+- Helm integrated and split application Deployments use Recreate. A mandatory,
+  read-only pre-upgrade cutover Job runs before the migration Job. It checks zero
+  desired application replicas, complete pending/running/terminating pod shutdown,
+  and the release-labelled deployment inventory (including renamed deployments).
+  RBAC permits reads only. API failure blocks migration. Upgrade rendering requires
+  an explicit tested image tag/digest containing the gate script; the default older
+  appVersion image is not silently accepted. Kustomize application profiles use
+  Recreate too; their release-wide stop/migrate/start gate is operator-owned.
+- The upgrade runbook explicitly documents downtime, ingress/worker drain, external
+  controller suspension, HPA scale-to-zero/reactivation, migration ownership,
+  failure recovery and coordinated database/application rollback. No rolling-upgrade
+  compatibility certificate, live production cutover or cluster acceptance is claimed.
+- Provider record reads are authoritative on authentication-options requests.
+  Unchanged records reuse decryption/options/metadata; changed records invalidate
+  local caches immediately. Promise reuse is keyed to the record and cannot make a
+  different registration inherit stale options. Callbacks captured before rotation
+  reject with a fresh-sign-in message; JWT issuance rechecks that registration.
+  First-link/JIT transactions share the policy lock with activation and recheck the
+  enabled registration before creating users or identities. Brief policy DB outages
+  retain decoding options while authorization callbacks fail protected access closed.
+- Historically tolerated settings no longer crash the administration dashboard.
+  Production continues through the established runtime reader. The console shows a
+  compatibility warning, preserves historical snapshots in PostgreSQL, omits
+  incompatible snapshots from editable revision choices, and requires a complete,
+  validated replacement for staging. Invalid historical snapshots remain archival
+  evidence, not silently normalized live configuration or unverified rollback targets.
+
+Verification completed for this follow-up:
+
+- **5,709 unit tests passed across 749 files**, four intentional skips.
+- **42 existing PostgreSQL tests passed across three suites**.
+- **Eight upgrade tests passed** using an isolated database first migrated with the
+  pre-SSO 2.0 baseline (`ea38c8c5601189225e3c5edd1efeed855c034c7d`), seeded with existing
+  provider ciphertext, administrator/password, immutable identity, linking approval,
+  team membership, incident history and a pre-upgrade encrypted OIDC session, then
+  upgraded through the branch's additive migrations. They cover Optional/Required
+  import with break-glass, Entra without email_verified, stable records/session,
+  historical configuration, stale first-link rejection and two independent module
+  cache instances sharing PostgreSQL through provider rotation and rollback.
+- **Four optimized HTTPS browser checks passed** in Chromium/Firefox/WebKit;
+  two Chromium-only virtual-authenticator cases are intentionally skipped on other
+  browsers. Hardware recovery still runs in a separate context with secure cookies.
+- **Four rendered Helm cutover contracts and four upcoming-doc contracts passed**.
+  Helm lint and all three Kustomize profiles render successfully. Infrastructure
+  rolling strategies remain independent of stopped application-runtime cutover.
+- TypeScript, modified-file lint (zero warnings), diff checks and the optimized
+  standalone production build pass. Production boot/browser verification used an
+  isolated local TLS fixture with secret checks enabled.
+
+The repeatable upgrade harness is `scripts/certify-sso-upgrade.cjs`; it accepts only
+`enterprise_sso_upgrade_test`, refuses an already-upgraded database, and never resets
+or drops it. Development fixtures were recreated only in that explicitly isolated
+local database. This is schema/application upgrade evidence, not a substitute for
+rehearsing an upgraded copy of a customer's actual deployment or certifying real IdP
+claims, physically independent keys, ingress, delivery and Kubernetes cutover. Those
+external acceptance requirements remain outstanding. No PR or deployment is created.

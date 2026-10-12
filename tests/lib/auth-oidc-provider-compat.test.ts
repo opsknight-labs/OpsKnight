@@ -47,7 +47,9 @@ vi.mock('@/lib/prisma', () => {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       create: vi.fn(),
     },
+    $queryRaw: vi.fn().mockResolvedValue([{ mode: 'SSO_OPTIONAL' }]),
     oidcConfig: {
+      findUnique: vi.fn().mockImplementation(() => getOidcConfigMock()),
       findFirst: vi.fn(),
       upsert: vi.fn(),
     },

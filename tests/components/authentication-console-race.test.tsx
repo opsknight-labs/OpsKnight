@@ -45,6 +45,7 @@ describe('authentication section request cancellation', () => {
       policyVersion: 1,
       activeRevisionId: null,
       activeProvider: null,
+      providerCompatibilityWarning: false,
       providerConfigVersion: 0,
       revisions: [],
       users: [],
