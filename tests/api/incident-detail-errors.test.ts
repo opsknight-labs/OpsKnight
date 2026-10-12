@@ -74,6 +74,25 @@ describe('GET /api/incidents/:id typed errors', () => {
     mocks.incidentFindUnique.mockResolvedValue(incident());
   });
 
+  it.each(['ADMIN', 'RESPONDER', 'AUDITOR', 'USER'])(
+    'protects source context for %s REST readers',
+    async role => {
+      mocks.resolveApiKeyActor.mockResolvedValue({ ...actor(), role });
+      mocks.incidentFindUnique.mockResolvedValue({
+        ...incident(),
+        description: '{"account":"private-account"}',
+        automationDecision: { incidentId: 'inc-1' },
+      });
+      const req = await createMockRequest('GET', '/api/incidents/inc-1');
+      const { status, data } = await parseResponse(await GET(req, context));
+      expect(status).toBe(200);
+      const sensitive = role === 'ADMIN' || role === 'RESPONDER';
+      expect(data.incident.description).toBe(sensitive ? '{"account":"private-account"}' : null);
+      expect(data.incident).not.toHaveProperty('automationDecision');
+      expect(JSON.stringify(data).includes('private-account')).toBe(sensitive);
+    }
+  );
+
   it('returns API_KEY_INVALID for a missing or invalid key', async () => {
     mocks.authenticateApiKey.mockResolvedValue(null);
     const req = await createMockRequest('GET', '/api/incidents/inc-1');
@@ -112,13 +131,11 @@ describe('GET /api/incidents/:id typed errors', () => {
   });
 
   it('returns INCIDENT_ACCESS_DENIED for a resource-level denial', async () => {
-    mocks.authorize
-      .mockReturnValueOnce({ allowed: true, scope: 'scoped' })
-      .mockReturnValueOnce({
-        allowed: false,
-        reason: 'MISSING_CAPABILITY',
-        requiredCapability: 'incident.read.scoped',
-      });
+    mocks.authorize.mockReturnValueOnce({ allowed: true, scope: 'scoped' }).mockReturnValueOnce({
+      allowed: false,
+      reason: 'MISSING_CAPABILITY',
+      requiredCapability: 'incident.read.scoped',
+    });
     const req = await createMockRequest('GET', '/api/incidents/inc-1');
 
     const { status, data } = await parseResponse(await GET(req, context));

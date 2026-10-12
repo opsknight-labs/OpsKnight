@@ -43,6 +43,15 @@ test('supported ingestion displays pinned context and intentional paging suppres
       type: 'EVENTS_API_V2',
     },
   });
+  const slack = await db.slackDestination.create({
+    data: {
+      serviceId: service.id,
+      workspaceId: `browser-${randomUUID()}`,
+      channelId: 'C_BROWSER_CERT',
+      channelName: 'Browser certification',
+      enabled: true,
+    },
+  });
   const snapshot = {
     schemaVersion: 1 as const,
     fields: Array.from({ length: 7 }, (_, i) => ({
@@ -69,7 +78,14 @@ test('supported ingestion displays pinned context and intentional paging suppres
         phase: 'ROUTE' as const,
         enabled: true,
         conditions: [{ fieldKey: 'priority', operator: 'EQ' as const, value: 'P3' }],
-        actions: [{ type: 'NO_ESCALATION' as const }],
+        actions: [
+          { type: 'NO_ESCALATION' as const },
+          {
+            type: 'NOTIFY_CHANNEL' as const,
+            provider: 'SLACK' as const,
+            destinationId: slack.id,
+          },
+        ],
       },
     ],
   };
@@ -138,18 +154,54 @@ test('supported ingestion displays pinned context and intentional paging suppres
   await expect(
     page.getByText('Personal paging intentionally skipped', { exact: false })
   ).toBeVisible();
-  await expect(
-    page.getByText('No channel notification records are available.', { exact: true })
-  ).toBeVisible();
+  expect(
+    await db.notification.count({
+      where: {
+        incidentId: incident.id,
+        channel: 'SLACK',
+        sourceType: 'AUTOMATION',
+        status: 'PENDING',
+      },
+    })
+  ).toBe(1);
+  const delivery = page.getByRole('region', { name: 'Channel notification status' });
+  await expect(delivery).toContainText('Queued');
+  await expect(delivery).not.toContainText('Delivery confirmed');
   await page.getByText(/^Show \d+ more context fields$/).click();
   await expect(page.getByText('Captured field 6', { exact: true })).toBeVisible();
+  await page.getByText('Show full value', { exact: true }).click();
+  await expect(page.getByText('x'.repeat(1200), { exact: true })).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2))
     .toBe(true);
+  await page.getByText('Show full value', { exact: true }).click();
   await page.screenshot({
     path: `/tmp/automation-context-${testInfo.project.name}.png`,
     fullPage: true,
   });
+  const auditorEmail = `automation-reader-${randomUUID()}@example.com`;
+  await db.user.create({
+    data: {
+      email: auditorEmail,
+      name: 'Context Auditor',
+      role: 'AUDITOR',
+      status: 'ACTIVE',
+      passwordHash: await bcrypt.hash(password, 12),
+    },
+  });
+  const readerCsrf = await (await page.request.get('/api/auth/csrf')).json();
+  await page.request.post('/api/auth/callback/credentials', {
+    form: { csrfToken: readerCsrf.csrfToken, email: auditorEmail, password, json: 'true' },
+  });
+  expect((await (await page.request.get('/api/auth/session')).json()).user.email).toBe(
+    auditorEmail
+  );
+  await page.goto(`/incidents/${incident.id}`);
+  await expect(page.getByText('Alert context is restricted.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Alert details are restricted.', { exact: true })).toBeVisible();
+  const readerHtml = await page.request.get(`/incidents/${incident.id}`);
+  expect(readerHtml.status()).toBe(200);
+  expect(await readerHtml.text()).not.toContain('x'.repeat(1200));
 });
 
 test('administrator archives and restores an unreferenced policy through Dependencies', async ({

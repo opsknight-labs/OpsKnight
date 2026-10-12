@@ -32,10 +32,25 @@ export default function IncidentAlertContextCard({
           : value.value == null
             ? 'Diagnostic value unavailable'
             : String(value.value);
+    const characters = [...display];
     return (
       <div key={field.key} className="min-w-0">
-        <dt className="font-medium">{field.label}</dt>
-        <dd className="break-words text-muted-foreground">{display}</dd>
+        <dt className="break-words font-medium">{field.label}</dt>
+        <dd className="break-words text-muted-foreground">
+          {characters.length > 160 ? (
+            <>
+              <span>{characters.slice(0, 160).join('')}…</span>
+              <details>
+                <summary className="cursor-pointer py-2" aria-label={`Show full ${field.label}`}>
+                  Show full value
+                </summary>
+                <p className="break-words">{display}</p>
+              </details>
+            </>
+          ) : (
+            display
+          )}
+        </dd>
       </div>
     );
   }

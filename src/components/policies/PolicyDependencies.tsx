@@ -39,7 +39,7 @@ export default async function PolicyDependencies({
   ]);
   const active = refs.filter(r => r.version.activeConfig);
   return (
-    <section className="rounded-xl border p-4 space-y-4">
+    <section className="min-w-0 break-words rounded-xl border p-4 space-y-4">
       <h2 className="font-semibold">Policy Dependencies · {archived ? 'Archived' : 'Active'}</h2>
       <p>
         {services.length} service defaults · {active.length} active versions ·{' '}

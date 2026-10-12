@@ -19,7 +19,14 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
     by: ['channel', 'status'],
     where: {
       incidentId,
-      eventType: 'triggered',
+      OR: [
+        { eventType: 'triggered' },
+        {
+          templateKey: {
+            in: ['automation-slack', 'service-slack-triggered', 'service-teams-triggered'],
+          },
+        },
+      ],
       channel: { in: ['SLACK', 'MICROSOFT_TEAMS'] },
     },
     _count: { _all: true },
@@ -75,7 +82,7 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
             <Badge variant="outline">Automation · v{decision.version?.versionNumber ?? '—'}</Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm">
+        <CardContent className="min-w-0 break-words space-y-2 text-sm">
           <p>
             {decision.matchedRouteRuleName || matchedRule?.name
               ? `Matched rule: ${decision.matchedRouteRuleName ?? matchedRule?.name}`
