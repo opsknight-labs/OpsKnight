@@ -1,4 +1,3 @@
-/* eslint-disable security/detect-non-literal-fs-filename */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chmod, mkdtemp, rm, writeFile, utimes, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -456,8 +455,36 @@ describe('Agent authority and durable recovery', () => {
       await writeFile(staleProbePath, 'stale-data');
       expect((await readdir(directory)).filter(f => f.startsWith('.probe-'))).toHaveLength(1);
 
-      await expect(spool.probeStorageIntegrity()).resolves.toBeUndefined();
+      await expect(spool.probeStorageIntegrity({ staleThresholdMs: 0 })).resolves.toBeUndefined();
       expect((await readdir(directory)).filter(f => f.startsWith('.probe-'))).toHaveLength(0);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('probeStorageIntegrity is single-flight and safely handles concurrent invocations without deleting active probes', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'opsknight-spool-concurrent-probe-'));
+    try {
+      const spool = new ResultSpool(directory);
+      await spool.initialize();
+
+      // Launch 5 concurrent storage probes simultaneously (simulating heartbeat + main loop + background checks)
+      const results = await Promise.allSettled([
+        spool.probeStorageIntegrity(),
+        spool.probeStorageIntegrity(),
+        spool.probeStorageIntegrity(),
+        spool.probeStorageIntegrity(),
+        spool.probeStorageIntegrity(),
+      ]);
+
+      // All 5 must resolve successfully without race condition failures
+      for (const res of results) {
+        expect(res.status).toBe('fulfilled');
+      }
+
+      // Assert that after all probes settle, no temporary probe files remain
+      const files = await readdir(directory);
+      expect(files.filter(f => f.startsWith('.probe-'))).toHaveLength(0);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

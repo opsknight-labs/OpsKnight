@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 import type { SpoolRecord } from './types';
 
 export class ResultSpool {
+  private activeProbe: Promise<void> | null = null;
+
   constructor(private readonly directory: string) {}
 
   async initialize() {
@@ -209,18 +211,50 @@ export class ResultSpool {
    * Proves that the spool directory can be read, listed, written, fsynced, and unlinked
    * without mutating or clobbering existing execution records.
    * Fails closed by throwing if any filesystem operation fails.
+   *
+   * Single-flight per Agent process to prevent race conditions between the main polling
+   * loop and asynchronous heartbeat cycles.
    */
   async probeStorageIntegrity(testHooks?: {
     simulateWriteFailure?: boolean;
     simulateSyncFailure?: boolean;
+    staleThresholdMs?: number;
+  }): Promise<void> {
+    if (this.activeProbe) {
+      return this.activeProbe;
+    }
+    const probePromise = this.executeProbe(testHooks);
+    this.activeProbe = probePromise;
+    try {
+      await probePromise;
+    } finally {
+      this.activeProbe = null;
+    }
+  }
+
+  private async executeProbe(testHooks?: {
+    simulateWriteFailure?: boolean;
+    simulateSyncFailure?: boolean;
+    staleThresholdMs?: number;
   }): Promise<void> {
     await this.initialize();
-    // 1. Clean up any stale probe files from previous crashed runs
+    // 1. Clean up only abandoned probe files older than a safe threshold (default 60s)
+    // to prevent concurrent probes from deleting active temporary files.
+    const staleThresholdMs = testHooks?.staleThresholdMs ?? 60_000;
+    const cutoff = Date.now() - staleThresholdMs;
     try {
       const names = await readdir(this.directory);
       for (const name of names) {
         if (/^\.probe-.*\.tmp$/i.test(name)) {
-          await unlink(join(this.directory, name)).catch(() => undefined);
+          const filePath = join(this.directory, name);
+          try {
+            const s = await stat(filePath);
+            if (s.mtimeMs < cutoff) {
+              await unlink(filePath).catch(() => undefined);
+            }
+          } catch {
+            // File might have already been unlinked by another process
+          }
         }
       }
     } catch {

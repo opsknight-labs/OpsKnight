@@ -334,9 +334,9 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   await page.getByRole('combobox', { name: 'Choose workflow' }).click();
   await page.getByRole('option', { name: `${name} (v1)` }).click();
   await page.getByRole('combobox', { name: 'Execution mode' }).click();
-  await page.getByRole('option', { name: 'Suggested', exact: true }).click();
+  await page.getByRole('option', { name: /^Suggested/ }).click();
   await page.getByRole('combobox', { name: 'Execution target' }).click();
-  await page.getByRole('option', { name: agent.name, exact: true }).click();
+  await page.getByRole('option', { name: agent.name }).click();
   await page
     .getByRole('dialog')
     .getByRole('button', { name: `Attach ${name}`, exact: true })
