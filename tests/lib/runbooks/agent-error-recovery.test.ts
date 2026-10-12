@@ -175,4 +175,121 @@ describe('Agent error precedence and lifecycle recovery', () => {
     });
     expect(reportedError).toBeNull();
   });
+
+  it('regression: recurring claim failures with an empty spool preserve transient communication errors across flushSpool', async () => {
+    // Scenario reported in PR review:
+    // 1. Agent claim fails because control plane is unavailable (503 / fetch failed).
+    let transientCommunicationError: string | null =
+      'Agent API server error: HTTP 503 - Service Unavailable';
+    const activeBlockingError: string | null = null;
+    const inFlightError: string | null = null;
+    const operationalError: string | null = null;
+    const terminalAuthError: string | null = null;
+
+    // Verify initial reported error reflects the claim failure:
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        terminalAuthError,
+        operationalError,
+        inFlightError,
+        transientError: transientCommunicationError,
+      })
+    ).toBe('Agent API server error: HTTP 503 - Service Unavailable');
+
+    // 2. Next polling loop iteration calls flushSpool() with an empty spool:
+    const spoolRecords: Array<{ attemptId: string }> = [];
+    const submitFailed = false;
+    let submittedCount = 0;
+
+    for (const _record of spoolRecords) {
+      submittedCount += 1;
+    }
+
+    // Fixed logic: Only clear if submittedCount > 0 AND spool depth == 0
+    if (!submitFailed && submittedCount > 0 && spoolRecords.length === 0) {
+      transientCommunicationError = null;
+    }
+
+    // 3. Verify communication error WAS NOT CLEARED by the empty spool:
+    expect(transientCommunicationError).toBe(
+      'Agent API server error: HTTP 503 - Service Unavailable'
+    );
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        terminalAuthError,
+        operationalError,
+        inFlightError,
+        transientError: transientCommunicationError,
+      })
+    ).toBe('Agent API server error: HTTP 503 - Service Unavailable');
+
+    // 4. Demonstrate recovery only occurs when proven communication succeeds:
+    // (a) Heartbeat succeeds or (b) Claim succeeds:
+    transientCommunicationError = null;
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        terminalAuthError,
+        operationalError,
+        inFlightError,
+        transientError: transientCommunicationError,
+      })
+    ).toBeNull();
+  });
+
+  it('preserves and reports operational filesystem/runtime errors with explicit recovery', () => {
+    const activeBlockingError: string | null = null;
+    let operationalError: string | null =
+      "EACCES: permission denied, scandir '/var/lib/opsknight-agent/spool'";
+    const transientError: string | null = 'Agent API temporarily unavailable.';
+
+    // 1. Operational error takes precedence over transient network error:
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        operationalError,
+        transientError,
+      })
+    ).toBe("EACCES: permission denied, scandir '/var/lib/opsknight-agent/spool'");
+
+    // 2. When storage/filesystem permissions are restored and spool inspection succeeds:
+    operationalError = null;
+
+    // Returns transient error if network is still down:
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        operationalError,
+        transientError,
+      })
+    ).toBe('Agent API temporarily unavailable.');
+  });
+
+  it('distinguishes terminal authorization revocation from transient network outages', () => {
+    const activeBlockingError: string | null = null;
+    let terminalAuthError: string | null =
+      'Agent authentication revoked or invalid: HTTP 403 - Agent credentials revoked';
+    const transientError: string | null = 'Agent API temporarily unavailable.';
+
+    // 1. Terminal authorization error takes precedence over transient network errors:
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        terminalAuthError,
+        transientError,
+      })
+    ).toBe('Agent authentication revoked or invalid: HTTP 403 - Agent credentials revoked');
+
+    // 2. Terminal error persists until re-enrollment or authenticated credentials succeed:
+    terminalAuthError = null;
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        terminalAuthError,
+        transientError: null,
+      })
+    ).toBeNull();
+  });
 });

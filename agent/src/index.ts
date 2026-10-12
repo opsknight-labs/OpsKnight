@@ -200,6 +200,8 @@ async function run() {
   await spool.initialize();
   let active = 0;
   let transientCommunicationError: string | null = null;
+  let terminalAuthError: string | null = null;
+  let operationalError: string | null = null;
   let inFlightError: string | null = null;
   let shuttingDown = false;
   let activeController: AbortController | null = null;
@@ -247,6 +249,8 @@ async function run() {
     const activeBlockingError = await getActiveBlockingCondition();
     return computeReportedLastError({
       activeBlockingError,
+      terminalAuthError,
+      operationalError,
       inFlightError,
       transientError: transientCommunicationError,
     });
@@ -254,6 +258,7 @@ async function run() {
 
   const flushSpool = async () => {
     let submitFailed = false;
+    let submittedCount = 0;
     for (const record of await spool.list()) {
       try {
         const { localOutput, ...result } = record;
@@ -266,6 +271,7 @@ async function run() {
         }
         await client.submit(result);
         await spool.remove(record.attemptId);
+        submittedCount += 1;
       } catch (error) {
         submitFailed = true;
         transientCommunicationError = error instanceof Error ? error.message : String(error);
@@ -277,8 +283,10 @@ async function run() {
         break;
       }
     }
-    if (!submitFailed && (await spool.depth()) === 0) {
+    // Only clear communication error if we actually submitted records and fully drained the spool
+    if (!submitFailed && submittedCount > 0 && (await spool.depth()) === 0) {
       transientCommunicationError = null;
+      operationalError = null;
     }
   };
 
@@ -320,8 +328,9 @@ async function run() {
       activeAttemptCount: active,
       lastError,
     });
-    // Demonstrated heartbeat roundtrip clears transient communication errors.
+    // Demonstrated heartbeat roundtrip clears transient communication and auth errors.
     transientCommunicationError = null;
+    terminalAuthError = null;
   };
   await heartbeat();
 
@@ -399,14 +408,50 @@ async function run() {
 
         const currentSpoolDepth = await spool.depth();
         const currentDeadLetterDepth = await spool.deadLetterDepth();
+        // Successful storage/safety inspection without exception clears previous local operational failures
+        operationalError = null;
+
         const readOnlyOnly = currentSpoolDepth > 0 || currentDeadLetterDepth > 0;
         try {
           attempt = await client.claim({ readOnlyOnly });
+          // A successful claim request (even if no attempt available) proves connectivity & valid auth
           transientCommunicationError = null;
+          terminalAuthError = null;
         } catch (claimErr) {
-          transientCommunicationError =
-            claimErr instanceof Error ? claimErr.message : String(claimErr);
-          await new Promise(resolve => setTimeout(resolve, 2_000));
+          if (claimErr instanceof AgentApiError) {
+            if (claimErr.status === 401 || claimErr.status === 403) {
+              terminalAuthError = `Agent authentication revoked or invalid: HTTP ${claimErr.status} - ${claimErr.message}`;
+              transientCommunicationError = null;
+              await new Promise(resolve => setTimeout(resolve, 15_000));
+              continue;
+            }
+            if (claimErr.status === 429) {
+              transientCommunicationError = `Agent API rate limit exceeded: HTTP 429 - ${claimErr.message}`;
+              await new Promise(resolve => setTimeout(resolve, 10_000));
+              continue;
+            }
+            if (claimErr.status === 409) {
+              operationalError = `Agent claim conflict: HTTP 409 - ${claimErr.message}`;
+              await new Promise(resolve => setTimeout(resolve, 2_000));
+              continue;
+            }
+            if (claimErr.status >= 500) {
+              transientCommunicationError = `Agent API server error: HTTP ${claimErr.status} - ${claimErr.message}`;
+              await new Promise(resolve => setTimeout(resolve, 5_000));
+              continue;
+            }
+            operationalError = `Agent API claim rejected: HTTP ${claimErr.status} - ${claimErr.message}`;
+            await new Promise(resolve => setTimeout(resolve, 5_000));
+            continue;
+          }
+          const claimMessage = claimErr instanceof Error ? claimErr.message : String(claimErr);
+          if (isTransientCommunicationError(claimMessage)) {
+            transientCommunicationError = claimMessage;
+            await new Promise(resolve => setTimeout(resolve, 2_000));
+          } else {
+            operationalError = `Unexpected claim failure: ${claimMessage}`;
+            await new Promise(resolve => setTimeout(resolve, 5_000));
+          }
           continue;
         }
         if (!attempt) {
@@ -514,6 +559,13 @@ async function run() {
         const failureMessage = error instanceof Error ? error.message : String(error);
         if (isTransientCommunicationError(failureMessage)) {
           transientCommunicationError = failureMessage;
+        } else if (
+          error instanceof AgentApiError &&
+          (error.status === 401 || error.status === 403)
+        ) {
+          terminalAuthError = `Agent authentication revoked or invalid: HTTP ${error.status} - ${error.message}`;
+        } else {
+          operationalError = failureMessage;
         }
         // Stop accepting work if a known outcome cannot reach durable storage.
         if (outcomeKnown && !resultPersisted) throw error;

@@ -62,18 +62,24 @@ export function determineActiveBlockingCondition(state: AgentConditionState): st
  *
  * Precedence:
  * 1. Active blocking condition (clock skew, dead-letter quarantine, spool backlog, draining).
- * 2. Active in-flight execution error (e.g. lease renewal failure during active run).
- * 3. Last unresolved transient communication error.
- * 4. null if healthy.
+ * 2. Terminal authentication/revocation error (revoked credentials, invalid token, HTTP 401/403).
+ * 3. Local operational/filesystem error (EACCES, corrupt spool, unexpected runtime failure).
+ * 4. Active in-flight execution error (e.g. lease renewal failure during active run).
+ * 5. Last unresolved transient communication error (network or 5xx outage).
+ * 6. null if healthy.
  */
 export function computeReportedLastError(params: {
   activeBlockingError: string | null;
-  inFlightError: string | null;
-  transientError: string | null;
+  terminalAuthError?: string | null;
+  operationalError?: string | null;
+  inFlightError?: string | null;
+  transientError?: string | null;
 }): string | null {
   if (params.activeBlockingError) return params.activeBlockingError;
+  if (params.terminalAuthError) return params.terminalAuthError;
+  if (params.operationalError) return params.operationalError;
   if (params.inFlightError) return params.inFlightError;
-  return params.transientError;
+  return params.transientError ?? null;
 }
 
 /**
@@ -94,6 +100,8 @@ export function isTransientCommunicationError(err: string | null): boolean {
     err.includes('504 Gateway Timeout') ||
     err.startsWith('HTTP 502') ||
     err.startsWith('HTTP 503') ||
-    err.startsWith('HTTP 504')
+    err.startsWith('HTTP 504') ||
+    err.includes('Agent API server error: HTTP 5') ||
+    err.includes('Agent API rate limit exceeded: HTTP 429')
   );
 }
