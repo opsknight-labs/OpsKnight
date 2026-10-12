@@ -12,7 +12,12 @@ import { probeCapabilities } from './capabilities';
 import { assertPolicyAllows, loadPolicy } from './policy';
 import { ResultSpool } from './spool';
 import { getAgentVersion } from './version';
-import { isPersistentFailure } from './recovery';
+import {
+  computeReportedLastError,
+  determineActiveBlockingCondition,
+  isTransientCommunicationError,
+  type SafetyLimits,
+} from './recovery';
 import type { AgentIdentity, ClaimedAttempt, SpoolRecord } from './types';
 
 const baseUrl = process.env.OPSKNIGHT_URL?.trim();
@@ -194,13 +199,61 @@ async function run() {
   const spool = new ResultSpool(`${dataDirectory}/spool`);
   await spool.initialize();
   let active = 0;
-  let lastError: string | null = null;
+  let transientCommunicationError: string | null = null;
+  let inFlightError: string | null = null;
   let shuttingDown = false;
   let activeController: AbortController | null = null;
   const abortUnfinishedExecution = () => activeController?.abort('LEASE_LOST');
 
+  const drainFilePath = `${dataDirectory}/drain`;
+  const drainReadyFilePath = `${dataDirectory}/drain-ready`;
+
+  const checkDraining = async (): Promise<boolean> => {
+    try {
+      await access(drainFilePath);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const safetyLimits: SafetyLimits = {
+    maxSpoolRecords: MAX_SPOOL_RECORDS,
+    maxSpoolBytes: MAX_SPOOL_BYTES,
+    maxSpoolRecordAgeMs: MAX_SPOOL_RECORD_AGE_MS,
+    maxDeadLetterRecords: MAX_DEAD_LETTER_RECORDS,
+    maxDeadLetterBytes: MAX_DEAD_LETTER_BYTES,
+    maxDeadLetterAgeMs: MAX_DEAD_LETTER_AGE_MS,
+  };
+
+  let clockError: string | null = null;
+  let lastClockCheck = 0;
+  let cachedClockSkew: number | null = null;
+
+  const getActiveBlockingCondition = async (): Promise<string | null> => {
+    const isDraining = await checkDraining();
+    const deadLetterStats = await spool.deadLetterStats();
+    const spoolStats = await spool.stats();
+    return determineActiveBlockingCondition({
+      clockError,
+      deadLetterStats,
+      spoolStats,
+      isDraining,
+      limits: safetyLimits,
+    });
+  };
+
+  const getEffectiveLastError = async (): Promise<string | null> => {
+    const activeBlockingError = await getActiveBlockingCondition();
+    return computeReportedLastError({
+      activeBlockingError,
+      inFlightError,
+      transientError: transientCommunicationError,
+    });
+  };
+
   const flushSpool = async () => {
-    const initialDepth = await spool.depth();
+    let submitFailed = false;
     for (const record of await spool.list()) {
       try {
         const { localOutput, ...result } = record;
@@ -214,7 +267,8 @@ async function run() {
         await client.submit(result);
         await spool.remove(record.attemptId);
       } catch (error) {
-        lastError = error instanceof Error ? error.message : String(error);
+        submitFailed = true;
+        transientCommunicationError = error instanceof Error ? error.message : String(error);
         if (error instanceof AgentApiError && error.terminal) {
           await spool.quarantine(record.attemptId);
           process.stderr.write(`Result ${record.attemptId} quarantined: HTTP ${error.status}\n`);
@@ -223,14 +277,10 @@ async function run() {
         break;
       }
     }
-    if (initialDepth > 0 && (await spool.depth()) === 0 && !isPersistentFailure(lastError)) {
-      lastError = null;
+    if (!submitFailed && (await spool.depth()) === 0) {
+      transientCommunicationError = null;
     }
   };
-
-  let clockError: string | null = null;
-  let lastClockCheck = 0;
-  let cachedClockSkew: number | null = null;
 
   const checkClock = async (force = false): Promise<number | null> => {
     const now = Date.now();
@@ -258,6 +308,7 @@ async function run() {
   const heartbeat = async () => {
     await checkClock(false);
     const effective = await probeCapabilities(policy);
+    const lastError = await getEffectiveLastError();
     await client.heartbeat({
       capabilities: effective.capabilities,
       capabilityReport: effective.report,
@@ -267,25 +318,12 @@ async function run() {
       spoolDepth: await spool.depth(),
       deadLetterDepth: await spool.deadLetterDepth(),
       activeAttemptCount: active,
-      lastError: clockError || lastError,
+      lastError,
     });
-    if (lastError && !isPersistentFailure(lastError) && clockError === null) {
-      lastError = null;
-    }
+    // Demonstrated heartbeat roundtrip clears transient communication errors.
+    transientCommunicationError = null;
   };
   await heartbeat();
-
-  const drainFilePath = `${dataDirectory}/drain`;
-  const drainReadyFilePath = `${dataDirectory}/drain-ready`;
-
-  const checkDraining = async (): Promise<boolean> => {
-    try {
-      await access(drainFilePath);
-      return true;
-    } catch {
-      return false;
-    }
-  };
 
   let publishingHealth = false;
   const publishHealth = async () => {
@@ -353,50 +391,32 @@ async function run() {
       let resultPersisted = false;
       let outcomeKnown = false;
       try {
-        const skew = await checkClock(false);
-        if (skew === null || skew > 60) {
-          await new Promise(resolve => setTimeout(resolve, 5_000));
-          continue;
-        }
-        const deadLetterStats = await spool.deadLetterStats();
-        if (
-          deadLetterStats.count >= MAX_DEAD_LETTER_RECORDS ||
-          deadLetterStats.totalBytes >= MAX_DEAD_LETTER_BYTES ||
-          deadLetterStats.oldestAgeMs >= MAX_DEAD_LETTER_AGE_MS
-        ) {
-          lastError = `Dead-letter safety threshold reached (${deadLetterStats.count} records, ${deadLetterStats.totalBytes} bytes). Halting ALL claims until operator resolves quarantined records.`;
-          await new Promise(resolve => setTimeout(resolve, 5_000));
-          continue;
-        }
-
-        const spoolStats = await spool.stats();
-        if (
-          spoolStats.count >= MAX_SPOOL_RECORDS ||
-          spoolStats.totalBytes >= MAX_SPOOL_BYTES ||
-          spoolStats.oldestAgeMs >= MAX_SPOOL_RECORD_AGE_MS
-        ) {
-          lastError = `Spool threshold reached (${spoolStats.count} records, ${spoolStats.totalBytes} bytes). Halting claims until backlog drains.`;
+        const activeCondition = await getActiveBlockingCondition();
+        if (activeCondition) {
           await new Promise(resolve => setTimeout(resolve, 5_000));
           continue;
         }
 
         const currentSpoolDepth = await spool.depth();
-        const currentDeadLetterDepth = deadLetterStats.count;
+        const currentDeadLetterDepth = await spool.deadLetterDepth();
         const readOnlyOnly = currentSpoolDepth > 0 || currentDeadLetterDepth > 0;
-        attempt = await client.claim({ readOnlyOnly });
+        try {
+          attempt = await client.claim({ readOnlyOnly });
+          transientCommunicationError = null;
+        } catch (claimErr) {
+          transientCommunicationError =
+            claimErr instanceof Error ? claimErr.message : String(claimErr);
+          await new Promise(resolve => setTimeout(resolve, 2_000));
+          continue;
+        }
         if (!attempt) {
-          if (lastError && !isPersistentFailure(lastError) && clockError === null) {
-            lastError = null;
-          }
           continue;
         }
         if (await checkDraining()) {
-          lastError = 'Execution claim released because Agent is draining.';
           await client.releaseClaim(attempt.attemptId, attempt.leaseToken).catch(() => undefined);
           continue;
         }
         if (readOnlyOnly && attempt.step.riskClass !== 'READ_ONLY') {
-          lastError = `Write action claim released because result backlog (${currentSpoolDepth}) or dead letters (${currentDeadLetterDepth}) exist.`;
           await client.releaseClaim(attempt.attemptId, attempt.leaseToken).catch(() => undefined);
           continue;
         }
@@ -425,7 +445,6 @@ async function run() {
         started = true;
         assertPolicyAllows(attempt, policy);
         if (!(await spool.markStarted(attempt.attemptId))) {
-          lastError = 'A previously dispatched attempt was offered again.';
           continue;
         }
         active += 1;
@@ -441,11 +460,13 @@ async function run() {
             .renew(attempt!.attemptId, attempt!.leaseToken)
             .then(result => {
               if (result?.cancelRequested) controller.abort('CANCEL_REQUESTED');
-              else if (result && authority?.valid)
+              else if (result && authority?.valid) {
                 authority.renew(result.leaseExpiresAt, attempt!.executionDeadlineAt);
+                inFlightError = null;
+              }
             })
             .catch(error => {
-              lastError = 'Execution lease renewal failed.';
+              inFlightError = 'Execution lease renewal failed.';
               if (
                 error instanceof AgentApiError &&
                 [401, 403, 404, 409, 410].includes(error.status)
@@ -464,6 +485,7 @@ async function run() {
         authority.dispose();
         activeController = null;
         active -= 1;
+        inFlightError = null;
         const redactedOutput = redactSecretInputs(attempt, result.output);
         const record: SpoolRecord = {
           attemptId: attempt.attemptId,
@@ -483,13 +505,16 @@ async function run() {
         await spool.put(record);
         resultPersisted = true;
         await flushSpool();
-        lastError = null;
       } catch (error) {
         if (renewTimer) clearInterval(renewTimer);
         authority?.dispose();
         active = 0;
-        lastError = error instanceof Error ? error.message : String(error);
+        inFlightError = null;
         activeController = null;
+        const failureMessage = error instanceof Error ? error.message : String(error);
+        if (isTransientCommunicationError(failureMessage)) {
+          transientCommunicationError = failureMessage;
+        }
         // Stop accepting work if a known outcome cannot reach durable storage.
         if (outcomeKnown && !resultPersisted) throw error;
         if (attempt && started && !resultPersisted) {
@@ -502,21 +527,21 @@ async function run() {
               ? isWrite
                 ? 'UNKNOWN'
                 : 'CANCELLED'
-              : lastError.startsWith('LOCAL_POLICY_DENIED')
+              : failureMessage.startsWith('LOCAL_POLICY_DENIED')
                 ? 'FAILED'
                 : 'UNKNOWN',
             errorCode: shuttingDown
               ? isWrite
                 ? 'AGENT_INTERRUPTED_BY_SHUTDOWN'
                 : 'AGENT_SHUTDOWN'
-              : lastError.startsWith('LOCAL_POLICY_DENIED')
+              : failureMessage.startsWith('LOCAL_POLICY_DENIED')
                 ? 'LOCAL_POLICY_DENIED'
                 : 'AGENT_FAILURE',
             errorMessage: shuttingDown
               ? isWrite
                 ? 'Execution was interrupted by process shutdown; target state is unknown.'
                 : 'Execution was cancelled by process shutdown.'
-              : lastError,
+              : failureMessage,
           });
         }
         if (shuttingDown) {

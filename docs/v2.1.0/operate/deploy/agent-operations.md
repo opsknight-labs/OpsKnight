@@ -82,10 +82,9 @@ Systemd logs and journal diagnostics use a unit allowlist and at most 500 lines.
 Docker and Podman share typed container actions but use independent
 `dockerContainers` / `podmanContainers` allowlists. The container image includes
 both CLIs; an inaccessible runtime is not advertised as effective. Host-native
-Agents need the appropriate CLI and narrowly scoped runtime access. No overlay
-automatically mounts host runtime sockets, enables privilege, or grants sudo.
-For remote Podman access, supply operator-controlled runtime connection
-configuration; do not expose unauthenticated sockets.
+Agents need the appropriate CLI and narrowly scoped runtime access. For containerized Agents, managing Docker or Podman containers on the host requires providing access to the respective engine:
+- **Docker**: Mount the Docker socket (e.g. `/var/run/docker.sock`) into the container when Docker actions are allowlisted.
+- **Podman**: Supply a Podman service socket via `CONTAINER_HOST` (e.g. `CONTAINER_HOST=unix:///run/podman/podman.sock` with the socket mounted), or run the Agent as a native host service. Nested rootless Podman execution inside unprivileged locked-down containers (`cap_drop: ALL`, `read_only: true`, `no-new-privileges: true`) is blocked by Linux kernel user namespace restrictions; using an explicit Podman socket connection is the supported deployment approach for containerized agents. Do not expose unauthenticated TCP sockets.
 
 Kubernetes policy includes `kubernetesActions` and `kubernetesMaxReplicas`.
 Default actions are read-only and the replica limit is zero. Explicitly add

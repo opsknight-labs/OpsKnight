@@ -167,7 +167,7 @@ export function agentApiError(error: unknown) {
         400
       );
     }
-    return jsonError(error instanceof Error ? error : (message || 'Invalid runbook request.'), 400);
+    return jsonError(message || 'Invalid runbook request.', 400);
   }
 
   const authenticationErrors = new Set([

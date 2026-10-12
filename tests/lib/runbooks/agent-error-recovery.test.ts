@@ -1,73 +1,178 @@
 import { describe, expect, it } from 'vitest';
-import { isPersistentFailure } from '../../../agent/src/recovery';
+import {
+  computeReportedLastError,
+  determineActiveBlockingCondition,
+  isTransientCommunicationError,
+  type SafetyLimits,
+} from '../../../agent/src/recovery';
 
-describe('Agent error classification and recovery', () => {
-  it('correctly classifies persistent safety and policy errors', () => {
-    expect(
-      isPersistentFailure('Spool threshold reached (50 records, 1048576 bytes). Halting claims until backlog drains.')
-    ).toBe(true);
+const defaultLimits: SafetyLimits = {
+  maxSpoolRecords: 100,
+  maxSpoolBytes: 50 * 1024 * 1024,
+  maxSpoolRecordAgeMs: 24 * 60 * 60 * 1000,
+  maxDeadLetterRecords: 50,
+  maxDeadLetterBytes: 25 * 1024 * 1024,
+  maxDeadLetterAgeMs: 7 * 24 * 60 * 60 * 1000,
+};
 
-    expect(
-      isPersistentFailure(
-        'Dead-letter safety threshold reached (10 records, 524288 bytes). Halting ALL claims until operator resolves quarantined records.'
-      )
-    ).toBe(true);
+describe('Agent active blocking condition evaluation', () => {
+  it('detects active safety thresholds and clears dynamically when state recovers', () => {
+    // 1. Spool threshold exceeded
+    const spoolThresholdState = {
+      clockError: null,
+      deadLetterStats: { count: 0, totalBytes: 0, oldestAgeMs: 0 },
+      spoolStats: { count: 105, totalBytes: 60 * 1024 * 1024, oldestAgeMs: 1000 },
+      isDraining: false,
+      limits: defaultLimits,
+    };
+    expect(determineActiveBlockingCondition(spoolThresholdState)).toContain(
+      'Spool threshold reached (105 records, 62914560 bytes)'
+    );
 
-    expect(
-      isPersistentFailure('LOCAL_POLICY_DENIED: Docker container untrusted-app is not allowlisted.')
-    ).toBe(true);
+    // When spool drains, condition clears dynamically to null without requiring restart
+    const spoolDrainedState = {
+      ...spoolThresholdState,
+      spoolStats: { count: 0, totalBytes: 0, oldestAgeMs: 0 },
+    };
+    expect(determineActiveBlockingCondition(spoolDrainedState)).toBeNull();
 
-    expect(
-      isPersistentFailure('Agent clock differs from OpsKnight by 95s. Execution claims paused until clock is synchronized.')
-    ).toBe(true);
+    // 2. Dead-letter threshold exceeded
+    const deadLetterState = {
+      clockError: null,
+      deadLetterStats: { count: 55, totalBytes: 30 * 1024 * 1024, oldestAgeMs: 1000 },
+      spoolStats: { count: 0, totalBytes: 0, oldestAgeMs: 0 },
+      isDraining: false,
+      limits: defaultLimits,
+    };
+    expect(determineActiveBlockingCondition(deadLetterState)).toContain(
+      'Dead-letter safety threshold reached (55 records, 31457280 bytes)'
+    );
 
-    expect(
-      isPersistentFailure('Initial clock synchronization check with control plane failed. Execution claims paused.')
-    ).toBe(true);
+    // When operator cleans dead-letters, condition clears dynamically
+    const deadLetterClearedState = {
+      ...deadLetterState,
+      deadLetterStats: { count: 0, totalBytes: 0, oldestAgeMs: 0 },
+    };
+    expect(determineActiveBlockingCondition(deadLetterClearedState)).toBeNull();
 
+    // 3. Draining state
     expect(
-      isPersistentFailure('Execution claim released because Agent is draining.')
-    ).toBe(true);
+      determineActiveBlockingCondition({
+        clockError: null,
+        deadLetterStats: { count: 0, totalBytes: 0, oldestAgeMs: 0 },
+        spoolStats: { count: 0, totalBytes: 0, oldestAgeMs: 0 },
+        isDraining: true,
+        limits: defaultLimits,
+      })
+    ).toBe('Execution claims paused because Agent is draining.');
 
+    // 4. Clock skew
+    const constClockError = 'Agent clock differs from OpsKnight by 75s. Execution claims paused until clock is synchronized.';
     expect(
-      isPersistentFailure('Write action claim released because result backlog (5) or dead letters (0) exist.')
-    ).toBe(true);
+      determineActiveBlockingCondition({
+        clockError: constClockError,
+        deadLetterStats: { count: 0, totalBytes: 0, oldestAgeMs: 0 },
+        spoolStats: { count: 0, totalBytes: 0, oldestAgeMs: 0 },
+        isDraining: false,
+        limits: defaultLimits,
+      })
+    ).toBe(constClockError);
+  });
+});
+
+describe('Agent error precedence and lifecycle recovery', () => {
+  it('correctly classifies transient communication errors vs operational outcomes', () => {
+    expect(isTransientCommunicationError('Agent API temporarily unavailable.')).toBe(true);
+    expect(isTransientCommunicationError('fetch failed: connect ECONNREFUSED 127.0.0.1:3000')).toBe(true);
+    expect(isTransientCommunicationError('socket hang up')).toBe(true);
+    expect(isTransientCommunicationError('HTTP 502 Bad Gateway')).toBe(true);
+    expect(isTransientCommunicationError('HTTP 504 Gateway Timeout')).toBe(true);
+    expect(isTransientCommunicationError(null)).toBe(false);
+    expect(isTransientCommunicationError('LOCAL_POLICY_DENIED: KUBERNETES is not enabled')).toBe(false);
+    expect(isTransientCommunicationError('Execution lease renewal failed.')).toBe(false);
   });
 
-  it('correctly classifies transient communication errors as non-persistent', () => {
-    expect(isPersistentFailure('Agent API temporarily unavailable.')).toBe(false);
-    expect(isPersistentFailure('fetch failed: connect ECONNREFUSED 127.0.0.1:3000')).toBe(false);
-    expect(isPersistentFailure('socket hang up')).toBe(false);
-    expect(isPersistentFailure('HTTP 502 Bad Gateway')).toBe(false);
-    expect(isPersistentFailure('HTTP 504 Gateway Timeout')).toBe(false);
-    expect(isPersistentFailure('Execution lease renewal failed.')).toBe(false);
-    expect(isPersistentFailure(null)).toBe(false);
-    expect(isPersistentFailure('')).toBe(false);
+  it('preserves in-flight lease errors across background heartbeats until the execution completes', () => {
+    let inFlightError: string | null = 'Execution lease renewal failed.';
+    let transientCommunicationError: string | null = 'Agent API temporarily unavailable.';
+    const activeBlockingError: string | null = null;
+
+    // During active execution with renewal failure:
+    // computeReportedLastError prioritizes inFlightError over transientError
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        inFlightError,
+        transientError: transientCommunicationError,
+      })
+    ).toBe('Execution lease renewal failed.');
+
+    // When background heartbeat roundtrip succeeds, it clears transientCommunicationError:
+    transientCommunicationError = null;
+
+    // But heartbeat DOES NOT clear inFlightError while the attempt is still running!
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        inFlightError,
+        transientError: transientCommunicationError,
+      })
+    ).toBe('Execution lease renewal failed.');
+
+    // Once the execution attempt finishes or is aborted, inFlightError is reset:
+    inFlightError = null;
+
+    // Agent is now completely healthy and no longer DEGRADED
+    expect(
+      computeReportedLastError({
+        activeBlockingError,
+        inFlightError,
+        transientError: transientCommunicationError,
+      })
+    ).toBeNull();
   });
 
-  it('demonstrates that transient errors clear upon communication recovery while persistent errors are retained', () => {
-    // Simulated state machine for agent heartbeat and claim recovery
-    let lastError: string | null = 'Agent API temporarily unavailable.';
-    let clockError: string | null = null;
+  it('demonstrates that draining a spool allows full recovery from DEGRADED state without restart', () => {
+    let spoolCount = 120; // Above limit
+    let transientCommunicationError: string | null = 'Agent API temporarily unavailable.';
+    const inFlightError: string | null = null;
 
-    // 1. Transient error recovered after successful heartbeat/claim
-    if (lastError && !isPersistentFailure(lastError) && clockError === null) {
-      lastError = null;
-    }
-    expect(lastError).toBeNull();
+    // 1. Initial degraded state: spool threshold exceeded + network down
+    let activeBlocking = determineActiveBlockingCondition({
+      clockError: null,
+      deadLetterStats: { count: 0, totalBytes: 0, oldestAgeMs: 0 },
+      spoolStats: { count: spoolCount, totalBytes: 60 * 1024 * 1024, oldestAgeMs: 5000 },
+      isDraining: false,
+      limits: defaultLimits,
+    });
+    expect(activeBlocking).toContain('Spool threshold reached');
+    expect(
+      computeReportedLastError({
+        activeBlockingError: activeBlocking,
+        inFlightError,
+        transientError: transientCommunicationError,
+      })
+    ).toContain('Spool threshold reached');
 
-    // 2. Persistent policy denial remains active even after communication roundtrip
-    lastError = 'LOCAL_POLICY_DENIED: KUBERNETES is not enabled on this Agent.';
-    if (lastError && !isPersistentFailure(lastError) && clockError === null) {
-      lastError = null;
-    }
-    expect(lastError).toBe('LOCAL_POLICY_DENIED: KUBERNETES is not enabled on this Agent.');
+    // 2. Connectivity recovers: flushSpool drains the spool
+    spoolCount = 0;
+    transientCommunicationError = null; // Cleared by flushSpool when depth drops to 0
 
-    // 3. Persistent dead letter threshold remains active
-    lastError = 'Dead-letter safety threshold reached (10 records, 100000 bytes). Halting ALL claims until operator resolves quarantined records.';
-    if (lastError && !isPersistentFailure(lastError) && clockError === null) {
-      lastError = null;
-    }
-    expect(lastError).toContain('Dead-letter safety threshold reached');
+    activeBlocking = determineActiveBlockingCondition({
+      clockError: null,
+      deadLetterStats: { count: 0, totalBytes: 0, oldestAgeMs: 0 },
+      spoolStats: { count: spoolCount, totalBytes: 0, oldestAgeMs: 0 },
+      isDraining: false,
+      limits: defaultLimits,
+    });
+    expect(activeBlocking).toBeNull();
+
+    // 3. Next heartbeat reports lastError: null! Agent is healthy again.
+    const reportedError = computeReportedLastError({
+      activeBlockingError: activeBlocking,
+      inFlightError,
+      transientError: transientCommunicationError,
+    });
+    expect(reportedError).toBeNull();
   });
 });

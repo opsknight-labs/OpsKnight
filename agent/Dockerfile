@@ -15,7 +15,10 @@ RUN apk add --no-cache bash docker-cli podman iproute2 kubectl procps tini fuse-
   && addgroup -S opsknight-agent && adduser -S -G opsknight-agent opsknight-agent \
   && echo "opsknight-agent:100000:65536" >> /etc/subuid \
   && echo "opsknight-agent:100000:65536" >> /etc/subgid \
-  && mkdir -p /var/lib/opsknight-agent /etc/opsknight-agent /home/opsknight-agent/.local/share/containers/storage \
+  && mkdir -p /var/lib/opsknight-agent /etc/opsknight-agent /etc/containers \
+    /home/opsknight-agent/.config/containers /home/opsknight-agent/.local/share/containers \
+  && printf '[storage]\ndriver = "vfs"\nrunroot = "/tmp/containers-run"\ngraphroot = "/var/lib/opsknight-agent/containers/storage"\n' > /etc/containers/storage.conf \
+  && printf '[engine]\ncgroup_manager = "cgroupfs"\nevents_logger = "file"\n' > /etc/containers/containers.conf \
   && chown -R opsknight-agent:opsknight-agent /var/lib/opsknight-agent /etc/opsknight-agent /home/opsknight-agent
 COPY --from=build /out/opsknight-agent.mjs /usr/local/bin/opsknight-agent.mjs
 COPY --from=build /out/VERSION /usr/local/bin/VERSION
