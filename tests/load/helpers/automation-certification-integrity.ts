@@ -37,6 +37,23 @@ export function requireSuccessfulMeasurement(
     throw new Error('Incomplete measurement: missing or partial telemetry');
 }
 
+export function requireSuccessfulRecovery(
+  exitCode: number | null,
+  report: {
+    certificationStatus: string;
+    results: unknown[];
+    comparisonGate: { failures: string[] };
+  }
+) {
+  if (exitCode !== 0) throw new Error('Recovery child did not exit successfully');
+  if (
+    report.certificationStatus !== 'RECOVERY_MEASUREMENT_ONLY' ||
+    report.results.length !== 1 ||
+    report.comparisonGate.failures.length
+  )
+    throw new Error('Recovery report incomplete or correctness gates failed');
+}
+
 export type InitialProvider = {
   behavior: {
     mode: string;

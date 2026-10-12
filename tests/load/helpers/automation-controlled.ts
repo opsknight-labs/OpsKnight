@@ -175,7 +175,13 @@ async function main() {
     await save();
     if (status !== 'CERTIFIED') throw new Error(`Controlled certification ${status}`);
   } finally {
-    snapshot.close();
+    // Retained artifacts own the measurements; leave no measured history in
+    // the mutable fixture, including after a failed or incomplete child.
+    try {
+      await snapshot.restore();
+    } finally {
+      snapshot.close();
+    }
   }
 }
 main().catch(error => {

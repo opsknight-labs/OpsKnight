@@ -4,6 +4,7 @@ import {
   FROZEN_CERTIFICATION,
   requireSuccessfulMeasurement,
   requireCleanProviderState,
+  requireSuccessfulRecovery,
 } from '../load/helpers/automation-certification-integrity';
 
 it('freezes every limit and separates fault-free comparison from recovery drills', () => {
@@ -12,6 +13,27 @@ it('freezes every limit and separates fault-free comparison from recovery drills
   expect(env).toMatchObject(FROZEN_CERTIFICATION);
   for (const [key] of Object.entries(FROZEN_CERTIFICATION))
     expect(() => controlledMeasurementEnvironment({ [key]: 'relaxed' })).toThrow('requires');
+});
+
+it('never certifies a failed recovery child from a seemingly passing report', () => {
+  const report = {
+    certificationStatus: 'RECOVERY_MEASUREMENT_ONLY',
+    results: [{}],
+    comparisonGate: { failures: [] as string[] },
+  };
+  expect(() => requireSuccessfulRecovery(0, report)).not.toThrow();
+  for (const exitCode of [1, null])
+    expect(() => requireSuccessfulRecovery(exitCode, report)).toThrow('exit');
+  expect(() => requireSuccessfulRecovery(0, { ...report, results: [] })).toThrow('incomplete');
+  expect(() =>
+    requireSuccessfulRecovery(0, {
+      ...report,
+      comparisonGate: { failures: ['dropped arrivals'] },
+    })
+  ).toThrow('gates');
+  expect(() =>
+    requireSuccessfulRecovery(0, { ...report, certificationStatus: 'MEASUREMENT_ONLY' })
+  ).toThrow('incomplete');
 });
 it('rejects failed or abnormal child exits even when their artifacts look valid', () => {
   const report = {

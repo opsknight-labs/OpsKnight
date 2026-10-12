@@ -377,3 +377,26 @@ sample cannot measure an ongoing synchronous stall. These are diagnostic context
 not proof of the timeout's cause. The 15ms guard and synchronous decision/trace
 persistence remain unchanged. Fresh image, recovery and sustained validation are
 still required; capacity remains **NOT CERTIFIED**.
+
+Audit 35's production browser validation passed all 20 desktop/mobile journeys,
+including pinned alert context, restricted source data, queued Slack intent,
+policy archive/restore and version history. The current `b645a673d` service
+automation and runbook CI workflows passed. These checks do not certify capacity.
+
+Audit 36 ran the exact runtime image from `6eae272ca` with the corrected immutable
+CRI image verification. Its separate replica-replacement recovery measurement
+persisted all 1,878 accepted events, with zero duplicate incidents/provider
+deliveries, deadlocks or pending work after drain. It failed with 523 dropped
+arrivals and four evaluation fallbacks. Ingestion p95 was 11,866.10ms and p99
+16,355.44ms; drain took 158.56 seconds. Component telemetry was incomplete because
+a Web instance was replaced. This is failed recovery evidence, not a passing
+fault-free comparison. Capacity remains **NOT CERTIFIED**.
+
+The next comparison attempt correctly refused the dirty fixture left by that
+failed drill, before sending load. Recovery now retains child logs, image and
+environment provenance, exit status and an explicit failed validation record;
+a failed child cannot be accepted from a passing-looking report. Both runners
+restore the immutable clean fixture on success or failure and close forwarding
+connections even if restoration fails. Measurement artifacts remain available
+for diagnosis. Restoration failure also fails the runner. Frozen test limits
+and application runtime behavior are unchanged.

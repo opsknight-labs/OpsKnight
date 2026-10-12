@@ -9728,6 +9728,63 @@
         }
       ],
       "timingScope": "Direct per-Web-pod timing deltas. Lost replicas mark metrics incomplete. Two fallbacks were EVALUATION_TIMEOUT. Retry counts include load and drain; operation-specific attribution is not available on this image."
+    },
+    {
+      "topology": "kind-helm-split-audit36-integrity-faultfree-bracketed-20rps-recovery",
+      "generatedAt": "2026-10-12T12:01:25.010Z",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "live-small: k6 gate failed (99)",
+          "live-small: 4 automation fallbacks"
+        ]
+      },
+      "certificationStatus": "RECOVERY_MEASUREMENT_ONLY",
+      "artifact": "artifacts/load-certification/automation/kind-helm-split-audit36-integrity-faultfree-bracketed-20rps-recovery/certification.json",
+      "runtimeRevision": "6eae272cafa8ddc5e33a791dcb39dbc8442a49e5",
+      "harnessRevision": "b645a673df193125bc8d7a44a8d86ce7d1fc92b9",
+      "scope": "Separate replica-replacement recovery measurement; no fault-free capacity comparison",
+      "results": [
+        {
+          "profile": "live-small",
+          "runId": "04-live-small",
+          "k6ExitCode": 99,
+          "acceptedEvents": 1878,
+          "persistedIncidents": 1878,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 4,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 655,
+          "recoveryDrainMs": 158558,
+          "criticalNotificationLatency": {
+            "p95Ms": 1483.0999999999995,
+            "p99Ms": 6227.93,
+            "sent": 5470,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": 199.9832079999906,
+          "deadlocksDelta": 0,
+          "droppedIterations": 523,
+          "ingestionLatencyMs": {
+            "p(95)": 11866.09999999999,
+            "p(99)": 16355.439999999993,
+            "avg": 5042.541001064963,
+            "min": 47,
+            "med": 4933.5,
+            "max": 22244,
+            "p(50)": 4933.5
+          },
+          "componentTelemetryComplete": false
+        }
+      ]
     }
   ],
   "initialImage": "opsknight-automation:audit2",
