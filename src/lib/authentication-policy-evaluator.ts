@@ -9,15 +9,23 @@ export interface AuthenticationPolicyState {
   legacyEmergencyEmail: string | null;
   passwordSessionMinVersion?: number;
   oidcSessionMinVersion?: number;
+  passwordRecoveryUserId?: string | null;
+  passwordRecoveryExpiresAt?: Date | null;
 }
 
 export function evaluateAuthenticationPolicy(
   policy: AuthenticationPolicyState,
   action: AuthenticationAction,
-  principal: { email?: string | null } = {},
+  principal: { id?: string | null; email?: string | null } = {},
   session: { method?: AuthenticationMethod; policyVersion?: number } = {}
 ): { allowed: boolean; reason: string; version: number } {
   const deny = (reason: string) => ({ allowed: false, reason, version: policy.version });
+  if (
+    Boolean(policy.passwordRecoveryUserId) !== Boolean(policy.passwordRecoveryExpiresAt) ||
+    (policy.passwordRecoveryExpiresAt &&
+      !Number.isFinite(policy.passwordRecoveryExpiresAt.getTime()))
+  )
+    return deny('INVALID_AUTHENTICATION_POLICY');
   if (
     !['PASSWORD_ONLY', 'SSO_OPTIONAL', 'SSO_REQUIRED'].includes(policy.mode) ||
     !Number.isSafeInteger(policy.version) ||
@@ -43,8 +51,18 @@ export function evaluateAuthenticationPolicy(
   const legacyEmergency =
     policy.legacyEmergencyEmail != null &&
     principal.email?.trim().toLowerCase() === policy.legacyEmergencyEmail;
+  const recoveryConfigured = Boolean(policy.passwordRecoveryUserId);
+  const recoveryAllowed =
+    recoveryConfigured &&
+    principal.id === policy.passwordRecoveryUserId &&
+    Boolean(
+      policy.passwordRecoveryExpiresAt && policy.passwordRecoveryExpiresAt.getTime() > Date.now()
+    );
   let allowed = false;
-  if (action === 'PASSWORD_LOGIN') allowed = policy.mode !== 'SSO_REQUIRED' || legacyEmergency;
+  if (action === 'PASSWORD_LOGIN')
+    allowed = recoveryConfigured
+      ? recoveryAllowed
+      : policy.mode !== 'SSO_REQUIRED' || legacyEmergency;
   if (action === 'PASSWORD_WRITE') allowed = policy.mode !== 'SSO_REQUIRED';
   if (action === 'OIDC_LOGIN') allowed = policy.mode !== 'PASSWORD_ONLY';
   if (action === 'SESSION') {
@@ -62,7 +80,9 @@ export function evaluateAuthenticationPolicy(
         ? policy.mode !== 'PASSWORD_ONLY'
         : session.method === 'legacy-emergency'
           ? legacyEmergency
-          : policy.mode !== 'SSO_REQUIRED';
+          : recoveryConfigured
+            ? recoveryAllowed
+            : policy.mode !== 'SSO_REQUIRED';
   }
   return {
     allowed,

@@ -51,6 +51,29 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
     vi.stubGlobal('fetch', fetchMock);
     return fetchMock;
   }
+  it('pins only the recovery surface during broken canonical host configuration', async () => {
+    setupStatusServingMocks();
+    vi.stubEnv('AUTH_RECOVERY_ORIGIN', 'https://recovery.example.test');
+    const { default: middleware } = await import('@/middleware');
+    const allowed = await middleware(
+      new NextRequest('https://recovery.example.test/login/emergency', {
+        headers: { host: 'recovery.example.test' },
+      })
+    );
+    expect(allowed.status).toBe(200);
+    const blocked = await middleware(
+      new NextRequest('https://recovery.example.test/incidents', {
+        headers: { host: 'recovery.example.test' },
+      })
+    );
+    expect(blocked.status).toBe(421);
+    const spoofed = await middleware(
+      new NextRequest('https://attacker.example.test/login/emergency', {
+        headers: { host: 'attacker.example.test', 'x-forwarded-host': 'recovery.example.test' },
+      })
+    );
+    expect(spoofed.status).toBe(421);
+  });
 
   describe('Direct Host Requests (no proxy)', () => {
     it('allows GET https://www.opsnite.com/login => 200', async () => {

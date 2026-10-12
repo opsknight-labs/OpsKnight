@@ -6,7 +6,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { getUserPermissions } from '@/lib/rbac';
 import { evaluateAuthenticationPolicy } from '@/lib/authentication-policy-evaluator';
 import { CAPABILITIES } from '@/lib/authorization';
-import { getEmergencySession, EMERGENCY_COOKIE } from './emergency';
+import { getEmergencySession, EMERGENCY_COOKIE, digest } from './emergency';
 
 export type ControlActor =
   | {
@@ -24,22 +24,26 @@ export type ControlActor =
       sessionId: string;
       credentialVersion: number;
       authenticatedAt: number;
+      sessionTokenHash: string;
     };
 
 export async function getControlActor(fresh = false): Promise<ControlActor> {
   const emergencyToken = (await cookies()).get(EMERGENCY_COOKIE)?.value;
   if (emergencyToken) {
     const session = await getEmergencySession(emergencyToken);
-    if (!session) throw new Error('Emergency session expired or revoked. Authenticate again.');
-    if (fresh && Date.now() - session.authenticatedAt.getTime() > 300000)
-      throw new Error('Verify your emergency credential again before this operation.');
-    return {
-      kind: session.emergencyAccountId ? 'emergency' : 'legacy',
-      id: session.emergencyAccountId ?? session.legacyUserId!,
-      sessionId: session.id,
-      credentialVersion: session.credentialVersion,
-      authenticatedAt: session.authenticatedAt.getTime(),
-    };
+    if (session) {
+      if (fresh && Date.now() - session.authenticatedAt.getTime() > 300000)
+        throw new Error('Verify your emergency credential again before this operation.');
+      return {
+        kind: session.emergencyAccountId ? 'emergency' : 'legacy',
+        id: session.emergencyAccountId ?? session.legacyUserId!,
+        sessionId: session.id,
+        credentialVersion: session.credentialVersion,
+        authenticatedAt: session.authenticatedAt.getTime(),
+        sessionTokenHash: digest(emergencyToken),
+      };
+    }
+    // A stale recovery cookie must not override a separately authenticated admin.
   }
   const permissions = await getUserPermissions();
   if (!permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE))
@@ -96,10 +100,16 @@ export async function lockControlActor(
     )
       throw new Error('Administrator permissions changed. Sign in again.');
     if (
+      actor.method !== 'oidc' &&
+      policy.passwordRecoveryUserId &&
+      policy.passwordRecoveryUserId !== user.id
+    )
+      throw new Error('Password recovery is restricted to the selected administrator.');
+    if (
       !evaluateAuthenticationPolicy(
         policy,
         'SESSION',
-        { email: user.email },
+        { id: user.id, email: user.email },
         { method: actor.method ?? 'credentials', policyVersion: actor.issuedUnderPolicyVersion }
       ).allowed
     )
@@ -123,6 +133,11 @@ export async function lockControlActor(
     const session = await tx.emergencySession.findUnique({ where: { id: actor.sessionId } });
     if (
       !session ||
+      session.tokenHash !== actor.sessionTokenHash ||
+      session.credentialVersion !== actor.credentialVersion ||
+      (actor.kind === 'emergency'
+        ? session.emergencyAccountId !== actor.id
+        : session.legacyUserId !== actor.id) ||
       session.revokedAt ||
       session.expiresAt.getTime() <= Date.now() ||
       Date.now() - session.lastActivityAt.getTime() >= 900000 ||

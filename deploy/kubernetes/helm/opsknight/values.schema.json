@@ -26,6 +26,10 @@
       ],
       "properties": {
         "nodeEnv": { "type": "string" },
+        "authRecoveryOrigin": {
+          "type": "string",
+          "description": "Optional exact trusted HTTPS recovery origin; web replicas must agree."
+        },
         "nextauthUrl": { "type": "string", "format": "uri" },
         "nextPublicAppUrl": { "type": "string", "format": "uri" },
         "trustProxyHeaders": { "type": ["string", "boolean"] },
@@ -132,8 +136,26 @@
               "uniqueItems": true,
               "items": { "type": "string" }
             },
-            "podmanContainers": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
-            "kubernetesActions": { "type": "array", "uniqueItems": true, "items": { "enum": ["get", "describe", "logs", "events", "rollout-status", "rollout-restart", "scale"] } },
+            "podmanContainers": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string" }
+            },
+            "kubernetesActions": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "get",
+                  "describe",
+                  "logs",
+                  "events",
+                  "rollout-status",
+                  "rollout-restart",
+                  "scale"
+                ]
+              }
+            },
             "kubernetesMaxReplicas": { "type": "integer", "minimum": 0, "maximum": 10000 },
             "kubernetesTargets": {
               "type": "array",
@@ -156,7 +178,11 @@
               "items": { "type": "string" }
             },
             "networkHosts": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
-            "networkPorts": { "type": "array", "uniqueItems": true, "items": { "type": "integer", "minimum": 1, "maximum": 65535 } },
+            "networkPorts": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "integer", "minimum": 1, "maximum": 65535 }
+            },
             "bashCommandPatterns": {
               "type": "array",
               "uniqueItems": true,

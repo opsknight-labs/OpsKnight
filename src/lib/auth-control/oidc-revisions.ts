@@ -106,7 +106,8 @@ async function validate(config: ProviderConfiguration) {
 export async function stageOidcRevision(
   actor: ControlActor,
   input: unknown,
-  acknowledgeBroadAdminRules = false
+  acknowledgeBroadAdminRules = false,
+  sourceRevisionId?: string
 ) {
   const config = providerConfigSchema.parse(input);
   if (Buffer.byteLength(config.clientSecret, 'utf8') > 4096)
@@ -126,8 +127,16 @@ export async function stageOidcRevision(
   if (!config.enabled)
     throw new Error('Staged providers must be enabled. Use Password Only policy to disable SSO.');
   const current = await prisma.oidcConfig.findUnique({ where: { id: 'default' } });
+  const source = sourceRevisionId
+    ? providerConfigSchema.parse(
+        (await prisma.oidcRevision.findUniqueOrThrow({ where: { id: sourceRevisionId } }))
+          .configuration
+      )
+    : null;
   let encryptedSecret: string;
   if (config.clientSecret) encryptedSecret = await encrypt(config.clientSecret);
+  else if (source && source.issuer === config.issuer && source.clientId === config.clientId)
+    encryptedSecret = source.clientSecret;
   else if (
     current &&
     current.issuer.replace(/\/$/, '') === config.issuer.replace(/\/$/, '') &&
@@ -339,7 +348,7 @@ export async function completeOidcRevisionTest(state: string, code: string, brow
 }
 
 async function preview(tx: Prisma.TransactionClient, revisionId: string) {
-  const origin = await authenticationOrigin();
+  const origin = await authenticationOrigin(tx);
   const revision = await tx.oidcRevision.findUniqueOrThrow({ where: { id: revisionId } });
   const config = providerConfigSchema.parse(revision.configuration);
   const proof = await tx.oidcRevisionTest.findFirst({
@@ -367,18 +376,12 @@ async function preview(tx: Prisma.TransactionClient, revisionId: string) {
   const replicas = await tx.authenticationReplicaObservation.count({
     where: { differs: true, lastSeenAt: { gt: new Date(Date.now() - 600000) } },
   });
-  const passwordSessions = await tx.userDevice.findMany({
-    where: { platform: { in: ['session:STANDARD', 'session:TRUSTED_PWA'] } },
-    select: { token: true },
+  const passwordSessionCount = await tx.userDevice.count({
+    where: {
+      platform: { in: ['session:STANDARD', 'session:TRUSTED_PWA'] },
+      OR: [{ sessionExpiresAt: null }, { sessionExpiresAt: { gt: new Date() } }],
+    },
   });
-  const passwordSessionCount = passwordSessions.filter(session => {
-    try {
-      const metadata = JSON.parse(session.token) as { expiresAt?: string };
-      return !metadata.expiresAt || new Date(metadata.expiresAt).getTime() > Date.now();
-    } catch {
-      return true;
-    }
-  }).length;
   const usersRequiringLinking = await tx.user.count({
     where: {
       status: { in: ['ACTIVE', 'INVITED'] },
@@ -512,6 +515,10 @@ export async function activateOidcRevision(
       const policy = await tx.authenticationPolicy.update({
         where: { id: 'default' },
         data: {
+          passwordRecoveryUserId: null,
+          passwordRecoveryExpiresAt: null,
+          recoveryDegradedAt:
+            data.verifiedEmergencyAccounts >= 2 ? null : data.policy.recoveryDegradedAt,
           mode,
           version: { increment: 1 },
           activeRevisionId: revisionId,

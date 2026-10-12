@@ -1,9 +1,13 @@
 import 'server-only';
 import prisma from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
+import { recoveryOriginPin } from '@/lib/recovery-origin-pin';
 
-export async function authenticationOrigin() {
-  const settings = await prisma.systemSettings.findUnique({
+export async function authenticationOrigin(
+  tx: Pick<Prisma.TransactionClient, 'systemSettings'> = prisma
+) {
+  const settings = await tx.systemSettings.findUnique({
     where: { id: 'default' },
     select: { appUrl: true },
   });
@@ -22,8 +26,22 @@ export async function authenticationOrigin() {
   return origin;
 }
 
-export async function assertAuthenticationOrigin(request: Request) {
-  const origin = await authenticationOrigin();
+/** Deployment-managed pin. Never derive recovery trust from an incoming Host header. */
+export async function recoveryOrigin(
+  tx: Pick<Prisma.TransactionClient, 'systemSettings'> = prisma
+) {
+  const pin = process.env.AUTH_RECOVERY_ORIGIN?.trim();
+  if (!pin) return authenticationOrigin(tx);
+  const origin = recoveryOriginPin(pin);
+  if (!origin)
+    throw new Error(
+      'AUTH_RECOVERY_ORIGIN must pin an exact HTTPS origin without a path or credentials.'
+    );
+  return origin;
+}
+
+export async function assertAuthenticationOrigin(request: Request, recovery = false) {
+  const origin = await (recovery ? recoveryOrigin() : authenticationOrigin());
   if (request.headers.get('origin') !== origin)
     throw new Error('Authentication request origin rejected.');
   const site = request.headers.get('sec-fetch-site');

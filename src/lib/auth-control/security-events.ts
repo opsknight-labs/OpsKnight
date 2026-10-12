@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
-import { escapeHtml } from '@/lib/email-components';
+import { escapeHtml, sanitizeUrl } from '@/lib/email-components';
+import { authenticationOrigin } from './origin';
 
 /** Mandatory audit + durable high-priority notification, in the caller's transaction. */
 export async function securityEvent(
@@ -31,12 +32,32 @@ export async function securityEvent(
     },
     tx
   );
+  const anonymousFailure = context.aggregateAnonymousFailure === true;
+  let failureCount = 0;
+  if (anonymousFailure) {
+    const windowMs = 5 * 60000;
+    const bucket = Math.floor(Date.now() / windowMs);
+    const window = await tx.authenticationFailureWindow.upsert({
+      where: { id: `anonymous-emergency:${bucket}` },
+      create: { id: `anonymous-emergency:${bucket}`, expiresAt: new Date((bucket + 2) * windowMs) },
+      update: { count: { increment: 1 } },
+    });
+    failureCount = window.count;
+    // One initial alert and one escalation per shared window, across all replicas/IPs.
+    // Every individual event and audit above remains committed.
+    if (failureCount !== 1 && failureCount !== 20) return event;
+  }
   const admins = await tx.user.findMany({
     where: { role: 'ADMIN', status: 'ACTIVE' },
     select: { id: true },
+    ...(anonymousFailure ? { take: 100, orderBy: { id: 'asc' as const } } : {}),
   });
-  const title = `Security alert: ${action}`;
-  const message = `Authentication event ${action} (${outcome}). Review System → SSO / Authentication → Diagnostics and Emergency Access. Event ${event.id}.`;
+  const title = anonymousFailure
+    ? 'Emergency sign-in failures detected'
+    : `Security alert: ${action}`;
+  const message = anonymousFailure
+    ? `${failureCount} unauthenticated emergency failures in the current five-minute window. Individual evidence remains in Diagnostics. Aggregated alerts reach up to 100 active administrators. Event ${event.id}.`
+    : `Authentication event ${action} (${outcome}). Review System → SSO / Authentication → Diagnostics and Emergency Access. Event ${event.id}.`;
   if (admins.length) {
     await tx.inAppNotification.createMany({
       data: admins.map(admin => ({
@@ -72,6 +93,7 @@ export async function processAuthenticationAlerts() {
       where: {
         id: alert.id,
         deliveredAt: null,
+        nextAttemptAt: { lte: new Date() },
         OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }],
       },
       data: { leaseToken, leaseUntil: new Date(Date.now() + 120000), attempts: { increment: 1 } },
@@ -96,6 +118,8 @@ export async function processAuthenticationAlerts() {
         continue;
       }
       const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
+      const reviewUrl = sanitizeUrl(`${await authenticationOrigin()}/settings/system?section=sso`);
+      if (!reviewUrl) throw new Error('Canonical security review URL unavailable.');
       const result = await enqueueCentralNotification(
         {
           category: 'SECURITY',
@@ -115,8 +139,8 @@ export async function processAuthenticationAlerts() {
             kind: 'EMAIL',
             to: recipient.email,
             subject: alert.title,
-            text: alert.message,
-            html: `<p>${escapeHtml(alert.message)}</p><p><a href="https://opsknight.com/">OpsKnight</a></p>`,
+            text: `${alert.message}\nReview authentication: ${reviewUrl}`,
+            html: `<p>${escapeHtml(alert.message)}</p><p><a href="${escapeHtml(reviewUrl)}">Review authentication on your instance</a></p><p><a href="https://opsknight.com/">OpsKnight</a></p>`,
           },
         },
         { dispatchImmediately: false }

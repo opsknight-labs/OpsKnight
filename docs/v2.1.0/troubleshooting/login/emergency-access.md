@@ -36,3 +36,41 @@ Inspect **Diagnostics** and the active administrators' in-app security alerts. D
 ## No identity or database is available
 
 Use the separately held backup/second identity, or the imported legacy password bridge if it has not been retired. That bridge opens only recovery. If all credentials are lost or PostgreSQL is unavailable, follow the external infrastructure recovery procedure. Environment edits and import-record deletion are not supported application recovery.
+
+## Alert bursts and distributed failure traffic
+
+Every failed attempt retains an individual security event and mandatory audit.
+Anonymous failure notifications are aggregated in a shared PostgreSQL five-minute
+window across IPs and web replicas: the first failure and twentieth failure generate
+alerts to at most 100 active administrators each. Further attempts remain searchable
+in Diagnostics without another email/in-app fan-out in that window. Sensitive
+successful operations and compromise/degraded-recovery events still alert admins.
+
+IP, account-identifier and instance-wide admission limits are independent. A
+rate-limited attempt cannot allocate another WebAuthn challenge. Retrying from many
+IPs does not bypass the shared instance budget. Investigate perimeter abuse, but do
+not delete individual evidence or disable origin checks to reduce queue pressure.
+The threshold/recipient cap is an application guard, not a substitute for ingress
+abuse protection and appropriate database capacity.
+
+Security emails link to the configured instance’s authentication diagnostics. If
+canonical URLs conflict, delivery is deferred rather than generating a link to an
+untrusted host. Repair the deployment/database URL and inspect pending delivery.
+Notifications use the existing provider queue, admission controls, and retries.
+
+## A stale recovery cookie accompanies a valid administrator session
+
+Expired or revoked recovery cookies are ignored when a separately valid ordinary
+administrator session exists. Authentication dashboard responses clear the stale
+cookie. This does not convert a recovery principal into an administrator. If the
+normal session was also revoked by policy or the user was demoted, sign in again
+through an allowed method. Never preserve an old rotated cookie for automation.
+
+## Origin conflict and infrastructure outage
+
+Use the [pinned-origin recovery procedure](../../guides/identity/sso-lockout-recovery/).
+The pin must be the exact trusted WebAuthn origin; a different hostname cannot reuse
+old hardware credentials. Database outage, missing policy, and missing encryption
+keys remain infrastructure incidents. Restore from governed backups and account
+for previously revoked state reappearing. Test the repaired public ingress on each
+replica before closing the incident.

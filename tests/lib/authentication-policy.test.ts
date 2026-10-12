@@ -24,6 +24,48 @@ const policy = {
 };
 
 describe('central authentication policy', () => {
+  it('restricts password recovery to a stable User ID and expires it on session rechecks', () => {
+    const state = {
+      ...policy,
+      mode: 'SSO_REQUIRED' as const,
+      passwordRecoveryUserId: 'original-admin',
+      passwordRecoveryExpiresAt: new Date(Date.now() + 60000),
+    };
+    expect(
+      evaluateAuthenticationPolicy(state, 'PASSWORD_LOGIN', { id: 'original-admin' }).allowed
+    ).toBe(true);
+    expect(
+      evaluateAuthenticationPolicy(state, 'PASSWORD_LOGIN', { id: 'another-user' }).allowed
+    ).toBe(false);
+    expect(
+      evaluateAuthenticationPolicy(
+        state,
+        'SESSION',
+        { id: 'original-admin' },
+        { method: 'credentials', policyVersion: 3 }
+      ).allowed
+    ).toBe(true);
+    expect(
+      evaluateAuthenticationPolicy(
+        state,
+        'SESSION',
+        { id: 'another-user' },
+        { method: 'credentials', policyVersion: 3 }
+      ).allowed
+    ).toBe(false);
+    expect(
+      evaluateAuthenticationPolicy(state, 'SESSION', {}, { method: 'oidc', policyVersion: 3 })
+        .allowed
+    ).toBe(true);
+    expect(
+      evaluateAuthenticationPolicy(
+        { ...state, passwordRecoveryExpiresAt: new Date(0) },
+        'SESSION',
+        { id: 'original-admin' },
+        { method: 'credentials', policyVersion: 3 }
+      ).allowed
+    ).toBe(false);
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(prisma.user.count).mockResolvedValue(1);

@@ -29,7 +29,7 @@ export async function getRequestStreamAuthentication(
     if (method === 'legacy-emergency') return null;
     const decision = await checkAuthenticationPolicy(
       'SESSION',
-      { email: token.email },
+      { id: token.sub, email: token.email },
       {
         method,
         policyVersion:
@@ -114,7 +114,7 @@ export async function resolveStreamAuthorization(
     if (authentication?.expiresAt && Date.now() >= authentication.expiresAt * 1000) return null;
     const decision = await checkAuthenticationPolicy(
       'SESSION',
-      {},
+      { id: userId },
       { method: authentication?.method, policyVersion: authentication?.policyVersion }
     );
     if (!decision.allowed) return null;

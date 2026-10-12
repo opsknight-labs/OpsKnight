@@ -9,8 +9,20 @@ import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
 import type { ControlActor } from './actor';
 import { emergencyReadiness } from './emergency-management';
 import { findRevisionIdentity } from './identity';
+import { authenticationOrigin, recoveryOrigin } from './origin';
+import { evaluateAuthenticationPolicy } from '@/lib/authentication-policy-evaluator';
 
-export async function authenticationDashboard(actor: ControlActor) {
+export type AuthenticationSection =
+  | 'overview'
+  | 'connection'
+  | 'access'
+  | 'policy'
+  | 'emergency'
+  | 'diagnostics';
+export async function authenticationDashboard(
+  actor: ControlActor,
+  section: AuthenticationSection = 'overview'
+) {
   const [
     policy,
     active,
@@ -31,12 +43,25 @@ export async function authenticationDashboard(actor: ControlActor) {
       include: { tests: { orderBy: { verifiedAt: 'desc' }, take: 1 } },
     }),
     prisma.emergencyAccount.findMany({
-      orderBy: { enrolledAt: 'asc' },
-      include: { credentials: { orderBy: { createdAt: 'desc' } } },
+      where: { status: { not: 'DISABLED' } },
+      orderBy: { enrolledAt: 'desc' },
+      take: 50,
+      include: {
+        credentials: {
+          orderBy: [{ revokedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'desc' }],
+          take: 50,
+          select: { id: true, displayName: true, createdAt: true, revokedAt: true },
+        },
+      },
     }),
-    prisma.emergencyAccessEvent.findMany({ orderBy: { createdAt: 'desc' }, take: 50 }),
+    section === 'diagnostics'
+      ? prisma.emergencyAccessEvent.findMany({ orderBy: { createdAt: 'desc' }, take: 50 })
+      : Promise.resolve([]),
     prisma.user.findMany({
-      where: { status: { in: ['ACTIVE', 'INVITED'] } },
+      where: {
+        status: { in: ['ACTIVE', 'INVITED'] },
+        ...{ role: 'ADMIN' as const, ...(actor.kind === 'admin' ? { id: actor.id } : {}) },
+      },
       select: {
         id: true,
         name: true,
@@ -46,29 +71,43 @@ export async function authenticationDashboard(actor: ControlActor) {
         status: true,
         oidcIdentities: { select: { issuer: true } },
       },
-      take: 500,
+      take: 25,
       orderBy: { email: 'asc' },
     }),
     emergencyReadiness(prisma).catch(error => {
       if (error instanceof Error && error.message.includes('conflicting canonical')) return [];
       throw error;
     }),
-    prisma.authenticationReplicaObservation.findMany({
-      where: { lastSeenAt: { gt: new Date(Date.now() - 600000) } },
-    }),
+    section === 'diagnostics'
+      ? prisma.authenticationReplicaObservation.findMany({
+          where: { lastSeenAt: { gt: new Date(Date.now() - 600000) } },
+          take: 100,
+        })
+      : Promise.resolve([]),
     prisma.authenticationAlert.count({ where: { deliveredAt: null } }),
-    prisma.userDevice.findMany({
-      where: { deviceId: { startsWith: 'session:' } },
-      orderBy: { lastUsed: 'desc' },
-      take: 100,
-      select: {
-        id: true,
-        userId: true,
-        platform: true,
-        token: true,
-        lastUsed: true,
-        user: { select: { email: true } },
-      },
+    section === 'diagnostics'
+      ? prisma.userDevice.findMany({
+          where: { deviceId: { startsWith: 'session:' } },
+          orderBy: { lastUsed: 'desc' },
+          take: 100,
+          select: {
+            id: true,
+            userId: true,
+            platform: true,
+            token: true,
+            lastUsed: true,
+            user: { select: { email: true } },
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+  const [canonical, pinnedOrigin] = await Promise.all([
+    authenticationOrigin()
+      .then(origin => ({ origin, conflict: false }))
+      .catch(() => ({ origin: null, conflict: true })),
+    recoveryOrigin().catch(error => {
+      if (actor.kind === 'admin') return null;
+      throw error;
     }),
   ]);
   const redact = (config: ReturnType<typeof providerConfigSchema.parse>) => {
@@ -88,12 +127,12 @@ export async function authenticationDashboard(actor: ControlActor) {
       !metadata.expiresAt ||
       !Number.isFinite(new Date(metadata.expiresAt).getTime()) ||
       new Date(metadata.expiresAt).getTime() <= Date.now();
-    const cutoff =
-      method === 'oidc' ? policy.oidcSessionMinVersion : policy.passwordSessionMinVersion;
-    const disallowed =
-      (method === 'oidc' && policy.mode === 'PASSWORD_ONLY') ||
-      (method === 'credentials' && policy.mode === 'SSO_REQUIRED') ||
-      (metadata.issuedUnderPolicyVersion ?? 0) < cutoff;
+    const disallowed = !evaluateAuthenticationPolicy(
+      policy,
+      'SESSION',
+      { id: session.userId, email: session.user.email },
+      { method, policyVersion: metadata.issuedUnderPolicyVersion }
+    ).allowed;
     return {
       id: session.id,
       email: session.user.email,
@@ -105,6 +144,13 @@ export async function authenticationDashboard(actor: ControlActor) {
     };
   });
   return {
+    section,
+    originConflict: canonical.conflict,
+    recoveryOrigin: pinnedOrigin,
+    recoveryOriginPinned: Boolean(process.env.AUTH_RECOVERY_ORIGIN),
+    recoveryDegradedAt: policy.recoveryDegradedAt?.toISOString() ?? null,
+    passwordRecoveryUserId: policy.passwordRecoveryUserId,
+    passwordRecoveryExpiresAt: policy.passwordRecoveryExpiresAt?.toISOString() ?? null,
     registeredSessions,
     actor: { kind: actor.kind, id: actor.id },
     mode: policy.mode,
@@ -139,6 +185,7 @@ export async function authenticationDashboard(actor: ControlActor) {
       })),
     })),
     verifiedEmergencyAccounts: ready.length,
+    usersHasMore: users.length === 25,
     events: events.map(event => ({
       id: event.id,
       eventType: event.eventType,
@@ -157,6 +204,51 @@ export async function authenticationDashboard(actor: ControlActor) {
       lastSeenAt: replica.lastSeenAt.toISOString(),
     })),
     pendingEmailAlerts: pendingAlerts,
+  };
+}
+
+/** Keyset pagination avoids loading a workspace directory for a recovery picker. */
+export async function searchAuthenticationUsers(
+  actor: ControlActor,
+  query: string,
+  after?: string,
+  administratorsOnly = true
+) {
+  if (!administratorsOnly && actor.kind !== 'admin')
+    throw new Error('Administrator directory access required.');
+  const users = await prisma.user.findMany({
+    where: {
+      status: { in: ['ACTIVE', 'INVITED'] },
+      ...(administratorsOnly ? { role: 'ADMIN', status: 'ACTIVE' } : {}),
+      ...(query
+        ? {
+            OR: [
+              { email: { contains: query, mode: 'insensitive' } },
+              { name: { contains: query, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: { id: 'asc' },
+    take: 26,
+    ...(after ? { cursor: { id: after }, skip: 1 } : {}),
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      roleSource: true,
+      status: true,
+      oidcIdentities: { select: { issuer: true }, take: 10 },
+    },
+  });
+  return {
+    users: users.slice(0, 25).map(user => ({
+      ...user,
+      issuers: user.oidcIdentities.map(identity => identity.issuer),
+      oidcIdentities: undefined,
+    })),
+    nextCursor: users.length > 25 ? users[24].id : null,
   };
 }
 

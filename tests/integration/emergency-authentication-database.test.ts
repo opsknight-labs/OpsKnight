@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import bcrypt from 'bcryptjs';
-import { restorePasswordAccess } from '@/lib/auth-control/recovery';
+import { restorePasswordAccess, repairCanonicalOrigin } from '@/lib/auth-control/recovery';
 import { createHash, generateKeyPairSync, randomBytes, sign } from 'node:crypto';
 import { isoCBOR } from '@simplewebauthn/server/helpers';
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server';
@@ -20,6 +20,7 @@ import {
   getEmergencySession,
   deliberateEmergencyActivity,
   legacyEmergencyLogin,
+  recordEmergencyFailure,
   digest,
   secret,
 } from '@/lib/auth-control/emergency';
@@ -33,6 +34,7 @@ vi.mock('@/lib/notification-control-plane', () => ({
 vi.mock('@/lib/auth', () => ({ getAuthOptions: vi.fn(), resetAuthOptionsCache: vi.fn() }));
 vi.mock('@/lib/auth-control/origin', () => ({
   authenticationOrigin: vi.fn().mockResolvedValue('https://recovery.example.test'),
+  recoveryOrigin: vi.fn().mockResolvedValue('https://recovery.example.test'),
 }));
 vi.mock('@/lib/auth-abuse', () => ({
   consumeAuthRateLimit: vi.fn().mockResolvedValue({ allowed: true }),
@@ -146,6 +148,9 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       where: { id: 'default' },
       create: { id: 'default', mode: 'PASSWORD_ONLY', version: 900, legacySnapshot: {} },
       update: {
+        passwordRecoveryUserId: null,
+        passwordRecoveryExpiresAt: null,
+        recoveryDegradedAt: null,
         mode: 'PASSWORD_ONLY',
         version: 900,
         passwordSessionMinVersion: 0,
@@ -299,6 +304,15 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       '127.0.0.1'
     );
     const reauth = await emergencyLoginOptions(accountId, '127.0.0.1', login.token);
+    const oldSession = await getEmergencySession(login.token);
+    const oldActor: ControlActor = {
+      kind: 'emergency',
+      id: accountId,
+      sessionId: oldSession!.id,
+      credentialVersion: oldSession!.credentialVersion,
+      authenticatedAt: oldSession!.authenticatedAt.getTime(),
+      sessionTokenHash: digest(login.token),
+    };
     const renewed = await verifyEmergencyLogin(
       reauth.challengeId,
       reauth.browserToken,
@@ -307,6 +321,9 @@ suite('independent emergency authentication with signed WebAuthn responses and P
     );
     expect(renewed.expiresAt).toEqual(login.expiresAt);
     expect(await getEmergencySession(login.token)).toBeNull();
+    await expect(prisma.$transaction(tx => lockControlActor(tx, oldActor))).rejects.toThrow(
+      'Emergency session expired'
+    );
     expect(await getEmergencySession(renewed.token)).not.toBeNull();
     token = renewed.token;
   });
@@ -331,6 +348,7 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       id: accountId,
       sessionId: session!.id,
       credentialVersion: session!.credentialVersion,
+      sessionTokenHash: digest(token),
       authenticatedAt: session!.authenticatedAt.getTime(),
     };
     const saved = await prisma.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
@@ -351,14 +369,87 @@ suite('independent emergency authentication with signed WebAuthn responses and P
     }
   });
   it('key revocation immediately rejects issued sessions and clears drill readiness', async () => {
+    const others = await prisma.emergencyAccount.findMany({
+      where: { id: { not: accountId } },
+      select: { id: true, verifiedAt: true },
+    });
+    await prisma.emergencyAccount.updateMany({
+      where: { id: { not: accountId } },
+      data: { verifiedAt: null },
+    });
+    await prisma.authenticationPolicy.update({
+      where: { id: 'default' },
+      data: { mode: 'SSO_REQUIRED' },
+    });
+    const session = await getEmergencySession(token);
+    const principal: ControlActor = {
+      kind: 'emergency',
+      id: accountId,
+      sessionId: session!.id,
+      sessionTokenHash: digest(token),
+      credentialVersion: session!.credentialVersion,
+      authenticatedAt: session!.authenticatedAt.getTime(),
+    };
     const credential = await prisma.emergencyCredential.findUniqueOrThrow({
       where: { credentialId: b64(credentialId) },
     });
-    await revokeEmergencyCredential(actor, credential.id, true);
+    await expect(revokeEmergencyCredential(principal, credential.id, false)).rejects.toThrow(
+      'replacement'
+    );
+    await revokeEmergencyCredential(principal, credential.id, true);
+    const degraded = await prisma.authenticationPolicy.findUniqueOrThrow({
+      where: { id: 'default' },
+    });
+    expect(degraded.mode).toBe('SSO_REQUIRED');
+    expect(degraded.recoveryDegradedAt).not.toBeNull();
     expect(await getEmergencySession(token)).toBeNull();
     expect(
       (await prisma.emergencyAccount.findUniqueOrThrow({ where: { id: accountId } })).verifiedAt
     ).toBeNull();
+    await prisma.authenticationPolicy.update({
+      where: { id: 'default' },
+      data: { mode: 'PASSWORD_ONLY', recoveryDegradedAt: null },
+    });
+    for (const other of others)
+      await prisma.emergencyAccount.update({
+        where: { id: other.id },
+        data: { verifiedAt: other.verifiedAt },
+      });
+  });
+  it('keeps individual abuse evidence while capping distributed anonymous alert fan-out', async () => {
+    await prisma.authenticationFailureWindow.deleteMany();
+    const prefix = `abuse-admin-${Date.now()}`;
+    await prisma.user.createMany({
+      data: Array.from({ length: 120 }, (_, index) => ({
+        id: `${prefix}-${index}`,
+        name: 'Abuse fixture admin',
+        email: `${prefix}-${index}@example.test`,
+        role: 'ADMIN' as const,
+        status: 'ACTIVE' as const,
+      })),
+    });
+    const before = await prisma.authenticationAlert.count();
+    const marker = new Date();
+    try {
+      for (let batch = 0; batch < 6; batch++)
+        await Promise.all(
+          Array.from({ length: 10 }, (_, index) =>
+            recordEmergencyFailure(`unknown-${batch}-${index}`, 'ACCOUNT_OR_CREDENTIAL_UNAVAILABLE')
+          )
+        );
+      expect(
+        await prisma.emergencyAccessEvent.count({
+          where: { eventType: 'auth.emergency.login.failed', createdAt: { gte: marker } },
+        })
+      ).toBe(60);
+      expect((await prisma.authenticationAlert.count()) - before).toBeLessThanOrEqual(200);
+      expect((await prisma.authenticationFailureWindow.findMany())[0].count).toBe(60);
+    } finally {
+      await prisma.authenticationAlert.deleteMany({
+        where: { recipientId: { startsWith: prefix } },
+      });
+      await prisma.user.deleteMany({ where: { id: { startsWith: prefix } } });
+    }
   });
   it('serializes an acting administrator behind a concurrent role change and rejects the stale authority', async () => {
     let acquired!: () => void;
@@ -426,6 +517,67 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       await prisma.emergencyAccessEvent.count({ where: { eventType: 'auth.test.rollback' } })
     ).toBe(before);
   });
+  it('repairs only the pinned database origin with fresh independent authority and preserves Required', async () => {
+    const saved = await prisma.systemSettings.findUniqueOrThrow({ where: { id: 'default' } });
+    const fixture = await prisma.emergencyAccount.create({
+      data: {
+        displayName: 'Origin repair fixture',
+        status: 'ACTIVE',
+        independenceConfirmedAt: new Date(),
+      },
+    });
+    const session = await prisma.emergencySession.create({
+      data: {
+        emergencyAccountId: fixture.id,
+        tokenHash: digest(secret()),
+        credentialVersion: 1,
+        expiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    const principal: ControlActor = {
+      kind: 'emergency',
+      id: fixture.id,
+      sessionId: session.id,
+      sessionTokenHash: session.tokenHash,
+      credentialVersion: 1,
+      authenticatedAt: Date.now(),
+    };
+    vi.stubEnv('AUTH_RECOVERY_ORIGIN', 'https://recovery.example.test');
+    vi.stubEnv('NEXTAUTH_URL', 'https://recovery.example.test');
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://other.example.test');
+    try {
+      await prisma.systemSettings.update({
+        where: { id: 'default' },
+        data: { appUrl: 'https://broken.example.test' },
+      });
+      await expect(repairCanonicalOrigin(principal, 900)).rejects.toThrow('align NEXTAUTH_URL');
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://recovery.example.test');
+      await prisma.authenticationPolicy.update({
+        where: { id: 'default' },
+        data: { mode: 'SSO_REQUIRED' },
+      });
+      await repairCanonicalOrigin(principal, 900);
+      expect(
+        (await prisma.systemSettings.findUniqueOrThrow({ where: { id: 'default' } })).appUrl
+      ).toBe('https://recovery.example.test');
+      expect(
+        (await prisma.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } })).mode
+      ).toBe('SSO_REQUIRED');
+      await expect(repairCanonicalOrigin(principal, 900)).rejects.toThrow('Policy changed');
+    } finally {
+      await prisma.systemSettings.update({
+        where: { id: 'default' },
+        data: { appUrl: saved.appUrl },
+      });
+      await prisma.authenticationPolicy.update({
+        where: { id: 'default' },
+        data: { version: 900, mode: 'PASSWORD_ONLY' },
+      });
+      await prisma.emergencySession.delete({ where: { id: session.id } });
+      await prisma.emergencyAccount.delete({ where: { id: fixture.id } });
+      vi.unstubAllEnvs();
+    }
+  });
   it('imports a legacy password only into recovery and explicitly restores the same administrator', async () => {
     const password = 'Legacy private certification phrase October 2026!';
     const original = await prisma.user.update({
@@ -449,6 +601,7 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       id: original.id,
       sessionId: session!.id,
       credentialVersion: original.tokenVersion,
+      sessionTokenHash: digest(login.token),
       authenticatedAt: Date.now(),
     };
     await restorePasswordAccess(

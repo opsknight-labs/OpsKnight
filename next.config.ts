@@ -1,8 +1,10 @@
 import path from 'path';
 
+import withPWAInit from '@ducanh2912/next-pwa';
+
 import type { NextConfig } from 'next';
 
-const withPWA = require('@ducanh2912/next-pwa').default({
+const withPWA = withPWAInit({
   dest: 'public',
   // Disable in dev to avoid caching issues; allow explicit override.
   disable: process.env.NODE_ENV === 'development' || process.env.DISABLE_PWA === 'true',
@@ -98,7 +100,6 @@ const withPWA = require('@ducanh2912/next-pwa').default({
   aggressiveFrontEndNavCaching: false,
   // Reconnection syncs data/actions; it must not destroy an in-progress form.
   reloadOnOnline: false,
-  swcMinify: true,
   fallbacks: {},
   cacheStartUrl: false,
   dynamicStartUrl: false,
@@ -108,6 +109,9 @@ const nextConfig: NextConfig = {
   distDir: process.env.BUILD_DIR || '.next',
   output: 'standalone',
   outputFileTracingRoot: path.join(__dirname),
+  // Instrumentation reads authentication policy before any request. Ensure the
+  // generated Prisma client and native engine exist in the standalone artifact.
+  outputFileTracingIncludes: { '/*': ['./node_modules/.prisma/client/**/*'] },
   experimental: {
     optimizePackageImports: ['@prisma/client', 'react-icons'],
     serverActions: { bodySizeLimit: '2mb' },

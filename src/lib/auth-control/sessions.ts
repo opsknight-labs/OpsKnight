@@ -28,6 +28,7 @@ export async function revokeAuthenticationSession(actor: ControlActor, id: strin
 export async function cleanAuthenticationCeremonies() {
   const expiry = new Date(Date.now() - 86400000);
   await prisma.$transaction([
+    prisma.authenticationFailureWindow.deleteMany({ where: { expiresAt: { lt: expiry } } }),
     prisma.emergencyChallenge.deleteMany({ where: { expiresAt: { lt: expiry } } }),
     prisma.oidcTestFlow.deleteMany({ where: { expiresAt: { lt: expiry } } }),
   ]);

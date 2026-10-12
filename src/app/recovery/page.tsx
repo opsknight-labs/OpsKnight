@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { EMERGENCY_COOKIE, getEmergencySession } from '@/lib/auth-control/emergency';
 import { getControlActor } from '@/lib/auth-control/actor';
 import { authenticationDashboard } from '@/lib/auth-control/dashboard';
-import { authenticationOrigin } from '@/lib/auth-control/origin';
+import { recoveryOrigin } from '@/lib/auth-control/origin';
 import AuthenticationConsole from '@/components/settings/AuthenticationConsole';
 import RecoveryActivity from '@/components/auth/RecoveryActivity';
 
@@ -13,7 +13,7 @@ export default async function RecoveryPage() {
   if (!session) redirect('/login/emergency');
   const actor = await getControlActor();
   const data = await authenticationDashboard(actor);
-  const origin = await authenticationOrigin();
+  const origin = await recoveryOrigin();
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-4 sm:p-8">
       <RecoveryActivity />

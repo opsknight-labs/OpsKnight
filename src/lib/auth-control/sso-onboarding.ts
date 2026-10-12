@@ -25,7 +25,8 @@ export async function inviteSsoUser(input: z.input<typeof invitationSchema>) {
   const actor = await getControlActor();
   if (actor.kind !== 'admin')
     throw new Error('Ordinary administrator access required for user invitations.');
-  const user = await prisma.$transaction(async tx => {
+  const origin = await authenticationOrigin();
+  const { user, generation } = await prisma.$transaction(async tx => {
     await lockControlActor(tx, actor, false);
     const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
     const provider = await tx.oidcConfig.findUnique({ where: { id: 'default' } });
@@ -62,7 +63,7 @@ export async function inviteSsoUser(input: z.input<typeof invitationSchema>) {
       expectedEmail: user.email.toLowerCase(),
       configVersion: provider.configVersion,
     };
-    await tx.oidcLinkingApproval.upsert({
+    const approval = await tx.oidcLinkingApproval.upsert({
       where: { userId: user.id },
       create: { userId: user.id, ...binding },
       update: { ...binding, generation: { increment: 1 } },
@@ -75,12 +76,14 @@ export async function inviteSsoUser(input: z.input<typeof invitationSchema>) {
       configVersion: provider.configVersion,
       expiresAt: expiresAt.toISOString(),
     });
-    return user;
+    return { user, generation: approval.generation };
   });
   return {
     success: true as const,
     ssoOnly: true as const,
-    inviteUrl: `${await authenticationOrigin()}/login`,
+    inviteUrl: `${origin}/login`,
     recipientEmail: user.email,
+    userId: user.id,
+    generation,
   };
 }

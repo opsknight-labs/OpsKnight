@@ -310,7 +310,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   // must never silently turn a browser into a long-lived trusted device.
                   const currentPolicy = await getAuthenticationPolicy();
                   const legacyEmergency = currentPolicy.legacyEmergencyEmail === email;
-                  const rememberMe = !legacyEmergency && credentials?.rememberMe === 'true';
+                  const rememberMe =
+                    !legacyEmergency &&
+                    !currentPolicy.passwordRecoveryUserId &&
+                    credentials?.rememberMe === 'true';
                   if (legacyEmergency) {
                     const { recordEmergencyFailure } = await import('@/lib/auth-control/emergency');
                     await recordEmergencyFailure(
@@ -323,7 +326,17 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   const ip = getClientIp(req?.headers);
                   const userAgent = userAgentHeader || 'Unknown';
 
-                  if (!(await checkAuthenticationPolicy('PASSWORD_LOGIN', { email })).allowed) {
+                  const passwordPrincipal = currentPolicy.passwordRecoveryUserId
+                    ? await prisma.user.findUnique({ where: { email }, select: { id: true } })
+                    : null;
+                  if (
+                    !(
+                      await checkAuthenticationPolicy('PASSWORD_LOGIN', {
+                        email,
+                        id: passwordPrincipal?.id,
+                      })
+                    ).allowed
+                  ) {
                     await logLoginBlocked(email || 'unknown', ip, userAgent, 'LOCAL_AUTH_DISABLED');
                     return null;
                   }
@@ -401,6 +414,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     await logLoginFailed(email, ip, userAgent, 'USER_DISABLED');
                     return null;
                   }
+                  if (
+                    currentPolicy.passwordRecoveryUserId &&
+                    (user.role !== 'ADMIN' || user.status !== 'ACTIVE')
+                  )
+                    return null;
 
                   const isValid = await bcrypt.compare(password, user.passwordHash);
                   if (!isValid) {
@@ -689,7 +707,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             try {
               const decision = await checkAuthenticationPolicy(
                 'SESSION',
-                { email: token.email },
+                { id: token.sub, email: token.email },
                 {
                   method:
                     augmentedToken.authProvider ??

@@ -37,3 +37,36 @@ Issuer migration creates a new issuer/subject binding only through verified owne
 Select the previous revision and stage it for rollback. This makes a new immutable revision using the current production base version. Run a fresh administrator test and activate it explicitly. A previously successful test is not reusable after a production change. If the old secret is revoked at the IdP, rollback requires a valid new secret; retaining an encrypted historical secret does not restore provider-side validity.
 
 Discovery, DNS, signature, nonce, PKCE, role or transaction failures preserve the current production provider. Secrets, tokens and private keys are excluded from Diagnostics. Emergency repairs depend on PostgreSQL and the retained encryption key. See [lockout recovery](sso-lockout-recovery/) when neither provider registration works.
+
+## Controlled rotation checklist
+
+Identify the current production issuer/client ID, active revision, secret expiry,
+IdP application owner, and which deployments hold the encryption key. Record the
+normal and administrator-test callback URLs shown in Connection. Provider-side
+secret overlap is preferable when supported, but confirm its exact behavior with
+your IdP administrator; the application cannot guarantee vendor overlap periods.
+
+Choose the saved revision to populate the editable draft. Production remains
+separate. A blank secret keeps that selected revision’s encrypted secret only
+when issuer and client ID remain the same; changing either requires the new
+secret. Field changes mark the draft unsaved, clear impact confirmation, and block
+testing/activation until a new immutable revision is staged.
+
+1. Create the replacement provider-side secret and record its expiry externally.
+2. Enter it in the draft, stage discovery, and run the real administrator test.
+3. Confirm role mapping retains ADMIN and the original OpsKnight User ID.
+4. Preview recovery readiness/session impact and activate with fresh proof.
+5. Sign in from a fresh ordinary browser and inspect token/JWKS errors and alerts.
+6. After the overlap window and acceptance checks, revoke the old provider secret.
+
+## Failure and rollback
+
+A discovery success is not token-exchange certification. A wrong secret may only
+fail at the real code callback. A provider version change invalidates the proof;
+a cancelled/expired test requires a new state/nonce/PKCE ceremony. Do not paste an
+ID/access token into Sample claims: that editor accepts sanitized claim examples.
+
+Rollback stages the previous configuration as a new immutable revision. Complete
+its own discovery and administrator login test before activation. It cannot revive
+a provider-side revoked secret. Preserve Required while repairing through recovery;
+if real SSO cannot be repaired, use the explicitly scoped recovery procedure.

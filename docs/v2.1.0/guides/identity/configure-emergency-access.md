@@ -42,6 +42,51 @@ Recovery sessions have a hard 60-minute maximum and a 15-minute inactivity timeo
 
 Enrollment, login successes/failures, revocation, policy changes and recovery repairs commit audit events and durable high-priority security notifications. Email outages retain pending intents and in-app alerts; inspect Diagnostics and restore the delivery worker/provider.
 
-Enroll and drill a replacement independent identity before disabling a ready account or rotating its last key under Required. For an actual compromised key, use the explicit compromise confirmation; this may reduce readiness and demands an immediate replacement drill. The final remaining ready identity cannot be revoked through this screen. Protect recovered access while addressing the incident.
+Enroll and drill a replacement independent identity before disabling a ready account or rotating its last key under Required. For an actual compromised key, use the explicit compromise confirmation; this may reduce readiness and demands an immediate replacement drill. Even the final verified credential can be revoked when explicitly declared compromised. This records a critical recovery-degraded state, invalidates that identity’s sessions immediately, and keeps SSO Required enforced. Revoking your own last key ends your recovery capability; use a different custodian, a valid normal SSO administrator, or externally governed infrastructure recovery for remediation.
 
 After two successful independent drills, use **Retire legacy emergency password**. The original User and references remain intact; the imported password bridge and its recovery sessions are removed. See [Emergency troubleshooting](../../troubleshooting/login/emergency-access/) for lost keys and database outages.
+
+## Deployment origin and key custody record
+
+Record the exact public HTTPS origin, the WebAuthn RP hostname, emergency account
+identifier, custodian, primary/backup key labels, and last independent drill time.
+Record identifiers, not private keys or recovery-session cookies. Keep this record
+available when SSO, the corporate password manager, or a normal administrator
+session is unavailable. Confirm PostgreSQL and the configured encryption keys are
+included in the separately governed infrastructure recovery plan.
+
+For an installation that needs recovery during canonical URL mistakes, set
+`AUTH_RECOVERY_ORIGIN` to the same trusted HTTPS origin used when enrolling the
+keys. This is an operator-controlled deployment setting, not a browser-provided
+Host override. Existing keys cannot authenticate on a different RP hostname.
+Restart every web replica after changing deployment controls, then drill through
+the public reverse proxy. See [lockout recovery](sso-lockout-recovery/) for repair.
+
+## Independent drill acceptance
+
+1. Sign out of ordinary OpsKnight sessions and open a separate browser profile.
+2. Open `/login/emergency` at the recorded origin, enter the identifier, and use
+   the assigned hardware key with its PIN/user-verification prompt.
+3. Confirm the restricted recovery console opens. Attempt an incident URL and
+   confirm it redirects to normal sign-in. An emergency principal is not a User.
+4. Return to Emergency Access, confirm the identity’s successful current drill,
+   and sign out of recovery. Reopening `/recovery` must request authentication.
+5. Repeat using the second custodian and independently controlled identity.
+6. Practice backup-key use without reusing an ordinary logged-in browser profile.
+
+Run a drill after enrollment, credential revocation, origin changes, and before
+Required enforcement. Readiness expires after 90 days. Maximums are 20 enabled or
+enrolling identities and ten active keys per identity. Replace obsolete keys
+rather than allowing an unbounded credential list to accumulate.
+
+## Compromise exercise and degraded recovery
+
+For a lost but uncompromised key, enroll and drill a replacement before voluntary
+revocation would reduce Required readiness below two identities. For actual
+compromise, select the compromise declaration and revoke promptly, including the
+last ready credential. Confirm the credential displays revoked and its sessions
+no longer authorize operations. A critical alert and degraded-recovery marker
+must appear; SSO Required must remain unchanged. Recover two independently ready
+identities promptly. Successful current drills clear the degraded marker when two
+identities are ready again. If none remain, a normal SSO administrator may enroll
+replacements; otherwise use the documented infrastructure incident procedure.

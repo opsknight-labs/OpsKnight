@@ -9,7 +9,7 @@ import {
 import prisma from '@/lib/prisma';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { consumeAuthRateLimit } from '@/lib/auth-abuse';
-import { authenticationOrigin } from './origin';
+import { recoveryOrigin } from './origin';
 import { securityEvent } from './security-events';
 
 export const EMERGENCY_COOKIE =
@@ -76,12 +76,23 @@ export async function getEmergencySession(token: string) {
 
 export async function recordEmergencyFailure(accountId: string, reason: string) {
   await prisma.$transaction(tx =>
-    securityEvent(tx, 'auth.emergency.login.failed', accountId, { reason }, 'failed')
+    securityEvent(
+      tx,
+      'auth.emergency.login.failed',
+      accountId,
+      { reason, aggregateAnonymousFailure: true },
+      'failed'
+    )
   );
 }
 
 export async function emergencyLoginOptions(accountId: string, ip: string, reauthToken?: string) {
-  if (!(await consumeAuthRateLimit('emergency:options:ip', ip, 30, 300000)).allowed) {
+  const limits = await Promise.all([
+    consumeAuthRateLimit('emergency:options:ip', ip, 30, 300000),
+    consumeAuthRateLimit('emergency:options:account', accountId, 20, 300000),
+    consumeAuthRateLimit('emergency:global', 'instance', 300, 300000),
+  ]);
+  if (limits.some(limit => !limit.allowed)) {
     await recordEmergencyFailure(accountId, 'RATE_LIMITED');
     throw new Error('Too many attempts from this network. Try again shortly.');
   }
@@ -96,7 +107,7 @@ export async function emergencyLoginOptions(accountId: string, ip: string, reaut
   const session = reauthToken ? await getEmergencySession(reauthToken) : null;
   if (reauthToken && (!session || session.emergencyAccountId !== account.id))
     throw new Error('Reauthentication must use the current emergency identity.');
-  const origin = await authenticationOrigin();
+  const origin = await recoveryOrigin();
   const options = await generateAuthenticationOptions({
     rpID: new URL(origin).hostname,
     userVerification: 'required',
@@ -123,11 +134,14 @@ export async function verifyEmergencyLogin(
   response: AuthenticationResponseJSON,
   ip: string
 ) {
-  const origin = await authenticationOrigin();
+  const origin = await recoveryOrigin();
   const token = secret();
   let accountId = '';
   try {
-    if (!(await consumeAuthRateLimit('emergency:verify:ip', ip, 30, 300000)).allowed)
+    if (
+      !(await consumeAuthRateLimit('emergency:verify:ip', ip, 30, 300000)).allowed ||
+      !(await consumeAuthRateLimit('emergency:global', 'instance', 300, 300000)).allowed
+    )
       throw new Error('RATE_LIMITED');
     return await prisma.$transaction(
       async tx => {
@@ -193,6 +207,20 @@ export async function verifyEmergencyLogin(
             verifiedOrigin: origin,
           },
         });
+        const readyCount = await tx.emergencyAccount.count({
+          where: {
+            status: 'ACTIVE',
+            verifiedOrigin: origin,
+            verifiedAt: { gte: new Date(Date.now() - 90 * 86400000) },
+            verifiedCredentialVersion: { equals: tx.emergencyAccount.fields.credentialVersion },
+            credentials: { some: { revokedAt: null, deviceType: 'singleDevice', backedUp: false } },
+          },
+        });
+        if (readyCount >= 2)
+          await tx.authenticationPolicy.updateMany({
+            where: { id: 'default', recoveryDegradedAt: { not: null } },
+            data: { recoveryDegradedAt: null },
+          });
         let expiresAt = new Date(Date.now() + 3600000);
         if (flow.kind === 'REAUTH') {
           const previous = await tx.emergencySession.findUnique({ where: { id: flow.sessionId! } });
@@ -253,6 +281,7 @@ export async function legacyEmergencyLogin(email: string, password: string, ip: 
   try {
     if (
       !(await consumeAuthRateLimit('emergency:legacy:ip', ip, 10, 300000)).allowed ||
+      !(await consumeAuthRateLimit('emergency:global', 'instance', 300, 300000)).allowed ||
       policy.legacyEmergencyEmail !== normalized
     )
       throw new Error('denied');

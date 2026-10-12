@@ -302,6 +302,7 @@ export async function ensureRegisteredSession(input: {
                   input.userAgent ?? metadata.userAgent,
                   metadata.issuedUnderPolicyVersion
                 ),
+                sessionExpiresAt: new Date(input.expiresAtSeconds * 1000),
               },
             });
           } catch (err) {
@@ -331,6 +332,10 @@ export async function ensureRegisteredSession(input: {
             input.issuedUnderPolicyVersion
           ),
           platform: activePlatform(input.policy),
+          sessionExpiresAt:
+            typeof input.expiresAtSeconds === 'number' && Number.isFinite(input.expiresAtSeconds)
+              ? new Date(input.expiresAtSeconds * 1000)
+              : null,
           lastUsed: new Date(),
           ...(input.userAgent ? { userAgent: input.userAgent.slice(0, 500) } : {}),
         },

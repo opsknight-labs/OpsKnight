@@ -113,6 +113,8 @@ export async function changeAuthenticationMode(input: unknown) {
       where: { id: 'default', version: parsed.expectedVersion },
       data: {
         mode: parsed.mode,
+        passwordRecoveryUserId: null,
+        passwordRecoveryExpiresAt: null,
         version: { increment: 1 },
         updatedBy: actor.id,
         oidcConfigVersion: oidc?.configVersion ?? null,

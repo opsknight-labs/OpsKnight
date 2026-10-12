@@ -30,9 +30,15 @@ test('enterprise console and independent hardware recovery work in a real browse
       'Access & provisioning',
       'Authentication policy',
       'Diagnostics',
-    ])
+    ]) {
+      await page.getByRole('tab', { name: title, exact: true }).click();
       await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    }
+    await page.getByRole('tab', { name: 'Overview', exact: true }).click();
     if (process.env.SSO_E2E_CAPTURE === '1') {
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Loading this section' })
+      ).toBeHidden();
       await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
       await page.setViewportSize({ width: 1440, height: 1000 });
       await page
@@ -41,7 +47,23 @@ test('enterprise console and independent hardware recovery work in a real browse
       await page.screenshot({ path: 'docs/v2.1.0/assets/enterprise-authentication-desktop.png' });
     }
     await page.setViewportSize({ width: 390, height: 1000 });
+    await page.locator('.sidebar-mobile').waitFor({ state: 'attached' });
+    const closeNavigation = page.getByRole('button', {
+      name: 'Close navigation menu',
+      exact: true,
+    });
+    if (await closeNavigation.isVisible()) {
+      await closeNavigation.click();
+      await expect(closeNavigation).toBeHidden();
+    }
+    await page.waitForFunction(
+      () =>
+        (document.querySelector('.sidebar-mobile')?.getBoundingClientRect().right ?? Infinity) <= 1
+    );
     if (process.env.SSO_E2E_CAPTURE === '1') {
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Loading this section' })
+      ).toBeHidden();
       await page
         .getByRole('heading', { name: 'Overview', exact: true })
         .evaluate(element => element.closest('section')?.scrollIntoView({ block: 'start' }));
@@ -75,11 +97,11 @@ test('enterprise console and independent hardware recovery work in a real browse
       },
     });
     const name = `Browser recovery drill ${Date.now()}`;
-    await page.getByLabel('Emergency identity name', { exact: true }).fill(name);
-    await page.getByLabel(/separately held hardware keys/).check();
+    await page.getByRole('textbox', { name: 'Emergency identity name', exact: true }).fill(name);
+    await page.getByRole('checkbox', { name: /separately held hardware keys/ }).check();
     await page.getByRole('button', { name: 'Create emergency identity', exact: true }).click();
     const identity = page
-      .locator('li')
+      .locator('li:visible')
       .filter({ has: page.getByText(`${name} —`, { exact: false }) })
       .first();
     await expect(identity).toBeVisible({ timeout: 30000 });
@@ -89,10 +111,38 @@ test('enterprise console and independent hardware recovery work in a real browse
       timeout: 30000,
     });
     if (process.env.SSO_E2E_CAPTURE === '1') {
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Loading this section' })
+      ).toBeHidden();
       await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
+      await page.addStyleTag({
+        content: '* { transition: none !important; animation: none !important; }',
+      });
+      await page.setViewportSize({ width: 1440, height: 1100 });
+      await expect
+        .poll(
+          async () =>
+            (
+              await page
+                .getByRole('heading', { name: 'Emergency Access', exact: true })
+                .first()
+                .boundingBox()
+            )?.x ?? 0
+        )
+        .toBeGreaterThan(220);
+      await page
+        .getByRole('heading', { name: 'Emergency Access', exact: true })
+        .first()
+        .evaluate(element => {
+          let ancestor: Element | null = element;
+          while (ancestor) {
+            ancestor.scrollTop = 0;
+            ancestor = ancestor.parentElement;
+          }
+          window.scrollTo(0, 0);
+        });
       await page.screenshot({
         path: 'docs/v2.1.0/assets/enterprise-emergency-access.png',
-        fullPage: true,
       });
     }
     const credentials = await cdp.send('WebAuthn.getCredentials', authenticator);
@@ -114,6 +164,11 @@ test('enterprise console and independent hardware recovery work in a real browse
       ...independent,
       credential: credentials.credentials[0],
     });
+    const preflight = await recovery.request.post(`${origin}/api/auth/emergency`, {
+      headers: { Origin: origin },
+      data: { action: 'invalid-preflight' },
+    });
+    expect(preflight.status()).toBe(400); // Compile the development handler before a native key prompt.
     await recoveryPage.goto(`${origin}/login/emergency`);
     await recoveryPage.getByLabel('Emergency account identifier').fill(accountId);
     await recoveryPage
@@ -123,11 +178,23 @@ test('enterprise console and independent hardware recovery work in a real browse
     await expect(
       recoveryPage.getByRole('heading', { name: 'Authentication recovery console', exact: true })
     ).toBeVisible();
+    const recoveryCookie = (await recovery.cookies()).find(cookie =>
+      cookie.name.endsWith('opsknight-emergency')
+    );
+    expect(recoveryCookie).toBeDefined();
+    expect(recoveryCookie?.httpOnly).toBe(true);
+    expect(recoveryCookie?.sameSite).toBe('Strict');
+    expect(recoveryCookie?.path).toBe('/');
+    if (new URL(origin).protocol === 'https:') {
+      expect(recoveryCookie?.secure).toBe(true);
+      expect(recoveryCookie?.name).toBe('__Host-opsknight-emergency');
+    }
     const authSession = await recovery.request.get(`${origin}/api/auth/session`);
     expect((await authSession.json())?.user).toBeUndefined();
     await recoveryPage.goto(`${origin}/incidents`, { waitUntil: 'domcontentloaded' });
     await expect(recoveryPage).toHaveURL(/\/login/);
     await recoveryPage.goto(`${origin}/recovery`);
+    await recoveryPage.getByRole('tab', { name: 'Emergency Access', exact: true }).click();
     await recoveryPage.getByRole('button', { name: 'Sign out of recovery', exact: true }).click();
     await recoveryPage.waitForURL(`${origin}/login/emergency`, { waitUntil: 'domcontentloaded' });
     await recoveryPage.goto(`${origin}/recovery`);
@@ -159,13 +226,38 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
     await page.waitForURL(url => !url.pathname.startsWith('/login'));
     await page.goto(`${origin}/settings/system?section=sso`);
     await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
+    // Saved revision selection must load its own sanitized configuration, not production.
+    const saved = await context.request.get(`${origin}/api/auth/control?section=connection`);
+    const dashboard = (await saved.json()).data;
+    await page.getByRole('tab', { name: 'Connection', exact: true }).click();
+    await expect(
+      page.getByRole('combobox', { name: 'Provider revision', exact: true })
+    ).toBeEnabled();
+    for (const revision of dashboard.revisions.slice(0, 2)) {
+      await page
+        .getByRole('combobox', { name: 'Provider revision', exact: true })
+        .selectOption(revision.id);
+      await expect(page.getByLabel('Client ID', { exact: true })).toHaveValue(
+        revision.configuration.clientId
+      );
+    }
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 1000 });
-      const connection = page.getByRole('link', { name: 'Connection', exact: true });
+      const closeNavigation = page.getByRole('button', {
+        name: 'Close navigation menu',
+        exact: true,
+      });
+      if (await closeNavigation.isVisible()) {
+        await closeNavigation.click();
+        await expect(closeNavigation).toBeHidden();
+      }
+      const connection = page.getByRole('tab', { name: 'Connection', exact: true });
       await connection.focus();
       await page.keyboard.press('Enter');
-      await expect(page).toHaveURL(/#authentication-1$/);
+      await expect(page.getByRole('heading', { name: 'Connection', exact: true })).toBeVisible();
       const client = page.getByLabel('Client ID', { exact: true });
+      await expect(client).toBeEnabled();
+      await client.fill('');
       await client.focus();
       await page.keyboard.type('keyboard-client');
       await expect(client).toHaveValue('keyboard-client');
@@ -177,10 +269,10 @@ test('enterprise console supports desktop/mobile layout and keyboard navigation'
         .getByRole('button', { name: 'Stage and validate connection', exact: true })
         .click();
       await expect(
-        page.getByRole('status').filter({ hasText: 'Invalid authentication request' })
+        page.getByRole('alert').filter({ hasText: 'Invalid authentication request' })
       ).toBeVisible();
     }
   } finally {
-    await context.close();
+    await context.close().catch(() => {});
   }
 });

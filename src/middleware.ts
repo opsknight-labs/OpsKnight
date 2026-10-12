@@ -3,6 +3,7 @@ import { getToken } from 'next-auth/jwt';
 import { logger } from '@/lib/logger';
 import { getNextAuthSecret } from '@/lib/secret-manager';
 import { SESSION_TOKEN_COOKIE_NAME, useSecureCookies } from '@/lib/auth-cookies';
+import { recoveryOriginPin } from '@/lib/recovery-origin-pin';
 import { toMobilePath } from '@/lib/app-routes';
 import { statusDomainRequestHeaders } from '@/lib/status-pages/internal-request';
 import {
@@ -823,6 +824,23 @@ export default async function middleware(req: NextRequest) {
   const rawRequestHost = getRawRequestHost(req);
   let requestHost = getAuthoritativeRequestHost(req);
   let usedConfiguredForwardedHost = false;
+
+  // Deployment-pinned recovery survives broken canonical application URL settings.
+  // This exception grants only the recovery surface; handlers still require origin
+  // validation and independent recovery authorization on every mutation.
+  const recoveryPin = recoveryOriginPin();
+  const recoveryPath =
+    pathname === '/recovery' ||
+    pathname === '/login/emergency' ||
+    pathname === '/api/auth/emergency' ||
+    pathname === '/api/auth/control' ||
+    pathname === '/api/auth/session' ||
+    pathname === '/api/auth/csrf' ||
+    pathname === '/api/health' ||
+    pathname.startsWith('/_next/') ||
+    ['/logo.png', '/favicon.ico', '/manifest.json', '/sw.js'].includes(pathname);
+  if (recoveryPin && recoveryPath && getAuthoritativeRequestOrigin(req) === recoveryPin)
+    return response;
 
   // Internal status-domain configuration provider: bypass to avoid recursive middleware deadlock
   if (pathname === '/api/status-page/domains' && isAllowedApplicationHost(requestHost)) {

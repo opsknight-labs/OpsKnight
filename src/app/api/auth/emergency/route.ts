@@ -55,7 +55,7 @@ const noStore = { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' 
 
 export async function POST(request: NextRequest) {
   try {
-    await assertAuthenticationOrigin(request);
+    await assertAuthenticationOrigin(request, true);
     const input = schema.parse(await readJsonBodyWithLimit(request, 65536));
     const token = request.cookies.get(EMERGENCY_COOKIE)?.value ?? '';
     const ip = getClientIp(request.headers);
@@ -93,13 +93,14 @@ export async function POST(request: NextRequest) {
         ...emergencyCookieOptions,
         expires: result.expiresAt,
       });
-      response.cookies.delete(CEREMONY_COOKIE);
+      response.cookies.set(CEREMONY_COOKIE, '', { ...emergencyCookieOptions, maxAge: 0 });
       return response;
     }
     if (input.action === 'activity') await deliberateEmergencyActivity(token);
     if (input.action === 'logout') await revokeEmergencySession(token);
     const response = jsonApiOk({ success: true }, { headers: noStore });
-    if (input.action === 'logout') response.cookies.delete(EMERGENCY_COOKIE);
+    if (input.action === 'logout')
+      response.cookies.set(EMERGENCY_COOKIE, '', { ...emergencyCookieOptions, maxAge: 0 });
     return response;
   } catch (error) {
     return jsonError(

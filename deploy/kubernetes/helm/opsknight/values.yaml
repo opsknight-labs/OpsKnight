@@ -325,6 +325,8 @@ networkPolicy:
 
 config:
   nodeEnv: production
+  # Optional exact HTTPS origin for independently enrolled recovery keys.
+  authRecoveryOrigin: ''
   nextauthUrl: 'http://localhost:3000'
   nextPublicAppUrl: 'http://localhost:3000'
   trustProxyHeaders: 'false'

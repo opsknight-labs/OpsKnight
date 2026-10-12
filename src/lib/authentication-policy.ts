@@ -93,7 +93,7 @@ export async function getAuthenticationPolicy() {
 
 export async function checkAuthenticationPolicy(
   action: AuthenticationAction,
-  principal: { email?: string | null } = {},
+  principal: { id?: string | null; email?: string | null } = {},
   session: { method?: AuthenticationMethod; policyVersion?: number } = {}
 ) {
   const policy = await getAuthenticationPolicy();
@@ -117,7 +117,11 @@ export async function assertPasswordOperationAllowed(client?: Prisma.Transaction
 
 export async function getDatabaseLocalAuthPolicy() {
   const policy = await getAuthenticationPolicy();
-  const localLoginEnabled = policy.mode !== 'SSO_REQUIRED';
+  const localLoginEnabled = policy.passwordRecoveryUserId
+    ? Boolean(
+        policy.passwordRecoveryExpiresAt && policy.passwordRecoveryExpiresAt.getTime() > Date.now()
+      )
+    : policy.mode !== 'SSO_REQUIRED';
   return {
     enabled: localLoginEnabled,
     localLoginEnabled,

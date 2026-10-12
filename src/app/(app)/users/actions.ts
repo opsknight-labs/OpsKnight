@@ -26,6 +26,7 @@ import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 
 type EmailInviteResult = {
   sent: boolean;
+  queued?: boolean;
   providerConfigured: boolean;
   providerName?: string | null;
 };
@@ -41,6 +42,8 @@ async function sendInviteEmailIfConfigured(data: {
   name: string;
   inviteUrl: string;
   invitedBy?: string;
+  ssoOnly?: boolean;
+  generation?: number;
 }): Promise<EmailInviteResult> {
   try {
     const { getEmailConfig } = await import('@/lib/notification-providers');
@@ -64,31 +67,36 @@ async function sendInviteEmailIfConfigured(data: {
       userName: data.name,
       inviteUrl: data.inviteUrl,
       invitedBy: data.invitedBy,
+      ssoOnly: data.ssoOnly,
     });
 
-    const result = await enqueueCentralNotification({
-      category: 'ADMINISTRATION',
-      channel: 'EMAIL',
-      recipientType: 'USER',
-      recipientId: data.userId,
-      recipientAddress: data.email,
-      userId: data.userId,
-      templateKey: 'user-invitation',
-      sourceType: 'USER_INVITATION',
-      sourceId: data.userId,
-      eventKey: inviteEventKey(data.inviteUrl),
-      displayMessage: 'Workspace invitation',
-      priority: 2,
-      payload: {
-        kind: 'EMAIL',
-        to: data.email,
-        subject: template.subject,
-        html: template.html,
-        text: template.text,
+    const result = await enqueueCentralNotification(
+      {
+        category: 'ADMINISTRATION',
+        channel: 'EMAIL',
+        recipientType: 'USER',
+        recipientId: data.userId,
+        recipientAddress: data.email,
+        userId: data.userId,
+        templateKey: 'user-invitation',
+        sourceType: 'USER_INVITATION',
+        sourceId: data.userId,
+        eventKey: `${inviteEventKey(data.inviteUrl)}${data.generation ? `:${data.generation}` : ''}`,
+        displayMessage: 'Workspace invitation',
+        priority: 2,
+        payload: {
+          kind: 'EMAIL',
+          to: data.email,
+          subject: template.subject,
+          html: template.html,
+          text: template.text,
+        },
       },
-    });
+      { dispatchImmediately: data.ssoOnly ? false : undefined }
+    );
     return {
       sent: result.delivered === true,
+      queued: !result.skipped && result.delivered !== true && !result.error,
       providerConfigured: true,
       providerName,
     };
@@ -216,6 +224,7 @@ export type UserFormState = {
   ssoOnly?: boolean;
   inviteUrl?: string | null;
   emailSent?: boolean;
+  emailQueued?: boolean;
   providerConfigured?: boolean;
   providerName?: string | null;
   recipientEmail?: string | null;
@@ -294,9 +303,24 @@ export async function addUser(
     const policy = await getAuthenticationPolicy();
     if (policy.mode === 'SSO_REQUIRED' || formData.get('ssoOnly') === 'on') {
       const result = await inviteSsoUser({ name, email, role });
+      const delivery = await sendInviteEmailIfConfigured({
+        userId: result.userId,
+        email,
+        name,
+        inviteUrl: result.inviteUrl,
+        invitedBy: admin?.name || admin?.email || undefined,
+        ssoOnly: true,
+        generation: result.generation,
+      });
       revalidatePath('/users');
       revalidatePath('/audit');
-      return result;
+      return {
+        ...result,
+        emailSent: delivery.sent,
+        emailQueued: delivery.queued,
+        providerConfigured: delivery.providerConfigured,
+        providerName: delivery.providerName,
+      };
     }
     await assertPasswordOperationAllowed();
     let inviteToken = '';
@@ -616,9 +640,24 @@ export async function generateInvite(
       email: user.email,
       role: user.role,
     });
+    const delivery = await sendInviteEmailIfConfigured({
+      userId: result.userId,
+      email: user.email,
+      name: user.name || user.email,
+      inviteUrl: result.inviteUrl,
+      invitedBy: admin?.name || admin?.email || undefined,
+      ssoOnly: true,
+      generation: result.generation,
+    });
     revalidatePath('/users');
     revalidatePath('/audit');
-    return result;
+    return {
+      ...result,
+      emailSent: delivery.sent,
+      emailQueued: delivery.queued,
+      providerConfigured: delivery.providerConfigured,
+      providerName: delivery.providerName,
+    };
   }
   const inviteUrl = await createInviteToken(user.id, user.email);
 

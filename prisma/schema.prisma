@@ -805,6 +805,9 @@ model AuthenticationPolicy {
   updatedAt                 DateTime           @updatedAt
   migratedAt                DateTime           @default(now())
   legacyEmergencyEmail      String?
+  passwordRecoveryUserId    String?
+  passwordRecoveryExpiresAt DateTime?
+  recoveryDegradedAt        DateTime?
   legacySnapshot            Json
 }
 
@@ -1881,20 +1884,22 @@ model InAppNotification {
 }
 
 model UserDevice {
-  id        String   @id @default(cuid())
-  userId    String
-  deviceId  String
-  token     String
-  platform  String
-  userAgent String?
-  lastUsed  DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid())
+  userId           String
+  deviceId         String
+  token            String
+  platform         String
+  userAgent        String?
+  lastUsed         DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  sessionExpiresAt DateTime?
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, deviceId])
   @@index([userId])
   @@index([token])
+  @@index([platform, sessionExpiresAt])
 }
 
 model AuditLog {
@@ -3975,6 +3980,15 @@ model AuthenticationAlert {
 
   @@unique([eventId, recipientId])
   @@index([deliveredAt, nextAttemptAt])
+}
+
+// Global aggregate windows prevent anonymous failures from amplifying administrator alerts.
+model AuthenticationFailureWindow {
+  id        String   @id
+  count     Int      @default(1)
+  expiresAt DateTime
+
+  @@index([expiresAt])
 }
 
 model OidcRevision {

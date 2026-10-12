@@ -19,6 +19,8 @@ import {
 } from '@/lib/auth-control/oidc-revisions';
 import { authenticationOrigin } from '@/lib/auth-control/origin';
 import { restorePasswordAccess } from '@/lib/auth-control/recovery';
+import { evaluateAuthenticationPolicy } from '@/lib/authentication-policy-evaluator';
+import { searchAuthenticationUsers } from '@/lib/auth-control/dashboard';
 import { digest, secret } from '@/lib/auth-control/emergency';
 import { inviteSsoUser } from '@/lib/auth-control/sso-onboarding';
 import type { ControlActor } from '@/lib/auth-control/actor';
@@ -31,6 +33,7 @@ vi.mock('@/lib/auth-control/actor', async importOriginal => {
 vi.mock('@/lib/auth', () => ({ getAuthOptions: vi.fn(), resetAuthOptionsCache: vi.fn() }));
 vi.mock('@/lib/auth-control/origin', () => ({
   authenticationOrigin: vi.fn().mockResolvedValue('https://recovery.example.test'),
+  recoveryOrigin: vi.fn().mockResolvedValue('https://recovery.example.test'),
 }));
 // Discovery shape is covered by the provider matrix suite. This suite exercises real
 // HTTPS token exchange, RS256/JWKS, nonce, PKCE, identity binding and activation.
@@ -190,6 +193,9 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
       where: { id: 'default' },
       create: { id: 'default', mode: 'PASSWORD_ONLY', version: 900, legacySnapshot: {} },
       update: {
+        passwordRecoveryUserId: null,
+        passwordRecoveryExpiresAt: null,
+        recoveryDegradedAt: null,
         mode: 'PASSWORD_ONLY',
         version: 900,
         passwordSessionMinVersion: 0,
@@ -336,6 +342,7 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
       kind: 'emergency',
       id: readyIds[0],
       sessionId: session.id,
+      sessionTokenHash: session.tokenHash,
       credentialVersion: 1,
       authenticatedAt: Date.now(),
     };
@@ -408,6 +415,97 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
       (await prisma.oidcConfig.findUniqueOrThrow({ where: { id: 'default' } })).providerLabel
     ).toBe('Repaired connection');
   });
+  it('counts 10,000 registered sessions without loading their metadata into activation memory', async () => {
+    const prefix = `preview-scale-${Date.now()}`;
+    const rows = Array.from({ length: 10000 }, (_, index) => ({
+      userId: actor.id,
+      deviceId: `${prefix}-${index}`,
+      token: 'legacy malformed metadata',
+      platform: 'session:STANDARD',
+      sessionExpiresAt: index < 5000 ? new Date(Date.now() + 3600000) : new Date(0),
+    }));
+    const before = (await enforcementPreview(revisionId)).passwordSessionCount;
+    try {
+      for (let start = 0; start < rows.length; start += 1000)
+        await prisma.userDevice.createMany({ data: rows.slice(start, start + 1000) });
+      const started = performance.now();
+      expect((await enforcementPreview(revisionId)).passwordSessionCount - before).toBe(5000);
+      console.log('10,000-session preview milliseconds:', Math.round(performance.now() - started));
+    } finally {
+      await prisma.userDevice.deleteMany({ where: { deviceId: { startsWith: prefix } } });
+    }
+  });
+  it('finds administrators beyond the initial directory page using bounded search', async () => {
+    const prefix = `directory-scale-${Date.now()}`;
+    try {
+      await prisma.user.createMany({
+        data: Array.from({ length: 80 }, (_, index) => ({
+          id: `${prefix}-${String(index).padStart(3, '0')}`,
+          name: 'Search fixture',
+          email: `${prefix}-${index}@example.test`,
+          role: 'ADMIN' as const,
+          status: 'ACTIVE' as const,
+        })),
+      });
+      const first = await searchAuthenticationUsers(recoveryActor, prefix);
+      expect(first.users).toHaveLength(25);
+      expect(first.nextCursor).toBeTruthy();
+      const second = await searchAuthenticationUsers(recoveryActor, prefix, first.nextCursor!);
+      expect(second.users).toHaveLength(25);
+      expect(second.users[0].id).not.toBe(first.users[0].id);
+      const searched = await searchAuthenticationUsers(recoveryActor, `${prefix}-79@`);
+      expect(searched.users[0].email).toBe(`${prefix}-79@example.test`);
+    } finally {
+      await prisma.user.deleteMany({ where: { id: { startsWith: prefix } } });
+    }
+  });
+  it('restores only one administrator for an hour while preserving Required and existing OIDC sessions', async () => {
+    await restorePasswordAccess(
+      recoveryActor,
+      actor.id,
+      'Private scoped restoration phrase October2026!',
+      903,
+      'RESTORE PASSWORD ACCESS'
+    );
+    const policy = await prisma.authenticationPolicy.findUniqueOrThrow({
+      where: { id: 'default' },
+    });
+    expect(policy.mode).toBe('SSO_REQUIRED');
+    expect(policy.passwordRecoveryUserId).toBe(actor.id);
+    expect(policy.oidcSessionMinVersion).toBeLessThan(904);
+    expect(evaluateAuthenticationPolicy(policy, 'PASSWORD_LOGIN', { id: actor.id }).allowed).toBe(
+      true
+    );
+    expect(
+      evaluateAuthenticationPolicy(policy, 'PASSWORD_LOGIN', { id: 'another-user' }).allowed
+    ).toBe(false);
+    expect(
+      evaluateAuthenticationPolicy(
+        policy,
+        'SESSION',
+        { id: actor.id },
+        { method: 'credentials', policyVersion: 904 }
+      ).allowed
+    ).toBe(true);
+    expect(
+      evaluateAuthenticationPolicy(
+        { ...policy, passwordRecoveryExpiresAt: new Date(0) },
+        'SESSION',
+        { id: actor.id },
+        { method: 'credentials', policyVersion: 904 }
+      ).allowed
+    ).toBe(false);
+    await prisma.authenticationPolicy.update({
+      where: { id: 'default' },
+      data: {
+        version: 903,
+        passwordRecoveryUserId: null,
+        passwordRecoveryExpiresAt: null,
+        passwordSessionMinVersion: 903,
+      },
+    });
+    await prisma.user.update({ where: { id: actor.id }, data: { tokenVersion: 0 } });
+  });
   it('explicit password recovery preserves the administrator and advances both session cutoffs', async () => {
     await expect(
       restorePasswordAccess(
@@ -423,7 +521,8 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
       actor.id,
       'Private recovery phrase October 2026!',
       903,
-      'RESTORE PASSWORD ACCESS'
+      'RESTORE INSTANCE PASSWORD ACCESS',
+      'INSTANCE'
     );
     const policy = await prisma.authenticationPolicy.findUniqueOrThrow({
       where: { id: 'default' },

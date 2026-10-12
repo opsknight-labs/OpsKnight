@@ -33,6 +33,7 @@ type FormState = {
   ssoOnly?: boolean;
   inviteUrl?: string | null;
   emailSent?: boolean;
+  emailQueued?: boolean;
   providerConfigured?: boolean;
   providerName?: string | null;
   recipientEmail?: string | null;
@@ -129,7 +130,7 @@ export default function UserCreateForm({ action, className = '', disabled = fals
   // Dedicated Post-Invite Result Screen
   if (state?.success && !dismissed) {
     const isAutoEmailSent = state.providerConfigured && state.emailSent;
-    const isDeliveryFailed = state.providerConfigured && !state.emailSent;
+    const isDeliveryFailed = state.providerConfigured && !state.emailSent && !state.emailQueued;
     const isManualOnly = !state.providerConfigured && !state.ssoOnly;
     const targetEmail = state.recipientEmail || email;
 
@@ -151,8 +152,14 @@ export default function UserCreateForm({ action, className = '', disabled = fals
               Workspace sign-in
             </Link>
             <p className="text-sm text-muted-foreground">
-              Share the sign-in URL with this user. A provider change or expired approval requires a
-              renewed invitation.
+              {state.emailSent
+                ? 'Invitation email delivered.'
+                : state.emailQueued
+                  ? 'Invitation email queued for delivery. You can also share the sign-in URL.'
+                  : state.providerConfigured
+                    ? 'Email delivery could not be queued. Share the sign-in URL manually.'
+                    : 'No email provider is configured. Share the sign-in URL manually.'}{' '}
+              A provider change or expired approval requires a renewed invitation.
             </p>
           </div>
         )}

@@ -1,7 +1,6 @@
 'use client';
 import { useHydrated } from '@/hooks/useHydrated';
 import { useState } from 'react';
-import { startAuthentication } from '@simplewebauthn/browser';
 import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/server';
 import { authenticationRequest } from '@/components/settings/AuthenticationConsole';
 import { Button } from '@/components/ui/shadcn/button';
@@ -40,7 +39,9 @@ export default function EmergencyLogin({ legacyAvailable }: { legacyAvailable: b
               options: PublicKeyCredentialRequestOptionsJSON;
               challengeId: string;
             }>({ action: 'options', accountId }, '/api/auth/emergency');
-            const response = await startAuthentication({ optionsJSON: options.options });
+            const response = await (
+              await import('@simplewebauthn/browser')
+            ).startAuthentication({ optionsJSON: options.options });
             await authenticationRequest(
               { action: 'verify', challengeId: options.challengeId, response },
               '/api/auth/emergency'

@@ -6,6 +6,8 @@ import { lockControlActor, type ControlActor } from './actor';
 import { securityEvent } from './security-events';
 import { resetAuthOptionsCache } from '@/lib/auth';
 import { invalidateSessionSecurityProjection } from '@/lib/session-security-projection';
+import { recoveryOrigin } from './origin';
+import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
 
 /** Explicit recovery operation; no automatic fallback and no ordinary reset token. */
 export async function restorePasswordAccess(
@@ -13,11 +15,15 @@ export async function restorePasswordAccess(
   adminUserId: string,
   password: string,
   expectedVersion: number,
-  confirmation: string
+  confirmation: string,
+  scope: 'ADMIN_ONLY' | 'INSTANCE' = 'ADMIN_ONLY'
 ) {
   if (actor.kind === 'admin') throw new Error('Use an independent emergency session for recovery.');
-  if (confirmation !== 'RESTORE PASSWORD ACCESS')
-    throw new Error('Confirm that this deliberately enables ordinary password login.');
+  if (
+    confirmation !==
+    (scope === 'INSTANCE' ? 'RESTORE INSTANCE PASSWORD ACCESS' : 'RESTORE PASSWORD ACCESS')
+  )
+    throw new Error('Confirm the exact scope of password recovery.');
   const user = await prisma.user.findUniqueOrThrow({ where: { id: adminUserId } });
   if (user.role !== 'ADMIN' || user.status !== 'ACTIVE')
     throw new Error('Select an existing active administrator.');
@@ -42,11 +48,14 @@ export async function restorePasswordAccess(
     const restored = await tx.authenticationPolicy.update({
       where: { id: 'default' },
       data: {
-        mode: 'PASSWORD_ONLY',
+        mode: scope === 'INSTANCE' ? 'PASSWORD_ONLY' : policy.mode,
         version: { increment: 1 },
         passwordSessionMinVersion: policy.version + 1,
-        oidcSessionMinVersion: policy.version + 1,
-        enforcedAt: null,
+        oidcSessionMinVersion:
+          scope === 'INSTANCE' ? policy.version + 1 : policy.oidcSessionMinVersion,
+        enforcedAt: scope === 'INSTANCE' ? null : policy.enforcedAt,
+        passwordRecoveryUserId: scope === 'ADMIN_ONLY' ? current.id : null,
+        passwordRecoveryExpiresAt: scope === 'ADMIN_ONLY' ? new Date(Date.now() + 3600000) : null,
         legacyEmergencyEmail: null,
       },
     });
@@ -73,10 +82,42 @@ export async function restorePasswordAccess(
       mode: restored.mode,
       policyVersion: restored.version,
       ordinaryPasswordLoginEnabled: true,
+      recoveryScope: scope,
+      otherLocalPasswordsEnabled: scope === 'INSTANCE',
     });
     return { mode: restored.mode, version: restored.version };
   });
   invalidateSessionSecurityProjection(adminUserId);
   resetAuthOptionsCache();
   return result;
+}
+
+/** A deployment pin grants recovery-origin trust, never arbitrary Host-header trust. */
+export async function repairCanonicalOrigin(actor: ControlActor, expectedVersion: number) {
+  if (actor.kind !== 'emergency' || !process.env.AUTH_RECOVERY_ORIGIN)
+    throw new Error(
+      'Independent emergency access and a deployment-managed recovery origin pin are required.'
+    );
+  const origin = await recoveryOrigin();
+  const resolution = resolveAuthPublicOrigin({ dbAppUrl: origin });
+  if (resolution.conflicts.length || resolution.origin !== origin)
+    throw new Error(
+      'First align NEXTAUTH_URL and NEXT_PUBLIC_APP_URL with the pinned recovery origin and restart all web replicas.'
+    );
+  await prisma.$transaction(async tx => {
+    await lockControlActor(tx, actor);
+    const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
+    if (policy.version !== expectedVersion) throw new Error('Policy changed. Reload recovery.');
+    await tx.systemSettings.update({ where: { id: 'default' }, data: { appUrl: origin } });
+    await tx.authenticationPolicy.update({
+      where: { id: 'default' },
+      data: { version: { increment: 1 } },
+    });
+    await securityEvent(tx, 'auth.recovery.origin.repaired', actor.id, {
+      origin,
+      policyPreserved: policy.mode,
+    });
+  });
+  resetAuthOptionsCache();
+  return { origin };
 }

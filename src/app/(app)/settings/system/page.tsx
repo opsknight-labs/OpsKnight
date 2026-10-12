@@ -1,6 +1,4 @@
-import AuthenticationConsole from '@/components/settings/AuthenticationConsole';
-import { authenticationDashboard } from '@/lib/auth-control/dashboard';
-import { getControlActor } from '@/lib/auth-control/actor';
+import AuthenticationSettingsLoader from '@/components/settings/AuthenticationSettingsLoader';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { getUserPermissions } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
@@ -166,10 +164,8 @@ export default async function SystemSettingsPage() {
       </SettingsSection>
     );
 
-    const authenticationData = await authenticationDashboard(await getControlActor());
     const ssoTab = (
-      <AuthenticationConsole
-        initialData={authenticationData}
+      <AuthenticationSettingsLoader
         callbackUrl={ssoCallbackUrl}
         testCallbackUrl={`${authOrigin.origin}/api/auth/oidc/test/callback`}
         scimSection={

@@ -39,3 +39,46 @@ Role mappings use ordered claim rules. Avoid broadly matching ADMIN rules; the e
 ## Failure and rollback
 
 Do not bypass blockers with database edits. Stage and test a corrected revision while the old production revision remains live. Under Required, a repair activation must preserve Required. If the IdP is unavailable, use [lockout recovery](sso-lockout-recovery/); password fallback requires a separate explicit policy restoration. Previous credentials can be staged as a new rollback revision and must pass a fresh real test before activation. Audit and alert failures roll back production mutations.
+
+## Deployment-specific preflight
+
+Check the externally visible HTTPS origin and both callback URLs through the real
+reverse proxy. Web replicas must agree on NEXTAUTH_URL, NEXT_PUBLIC_APP_URL, any
+recovery pin, and the authoritative database. Apply additive migrations before
+rolling out code that reads new fields; do not mix older/newer authentication code
+in a release that changes policy semantics. Preserve encryption keys across rollout.
+
+Discovery verifies endpoint shape; the administrator test exercises authorization
+code exchange, PKCE, nonce, signed ID token/JWKS, email assurance, role mapping, and
+existing identity ownership. A test does not issue an ordinary production session.
+The proof is bound to revision, current provider version, selected administrator
+security state, canonical origin, and a 15-minute lifetime.
+
+Enforcement preview counts registered password sessions in PostgreSQL using an
+indexed expiry column. Legacy records without a typed expiry projection are counted
+conservatively. Counts concern registered sessions, not every theoretical JWT that
+may exist. Activation repeats authoritative readiness checks in its transaction;
+a displayed preview does not reserve policy or guarantee a later activation.
+
+## Expected blockers and responses
+
+- Administrator proof absent/expired: repeat real sign-in for the selected revision.
+- Active provider changed: stage against its new version and repeat the test.
+- Fewer than two recovery drills: independently drill both identities at the
+  configured recovery origin. Revocation/enrollment invalidates the old drill.
+- Replica conflict: reconcile deployment variables and wait for fresh observations.
+- ADMIN mapping lost: correct groups/roles and verify the intended account.
+- Unsaved draft: stage the draft; tests always target immutable saved values.
+
+## Acceptance under Required
+
+From separate browsers, verify ordinary SSO succeeds, a previous password session
+fails, and an unknown/unassigned identity cannot gain ADMIN. Verify both recovery
+custodians can sign in and cannot view incidents using recovery-only sessions.
+Rotate an emergency session token and confirm its old capability cannot perform a
+later mutation. Confirm background reads do not extend the idle timer. Practice an
+IdP outage and repaired staged activation without weakening Required.
+
+Use native browsers and actual tenants for final deployment certification. Chromium
+virtual keys and the local cryptographic fixture verify application/protocol behavior;
+they do not establish independent physical custody or vendor-side deactivation.

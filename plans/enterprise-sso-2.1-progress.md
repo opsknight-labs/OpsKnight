@@ -180,3 +180,84 @@ restarts, external PostgreSQL restore and a controlled application downgrade.
 Confirm actual alert delivery and operational custody/drill procedures in the target
 deployment. No production deployment, website publication or PR is implied by this
 branch, and no complete external-release certification is claimed.
+
+## Latest audit implementation (reviewed input: f7b6be1)
+
+The supplied latest audit is preserved in `enterprise-sso-2.1-latest-audit.md`.
+Implementation now addresses each source finding:
+
+- Deployment-pinned `AUTH_RECOVERY_ORIGIN` keeps origin/RP/UV/CSRF checks and
+  authorizes only recovery host routes. Fresh independent recovery can repair the
+  database App URL only after deployment URL settings agree with the pin.
+- Actual compromise can revoke the final ready key. Its sessions are revoked,
+  Required stays enforced, and an urgent degraded-recovery marker/event is written.
+  Two current independent drills clear the degraded marker.
+- Individual anonymous failure evidence remains transactional. Shared PostgreSQL
+  windows emit at most two alert batches per five minutes, capped at 100 recipients
+  each, independent of request IP. IP/account/global admission limits precede
+  challenge allocation. Successful security operations remain fully notified.
+- Emergency actors retain their presented token hash and compare it under the
+  mutation row lock. Rotation invalidates requests authorized before the rotation.
+  Invalid recovery cookies can fall back only to a separate valid normal admin.
+- Administrator-only password restoration is the default: one stable User ID for
+  one hour, preserving the SSO mode and other users’ OIDC sessions. Instance-wide
+  Password Only remains a distinct audited scope with a separate confirmation.
+- Enforcement preview uses indexed PostgreSQL counts, not unbounded JSON session
+  reads. Legacy sessions without a typed expiry projection are conservatively counted. Registration/renewal
+  populate the typed expiry projection; an additive migration creates its index.
+- SSO invitations use the existing email queue with SSO-specific instructions,
+  generation-specific delivery keys, and accurate queued/sent/manual results.
+  No invitation password capability is created.
+- Security-alert review links point to the validated canonical instance URL;
+  canonical conflict defers email instead of generating an unsafe link.
+- Selecting a revision synchronizes the complete editable draft, including mappings.
+  Editing marks it unsaved and clears activation impact/confirmation. Testing and
+  activation require a saved revision; blank secrets preserve only its same-client
+  encrypted secret. Production configuration remains separately labelled.
+- Administrator pickers and the account directory use bounded server search and
+  pagination. Superseded searches are aborted; recovery is not tied to the first
+  workspace user page.
+- Authentication now follows existing product DetailTabs, semantic cards/badges,
+  focus styling, accessible feedback, and responsive layouts. Only the visible tab
+  is mounted. System settings defer the authentication bundle/data until selected;
+  diagnostics reads happen on demand and WebAuthn loads only for a ceremony.
+- Expanded runbooks cover Compose/Helm pins, exact repair boundaries, scoped/global
+  restoration, compromise/custody drills, alert abuse, expected blockers, rollback,
+  and completion evidence. Real provider/physical-key/multi-replica certification
+  remains external acceptance work rather than an inferred completed result.
+
+New isolated database coverage includes 10,000 session rows, administrator search
+beyond the first page, 60 concurrent/distributed failure events with 120 fixture
+administrators, final compromised-key revocation, rotated-capability mutation
+rejection, scoped restoration expiry, and pinned-origin repair. Fixture migrations
+were applied only to `enterprise_sso_test`. Helm lint and both Compose configuration
+validations run without starting services or deploying changes.
+
+### Final verification of the latest audit implementation
+
+- Full unit suite: **5,697 passed across 748 files**, with four intentional skips.
+  Includes stale recovery-cookie fallback and aborted section-request regressions.
+- Isolated PostgreSQL suites: **42 passed across three files**, including signed
+  WebAuthn and HTTPS OIDC exchange fixtures plus the scale/concurrency cases above.
+- TypeScript passes; all changed/new TypeScript and JavaScript files pass ESLint
+  with zero warnings, including explicitly checked framework/test configuration.
+- Upcoming documentation: **four contracts passed**; retained identity guides also
+  pass their two contracts. Helm lint and integrated/split Compose validation pass.
+- Optimized production build passes. The standalone package automatically includes
+  the generated Prisma engine; boot was verified without copying an engine into
+  the artifact. Public/static assets were copied using the normal standalone
+  packaging procedure. The obsolete, unsupported PWA `swcMinify` option was removed
+  while replacing its untyped configuration loader with the package's typed import.
+- Production HTTPS browser suite: **four passed**, with two explicit skips for the
+  Chromium-only virtual hardware authenticator. Chromium, Firefox and WebKit verify
+  desktop/mobile layout, keyboard access, validation and saved-revision selection.
+  Chromium also verifies recovery enrollment, separate-context sign-in, secure
+  production cookie behavior, authorization/CSRF boundaries and logout. The rapid
+  tab-switching regression passes against the optimized package. Fresh screenshots
+  are retained in the versioned documentation assets.
+
+The HTTPS fixture used a local, explicitly opted-in self-signed certificate and an
+isolated database; production secret checks stayed enabled. No production deployment,
+external provider tenant, real physical key or multi-replica release certification
+is implied. Those acceptance requirements remain listed above. All changes remain
+on `feat/enterprise-sso-2.1`; no PR is created.

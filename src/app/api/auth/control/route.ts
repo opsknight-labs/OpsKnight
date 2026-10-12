@@ -4,7 +4,11 @@ import { jsonApiOk, jsonError } from '@/lib/api-response';
 import type { RegistrationResponseJSON } from '@simplewebauthn/server';
 import { revokeAuthenticationSession } from '@/lib/auth-control/sessions';
 import { getControlActor } from '@/lib/auth-control/actor';
-import { authenticationDashboard, identityClaimsPreview } from '@/lib/auth-control/dashboard';
+import {
+  authenticationDashboard,
+  identityClaimsPreview,
+  searchAuthenticationUsers,
+} from '@/lib/auth-control/dashboard';
 import { assertAuthenticationOrigin } from '@/lib/auth-control/origin';
 import {
   activateOidcRevision,
@@ -23,7 +27,7 @@ import {
   verifyRegistration,
 } from '@/lib/auth-control/emergency-management';
 import { CEREMONY_COOKIE, emergencyCookieOptions } from '@/lib/auth-control/emergency';
-import { restorePasswordAccess } from '@/lib/auth-control/recovery';
+import { restorePasswordAccess, repairCanonicalOrigin } from '@/lib/auth-control/recovery';
 import { changeAuthenticationMode } from '@/app/(app)/settings/system/authentication-actions';
 import { readJsonBodyWithLimit } from '@/lib/request-body';
 import { consumeAuthRateLimit } from '@/lib/auth-abuse';
@@ -32,9 +36,17 @@ const id = z.string().min(1).max(128);
 const schema = z.discriminatedUnion('action', [
   z
     .object({
+      action: z.literal('repairOrigin'),
+      expectedVersion: z.number().int().positive(),
+      confirmation: z.literal('REPAIR PINNED ORIGIN'),
+    })
+    .strict(),
+  z
+    .object({
       action: z.literal('stage'),
       configuration: z.unknown(),
       acknowledgeBroadAdminRules: z.boolean().default(false),
+      sourceRevisionId: id.optional(),
     })
     .strict(),
   z
@@ -101,16 +113,46 @@ const schema = z.discriminatedUnion('action', [
       adminUserId: id,
       password: z.string().min(1).max(256),
       expectedVersion: z.number().int().positive(),
-      confirmation: z.literal('RESTORE PASSWORD ACCESS'),
+      confirmation: z.enum(['RESTORE PASSWORD ACCESS', 'RESTORE INSTANCE PASSWORD ACCESS']),
+      scope: z.enum(['ADMIN_ONLY', 'INSTANCE']).default('ADMIN_ONLY'),
     })
     .strict(),
 ]);
 const headers = { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-referrer' };
 const json = (data: unknown) => jsonApiOk(data, { headers });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    return json(await authenticationDashboard(await getControlActor()));
+    const params = z
+      .object({
+        section: z
+          .enum(['overview', 'connection', 'access', 'policy', 'emergency', 'diagnostics'])
+          .default('overview'),
+        view: z.enum(['dashboard', 'admins', 'users']).default('dashboard'),
+        q: z.string().max(100).default(''),
+        after: z.string().max(128).optional(),
+      })
+      .strict()
+      .parse(Object.fromEntries(request.nextUrl.searchParams));
+    const actor = await getControlActor();
+    if (
+      !(await consumeAuthRateLimit('auth-control-read', `${actor.kind}:${actor.id}`, 120, 60000))
+        .allowed
+    )
+      return jsonError('Too many authentication reads.', 429, undefined, headers);
+    if (params.view !== 'dashboard')
+      return json(
+        await searchAuthenticationUsers(actor, params.q, params.after, params.view === 'admins')
+      );
+    const response = json(await authenticationDashboard(actor, params.section));
+    if (actor.kind === 'admin' && request.cookies.has('opsknight-emergency'))
+      response.cookies.set('opsknight-emergency', '', { ...emergencyCookieOptions, maxAge: 0 });
+    if (actor.kind === 'admin' && request.cookies.has('__Host-opsknight-emergency'))
+      response.cookies.set('__Host-opsknight-emergency', '', {
+        ...emergencyCookieOptions,
+        maxAge: 0,
+      });
+    return response;
   } catch {
     return jsonError(
       'Authentication administration requires an active administrator or emergency recovery session.',
@@ -123,17 +165,30 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await assertAuthenticationOrigin(request);
     const input = schema.parse(await readJsonBodyWithLimit(request, 65536));
     const actor = await getControlActor(input.action !== 'preview' && input.action !== 'claims');
+    await assertAuthenticationOrigin(
+      request,
+      actor.kind !== 'admin' ||
+        ['enroll', 'verifyEnrollment', 'revoke', 'disableEmergency', 'createEmergency'].includes(
+          input.action
+        )
+    );
     if (
       !(await consumeAuthRateLimit('auth-control', `${actor.kind}:${actor.id}`, 60, 300000)).allowed
     )
       throw new Error('Too many authentication operations. Try again later.');
     switch (input.action) {
+      case 'repairOrigin':
+        return json(await repairCanonicalOrigin(actor, input.expectedVersion));
       case 'stage':
         return json(
-          await stageOidcRevision(actor, input.configuration, input.acknowledgeBroadAdminRules)
+          await stageOidcRevision(
+            actor,
+            input.configuration,
+            input.acknowledgeBroadAdminRules,
+            input.sourceRevisionId
+          )
         );
       case 'test': {
         const result = await beginOidcRevisionTest(
@@ -214,7 +269,8 @@ export async function POST(request: NextRequest) {
             input.adminUserId,
             input.password,
             input.expectedVersion,
-            input.confirmation
+            input.confirmation,
+            input.scope
           )
         );
     }

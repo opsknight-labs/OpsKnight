@@ -1477,3 +1477,19 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: not displayed
 - Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `env.example`, `src/lib/prisma-datasource.ts`
+
+## AUTH_RECOVERY_ORIGIN
+
+Optional deployment-managed exact HTTPS origin for independent recovery. Default:
+unset, using the conflict-free canonical authentication origin. The value must have
+no path other than `/`, credentials, query or fragment. Plain HTTP is accepted only
+for local development on localhost/127.0.0.1. Set the same value on all web replicas
+and enroll/drill keys on that origin before relying on it during an outage.
+
+Compose exposes `AUTH_RECOVERY_ORIGIN`; Helm exposes `config.authRecoveryOrigin`.
+The pin opens only recovery endpoints and required assets in host routing. Request
+Origin and WebAuthn RP/UV checks remain enforced. It never trusts arbitrary incoming
+Host/X-Forwarded-Host values or enables normal incident access. Database App URL
+repair requires fresh independent-key authorization and agreement between the pin,
+NEXTAUTH_URL and NEXT_PUBLIC_APP_URL. See
+[recovery procedure](../../guides/identity/sso-lockout-recovery/).

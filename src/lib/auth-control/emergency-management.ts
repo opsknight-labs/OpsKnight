@@ -6,7 +6,7 @@ import {
 } from '@simplewebauthn/server';
 import prisma from '@/lib/prisma';
 import { lockControlActor, type ControlActor } from './actor';
-import { authenticationOrigin } from './origin';
+import { recoveryOrigin } from './origin';
 import { digest, secret } from './emergency';
 import { securityEvent } from './security-events';
 
@@ -32,12 +32,16 @@ export async function createEmergencyAccount(
 }
 
 export async function registrationOptions(actor: ControlActor, accountId: string) {
-  const origin = await authenticationOrigin();
+  const origin = await recoveryOrigin();
   const account = await prisma.emergencyAccount.findUnique({
     where: { id: accountId },
     include: { credentials: { where: { revokedAt: null } } },
   });
   if (!account || account.status === 'DISABLED') throw new Error('Emergency account unavailable.');
+  if (account.credentials.length >= 10)
+    throw new Error(
+      'Revoke obsolete keys before enrolling another (ten active keys per identity).'
+    );
   const options = await generateRegistrationOptions({
     rpName: 'OpsKnight Emergency Access',
     rpID: new URL(origin).hostname,
@@ -80,7 +84,7 @@ async function verifyRegistrationInternal(
   displayName: string,
   response: RegistrationResponseJSON
 ) {
-  const origin = await authenticationOrigin();
+  const origin = await recoveryOrigin();
   const flow = await prisma.emergencyChallenge.findUnique({ where: { id: challengeId } });
   if (
     !flow ||
@@ -151,8 +155,10 @@ async function verifyRegistrationInternal(
   });
 }
 
-export async function emergencyReadiness(tx: Pick<typeof prisma, 'emergencyAccount'>) {
-  const origin = await authenticationOrigin();
+export async function emergencyReadiness(
+  tx: Pick<typeof prisma, 'emergencyAccount' | 'systemSettings'>
+) {
+  const origin = await recoveryOrigin(tx);
   const accounts = await tx.emergencyAccount.findMany({
     where: {
       status: 'ACTIVE',
@@ -160,8 +166,13 @@ export async function emergencyReadiness(tx: Pick<typeof prisma, 'emergencyAccou
       verifiedAt: { gte: new Date(Date.now() - 90 * 86400000) },
     },
     include: {
-      credentials: { where: { revokedAt: null, deviceType: 'singleDevice', backedUp: false } },
+      credentials: {
+        where: { revokedAt: null, deviceType: 'singleDevice', backedUp: false },
+        select: { id: true },
+        take: 1,
+      },
     },
+    take: 20,
   });
   return accounts.filter(
     account =>
@@ -188,7 +199,7 @@ export async function revokeEmergencyCredential(
       throw new Error(
         'Enroll and drill a replacement independent identity before reducing recovery readiness. Confirm compromise only for an actual compromised key.'
       );
-    if (policy.mode === 'SSO_REQUIRED' && affectedReady && ready.length <= 1)
+    if (policy.mode === 'SSO_REQUIRED' && affectedReady && ready.length <= 1 && !compromised)
       throw new Error(
         'Keep another verified emergency identity before revoking the last recovery identity.'
       );
@@ -208,6 +219,20 @@ export async function revokeEmergencyCredential(
       where: { emergencyAccountId: credential.emergencyAccountId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    const recoveryDegraded =
+      policy.mode === 'SSO_REQUIRED' && ready.length - Number(affectedReady) < 2;
+    if (recoveryDegraded) {
+      await tx.authenticationPolicy.update({
+        where: { id: 'default' },
+        data: { recoveryDegradedAt: new Date() },
+      });
+      await securityEvent(tx, 'auth.emergency.recovery.degraded', actor.id, {
+        compromised,
+        remainingReadyIdentities: ready.length - Number(affectedReady),
+        urgentRemediation: true,
+        policyPreserved: policy.mode,
+      });
+    }
     await securityEvent(tx, 'auth.emergency.credential.revoked', credential.emergencyAccountId, {
       compromised,
       authorizedBy: `${actor.kind}:${actor.id}`,
