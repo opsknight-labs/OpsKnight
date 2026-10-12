@@ -4,10 +4,12 @@ import {
   resetDatabase,
   createTestUser,
   createTestService,
+  createTestIncident,
 } from '../helpers/test-db';
 import { transitionPolicyArchive, assertPolicyActive } from '@/lib/escalation/policy-lifecycle';
 import { updateServiceWithAutomationPolicyGuard } from '@/lib/automation/service-policy';
 import { publishVersion, saveDraft } from '@/lib/automation/versioning';
+import { resolveIncidentResponderRouting } from '@/lib/escalation/routing';
 beforeEach(resetDatabase);
 afterAll(() => db.$disconnect());
 it('blocks active defaults, preserves policy rows and prevents archived reassignment', async () => {
@@ -79,6 +81,23 @@ it('blocks current published versions but preserves historical versions on archi
   await transitionPolicyArchive(policy.id, actor.id, true);
   expect(await db.automationVersionPolicyRef.count({ where: { versionId: version.id } })).toBe(1);
   expect(await db.automationVersion.count({ where: { id: version.id } })).toBe(1);
+  const incident = await createTestIncident('Pinned archived routing', service.id);
+  await db.incidentAutomationDecision.create({
+    data: {
+      incidentId: incident.id,
+      serviceId: service.id,
+      versionId: version.id,
+      mode: 'LIVE',
+      routeType: 'ESCALATION_POLICY',
+      escalationPolicyId: policy.id,
+      evaluationAt: new Date(),
+      summary: { responderPolicy: { id: policy.id, name: policy.name, steps: [] } },
+    },
+  });
+  const pinned = await resolveIncidentResponderRouting(incident.id, service.id, db);
+  expect(pinned.type).toBe('SELECTED_POLICY');
+  expect(pinned.policy?.id).toBe(policy.id);
+  expect(pinned.policy?.name).toBe(policy.name);
 });
 
 it('serializes archive against publication and rejects archived rollback references', async () => {

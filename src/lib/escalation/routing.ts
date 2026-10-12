@@ -45,6 +45,9 @@ export async function resolveIncidentResponderRouting(
           id: snapshot.id,
           name: snapshot.name,
           description: null,
+          // A pinned definition remains usable independently of today's archive state.
+          archivedAt: null,
+          archivedBy: null,
           createdAt: decision.createdAt,
           updatedAt: decision.createdAt,
           steps: snapshot.steps.map(({ conditions: _conditions, ...step }) => ({
