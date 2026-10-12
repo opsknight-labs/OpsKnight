@@ -8,6 +8,9 @@ export function evaluateEnrichment(
   initialContext: Context,
   guard: EvaluationGuard
 ) {
+  const fieldsByKey = new Map(
+    [...builtinFields, ...version.fields].map(field => [field.key, field])
+  );
   const context = { ...initialContext };
   const tags = new Set<string>();
   const writes: Array<{ ruleId: string; fieldKey: string; before: unknown; value: Scalar }> = [];
@@ -38,7 +41,7 @@ export function evaluateEnrichment(
       if (action.type !== 'SET_PRIORITY' && action.type !== 'SET_CONTEXT')
         throw new Error('VERSION_INVALID');
       const key = action.type === 'SET_PRIORITY' ? 'priority' : action.fieldKey;
-      const field = [...builtinFields, ...version.fields].find(f => f.key === key);
+      const field = fieldsByKey.get(key);
       if (!field) throw new Error('VERSION_INVALID');
       const value = normalizeValue(action.value, field);
       if (value.state !== 'RECOGNIZED') throw new Error('VERSION_INVALID');
