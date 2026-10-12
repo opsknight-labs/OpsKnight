@@ -1,3 +1,4 @@
+import { checkAuthenticationPolicy } from '@/lib/authentication-policy';
 import prisma from '@/lib/prisma';
 import { getAuthOptions } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
@@ -40,6 +41,7 @@ export default async function SecuritySettingsPage() {
       })
     : null;
 
+  const passwordOperationsAllowed = (await checkAuthenticationPolicy('PASSWORD_WRITE')).allowed;
   const hasPassword = Boolean(user?.passwordHash);
   const isSsoLinked = Boolean(
     user?.lastOidcSync || (user?.oidcIdentities && user.oidcIdentities.length > 0)
@@ -160,7 +162,14 @@ export default async function SecuritySettingsPage() {
           </p>
         }
       >
-        <SecurityForm hasPassword={hasPassword} />
+        {passwordOperationsAllowed ? (
+          <SecurityForm hasPassword={hasPassword} />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Password creation and changes are blocked by the system authentication policy. Use your
+            organization&apos;s identity provider to manage your sign-in credentials.
+          </p>
+        )}
       </SettingsSection>
 
       {/* Section 2: Signed-in Sessions */}
@@ -185,8 +194,8 @@ export default async function SecuritySettingsPage() {
           isAdmin ? (
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
-                As an administrator, you can configure workspace-wide OIDC / SAML providers in
-                System Settings.
+                As an administrator, you can configure workspace-wide OIDC providers in System
+                Settings.
               </p>
               <Button variant="ghost" size="sm" asChild className="gap-1 text-xs h-8">
                 <Link href="/settings/system?section=sso">

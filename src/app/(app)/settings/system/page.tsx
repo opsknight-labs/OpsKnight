@@ -1,3 +1,5 @@
+import AuthenticationPolicySettings from '@/components/settings/AuthenticationPolicySettings';
+import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { getUserPermissions } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
@@ -162,13 +164,21 @@ export default async function SystemSettingsPage() {
       </SettingsSection>
     );
 
+    const authenticationPolicy = await getAuthenticationPolicy();
     const ssoTab = (
-      <SsoSettingsForm
-        initialConfig={oidcConfig}
-        callbackUrl={ssoCallbackUrl}
-        hasEncryptionKey={env.encryptionKey}
-        scimSection={<ScimSettingsSection initialConfig={scimConfig} tenantUrl={scimTenantUrl} />}
-      />
+      <div className="space-y-6">
+        <AuthenticationPolicySettings
+          initialMode={authenticationPolicy.mode}
+          initialVersion={authenticationPolicy.version}
+          legacyEmergencyConfigured={Boolean(authenticationPolicy.legacyEmergencyEmail)}
+        />
+        <SsoSettingsForm
+          initialConfig={oidcConfig}
+          callbackUrl={ssoCallbackUrl}
+          hasEncryptionKey={env.encryptionKey}
+          scimSection={<ScimSettingsSection initialConfig={scimConfig} tenantUrl={scimTenantUrl} />}
+        />
+      </div>
     );
 
     const retentionTab = <RetentionPolicySettings />;

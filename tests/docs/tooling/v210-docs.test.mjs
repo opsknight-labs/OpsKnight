@@ -28,6 +28,42 @@ test('2.1.0 is upcoming without changing the released version', () => {
 });
 
 test('2.1.0 frontmatter and local links resolve', () => {
-  execFileSync(process.execPath, ['scripts/docs/check-frontmatter.mjs', 'docs/v2.1.0'], { stdio: 'pipe' });
-  execFileSync(process.execPath, ['scripts/check-docs-links.cjs', 'docs/v2.1.0'], { stdio: 'pipe' });
+  execFileSync(process.execPath, ['scripts/docs/check-frontmatter.mjs', 'docs/v2.1.0'], {
+    stdio: 'pipe',
+  });
+  execFileSync(process.execPath, ['scripts/check-docs-links.cjs', 'docs/v2.1.0'], {
+    stdio: 'pipe',
+  });
+});
+
+test('2.1 identity policy guides describe the implemented migration and activation boundary', () => {
+  const guide = readFileSync('docs/v2.1.0/guides/identity/authentication-modes.md', 'utf8');
+  for (const phrase of [
+    'Password Only',
+    'SSO Optional',
+    'SSO Required',
+    'five minutes',
+    'once',
+    'PostgreSQL',
+    'one-hour',
+    '15-minute',
+    'Rollback',
+    'Implementation references',
+  ]) {
+    assert.ok(
+      guide.toLowerCase().includes(phrase.toLowerCase()),
+      `Missing policy procedure: ${phrase}`
+    );
+  }
+  assert.match(guide, /activation is currently unavailable/);
+  assert.match(guide, /not.*dedicated emergency principal/);
+  const oidc = readFileSync('docs/v2.1.0/guides/identity/configure-oidc.md', 'utf8');
+  assert.match(oidc, /SSO \/ Authentication/);
+  assert.ok(!oidc.includes('Local credential login is controlled by `AUTH_LOCAL_LOGIN_ENABLED`'));
+  for (const provider of ['Microsoft Entra', 'Google', 'Okta', 'Auth0', 'Keycloak']) {
+    assert.ok(oidc.includes(provider), `Lost provider instructions: ${provider}`);
+  }
+  assert.ok(
+    readFileSync('docs/v2.1.0/guides/identity/README.md', 'utf8').includes('authentication-modes')
+  );
 });

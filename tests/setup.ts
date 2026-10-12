@@ -57,6 +57,7 @@ const createMockModel = () => ({
   findMany: vi.fn().mockResolvedValue([]),
   findFirst: vi.fn().mockResolvedValue(null),
   findUnique: vi.fn().mockResolvedValue(null),
+  findUniqueOrThrow: vi.fn().mockResolvedValue(null),
   create: vi.fn().mockResolvedValue({}),
   update: vi.fn().mockResolvedValue({}),
   updateMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -67,6 +68,16 @@ const createMockModel = () => ({
 });
 
 const mockPrisma = {
+  authenticationPolicy: {
+    ...createMockModel(),
+    findUnique: vi.fn().mockResolvedValue({
+      id: 'default',
+      mode: 'SSO_OPTIONAL',
+      version: 1,
+      legacyEmergencyEmail: null,
+    }),
+  },
+  authenticationPolicyImport: createMockModel(),
   notification: createMockModel(),
   incident: createMockModel(),
   onCallLayerUser: createMockModel(),
@@ -154,7 +165,7 @@ vi.mock('@/lib/prisma', async importOriginal => {
 
 // Mock Twilio globally for dynamic requires
 vi.mock('twilio', async importOriginal => {
-  const actual = await importOriginal<any>();
+  const actual = await importOriginal<typeof import('twilio')>();
   const mockCreate = vi.fn().mockResolvedValue({ sid: 'mock-sid' });
   const mockClient = {
     messages: {
@@ -178,8 +189,8 @@ if (process.env.VITEST_USE_REAL_DB) {
       const { default: prisma } = await import('../src/lib/prisma');
 
       await testPrisma.$disconnect();
-      if (typeof (prisma as any)?.$disconnect === 'function') {
-        await (prisma as any).$disconnect();
+      if (typeof prisma?.$disconnect === 'function') {
+        await prisma.$disconnect();
       }
     } catch (e) {
       console.warn('[Setup] Failed to disconnect Prisma:', e);

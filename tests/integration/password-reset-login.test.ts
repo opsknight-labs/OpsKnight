@@ -2,6 +2,8 @@
 import { describe, it, expect, beforeEach, vi, afterAll, beforeAll } from 'vitest';
 
 const runIntegration = Boolean(process.env.VITEST_USE_REAL_DB);
+vi.unmock('@/lib/prisma');
+
 const describeIntegration =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
 
@@ -22,8 +24,6 @@ let completePasswordReset: typeof import('@/lib/password-reset').completePasswor
 describeIntegration('Password Reset -> Login Flow', () => {
   beforeAll(async () => {
     if (!runIntegration) return;
-    vi.unmock('@/lib/prisma');
-    vi.unmock('../src/lib/prisma');
     vi.resetModules();
     ({ initiatePasswordReset, completePasswordReset } = await import('@/lib/password-reset'));
   });
@@ -91,7 +91,9 @@ describeIntegration('Password Reset -> Login Flow', () => {
     const { token, tokenRecord } = await installDeterministicToken(user.id);
 
     expect((await completePasswordReset(token, 'NewPassword456!', '127.0.0.1')).success).toBe(true);
-    expect((await testPrisma.userToken.findUnique({ where: { id: tokenRecord.id } }))?.usedAt).not.toBeNull();
+    expect(
+      (await testPrisma.userToken.findUnique({ where: { id: tokenRecord.id } }))?.usedAt
+    ).not.toBeNull();
 
     const second = await completePasswordReset(token, 'AnotherPassword!', '127.0.0.1');
     expect(second.success).toBe(false);

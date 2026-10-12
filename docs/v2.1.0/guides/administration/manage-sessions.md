@@ -5,10 +5,19 @@ type: how-to
 product_area: identity
 audience: [responder, administrator]
 reader: { status: READER_COMPLETE, task: Review and revoke account sessions and recent device activity. }
-verification: { level: source, verified_at: 2026-10-01, evidence: [src/app/(app)/settings/security/page.tsx, src/components/settings/ActiveSessionsSection.tsx] }
+verification: { level: source, verified_at: 2026-10-12, evidence: [src/app/(app)/settings/security/page.tsx, src/components/settings/ActiveSessionsSection.tsx] }
 ---
 
 # Review and revoke signed-in sessions
+
+System [authentication policy](../identity/authentication-modes/) is enforced
+when an existing session makes its next protected server request. Password Only
+rejects OIDC sessions; SSO Required rejects ordinary password sessions. Method-specific
+revocation cutoffs also keep sessions revoked after a mode is relaxed again.
+Imported legacy emergency-password sessions last at most one hour, expire after
+15 minutes of inactivity, and cannot use Remember Me or Trusted PWA extensions.
+These are compatibility sessions, not the dedicated recovery console planned for
+independent emergency identities.
 
 ## Before you begin
 

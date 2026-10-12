@@ -45,6 +45,7 @@ vi.mock('next/cache', () => ({
 
 vi.mock('@/lib/prisma', () => {
   const tx = {
+    $queryRaw: vi.fn().mockResolvedValue([{ mode: 'SSO_OPTIONAL' }]),
     oidcConfig: {
       updateMany: mocks.prismaUpdateMany,
       create: mocks.prismaCreate,
@@ -59,6 +60,11 @@ vi.mock('@/lib/prisma', () => {
   };
   return {
     default: {
+      authenticationPolicy: {
+        findUnique: vi
+          .fn()
+          .mockResolvedValue({ mode: 'SSO_OPTIONAL', version: 1, legacyEmergencyEmail: null }),
+      },
       oidcConfig: {
         findFirst: mocks.prismaFindFirst,
       },

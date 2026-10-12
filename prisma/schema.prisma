@@ -778,6 +778,34 @@ model SlackOAuthConfig {
   @@unique([id])
 }
 
+enum AuthenticationMode {
+  PASSWORD_ONLY
+  SSO_OPTIONAL
+  SSO_REQUIRED
+}
+
+// Singleton. Never derive live policy from replica-local environment variables.
+model AuthenticationPolicyImport {
+  id         String   @id @default("default")
+  importedAt DateTime @default(now())
+}
+
+model AuthenticationPolicy {
+  id                        String             @id @default("default")
+  mode                      AuthenticationMode
+  version                   Int                @default(1)
+  oidcConfigVersion         Int?
+  passwordSessionMinVersion Int                @default(0)
+  oidcSessionMinVersion     Int                @default(0)
+  enforcedAt                DateTime?
+  lastVerifiedAt            DateTime?
+  updatedBy                 String?
+  updatedAt                 DateTime           @updatedAt
+  migratedAt                DateTime           @default(now())
+  legacyEmergencyEmail      String?
+  legacySnapshot            Json
+}
+
 model OidcConfig {
   id                        String   @id @default("default")
   issuer                    String

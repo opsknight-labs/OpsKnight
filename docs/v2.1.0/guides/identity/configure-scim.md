@@ -10,7 +10,7 @@ reader:
 keywords: [SCIM provisioning, Entra provisioning, Okta provisioning, SCIM users, SCIM groups, team synchronization, identity lifecycle]
 verification:
   level: source
-  verified_at: 2026-10-02
+  verified_at: 2026-10-12
   evidence:
     - src/lib/scim.ts
     - src/app/api/scim/v2/Users/route.ts
@@ -27,6 +27,14 @@ verification:
 ---
 
 # Configure SCIM provisioning
+
+SCIM remains a User lifecycle interface, separate from the system authentication
+mode. SSO Required blocks password invitations and password completion; it does
+not turn SCIM into an authentication provider. Dedicated emergency principals are
+not implemented in this increment. Imported legacy emergency password identities
+are ordinary User records: exclude them from provider assignments and automated
+offboarding rather than assuming SCIM cannot target them. Never run a deactivation
+drill against your only working administrator or recovery account.
 
 OpsKnight exposes SCIM 2.0 **Users** and **Groups** APIs. Use them to manage
 accounts, account state, teams, and team membership from an identity provider:

@@ -44,6 +44,15 @@ vi.mock('@/lib/users/admin-invariants', () => ({
 
 vi.mock('@/lib/prisma', () => ({
   default: {
+    $queryRaw: vi.fn().mockResolvedValue([{ mode: 'SSO_OPTIONAL' }]),
+    authenticationPolicy: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'default',
+        mode: 'SSO_OPTIONAL',
+        version: 1,
+        legacyEmergencyEmail: null,
+      }),
+    },
     oidcConfig: {
       findFirst: vi.fn(),
       findUniqueOrThrow: vi.fn(),

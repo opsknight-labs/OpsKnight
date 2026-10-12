@@ -10,7 +10,7 @@ reader:
 keywords: [OIDC login, configure SSO, OpenID Connect, Entra, Google Workspace, Okta, Auth0]
 verification:
   level: source
-  verified_at: 2026-10-02
+  verified_at: 2026-10-12
   evidence:
     - src/components/settings/SsoSettingsForm.tsx
     - src/app/(app)/settings/security/actions.ts
@@ -45,7 +45,7 @@ You need:
 - permission to create its client secret and configure token claims; and
 - a tested local break-glass administrator before changing sign-in policy.
 
-Open **Settings → System → SSO / OIDC** and copy the displayed callback URL. It
+Open **Settings → System → SSO / Authentication** and copy the displayed callback URL. It
 has this exact form:
 
 ```text
@@ -262,7 +262,7 @@ boundary.
 
 After finishing the provider registration:
 
-1. Open **Settings → System → SSO / OIDC**.
+1. Open **Settings → System → SSO / Authentication**.
 2. Choose the provider template. For Okta or Auth0 custom domains, this choice
    keeps the appropriate stricter provider policy; it cannot make an arbitrary
    issuer inherit Google or Entra trust.
@@ -331,12 +331,27 @@ Never map a broad all-employees group to `ADMIN`.
 4. Verify role and profile mappings, logout, and session expiry.
 5. Deactivate a pilot at the provider and confirm the expected access outcome.
 6. Expand assignments in stages while monitoring authentication audit events.
-7. Disable local login only after break-glass recovery is rehearsed.
+7. After saving the enabled connection, select **SSO Optional** in
+   **Authentication policy**, complete a fresh administrator sign-in, and confirm
+   the policy change. Test a real login from a separate browser session.
 
-Local credential login is controlled by `AUTH_LOCAL_LOGIN_ENABLED`. Emergency
-access uses `AUTH_BREAK_GLASS_ENABLED` and `AUTH_BREAK_GLASS_EMAIL`. Keep its
-credential outside the SSO dependency and protect use through an operational
-runbook.
+The database policy controls local credential login. Saving an OIDC connection
+does not itself switch a Password Only installation to Optional. Follow
+[authentication modes](authentication-modes/) for allowed actions, verification,
+session effects, and rollback. **Test Connection** proves discovery validation,
+not successful browser login or retained administrator access.
+
+`AUTH_LOCAL_LOGIN_ENABLED`, `AUTH_BREAK_GLASS_ENABLED`, and `AUTH_BREAK_GLASS_EMAIL`
+are imported once for existing deployments. Later environment changes do not
+override PostgreSQL. Imported legacy emergency password sessions have a one-hour
+maximum and a 15-minute idle limit. New SSO Required activation is unavailable
+until independent emergency accounts and verified administrator readiness exist;
+do not edit the database to bypass that restriction.
+
+Active provider edits under an imported Required policy are rejected. A freshly
+authenticated administrator must first return to Optional before editing. Staged
+provider revisions and their real browser test/activation workflow are not yet
+available in this implementation increment.
 
 OIDC sessions have independent absolute, idle, renewal, and update-age settings
 under the `AUTH_SSO_*` configuration family. Requiring a new OpsKnight OIDC

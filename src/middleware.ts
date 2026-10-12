@@ -3,7 +3,6 @@ import { getToken } from 'next-auth/jwt';
 import { logger } from '@/lib/logger';
 import { getNextAuthSecret } from '@/lib/secret-manager';
 import { SESSION_TOKEN_COOKIE_NAME, useSecureCookies } from '@/lib/auth-cookies';
-import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import { toMobilePath } from '@/lib/app-routes';
 import { statusDomainRequestHeaders } from '@/lib/status-pages/internal-request';
 import {
@@ -1097,34 +1096,10 @@ export default async function middleware(req: NextRequest) {
     Date.now() >= (token as { sessionExpiresAt: number }).sessionExpiresAt * 1000;
   const isAuthenticated = !!token && !token.error && !!token.sub && !isSessionExpired;
 
-  if (isAuthenticated) {
-    const isLoginPage =
-      pathname === '/login' ||
-      pathname.startsWith('/login/') ||
-      pathname === '/m/login' ||
-      pathname.startsWith('/m/login/');
-    if (isLoginPage) {
-      if (req.nextUrl.searchParams.has('error')) return response;
-      const isExplicitMobile = pathname === '/m/login' || pathname.startsWith('/m/login/');
-      const defaultDest = isExplicitMobile || (isMobile && !preferDesktop) ? '/m' : '/';
-      const redirectUrl = safeInternalCallbackUrl(
-        req.nextUrl.searchParams.get('callbackUrl'),
-        defaultDest
-      );
-      const authoritativeOrigin = resolveAuthoritativeOrigin(
-        req,
-        requestHost,
-        statusConfig,
-        usedConfiguredForwardedHost
-      );
-      const redirectResponse = NextResponse.redirect(new URL(redirectUrl, authoritativeOrigin));
-      Object.entries(securityHeaders).forEach(([key, value]) =>
-        redirectResponse.headers.set(key, value)
-      );
-      return redirectResponse;
-    }
-    return response;
-  }
+  // The Edge cookie check is only a routing hint. Login pages validate policy,
+  // revocation and database state in their Node server session callback. Redirecting
+  // here based on a stale cookie creates a loop after SSO enforcement.
+  if (isAuthenticated) return response;
 
   if (isPublicPath(pathname)) return response;
 

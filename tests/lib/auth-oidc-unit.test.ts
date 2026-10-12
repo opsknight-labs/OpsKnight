@@ -38,6 +38,14 @@ vi.mock('@/lib/users/admin-invariants', () => ({
 
 vi.mock('@/lib/prisma', () => ({
   default: {
+    authenticationPolicy: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'default',
+        mode: 'SSO_OPTIONAL',
+        version: 1,
+        legacyEmergencyEmail: null,
+      }),
+    },
     user: {
       findUnique: vi.fn(),
       update: vi.fn(),

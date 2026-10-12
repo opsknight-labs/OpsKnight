@@ -3,6 +3,61 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import prisma from '@/lib/prisma';
+import { checkAuthenticationPolicy } from '@/lib/authentication-policy';
+import type { AuthenticationMethod } from '@/lib/authentication-policy-evaluator';
+
+export type StreamAuthentication = {
+  sessionJti: string;
+  method?: AuthenticationMethod;
+  policyVersion?: number;
+  expiresAt?: number;
+};
+
+export async function getRequestStreamAuthentication(
+  req: NextRequest
+): Promise<StreamAuthentication | null> {
+  try {
+    const token = await getToken({
+      req,
+      secret: await getNextAuthSecret(),
+      cookieName: SESSION_TOKEN_COOKIE_NAME,
+      secureCookie: useSecureCookies,
+      decode: customJwtDecode,
+    });
+    if (!token?.sub || token.error || typeof token.jti !== 'string') return null;
+    const method = token.authProvider ?? (token.oidcAuthenticatedAt ? 'oidc' : 'credentials');
+    if (method === 'legacy-emergency') return null;
+    const decision = await checkAuthenticationPolicy(
+      'SESSION',
+      { email: token.email },
+      {
+        method,
+        policyVersion:
+          typeof token.issuedUnderPolicyVersion === 'number'
+            ? token.issuedUnderPolicyVersion
+            : undefined,
+      }
+    );
+    if (!decision.allowed) return null;
+    const expiresAt = Math.min(
+      typeof token.sessionExpiresAt === 'number' ? token.sessionExpiresAt : Infinity,
+      typeof token.absoluteExpiresAt === 'number' ? token.absoluteExpiresAt : Infinity,
+      typeof token.exp === 'number' ? token.exp : Infinity
+    );
+    if (!Number.isFinite(expiresAt) || Date.now() >= expiresAt * 1000) return null;
+    return {
+      sessionJti: token.jti,
+      method,
+      policyVersion:
+        typeof token.issuedUnderPolicyVersion === 'number'
+          ? token.issuedUnderPolicyVersion
+          : undefined,
+      expiresAt,
+    };
+  } catch {
+    return null;
+  }
+}
 import { isAppRole } from '@/lib/authorization';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { getNextAuthSecret } from '@/lib/secret-manager';
@@ -46,7 +101,8 @@ export async function getRequestSessionJti(req: NextRequest): Promise<string | n
 export async function resolveStreamAuthorization(
   userId: string,
   expectedTokenVersion: number,
-  sessionJti?: string | null
+  sessionJti?: string | null,
+  authentication?: StreamAuthentication | null
 ): Promise<StreamAuthorization | null> {
   // Enforce canonical JTI session registry: stream connections without a valid session JTI
   // are rejected immediately rather than bypassing the session registry.
@@ -55,6 +111,13 @@ export async function resolveStreamAuthorization(
   }
 
   try {
+    if (authentication?.expiresAt && Date.now() >= authentication.expiresAt * 1000) return null;
+    const decision = await checkAuthenticationPolicy(
+      'SESSION',
+      {},
+      { method: authentication?.method, policyVersion: authentication?.policyVersion }
+    );
+    if (!decision.allowed) return null;
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {

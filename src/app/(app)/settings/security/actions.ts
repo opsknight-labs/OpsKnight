@@ -20,6 +20,7 @@ import {
 } from '@/lib/oidc/issuer-migration';
 import { normalizeOidcProviderType } from '@/lib/oidc-provider';
 import { validateOidcCustomScopes } from '@/lib/oidc/scopes';
+import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { getEnterpriseSessionPolicy } from '@/lib/local-auth-policy';
 
 function normalizeDomains(value: string) {
@@ -298,8 +299,16 @@ export async function saveOidcConfig(
       };
     }
 
+    await getAuthenticationPolicy();
     let migratedUserIds: string[] = [];
     const updatedAt = await prisma.$transaction(async tx => {
+      const policies = await tx.$queryRaw<Array<{ mode: string }>>`
+        SELECT "mode" FROM "AuthenticationPolicy" WHERE "id" = 'default' FOR UPDATE`;
+      if (!policies[0] || policies[0].mode === 'SSO_REQUIRED') {
+        throw new Error(
+          'Switch to SSO Optional with fresh administrator authentication before editing the active provider. SSO Required provider changes require staged activation.'
+        );
+      }
       const id = existing?.id ?? 'default';
       if (existing) {
         const roleMappingChanged =

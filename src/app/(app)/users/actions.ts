@@ -1,5 +1,7 @@
 'use server';
 
+import { assertPasswordOperationAllowed } from '@/lib/authentication-policy';
+
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
@@ -284,8 +286,10 @@ export async function addUser(
       return { error: 'A user with that email already exists.' };
     }
 
+    await assertPasswordOperationAllowed();
     let inviteToken = '';
     const user = await prisma.$transaction(async tx => {
+      await assertPasswordOperationAllowed(tx);
       const newUser = await tx.user.create({
         data: {
           name,

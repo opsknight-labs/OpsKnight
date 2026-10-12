@@ -6,13 +6,39 @@ product_area: configuration
 audience: [developer, operator, administrator]
 verification:
   level: source
-  verified_at: 2026-10-03
+  verified_at: 2026-10-12
   evidence:
     - src/
     - deploy/
 ---
 
 # Configuration reference
+
+## Authentication policy migration
+
+In 2.1 the singleton PostgreSQL AuthenticationPolicy is authoritative for login
+mode. `AUTH_LOCAL_LOGIN_ENABLED` defaults to enabled and the legacy emergency
+exception defaults to disabled. On the first policy read after schema migration,
+an advisory-locked transaction imports those effective controls once, records the
+snapshot and import marker, and emits `auth.policy.migrated`. The warning must be
+reviewed before enforcing or downgrading an installation. Replicas must have
+consistent legacy controls during that first import.
+
+After import, changing `AUTH_LOCAL_LOGIN_ENABLED`, `AUTH_BREAK_GLASS_ENABLED`, or
+`AUTH_BREAK_GLASS_EMAIL` and restarting does not change the policy. Use
+**Settings → System → SSO / Authentication → Authentication policy** for supported
+mode changes. New SSO Required activation is blocked pending independent recovery
+and verified administrator readiness. An already-disabled local-login installation
+is preserved as Required, including its explicitly configured legacy exception;
+this is not a statement that its recovery is certified.
+
+Do not delete policy/import records or use environment edits as lockout recovery.
+A missing imported policy or database outage fails authentication closed. Restore
+PostgreSQL using external database administration. Application rollback to older
+code needs an explicit review of legacy deployment controls because older versions
+do not understand the database policy. See
+[authentication modes](../../guides/identity/authentication-modes/) for the import
+contract, defaults, session effects and operator verification.
 
 This operator reference contains settings exposed by deployment manifests or
 the supported environment template. Required and default values are conservative
@@ -262,39 +288,39 @@ Sets the polling interval while the general queue is idle.
 - Secret: no
 - Runtime roles: web or integrated runtime
 - Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
+- Apply behavior: imported once into PostgreSQL; later edits and restarts do not override policy
+- Deprecated: legacy primary policy control; retained only for one-time migration
 - Extraction confidence: incomplete
 - Static default: none discovered
-- Sources: `env.example`, `src/lib/local-auth-policy.ts`
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`, `src/lib/authentication-policy.ts`
 
 ## `AUTH_BREAK_GLASS_ENABLED`
 
 - Type: string
 - Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
+- Allowed values: `true` or `false`; legacy parsing trims whitespace and compares case-insensitively
 - Secret: no
 - Runtime roles: web or integrated runtime
 - Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
+- Apply behavior: imported once into PostgreSQL; later edits and restarts do not override policy
+- Deprecated: legacy primary policy control; retained only for one-time migration
 - Extraction confidence: incomplete
-- Static default: none discovered
-- Sources: `env.example`, `src/lib/local-auth-policy.ts`
+- Static default: `false` (one-time legacy import)
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`, `src/lib/authentication-policy.ts`
 
 ## `AUTH_LOCAL_LOGIN_ENABLED`
 
 - Type: string
 - Required: conditional or optional; inspect cited source
-- Allowed values: not statically complete
+- Allowed values: `true` or `false`; legacy parsing trims whitespace and compares case-insensitively
 - Secret: no
 - Runtime roles: web or integrated runtime
 - Deployment support: manifest
-- Apply behavior: restart required
-- Deprecated: no
+- Apply behavior: imported once into PostgreSQL; later edits and restarts do not override policy
+- Deprecated: legacy primary policy control; retained only for one-time migration
 - Extraction confidence: incomplete
-- Static default: none discovered
-- Sources: `env.example`, `src/lib/local-auth-policy.ts`
+- Static default: `true` (one-time legacy import)
+- Sources: `env.example`, `src/lib/local-auth-policy.ts`, `src/lib/authentication-policy.ts`
 
 ## `AUTH_SSO_REAUTH_AFTER_SECONDS`
 

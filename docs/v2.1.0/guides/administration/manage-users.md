@@ -11,7 +11,7 @@ reader:
 keywords: [invite users, disable account, delete user, user roles, team membership, offboarding]
 verification:
   level: source
-  verified_at: 2026-09-29
+  verified_at: 2026-10-12
   evidence:
     - src/app/(app)/users/page.tsx
     - src/app/(app)/users/[id]/page.tsx
@@ -24,6 +24,16 @@ verification:
 ---
 
 # Manage users and account lifecycle
+
+Under SSO Required, password invitations and invitation-based password completion
+are blocked server-side. Use existing OIDC/JIT or SCIM provisioning procedures for
+SSO onboarding. Existing-account OIDC linking is explicitly approved and preserves
+the User ID and operational history; do not delete the first administrator to
+introduce SSO. Review role-source and mapping consequences before testing login.
+Dedicated emergency identities are not implemented yet. Imported legacy emergency
+password identities are still normal User records, so keep them outside provider
+assignments and automated offboarding; they are not automatically excluded by
+the dedicated-principal architecture specified for the final release.
 
 ![User directory populated with active responders and administrators](/docs/v2.0.0/assets/users.png)
 

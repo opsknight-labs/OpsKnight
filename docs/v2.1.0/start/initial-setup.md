@@ -10,7 +10,7 @@ reader:
   task: Complete a new OpsKnight installation without locking out the public hostname.
 verification:
   level: source
-  verified_at: 2026-10-02
+  verified_at: 2026-10-12
   evidence:
     [
       src/app/setup/page.tsx,
@@ -23,6 +23,17 @@ verification:
 # Complete the initial setup
 
 Use `/setup` once, after database migration and public readiness succeed. This workflow creates the first active administrator and saves the canonical Application URL. It is part of the deployment security boundary, not a cosmetic preference.
+
+Introducing SSO does not replace this administrator or turn the account into an
+emergency identity. Keep password sign-in available while configuring the provider,
+select SSO Optional, approve the existing account's first OIDC link in **Users**,
+and test sign-in from a separate browser session. Issuer-and-subject binding links
+the same User ID; records and permissions remain attached to that account. Review
+role mappings before sign-in because matching claims can change the role. Follow
+[authentication modes](../guides/identity/authentication-modes/) for system policy.
+New SSO Required activation remains unavailable pending independent emergency
+recovery and a verified SSO administrator. Do not bypass readiness by changing
+deployment variables after their one-time policy import.
 
 > **Before selecting Create administrator:** verify that **Application URL** is the browser-facing HTTPS origin. After initialization, requests for unknown application hosts are rejected with HTTP `421 Misdirected Request`.
 

@@ -1,3 +1,4 @@
+import { assertPasswordOperationAllowed } from '@/lib/authentication-policy';
 import { randomBytes, createHash } from 'crypto';
 import prisma from '@/lib/prisma';
 import { getAppUrl } from '@/lib/app-url';
@@ -11,12 +12,14 @@ export async function issueUserInviteToken(
   userId: string,
   email: string
 ): Promise<{ token: string; inviteUrl: string; expiresAt: Date }> {
+  await assertPasswordOperationAllowed();
   const token = randomBytes(32).toString('base64url');
   const tokenHash = createHash('sha256').update(token).digest('hex');
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const identifier = email.toLowerCase();
 
   await prisma.$transaction(async tx => {
+    await assertPasswordOperationAllowed(tx);
     const rotated = await tx.user.update({
       where: { id: userId, status: 'INVITED' },
       data: { invitedAt: new Date(), invitationGeneration: { increment: 1 } },

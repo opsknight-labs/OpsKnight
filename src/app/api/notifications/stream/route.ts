@@ -1,3 +1,4 @@
+import { checkAuthenticationPolicy } from '@/lib/authentication-policy';
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
@@ -311,6 +312,19 @@ export async function GET(req: NextRequest) {
 
             if (pollCount % 3 === 0) {
               try {
+                const policyDecision = await checkAuthenticationPolicy(
+                  'SESSION',
+                  { email: session.user.email },
+                  {
+                    method: session.authenticationMethod,
+                    policyVersion: session.issuedUnderPolicyVersion,
+                  }
+                );
+                if (!policyDecision.allowed || Date.now() >= new Date(session.expires).getTime()) {
+                  send(JSON.stringify({ type: 'authorization_revoked' }));
+                  cleanup();
+                  return;
+                }
                 const freshUser = await prisma.user.findUnique({
                   where: { id: user.id },
                   select: { status: true, tokenVersion: true },

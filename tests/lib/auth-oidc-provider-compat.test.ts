@@ -22,6 +22,14 @@ vi.mock('@/lib/oidc-validation', () => ({
 
 vi.mock('@/lib/prisma', () => {
   const mockPrisma = {
+    authenticationPolicy: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'default',
+        mode: 'SSO_OPTIONAL',
+        version: 1,
+        legacyEmergencyEmail: null,
+      }),
+    },
     user: {
       findUnique: vi.fn(),
       create: vi.fn(),

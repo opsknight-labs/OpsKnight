@@ -20,11 +20,12 @@ import {
 } from '@/lib/auth-cookies';
 import type { JWT } from 'next-auth/jwt';
 import { customJwtEncode, customJwtDecode } from '@/lib/auth-jwt-encoder';
+import { getEnterpriseSessionPolicy } from '@/lib/local-auth-policy';
 import {
-  getEnterpriseSessionPolicy,
-  getLocalAuthPolicy,
-  isLocalCredentialAllowed,
-} from '@/lib/local-auth-policy';
+  checkAuthenticationPolicy,
+  getDatabaseLocalAuthPolicy,
+  getAuthenticationPolicy,
+} from '@/lib/authentication-policy';
 import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
 import { getValidatedOidcRuntimeMetadata } from '@/lib/oidc-validation';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
@@ -56,13 +57,17 @@ type AugmentedJWT = JWT & {
   /** Trust-version of the provider configuration that issued this session. */
   oidcConfigVersion?: number;
   /** Authentication provider that established this session. */
-  authProvider?: 'oidc' | 'credentials';
+  authProvider?: 'oidc' | 'credentials' | 'legacy-emergency';
+  authenticationPolicyVersion?: number;
+  issuedUnderPolicyVersion?: number;
+  authenticatedAt?: number;
 };
 
 type AugmentedUser = User & {
   tokenVersion?: number;
   role?: string;
   rememberMe?: boolean;
+  legacyEmergency?: boolean;
 };
 
 type OidcProfileClaims = Record<string, unknown>;
@@ -152,7 +157,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
   }
 
   authOptionsInFlight = (async () => {
-    const oidcConfig = await getOidcConfig();
+    const localAuthPolicy = await getDatabaseLocalAuthPolicy();
+    const oidcConfig = localAuthPolicy.oidcLoginEnabled ? await getOidcConfig() : null;
     const oidcValidation = oidcConfig
       ? await getValidatedOidcRuntimeMetadata(oidcConfig.issuer, {
           tokenEndpointAuthMethod: oidcConfig.tokenEndpointAuthMethod,
@@ -171,8 +177,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
     const credentialSessionMaxAgeSeconds = 60 * 60 * 24 * 7;
     const rememberMeMaxAgeSeconds = 60 * 60 * 24 * 90;
     const sessionUpdateAgeSeconds = enterpriseSession.updateAgeSeconds;
-    const localAuthPolicy = getLocalAuthPolicy();
-
     if (activeOidcConfig) {
       logger.info('[Auth] OIDC provider will be enabled', {
         component: 'auth',
@@ -304,12 +308,14 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   const userAgentHeader = (req?.headers?.['user-agent'] as string) || '';
                   // Session trust is an explicit user choice. Form factor/user-agent
                   // must never silently turn a browser into a long-lived trusted device.
-                  const rememberMe = credentials?.rememberMe === 'true';
+                  const currentPolicy = await getAuthenticationPolicy();
+                  const legacyEmergency = currentPolicy.legacyEmergencyEmail === email;
+                  const rememberMe = !legacyEmergency && credentials?.rememberMe === 'true';
                   const { getClientIp } = await import('@/lib/client-ip');
                   const ip = getClientIp(req?.headers);
                   const userAgent = userAgentHeader || 'Unknown';
 
-                  if (!isLocalCredentialAllowed(email)) {
+                  if (!(await checkAuthenticationPolicy('PASSWORD_LOGIN', { email })).allowed) {
                     await logLoginBlocked(email || 'unknown', ip, userAgent, 'LOCAL_AUTH_DISABLED');
                     return null;
                   }
@@ -444,6 +450,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     role: user.role,
                     tokenVersion: user.tokenVersion,
                     rememberMe,
+                    legacyEmergency,
                   } as User & { rememberMe: boolean };
                 },
               }),
@@ -463,10 +470,25 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             trigger: trigger || 'none',
           });
 
+          if (user) {
+            try {
+              (token as AugmentedJWT).issuedUnderPolicyVersion = (
+                await getAuthenticationPolicy()
+              ).version;
+            } catch {
+              return clearSessionToken(token as AugmentedJWT, 'AUTHENTICATION_POLICY_UNAVAILABLE');
+            }
+          }
+
           if (user && account) {
             delete (token as AugmentedJWT).error;
             (token as AugmentedJWT).authProvider =
-              account.provider === 'oidc' ? 'oidc' : 'credentials';
+              account.provider === 'oidc'
+                ? 'oidc'
+                : (user as AugmentedUser).legacyEmergency
+                  ? 'legacy-emergency'
+                  : 'credentials';
+            (token as AugmentedJWT).authenticatedAt = Date.now();
             if (!token.jti || typeof token.jti !== 'string') {
               token.jti = uuidv4();
             }
@@ -531,6 +553,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               (token as AugmentedJWT).rememberMe = (user as AugmentedUser).rememberMe === true;
             }
 
+            (token as AugmentedJWT).lastActivityAt = Date.now();
             const remember = (token as AugmentedJWT).rememberMe === true;
             const isOidc = account.provider === 'oidc';
             const nowSec = Math.floor(Date.now() / 1000);
@@ -541,17 +564,22 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               oidcRenewalWindowSeconds * 2
             );
 
-            const sessionTtlSeconds = isOidc
-              ? oidcRenewalWindowSeconds
-              : remember
-                ? rememberMeMaxAgeSeconds
-                : credentialSessionMaxAgeSeconds;
+            const isLegacyEmergency = (token as AugmentedJWT).authProvider === 'legacy-emergency';
+            const sessionTtlSeconds = isLegacyEmergency
+              ? 3600
+              : isOidc
+                ? oidcRenewalWindowSeconds
+                : remember
+                  ? rememberMeMaxAgeSeconds
+                  : credentialSessionMaxAgeSeconds;
 
-            const absoluteTtlSeconds = isOidc
-              ? oidcAbsoluteMaxAgeSeconds
-              : remember
-                ? rememberMeMaxAgeSeconds
-                : credentialSessionMaxAgeSeconds * 4;
+            const absoluteTtlSeconds = isLegacyEmergency
+              ? 3600
+              : isOidc
+                ? oidcAbsoluteMaxAgeSeconds
+                : remember
+                  ? rememberMeMaxAgeSeconds
+                  : credentialSessionMaxAgeSeconds * 4;
 
             const sessionExpiresAt = nowSec + sessionTtlSeconds;
             const absoluteExpiresAt = nowSec + absoluteTtlSeconds;
@@ -582,6 +610,16 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
           const augmentedToken = token as AugmentedJWT;
           let isProfileRefresh = false;
+
+          if (
+            augmentedToken.authProvider === 'legacy-emergency' &&
+            (!augmentedToken.authenticatedAt ||
+              Date.now() - augmentedToken.authenticatedAt >= 3600000 ||
+              !augmentedToken.lastActivityAt ||
+              Date.now() - augmentedToken.lastActivityAt >= 900000)
+          ) {
+            return clearSessionToken(augmentedToken, 'EMERGENCY_SESSION_EXPIRED');
+          }
 
           if (trigger === 'update') {
             const updatePayload = session as
@@ -647,6 +685,47 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             return clearSessionToken(augmentedToken, 'SESSION_EXPIRED');
           }
 
+          if (token.sub) {
+            try {
+              const decision = await checkAuthenticationPolicy(
+                'SESSION',
+                { email: token.email },
+                {
+                  method:
+                    augmentedToken.authProvider ??
+                    (augmentedToken.oidcAuthenticatedAt ? 'oidc' : 'credentials'),
+                  policyVersion: augmentedToken.issuedUnderPolicyVersion,
+                }
+              );
+              if (!decision.allowed) return clearSessionToken(augmentedToken, decision.reason);
+              augmentedToken.authenticationPolicyVersion = decision.version;
+              if (augmentedToken.authProvider === 'legacy-emergency') {
+                const started = augmentedToken.authenticatedAt;
+                if (
+                  !started ||
+                  Date.now() - started >= 3600000 ||
+                  (augmentedToken.lastActivityAt &&
+                    Date.now() - augmentedToken.lastActivityAt >= 900000)
+                ) {
+                  return clearSessionToken(augmentedToken, 'EMERGENCY_SESSION_EXPIRED');
+                }
+                augmentedToken.rememberMe = false;
+                augmentedToken.absoluteExpiresAt = Math.floor(started / 1000) + 3600;
+                augmentedToken.sessionExpiresAt = Math.min(
+                  augmentedToken.sessionExpiresAt ?? Infinity,
+                  augmentedToken.absoluteExpiresAt
+                );
+                token.exp = Math.min(
+                  typeof token.exp === 'number' ? token.exp : Infinity,
+                  augmentedToken.absoluteExpiresAt
+                );
+              }
+            } catch {
+              augmentedToken.error = 'AUTHENTICATION_POLICY_UNAVAILABLE';
+              return augmentedToken;
+            }
+          }
+
           if (!user && augmentedToken.oidcAuthenticatedAt) {
             const currentTime = Date.now();
             const currentConfig = await getOidcConfig();
@@ -679,6 +758,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               if (isProfileRefresh) {
                 const profileUser = await getSessionProfileProjection(token.sub);
                 if (profileUser) {
+                  if (
+                    typeof currentTokenVersion === 'number' &&
+                    profileUser.tokenVersion !== currentTokenVersion
+                  ) {
+                    return clearSessionToken(token as AugmentedJWT, 'SESSION_REVOKED');
+                  }
                   delete (token as AugmentedJWT).error;
                   token.name = profileUser.name;
                   token.email = profileUser.email;
@@ -744,6 +829,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             logger.debug('[Auth-Debug] No token.sub found!', { component: 'auth:jwt', token });
           }
 
+          if (augmentedToken.authProvider === 'legacy-emergency')
+            augmentedToken.lastActivityAt = Date.now();
           return token;
         },
         async session({ session, token }) {
@@ -779,6 +866,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             session.user.sessionId = sessionJti;
           }
           session.sessionId = sessionJti;
+          session.authenticationMethod = (token as AugmentedJWT).authProvider;
+          session.authenticationPolicyVersion = (token as AugmentedJWT).authenticationPolicyVersion;
+          session.issuedUnderPolicyVersion = (token as AugmentedJWT).issuedUnderPolicyVersion;
+          session.authenticatedAt = (token as AugmentedJWT).authenticatedAt;
 
           if (typeof (token as AugmentedJWT)?.sessionExpiresAt === 'number') {
             session.expires = new Date(
@@ -804,6 +895,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             return true;
           }
 
+          if (!(await checkAuthenticationPolicy('OIDC_LOGIN')).allowed) return false;
           const activeConfig = await getOidcConfig();
           if (!activeConfig) {
             logger.warn('[Auth] OIDC sign-in rejected: configuration missing or invalid', {

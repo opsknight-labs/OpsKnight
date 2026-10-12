@@ -7,7 +7,7 @@ import prisma from '@/lib/prisma';
 import { buildRetainedDateFilter } from '@/lib/dashboard-utils';
 import { dashboardMetricsScope } from '@/lib/authorization-filters';
 import {
-  getRequestSessionJti,
+  getRequestStreamAuthentication,
   hasSameStreamAuthorizationScope,
   resolveStreamAuthorization,
   type StreamAuthorization,
@@ -29,12 +29,14 @@ export async function GET(request: NextRequest) {
     });
     if (!sessionUser) return new Response('Unauthorized', { status: 401 });
 
-    const sessionJti = await getRequestSessionJti(request);
+    const streamAuthentication = await getRequestStreamAuthentication(request);
+    const sessionJti = streamAuthentication?.sessionJti;
     const expectedTokenVersion = session.user.tokenVersion ?? 0;
     const initialAuthorization = await resolveStreamAuthorization(
       sessionUser.id,
       expectedTokenVersion,
-      sessionJti
+      sessionJti,
+      streamAuthentication
     );
     if (!initialAuthorization) return new Response('Unauthorized', { status: 401 });
     let actor: StreamAuthorization = initialAuthorization;
@@ -155,7 +157,8 @@ export async function GET(request: NextRequest) {
             const nextAuthorization = await resolveStreamAuthorization(
               actor.id,
               expectedTokenVersion,
-              sessionJti
+              sessionJti,
+              streamAuthentication
             );
             if (!nextAuthorization || !hasSameStreamAuthorizationScope(actor, nextAuthorization)) {
               send({ type: 'authorization_revoked' });
