@@ -20,6 +20,7 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/lib/db-utils', () => ({
   runSerializableTransaction: mocks.runSerializableTransaction,
+  runReadCommittedTransaction: mocks.runSerializableTransaction,
 }));
 
 import prisma from '@/lib/prisma';
@@ -77,7 +78,13 @@ function transactionDouble(failOn?: 'incident' | 'event' | 'job') {
   const writes: string[] = [];
   mocks.runSerializableTransaction.mockImplementation(async callback =>
     callback({
-      $queryRaw: mocks.txEscalationJobLookup,
+      $queryRaw: async (...args: unknown[]) => {
+        if (Array.isArray(args[0])) {
+          const row = await mocks.txIncidentFindUnique();
+          return row ? [row] : [];
+        }
+        return mocks.txEscalationJobLookup(...args);
+      },
       incident: {
         findUnique: mocks.txIncidentFindUnique,
         updateMany: mocks.txIncidentUpdateMany,

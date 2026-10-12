@@ -3,7 +3,7 @@ import { resolveIncidentResponderRouting } from './routing';
  * Durable persistence for the escalation engine.
  *
  * Everything that changes escalation state goes through this module, and the
- * outcome of a step lands in exactly one serializable transaction:
+ * outcome of a step lands in exactly one incident-locked transaction:
  *
  *   verify generation -> assignment -> timeline -> escalation state -> next job
  *
@@ -14,7 +14,7 @@ import { resolveIncidentResponderRouting } from './routing';
  */
 import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
-import { runSerializableTransaction } from '../db-utils';
+import { runReadCommittedTransaction, runSerializableTransaction } from '../db-utils';
 import { escalationJobLookupQuery } from './job-query';
 import { logger } from '../logger';
 import type { EscalationAssignment } from './assignee-selection';
@@ -58,16 +58,6 @@ type IncidentStateRow = {
   currentEscalationStep: number | null;
   escalationGeneration: number | null;
 };
-
-const INCIDENT_STATE_SELECT = {
-  status: true,
-  assigneeId: true,
-  teamId: true,
-  escalationStatus: true,
-  escalationProcessingAt: true,
-  currentEscalationStep: true,
-  escalationGeneration: true,
-} as const;
 
 /**
  * Production selects always include `escalationProcessingAt`. `undefined` is
@@ -306,11 +296,15 @@ export async function commitEscalationPlan(input: {
    */
   notifications?: EscalationNotificationPlan;
 }): Promise<EscalationCommitResult> {
-  return runSerializableTransaction<EscalationCommitResult>(async tx => {
-    const current = (await tx.incident.findUnique({
-      where: { id: input.incidentId },
-      select: INCIDENT_STATE_SELECT,
-    })) as IncidentStateRow | null;
+  return runReadCommittedTransaction<EscalationCommitResult>(async tx => {
+    // Serialize workers and lifecycle mutations on this incident before any
+    // writes. Waiting workers read the committed claim/generation/cursor after
+    // acquiring the lock; unrelated incidents do not share an SSI read fence.
+    const [current] = await tx.$queryRaw<IncidentStateRow[]>`
+      SELECT status::text AS status, "assigneeId", "teamId", "escalationStatus",
+             "escalationProcessingAt", "currentEscalationStep", "escalationGeneration"
+      FROM "Incident" WHERE id = ${input.incidentId} FOR UPDATE
+    `;
 
     if (
       !current ||

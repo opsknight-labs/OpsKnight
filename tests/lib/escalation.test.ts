@@ -53,6 +53,25 @@ const txIncidentUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
 // the reloaded lease must carry that same token or every commit reads as
 // superseded.
 vi.mock('@/lib/db-utils', () => ({
+  runReadCommittedTransaction: vi.fn(async fn =>
+    fn({
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValue([
+          {
+            status: 'OPEN',
+            assigneeId: null,
+            teamId: null,
+            escalationStatus: 'ESCALATING',
+            escalationProcessingAt: new Date('2026-01-01T12:00:00.000Z'),
+            currentEscalationStep: 0,
+          },
+        ]),
+      incident: { update: txIncidentUpdate },
+      incidentEvent: { create: vi.fn() },
+      backgroundJob: { create: vi.fn().mockResolvedValue({ id: 'job-next' }) },
+    })
+  ),
   runSerializableTransaction: vi.fn(async fn => {
     return fn({
       incident: {
@@ -131,7 +150,7 @@ describe('resolveEscalationTarget', () => {
           { userId: 'invited-1', user: { status: 'INVITED' } },
           { userId: 'disabled-1', user: { status: 'DISABLED' } },
         ],
-      } as any);
+      } as never);
 
       const result = await resolveEscalationTarget('TEAM', 'team-1');
 
@@ -161,7 +180,7 @@ describe('resolveEscalationTarget', () => {
           { userId: 'user-1', user: { status: 'ACTIVE' } },
           { userId: 'lead-1', user: { status: 'ACTIVE' } },
         ],
-      } as any);
+      } as never);
 
       const result = await resolveEscalationTarget('TEAM', 'team-1', new Date(), true);
 
@@ -182,7 +201,7 @@ describe('resolveEscalationTarget', () => {
         teamLeadId: 'lead-1',
         // Lead is not a member that receives team notifications.
         members: [{ userId: 'user-1', user: { status: 'ACTIVE' } }],
-      } as any);
+      } as never);
 
       const result = await resolveEscalationTarget('TEAM', 'team-1', new Date(), true);
 
@@ -218,7 +237,7 @@ describe('resolveEscalationTarget', () => {
             replacesUserId: null,
           },
         ],
-      } as any);
+      } as never);
 
       const result = await resolveEscalationTarget('SCHEDULE', 'schedule-1', atTime);
 
@@ -239,7 +258,7 @@ describe('resolveEscalationTarget', () => {
         timeZone: 'UTC',
         layers: [],
         overrides: [],
-      } as any);
+      } as never);
 
       const result = await resolveEscalationTarget('SCHEDULE', 'schedule-1');
 
@@ -249,7 +268,7 @@ describe('resolveEscalationTarget', () => {
 
   describe('Unknown target type', () => {
     it('returns empty array for unknown target type', async () => {
-      const result = await resolveEscalationTarget('UNKNOWN' as any, 'id');
+      const result = await resolveEscalationTarget('UNKNOWN' as never, 'id');
       expect(result).toEqual([]);
     });
   });
@@ -284,7 +303,7 @@ describe('executeEscalation', () => {
     vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
       id: 'inc-1',
       service: { policy: null },
-    } as any);
+    } as never);
 
     const result = await executeEscalation('inc-1');
 
@@ -304,7 +323,7 @@ describe('executeEscalation', () => {
           steps: [{ delayMinutes: 0, targetType: 'USER', targetUserId: 'user-1' }],
         },
       },
-    } as any);
+    } as never);
 
     const result = await executeEscalation('inc-1');
 
@@ -325,7 +344,7 @@ describe('executeEscalation', () => {
           steps: [{ delayMinutes: 0, targetType: 'USER', targetUserId: 'user-1' }],
         },
       },
-    } as any);
+    } as never);
 
     const result = await executeEscalation('inc-1');
 
@@ -374,7 +393,7 @@ describe('executeEscalation', () => {
 
     // Lock acquisition fails, and the incident is still a live escalation, so
     // this is a competing worker rather than a superseded generation.
-    vi.mocked(prisma.incident.updateMany).mockResolvedValueOnce({ count: 0 } as any);
+    vi.mocked(prisma.incident.updateMany).mockResolvedValueOnce({ count: 0 } as never);
     vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
       status: 'OPEN',
       escalationStatus: 'ESCALATING',
@@ -410,9 +429,9 @@ describe('executeEscalation', () => {
           ],
         },
       },
-    } as any);
+    } as never);
 
-    vi.mocked(prisma.incident.updateMany).mockResolvedValueOnce({ count: 1 } as any);
+    vi.mocked(prisma.incident.updateMany).mockResolvedValueOnce({ count: 1 } as never);
 
     const result = await executeEscalation('inc-1');
 
@@ -455,7 +474,7 @@ describe('processPendingEscalations', () => {
       escalationStatus: 'ESCALATING',
     }));
 
-    vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
+    vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as never);
 
     const executor = vi.fn().mockResolvedValue({ outcome: 'STEP_EXECUTED', escalated: true });
 
@@ -472,7 +491,7 @@ describe('processPendingEscalations', () => {
       { id: 'inc-2', currentEscalationStep: 0, escalationStatus: 'ESCALATING' },
     ];
 
-    vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
+    vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as never);
 
     const executor = vi
       .fn()
@@ -490,7 +509,7 @@ describe('processPendingEscalations', () => {
   it('marks benign failures as completed without errors', async () => {
     const incidents = [{ id: 'inc-1', currentEscalationStep: 0, escalationStatus: 'ESCALATING' }];
 
-    vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
+    vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as never);
 
     const executor = vi.fn().mockResolvedValue({
       outcome: 'COMPLETED',
@@ -517,7 +536,7 @@ describe('processPendingEscalations', () => {
       },
     ];
 
-    vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
+    vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as never);
 
     const executor = vi.fn().mockRejectedValue(new Error('Serialization failure'));
 
@@ -535,7 +554,7 @@ describe('processPendingEscalations', () => {
   it('uses provided step index from incident', async () => {
     const incidents = [{ id: 'inc-1', currentEscalationStep: 3, escalationStatus: 'ESCALATING' }];
 
-    vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
+    vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as never);
 
     const executor = vi.fn().mockResolvedValue({ outcome: 'STEP_EXECUTED', escalated: true });
 
@@ -549,7 +568,7 @@ describe('processPendingEscalations', () => {
       { id: 'inc-1', currentEscalationStep: null, escalationStatus: 'ESCALATING' },
     ];
 
-    vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as any);
+    vi.mocked(prisma.incident.findMany).mockResolvedValueOnce(incidents as never);
 
     const executor = vi.fn().mockResolvedValue({ outcome: 'STEP_EXECUTED', escalated: true });
 

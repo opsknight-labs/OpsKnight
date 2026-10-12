@@ -268,3 +268,22 @@ in memory. Compact traces also avoid constructing unused full rule summaries.
 Stored explanations, immutable routing snapshots, byte bounds and trace sampling
 remain the same. This change requires fresh capacity measurements; Audit 28
 certifies correctness and recovery for the preceding runtime only.
+
+Audit 29 tested revision `347b065e36f9510493e1003db4b0dd075004c17a` with
+the persistence projection. All 24,007 acknowledged events persisted and all
+queues drained; every paired latency comparison failed at least one frozen
+1.25× gate. LIVE-worst also recorded one `EVALUATION_TIMEOUT` fallback.
+Capacity remains **NOT CERTIFIED**; this run does not establish zero fallbacks.
+The complete matrix and component timings are appended to the capacity ledger,
+preserving all preceding evidence.
+
+The next contention fix locks the incident row before an escalation step reads
+its claim, generation and cursor, then commits assignment, pages, timeline,
+state and next job atomically at READ COMMITTED. It replaces broad Serializable
+read conflicts between unrelated incidents with the incident's explicit row
+fence. Other escalation transactions retain their existing isolation. Real
+PostgreSQL tests cover concurrent ownership, ACK while waiting, rollback after
+page writes, and forty incidents sharing a recipient. The previous implementation
+failed that shared-recipient test with SQLSTATE 40001; the row-locked commit
+passed all four tests with zero retries. Sustained performance must be measured
+again before this change supports a capacity claim.
