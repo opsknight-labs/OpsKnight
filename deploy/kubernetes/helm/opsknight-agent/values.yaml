@@ -1,0 +1,61 @@
+fullnameOverride: ""
+agent:
+  enabled: true
+  replicaCount: 1
+  kubernetes:
+    enabled: false
+  image:
+    repository: ghcr.io/opsknight-labs/opsknight-agent
+    tag: 2.0.0
+    digest: ''
+    pullPolicy: IfNotPresent
+  url: ''
+  enrollmentToken:
+    existingSecret: ''
+    key: OPSKNIGHT_AGENT_ENROLLMENT_TOKEN
+  policy:
+    allowedStepTypes:
+      - LINUX_DIAGNOSTICS
+    systemdUnits: []
+    dockerContainers: []
+    podmanContainers: []
+    kubernetesNamespaces: []
+    kubernetesActions:
+      - get
+      - describe
+      - logs
+      - events
+      - rollout-status
+    kubernetesMaxReplicas: 0
+    kubernetesTargets: []
+    linuxDiagnostics:
+      - summary
+      - disk
+      - memory
+    networkHosts: []
+    networkPorts: []
+    bashCommandPatterns: []
+    allowNonIdempotent: false
+    maxRuntimeSeconds: 300
+    maxOutputBytes: 1048576
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ''
+  serviceAccount:
+    create: true
+    name: ''
+  rbac:
+    rules: []
+  networkPolicy:
+    kubernetesApiCIDRs: []
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}

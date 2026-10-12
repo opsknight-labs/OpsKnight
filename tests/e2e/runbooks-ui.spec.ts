@@ -206,7 +206,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   const secretName = `ui-secret-${suffix}`;
   await page.getByRole('button', { name: 'Add Agent', exact: true }).click();
   await page.getByLabel('Agent name', { exact: true }).fill(agentName);
-  await page.getByLabel('Expected hostname').fill('ui-fixture.invalid');
+  await page.getByLabel('Hostname hint (optional)').fill('ui-fixture.invalid');
   await page.getByRole('button', { name: 'Create enrollment', exact: true }).click();
   await expect(page.getByText('Copy this one-time token now', { exact: true })).toBeVisible();
   const agent = await prisma.runbookAgent.findFirstOrThrow({ where: { name: agentName } });
