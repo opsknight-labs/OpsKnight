@@ -23,3 +23,7 @@ services:
 
 volumes:
   opsknight_agent_data:
+
+networks:
+  opsknight-network:
+    driver: bridge

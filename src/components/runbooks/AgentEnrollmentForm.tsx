@@ -29,7 +29,7 @@ export default function AgentEnrollmentForm({
           <Input id="agent-name" name="name" required placeholder="prod-payments-01" />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="agent-hostname">Expected hostname</Label>
+          <Label htmlFor="agent-hostname">Hostname hint (optional)</Label>
           <Input id="agent-hostname" name="hostname" placeholder="payments-01.internal" />
         </div>
         <Button type="submit" disabled={pending}>

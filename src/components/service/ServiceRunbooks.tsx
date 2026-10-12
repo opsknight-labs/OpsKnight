@@ -31,6 +31,7 @@ import {
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
 import RunbookBindingVersionInputs from './RunbookBindingVersionInputs';
+import Field from '@/components/runbooks/RunbookField';
 
 type Binding = Prisma.ServiceRunbookBindingGetPayload<{
   include: {
@@ -115,10 +116,20 @@ export default function ServiceRunbooks({
                 Target:{' '}
                 {availableAgents.find(agent => agent.id === binding.defaultAgentId)?.name ??
                   availableAgentPools.find(pool => pool.id === binding.defaultAgentPoolId)?.name ??
-                  'Control plane'}{' '}
+                  (binding.defaultAgentId
+                    ? 'Unavailable Agent'
+                    : binding.defaultAgentPoolId
+                      ? 'Unavailable pool'
+                      : 'Control plane')}{' '}
                 · Trigger:{' '}
-                {binding.triggers.length
-                  ? `${binding.triggers[0]?.event.replaceAll('_', ' ')} · ${binding.triggers[0]?.conditions.length ?? 0} conditions`
+                {binding.triggers.some(trigger => trigger.enabled)
+                  ? binding.triggers
+                      .filter(trigger => trigger.enabled)
+                      .map(
+                        trigger =>
+                          `${trigger.event.replaceAll('_', ' ')} · ${trigger.conditions.length} conditions`
+                      )
+                      .join('; ')
                   : 'Manual only'}
               </p>
               <InputSummary
@@ -452,7 +463,7 @@ function InputSummary({
         <div key={input.key} className="rounded border p-2 text-xs">
           <span className="font-medium">{input.label}: </span>
           <span className="text-muted-foreground">
-            {input.type === 'SECRET_REF' && values[input.key]
+            {input.type === 'SECRET_REF' && (values[input.key] ?? input.defaultValue)
               ? 'Configured secret reference'
               : String(values[input.key] ?? input.defaultValue ?? 'Not set')}
           </span>
@@ -516,15 +527,6 @@ function TriggerConditionRow({
         ]}
       />
       <Input name="conditionValue" defaultValue={displayedValue} placeholder="Match value" />
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-2">
-      <Label>{label}</Label>
-      {children}
     </div>
   );
 }
