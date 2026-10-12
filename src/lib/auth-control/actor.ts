@@ -78,7 +78,13 @@ export async function lockControlActor(
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(210012002::bigint)`;
   await tx.$queryRaw`SELECT "id" FROM "AuthenticationPolicy" WHERE "id" = 'default' FOR UPDATE`;
   const policy = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
-  if (evaluateAuthenticationPolicy(policy, 'PASSWORD_WRITE').reason === 'INVALID_AUTHENTICATION_POLICY') throw new Error('Authentication policy is invalid. Restore the authoritative policy before making security changes.');
+  if (
+    evaluateAuthenticationPolicy(policy, 'PASSWORD_WRITE').reason ===
+    'INVALID_AUTHENTICATION_POLICY'
+  )
+    throw new Error(
+      'Authentication policy is invalid. Restore the authoritative policy before making security changes.'
+    );
   if (actor.kind === 'admin') {
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${actor.id} FOR UPDATE`;
     const user = await tx.user.findUnique({ where: { id: actor.id } });

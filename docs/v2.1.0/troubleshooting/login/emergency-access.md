@@ -7,7 +7,8 @@ audience: [administrator, operator]
 verification:
   level: source
   verified_at: 2026-10-12
-  evidence: [src/lib/auth-control/emergency.ts, tests/integration/emergency-authentication-database.test.ts]
+  evidence:
+    [src/lib/auth-control/emergency.ts, tests/integration/emergency-authentication-database.test.ts]
 ---
 
 # Troubleshoot emergency access

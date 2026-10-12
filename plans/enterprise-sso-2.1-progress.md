@@ -141,8 +141,12 @@ configuration where ordinary administrator access is still valid.
   hardware independence or production-provider certification.
 - Upcoming documentation: four contracts passed, including frontmatter, internal
   links, released-version preservation and retained provider detail.
-- An optimized production build passed. The repository's pre-push gate also
-  requires a production build and the full unit suite before uploading this branch.
+- The final optimized production build passed using the repository-configured
+  `.next-pre-push` directory. Git hook wrappers were absent in this worktree, so checks were run
+  manually. An alternate, unexcluded `.next-prepush` directory exposed existing
+  generated route-type errors: extra helper exports in status/Jira routes and
+  optional page props in teams/schedules. These unrelated framework contracts are
+  not covered by the repository's normal TypeScript artifact exclusions.
 - Additive enterprise authentication and origin-readiness migrations applied to
   isolated `enterprise_sso_test`; no production/application database was migrated.
 

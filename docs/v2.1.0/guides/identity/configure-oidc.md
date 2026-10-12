@@ -281,8 +281,8 @@ After finishing the provider registration:
    membership.
 10. Optionally map bounded claims to department, job title, and avatar fields.
 11. Stage the configuration, run **Test administrator sign-in**, preview impact
-   and activate **SSO Optional**. Then test production sign-in in a private browser
-   with a non-administrator pilot account.
+    and activate **SSO Optional**. Then test production sign-in in a private browser
+    with a non-administrator pilot account.
 
 Connection testing does not prove callback, user assignment, consent, claims,
 or account-link behavior. A real pilot login is mandatory.
@@ -363,12 +363,12 @@ The staged **Authentication policy** form can override maximum session lifetime 
 sessions. Leaving a field at its default uses the corresponding environment
 policy.
 
-| Control | Supported range | Environment default | Built-in fallback |
-| --- | --- | --- | --- |
-| Maximum session lifetime | 15 minutes to 30 days | `AUTH_SSO_SESSION_MAX_AGE_SECONDS` | 12 hours |
-| Idle inactivity timeout | 5 minutes to 7 days, and no longer than maximum lifetime | `AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS` | 4 hours |
-| Reauthentication window | 15 minutes to 30 days | `AUTH_SSO_REAUTH_AFTER_SECONDS` | 12 hours |
-| Session update interval | 1 minute to 24 hours | `AUTH_SSO_SESSION_UPDATE_AGE_SECONDS` | 1 hour |
+| Control                  | Supported range                                          | Environment default                     | Built-in fallback |
+| ------------------------ | -------------------------------------------------------- | --------------------------------------- | ----------------- |
+| Maximum session lifetime | 15 minutes to 30 days                                    | `AUTH_SSO_SESSION_MAX_AGE_SECONDS`      | 12 hours          |
+| Idle inactivity timeout  | 5 minutes to 7 days, and no longer than maximum lifetime | `AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS` | 4 hours           |
+| Reauthentication window  | 15 minutes to 30 days                                    | `AUTH_SSO_REAUTH_AFTER_SECONDS`         | 12 hours          |
+| Session update interval  | 1 minute to 24 hours                                     | `AUTH_SSO_SESSION_UPDATE_AGE_SECONDS`   | 1 hour            |
 
 The UI overrides the first two values. When maximum lifetime is overridden, it
 also becomes the effective reauthentication window. Invalid environment values

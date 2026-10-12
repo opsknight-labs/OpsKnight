@@ -27,7 +27,9 @@ import { lockControlActor, type ControlActor } from '@/lib/auth-control/actor';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import { processAuthenticationAlerts, securityEvent } from '@/lib/auth-control/security-events';
 
-vi.mock('@/lib/notification-control-plane', () => ({ enqueueCentralNotification: vi.fn().mockRejectedValue(new Error('delivery queue unavailable')) }));
+vi.mock('@/lib/notification-control-plane', () => ({
+  enqueueCentralNotification: vi.fn().mockRejectedValue(new Error('delivery queue unavailable')),
+}));
 vi.mock('@/lib/auth', () => ({ getAuthOptions: vi.fn(), resetAuthOptionsCache: vi.fn() }));
 vi.mock('@/lib/auth-control/origin', () => ({
   authenticationOrigin: vi.fn().mockResolvedValue('https://recovery.example.test'),
@@ -324,13 +326,29 @@ suite('independent emergency authentication with signed WebAuthn responses and P
   });
   it('refuses emergency configuration writes when the authoritative policy is missing', async () => {
     const session = await getEmergencySession(token);
-    const principal: ControlActor = { kind: 'emergency', id: accountId, sessionId: session!.id, credentialVersion: session!.credentialVersion, authenticatedAt: session!.authenticatedAt.getTime() };
+    const principal: ControlActor = {
+      kind: 'emergency',
+      id: accountId,
+      sessionId: session!.id,
+      credentialVersion: session!.credentialVersion,
+      authenticatedAt: session!.authenticatedAt.getTime(),
+    };
     const saved = await prisma.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
     await prisma.authenticationPolicy.delete({ where: { id: 'default' } });
     try {
-      await expect(createEmergencyAccount(principal, 'Must not survive missing policy', true)).rejects.toThrow();
-      expect(await prisma.emergencyAccount.count({ where: { displayName: 'Must not survive missing policy' } })).toBe(0);
-    } finally { await prisma.authenticationPolicy.create({ data: { ...saved, legacySnapshot: saved.legacySnapshot as Prisma.InputJsonValue } }); }
+      await expect(
+        createEmergencyAccount(principal, 'Must not survive missing policy', true)
+      ).rejects.toThrow();
+      expect(
+        await prisma.emergencyAccount.count({
+          where: { displayName: 'Must not survive missing policy' },
+        })
+      ).toBe(0);
+    } finally {
+      await prisma.authenticationPolicy.create({
+        data: { ...saved, legacySnapshot: saved.legacySnapshot as Prisma.InputJsonValue },
+      });
+    }
   });
   it('key revocation immediately rejects issued sessions and clears drill readiness', async () => {
     const credential = await prisma.emergencyCredential.findUniqueOrThrow({

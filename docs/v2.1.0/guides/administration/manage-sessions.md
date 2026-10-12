@@ -4,8 +4,15 @@ description: Inspect account sessions and recent device activity, revoke access,
 type: how-to
 product_area: identity
 audience: [responder, administrator]
-reader: { status: READER_COMPLETE, task: Review and revoke account sessions and recent device activity. }
-verification: { level: source, verified_at: 2026-10-12, evidence: [src/app/(app)/settings/security/page.tsx, src/components/settings/ActiveSessionsSection.tsx] }
+reader:
+  { status: READER_COMPLETE, task: Review and revoke account sessions and recent device activity. }
+verification:
+  {
+    level: source,
+    verified_at: 2026-10-12,
+    evidence:
+      [src/app/(app)/settings/security/page.tsx, src/components/settings/ActiveSessionsSection.tsx],
+  }
 ---
 
 # Review and revoke signed-in sessions

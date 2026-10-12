@@ -96,11 +96,35 @@ export async function processAuthenticationAlerts() {
         continue;
       }
       const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
-      const result = await enqueueCentralNotification({ category: 'SECURITY', channel: 'EMAIL', recipientType: 'EMAIL', recipientId: alert.recipientId, recipientAddress: recipient.email, userId: alert.recipientId,
-        templateKey: 'authentication-security-alert', sourceType: 'AUTHENTICATION', sourceId: alert.eventId, eventKey: alert.id, displayMessage: alert.message, priority: 0, trafficClass: 'CRITICAL',
-        payload: { kind: 'EMAIL', to: recipient.email, subject: alert.title, text: alert.message, html: `<p>${escapeHtml(alert.message)}</p><p><a href="https://opsknight.com/">OpsKnight</a></p>` }
-      }, { dispatchImmediately: false });
-      const notification = await prisma.notification.findUnique({ where: { id: result.id }, select: { status: true } });
+      const result = await enqueueCentralNotification(
+        {
+          category: 'SECURITY',
+          channel: 'EMAIL',
+          recipientType: 'EMAIL',
+          recipientId: alert.recipientId,
+          recipientAddress: recipient.email,
+          userId: alert.recipientId,
+          templateKey: 'authentication-security-alert',
+          sourceType: 'AUTHENTICATION',
+          sourceId: alert.eventId,
+          eventKey: alert.id,
+          displayMessage: alert.message,
+          priority: 0,
+          trafficClass: 'CRITICAL',
+          payload: {
+            kind: 'EMAIL',
+            to: recipient.email,
+            subject: alert.title,
+            text: alert.message,
+            html: `<p>${escapeHtml(alert.message)}</p><p><a href="https://opsknight.com/">OpsKnight</a></p>`,
+          },
+        },
+        { dispatchImmediately: false }
+      );
+      const notification = await prisma.notification.findUnique({
+        where: { id: result.id },
+        select: { status: true },
+      });
       delivered = notification?.status === 'SENT' || notification?.status === 'DELIVERED';
     } catch {
       /* Preserve the durable intent and retry; never log provider secrets. */

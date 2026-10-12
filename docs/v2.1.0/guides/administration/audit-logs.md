@@ -11,7 +11,15 @@ reader:
 verification:
   level: source
   verified_at: 2026-10-12
-  evidence: [src/app/(app)/audit/page.tsx, src/components/audit/AuditFilters.tsx, src/components/audit/AuditLogTable.tsx, src/components/audit/AuditDetailModal.tsx, src/lib/audit.ts, src/lib/audit-filters.ts]
+  evidence:
+    [
+      src/app/(app)/audit/page.tsx,
+      src/components/audit/AuditFilters.tsx,
+      src/components/audit/AuditLogTable.tsx,
+      src/components/audit/AuditDetailModal.tsx,
+      src/lib/audit.ts,
+      src/lib/audit-filters.ts,
+    ]
 ---
 
 # Review audit logs

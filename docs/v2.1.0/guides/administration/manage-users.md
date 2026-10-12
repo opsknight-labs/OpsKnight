@@ -44,18 +44,18 @@ schedules, escalation targets, teams, and API credentials.
 
 User status and role are separate:
 
-| Status | Meaning |
-| --- | --- |
-| `INVITED` | Account exists but invitation onboarding is not complete |
-| `ACTIVE` | Account can authenticate through its configured identity path |
-| `DISABLED` | Account access is revoked; historical records remain |
+| Status     | Meaning                                                       |
+| ---------- | ------------------------------------------------------------- |
+| `INVITED`  | Account exists but invitation onboarding is not complete      |
+| `ACTIVE`   | Account can authenticate through its configured identity path |
+| `DISABLED` | Account access is revoked; historical records remain          |
 
-| Application role | Intended use |
-| --- | --- |
-| `ADMIN` | Organization-wide administration and security-sensitive configuration |
-| `RESPONDER` | Incident response and operational work within authorized scope |
-| `AUDITOR` | Read-oriented audit and review workflows |
-| `USER` | Standard member access without responder or administrator authority |
+| Application role | Intended use                                                          |
+| ---------------- | --------------------------------------------------------------------- |
+| `ADMIN`          | Organization-wide administration and security-sensitive configuration |
+| `RESPONDER`      | Incident response and operational work within authorized scope        |
+| `AUDITOR`        | Read-oriented audit and review workflows                              |
+| `USER`           | Standard member access without responder or administrator authority   |
 
 Team roles (`OWNER`, `ADMIN`, and `MEMBER`) are separate from application roles.
 Adding someone as a team owner does not make them an OpsKnight administrator.

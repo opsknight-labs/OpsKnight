@@ -37,15 +37,14 @@ describe('mobile/PWA enterprise architecture contract', () => {
     expect(dashboardNotifications).not.toMatch(
       /useEffect\([\s\S]{0,500}Notification\.requestPermission\(/
     );
-    expect(auth).toContain("const rememberMe = !legacyEmergency && credentials?.rememberMe === 'true';");
+    expect(auth).toContain(
+      "const rememberMe = !legacyEmergency && credentials?.rememberMe === 'true';"
+    );
     expect(auth).not.toContain("credentials?.rememberMe === 'true' || isMobileClient");
   });
 
   it('keeps mobile Push permission on the explicit Enable gesture path', () => {
-    const pushToggle = fs.readFileSync(
-      'src/components/mobile/PushNotificationToggle.tsx',
-      'utf8'
-    );
+    const pushToggle = fs.readFileSync('src/components/mobile/PushNotificationToggle.tsx', 'utf8');
 
     expect(pushToggle).toContain("stage = 'REQUEST_PERMISSION'");
     expect(pushToggle).toContain('Notification.requestPermission()');
@@ -82,7 +81,7 @@ describe('mobile/PWA enterprise architecture contract', () => {
     const versionCheck = fs.readFileSync('src/components/VersionCheck.tsx', 'utf8');
     const coordinator = fs.readFileSync('src/components/mobile/MobilePwaCoordinator.tsx', 'utf8');
 
-    expect(versionCheck).toContain("window.dispatchEvent(");
+    expect(versionCheck).toContain('window.dispatchEvent(');
     expect(versionCheck).toContain("'opsknight:deployment-update'");
     expect(coordinator).toContain(
       "window.addEventListener('opsknight:deployment-update', onDeploymentUpdate)"

@@ -7,7 +7,16 @@ audience: [administrator, operator]
 reader:
   status: READER_COMPLETE
   task: Configure and verify SCIM user and group provisioning end to end.
-keywords: [SCIM provisioning, Entra provisioning, Okta provisioning, SCIM users, SCIM groups, team synchronization, identity lifecycle]
+keywords:
+  [
+    SCIM provisioning,
+    Entra provisioning,
+    Okta provisioning,
+    SCIM users,
+    SCIM groups,
+    team synchronization,
+    identity lifecycle,
+  ]
 verification:
   level: source
   verified_at: 2026-10-12
@@ -86,13 +95,13 @@ Authorization: Bearer <SCIM_BEARER_TOKEN>
 
 ## Discovery endpoints
 
-| Method | Path | Result |
-| --- | --- | --- |
-| `GET` | `/ServiceProviderConfig` | Supported SCIM capabilities and authentication |
-| `GET` | `/ResourceTypes` | User and Group definitions |
-| `GET` | `/ResourceTypes/{User\|Group}` | One resource type |
-| `GET` | `/Schemas` | User and Group schemas |
-| `GET` | `/Schemas/{schema-URN}` | One schema |
+| Method | Path                           | Result                                         |
+| ------ | ------------------------------ | ---------------------------------------------- |
+| `GET`  | `/ServiceProviderConfig`       | Supported SCIM capabilities and authentication |
+| `GET`  | `/ResourceTypes`               | User and Group definitions                     |
+| `GET`  | `/ResourceTypes/{User\|Group}` | One resource type                              |
+| `GET`  | `/Schemas`                     | User and Group schemas                         |
+| `GET`  | `/Schemas/{schema-URN}`        | One schema                                     |
 
 Discovery advertises PATCH and filtering, with at most 100 results. Bulk,
 sorting, password changes, and ETags are not supported.
@@ -101,9 +110,9 @@ sorting, password changes, and ETags are not supported.
 
 The schema is `urn:ietf:params:scim:schemas:core:2.0:User`.
 
-| Method | Path | Behavior |
-| --- | --- | --- |
-| `GET`, `POST` | `/Users` | List/filter users or create one user |
+| Method                          | Path          | Behavior                                     |
+| ------------------------------- | ------------- | -------------------------------------------- |
+| `GET`, `POST`                   | `/Users`      | List/filter users or create one user         |
 | `GET`, `PUT`, `PATCH`, `DELETE` | `/Users/{id}` | Read, replace, update, or deprovision a user |
 
 `externalId` is the required immutable directory identifier; `userName` is the
@@ -127,9 +136,9 @@ accepts add/replace for `active`, `displayName`, `name`/`name.formatted`, and
 The schema is `urn:ietf:params:scim:schemas:core:2.0:Group`. Each Group is an
 OpsKnight Team; group members become team members with role `MEMBER`.
 
-| Method | Path | Behavior |
-| --- | --- | --- |
-| `GET`, `POST` | `/Groups` | List/filter teams or create a team |
+| Method                          | Path           | Behavior                                |
+| ------------------------------- | -------------- | --------------------------------------- |
+| `GET`, `POST`                   | `/Groups`      | List/filter teams or create a team      |
 | `GET`, `PUT`, `PATCH`, `DELETE` | `/Groups/{id}` | Read, replace, update, or delete a team |
 
 `displayName` is required, unique, and limited to 100 characters. `externalId`

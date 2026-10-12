@@ -112,7 +112,12 @@ export async function GET() {
   try {
     return json(await authenticationDashboard(await getControlActor()));
   } catch {
-    return jsonError('Authentication administration requires an active administrator or emergency recovery session.', 403, undefined, headers);
+    return jsonError(
+      'Authentication administration requires an active administrator or emergency recovery session.',
+      403,
+      undefined,
+      headers
+    );
   }
 }
 
@@ -214,6 +219,15 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error) {
-    return jsonError(error instanceof z.ZodError ? 'Invalid authentication request.' : error instanceof Error && !('clientVersion' in error) ? error.message : 'Authentication administration unavailable.', error instanceof z.ZodError ? 400 : 403, undefined, headers);
+    return jsonError(
+      error instanceof z.ZodError
+        ? 'Invalid authentication request.'
+        : error instanceof Error && !('clientVersion' in error)
+          ? error.message
+          : 'Authentication administration unavailable.',
+      error instanceof z.ZodError ? 400 : 403,
+      undefined,
+      headers
+    );
   }
 }

@@ -21,7 +21,9 @@ vi.mock('@/lib/auth', () => ({
   resetAuthOptionsCache: vi.fn(),
 }));
 vi.mock('@/lib/rbac', () => ({
-  getCurrentUser: vi.fn(async () => prisma.user.findUniqueOrThrow({ where: { id: 'enterprise-sso-policy-certifier' } })),
+  getCurrentUser: vi.fn(async () =>
+    prisma.user.findUniqueOrThrow({ where: { id: 'enterprise-sso-policy-certifier' } })
+  ),
   getUserPermissions: vi.fn().mockResolvedValue({ isAdmin: true, capabilities: ['admin.manage'] }),
 }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
@@ -219,28 +221,58 @@ integration('authoritative authentication policy in PostgreSQL', () => {
   it('does not let an in-flight password change overwrite a concurrent administrator reset', async () => {
     const snapshot = await prisma.user.findUniqueOrThrow({ where: { id: actorId } });
     vi.mocked(getCurrentUser).mockResolvedValueOnce(snapshot);
-    let hashing!: () => void; let release!: () => void;
-    const entered = new Promise<void>(resolve => { hashing = resolve; });
-    const gate = new Promise<void>(resolve => { release = resolve; });
+    let hashing!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>(resolve => {
+      hashing = resolve;
+    });
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
     const originalHash = bcrypt.hash;
     const candidate = 'Cobalt sheltered passage October2026!';
     const changedHash = await originalHash('Administrator recovery replacement October2026!', 12);
-    const intercept = vi.spyOn(bcrypt, 'hash').mockImplementation(((value: string, salt: string | number, callback?: (error: Error | null, result: string) => void, progress?: (percent: number) => void) => {
+    const intercept = vi.spyOn(bcrypt, 'hash').mockImplementation(((
+      value: string,
+      salt: string | number,
+      callback?: (error: Error | null, result: string) => void,
+      progress?: (percent: number) => void
+    ) => {
       if (callback) return originalHash(value, salt, callback, progress);
       if (value !== candidate) return originalHash(value, salt);
-      return originalHash(value, salt).then(async result => { hashing(); await gate; return result; });
+      return originalHash(value, salt).then(async result => {
+        hashing();
+        await gate;
+        return result;
+      });
     }) as typeof bcrypt.hash);
     try {
-      const input = new FormData(); input.set('currentPassword', password); input.set('newPassword', candidate); input.set('confirmPassword', candidate);
+      const input = new FormData();
+      input.set('currentPassword', password);
+      input.set('newPassword', candidate);
+      input.set('confirmPassword', candidate);
       const changing = updatePassword({}, input);
-      const stage = await Promise.race([entered.then(() => ({ hashing: true as const })), changing.then(result => ({ hashing: false as const, result }))]);
-      if (!stage.hashing) throw new Error(`Password change finished before hashing: ${stage.result.error ?? 'unexpected success'}`);
-      await prisma.user.update({ where: { id: actorId }, data: { passwordHash: changedHash, tokenVersion: { increment: 1 } } });
-      release(); const result = await changing;
+      const stage = await Promise.race([
+        entered.then(() => ({ hashing: true as const })),
+        changing.then(result => ({ hashing: false as const, result })),
+      ]);
+      if (!stage.hashing)
+        throw new Error(
+          `Password change finished before hashing: ${stage.result.error ?? 'unexpected success'}`
+        );
+      await prisma.user.update({
+        where: { id: actorId },
+        data: { passwordHash: changedHash, tokenVersion: { increment: 1 } },
+      });
+      release();
+      const result = await changing;
       expect(result.error).toBeTruthy();
       const current = await prisma.user.findUniqueOrThrow({ where: { id: actorId } });
-      expect(current.passwordHash).toBe(changedHash); expect(current.tokenVersion).toBe(snapshot.tokenVersion + 1);
-    } finally { release(); intercept.mockRestore(); }
+      expect(current.passwordHash).toBe(changedHash);
+      expect(current.tokenVersion).toBe(snapshot.tokenVersion + 1);
+    } finally {
+      release();
+      intercept.mockRestore();
+    }
   });
-
 });

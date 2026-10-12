@@ -102,6 +102,15 @@ export async function POST(request: NextRequest) {
     if (input.action === 'logout') response.cookies.delete(EMERGENCY_COOKIE);
     return response;
   } catch (error) {
-    return jsonError(error instanceof z.ZodError ? 'Invalid emergency request.' : error instanceof Error && !('clientVersion' in error) ? error.message : 'Emergency authentication unavailable.', error instanceof z.ZodError ? 400 : 403, undefined, noStore);
+    return jsonError(
+      error instanceof z.ZodError
+        ? 'Invalid emergency request.'
+        : error instanceof Error && !('clientVersion' in error)
+          ? error.message
+          : 'Emergency authentication unavailable.',
+      error instanceof z.ZodError ? 400 : 403,
+      undefined,
+      noStore
+    );
   }
 }

@@ -230,7 +230,6 @@ Sets the polling interval while the general queue is idle.
 - Apply behavior: restart required
 - Sensitivity: non-secret
 
-
 ## Supported production inventory
 
 ## `ALLOW_INSECURE_SECRETS`
@@ -1478,4 +1477,3 @@ Sets the polling interval while the general queue is idle.
 - Extraction confidence: incomplete
 - Static default: not displayed
 - Sources: `deploy/compose/docker-compose.pgbouncer.yml`, `deploy/compose/docker-compose.split.yml`, `env.example`, `src/lib/prisma-datasource.ts`
-

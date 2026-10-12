@@ -47,7 +47,7 @@ P0 — Fix before production rollout
 
 The active OIDC configuration action explicitly rejects edits when policy is `SSO_REQUIRED`:
 
-[SSO configuration action](https://github.com/opsknight-labs/OpsKnight/blob/c5b2aaad29fd18ad89da69bc892c8822d3800d30/src/app/\(app\)/settings/security/actions.ts#L302-L311)
+[SSO configuration action](<https://github.com/opsknight-labs/OpsKnight/blob/c5b2aaad29fd18ad89da69bc892c8822d3800d30/src/app/(app)/settings/security/actions.ts#L302-L311>)
 
 Consider this situation:
 
@@ -107,7 +107,7 @@ This is a potential race, not a demonstrated exploit.
 
 ### Finding E — New SSO users cannot use the normal invitation workflow
 
-In [`addUser`](https://github.com/opsknight-labs/OpsKnight/blob/c5b2aaad29fd18ad89da69bc892c8822d3800d30/src/app/\(app\)/users/actions.ts#L289-L334), user creation is guarded by `assertPasswordOperationAllowed()`.
+In [`addUser`](<https://github.com/opsknight-labs/OpsKnight/blob/c5b2aaad29fd18ad89da69bc892c8822d3800d30/src/app/(app)/users/actions.ts#L289-L334>), user creation is guarded by `assertPasswordOperationAllowed()`.
 
 Under SSO Required, that rejects the conventional password-invitation workflow.
 
