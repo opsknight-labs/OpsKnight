@@ -23,7 +23,8 @@ spec:
       command: [sh, -c, 'sleep infinity']
       resources:
         requests:
-          cpu: 100m
+          # Share the reserved/auxiliary CPUs without displacing application replicas.
+          cpu: '0'
           memory: 64Mi
         limits:
           cpu: 500m

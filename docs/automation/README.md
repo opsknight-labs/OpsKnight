@@ -470,3 +470,11 @@ The automation integration fixture hook now allows 30 seconds, matching other
 PostgreSQL fixture suites, to avoid a timed-out reset continuing into the next
 test. The application evaluation deadline, test assertions, offered workload and
 frozen capacity gates are unchanged.
+
+The first in-cluster setup stopped before seeding/load because its 100m client
+CPU reservation prevented the second guaranteed Web replica from scheduling.
+The client now requests zero CPU, like the existing auxiliary fixture roles,
+while retaining its 500m limit. The running client was verified at
+`cpu.max=50000 100000` on shared CPUs `0,11`; both Web replicas became ready.
+The ten application/PostgreSQL CPUs remain unchanged. This is a deployment
+setup correction, not a passing measurement or a relaxed performance gate.
