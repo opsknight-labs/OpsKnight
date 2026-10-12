@@ -298,12 +298,40 @@ jobs:
           file: ./agent/Dockerfile
           platforms: linux/amd64
           push: false
+          load: true
           tags: opsknight-agent-pr-validation:${{ github.sha }}
           build-args: |
             OPSKNIGHT_VERSION=${{ github.ref_name }}
           cache-from: type=gha,scope=opsknight-agent-main-amd64
           provenance: false
           sbom: false
+
+      - name: Verify Agent container image lifecycle and process reaping
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          AGENT_IMAGE="opsknight-agent-pr-validation:${GITHUB_SHA}"
+          echo "Verifying tini init, zombie reaping, and Podman execution in ${AGENT_IMAGE}..."
+
+          # 1. Verify tini is PID 1
+          docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges:true \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --entrypoint /sbin/tini "$AGENT_IMAGE" -- ps -ef | grep -E '1\s+0\s+.*\/sbin\/tini'
+
+          # 2. Verify child process reaping (zero zombies under rapid child exit)
+          ZOMBIES=$(docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges:true \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --entrypoint /sbin/tini "$AGENT_IMAGE" -- /bin/sh -c 'for i in $(seq 1 30); do (exit 0) & done; wait; ps -A -o stat= | grep -c "Z" || true')
+          if [ "${ZOMBIES//[[:space:]]/}" != "0" ]; then
+            echo "FAILED: Detected zombie processes: $ZOMBIES"
+            exit 1
+          fi
+
+          # 3. Verify Podman client executes without filesystem errors under read-only rootfs
+          docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges:true \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --entrypoint /bin/sh "$AGENT_IMAGE" -c 'podman --version' | grep -q 'podman version 5.'
 
       - name: Verify Compose split runtime and PgBouncer live stack
         if: github.event_name == 'pull_request'

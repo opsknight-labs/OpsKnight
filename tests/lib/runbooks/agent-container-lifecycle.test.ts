@@ -10,9 +10,11 @@ import {
   type SafetyLimits,
 } from '../../../agent/src/recovery';
 
-const hasDocker = (() => {
+const agentImage = process.env.OPSKNIGHT_AGENT_TEST_IMAGE || 'opsknight-agent:test';
+
+const hasDockerAgentImage = (() => {
   try {
-    const res = spawnSync('docker', ['info'], { timeout: 4000 });
+    const res = spawnSync('docker', ['image', 'inspect', agentImage], { timeout: 4000 });
     return res.status === 0;
   } catch {
     return false;
@@ -20,7 +22,7 @@ const hasDocker = (() => {
 })();
 
 describe('Agent Container & Process Lifecycle Tests', () => {
-  it.runIf(hasDocker)('verifies tini entrypoint is PID 1 and reaps child processes without zombies', () => {
+  it.runIf(hasDockerAgentImage)('verifies tini entrypoint is PID 1 and reaps child processes without zombies', () => {
     // 1. Verify PID 1 in container is tini
     const psRes = spawnSync(
       'docker',
@@ -34,7 +36,7 @@ describe('Agent Container & Process Lifecycle Tests', () => {
         '/tmp:rw,noexec,nosuid,size=16m',
         '--entrypoint',
         '/sbin/tini',
-        'opsknight-agent:test',
+        agentImage,
         '--',
         'ps',
         '-ef',
@@ -58,7 +60,7 @@ describe('Agent Container & Process Lifecycle Tests', () => {
         '/tmp:rw,noexec,nosuid,size=16m',
         '--entrypoint',
         '/sbin/tini',
-        'opsknight-agent:test',
+        agentImage,
         '--',
         '/bin/sh',
         '-c',
@@ -72,7 +74,7 @@ describe('Agent Container & Process Lifecycle Tests', () => {
     expect(zombieCheckRes.stdout.trim()).toBe('0');
   });
 
-  it.runIf(hasDocker)('verifies container handles SIGTERM signal gracefully', () => {
+  it.runIf(hasDockerAgentImage)('verifies container handles SIGTERM signal gracefully', () => {
     // Launch a container with tini sleeping in background, then send SIGTERM
     const containerName = `test-tini-sigterm-${Date.now()}`;
     const startRes = spawnSync(
@@ -89,7 +91,7 @@ describe('Agent Container & Process Lifecycle Tests', () => {
         '/tmp:rw,noexec,nosuid,size=16m',
         '--entrypoint',
         '/sbin/tini',
-        'opsknight-agent:test',
+        agentImage,
         '--',
         'sleep',
         '60',
@@ -117,7 +119,7 @@ describe('Agent Container & Process Lifecycle Tests', () => {
     }
   });
 
-  it.runIf(hasDocker)('verifies Podman executes cleanly under read-only rootfs and dispatches client socket calls', () => {
+  it.runIf(hasDockerAgentImage)('verifies Podman executes cleanly under read-only rootfs and dispatches client socket calls', () => {
     // 1. podman --version works under read-only rootfs without stat .config crash
     const versionRes = spawnSync(
       'docker',
@@ -131,7 +133,7 @@ describe('Agent Container & Process Lifecycle Tests', () => {
         '/tmp:rw,noexec,nosuid,size=16m',
         '--entrypoint',
         '/bin/sh',
-        'opsknight-agent:test',
+        agentImage,
         '-c',
         'podman --version',
       ],
@@ -155,7 +157,7 @@ describe('Agent Container & Process Lifecycle Tests', () => {
         'CONTAINER_HOST=tcp://127.0.0.1:9999',
         '--entrypoint',
         '/bin/sh',
-        'opsknight-agent:test',
+        agentImage,
         '-c',
         'podman info',
       ],
