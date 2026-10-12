@@ -242,6 +242,7 @@ export async function getAutomationArea(
     : [];
   const policies = ['rules', 'test'].includes(area)
     ? await prisma.escalationPolicy.findMany({
+        where: { archivedAt: null },
         select: { id: true, name: true },
         orderBy: { name: 'asc' },
       })

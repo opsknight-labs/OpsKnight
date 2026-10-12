@@ -1,3 +1,4 @@
+import PolicyDependencies from '@/components/policies/PolicyDependencies';
 import prisma from '@/lib/prisma';
 import { assertCanViewPolicy, getUserPermissions } from '@/lib/rbac';
 import { notFound, redirect } from 'next/navigation';
@@ -382,6 +383,13 @@ export default async function PolicyDetailPage({
         services={servicesContent}
         activity={activityContent}
         settings={settingsContent}
+        dependencies={
+          <PolicyDependencies
+            policyId={id}
+            archived={!!policy.archivedAt}
+            canManage={permissions.role === 'ADMIN'}
+          />
+        }
       />
     </div>
   );

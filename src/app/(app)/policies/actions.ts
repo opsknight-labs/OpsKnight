@@ -1,4 +1,6 @@
 'use server';
+import { z } from 'zod';
+import { transitionPolicyArchive } from '@/lib/escalation/policy-lifecycle';
 import {
   assertResponderPolicySnapshotSafe,
   lockResponderPolicy,
@@ -698,4 +700,20 @@ export async function reorderPolicySteps(
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to reorder escalation steps' };
   }
+}
+
+export async function setPolicyArchived(policyId: string, archived: boolean) {
+  const actor = await assertAdmin();
+  z.object({ policyId: z.string().min(1).max(100), archived: z.boolean() })
+    .strict()
+    .parse({ policyId, archived });
+  await transitionPolicyArchive(policyId, actor.id, archived);
+  await logAudit({
+    action: archived ? 'escalation_policy.archived' : 'escalation_policy.restored',
+    entityType: 'ESCALATION_POLICY',
+    entityId: policyId,
+    actorId: actor.id,
+  });
+  revalidatePath(`/policies/${policyId}`);
+  revalidatePath('/policies');
 }

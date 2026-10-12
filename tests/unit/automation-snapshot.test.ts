@@ -115,7 +115,9 @@ describe('responderSnapshotSchema and captureResponderSnapshot bounds', () => {
 
   it('validateReferences blocks publishing when referenced policy exceeds MAX_ESCALATION_STEPS', async () => {
     const mockTx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       escalationPolicy: {
+        findUnique: vi.fn().mockResolvedValue({ archivedAt: null }),
         findMany: vi.fn().mockResolvedValue([
           {
             id: 'pol-too-many-steps',
@@ -155,6 +157,7 @@ describe('responderSnapshotSchema and captureResponderSnapshot bounds', () => {
   it('publication validates the complete responder snapshot byte size, not only step count', async () => {
     const tx = {
       escalationPolicy: {
+        findUnique: vi.fn().mockResolvedValue({ archivedAt: null }),
         findMany: vi
           .fn()
           .mockResolvedValue([{ id: 'large', name: 'Large policy', _count: { steps: 0 } }]),

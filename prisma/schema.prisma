@@ -674,6 +674,8 @@ model Service {
 }
 
 model EscalationPolicy {
+  archivedAt DateTime?
+  archivedBy String?
   id          String           @id @default(cuid())
   name        String           @unique
   description String?

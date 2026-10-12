@@ -1,3 +1,4 @@
+import { assertPolicyActive } from '@/lib/escalation/policy-lifecycle';
 import 'server-only';
 import { getAutomationSettings } from './settings';
 import { lockAutomationService as lock } from './locking';
@@ -95,6 +96,7 @@ export async function validateReferences(
       )
     ),
   ];
+  for (const policyId of [...policyIds].sort()) await assertPolicyActive(tx, policyId);
   const policies = await tx.escalationPolicy.findMany({
     where: { id: { in: policyIds } },
     select: { id: true, name: true, _count: { select: { steps: true } } },

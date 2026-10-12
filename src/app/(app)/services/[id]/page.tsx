@@ -292,6 +292,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     canManageService ? prisma.team.findMany({ orderBy: { name: 'asc' } }) : Promise.resolve([]),
     canManageService
       ? prisma.escalationPolicy.findMany({
+          where: { archivedAt: null },
           select: { id: true, name: true, description: true },
           orderBy: { name: 'asc' },
         })

@@ -1,4 +1,5 @@
 import 'server-only';
+import { assertPolicyActive } from '@/lib/escalation/policy-lifecycle';
 import type { Prisma } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import {
@@ -17,6 +18,7 @@ export async function updateServiceWithAutomationPolicyGuard(
       where: { serviceId },
       select: { mode: true },
     });
+    if (data.escalationPolicyId) await assertPolicyActive(tx, data.escalationPolicyId);
     if (config?.mode === 'LIVE' && data.escalationPolicyId) {
       await lockResponderPolicy(tx, data.escalationPolicyId);
       await assertResponderPolicySnapshotSafe(tx, data.escalationPolicyId);
