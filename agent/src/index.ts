@@ -12,6 +12,7 @@ import { probeCapabilities } from './capabilities';
 import { assertPolicyAllows, loadPolicy } from './policy';
 import { ResultSpool } from './spool';
 import { getAgentVersion } from './version';
+import { isPersistentFailure } from './recovery';
 import type { AgentIdentity, ClaimedAttempt, SpoolRecord } from './types';
 
 const baseUrl = process.env.OPSKNIGHT_URL?.trim();
@@ -199,6 +200,7 @@ async function run() {
   const abortUnfinishedExecution = () => activeController?.abort('LEASE_LOST');
 
   const flushSpool = async () => {
+    const initialDepth = await spool.depth();
     for (const record of await spool.list()) {
       try {
         const { localOutput, ...result } = record;
@@ -220,6 +222,9 @@ async function run() {
         }
         break;
       }
+    }
+    if (initialDepth > 0 && (await spool.depth()) === 0 && !isPersistentFailure(lastError)) {
+      lastError = null;
     }
   };
 
@@ -264,6 +269,9 @@ async function run() {
       activeAttemptCount: active,
       lastError: clockError || lastError,
     });
+    if (lastError && !isPersistentFailure(lastError) && clockError === null) {
+      lastError = null;
+    }
   };
   await heartbeat();
 
@@ -376,7 +384,12 @@ async function run() {
         const currentDeadLetterDepth = deadLetterStats.count;
         const readOnlyOnly = currentSpoolDepth > 0 || currentDeadLetterDepth > 0;
         attempt = await client.claim({ readOnlyOnly });
-        if (!attempt) continue;
+        if (!attempt) {
+          if (lastError && !isPersistentFailure(lastError) && clockError === null) {
+            lastError = null;
+          }
+          continue;
+        }
         if (await checkDraining()) {
           lastError = 'Execution claim released because Agent is draining.';
           await client.releaseClaim(attempt.attemptId, attempt.leaseToken).catch(() => undefined);

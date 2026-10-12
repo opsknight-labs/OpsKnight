@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { jsonError } from '@/lib/api-response';
+import { AppError, isAppErrorCode } from '@/lib/errors';
 import { ZodError } from 'zod';
 import { authenticateAgentRequest } from './agent-auth';
 import {
@@ -88,26 +89,87 @@ export async function authenticatedAgentJson(request: Request, maxBytes: number 
   return { agent, json };
 }
 
+function getErrorCode(error: unknown): string | undefined {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof (error as { code?: unknown }).code === 'string'
+  ) {
+    return (error as { code: string }).code;
+  }
+  return undefined;
+}
+
 export function agentApiError(error: unknown) {
+  const code = getErrorCode(error);
+  const name = error instanceof Error ? error.name : '';
+  const message = error instanceof Error ? error.message : 'Agent request failed.';
+
   if (
     error instanceof RunbookPayloadTooLargeError ||
-    (error instanceof Error &&
-      (error.name === 'RunbookPayloadTooLargeError' ||
-        error.message.startsWith('Payload exceeds maximum allowed size')))
+    name === 'RunbookPayloadTooLargeError' ||
+    message.startsWith('Payload exceeds maximum allowed size')
   ) {
     return jsonError('Payload too large.', 413);
   }
-  if (error instanceof RunbookAgentRevokedError) return jsonError('Agent has been revoked.', 403);
+
   if (
+    code === 'RUNBOOK_AGENT_REVOKED' ||
+    error instanceof RunbookAgentRevokedError ||
+    name === 'RunbookAgentRevokedError'
+  ) {
+    return jsonError('Agent has been revoked.', 403);
+  }
+
+  if (
+    code === 'RUNBOOK_PRE_EXECUTION_FENCE_FAILED' ||
+    code === 'RUNBOOK_AGENT_LEASE_EXPIRED' ||
+    code === 'RUNBOOK_AGENT_LEASE_TOKEN_MISMATCH' ||
+    code === 'RUNBOOK_APPROVAL_PLAN_CHANGED' ||
     error instanceof RunbookPreExecutionFenceError ||
     error instanceof RunbookAgentLeaseExpiredError ||
-    error instanceof RunbookAgentLeaseTokenMismatchError
+    error instanceof RunbookAgentLeaseTokenMismatchError ||
+    [
+      'RunbookPreExecutionFenceError',
+      'RunbookAgentLeaseExpiredError',
+      'RunbookAgentLeaseTokenMismatchError',
+      'RunbookApprovalPlanChangedError',
+    ].includes(name)
   ) {
     return jsonError('Execution result or lease is outside its accepted fence.', 409);
   }
-  if (error instanceof RunbookAgentNotFoundError) return jsonError('Agent not found.', 404);
-  if (error instanceof ZodError || error instanceof RunbookError) return jsonError(error, 400);
-  const message = error instanceof Error ? error.message : 'Agent request failed.';
+
+  if (
+    code === 'RUNBOOK_AGENT_NOT_FOUND' ||
+    error instanceof RunbookAgentNotFoundError ||
+    name === 'RunbookAgentNotFoundError'
+  ) {
+    return jsonError('Agent not found.', 404);
+  }
+
+  if (
+    error instanceof ZodError ||
+    name === 'ZodError' ||
+    (error &&
+      typeof error === 'object' &&
+      'issues' in error &&
+      Array.isArray((error as { issues?: unknown }).issues)) ||
+    error instanceof RunbookError ||
+    (code !== undefined && code.startsWith('RUNBOOK_'))
+  ) {
+    if (code && isAppErrorCode(code)) {
+      return jsonError(
+        new AppError({
+          code,
+          userMessage: message,
+        }),
+        400
+      );
+    }
+    return jsonError(error instanceof Error ? error : (message || 'Invalid runbook request.'), 400);
+  }
+
   const authenticationErrors = new Set([
     'Missing agent authentication headers.',
     'Agent request timestamp is outside the allowed window.',
@@ -118,6 +180,7 @@ export function agentApiError(error: unknown) {
     'Enrollment token has already been consumed.',
   ]);
   if (authenticationErrors.has(message)) return jsonError('Agent authentication failed.', 401);
+
   if (
     message.startsWith('Artifact quota exceeded') ||
     [
@@ -126,8 +189,10 @@ export function agentApiError(error: unknown) {
       'Compressed artifact must be between 1 byte and 1 MiB.',
       'Artifact checksum does not match.',
     ].includes(message)
-  )
+  ) {
     return jsonError(message, 400);
+  }
+
   // Infrastructure errors must remain retryable; never quarantine results on a DB outage.
   return jsonError('Agent API temporarily unavailable.', 500);
 }

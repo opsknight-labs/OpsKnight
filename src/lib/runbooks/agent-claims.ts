@@ -386,10 +386,15 @@ export async function claimAgentAttempt(
               }))
             )
               blockedSecretTransport = true;
-            if (blockedSecretTransport)
-              throw new RunbookDefinitionError(
-                'HTTPS required for secret-backed steps. Configure this Agent with a trusted HTTPS control-plane URL.'
+            if (blockedSecretTransport) {
+              console.warn(
+                `[RunbookAgent] Agent ${agentId} attempted to claim secret-backed steps without verified confidential transport. ` +
+                  `If running behind a TLS-terminating reverse proxy (e.g. Nginx, Cloudflare), configure TRUST_PROXY_HEADERS=true on the control plane.`
               );
+              throw new RunbookDefinitionError(
+                'HTTPS required for secret-backed steps. If behind a TLS-terminating reverse proxy, configure TRUST_PROXY_HEADERS=true on the control plane.'
+              );
+            }
             return null;
           }
           const lockedCandidates = await tx.$queryRaw<Array<{ id: string }>>`
