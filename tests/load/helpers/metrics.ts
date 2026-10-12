@@ -306,7 +306,9 @@ export async function collectSingleTelemetrySample(options: {
     collectPostgresTelemetry(options.prisma),
     collectProviderTelemetry(options.controlBaseUrl),
     collectContainerStats(options.k8sNamespace),
-    options.topology.includes('automation') ? captureHostPressure() : undefined,
+    options.k8sNamespace === 'automation-cert' || options.topology.includes('automation')
+      ? captureHostPressure()
+      : undefined,
   ]);
 
   return {

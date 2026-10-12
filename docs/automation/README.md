@@ -419,3 +419,18 @@ records actual cgroup CPU placement before each controlled measurement.
 Cumulative paging counters require differences between samples; swap occupancy
 alone does not prove active swapping. These additions are diagnostic evidence,
 not relaxed gates, extra application resources or a performance optimization.
+
+Audit 39 completed one OFF–service-disabled–OFF bracket. All three correctness
+measurements passed with no dropped arrivals or fallbacks, but OFF p95/p99
+changed from 392.05/813.01ms to 132/289ms. The bracket is **INCONCLUSIVE** under
+the unchanged drift gates. Service-disabled p95/p99 was 2,164/3,626ms. Both Web
+replicas retained the same CPU placements (7–8 and 9–10) across all three runs.
+No complete 30-measurement matrix or capacity certificate is claimed. The
+operator stopped after the completed unstable bracket; artifacts are retained
+and the restored fixture was verified free of capacity incidents/decisions/traces.
+
+The first host-pressure sampler selected topology names containing `automation`,
+but the Kind topology name did not contain that word. Thus Audit 39 retained
+pre-run host snapshots and CPU placement, **not workload paging samples**. The
+sampler now also recognizes the explicitly owned `automation-cert` namespace.
+Audit 39 cannot substantiate a relationship between active paging and latency.
