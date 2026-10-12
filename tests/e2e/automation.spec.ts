@@ -148,9 +148,11 @@ test('supported ingestion displays pinned context and intentional paging suppres
       where: { type: 'ESCALATION', payload: { path: ['incidentId'], equals: incident.id } },
     })
   ).toBe(0);
-  await page.goto(`/incidents/${incident.id}`);
+  await page.goto(`${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${incident.id}`);
   await expect(page.getByRole('heading', { name: /Alert Context/ })).toBeVisible();
-  await expect(page.getByText('production', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('production', { exact: true }).filter({ visible: true })
+  ).toBeVisible();
   await expect(
     page.getByText('Personal paging intentionally skipped', { exact: false })
   ).toBeVisible();
@@ -196,15 +198,21 @@ test('supported ingestion displays pinned context and intentional paging suppres
   expect((await (await page.request.get('/api/auth/session')).json()).user.email).toBe(
     auditorEmail
   );
-  await page.goto(`/incidents/${incident.id}`);
-  await expect(page.getByText('Alert context is restricted.', { exact: true })).toBeVisible();
-  await expect(page.getByText('Alert details are restricted.', { exact: true })).toBeVisible();
+  await page.goto(`${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${incident.id}`);
+  await expect(
+    page.getByText('Alert context is restricted.', { exact: true }).filter({ visible: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText('Alert details are restricted.', { exact: true }).filter({ visible: true })
+  ).toBeVisible();
   const readerHtml = await page.request.get(`/incidents/${incident.id}`);
   expect(readerHtml.status()).toBe(200);
   expect(await readerHtml.text()).not.toContain('x'.repeat(1200));
 });
 
-test('P1 ingestion pins its policy through later edits and archival', async ({ page }) => {
+test('P1 ingestion pins its policy through later edits and archival', async ({
+  page,
+}, testInfo) => {
   const csrf = await (await page.request.get('/api/auth/csrf')).json();
   await page.request.post('/api/auth/callback/credentials', {
     form: { csrfToken: csrf.csrfToken, email, password, json: 'true' },
@@ -336,7 +344,9 @@ test('P1 ingestion pins its policy through later edits and archival', async ({ p
       where: { incidentId: missing.data.result.incident.id, sourceType: 'AUTOMATION' },
     })
   ).toBe(0);
-  await page.goto(`/incidents/${missing.data.result.incident.id}`);
+  await page.goto(
+    `${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${missing.data.result.incident.id}`
+  );
   await expect(page.getByText('Not provided', { exact: true })).toBeVisible();
   await expect(
     page.getByText('No routing rule matched; service-default routing was used.', { exact: true })
@@ -364,9 +374,13 @@ test('P1 ingestion pins its policy through later edits and archival', async ({ p
   await page.goto(`/policies/${policy.id}?tab=dependencies`);
   await page.getByRole('button', { name: 'Archive policy', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Policy Dependencies · Archived' })).toBeVisible();
-  await page.goto(`/incidents/${incident.id}`);
-  await expect(page.getByText('production', { exact: true })).toBeVisible();
-  await expect(page.getByText('Responder route:', { exact: false })).toContainText(policy.name);
+  await page.goto(`${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${incident.id}`);
+  await expect(
+    page.getByText('production', { exact: true }).filter({ visible: true })
+  ).toBeVisible();
+  await expect(
+    page.getByText('Responder route:', { exact: false }).filter({ visible: true })
+  ).toContainText(policy.name);
   expect(
     (await db.incidentAutomationDecision.findUniqueOrThrow({ where: { incidentId: incident.id } }))
       .versionId
