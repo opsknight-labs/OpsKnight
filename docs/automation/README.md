@@ -287,3 +287,20 @@ page writes, and forty incidents sharing a recipient. The previous implementatio
 failed that shared-recipient test with SQLSTATE 40001; the row-locked commit
 passed all four tests with zero retries. Sustained performance must be measured
 again before this change supports a capacity claim.
+
+Audit 30 completed the full matrix on exact runtime revision
+`4e8c924115e2ca7e8d928f616e6c05a2ad207861`. All three exact-head CI workflows
+passed. All 24,008 acknowledged alerts persisted; incident duplicates, provider
+duplicates, deadlocks and pending work after each profile drain were zero.
+Retries across the measured load/drain windows fell from 45,722 in Audit 29 to
+1,179, but every paired ingestion-latency comparison failed at least one 1.25×
+gate. SHADOW and LIVE-medium each recorded one `EVALUATION_TIMEOUT` fallback.
+Capacity remains **NOT CERTIFIED**; reduced retries do not establish a latency
+pass. The full result is appended without changing preceding ledger entries.
+
+Post-run diagnosis sampled one general worker after cleanup: its V8 profile was
+99.29% idle. This is not a traffic CPU profile and does not attribute native
+Prisma-engine CPU. Earlier high worker CPU samples included cleanup work. Database
+snapshots also observed WAL sync/write waits and slow queries; these are leads
+for diagnosis, not proof of a storage bottleneck. No latency threshold, evaluator
+time limit or provider budget was relaxed.
