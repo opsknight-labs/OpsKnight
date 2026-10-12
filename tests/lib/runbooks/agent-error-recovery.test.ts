@@ -1,4 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { createHash, generateKeyPairSync, sign } from 'node:crypto';
+import { chmod, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { run } from '../../../agent/src/index';
+import { ResultSpool } from '../../../agent/src/spool';
+import { AgentApiError, type AgentClient } from '../../../agent/src/client';
+import { canonicalEnvelope } from '../../../agent/src/envelope';
+import type { ClaimedAttempt, AgentIdentity, AgentPolicy } from '../../../agent/src/types';
 import {
   computeReportedLastError,
   determineActiveBlockingCondition,
@@ -392,3 +401,287 @@ describe('Agent error precedence and lifecycle recovery', () => {
     ).toBeNull();
   });
 });
+
+describe('Real Agent Loop Recovery & Regressions', () => {
+  const keys = generateKeyPairSync('ed25519');
+  const publicKeySpki = keys.publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+  const agentId = 'agent_test_123';
+  const identity: AgentIdentity = {
+    agentId,
+    privateKey: 'mock-key',
+    publicKey: 'mock-public-key',
+  };
+  const policy: AgentPolicy = {
+    allowedStepTypes: ['BASH'],
+    allowNonIdempotent: true,
+    maxRuntimeSeconds: 30,
+    maxOutputBytes: 1024,
+    systemdUnits: [],
+    dockerContainers: [],
+    kubernetesNamespaces: [],
+    bashCommandPatterns: ['echo ok'],
+  };
+
+  function createSignedAttempt(overrides: Partial<ClaimedAttempt> = {}): ClaimedAttempt {
+    const attemptId = overrides.attemptId ?? 'att1';
+    const leaseToken = overrides.leaseToken ?? 'lease1';
+    const payload = {
+      attemptId,
+      signingAgentId: agentId,
+      leaseToken,
+      leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      executionDeadlineAt: new Date(Date.now() + 120_000).toISOString(),
+      step: {
+        key: 'step1',
+        name: 'Step 1',
+        type: 'BASH' as const,
+        riskClass: 'READ_ONLY' as const,
+        timeoutSeconds: 30,
+        config: { command: 'echo ok' },
+        ...overrides.step,
+      },
+      inputValues: overrides.inputValues ?? {},
+      secretInputKeys: overrides.secretInputKeys ?? [],
+      idempotencyKey: null,
+      planDigest: null,
+      executionId: 'exec1',
+      ...overrides,
+    };
+    delete (payload as Record<string, unknown>).signature;
+    const signature = sign(null, Buffer.from(canonicalEnvelope(payload)), keys.privateKey).toString('base64');
+    return { ...payload, signature } as ClaimedAttempt;
+  }
+
+  function createSignedStart(attempt: ClaimedAttempt) {
+    const leaseTokenHash = createHash('sha256').update(attempt.leaseToken).digest('hex');
+    const payload = {
+      attemptId: attempt.attemptId,
+      signingAgentId: agentId,
+      leaseTokenHash,
+      leaseExpiresAt: attempt.leaseExpiresAt,
+      cancelRequested: false,
+    };
+    const signature = sign(null, Buffer.from(canonicalEnvelope(payload)), keys.privateKey).toString('base64');
+    return { ...payload, signature };
+  }
+
+  it('handles LOCAL_POLICY_DENIED on one job, persists FAILED outcome, and allows subsequent valid job to succeed', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'agent-loop-policy-'));
+    try {
+      const spool = new ResultSpool(join(tempDir, 'spool'));
+
+      // Attempt 1: Policy denied because BASH command "rm -rf /" is not in bashCommandPatterns: ['echo ok']
+      const deniedAttempt = createSignedAttempt({
+        attemptId: 'denied1',
+        leaseToken: 'token1',
+        step: {
+          key: 'step_denied',
+          name: 'Denied Step',
+          type: 'BASH',
+          riskClass: 'NON_IDEMPOTENT',
+          timeoutSeconds: 30,
+          config: { command: 'rm -rf /' },
+        },
+      });
+
+      // Attempt 2: Valid BASH command "echo ok"
+      const validAttempt = createSignedAttempt({
+        attemptId: 'valid1',
+        leaseToken: 'token2',
+        step: {
+          key: 'step_valid',
+          name: 'Valid Step',
+          type: 'BASH',
+          riskClass: 'READ_ONLY',
+          timeoutSeconds: 30,
+          config: { command: 'echo ok' },
+        },
+      });
+
+      let claimCount = 0;
+      const submittedResults: Array<{ attemptId: string; status: string; errorCode?: string }> = [];
+
+      const mockClient = {
+        claim: vi.fn().mockImplementation(async () => {
+          claimCount++;
+          if (claimCount === 1) return deniedAttempt;
+          if (claimCount === 2) return validAttempt;
+          return null;
+        }),
+        start: vi.fn().mockImplementation(async (attemptId: string) => {
+          if (attemptId === 'denied1') return createSignedStart(deniedAttempt);
+          return createSignedStart(validAttempt);
+        }),
+        renew: vi.fn(),
+        submit: vi.fn().mockImplementation(async (result: { attemptId: string; status: string; errorCode?: string }) => {
+          submittedResults.push(result);
+        }),
+        heartbeat: vi.fn(),
+        checkServerClock: vi.fn().mockResolvedValue({ skewSeconds: 0 }),
+        uploadArtifact: vi.fn(),
+        releaseClaim: vi.fn(),
+      } as unknown as AgentClient;
+
+      await run({
+        baseUrl: 'http://localhost:3000',
+        dataDirectory: tempDir,
+        identity,
+        policy,
+        executionPublicKey: publicKeySpki,
+        client: mockClient,
+        spool,
+        maxIterations: 2,
+        pollIntervalMs: 5,
+        skipHeartbeat: true,
+        skipHealth: true,
+      });
+
+      expect(mockClient.claim).toHaveBeenCalledTimes(2);
+      expect(submittedResults).toHaveLength(2);
+      expect(submittedResults[0]).toMatchObject({
+        attemptId: 'denied1',
+        status: 'FAILED',
+        errorCode: 'LOCAL_POLICY_DENIED',
+      });
+      expect(submittedResults[1]).toMatchObject({
+        attemptId: 'valid1',
+        status: 'SUCCEEDED',
+      });
+      expect(await spool.depth()).toBe(0);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('handles HTTP 400/409 claim errors without deadlock, retrying and recovering on next cycle', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'agent-loop-claim-err-'));
+    try {
+      const spool = new ResultSpool(join(tempDir, 'spool'));
+
+      const validAttempt = createSignedAttempt({
+        attemptId: 'claimedAfterConflict',
+        leaseToken: 'token409',
+      });
+
+      let claimCount = 0;
+      const submittedResults: Array<{ attemptId: string; status: string }> = [];
+
+      const mockClient = {
+        claim: vi.fn().mockImplementation(async () => {
+          claimCount++;
+          if (claimCount === 1) {
+            // First claim fails with HTTP 409 conflict
+            throw new AgentApiError('Conflict: Claim already acquired by another worker', 409);
+          }
+          if (claimCount === 2) {
+            // Second claim succeeds
+            return validAttempt;
+          }
+          return null;
+        }),
+        start: vi.fn().mockImplementation(async () => createSignedStart(validAttempt)),
+        renew: vi.fn(),
+        submit: vi.fn().mockImplementation(async (result: { attemptId: string; status: string }) => {
+          submittedResults.push(result);
+        }),
+        heartbeat: vi.fn(),
+        checkServerClock: vi.fn().mockResolvedValue({ skewSeconds: 0 }),
+        uploadArtifact: vi.fn(),
+        releaseClaim: vi.fn(),
+      } as unknown as AgentClient;
+
+      await run({
+        baseUrl: 'http://localhost:3000',
+        dataDirectory: tempDir,
+        identity,
+        policy,
+        executionPublicKey: publicKeySpki,
+        client: mockClient,
+        spool,
+        maxIterations: 2,
+        pollIntervalMs: 5,
+        skipHeartbeat: true,
+        skipHealth: true,
+      });
+
+      // Proves claim was called again on cycle 2 without deadlock or pause
+      expect(mockClient.claim).toHaveBeenCalledTimes(2);
+      expect(submittedResults).toHaveLength(1);
+      expect(submittedResults[0]).toMatchObject({
+        attemptId: 'claimedAfterConflict',
+        status: 'SUCCEEDED',
+      });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('handles spool EACCES by halting claims, and automatically resumes when directory permissions are restored', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'agent-loop-eacces-'));
+    const spoolDir = join(tempDir, 'spool');
+    try {
+      const spool = new ResultSpool(spoolDir);
+      await spool.initialize();
+
+      // Revoke directory write and read permissions to induce EACCES
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      await chmod(spoolDir, 0o000);
+
+      const mockClient = {
+        claim: vi.fn().mockImplementation(async () => null),
+        start: vi.fn(),
+        renew: vi.fn(),
+        submit: vi.fn(),
+        heartbeat: vi.fn(),
+        checkServerClock: vi.fn().mockResolvedValue({ skewSeconds: 0 }),
+        uploadArtifact: vi.fn(),
+        releaseClaim: vi.fn(),
+      } as unknown as AgentClient;
+
+      // Iteration 1: Spool is inaccessible (chmod 000).
+      // Claims MUST be halted, mockClient.claim should NOT be called.
+      await run({
+        baseUrl: 'http://localhost:3000',
+        dataDirectory: tempDir,
+        identity,
+        policy,
+        executionPublicKey: publicKeySpki,
+        client: mockClient,
+        spool,
+        maxIterations: 1,
+        pollIntervalMs: 5,
+        skipHeartbeat: true,
+        skipHealth: true,
+      });
+
+      expect(mockClient.claim).not.toHaveBeenCalled();
+
+      // Operator restores permissions: chmod 0700
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      await chmod(spoolDir, 0o700);
+
+      // Iteration 2: Storage is restored.
+      // probeStorageIntegrity succeeds -> claims resume immediately!
+      await run({
+        baseUrl: 'http://localhost:3000',
+        dataDirectory: tempDir,
+        identity,
+        policy,
+        executionPublicKey: publicKeySpki,
+        client: mockClient,
+        spool,
+        maxIterations: 1,
+        pollIntervalMs: 5,
+        skipHeartbeat: true,
+        skipHealth: true,
+      });
+
+      expect(mockClient.claim).toHaveBeenCalledTimes(1);
+    } finally {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      await chmod(spoolDir, 0o700).catch(() => undefined);
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+});
+

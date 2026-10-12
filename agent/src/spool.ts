@@ -203,4 +203,45 @@ export class ResultSpool {
       oldestAgeMs: names.length > 0 ? Math.max(0, Date.now() - oldestMtime) : 0,
     };
   }
+
+  /**
+   * Comprehensive, safe verification of storage durability and accessibility.
+   * Proves that the spool directory can be read, listed, written, fsynced, and unlinked
+   * without mutating or clobbering existing execution records.
+   * Fails closed by throwing if any filesystem operation fails.
+   */
+  async probeStorageIntegrity(): Promise<void> {
+    await this.initialize();
+    // 1. Verify reading directory and listing/decoding existing records
+    await this.list();
+    // 2. Verify write, sync, readback and unlink capabilities
+    const probePath = join(this.directory, `.probe-${process.pid}-${randomUUID()}.tmp`);
+    const file = await open(probePath, 'wx', 0o600);
+    try {
+      await file.writeFile(Buffer.from('opsknight-storage-probe'));
+      await file.sync();
+    } finally {
+      await file.close();
+    }
+    try {
+      const readBack = await readFile(probePath, 'utf8');
+      if (readBack !== 'opsknight-storage-probe') {
+        throw new Error('Storage probe data verification failed');
+      }
+    } finally {
+      await unlink(probePath).catch(() => undefined);
+    }
+    // 3. Verify directory metadata sync
+    const directory = await open(this.directory, 'r');
+    try {
+      await directory.sync();
+    } finally {
+      await directory.close();
+    }
+    // 4. Verify dead-letter directory accessibility
+    const deadLetterDir = join(this.directory, 'dead-letter');
+    await mkdir(deadLetterDir, { recursive: true, mode: 0o700 });
+    await readdir(deadLetterDir);
+  }
 }
+

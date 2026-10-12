@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, rm, writeFile, utimes } from 'node:fs/promises';
+import { chmod, mkdtemp, rm, writeFile, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateKeyPairSync, sign } from 'node:crypto';
@@ -379,6 +379,59 @@ describe('Agent authority and durable recovery', () => {
       await expect(spool.deadLetterStats()).rejects.toThrow();
     } finally {
       await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('probeStorageIntegrity verifies read, write, fsync, and dead-letter durability without mutating records', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'opsknight-spool-probe-'));
+    try {
+      const spool = new ResultSpool(directory);
+      await spool.initialize();
+      await spool.put({
+        attemptId: 'existingRecord1',
+        leaseToken: 'token1',
+        producedAt: new Date().toISOString(),
+        status: 'SUCCEEDED',
+        localOutput: 'important output that must be preserved',
+      });
+
+      // Probe should verify storage integrity cleanly
+      await expect(spool.probeStorageIntegrity()).resolves.toBeUndefined();
+
+      // Verify that existing record was not mutated or removed
+      const records = await spool.list();
+      expect(records).toHaveLength(1);
+      expect(records[0].attemptId).toBe('existingRecord1');
+      expect(records[0].localOutput).toBe('important output that must be preserved');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('probeStorageIntegrity fails closed when storage permissions are unwritable or unreadable', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'opsknight-spool-probe-err-'));
+    try {
+      const spool = new ResultSpool(directory);
+      await spool.initialize();
+
+      // 1. Unwritable directory (0o500: read/execute only, no write)
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      await chmod(directory, 0o500);
+      await expect(spool.probeStorageIntegrity()).rejects.toThrow();
+
+      // 2. Unreadable directory (0o300: write/execute only, no read)
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      await chmod(directory, 0o300);
+      await expect(spool.probeStorageIntegrity()).rejects.toThrow();
+
+      // 3. Restored directory (0o700: full permissions) -> succeeds!
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      await chmod(directory, 0o700);
+      await expect(spool.probeStorageIntegrity()).resolves.toBeUndefined();
+    } finally {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename
+      await chmod(directory, 0o700).catch(() => undefined);
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });

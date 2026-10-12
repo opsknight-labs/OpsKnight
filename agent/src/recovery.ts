@@ -18,6 +18,7 @@ export interface SafetyLimits {
 }
 
 export interface AgentConditionState {
+  storageError?: string | null;
   clockError: string | null;
   deadLetterStats: SpoolStats;
   spoolStats: SpoolStats;
@@ -27,12 +28,15 @@ export interface AgentConditionState {
 
 /**
  * Dynamically determines if an active safety or operational condition currently blocks claims.
- * Evaluates live state (clock, dead-letter quarantine, spool backlog, draining) rather than
- * relying on static historical error strings.
+ * Evaluates live state (storage integrity, clock, dead-letter quarantine, spool backlog, draining)
+ * rather than relying on static historical error strings.
  *
  * Returns the human-readable condition string, or null if the agent's current state is healthy.
  */
 export function determineActiveBlockingCondition(state: AgentConditionState): string | null {
+  if (state.storageError) {
+    return `Execution claims paused due to local storage failure: ${state.storageError}`;
+  }
   if (state.clockError) {
     return state.clockError;
   }

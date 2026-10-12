@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import { access, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { AgentApiError, AgentClient, enrollAgent } from './client';
 import { LeaseAuthority } from './lease';
 import { verifyExecutionEnvelope, parseTrustedSigningKeys } from './envelope';
@@ -24,10 +25,16 @@ const baseUrl = process.env.OPSKNIGHT_URL?.trim();
 const dataDirectory = process.env.OPSKNIGHT_AGENT_DATA_DIR ?? '/var/lib/opsknight-agent';
 const identityPath = process.env.OPSKNIGHT_AGENT_IDENTITY_FILE ?? `${dataDirectory}/identity.json`;
 const policyPath = process.env.OPSKNIGHT_AGENT_POLICY_FILE ?? '/etc/opsknight-agent/policy.json';
-const executionPublicKey = parseTrustedSigningKeys(
-  process.env.OPSKNIGHT_EXECUTION_PUBLIC_KEYS,
-  process.env.OPSKNIGHT_EXECUTION_PUBLIC_KEY
-);
+const executionPublicKey = (() => {
+  try {
+    return parseTrustedSigningKeys(
+      process.env.OPSKNIGHT_EXECUTION_PUBLIC_KEYS,
+      process.env.OPSKNIGHT_EXECUTION_PUBLIC_KEY
+    );
+  } catch {
+    return null;
+  }
+})();
 
 function parseBoundedInteger(
   envName: string,
@@ -89,22 +96,19 @@ const MAX_DEAD_LETTER_AGE_MS = parseBoundedInteger(
   30 * 24 * 60 * 60 * 1000
 );
 
-if (!baseUrl) throw new Error('OPSKNIGHT_URL is required.');
-if (!executionPublicKey)
-  throw new Error(
-    'Pin OPSKNIGHT_EXECUTION_PUBLIC_KEY from Runbooks > Agents before starting the Agent.'
-  );
-
-async function saveIdentity(identity: AgentIdentity) {
-  await mkdir(dirname(identityPath), { recursive: true, mode: 0o700 });
-  const temporary = `${identityPath}.${process.pid}.tmp`;
+async function saveIdentity(identity: AgentIdentity, targetPath = identityPath) {
+  await mkdir(dirname(targetPath), { recursive: true, mode: 0o700 });
+  const temporary = `${targetPath}.${process.pid}.tmp`;
   await writeFile(temporary, JSON.stringify(identity), { mode: 0o600, flag: 'wx' });
-  await rename(temporary, identityPath);
+  await rename(temporary, targetPath);
 }
 
-async function loadIdentity(): Promise<AgentIdentity> {
+async function loadIdentity(
+  targetPath = identityPath,
+  effectiveUrl = baseUrl
+): Promise<AgentIdentity> {
   try {
-    return JSON.parse(await readFile(identityPath, 'utf8')) as AgentIdentity;
+    return JSON.parse(await readFile(targetPath, 'utf8')) as AgentIdentity;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     const tokenFile = process.env.OPSKNIGHT_AGENT_ENROLLMENT_TOKEN_FILE?.trim();
@@ -113,8 +117,9 @@ async function loadIdentity(): Promise<AgentIdentity> {
       : process.env.OPSKNIGHT_AGENT_ENROLLMENT_TOKEN?.trim();
     if (!token)
       throw new Error('Agent is not enrolled and OPSKNIGHT_AGENT_ENROLLMENT_TOKEN is missing.');
-    const identity = await enrollAgent(baseUrl!, token);
-    await saveIdentity(identity);
+    if (!effectiveUrl) throw new Error('OPSKNIGHT_URL is required to enroll agent.');
+    const identity = await enrollAgent(effectiveUrl, token);
+    await saveIdentity(identity, targetPath);
     return identity;
   }
 }
@@ -192,23 +197,59 @@ function redactEvidence(
   return visit(state) as Record<string, unknown>;
 }
 
-async function run() {
-  const identity = await loadIdentity();
-  const { policy, hash: policyHash } = await loadPolicy(policyPath);
-  const client = new AgentClient(baseUrl!, identity, executionPublicKey);
-  const spool = new ResultSpool(`${dataDirectory}/spool`);
+export interface RunAgentOptions {
+  baseUrl?: string;
+  dataDirectory?: string;
+  identityPath?: string;
+  identity?: AgentIdentity;
+  policyPath?: string;
+  policy?: import('./types').AgentPolicy;
+  policyHash?: string;
+  executionPublicKey?: string | Record<string, string>;
+  signal?: AbortSignal;
+  maxIterations?: number;
+  client?: AgentClient;
+  spool?: ResultSpool;
+  pollIntervalMs?: number;
+  skipHeartbeat?: boolean;
+  skipHealth?: boolean;
+}
+
+export async function run(options: RunAgentOptions = {}) {
+  const effectiveBaseUrl = options.baseUrl ?? baseUrl;
+  const effectiveDataDir = options.dataDirectory ?? dataDirectory;
+  const effectiveIdentityPath = options.identityPath ?? identityPath;
+  const effectivePolicyPath = options.policyPath ?? policyPath;
+  const effectiveKey = options.executionPublicKey ?? executionPublicKey;
+  const pollInterval = options.pollIntervalMs ?? 2_000;
+
+  if (!effectiveBaseUrl) throw new Error('OPSKNIGHT_URL is required.');
+  if (!effectiveKey)
+    throw new Error(
+      'Pin OPSKNIGHT_EXECUTION_PUBLIC_KEY from Runbooks > Agents before starting the Agent.'
+    );
+
+  const identity =
+    options.identity ?? (await loadIdentity(effectiveIdentityPath, effectiveBaseUrl));
+  const { policy, hash: policyHash } =
+    options.policy !== undefined
+      ? { policy: options.policy, hash: options.policyHash ?? 'mock-policy-hash' }
+      : await loadPolicy(effectivePolicyPath);
+  const client = options.client ?? new AgentClient(effectiveBaseUrl, identity, effectiveKey);
+  const spool = options.spool ?? new ResultSpool(`${effectiveDataDir}/spool`);
   await spool.initialize();
   let active = 0;
   let transientCommunicationError: string | null = null;
   let terminalAuthError: string | null = null;
-  let operationalError: string | null = null;
+  let storageError: string | null = null;
+  let lastClaimError: string | null = null;
   let inFlightError: string | null = null;
   let shuttingDown = false;
   let activeController: AbortController | null = null;
   const abortUnfinishedExecution = () => activeController?.abort('LEASE_LOST');
 
-  const drainFilePath = `${dataDirectory}/drain`;
-  const drainReadyFilePath = `${dataDirectory}/drain-ready`;
+  const drainFilePath = `${effectiveDataDir}/drain`;
+  const drainReadyFilePath = `${effectiveDataDir}/drain-ready`;
 
   const checkDraining = async (): Promise<boolean> => {
     try {
@@ -232,18 +273,30 @@ async function run() {
   let lastClockCheck = 0;
   let cachedClockSkew: number | null = null;
 
+  const checkStorageHealth = async (): Promise<boolean> => {
+    try {
+      await spool.probeStorageIntegrity();
+      storageError = null;
+      return true;
+    } catch (fsErr) {
+      storageError = fsErr instanceof Error ? fsErr.message : String(fsErr);
+      return false;
+    }
+  };
+
   const getActiveBlockingCondition = async (): Promise<string | null> => {
-    if (operationalError && !operationalError.startsWith('Spool storage inaccessible')) {
-      return `Execution claims paused due to local storage failure: ${operationalError}`;
+    if (storageError) {
+      const recovered = await checkStorageHealth();
+      if (!recovered) {
+        return `Execution claims paused due to local storage failure: ${storageError}`;
+      }
     }
     const isDraining = await checkDraining();
     try {
       const deadLetterStats = await spool.deadLetterStats();
       const spoolStats = await spool.stats();
-      if (operationalError?.startsWith('Spool storage inaccessible')) {
-        operationalError = null;
-      }
       return determineActiveBlockingCondition({
+        storageError: null,
         clockError,
         deadLetterStats,
         spoolStats,
@@ -251,8 +304,8 @@ async function run() {
         limits: safetyLimits,
       });
     } catch (fsErr) {
-      operationalError = `Spool storage inaccessible: ${fsErr instanceof Error ? fsErr.message : String(fsErr)}`;
-      return `Execution claims paused due to local storage failure: ${operationalError}`;
+      storageError = fsErr instanceof Error ? fsErr.message : String(fsErr);
+      return `Execution claims paused due to local storage failure: ${storageError}`;
     }
   };
 
@@ -261,7 +314,7 @@ async function run() {
     return computeReportedLastError({
       activeBlockingError,
       terminalAuthError,
-      operationalError,
+      operationalError: storageError ?? lastClaimError,
       inFlightError,
       transientError: transientCommunicationError,
     });
@@ -272,8 +325,8 @@ async function run() {
     let submittedCount = 0;
     try {
       const records = await spool.list();
-      if (operationalError?.startsWith('Spool storage inaccessible')) {
-        operationalError = null;
+      if (storageError) {
+        await checkStorageHealth();
       }
       for (const record of records) {
         try {
@@ -304,8 +357,8 @@ async function run() {
         transientCommunicationError = null;
       }
     } catch (fsErr) {
-      operationalError = `Spool storage inaccessible: ${fsErr instanceof Error ? fsErr.message : String(fsErr)}`;
-      process.stderr.write(`[Agent Storage Error] ${operationalError}\n`);
+      storageError = `Spool storage inaccessible: ${fsErr instanceof Error ? fsErr.message : String(fsErr)}`;
+      process.stderr.write(`[Agent Storage Error] ${storageError}\n`);
     }
   };
 
@@ -340,19 +393,19 @@ async function run() {
     try {
       spoolDepth = await spool.depth();
       deadLetterDepth = await spool.deadLetterDepth();
-      if (operationalError?.startsWith('Spool storage inaccessible')) {
-        operationalError = null;
+      if (storageError) {
+        await checkStorageHealth();
       }
     } catch (spoolErr) {
-      operationalError = `Spool storage inaccessible: ${spoolErr instanceof Error ? spoolErr.message : String(spoolErr)}`;
-      process.stderr.write(`[Agent Storage Error] ${operationalError}\n`);
+      storageError = spoolErr instanceof Error ? spoolErr.message : String(spoolErr);
+      process.stderr.write(`[Agent Storage Error] ${storageError}\n`);
     }
     const lastError = await getEffectiveLastError();
     await client.heartbeat({
       capabilities: effective.capabilities,
       capabilityReport: effective.report,
       trustedSigningKeys:
-        typeof executionPublicKey === 'object' ? Object.keys(executionPublicKey) : ['default'],
+        typeof effectiveKey === 'object' ? Object.keys(effectiveKey) : ['default'],
       policyHash,
       spoolDepth,
       deadLetterDepth,
@@ -363,7 +416,6 @@ async function run() {
     transientCommunicationError = null;
     terminalAuthError = null;
   };
-  await heartbeat();
 
   let publishingHealth = false;
   const publishHealth = async () => {
@@ -371,47 +423,73 @@ async function run() {
     publishingHealth = true;
     try {
       const draining = await checkDraining();
-      await mkdir(dataDirectory, { recursive: true, mode: 0o700 });
-      const temporary = `${dataDirectory}/health.${process.pid}.tmp`;
+      await mkdir(effectiveDataDir, { recursive: true, mode: 0o700 });
+      const temporary = `${effectiveDataDir}/health.${process.pid}.tmp`;
       await writeFile(
         temporary,
         JSON.stringify({
           pid: process.pid,
           updatedAt: Date.now(),
-          ready: !draining && clockError === null && operationalError === null,
+          ready: !draining && clockError === null && storageError === null,
           draining,
           activeAttemptCount: active,
           version: getAgentVersion(),
-          operationalError,
+          storageError,
+          lastClaimError,
         }),
         { mode: 0o600 }
       );
-      await rename(temporary, `${dataDirectory}/health.json`);
-      if (operationalError?.startsWith('Agent data directory inaccessible')) {
-        operationalError = null;
+      await rename(temporary, `${effectiveDataDir}/health.json`);
+      if (storageError?.startsWith('Agent data directory inaccessible')) {
+        storageError = null;
       }
     } catch (healthErr) {
-      operationalError = `Agent data directory inaccessible: ${healthErr instanceof Error ? healthErr.message : String(healthErr)}`;
+      storageError = `Agent data directory inaccessible: ${healthErr instanceof Error ? healthErr.message : String(healthErr)}`;
     } finally {
       publishingHealth = false;
     }
   };
-  await publishHealth();
-  const heartbeatTimer = setInterval(() => void heartbeat().catch(() => undefined), 30_000);
-  const healthTimer = setInterval(() => void publishHealth().catch(() => undefined), 15_000);
+
+  if (!options.skipHealth) {
+    await publishHealth();
+  }
+  if (!options.skipHeartbeat) {
+    await heartbeat();
+  }
+
+  const heartbeatTimer = options.skipHeartbeat
+    ? null
+    : setInterval(() => void heartbeat().catch(() => undefined), 30_000);
+  const healthTimer = options.skipHealth
+    ? null
+    : setInterval(() => void publishHealth().catch(() => undefined), 15_000);
 
   const shutdown = () => {
     shuttingDown = true;
     activeController?.abort('AGENT_SHUTDOWN');
-    clearInterval(heartbeatTimer);
-    clearInterval(healthTimer);
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    if (healthTimer) clearInterval(healthTimer);
     process.exitCode = 0;
   };
+  if (options.signal) {
+    if (options.signal.aborted) {
+      shutdown();
+      return;
+    }
+    options.signal.addEventListener('abort', shutdown, { once: true });
+  }
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
 
+  let iterationsRun = 0;
   try {
     while (!shuttingDown) {
+      if (options.maxIterations !== undefined) {
+        if (iterationsRun >= options.maxIterations) {
+          break;
+        }
+        iterationsRun++;
+      }
       await flushSpool();
       const draining = await checkDraining();
       if (draining) {
@@ -427,7 +505,7 @@ async function run() {
           }
         }
         await publishHealth();
-        await new Promise(resolve => setTimeout(resolve, 1_000));
+        await new Promise(resolve => setTimeout(resolve, Math.min(1_000, pollInterval)));
         continue;
       }
       let attempt: ClaimedAttempt | null = null;
@@ -439,14 +517,12 @@ async function run() {
       try {
         const activeCondition = await getActiveBlockingCondition();
         if (activeCondition) {
-          await new Promise(resolve => setTimeout(resolve, 5_000));
+          await new Promise(resolve => setTimeout(resolve, Math.min(5_000, pollInterval)));
           continue;
         }
 
         const currentSpoolDepth = await spool.depth();
         const currentDeadLetterDepth = await spool.deadLetterDepth();
-        // Successful storage/safety inspection without exception clears previous local operational failures
-        operationalError = null;
 
         const readOnlyOnly = currentSpoolDepth > 0 || currentDeadLetterDepth > 0;
         try {
@@ -454,40 +530,41 @@ async function run() {
           // A successful claim request (even if no attempt available) proves connectivity & valid auth
           transientCommunicationError = null;
           terminalAuthError = null;
+          lastClaimError = null;
         } catch (claimErr) {
           if (claimErr instanceof AgentApiError) {
             if (claimErr.status === 401 || claimErr.status === 403) {
               terminalAuthError = `Agent authentication revoked or invalid: HTTP ${claimErr.status} - ${claimErr.message}`;
               transientCommunicationError = null;
-              await new Promise(resolve => setTimeout(resolve, 15_000));
+              await new Promise(resolve => setTimeout(resolve, Math.min(15_000, pollInterval * 3)));
               continue;
             }
             if (claimErr.status === 429) {
               transientCommunicationError = `Agent API rate limit exceeded: HTTP 429 - ${claimErr.message}`;
-              await new Promise(resolve => setTimeout(resolve, 10_000));
+              await new Promise(resolve => setTimeout(resolve, Math.min(10_000, pollInterval * 2)));
               continue;
             }
             if (claimErr.status === 409) {
-              operationalError = `Agent claim conflict: HTTP 409 - ${claimErr.message}`;
-              await new Promise(resolve => setTimeout(resolve, 2_000));
+              lastClaimError = `Agent claim conflict: HTTP 409 - ${claimErr.message}`;
+              await new Promise(resolve => setTimeout(resolve, pollInterval));
               continue;
             }
             if (claimErr.status >= 500) {
               transientCommunicationError = `Agent API server error: HTTP ${claimErr.status} - ${claimErr.message}`;
-              await new Promise(resolve => setTimeout(resolve, 5_000));
+              await new Promise(resolve => setTimeout(resolve, Math.min(5_000, pollInterval)));
               continue;
             }
-            operationalError = `Agent API claim rejected: HTTP ${claimErr.status} - ${claimErr.message}`;
-            await new Promise(resolve => setTimeout(resolve, 5_000));
+            lastClaimError = `Agent API claim rejected: HTTP ${claimErr.status} - ${claimErr.message}`;
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
             continue;
           }
           const claimMessage = claimErr instanceof Error ? claimErr.message : String(claimErr);
           if (isTransientCommunicationError(claimMessage)) {
             transientCommunicationError = claimMessage;
-            await new Promise(resolve => setTimeout(resolve, 2_000));
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
           } else {
-            operationalError = `Unexpected claim failure: ${claimMessage}`;
-            await new Promise(resolve => setTimeout(resolve, 5_000));
+            lastClaimError = `Unexpected claim failure: ${claimMessage}`;
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
           }
           continue;
         }
@@ -502,10 +579,10 @@ async function run() {
           await client.releaseClaim(attempt.attemptId, attempt.leaseToken).catch(() => undefined);
           continue;
         }
-        verifyExecutionEnvelope(attempt, executionPublicKey!, identity.agentId);
+        verifyExecutionEnvelope(attempt, effectiveKey!, identity.agentId);
         if (
           attempt.secretInputKeys.length > 0 &&
-          new URL(baseUrl!).protocol !== 'https:' &&
+          new URL(effectiveBaseUrl).protocol !== 'https:' &&
           !(
             (process.env.NODE_ENV === 'development' &&
               process.env.OPSKNIGHT_ALLOW_INSECURE_AGENT_SECRETS === 'true') ||
@@ -601,55 +678,78 @@ async function run() {
           (error.status === 401 || error.status === 403)
         ) {
           terminalAuthError = `Agent authentication revoked or invalid: HTTP ${error.status} - ${error.message}`;
-        } else {
-          operationalError = failureMessage;
         }
-        // Stop accepting work if a known outcome cannot reach durable storage.
-        if (outcomeKnown && !resultPersisted) throw error;
+        // Stop accepting work only if a known outcome cannot reach durable storage.
+        if (outcomeKnown && !resultPersisted) {
+          storageError = `Outcome could not be persisted to durable spool: ${failureMessage}`;
+          throw error;
+        }
         if (attempt && started && !resultPersisted) {
           const isWrite = attempt.step.riskClass !== 'READ_ONLY';
-          await spool.put({
-            attemptId: attempt.attemptId,
-            leaseToken: attempt.leaseToken,
-            producedAt: new Date().toISOString(),
-            status: shuttingDown
-              ? isWrite
-                ? 'UNKNOWN'
-                : 'CANCELLED'
-              : failureMessage.startsWith('LOCAL_POLICY_DENIED')
-                ? 'FAILED'
-                : 'UNKNOWN',
-            errorCode: shuttingDown
-              ? isWrite
-                ? 'AGENT_INTERRUPTED_BY_SHUTDOWN'
-                : 'AGENT_SHUTDOWN'
-              : failureMessage.startsWith('LOCAL_POLICY_DENIED')
-                ? 'LOCAL_POLICY_DENIED'
-                : 'AGENT_FAILURE',
-            errorMessage: shuttingDown
-              ? isWrite
-                ? 'Execution was interrupted by process shutdown; target state is unknown.'
-                : 'Execution was cancelled by process shutdown.'
-              : failureMessage,
-          });
+          try {
+            await spool.put({
+              attemptId: attempt.attemptId,
+              leaseToken: attempt.leaseToken,
+              producedAt: new Date().toISOString(),
+              status: shuttingDown
+                ? isWrite
+                  ? 'UNKNOWN'
+                  : 'CANCELLED'
+                : failureMessage.startsWith('LOCAL_POLICY_DENIED')
+                  ? 'FAILED'
+                  : 'UNKNOWN',
+              errorCode: shuttingDown
+                ? isWrite
+                  ? 'AGENT_INTERRUPTED_BY_SHUTDOWN'
+                  : 'AGENT_SHUTDOWN'
+                : failureMessage.startsWith('LOCAL_POLICY_DENIED')
+                  ? 'LOCAL_POLICY_DENIED'
+                  : 'AGENT_FAILURE',
+              errorMessage: shuttingDown
+                ? isWrite
+                  ? 'Execution was interrupted by process shutdown; target state is unknown.'
+                  : 'Execution was cancelled by process shutdown.'
+                : redactSecretInputs(attempt, failureMessage),
+            });
+            resultPersisted = true;
+          } catch (spoolErr) {
+            storageError = `Failed to persist execution outcome: ${spoolErr instanceof Error ? spoolErr.message : String(spoolErr)}`;
+            throw spoolErr;
+          }
         }
         if (shuttingDown) {
           await flushSpool().catch(() => undefined);
           break;
         }
-        await new Promise(resolve => setTimeout(resolve, 2_000));
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
       }
     }
   } finally {
-    clearInterval(heartbeatTimer);
-    clearInterval(healthTimer);
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    if (healthTimer) clearInterval(healthTimer);
     abortUnfinishedExecution();
     process.removeListener('SIGINT', shutdown);
     process.removeListener('SIGTERM', shutdown);
   }
 }
 
-void run().catch(error => {
-  process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
-  process.exitCode = 1;
-});
+const isDirectExecution = () => {
+  if (typeof process === 'undefined' || !process.argv || !process.argv[1]) return false;
+  try {
+    const executed = process.argv[1];
+    return (
+      executed.endsWith('opsknight-agent.mjs') ||
+      executed.endsWith('agent/src/index.ts') ||
+      Boolean(import.meta.url && fileURLToPath(import.meta.url) === executed)
+    );
+  } catch {
+    return false;
+  }
+};
+
+if (isDirectExecution()) {
+  void run().catch(error => {
+    process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}
