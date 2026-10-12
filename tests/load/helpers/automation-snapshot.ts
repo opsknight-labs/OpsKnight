@@ -107,13 +107,19 @@ export async function createControlledSnapshot() {
       '--timeout=150s',
     ]);
     // Identical startup settling; cold ingestion/version-cache costs remain measured.
-    for (let attempt = 0; attempt < 15; attempt++) {
-      const response = await fetch('http://127.0.0.1:3439/api/health', {
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!response.ok) throw new Error('Controlled fixture failed health warmup');
+    let healthySamples = 0;
+    for (let attempt = 0; attempt < 60 && healthySamples < 15; attempt++) {
+      try {
+        const response = await fetch('http://127.0.0.1:3439/api/health', {
+          signal: AbortSignal.timeout(5000),
+        });
+        healthySamples = response.ok ? healthySamples + 1 : 0;
+      } catch {
+        healthySamples = 0;
+      }
       await sleep(2000);
     }
+    if (healthySamples < 15) throw new Error('Controlled fixture failed consecutive health warmup');
   }
   let forward: ChildProcess | undefined;
   await stop();
