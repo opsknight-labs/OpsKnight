@@ -256,13 +256,38 @@ export async function deletePolicy(policyId: string) {
 
   const automationReferences = await prisma.automationVersionPolicyRef.findMany({
     where: { escalationPolicyId: policyId },
-    select: { version: { select: { service: { select: { name: true } } } } },
+    select: {
+      version: {
+        select: {
+          versionNumber: true,
+          snapshot: true,
+          service: { select: { id: true, name: true } },
+        },
+      },
+    },
   });
   const pinnedDecisions = await prisma.incidentAutomationDecision.count({
     where: { escalationPolicyId: policyId },
   });
   if (automationReferences.length || pinnedDecisions)
     return {
+      automationReferences: automationReferences.map(({ version }) => {
+        const snapshot = version.snapshot as unknown as {
+          rules?: Array<{ name?: string; actions?: Array<{ type: string; policyId?: string }> }>;
+        };
+        return {
+          serviceId: version.service.id,
+          serviceName: version.service.name,
+          versionNumber: version.versionNumber,
+          ruleNames: (snapshot.rules ?? [])
+            .filter(rule =>
+              rule.actions?.some(
+                action => action.type === 'USE_ESCALATION_POLICY' && action.policyId === policyId
+              )
+            )
+            .map(rule => rule.name ?? 'Unnamed rule'),
+        };
+      }),
       error: `Cannot delete policy: published automation or ${pinnedDecisions} pinned incident(s) reference it. Historical incident routes must remain available for reopen. Publish a replacement route; policies referenced by incident decisions cannot be deleted.`,
     };
 

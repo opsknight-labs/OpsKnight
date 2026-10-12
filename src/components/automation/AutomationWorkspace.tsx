@@ -642,7 +642,8 @@ export default function AutomationWorkspace({
           <div>
             <h2 className="text-lg sm:text-xl font-semibold flex items-center gap-2">
               <Workflow className="h-5 w-5" />
-              Automation <Badge>{data?.mode ?? 'Loading…'}</Badge>
+              Automation <Badge variant="secondary">Beta</Badge>{' '}
+              <Badge>{data?.mode ?? 'Loading…'}</Badge>
             </h2>
             <p className="text-sm text-muted-foreground">
               Version {data?.activeVersion?.versionNumber ?? '—'} · {saveState} · Global{' '}
