@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { captureHostPressure } from './automation-host-pressure';
 const exec = promisify(execFile);
 export async function captureControlledEnvironment() {
   const args = ['--context', 'kind-opsknight-automation', '-n', 'automation-cert'];
@@ -83,12 +84,30 @@ export async function captureControlledEnvironment() {
         concurrentWorkload: item.Name !== 'opsknight-automation-control-plane',
       };
     });
+  const cpuPlacement = await Promise.all(
+    pods.map(async pod => {
+      try {
+        const result = await exec(
+          'kubectl',
+          [...args, 'exec', pod.name, '--', 'cat', '/sys/fs/cgroup/cpuset.cpus.effective'],
+          { timeout: 5000, maxBuffer: 1024 }
+        );
+        const cpus = result.stdout.trim();
+        if (!/^[0-9,-]+$/.test(cpus)) throw new Error('Missing CPU placement');
+        return { pod: pod.name, status: 'AVAILABLE' as const, cpus };
+      } catch {
+        return { pod: pod.name, status: 'UNAVAILABLE' as const };
+      }
+    })
+  );
   return {
     capturedAt: new Date().toISOString(),
     postgresVersion: version.stdout.trim(),
     snapshotIdentity: identity.stdout.trim(),
     pods,
     hostContainers: containers,
+    hostPressure: await captureHostPressure(),
+    cpuPlacement,
     externalStateIsolation: 'OS scheduling/cache and other host workloads are observed, not reset',
   };
 }

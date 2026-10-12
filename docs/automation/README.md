@@ -400,3 +400,22 @@ restore the immutable clean fixture on success or failure and close forwarding
 connections even if restoration fails. Measurement artifacts remain available
 for diagnosis. Restoration failure also fails the runner. Frozen test limits
 and application runtime behavior are unchanged.
+
+Audit 38's first fault-free OFF baseline had 2,401 accepted/persisted events,
+zero fallbacks, dropped arrivals, duplicate incidents/provider deliveries or
+pending work, and ingestion p95/p99 of 237/437ms. The next service-disabled
+measurement failed with 195 dropped arrivals and a queue-age breach: 2,206
+accepted/persisted events, zero evaluator fallbacks and p95/p99 of
+7,851.25/14,026.70ms. No complete OFF–target–OFF bracket or capacity certificate
+was produced. Failed measurement evidence is retained and the clean fixture
+was restored. This service-disabled workload performed no rule evaluation;
+these results do not establish an evaluator bottleneck.
+
+Following the failure, the shared Mac reported roughly 7.4GB of swap in use.
+That observation was outside the measurement and cannot establish causation.
+Automation telemetry now samples numeric host swap/page/compressor counters on
+macOS during the workload, with explicit unavailable/unsupported states, and
+records actual cgroup CPU placement before each controlled measurement.
+Cumulative paging counters require differences between samples; swap occupancy
+alone does not prove active swapping. These additions are diagnostic evidence,
+not relaxed gates, extra application resources or a performance optimization.

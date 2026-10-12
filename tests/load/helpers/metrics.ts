@@ -4,6 +4,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { PrismaClient } from '@prisma/client';
 import { DEFAULT_EMULATOR_ENDPOINTS } from '../fixtures/notification-providers';
+import { captureHostPressure } from './automation-host-pressure';
 
 const execFileAsync = promisify(execFile);
 
@@ -41,6 +42,7 @@ export interface TelemetrySample {
   postgres: PostgresTelemetrySnapshot;
   providers: Record<string, unknown>;
   containers: ContainerResourceSample[];
+  hostPressure?: Awaited<ReturnType<typeof captureHostPressure>>;
 }
 
 export function parsePrometheusText(raw: string): Record<string, number> {
@@ -299,11 +301,12 @@ export async function collectSingleTelemetrySample(options: {
   controlBaseUrl?: string;
   k8sNamespace?: string;
 }): Promise<TelemetrySample> {
-  const [prometheusMetrics, postgres, providers, containers] = await Promise.all([
+  const [prometheusMetrics, postgres, providers, containers, hostPressure] = await Promise.all([
     scrapePrometheusEndpoint(options.baseUrl, options.metricsToken),
     collectPostgresTelemetry(options.prisma),
     collectProviderTelemetry(options.controlBaseUrl),
     collectContainerStats(options.k8sNamespace),
+    options.topology.includes('automation') ? captureHostPressure() : undefined,
   ]);
 
   return {
@@ -314,6 +317,7 @@ export async function collectSingleTelemetrySample(options: {
     postgres,
     providers,
     containers,
+    ...(hostPressure ? { hostPressure } : {}),
   };
 }
 
