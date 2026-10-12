@@ -30,6 +30,15 @@ it('blocks active defaults, preserves policy rows and prevents archived reassign
     'archived'
   );
   await transitionPolicyArchive(policy.id, actor.id, false);
+  expect(
+    await db.auditLog.count({
+      where: {
+        entityId: policy.id,
+        actorId: actor.id,
+        action: { in: ['escalation_policy.archived', 'escalation_policy.restored'] },
+      },
+    })
+  ).toBe(2);
   await updateServiceWithAutomationPolicyGuard(service.id, { escalationPolicyId: policy.id });
   expect(
     (await db.service.findUniqueOrThrow({ where: { id: service.id } })).escalationPolicyId

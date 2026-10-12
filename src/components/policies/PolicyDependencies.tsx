@@ -7,10 +7,12 @@ export default async function PolicyDependencies({
   policyId,
   archived,
   canManage,
+  mobile = false,
 }: {
   policyId: string;
   archived: boolean;
   canManage: boolean;
+  mobile?: boolean;
 }) {
   await assertCanViewPolicy(policyId);
   const [services, refs, pinned] = await Promise.all([
@@ -20,9 +22,13 @@ export default async function PolicyDependencies({
     }),
     prisma.automationVersionPolicyRef.findMany({
       where: { escalationPolicyId: policyId },
-      include: {
+      select: {
+        versionId: true,
         version: {
-          include: {
+          select: {
+            serviceId: true,
+            versionNumber: true,
+            snapshot: true,
             service: { select: { id: true, name: true } },
             activeConfig: { select: { serviceId: true } },
           },
@@ -58,7 +64,14 @@ export default async function PolicyDependencies({
             : [];
           return (
             <li key={r.versionId}>
-              <a className="underline" href={`/services/${r.version.serviceId}?tab=automation`}>
+              <a
+                className="underline"
+                href={
+                  mobile
+                    ? `/m/services/${r.version.serviceId}/automation`
+                    : `/services/${r.version.serviceId}?tab=automation`
+                }
+              >
                 {r.version.service.name} · v{r.version.versionNumber}
               </a>{' '}
               · {r.version.activeConfig ? 'Current' : 'Historical, immutable'}

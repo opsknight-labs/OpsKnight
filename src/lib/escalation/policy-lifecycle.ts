@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
+import { logAudit } from '@/lib/audit';
 import { lockResponderPolicy, assertResponderPolicySnapshotSafe } from './automation-snapshot';
 
 /** Publication, default assignment and retirement serialize on the policy row. */
@@ -36,12 +37,24 @@ export async function transitionPolicyArchive(
           `Cannot archive: active service or published automation references remain (${[...services.map(s => s.name), ...versions.map(v => v.version.service.name)].join(', ')}). Replace those routes first. Historical references may remain.`
         );
     } else await assertResponderPolicySnapshotSafe(tx, policyId);
-    return tx.escalationPolicy.update({
+    const updated = await tx.escalationPolicy.update({
       where: { id: policyId },
       data: {
         archivedAt: archived ? (policy.archivedAt ?? new Date()) : null,
         archivedBy: archived ? actorId : null,
       },
     });
+    await logAudit(
+      {
+        action: archived ? 'escalation_policy.archived' : 'escalation_policy.restored',
+        entityType: 'ESCALATION_POLICY',
+        entityId: policyId,
+        actorId,
+        oldValue: { archivedAt: policy.archivedAt?.toISOString() ?? null },
+        newValue: { archivedAt: updated.archivedAt?.toISOString() ?? null },
+      },
+      tx
+    );
+    return updated;
   });
 }

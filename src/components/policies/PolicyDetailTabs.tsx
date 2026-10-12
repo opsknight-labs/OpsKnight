@@ -30,9 +30,6 @@ export default function PolicyDetailTabs({
   dependencies,
 }: PolicyDetailTabsProps) {
   const tabItems = [
-    ...(dependencies
-      ? [{ id: 'dependencies', label: 'Dependencies', icon: <Layers className="h-4 w-4" /> }]
-      : []),
     {
       id: 'steps',
       label: 'Escalation Steps',
@@ -45,6 +42,9 @@ export default function PolicyDetailTabs({
       icon: <Server className="h-4 w-4" />,
       count: serviceCount,
     },
+    ...(dependencies
+      ? [{ id: 'dependencies', label: 'Dependencies', icon: <Layers className="h-4 w-4" /> }]
+      : []),
     {
       id: 'activity',
       label: 'Activity History',

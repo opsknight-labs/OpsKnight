@@ -68,7 +68,7 @@ test('supported ingestion displays pinned context and intentional paging suppres
         name: 'Skip personal paging',
         phase: 'ROUTE' as const,
         enabled: true,
-        conditions: [],
+        conditions: [{ fieldKey: 'priority', operator: 'EQ' as const, value: 'P3' }],
         actions: [{ type: 'NO_ESCALATION' as const }],
       },
     ],

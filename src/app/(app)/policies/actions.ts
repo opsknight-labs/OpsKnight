@@ -708,12 +708,8 @@ export async function setPolicyArchived(policyId: string, archived: boolean) {
     .strict()
     .parse({ policyId, archived });
   await transitionPolicyArchive(policyId, actor.id, archived);
-  await logAudit({
-    action: archived ? 'escalation_policy.archived' : 'escalation_policy.restored',
-    entityType: 'ESCALATION_POLICY',
-    entityId: policyId,
-    actorId: actor.id,
-  });
   revalidatePath(`/policies/${policyId}`);
   revalidatePath('/policies');
+  revalidatePath(`/m/policies/${policyId}`);
+  revalidatePath('/m/policies');
 }

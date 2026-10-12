@@ -76,6 +76,9 @@ export default function PolicyDeleteButton({
       {deletionError && (
         <div role="alert" className="mb-4 text-sm text-red-900">
           <p>{deletionError}</p>
+          <a className="mt-2 inline-block underline" href={`/policies/${policyId}?tab=dependencies`}>
+            Review dependencies and archive options
+          </a>
           <ul className="mt-2 list-disc pl-5">
             {blockers.map(reference => (
               <li key={`${reference.serviceId}:${reference.versionNumber}`}>
