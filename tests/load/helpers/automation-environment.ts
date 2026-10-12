@@ -106,6 +106,19 @@ export async function verifyControlledImage(
   expected: string,
   environment: Awaited<ReturnType<typeof captureControlledEnvironment>>
 ) {
+  const inventory = await exec('docker', [
+    'exec',
+    'opsknight-automation-control-plane',
+    'crictl',
+    'images',
+    '-o',
+    'json',
+  ]);
+  const images = (
+    JSON.parse(inventory.stdout) as {
+      images: Array<{ id: string; repoDigests?: string[] }>;
+    }
+  ).images;
   const application = environment.pods.filter(
     p => p.name.startsWith('automation-') && !p.name.startsWith('automation-postgresql')
   );
@@ -120,11 +133,24 @@ export async function verifyControlledImage(
         'opsknight-automation-control-plane',
         'crictl',
         'inspecti',
-        reference,
+        resolveControlledImageReference(reference, images),
       ]);
       const parsed = JSON.parse(inspected.stdout) as { status: { id: string } };
       configIds.push(parsed.status.id);
     }
   assertControlledImageConfigs(expected, configIds);
   return { expectedConfigDigest: expected, verifiedConfigDigests: configIds };
+}
+
+/** Kind's imported repo digest is listed by CRI but may not be inspectable by alias. */
+export function resolveControlledImageReference(
+  reference: string,
+  images: Array<{ id: string; repoDigests?: string[] }>
+) {
+  const matches = images.filter(
+    image => image.id === reference || image.repoDigests?.includes(reference)
+  );
+  if (matches.length !== 1 || !/^sha256:[a-f0-9]{64}$/.test(matches[0].id))
+    throw new Error('Deployed image digest cannot be resolved unambiguously');
+  return matches[0].id;
 }
