@@ -1,0 +1,26 @@
+Step_Type,Execution_Mode,Risk_Classification,Test_Layer,Test_Identifier_Or_Path,Verdict,Verified_Commit,Notes
+MANUAL,Local,READ_ONLY,Unit & Orchestration,tests/lib/runbooks/orchestrator.test.ts,PASS,ea38c8c56,Operator instruction prompting verified; no agent required
+MANUAL,Local,READ_ONLY,Real DB Integration,tests/integration/runbook-execution-safety.test.ts,PASS,ea38c8c56,Step transitions to SUCCEEDED upon operator acknowledgment
+APPROVAL,Local,READ_ONLY,Orchestration & RBAC,tests/lib/runbooks/orchestrator.test.ts,PASS,ea38c8c56,Suspends runbook in WAITING_APPROVAL until authorized actor approves
+APPROVAL,Local,READ_ONLY,Real DB Concurrency,tests/integration/runbook-execution-safety.test.ts,PASS,ea38c8c56,Concurrent duplicate approvals rejected; actor audit preserved
+CONDITION,Local,READ_ONLY,Unit & Validation,tests/lib/runbooks/conditions.test.ts,PASS,ea38c8c56,Evaluates incident fields and step input values; strict type normalization
+CONDITION,Local,READ_ONLY,Integration Gate,tests/integration/runbook-preview-authorization.test.ts,PASS,ea38c8c56,Branching logic verified; invalid OR condition safely rejected
+WAIT,Local,READ_ONLY,Orchestration,tests/lib/runbooks/orchestrator.test.ts,PASS,ea38c8c56,Deterministic sleep timer; non-blocking orchestrator resumption
+WAIT,Local,READ_ONLY,Database Lifecycle,tests/integration/runbook-lifecycle-database.test.ts,PASS,ea38c8c56,Durable state persistence across worker polling cycles
+HTTP,Local,IDEMPOTENT_WRITE,Unit & Sanitization,tests/components/HttpActionEditor.test.tsx,PASS,ea38c8c56,PR #859 fix: switching to GET/HEAD removes body payload from step
+HTTP,Local,IDEMPOTENT_WRITE,Orchestration,tests/lib/runbooks/orchestrator.test.ts,PASS,ea38c8c56,Configured timeouts and status code assertion gates verified
+LINUX_DIAGNOSTICS,Agent,READ_ONLY,Agent Unit & Policy,tests/lib/runbooks/definition.test.ts,PASS,ea38c8c56,Supported actions: summary disk memory processes network listeners journal
+LINUX_DIAGNOSTICS,Agent,READ_ONLY,Agent Runtime,tests/integration/runbook-agent-runtime.test.ts,PASS,ea38c8c56,Diagnostic output captured with UTF-8 safe buffer truncation (256KB)
+SYSTEMD,Agent,IDEMPOTENT_WRITE,Agent Contract,agent/src/executor.ts,PASS,ea38c8c56,Actions: status start stop restart logs; strictly validated unit arguments
+SYSTEMD,Agent,NON_IDEMPOTENT,Agent Policy Gate,tests/lib/runbooks/definition.test.ts,PASS,ea38c8c56,Rejects unsupported systemctl verbs; fails closed on unknown state
+DOCKER,Agent,IDEMPOTENT_WRITE,Agent Runtime,agent/src/executor.ts,PASS,ea38c8c56,Actions: inspect logs health restart start stop; supports docker & podman
+DOCKER,Agent,READ_ONLY,Evidence & Health,agent/src/evidence.ts,PASS,ea38c8c56,Health inspection parses container health JSON status correctly
+KUBERNETES,Agent,READ_ONLY,Live Kind Workload,kind-opsknight-runbook-cert/cert-web,PASS,ea38c8c56,Actions: get describe logs events on nginx deployment in opsknight-cert
+KUBERNETES,Agent,IDEMPOTENT_WRITE,Live Kind Workload,kind-opsknight-runbook-cert/cert-web,PASS,ea38c8c56,Actions: scale rollout-status rollout-restart verified on cert-web
+KUBERNETES,Agent,IDEMPOTENT_WRITE,Builder Validation,tests/components/RunbookBuilder.test.tsx,PASS,ea38c8c56,Resource name required for logs/rollout-restart; replica bounds enforced
+BASH,Agent,NON_IDEMPOTENT,Local Policy Engine,agent/src/policy.ts,PASS,ea38c8c56,Strict allowlist check: command MUST match bashCommandPatterns exactly
+BASH,Agent,NON_IDEMPOTENT,Security Regression,tests/integration/runbook-agent-runtime.test.ts,PASS,ea38c8c56,Rejects non-allowlisted commands with LOCAL_POLICY_DENIED
+ALL_10_TYPES,Local,N/A,Plan Digest & Checksum,tests/lib/runbooks/definition.test.ts,PASS,ea38c8c56,Deterministic SHA-256 plan digest prevents mid-flight plan tampering
+ALL_10_TYPES,Agent,N/A,Execution Envelope Signing,tests/integration/runbook-agent-runtime.test.ts,PASS,ea38c8c56,Ed25519 asymmetric signature with canonical JSON envelope
+ALL_10_TYPES,Local/Agent,N/A,Preview Authorization,tests/integration/runbook-preview-authorization.test.ts,PASS,ea38c8c56,Atomically consumed preview authorization with incident context fence
+ALL_10_TYPES,Remote Control Plane,N/A,Remote Enrollment,https://opcenterio.com,BLOCKED_BY_ENVIRONMENT,ea38c8c56,Domain opcenterio.com returns NXDOMAIN (unregistered domain)
