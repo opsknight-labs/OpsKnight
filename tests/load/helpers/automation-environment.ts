@@ -92,3 +92,39 @@ export async function captureControlledEnvironment() {
     externalStateIsolation: 'OS scheduling/cache and other host workloads are observed, not reset',
   };
 }
+
+/** Config digests bind the full filesystem layer list and runtime config to the built image. */
+export function assertControlledImageConfigs(expected: string, actual: string[]) {
+  if (
+    !/^sha256:[a-f0-9]{64}$/.test(expected) ||
+    !actual.length ||
+    actual.some(value => value !== expected)
+  )
+    throw new Error('Deployed application image does not match the declared built image');
+}
+export async function verifyControlledImage(
+  expected: string,
+  environment: Awaited<ReturnType<typeof captureControlledEnvironment>>
+) {
+  const application = environment.pods.filter(
+    p => p.name.startsWith('automation-') && !p.name.startsWith('automation-postgresql')
+  );
+  const configIds: string[] = [];
+  for (const pod of application)
+    for (const container of pod.containers) {
+      const reference = container.status?.imageID;
+      if (!reference || !/^[a-zA-Z0-9./_:@-]+$/.test(reference))
+        throw new Error('Missing deployed image identity');
+      const inspected = await exec('docker', [
+        'exec',
+        'opsknight-automation-control-plane',
+        'crictl',
+        'inspecti',
+        reference,
+      ]);
+      const parsed = JSON.parse(inspected.stdout) as { status: { id: string } };
+      configIds.push(parsed.status.id);
+    }
+  assertControlledImageConfigs(expected, configIds);
+  return { expectedConfigDigest: expected, verifiedConfigDigests: configIds };
+}

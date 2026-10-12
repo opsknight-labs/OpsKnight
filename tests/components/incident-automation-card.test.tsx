@@ -70,3 +70,36 @@ it('denies an invisible incident before reading permissions or decisions', async
   expect(mocks.permissions).not.toHaveBeenCalled();
   expect(mocks.decision).not.toHaveBeenCalled();
 });
+
+it('shows pinned human-readable labels and enriched values outside the evaluation disclosure', async () => {
+  mocks.permissions.mockResolvedValue({
+    capabilities: ['automation.read', 'incident.sensitive.read'],
+  });
+  mocks.decision.mockResolvedValue({
+    routeType: 'SERVICE_DEFAULT',
+    summary: {
+      inputContext: { environment: { state: 'RECOGNIZED', value: 'staging' } },
+      enrichedContext: { environment: { state: 'RECOGNIZED', value: 'production' } },
+    },
+    version: {
+      versionNumber: 2,
+      snapshot: {
+        schemaVersion: 1,
+        fields: [
+          {
+            fieldId: 'environment-field',
+            key: 'environment',
+            label: 'Deployment environment',
+            type: 'STRING',
+            mappings: [],
+          },
+        ],
+        rules: [],
+      },
+    },
+  });
+  const html = renderToStaticMarkup((await IncidentAutomationCard({ incidentId: 'incident' }))!);
+  expect(html).toContain('Alert Context');
+  expect(html.indexOf('Deployment environment')).toBeLessThan(html.indexOf('View evaluation'));
+  expect(html).toContain('production');
+});

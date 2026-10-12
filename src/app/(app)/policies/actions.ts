@@ -288,7 +288,7 @@ export async function deletePolicy(policyId: string) {
             .map(rule => rule.name ?? 'Unnamed rule'),
         };
       }),
-      error: `Cannot delete policy: published automation or ${pinnedDecisions} pinned incident(s) reference it. Historical incident routes must remain available for reopen. Publish a replacement route; policies referenced by incident decisions cannot be deleted.`,
+      error: `Cannot delete policy: published automation or ${pinnedDecisions} pinned incident(s) reference it. Historical incident routes must remain available for reopen. Publishing a replacement does not remove historical references. Keep this policy for existing incident routes; historical published versions cannot be edited.`,
     };
 
   // Check if policy is used by any services

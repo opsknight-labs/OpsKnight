@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createControlledSnapshot } from './automation-snapshot';
 import { controlledMeasurementEnvironment } from './automation-certification-integrity';
-import { captureControlledEnvironment } from './automation-environment';
+import { captureControlledEnvironment, verifyControlledImage } from './automation-environment';
 
 const exec = promisify(execFile);
 async function main() {
@@ -24,6 +24,10 @@ async function main() {
   try {
     await snapshot.restore();
     const environment = await captureControlledEnvironment();
+    const provenance = JSON.parse(
+      await fs.readFile(path.join(directory, 'kind-runtime.json'), 'utf8')
+    ) as { imageConfigDigest: string };
+    await verifyControlledImage(provenance.imageConfigDigest, environment);
     const child = await exec(
       'npx',
       [

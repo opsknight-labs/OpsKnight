@@ -143,7 +143,8 @@ export default function PolicyDeleteButton({
       ) : (
         <>
           <p style={{ fontSize: '0.85rem', color: '#7f1d1d', marginBottom: '1rem' }}>
-            Deleting this policy will remove it from all services. This action cannot be undone.
+            Deletion is available only for unreferenced policies. Published versions and historical
+            incident routes remain protected. This action cannot be undone.
           </p>
           <button
             type="button"
