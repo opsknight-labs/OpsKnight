@@ -347,9 +347,13 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
   await page.goto(
     `${testInfo.project.name === 'desktop' ? '' : '/m'}/incidents/${missing.data.result.incident.id}`
   );
-  await expect(page.getByText('Not provided', { exact: true })).toBeVisible();
   await expect(
-    page.getByText('No routing rule matched; service-default routing was used.', { exact: true })
+    page.getByText('Not provided', { exact: true }).filter({ visible: true })
+  ).toBeVisible();
+  await expect(
+    page
+      .getByText('No routing rule matched; service-default routing was used.', { exact: true })
+      .filter({ visible: true })
   ).toBeVisible();
   await db.escalationPolicy.update({
     where: { id: policy.id },
