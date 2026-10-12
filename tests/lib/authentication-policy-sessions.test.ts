@@ -109,7 +109,7 @@ describe('policy changes re-evaluate existing authenticated sessions', () => {
     };
     const result = await evaluate(token, { activity: true, extendSession: true });
     expect(result.sub).toBeUndefined();
-    expect(result.error).toBe('EMERGENCY_SESSION_EXPIRED');
+    expect(result.error).toBe('EMERGENCY_RECOVERY_ONLY');
   });
 
   it('does not let a profile refresh replace the security version of a revoked cookie', async () => {
@@ -124,7 +124,7 @@ describe('policy changes re-evaluate existing authenticated sessions', () => {
     expect(result.error).toBe('SESSION_REVOKED');
   });
 
-  it('caps emergency-password sessions at one hour despite a trusted-device extension request', async () => {
+  it('rejects legacy emergency JWTs even while their old expiry is valid', async () => {
     vi.mocked(prisma.authenticationPolicy.findUnique).mockResolvedValue({
       ...optionalPolicy,
       legacyEmergencyEmail: 'admin@example.com',
@@ -139,9 +139,7 @@ describe('policy changes re-evaluate existing authenticated sessions', () => {
       rememberMe: true,
     };
     const result = await evaluate(token, { activity: true, extendSession: true });
-    expect(result.sub).toBe('admin-1');
-    expect(result.rememberMe).toBe(false);
-    expect(result.absoluteExpiresAt).toBe(Math.floor(started / 1000) + 3600);
-    expect(Number(result.sessionExpiresAt)).toBeLessThanOrEqual(Number(result.absoluteExpiresAt));
+    expect(result.sub).toBeUndefined();
+    expect(result.error).toBe('EMERGENCY_RECOVERY_ONLY');
   });
 });

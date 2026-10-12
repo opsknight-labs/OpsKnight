@@ -1,8 +1,12 @@
 'use server';
 
-import { assertPasswordOperationAllowed } from '@/lib/authentication-policy';
+import {
+  getAuthenticationPolicy,
+  assertPasswordOperationAllowed,
+} from '@/lib/authentication-policy';
 
 import prisma from '@/lib/prisma';
+import { inviteSsoUser } from '@/lib/auth-control/sso-onboarding';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
 import { randomBytes, createHash } from 'crypto';
@@ -209,6 +213,7 @@ async function deleteUserInternal(userId: string) {
 export type UserFormState = {
   error?: string | null;
   success?: boolean;
+  ssoOnly?: boolean;
   inviteUrl?: string | null;
   emailSent?: boolean;
   providerConfigured?: boolean;
@@ -286,6 +291,13 @@ export async function addUser(
       return { error: 'A user with that email already exists.' };
     }
 
+    const policy = await getAuthenticationPolicy();
+    if (policy.mode === 'SSO_REQUIRED' || formData.get('ssoOnly') === 'on') {
+      const result = await inviteSsoUser({ name, email, role });
+      revalidatePath('/users');
+      revalidatePath('/audit');
+      return result;
+    }
     await assertPasswordOperationAllowed();
     let inviteToken = '';
     const user = await prisma.$transaction(async tx => {
@@ -595,6 +607,19 @@ export async function generateInvite(
   const { checkRateLimit } = await import('@/lib/password-reset');
   await checkRateLimit(user.email, realIp, 'user.invite.resent');
 
+  const policy = await getAuthenticationPolicy();
+  const existingApproval = await prisma.oidcLinkingApproval.findUnique({ where: { userId } });
+  if (policy.mode === 'SSO_REQUIRED' || existingApproval || _formData.get('ssoOnly') === 'on') {
+    const result = await inviteSsoUser({
+      userId,
+      name: user.name || user.email,
+      email: user.email,
+      role: user.role,
+    });
+    revalidatePath('/users');
+    revalidatePath('/audit');
+    return result;
+  }
   const inviteUrl = await createInviteToken(user.id, user.email);
 
   await logAudit({

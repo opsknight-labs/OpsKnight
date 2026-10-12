@@ -10,6 +10,9 @@ import { getUserPermissions } from '@/lib/rbac';
 import { CAPABILITIES } from '@/lib/authorization';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { logAudit } from '@/lib/audit';
+import { securityEvent } from '@/lib/auth-control/security-events';
+import { lockControlActor } from '@/lib/auth-control/actor';
+import { activateOidcRevision } from '@/lib/auth-control/oidc-revisions';
 import { consumeAuthRateLimit } from '@/lib/auth-abuse';
 
 const transitionSchema = z
@@ -39,11 +42,26 @@ export async function changeAuthenticationMode(input: unknown) {
   if (!(await consumeAuthRateLimit('policy-change', session.user.id, 5, 300_000)).allowed) {
     throw new Error('Too many authentication policy changes. Try again later.');
   }
-  // Required-mode activation is deliberately unavailable until dedicated, verified
-  // WebAuthn recovery and a real administrator login test exist. No client override.
   if (parsed.mode === 'SSO_REQUIRED') {
-    throw new Error(
-      'SSO Required activation is unavailable until two independent emergency accounts and a verified SSO administrator are implemented and tested.'
+    const current = await getAuthenticationPolicy();
+    if (!current.activeRevisionId)
+      throw new Error(
+        'Stage and verify an OIDC provider and two independent emergency accounts before enforcement.'
+      );
+    return activateOidcRevision(
+      {
+        kind: 'admin',
+        id: session.user.id,
+        tokenVersion: session.user.tokenVersion ?? 0,
+        authenticatedAt: session.authenticatedAt,
+        sessionId: session.sessionId,
+        method: session.authenticationMethod === 'oidc' ? 'oidc' : 'credentials',
+        issuedUnderPolicyVersion: session.issuedUnderPolicyVersion,
+      },
+      current.activeRevisionId,
+      parsed.expectedVersion,
+      'SSO_REQUIRED',
+      'ACTIVATE VERIFIED SSO'
     );
   }
   await getAuthenticationPolicy();
@@ -65,7 +83,15 @@ export async function changeAuthenticationMode(input: unknown) {
     throw new Error('Verify your current password before disabling SSO.');
   }
   const policy = await prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT "id" FROM "AuthenticationPolicy" WHERE "id" = 'default' FOR UPDATE`;
+    await lockControlActor(tx, {
+      kind: 'admin',
+      id: actor.id,
+      tokenVersion: actor.tokenVersion,
+      authenticatedAt: session.authenticatedAt!,
+      sessionId: session.sessionId,
+      method: session.authenticationMethod === 'oidc' ? 'oidc' : 'credentials',
+      issuedUnderPolicyVersion: session.issuedUnderPolicyVersion,
+    });
     const current = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
     const currentActor = await tx.user.findUnique({ where: { id: actor.id } });
     if (
@@ -91,10 +117,17 @@ export async function changeAuthenticationMode(input: unknown) {
         updatedBy: actor.id,
         oidcConfigVersion: oidc?.configVersion ?? null,
         enforcedAt: null,
-        ...(parsed.mode === 'PASSWORD_ONLY' ? { oidcSessionMinVersion: current.version + 1 } : {}),
+        ...(parsed.mode === 'PASSWORD_ONLY'
+          ? { oidcSessionMinVersion: current.version + 1, legacyEmergencyEmail: null }
+          : {}),
       },
     });
     if (updated.count !== 1) throw new Error('Authentication policy changed elsewhere.');
+    if (parsed.mode === 'PASSWORD_ONLY')
+      await tx.emergencySession.updateMany({
+        where: { legacyUserId: { not: null }, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     const result = await tx.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } });
     await logAudit(
       {
@@ -112,6 +145,11 @@ export async function changeAuthenticationMode(input: unknown) {
       },
       tx
     );
+    await securityEvent(tx, 'auth.policy.mode.transition', actor.id, {
+      oldMode: current.mode,
+      mode: result.mode,
+      version: result.version,
+    });
     return result;
   });
   resetAuthOptionsCache();

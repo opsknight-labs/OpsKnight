@@ -311,6 +311,14 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   const currentPolicy = await getAuthenticationPolicy();
                   const legacyEmergency = currentPolicy.legacyEmergencyEmail === email;
                   const rememberMe = !legacyEmergency && credentials?.rememberMe === 'true';
+                  if (legacyEmergency) {
+                    const { recordEmergencyFailure } = await import('@/lib/auth-control/emergency');
+                    await recordEmergencyFailure(
+                      'legacy',
+                      'NORMAL_LOGIN_REJECTED_USE_RECOVERY_PAGE'
+                    );
+                    return null;
+                  }
                   const { getClientIp } = await import('@/lib/client-ip');
                   const ip = getClientIp(req?.headers);
                   const userAgent = userAgentHeader || 'Unknown';
@@ -609,17 +617,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           }
 
           const augmentedToken = token as AugmentedJWT;
+          if (augmentedToken.authProvider === 'legacy-emergency')
+            return clearSessionToken(augmentedToken, 'EMERGENCY_RECOVERY_ONLY');
           let isProfileRefresh = false;
-
-          if (
-            augmentedToken.authProvider === 'legacy-emergency' &&
-            (!augmentedToken.authenticatedAt ||
-              Date.now() - augmentedToken.authenticatedAt >= 3600000 ||
-              !augmentedToken.lastActivityAt ||
-              Date.now() - augmentedToken.lastActivityAt >= 900000)
-          ) {
-            return clearSessionToken(augmentedToken, 'EMERGENCY_SESSION_EXPIRED');
-          }
 
           if (trigger === 'update') {
             const updatePayload = session as
@@ -699,27 +699,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               );
               if (!decision.allowed) return clearSessionToken(augmentedToken, decision.reason);
               augmentedToken.authenticationPolicyVersion = decision.version;
-              if (augmentedToken.authProvider === 'legacy-emergency') {
-                const started = augmentedToken.authenticatedAt;
-                if (
-                  !started ||
-                  Date.now() - started >= 3600000 ||
-                  (augmentedToken.lastActivityAt &&
-                    Date.now() - augmentedToken.lastActivityAt >= 900000)
-                ) {
-                  return clearSessionToken(augmentedToken, 'EMERGENCY_SESSION_EXPIRED');
-                }
-                augmentedToken.rememberMe = false;
-                augmentedToken.absoluteExpiresAt = Math.floor(started / 1000) + 3600;
-                augmentedToken.sessionExpiresAt = Math.min(
-                  augmentedToken.sessionExpiresAt ?? Infinity,
-                  augmentedToken.absoluteExpiresAt
-                );
-                token.exp = Math.min(
-                  typeof token.exp === 'number' ? token.exp : Infinity,
-                  augmentedToken.absoluteExpiresAt
-                );
-              }
             } catch {
               augmentedToken.error = 'AUTHENTICATION_POLICY_UNAVAILABLE';
               return augmentedToken;
@@ -829,8 +808,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             logger.debug('[Auth-Debug] No token.sub found!', { component: 'auth:jwt', token });
           }
 
-          if (augmentedToken.authProvider === 'legacy-emergency')
-            augmentedToken.lastActivityAt = Date.now();
           return token;
         },
         async session({ session, token }) {

@@ -1,11 +1,12 @@
-import AuthenticationPolicySettings from '@/components/settings/AuthenticationPolicySettings';
+import AuthenticationConsole from '@/components/settings/AuthenticationConsole';
+import { authenticationDashboard } from '@/lib/auth-control/dashboard';
+import { getControlActor } from '@/lib/auth-control/actor';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { getUserPermissions } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
 import { resolveAuthPublicOrigin } from '@/lib/auth-public-origin';
 import AppUrlSettings from '@/components/settings/AppUrlSettings';
 import { SettingsSection } from '@/components/settings/layout/SettingsSection';
-import SsoSettingsForm from '@/components/settings/SsoSettingsForm';
 import RetentionPolicySettings from '@/components/settings/RetentionPolicySettings';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import SystemSettingsTabs from '@/components/settings/SystemSettingsTabs';
@@ -130,7 +131,8 @@ export default async function SystemSettingsPage() {
 
     const env = detectEnvStatus();
     const isAppUrlConfigured = Boolean(appUrl || env.appUrl);
-    const ssoEnabled = Boolean(oidcConfig?.enabled);
+    const effectivePolicy = await getAuthenticationPolicy();
+    const ssoEnabled = Boolean(oidcConfig?.enabled) && effectivePolicy.mode !== 'PASSWORD_ONLY';
     const appUrlConfigured = Boolean(appUrl);
     const effectiveEnv = {
       encryptionKey: env.encryptionKey,
@@ -164,21 +166,20 @@ export default async function SystemSettingsPage() {
       </SettingsSection>
     );
 
-    const authenticationPolicy = await getAuthenticationPolicy();
+    const authenticationData = await authenticationDashboard(await getControlActor());
     const ssoTab = (
-      <div className="space-y-6">
-        <AuthenticationPolicySettings
-          initialMode={authenticationPolicy.mode}
-          initialVersion={authenticationPolicy.version}
-          legacyEmergencyConfigured={Boolean(authenticationPolicy.legacyEmergencyEmail)}
-        />
-        <SsoSettingsForm
-          initialConfig={oidcConfig}
-          callbackUrl={ssoCallbackUrl}
-          hasEncryptionKey={env.encryptionKey}
-          scimSection={<ScimSettingsSection initialConfig={scimConfig} tenantUrl={scimTenantUrl} />}
-        />
-      </div>
+      <AuthenticationConsole
+        initialData={authenticationData}
+        callbackUrl={ssoCallbackUrl}
+        testCallbackUrl={`${authOrigin.origin}/api/auth/oidc/test/callback`}
+        scimSection={
+          <ScimSettingsSection
+            key="scim-settings"
+            initialConfig={scimConfig}
+            tenantUrl={scimTenantUrl}
+          />
+        }
+      />
     );
 
     const retentionTab = <RetentionPolicySettings />;

@@ -26,6 +26,8 @@ import { parse as parseDomain } from 'tldts';
 
 const PUBLIC_PATH_PREFIXES = [
   '/login',
+  '/recovery',
+  '/auth/oidc-test-result',
   '/forgot-password',
   '/reset-password',
   '/set-password',

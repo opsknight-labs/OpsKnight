@@ -37,11 +37,13 @@ lock. Database failure or loss of an already-imported policy fails authenticatio
 closed; changing deployment variables cannot bypass this boundary. This requires
 an external PostgreSQL recovery procedure during a database outage.
 
-Keep a tested recovery administrator outside the normal federation failure
-path, protect it as a break-glass identity, and audit its use. Dedicated emergency
-principals and a restricted recovery console are still outstanding. An imported
-legacy emergency password identity remains an ordinary User, with a one-hour
-maximum and a 15-minute idle timeout. It does not establish the two independent
-WebAuthn identities needed before new Required activation can become available.
+Keep two independently held hardware-key emergency identities outside the
+federation failure path. Dedicated emergency principals open a restricted recovery
+console and never create ordinary User sessions. Successful drills verify current
+credential versions; enrollment alone is insufficient. Their hard maximum is one
+hour, idle timeout 15 minutes, and sensitive actions require a fresh five-minute
+proof. Imported emergency passwords are a recovery-only bridge to retire after
+two independent drills. PostgreSQL is required for both ordinary and emergency
+authentication. See [Emergency Access](../guides/identity/configure-emergency-access/).
 See [authentication modes](../guides/identity/authentication-modes/) and the
 [OIDC](../guides/identity/configure-oidc) and [SCIM](../guides/identity/configure-scim) guides.

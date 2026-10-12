@@ -26,6 +26,7 @@ const policy = {
 describe('central authentication policy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.count).mockResolvedValue(1);
     vi.mocked(prisma.authenticationPolicy.findUnique).mockResolvedValue(policy as never);
     vi.mocked(prisma.authenticationPolicyImport.findUnique).mockResolvedValue(null);
   });
@@ -185,6 +186,35 @@ describe('central authentication policy', () => {
       expect(prisma.authenticationPolicyImport.create).toHaveBeenCalledTimes(1);
       expect(prisma.user.update).not.toHaveBeenCalled();
       expect(prisma.user.delete).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('keeps a fresh zero-user installation bootstrappable even with deprecated SSO-only environment settings', async () => {
+    vi.stubEnv('AUTH_LOCAL_LOGIN_ENABLED', 'false');
+    vi.stubEnv('AUTH_BREAK_GLASS_ENABLED', 'true');
+    vi.stubEnv('AUTH_BREAK_GLASS_EMAIL', 'first-admin@example.test');
+    vi.mocked(prisma.user.count).mockResolvedValue(0);
+    vi.mocked(prisma.authenticationPolicy.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.authenticationPolicy.create).mockResolvedValue({
+      ...policy,
+      mode: 'PASSWORD_ONLY',
+      version: 1,
+    } as never);
+    try {
+      expect((await getAuthenticationPolicy()).mode).toBe('PASSWORD_ONLY');
+      expect(prisma.authenticationPolicy.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            mode: 'PASSWORD_ONLY',
+            passwordSessionMinVersion: 0,
+            legacyEmergencyEmail: null,
+            enforcedAt: null,
+            legacySnapshot: expect.objectContaining({ bootstrap: true }),
+          }),
+        })
+      );
     } finally {
       vi.unstubAllEnvs();
     }

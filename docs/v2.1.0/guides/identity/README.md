@@ -16,9 +16,10 @@ each integration with a pilot assignment before broad rollout, keep provider
 identifiers stable, and document whether elevated roles come from OIDC claims
 or manual administration.
 
-Start with [authentication modes](./authentication-modes/) before introducing SSO.
-Configure the provider while password login remains available, choose SSO Optional,
-approve the existing administrator's first identity link, and test a real login in
-a separate browser session. The original User ID and operational history remain
-intact. New SSO Required activation is unavailable until dedicated independent
-emergency recovery and verified administrator readiness are implemented and tested.
+Start with [authentication modes](./authentication-modes/), then
+[migrate the existing administrator](./migrate-admin-to-sso/) without changing its
+User ID. [Configure independent emergency access](./configure-emergency-access/)
+and [test and enforce SSO](./test-and-enforce-sso/) after a staged login test.
+Use [credential rotation](./rotate-oidc-credentials/) for tested provider changes
+and [lockout recovery](./sso-lockout-recovery/) during an IdP outage. Emergency
+recovery needs PostgreSQL and never silently enables password fallback.

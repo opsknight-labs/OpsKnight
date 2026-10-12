@@ -31,9 +31,10 @@ and test sign-in from a separate browser session. Issuer-and-subject binding lin
 the same User ID; records and permissions remain attached to that account. Review
 role mappings before sign-in because matching claims can change the role. Follow
 [authentication modes](../guides/identity/authentication-modes/) for system policy.
-New SSO Required activation remains unavailable pending independent emergency
-recovery and a verified SSO administrator. Do not bypass readiness by changing
-deployment variables after their one-time policy import.
+SSO Required activation needs a real tested administrator login for the exact
+staged revision and two independent emergency hardware-key identities with current
+sign-in drills. Follow [test and enforce SSO](../guides/identity/test-and-enforce-sso/).
+Deployment variables do not override PostgreSQL after their one-time policy import.
 
 > **Before selecting Create administrator:** verify that **Application URL** is the browser-facing HTTPS origin. After initialization, requests for unknown application hosts are rejected with HTTP `421 Misdirected Request`.
 

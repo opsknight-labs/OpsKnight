@@ -24,19 +24,28 @@ snapshot and import marker, and emits `auth.policy.migrated`. The warning must b
 reviewed before enforcing or downgrading an installation. Replicas must have
 consistent legacy controls during that first import.
 
+An empty installation with no users starts in Password Only so the first
+administrator can complete setup, even if deprecated environment controls request
+Required. The import snapshot records this bootstrap decision. Existing
+installations retain their effective policy during import.
+
 After import, changing `AUTH_LOCAL_LOGIN_ENABLED`, `AUTH_BREAK_GLASS_ENABLED`, or
 `AUTH_BREAK_GLASS_EMAIL` and restarting does not change the policy. Use
 **Settings → System → SSO / Authentication → Authentication policy** for supported
-mode changes. New SSO Required activation is blocked pending independent recovery
-and verified administrator readiness. An already-disabled local-login installation
+mode changes. SSO Required activation needs a verified staged administrator login
+and two independently held hardware-key emergency identities with current drills. An already-disabled local-login installation
 is preserved as Required, including its explicitly configured legacy exception;
 this is not a statement that its recovery is certified.
 
 Do not delete policy/import records or use environment edits as lockout recovery.
 A missing imported policy or database outage fails authentication closed. Restore
 PostgreSQL using external database administration. Application rollback to older
-code needs an explicit review of legacy deployment controls because older versions
-do not understand the database policy. See
+code needs a coordinated rollback of application, database and deployment settings.
+Older versions do not understand the database policy, independent emergency
+principals or the new SECURITY notification enum. Do not run older and newer web
+replicas together. Preserve a tested pre-upgrade database backup and explicitly
+review older login environment controls; restoring a backup can restore revoked
+security state and requires credential/session rotation. See
 [authentication modes](../../guides/identity/authentication-modes/) for the import
 contract, defaults, session effects and operator verification.
 

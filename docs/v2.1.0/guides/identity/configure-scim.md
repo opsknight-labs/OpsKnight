@@ -314,3 +314,11 @@ across replicas, and a new authenticated request rather than an old browser view
 
 Continue with [OIDC single sign-on](configure-oidc/) and
 [manage users](../administration/manage-users/).
+
+## Emergency identity exclusion
+
+SCIM Users and Groups manage ordinary workspace lifecycle. Independent emergency
+accounts and credentials have separate tables, cookies and authorization and never
+become SCIM/JIT Users, responder assignments or team members. Disabling an ordinary
+SCIM user revokes its ordinary access; it does not disable a separate independently
+held emergency identity. Keep emergency custody outside the federation failure path.

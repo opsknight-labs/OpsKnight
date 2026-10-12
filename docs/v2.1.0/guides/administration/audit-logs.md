@@ -78,3 +78,12 @@ Audit data can contain user and resource identifiers plus operational metadata. 
 - **An actor is blank:** historical/system activity may retain captured actor fields without a current user relation; inspect the row details.
 - **CSV contains fewer records than expected:** paginate and export the required result pages or use the approved evidence-export workflow for the broader case.
 - **Audit and System Logs disagree:** compare timestamps and resource IDs; they serve different purposes and have different persistence boundaries.
+
+## Authentication security events
+
+Review **System → SSO / Authentication → Diagnostics** for recent staged-provider
+tests/activation, emergency enrollment/sign-in/failure/revocation, explicit password
+restoration and targeted session revocation. Production mutations commit their audit
+and durable high-priority alert intent in one transaction. Failed audit/intent writes
+reject the mutation. Tokens, secrets and private keys are excluded from Diagnostics.
+Email delivery outages retain pending intents and in-app administrator security alerts.

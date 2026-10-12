@@ -207,7 +207,7 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       expect(location).not.toContain('evil.attacker.test');
     });
 
-    it('trusted proxy: authenticated login redirect uses authoritative public origin', async () => {
+    it('trusted proxy: login defers authenticated redirects to authoritative server policy', async () => {
       vi.stubEnv('TRUST_PROXY_HEADERS', 'true');
       setupStatusServingMocks();
       const { getToken } = await import('next-auth/jwt');
@@ -228,8 +228,8 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       });
       const res = await middleware(req);
 
-      expect(res.status).toBe(307);
-      expect(res.headers.get('location')).toBe('https://www.opsnite.com/settings');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('location')).toBeNull();
     });
 
     it('trusted proxy redirect uses trusted proxy headers even when configured app URL has internal port', async () => {

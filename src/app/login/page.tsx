@@ -51,7 +51,7 @@ export default async function LoginPage({
   const ssoCapability = await getOidcRuntimeCapability();
   const localAuthPolicy = await getDatabaseLocalAuthPolicy();
   const ssoEnabled = ssoCapability.runtimeReady && localAuthPolicy.oidcLoginEnabled;
-  const ssoError = ssoCapability.error;
+  const ssoError = localAuthPolicy.oidcLoginEnabled ? ssoCapability.error : null;
 
   const awaitedSearchParams = await searchParams;
   const rawCallbackUrl =

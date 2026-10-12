@@ -1,26 +1,18 @@
 'use server';
 
-import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
 import { encrypt } from '@/lib/encryption';
 import {
-  SettingsChangedMutationError,
-  isSettingsChangedError,
   parseSettingsRevision,
   settingsChangedState,
   type SettingsActionState,
 } from '@/lib/settings-result';
-import {
-  hasIssuerMigrationConfirmation,
-  isOidcIssuerMigration,
-  normalizeOidcIssuer,
-} from '@/lib/oidc/issuer-migration';
+import { hasIssuerMigrationConfirmation, isOidcIssuerMigration } from '@/lib/oidc/issuer-migration';
 import { normalizeOidcProviderType } from '@/lib/oidc-provider';
 import { validateOidcCustomScopes } from '@/lib/oidc/scopes';
-import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { getEnterpriseSessionPolicy } from '@/lib/local-auth-policy';
 
 function normalizeDomains(value: string) {
@@ -71,30 +63,13 @@ function parseRoleMapping(input: string): RoleMappingRule[] {
   });
 }
 
-function stableSerializeRoleMapping(mapping: unknown): string {
-  if (!Array.isArray(mapping)) return '[]';
-  // Preserve rule order: role evaluation in mapClaimsToRole uses first-match-wins semantics,
-  // so rule order changes are semantically significant security changes.
-  const normalized = mapping.map(entry => {
-    if (!entry || typeof entry !== 'object') return entry;
-    const candidate = entry as Record<string, unknown>;
-    return {
-      claim: String(candidate.claim ?? '').trim(),
-      value: String(candidate.value ?? '').trim(),
-      role: String(candidate.role ?? '').trim(),
-    };
-  });
-  return JSON.stringify(normalized);
-}
-
 export async function saveOidcConfig(
   prevState: SettingsActionState | undefined,
   formData: FormData
 ): Promise<SettingsActionState> {
   const expectedUpdatedAt = prevState?.updatedAt ?? null;
-  let actor;
   try {
-    actor = await assertAdmin();
+    await assertAdmin();
   } catch (error) {
     return {
       success: false,
@@ -111,7 +86,7 @@ export async function saveOidcConfig(
     const enabledValue = formData.get('enabled');
     const autoProvisionValue = formData.get('autoProvision');
     const enabled = enabledValue === 'on' || enabledValue === 'true' || enabledValue === 'checked';
-    const autoProvision =
+    const _autoProvision =
       autoProvisionValue === 'on' ||
       autoProvisionValue === 'true' ||
       autoProvisionValue === 'checked';
@@ -119,8 +94,8 @@ export async function saveOidcConfig(
       (formData.get('allowedDomains') as string | null) ?? ''
     );
     const rawCustomScopes = (formData.get('customScopes') as string | null)?.trim() ?? null;
-    const providerLabel = (formData.get('providerLabel') as string | null)?.trim() ?? null;
-    const organizationId = (formData.get('organizationId') as string | null)?.trim() ?? null;
+    const _providerLabel = (formData.get('providerLabel') as string | null)?.trim() ?? null;
+    const _organizationId = (formData.get('organizationId') as string | null)?.trim() ?? null;
     const rawTokenEndpointAuthMethod = (
       formData.get('tokenEndpointAuthMethod') as string | null
     )?.trim();
@@ -130,9 +105,8 @@ export async function saveOidcConfig(
         : 'client_secret_basic';
     const requestedProviderType = (formData.get('providerType') as string | null)?.trim();
 
-    let roleMapping: RoleMappingRule[];
     try {
-      roleMapping = parseRoleMapping((formData.get('roleMapping') as string | null) || '[]');
+      parseRoleMapping((formData.get('roleMapping') as string | null) || '[]');
     } catch {
       return {
         success: false,
@@ -170,7 +144,7 @@ export async function saveOidcConfig(
       sessionMaxAgeSeconds = parsedMaxAge;
     }
 
-    let sessionIdleTimeoutSeconds: number | null = null;
+    let _sessionIdleTimeoutSeconds: number | null = null;
     if (rawIdleTimeout && rawIdleTimeout !== 'default') {
       const parsedIdle = Number.parseInt(rawIdleTimeout, 10);
       if (Number.isNaN(parsedIdle) || parsedIdle < 300 || parsedIdle > 604_800) {
@@ -191,7 +165,7 @@ export async function saveOidcConfig(
           updatedAt: expectedUpdatedAt,
         };
       }
-      sessionIdleTimeoutSeconds = parsedIdle;
+      _sessionIdleTimeoutSeconds = parsedIdle;
     }
 
     const issuer = (rawIssuer || existing?.issuer || '').trim();
@@ -206,7 +180,7 @@ export async function saveOidcConfig(
         updatedAt: expectedUpdatedAt,
       };
     }
-    const customScopes = scopeValidation.scopes;
+    const _customScopes = scopeValidation.scopes;
 
     if (enabled) {
       if (!issuer || !isValidIssuer(issuer)) {
@@ -299,210 +273,18 @@ export async function saveOidcConfig(
       };
     }
 
-    await getAuthenticationPolicy();
-    let migratedUserIds: string[] = [];
-    const updatedAt = await prisma.$transaction(async tx => {
-      const policies = await tx.$queryRaw<Array<{ mode: string }>>`
-        SELECT "mode" FROM "AuthenticationPolicy" WHERE "id" = 'default' FOR UPDATE`;
-      if (!policies[0] || policies[0].mode === 'SSO_REQUIRED') {
-        throw new Error(
-          'Switch to SSO Optional with fresh administrator authentication before editing the active provider. SSO Required provider changes require staged activation.'
-        );
-      }
-      const id = existing?.id ?? 'default';
-      if (existing) {
-        const roleMappingChanged =
-          stableSerializeRoleMapping(existing.roleMapping) !==
-          stableSerializeRoleMapping(roleMapping);
-        const customScopesChanged = (existing.customScopes ?? null) !== (customScopes ?? null);
-
-        const securityConfigChanged =
-          normalizeOidcIssuer(existing.issuer) !== normalizeOidcIssuer(issuer) ||
-          existing.clientId !== clientId ||
-          clientSecretChanged ||
-          existing.enabled !== enabled ||
-          existing.providerType !== providerType ||
-          existing.organizationId !== organizationId ||
-          existing.tokenEndpointAuthMethod !== tokenEndpointAuthMethod ||
-          roleMappingChanged ||
-          customScopesChanged ||
-          JSON.stringify(existing.allowedDomains ?? []) !== JSON.stringify(allowedDomains ?? []);
-
-        const updated = await tx.oidcConfig.updateMany({
-          where: { id: existing.id, updatedAt: expectedRevision! },
-          data: {
-            issuer,
-            clientId,
-            ...(clientSecretChanged && encryptedSecret ? { clientSecret: encryptedSecret } : {}),
-            enabled,
-            autoProvision,
-            allowedDomains,
-            roleMapping: roleMapping as Prisma.InputJsonValue,
-            customScopes,
-            providerType,
-            providerLabel,
-            organizationId,
-            tokenEndpointAuthMethod,
-            profileMapping:
-              Object.keys(profileMapping).length > 0
-                ? (profileMapping as Prisma.InputJsonObject)
-                : Prisma.JsonNull,
-            sessionMaxAgeSeconds,
-            sessionIdleTimeoutSeconds,
-            updatedBy: actor.id,
-            ...(securityConfigChanged ? { configVersion: { increment: 1 } } : {}),
-          },
-        });
-        if (updated.count !== 1) throw new SettingsChangedMutationError();
-
-        if (issuerMigration) {
-          const previousIssuer = normalizeOidcIssuer(existing.issuer);
-          const targets =
-            (await tx.user.findMany?.({
-              where: { oidcIdentities: { some: { issuer: previousIssuer } } },
-              select: { id: true },
-            })) ?? [];
-          if (targets.length > 0) {
-            migratedUserIds = targets.map(t => t.id);
-            await tx.user.updateMany({
-              where: { id: { in: migratedUserIds } },
-              data: { tokenVersion: { increment: 1 } },
-            });
-          } else {
-            await tx.user.updateMany({
-              where: { oidcIdentities: { some: { issuer: previousIssuer } } },
-              data: { tokenVersion: { increment: 1 } },
-            });
-          }
-        }
-        if (securityConfigChanged) {
-          await tx.oidcLinkingApproval.updateMany({
-            where: {
-              providerConfigId: existing.id,
-              consumedAt: null,
-              revokedAt: null,
-            },
-            data: { revokedAt: new Date() },
-          });
-        }
-      } else {
-        await tx.oidcConfig.create({
-          data: {
-            id,
-            issuer,
-            clientId,
-            clientSecret: encryptedSecret || '',
-            enabled,
-            autoProvision,
-            allowedDomains,
-            roleMapping: roleMapping as Prisma.InputJsonValue,
-            customScopes,
-            providerType,
-            providerLabel,
-            organizationId,
-            tokenEndpointAuthMethod,
-            profileMapping:
-              Object.keys(profileMapping).length > 0
-                ? (profileMapping as Prisma.InputJsonObject)
-                : Prisma.JsonNull,
-            sessionMaxAgeSeconds,
-            sessionIdleTimeoutSeconds,
-            updatedBy: actor.id,
-          },
-        });
-      }
-
-      await logAudit(
-        {
-          action: 'oidc.config.updated',
-          entityType: 'SSO_CONFIG',
-          entityId: id,
-          actorId: actor.id,
-          oldValue: existing
-            ? {
-                enabled: existing.enabled,
-                issuer: existing.issuer,
-                clientId: existing.clientId,
-                autoProvision: existing.autoProvision,
-                allowedDomains: existing.allowedDomains,
-                customScopes: existing.customScopes,
-                providerType: existing.providerType,
-                providerLabel: existing.providerLabel,
-                organizationId: existing.organizationId,
-                tokenEndpointAuthMethod: existing.tokenEndpointAuthMethod,
-                hasClientSecret: Boolean(existing.clientSecret),
-                sessionMaxAgeSeconds: existing.sessionMaxAgeSeconds,
-                sessionIdleTimeoutSeconds: existing.sessionIdleTimeoutSeconds,
-              }
-            : null,
-          newValue: {
-            enabled,
-            issuer,
-            clientId,
-            autoProvision,
-            allowedDomains,
-            customScopes,
-            providerType,
-            providerLabel,
-            organizationId,
-            tokenEndpointAuthMethod,
-            roleMappingCount: roleMapping.length,
-            hasClientSecret: Boolean(encryptedSecret),
-            sessionMaxAgeSeconds,
-            sessionIdleTimeoutSeconds,
-          },
-          details: {
-            integration: 'oidc',
-            issuerMigration,
-            ...(issuerMigration
-              ? {
-                  previousIssuer: normalizeOidcIssuer(existing!.issuer),
-                  sessionsRevoked: true,
-                  pendingLinkApprovalsRevoked: true,
-                }
-              : {}),
-          },
-        },
-        tx
-      );
-
-      const saved = await tx.oidcConfig.findUniqueOrThrow({
-        where: { id },
-        select: { updatedAt: true },
-      });
-      return saved.updatedAt.toISOString();
-    });
-
-    const { resetAuthOptionsCache } = await import('@/lib/auth');
-    resetAuthOptionsCache();
-    if (migratedUserIds.length > 0) {
-      const { invalidateSessionSecurityProjections } =
-        await import('@/lib/session-security-projection');
-      invalidateSessionSecurityProjections(migratedUserIds);
-    }
-    // Invalidate the OIDC config caches too — the freshly saved issuer,
-    // client secret and enabled state must take effect immediately rather
-    // than remaining stale for several seconds.
-    const { resetOidcConfigCache } = await import('@/lib/oidc-config');
-    resetOidcConfigCache();
-    const { resetOidcRuntimeMetadataCache } = await import('@/lib/oidc-validation');
-    resetOidcRuntimeMetadataCache();
-    revalidatePath('/settings/security');
-    revalidatePath('/settings/system');
-    revalidatePath('/login');
-
-    return { success: true, error: null, updatedAt };
-  } catch (error) {
-    if (
-      isSettingsChangedError(error) ||
-      (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
-    ) {
-      return settingsChangedState(expectedUpdatedAt);
-    }
     return {
       success: false,
-      code: 'INTERNAL_ERROR',
-      error: 'Failed to save SSO configuration.',
+      code: 'VALIDATION_ERROR',
+      error:
+        'Provider changes require staged configuration and a verified administrator login in System → SSO / Authentication.',
+      updatedAt: expectedUpdatedAt,
+    };
+  } catch {
+    return {
+      success: false,
+      code: 'VALIDATION_ERROR',
+      error: 'Invalid legacy SSO configuration. Use the staged authentication console.',
       updatedAt: expectedUpdatedAt,
     };
   }

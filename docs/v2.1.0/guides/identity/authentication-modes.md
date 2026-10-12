@@ -1,6 +1,6 @@
 ---
 title: Choose an authentication mode
-description: Understand database-backed login policy, permitted password operations, and policy-driven session revocation.
+description: Choose an authentication mode with staged configuration, explicit verification and audited recovery.
 type: how-to
 product_area: identity
 audience: [administrator, operator]
@@ -8,135 +8,43 @@ verification:
   level: source
   verified_at: 2026-10-12
   evidence:
-    - src/lib/authentication-policy.ts
-    - src/lib/authentication-policy-evaluator.ts
-    - src/app/(app)/settings/system/authentication-actions.ts
-    - src/components/settings/AuthenticationPolicySettings.tsx
-    - tests/lib/authentication-policy.test.ts
-    - tests/lib/authentication-policy-sessions.test.ts
-    - tests/integration/authentication-policy-database.test.ts
+    - src/components/settings/AuthenticationConsole.tsx
+    - src/lib/auth-control
+    - tests/integration/emergency-authentication-database.test.ts
 ---
 
 # Choose an authentication mode
 
-This guide is for administrators changing system-wide sign-in policy and operators
-upgrading an existing installation. Personal password and session controls remain
-in **Settings → Security**.
+For administrators and deployment operators. Personal password, linked identity and session controls remain in **Settings → Security**. System policy is in **Settings → System → SSO / Authentication**.
 
-## Before you begin
+## Prerequisites
 
-Apply all application migrations to PostgreSQL. Every web replica must use the
-same database and consistent deployment settings during the initial policy import.
-Keep working administrator credentials available. OIDC requires the existing
-encryption key, stable public HTTPS origin, client credentials, and provider
-registration described in [Configure OIDC](configure-oidc/).
+Apply migrations, keep all replicas on the same PostgreSQL database and preserve the encryption key. Set a canonical public HTTPS origin. Register both production `/api/auth/callback/oidc` and staged `/api/auth/oidc/test/callback` redirect URIs at the IdP. Read [Configure OIDC](configure-oidc/) for provider-specific boundaries.
 
-New **SSO Required** activation is currently unavailable. Dedicated WebAuthn
-emergency identities and staged, real administrator login verification must be
-implemented and certified before this restriction can be removed. Existing
-installations with local login disabled retain their effective required policy
-through the explicit legacy import; this does not certify their recovery readiness.
+![Authentication console on a mobile viewport](../../assets/enterprise-authentication-mobile.png)
 
-## What each mode permits
+## Select the policy
 
-**Password Only** permits password sign-in, password creation/change, reset-token
-issuance, invitation password onboarding, and password sessions. It rejects OIDC
-sign-in and existing OIDC sessions, even when a provider configuration is saved.
+- **Password Only** permits ordinary password authentication and password operations. OIDC sessions and sign-in are rejected even if a connection is stored.
+- **SSO Optional** permits passwords and OIDC. Existing-account linking requires an explicit expiring approval; email alone never establishes ownership.
+- **SSO Required** permits ordinary OIDC authentication and rejects ordinary passwords, password creation/change, reset issuance/completion and password invitation activation. **Users → Invite with SSO only** creates a bound first-link approval without a password token. Required selects this invitation type automatically.
 
-**SSO Optional** permits both password and OIDC sign-in. Password operations remain
-available. Existing account linking remains explicitly approved and bound to issuer
-and subject. Saving a provider does not automatically change this policy.
+Sign in within the five-minute freshness window. Stage the connection, run a real administrator login test, and activate Optional first. Required activation additionally needs two active, independently held hardware-key emergency identities with successful drills for their current credential versions in the last 90 days. Discovery validation alone cannot satisfy administrator readiness. Drills and administrator proofs are bound to the verified public origin; changing it requires new verification. The tested administrator must remain active and ADMIN, and the proof expires after 15 minutes. See [Test and enforce SSO](test-and-enforce-sso/).
 
-**SSO Required** rejects ordinary password sign-in, password creation/change,
-password resets, invitation-token issuance, and invitation password completion.
-Existing ordinary password sessions are rejected at their next protected request.
-OIDC sign-in remains available when the configured provider works. An IdP outage
-does not enable normal password authentication.
+## Verify and observe session effects
 
-An explicitly imported legacy emergency password identity remains a compatibility
-exception for sign-in only. Password reset and creation are blocked for that identity
-under SSO Required. It is still a regular User record in this intermediate
-implementation; it is **not** a dedicated emergency principal or restricted recovery
-console. Its sessions have a one-hour maximum, a 15-minute inactivity timeout, and
-no Remember Me or Trusted PWA extension. Pre-upgrade emergency password sessions
-must authenticate again to receive those restrictions.
+Inspect **Overview**, then **Authentication policy → Preview enforcement impact**. Confirm the authoritative mode and version, affected password sessions, users requiring identity links, administrator verification and recovery blockers. Confirm the activation checkbox before applying the exact tested revision. A stale version or changed administrator refuses activation transactionally.
 
-## Change the mode
+Disallowed sessions fail on the next protected server request. Password cutoffs persist across a later return to Optional; old revoked sessions do not return. Changing the production provider advances the OIDC cutoff. Long-lived streams recheck policy at their existing server intervals; already delivered data is not recalled. Users must sign in again after their issuing method is revoked. Settings → Security shows the current sign-in method separately from system policy.
 
-1. Sign out and sign in again as an active administrator. The confirmation must
-   occur within five minutes of this sign-in; refreshing the session is insufficient.
-2. Open **Settings → System → SSO / Authentication**.
-3. In **Authentication policy**, select **Sign-in mode**. To select SSO Optional,
-   first save and enable an OIDC provider in the connection form below it.
-4. When changing to Password Only, enter **Verify your current password**. An
-   administrator without a working local password cannot disable SSO this way.
-5. Read the session-impact notice and select the acknowledgment checkbox.
-6. Select **Change authentication policy**.
+## Recovery and rollback
 
-The current mode changes only after the server validates administrator permission,
-fresh sign-in, rate limits, and the expected policy version. The database update
-and `auth.policy.changed` audit event commit atomically. Concurrent edits require
-the losing administrator to reload rather than overwriting the winner's policy.
+An IdP outage never automatically enables passwords. Use [Emergency Access](configure-emergency-access/) to repair and test a staged provider while preserving Required, or deliberately use [lockout recovery](sso-lockout-recovery/) to restore password access. A normal fresh administrator can deliberately select Optional, or prove their current password to select Password Only. Those changes are audited and enqueue durable security alerts.
 
-Changing to Password Only revokes existing OIDC sessions. Changing back to Optional
-does not resurrect those sessions: their immutable issuing-policy version remains
-below the database revocation cutoff. Users must complete a new sign-in.
+Emergency recovery sessions have a one-hour hard cap and a 15-minute idle timeout. Passive reads do not extend either limit.
 
-## Verify the result
+A fresh installation with no Users starts in Password Only so the first administrator can configure and verify SSO, even if deprecated local-login environment flags were preset. Existing installations retain their imported effective policy.
 
-Check the displayed current mode and the corresponding event in the audit log.
-Use a separate browser session to test permitted login. In Password Only, attempt
-OIDC login and verify it is rejected. When checking an imported Required policy,
-test an ordinary password session created before migration and confirm a protected
-request rejects it. Keep the administrator recovery session separate from this test.
+Legacy environment controls are imported once under a PostgreSQL advisory lock. Later environment edits do not override policy. Imported Required installations keep their policy but are not automatically certified as recovery-ready. The imported emergency password now opens only the restricted recovery console at `/recovery`; it never creates an ordinary administrator session. Retire it after two independent drills.
 
-Open event streams recheck policy during their authorization checks; ordinary
-requests evaluate policy on each server session validation. The realtime heartbeat
-checks at a 15-second interval; events and notifications check during their existing
-polling cycles. This is not a promise of instantaneous closure of already-open streams.
-
-## Failure handling and rollback
-
-- **Sign in again**: perform a new full sign-in and retry within five minutes.
-- **Policy changed elsewhere**: reload the page, inspect the current mode, and retry
-  using the new version. Do not replay an old request.
-- **Verify your current password**: verify the existing password; an SSO login alone
-  is not proof that Password Only will leave you able to authenticate.
-- **SSO Required activation is unavailable**: remain Optional. Do not bypass this
-  restriction by editing the database to claim recovery readiness.
-- **Provider edits while Required**: use a fresh administrator session to switch to
-  Optional before editing the active provider. Staged activation is not available yet.
-- **Database outage or missing migrated policy**: authentication fails closed.
-  Restore PostgreSQL and its policy/import records through your external database
-  recovery procedure. Environment-variable changes do not provide a bypass.
-
-To undo an Optional/Password Only change, sign in using the currently permitted
-method and repeat this procedure. Revoked sessions remain revoked. Rolling back
-to application code that predates database policy is unsafe: older code uses the
-legacy deployment controls. Review those controls and the database policy together
-before any application downgrade; retain a database backup and a tested recovery path.
-
-## Migration and security boundaries
-
-On the first authentication-policy read, an advisory-locked transaction imports
-`AUTH_LOCAL_LOGIN_ENABLED`, `AUTH_BREAK_GLASS_ENABLED`, and `AUTH_BREAK_GLASS_EMAIL`
-once. Local login enabled plus an enabled OIDC configuration becomes Optional;
-local login enabled without one becomes Password Only; local login disabled becomes
-Required, even if the old provider configuration is broken. No user is converted,
-deleted, or hidden during import. A warning and `auth.policy.migrated` event record
-the migration. Subsequent environment edits do not change the database policy.
-
-Password mutation transactions lock the same policy row as mode changes. A password
-write that waits behind enforcement is denied after that change commits. A failed
-policy lookup never falls back to ordinary local login. Do not treat a discovery
-test as proof of administrator sign-in or recovery readiness.
-
-## Implementation references
-
-The policy/import models and both additive migrations are in `prisma/`.
-`src/lib/authentication-policy-evaluator.ts` defines mode/action rules;
-`src/lib/authentication-policy.ts` loads authoritative state and locks password
-operations. `src/lib/auth.ts` enforces policy for login and session evaluation.
-The source and database tests listed in this page's verification metadata cover
-migration, stale sessions, outages, and transaction ordering. Their presence does
-not claim a live provider or browser certification.
+PostgreSQL outage and missing imported policy fail closed. Emergency authentication also needs PostgreSQL. Restore the database externally; do not delete policy/import records to force environment fallback. Before application downgrade, explicitly reconcile the older application's environment controls because it does not understand this policy.

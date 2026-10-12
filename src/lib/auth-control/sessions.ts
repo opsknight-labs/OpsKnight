@@ -1,0 +1,34 @@
+import 'server-only';
+import prisma from '@/lib/prisma';
+import { lockControlActor, type ControlActor } from './actor';
+import { securityEvent } from './security-events';
+
+/** Opaque database handle; never expose or accept the JWT/session capability. */
+export async function revokeAuthenticationSession(actor: ControlActor, id: string) {
+  await prisma.$transaction(async tx => {
+    await lockControlActor(tx, actor);
+    await tx.$queryRaw`SELECT "id" FROM "UserDevice" WHERE "id" = ${id} FOR UPDATE`;
+    const session = await tx.userDevice.findUniqueOrThrow({ where: { id } });
+    if (!session.platform.startsWith('session:') || !session.deviceId.startsWith('session:'))
+      throw new Error('Select a registered authentication session.');
+    if (session.platform.startsWith('session:REVOKED:')) return;
+    const method = session.platform === 'session:OIDC' ? 'oidc' : 'credentials';
+    await tx.userDevice.update({
+      where: { id },
+      data: { platform: `session:REVOKED:${session.platform.slice('session:'.length)}` },
+    });
+    await securityEvent(tx, 'auth.session.revoked', actor.id, {
+      userId: session.userId,
+      method,
+      sessionHandle: id,
+    });
+  });
+}
+
+export async function cleanAuthenticationCeremonies() {
+  const expiry = new Date(Date.now() - 86400000);
+  await prisma.$transaction([
+    prisma.emergencyChallenge.deleteMany({ where: { expiresAt: { lt: expiry } } }),
+    prisma.oidcTestFlow.deleteMany({ where: { expiresAt: { lt: expiry } } }),
+  ]);
+}

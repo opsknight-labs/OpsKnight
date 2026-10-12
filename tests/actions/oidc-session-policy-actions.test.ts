@@ -167,50 +167,18 @@ describe('saveOidcConfig session policy validation & persistence', () => {
     expect(mocks.prismaUpdateMany).not.toHaveBeenCalled();
   });
 
-  it('persists valid session policy values and resets caches', async () => {
+  it.each([
+    ['28800', '7200'],
+    ['default', 'default'],
+  ])('requires staging even for valid session policy %s / %s', async (maximum, idle) => {
     const formData = new FormData();
-    formData.set('sessionMaxAgeSeconds', '28800'); // 8 hours
-    formData.set('sessionIdleTimeoutSeconds', '7200'); // 2 hours
-
+    formData.set('sessionMaxAgeSeconds', maximum);
+    formData.set('sessionIdleTimeoutSeconds', idle);
     const result = await saveOidcConfig(initialState, formData);
-
-    expect(result.success).toBe(true);
-    expect(mocks.prismaUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          sessionMaxAgeSeconds: 28800,
-          sessionIdleTimeoutSeconds: 7200,
-        }),
-      })
-    );
-    expect(mocks.logAudit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'oidc.config.updated',
-        newValue: expect.objectContaining({
-          sessionMaxAgeSeconds: 28800,
-          sessionIdleTimeoutSeconds: 7200,
-        }),
-      }),
-      expect.anything()
-    );
-  });
-
-  it('saves null when "default" is submitted to revert to system defaults', async () => {
-    const formData = new FormData();
-    formData.set('sessionMaxAgeSeconds', 'default');
-    formData.set('sessionIdleTimeoutSeconds', 'default');
-
-    const result = await saveOidcConfig(initialState, formData);
-
-    expect(result.success).toBe(true);
-    expect(mocks.prismaUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          sessionMaxAgeSeconds: null,
-          sessionIdleTimeoutSeconds: null,
-        }),
-      })
-    );
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('staged configuration');
+    expect(mocks.prismaUpdateMany).not.toHaveBeenCalled();
+    expect(mocks.logAudit).not.toHaveBeenCalled();
   });
 
   it('rejects groups as an Entra OAuth scope at the server boundary', async () => {

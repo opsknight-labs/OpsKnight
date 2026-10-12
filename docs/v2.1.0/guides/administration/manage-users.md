@@ -361,3 +361,18 @@ At least on the organization's review cadence:
 Do not treat a clean Users list alone as proof of least privilege: team scope,
 API keys, chat identity links, schedules, and external provider assignment all
 contribute to effective access.
+
+## SSO-only invitation onboarding
+
+In **Users**, choose **Invite with SSO only** to create a pending account with no
+password hash or setup token. Required SSO automatically selects this behavior.
+Activate an SSO connection first. The seven-day approval binds the exact issuer,
+client, configuration version and verified email. Share the workspace login URL;
+the user chooses production SSO and the approved first sign-in binds issuer and
+subject to this original User. Email alone cannot join an existing account.
+
+Renew a pending SSO invitation after expiry or provider changes. Renewal invalidates
+password invitation/reset capabilities for the pending user. Review **Access &
+provisioning** for each user's role source and linked issuer. OIDC claims do not
+replace SCIM lifecycle authority; disabled users remain blocked. Emergency
+identities are managed separately under **System → Emergency Access**.

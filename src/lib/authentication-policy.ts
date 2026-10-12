@@ -35,25 +35,30 @@ export async function initializeAuthenticationPolicy() {
     }
     const legacy = getLocalAuthPolicy();
     const oidc = await tx.oidcConfig.findUnique({ where: { id: 'default' } });
+    const bootstrap = (await tx.user.count()) === 0;
     const snapshot = {
       localLoginEnabled: legacy.localLoginEnabled,
       breakGlassEnabled: legacy.breakGlassEnabled,
       breakGlassEmail: legacy.breakGlassEmail,
       oidcEnabled: Boolean(oidc?.enabled),
+      bootstrap,
     };
     const policy = await tx.authenticationPolicy.create({
       data: {
         id: 'default',
-        mode: !legacy.localLoginEnabled
-          ? 'SSO_REQUIRED'
-          : oidc?.enabled
-            ? 'SSO_OPTIONAL'
-            : 'PASSWORD_ONLY',
+        mode: bootstrap
+          ? 'PASSWORD_ONLY'
+          : !legacy.localLoginEnabled
+            ? 'SSO_REQUIRED'
+            : oidc?.enabled
+              ? 'SSO_OPTIONAL'
+              : 'PASSWORD_ONLY',
         oidcConfigVersion: oidc?.configVersion ?? null,
-        passwordSessionMinVersion: legacy.localLoginEnabled ? 0 : 1,
-        legacyEmergencyEmail: legacy.breakGlassEnabled ? legacy.breakGlassEmail : null,
+        passwordSessionMinVersion: bootstrap || legacy.localLoginEnabled ? 0 : 1,
+        legacyEmergencyEmail:
+          !bootstrap && legacy.breakGlassEnabled ? legacy.breakGlassEmail : null,
         legacySnapshot: snapshot,
-        enforcedAt: !legacy.localLoginEnabled ? new Date() : null,
+        enforcedAt: !bootstrap && !legacy.localLoginEnabled ? new Date() : null,
       },
     });
     await tx.authenticationPolicyImport.create({ data: { id: 'default' } });
@@ -68,7 +73,9 @@ export async function initializeAuthenticationPolicy() {
       tx
     );
     logger.warn(
-      'Authentication policy imported from legacy environment. Database policy is now authoritative; legacy emergency passwords require replacement.',
+      bootstrap
+        ? 'Fresh installation starts in Password Only. Create the first administrator, then stage and verify SSO.'
+        : 'Authentication policy imported from legacy environment. Database policy is now authoritative; legacy emergency passwords require replacement.',
       {
         component: 'authentication-policy',
         mode: policy.mode,
@@ -112,7 +119,7 @@ export async function getDatabaseLocalAuthPolicy() {
   const policy = await getAuthenticationPolicy();
   const localLoginEnabled = policy.mode !== 'SSO_REQUIRED';
   return {
-    enabled: localLoginEnabled || Boolean(policy.legacyEmergencyEmail),
+    enabled: localLoginEnabled,
     localLoginEnabled,
     oidcLoginEnabled: policy.mode !== 'PASSWORD_ONLY',
     breakGlassEnabled: Boolean(policy.legacyEmergencyEmail),

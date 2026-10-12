@@ -1,174 +1,178 @@
 # Enterprise SSO 2.1 delivery record
 
-The complete user specification is preserved in
-[enterprise-sso-2.1-specification.md](enterprise-sso-2.1-specification.md).
-All implementation, migrations, tests, and manually maintained 2.1 documentation
-belong to `feat/enterprise-sso-2.1` in `opsknight-enterprise-sso`. Do not create a PR
-without the user's instruction. Do not modify or publish the website repository.
+The complete specification remains in [enterprise-sso-2.1-specification.md](enterprise-sso-2.1-specification.md).
+The supplied historical [deep branch audit](enterprise-sso-2.1-branch-audit.md) is preserved separately; its outstanding findings describe the earlier foundation, not the final code.
 
-This branch is an implementation in progress, not a completed enterprise SSO
-release. The original specification's seven-PR recommendation is superseded by
-the user's single-branch/no-PR direction. Use incremental commits on this branch.
+Implementation, migrations, tests and manually maintained upcoming documentation
+stay in the separate `opsknight-enterprise-sso` worktree on
+`feat/enterprise-sso-2.1`. The user's single-branch/no-PR instruction supersedes
+the specification's suggested PR sequence. No website repository is modified or
+published. v2.0.0 remains the released version.
+
+## Implemented behavior
+
+### Authoritative policy and session enforcement
+
+PostgreSQL owns Password Only, SSO Optional and SSO Required policy after a
+serialized one-time legacy import. A fresh zero-user installation starts in
+Password Only so deprecated SSO-only flags cannot deadlock first-admin setup. Missing imported policy and database failures
+fail closed. Existing sessions carry their method and immutable issuing-policy
+version; persisted method-specific cutoffs prevent revoked sessions returning
+when policy is later relaxed. Credential/OIDC login, protected sessions, password
+creation/change/reset and password invitations consult authoritative policy.
+Fresh administrator mutations lock the policy and actual acting User/security
+rows; revocation and concurrent demotion cannot reuse stale authorization.
+
+System Diagnostics exposes the 100 most recent registered sessions by method,
+expiry, issuing version and state, with fresh, audited targeted revocation.
+Personal Security separates current sign-in method, linked identity and system
+policy. Password controls disappear when Required blocks them. Streaming
+connections retain their existing periodic authoritative policy checks; already
+delivered data cannot be recalled.
+
+### Independent emergency recovery
+
+Dedicated EmergencyAccount, public WebAuthn credentials, browser-bound single-use
+challenges, credential versions, independent opaque recovery sessions and events
+are implemented. SimpleWebAuthn verifies signatures, challenge, exact origin/RP,
+user presence/verification and counter state. Synced/backup-eligible credentials
+are rejected. No private keys reach the server. Enrollment requires fresh normal
+administrator or narrowly scoped recovery authorization. Registration alone does
+not establish readiness: a separate successful authentication drill verifies the
+current credential version and canonical origin, with a 90-day readiness lifetime.
+
+`/login/emergency` opens `/recovery`, outside ordinary application administration.
+Emergency principals never resolve into normal User/JIT/SCIM/responders, NextAuth
+JWTs or trusted devices. Recovery sessions have a one-hour absolute cap and
+15-minute idle timeout. Passive reads do not refresh idle; deliberate visible
+interaction does. Sensitive mutations require five-minute freshness.
+Reauthentication rotates the capability without extending its absolute cap.
+Enrollment, revocation and disablement revoke affected sessions and invalidate
+previous readiness. Shared attempt limits do not permanently lock an account.
+
+Privacy-preserving WebAuthn attestation cannot prove physically distinct keys or
+custodians. The independence confirmation is an explicit custody obligation;
+operators must actually hold and drill separate hardware. This limitation is
+stated in the guide, rather than represented as a cryptographic guarantee.
+
+### Staged onboarding, activation and recovery repair
+
+Immutable encrypted provider revisions preserve current production configuration
+while discovery and actual administrator authentication are tested separately.
+Tests bind revision, existing administrator, browser, state, nonce, PKCE, origin,
+expiration and current production configuration version. Real code exchange and
+RS256/JWKS verification establish proof; test callbacks issue no ordinary session.
+First linking requires explicit ownership approval and matching verified email;
+stable issuer/subject bindings preserve the original User ID. Effective ADMIN and
+current user/token state are rechecked under transactional locks.
+
+Impact preview includes password sessions, unbound users, exact administrator
+proof, independently drilled recovery identities and active replica conflicts.
+Required activation needs a proof from the current origin within 15 minutes and
+two current independent drills. Activation checks expected versions and commits
+provider, policy, cutoffs, audit and alerts atomically. An origin, role, token,
+credential or production configuration change invalidates corresponding evidence.
+Previously activated revisions can be staged as new rollback revisions, and need
+fresh login verification before activation. The old direct provider-save action
+cannot bypass this workflow, including for Optional or cosmetic changes.
+
+A fresh emergency principal can stage/test/activate a provider repair while
+preserving Required. A completely unavailable IdP never causes automatic password
+fallback. The separate explicit password-restoration workflow changes policy,
+updates an existing active administrator in place, advances both session cutoffs,
+rotates token version and audits/enqueues alerts. Imported legacy passwords create
+only recovery sessions; two verified independent identities allow retiring the
+bridge without deleting its original User. A deliberate normal Password Only
+transition also clears the legacy bridge after proving the administrator password.
+
+### Console, identity lifecycle and diagnostics
+
+System SSO / Authentication provides Overview, Connection, Access & provisioning,
+Authentication policy and Diagnostics. Provider templates/issuer/client fields,
+Auth0 organization, client authentication method, scopes, ordered role rules,
+profile claims and session bounds remain available. Claims preview explains
+identity/linking/JIT/role decisions without treating untrusted samples as proof.
+Broad ADMIN rules require acknowledgement; role source and issuer bindings are
+visible. Emergency Access has independent enrollment, backup/replacement,
+revocation, disablement, current drill state and recovery events.
+
+Users can be invited without a password hash or setup token. Required selects
+this behavior automatically. The seven-day first-link approval binds exact issuer,
+client/config version and verified email; renewal invalidates pending password
+capabilities. Ordinary lifecycle, SCIM and operational identity remain separate
+from emergency principals.
+
+Every security mutation and emergency login result persists mandatory audit and
+durable high-priority in-app/email intent transactionally. A leased outbox hands email intents to the existing notification control plane
+with stable delivery keys; that control plane owns provider admission and retries. Delivery outages retain intents and
+in-app alerts. Expired ceremony state is cleaned by scheduler maintenance.
+Web replicas periodically record legacy-setting and canonical-origin conflicts;
+PostgreSQL remains authoritative. Conflicting canonical origins fail authentication
+administration closed; the ordinary Settings screen remains available to reconcile
+configuration where ordinary administrator access is still valid.
+
+## Supplied audit findings addressed
+
+- A: Required recovery repair stages/tests a provider and preserves Required; explicit password restoration is a separate audited action.
+- B: Passive emergency reads never refresh idle time; hard expiry and reauthentication caps are exercised against PostgreSQL.
+- C: Separate recovery-only sessions and identifiable mandatory security events/durable alerts replace ordinary legacy-emergency JWT issuance.
+- D: The acting administrator's real row is locked and rechecked behind concurrent demotion; stale authorization and expected versions fail closed.
+- E: Required-compatible SSO invitations create bound first-link approvals without passwords or setup tokens.
 
 ## Verification recorded on 2026-10-12
 
-- Full TypeScript check: passed (`npx tsc --noEmit`).
-- ESLint for every modified/new TypeScript and JavaScript file: passed with zero warnings.
-- Authentication/OIDC/session regressions, policy action guards, policy form behavior,
-  and OIDC architecture contracts: 316 tests passed across 33 files.
-- Dedicated PostgreSQL policy tests: 6 passed, including concurrent import, durable
-  revocation cutoffs, enforcement/write ordering, missing-policy behavior, competing
-  administrator updates, and mandatory-audit rollback.
-- Existing PostgreSQL password-recovery compatibility: 5 tests passed across 3 files,
-  including concurrent reset issuance and session revocation.
-- Upcoming 2.1 documentation contracts: 4 passed, including frontmatter, internal
-  links, released-version preservation, provider detail retention and policy claims.
-- Both additive migrations applied successfully to the isolated
-  `enterprise_sso_test` database. No production/application database was used.
+- TypeScript: `npx tsc --noEmit` passed.
+- Modified/new TypeScript and JavaScript: ESLint passed with zero warnings.
+- Full unit suite: 5,685 passed across 745 files; four intentionally skipped.
+- Authentication/OIDC/session/user-invitation/component regressions: 308 passed
+  across 31 files, including eight canonical-origin/CSRF boundary tests.
+- Isolated PostgreSQL suites: 37 passed across policy, signed WebAuthn and staged
+  OIDC suites. They exercise concurrency, mandatory-intent rollback, shared email
+  handoff leases/delivery-queue outage retention, signed origin/RP/UV/counter/replay failures,
+  passive idle/hard expiry, reauthentication, credential revocation, real HTTPS
+  token exchange, nonce/audience/PKCE/JWKS, explicit linking, legacy issuer ownership protection, origin-bound proof,
+  Required readiness, emergency Required repair, password-free invitations, an administrator-reset/password-change race, and
+  explicit administrator restoration.
+- Chromium browser recovery test: console sections/mobile overflow, virtual hardware-key
+  enrollment and a separate-context sign-in drill, no ordinary NextAuth user,
+  incident-route denial, recovery logout and anonymous/foreign-origin rejection.
+  Three additional Chromium/Firefox/WebKit desktop/mobile and keyboard/validation
+  checks passed. The virtual authenticator establishes browser/protocol integration, not physical
+  hardware independence or production-provider certification.
+- Upcoming documentation: four contracts passed, including frontmatter, internal
+  links, released-version preservation and retained provider detail.
+- An optimized production build passed. The repository's pre-push gate also
+  requires a production build and the full unit suite before uploading this branch.
+- Additive enterprise authentication and origin-readiness migrations applied to
+  isolated `enterprise_sso_test`; no production/application database was migrated.
 
-This is source, unit, component and PostgreSQL verification. It is not a live IdP,
-real-browser, WebAuthn, accessibility, multi-replica deployment or complete-release
-certification. Those requirements remain explicitly outstanding below.
+The PostgreSQL OIDC fixture verifies actual HTTPS code exchange and signed token
+verification. Discovery shape is injected in that fixture and independently tested
+in the existing discovery/provider matrix suite. Readiness fixtures in activation
+tests represent already-verified database state; signed WebAuthn tests and the
+separate-context browser drill establish how real verification writes that state.
+They do not constitute hardware/vendor attestation.
 
-## Security foundation implemented in this increment
+## Documentation delivered
 
-- PostgreSQL singleton policy, monotonically increasing policy versions, explicit
-  legacy import snapshot, separate import marker, and audited bootstrap transaction.
-- Advisory lock for simultaneous replica migration; no policy cache or database-
-  outage fallback; a missing already-migrated policy fails closed.
-- Central evaluator for ordinary credentials, OIDC, password writes, and sessions.
-- Server session validation rejects disallowed methods on the next protected
-  request even with cached auth options or cached user security projections.
-- Immutable issuing-policy versions and persisted method-specific revocation
-  cutoffs prevent sessions returning when a restrictive mode is later relaxed.
-- Password changes, password-reset issuance/completion, invitation issuance,
-  direct invitation activation, and inline admin invitations consult policy.
-  Password mutation transactions lock the policy row to serialize enforcement.
-- Compatibility emergency-password sessions have absolute/idle limits and reject
-  trusted-device extension. They are explicitly not the final emergency subsystem.
-- Long-lived event streams recheck authoritative policy, and the Edge middleware
-  defers login redirects to the server's authoritative session evaluation.
-- Administrator mode changes require fresh server-established authentication,
-  strict input validation, shared rate limiting, optimistic concurrency, and an
-  atomic audit. Disabling SSO additionally proves the administrator's password.
-- New Required activation stays blocked until independent emergency recovery and
-  real administrator login verification are available. Existing Required installs
-  preserve the legacy policy without being labeled readiness-certified.
-- Active-provider edits are blocked under Required until a fresh administrator
-  deliberately returns to Optional. This is a temporary guard pending staged revisions.
-- Personal Security hides password creation/change when system policy blocks it.
+Upcoming 2.1 guides cover authentication modes, existing administrator migration,
+independent emergency setup, tested enforcement, credential/provider rotation,
+lockout recovery and emergency troubleshooting. Existing detailed Entra, Google,
+Okta, Auth0 and Generic/Keycloak instructions remain. Setup, authentication concepts,
+legacy configuration, SCIM, invitations, sessions and audits describe implemented
+boundaries. Real browser captures accompany the console and Emergency Access.
+Downgrade guidance requires coordinated application/database/settings rollback,
+no mixed old/new replicas, a pre-upgrade backup and consideration of restored
+revoked state. Emergency authentication explicitly depends on PostgreSQL.
 
-## Phase 0 / Phase 1 remaining certification
+## External release certification still required
 
-Verify every direct route with real HTTP requests, policy transitions in both
-directions, stale method-less JWTs, all remember/device extension calls, unknown
-methods, corrupt records, missing database state, and setup authorization. Exercise
-database migration against fresh and pre-existing installations, concurrent policy
-admins, mandatory-audit failure rollback, and integrated/split deployments. Add a
-notification intent for policy changes, and complete method/expiry/revocation
-projection in session administration. Do not treat current unit coverage as proof
-of every topology or browser requirement.
-
-## Phase 2: independent emergency recovery — outstanding
-
-Implement EmergencyAccount, WebAuthn public credentials, versioned credential
-revocation, single-use challenge state, dedicated emergency sessions, and mandatory
-events. Use a maintained WebAuthn verifier with exact origin/RP binding, user
-verification, registration proof, authentication proof, replay prevention, and
-counter/credential synchronization handling. Private keys never reach the server.
-
-Enrollment requires an authorized fresh admin or a narrowly authorized fresh
-emergency session. Require two separately verified active identities before new
-enforcement. Account verification must result from a real sign-in drill using
-authentication independent of the IdP. Provide secure backup-key enrollment,
-replacement and compromise revocation without an ordinary password reset.
-
-Expose `/login/emergency` and a restricted recovery console. Emergency sessions
-must never resolve to a User, JIT/SCIM record, responder selector, incident role,
-ordinary JWT, or trusted device. Enforce 60-minute absolute and 15-minute idle
-limits on the server, with fresh authentication for credential/policy repair.
-Rate-limit shared IP/credential attempts without permanent account-wide lockout
-that lets an attacker deny recovery. Audit and durable high-priority notification
-intent must commit for every success/failure; test notification-delivery outages.
-
-## Phase 3: staged OIDC onboarding / enforcement — outstanding
-
-Create immutable encrypted provider revisions, active revision references,
-activation/rollback metadata, and staged test authorization bound to admin,
-revision, state, nonce, PKCE, expiration and canonical origin. The staged callback
-must never replace production config or create an ordinary production session.
-Reuse validated issuer/subject and explicit linking semantics; no email-only join.
-
-Record a real administrator login result for the exact tested revision and role
-mapping. Invalidate readiness after any trust-relevant change, admin disable/role
-change, credential revocation, emergency-account deactivation, or stale drill.
-Discovery health and browser login verification are separate evidence.
-
-Preview password sessions affected, users without binding, administrator-role
-consequences, and missing recovery requirements. Under a single authoritative
-transaction, check expected policy/revision versions, fresh admin authentication,
-verified SSO admin and two independent emergency identities, activate the revision,
-advance cutoffs, record audits and enqueue notification intents. Failures preserve
-the old production revision. Concurrent edits must not activate untested state.
-
-## Phase 4: final system UI — outstanding
-
-Replace the long SSO form with Overview, Connection, Access & provisioning,
-Authentication policy and Diagnostics. Preserve provider-specific fields and
-templates; show discovery health and actual administrator login distinctly.
-Build guided onboarding and the separate System → Emergency Access screen with
-enrollment, credential management, drill history and audited recovery events.
-Use existing components, single-column mobile forms, clear keyboard focus and
-accessible validation. Preserve personal password/linked identity/sessions in
-Settings → Security. Real screenshots only after tested UI exists.
-
-## Phase 5: identity lifecycle / diagnostics — outstanding
-
-Keep the stable issuer-and-subject model and first-link approvals. Add identity
-resolution preview, claim-role tester, broadly matching ADMIN warnings, role-source
-display and explicit diagnostics for missing claims, Entra group overage, email
-changes, issuer migration, JIT/SCIM authority and deactivation revocation.
-Emergency identities remain separate from all existing provisioning code.
-
-Add secret-redacted authentication audit/diagnostic views, method-aware session
-management and targeted revocation, emergency/policy alert delivery, and provider
-outage/key rotation tests. Bound discovery metadata staleness and signing-key
-refresh. Back-channel logout is a later optional enhancement, not this release's
-ordinary logout mechanism or a readiness prerequisite.
-
-## Phase 6: compatibility / operations — outstanding
-
-Validate environment import on representative existing installations, no
-conflicting live source of truth, fresh bootstrap, shared policy across replicas,
-IdP outage without fallback, PostgreSQL outage, invalid staged config, issuer
-migration, secret rotation and explicit application downgrade constraints.
-Document external database recovery; emergency recovery itself depends on
-PostgreSQL and cannot claim database-independent authentication. Redis is not a
-new feature requirement. Preserve first admin IDs and operational references.
-
-## Documentation deliverables — partially implemented
-
-`authentication-modes.md` documents this increment and explicitly names its limits.
-Update configure-oidc, authentication concepts, initial setup, personal/system
-settings, sessions, user linking, audits and legacy configuration alongside code.
-Retain detailed Entra/Google/Okta/Auth0/Generic OIDC/Keycloak instructions.
-
-Still required once corresponding features work: migrate-admin-to-sso,
-configure-emergency-access, test-and-enforce-sso, rotate-oidc-credentials,
-sso-lockout-recovery and emergency-access troubleshooting. Do not publish pending
-designs as supported procedures. Each page needs audience, prerequisites, exact
-navigation/labels, actions, expected results, verification, failures, rollback,
-security implications and actual source/test references. Maintain upcoming v2.1
-metadata, indexes, links and identity contracts without weakening v2.0 tests.
-
-## Phase 7: full certification — outstanding
-
-Certify first-admin bootstrap/account preservation; provider flows for Entra,
-Google, Okta, Auth0 and custom OIDC; linking expiry/issuer/subject/email collisions;
-all mode transitions; independent recovery enrollment, drills, expiry, revocation,
-lost keys and alerts; CSRF, replay, state/nonce, session fixation, escalation and
-shared limits; IdP/DB/metadata failures; concurrent admins; integrated/split and
-multi-replica/restart behavior; desktop/mobile Safari/Chrome/Firefox and keyboard
-accessibility; and real documentation walkthroughs. Record surviving-session
-semantics and stream revocation bounds. No final-completion claim until these
-requirements and all nine acceptance guarantees in the specification have evidence.
+The implementation is not a certification of every environment in the original
+matrix. Before a production release, walk the guides against actual Entra, Google,
+Okta, Auth0 and custom IdP tenants and physically independent keys; exercise real
+provider-side assignment/deactivation and key/secret rotation. Verify native desktop/mobile Safari/Firefox hardware-key flows and screen-reader
+behavior, split/multiple-replica runtime,
+restarts, external PostgreSQL restore and a controlled application downgrade.
+Confirm actual alert delivery and operational custody/drill procedures in the target
+deployment. No production deployment, website publication or PR is implied by this
+branch, and no complete external-release certification is claimed.

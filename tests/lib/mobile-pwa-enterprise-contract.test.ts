@@ -37,7 +37,7 @@ describe('mobile/PWA enterprise architecture contract', () => {
     expect(dashboardNotifications).not.toMatch(
       /useEffect\([\s\S]{0,500}Notification\.requestPermission\(/
     );
-    expect(auth).toContain("const rememberMe = credentials?.rememberMe === 'true';");
+    expect(auth).toContain("const rememberMe = !legacyEmergency && credentials?.rememberMe === 'true';");
     expect(auth).not.toContain("credentials?.rememberMe === 'true' || isMobileClient");
   });
 

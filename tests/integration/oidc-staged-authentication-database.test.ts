@@ -1,0 +1,439 @@
+// @vitest-environment node
+/* eslint-disable security/detect-non-literal-fs-filename -- Certificate paths are generated exclusively inside an isolated mkdtemp directory. */
+import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
+import { createServer, type Server } from 'node:https';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
+import { SignJWT, exportJWK } from 'jose';
+import { custom } from 'openid-client';
+import prisma from '@/lib/prisma';
+import {
+  stageOidcRevision,
+  beginOidcRevisionTest,
+  completeOidcRevisionTest,
+  activateOidcRevision,
+  enforcementPreview,
+} from '@/lib/auth-control/oidc-revisions';
+import { authenticationOrigin } from '@/lib/auth-control/origin';
+import { restorePasswordAccess } from '@/lib/auth-control/recovery';
+import { digest, secret } from '@/lib/auth-control/emergency';
+import { inviteSsoUser } from '@/lib/auth-control/sso-onboarding';
+import type { ControlActor } from '@/lib/auth-control/actor';
+
+const runtime = vi.hoisted(() => ({ issuer: '' }));
+vi.mock('@/lib/auth-control/actor', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/lib/auth-control/actor')>();
+  return { ...actual, getControlActor: vi.fn(() => actor) };
+});
+vi.mock('@/lib/auth', () => ({ getAuthOptions: vi.fn(), resetAuthOptionsCache: vi.fn() }));
+vi.mock('@/lib/auth-control/origin', () => ({
+  authenticationOrigin: vi.fn().mockResolvedValue('https://recovery.example.test'),
+}));
+// Discovery shape is covered by the provider matrix suite. This suite exercises real
+// HTTPS token exchange, RS256/JWKS, nonce, PKCE, identity binding and activation.
+vi.mock('@/lib/oidc-validation', () => ({
+  resetOidcRuntimeMetadataCache: vi.fn(),
+  validateOidcConnection: vi.fn(async () => ({
+    isValid: true,
+    metadata: {
+      issuer: runtime.issuer,
+      authorizationEndpoint: `${runtime.issuer}/authorize`,
+      tokenEndpoint: `${runtime.issuer}/token`,
+      jwksUri: `${runtime.issuer}/jwks`,
+    },
+  })),
+}));
+const suite = process.env.VITEST_USE_REAL_DB === '1' ? describe : describe.skip;
+const actor: ControlActor = {
+  kind: 'admin',
+  id: 'staged-oidc-certifier',
+  tokenVersion: 0,
+  authenticatedAt: Date.now(),
+  method: 'credentials',
+  issuedUnderPolicyVersion: 900,
+};
+const keys = generateKeyPairSync('rsa', { modulusLength: 2048 });
+const codes = new Map<string, { nonce: string; challenge: string; variant: string }>();
+let recoveryActor: ControlActor;
+const readyIds: string[] = [];
+let server: Server;
+let directory: string;
+let revisionId: string;
+const callbackState = (url: string) => new URL(url).searchParams.get('state')!;
+function issueCode(url: string, variant = 'valid') {
+  const params = new URL(url).searchParams;
+  const code = randomBytes(32).toString('hex');
+  codes.set(code, {
+    nonce: params.get('nonce')!,
+    challenge: params.get('code_challenge')!,
+    variant,
+  });
+  return code;
+}
+
+suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
+  beforeAll(async () => {
+    if (!new URL(process.env.DATABASE_URL!).pathname.endsWith('/enterprise_sso_test'))
+      throw new Error('Isolated enterprise_sso_test DB required.');
+    vi.stubEnv('OPSKNIGHT_LOAD_TEST_ALLOW_HOSTS', 'localhost');
+    vi.stubEnv('ENCRYPTION_KEY', randomBytes(32).toString('hex'));
+    directory = mkdtempSync(join(tmpdir(), 'opsknight-oidc-cert-'));
+    const cert = join(directory, 'cert.pem');
+    const key = join(directory, 'key.pem');
+    execFileSync(
+      'openssl',
+      [
+        'req',
+        '-x509',
+        '-newkey',
+        'rsa:2048',
+        '-nodes',
+        '-keyout',
+        key,
+        '-out',
+        cert,
+        '-days',
+        '1',
+        '-subj',
+        '/CN=localhost',
+        '-addext',
+        'subjectAltName=DNS:localhost',
+      ],
+      { stdio: 'ignore' }
+    );
+    custom.setHttpOptionsDefaults({ ca: readFileSync(cert) });
+    const jwk = await exportJWK(keys.publicKey);
+    server = createServer(
+      { key: readFileSync(key), cert: readFileSync(cert) },
+      (request, response) => {
+        const handle = async () => {
+          response.setHeader('Content-Type', 'application/json');
+          if (request.url === '/jwks') {
+            response.end(
+              JSON.stringify({ keys: [{ ...jwk, kid: 'test-key', use: 'sig', alg: 'RS256' }] })
+            );
+            return;
+          }
+          if (request.url !== '/token') {
+            response.writeHead(404).end();
+            return;
+          }
+          let body = '';
+          for await (const chunk of request) body += chunk;
+          const params = new URLSearchParams(body);
+          const code = params.get('code')!;
+          const details = codes.get(code);
+          codes.delete(code);
+          const verifier = params.get('code_verifier') || '';
+          if (
+            !details ||
+            createHash('sha256').update(verifier).digest('base64url') !== details.challenge ||
+            request.headers.authorization !==
+              `Basic ${Buffer.from('test-client:test-secret').toString('base64')}` ||
+            params.get('redirect_uri') !==
+              'https://recovery.example.test/api/auth/oidc/test/callback'
+          ) {
+            response.writeHead(400).end(JSON.stringify({ error: 'invalid_grant' }));
+            return;
+          }
+          const idToken = await new SignJWT({
+            email:
+              details.variant === 'email'
+                ? 'foreign@example.test'
+                : 'staged-certifier@example.test',
+            email_verified: details.variant !== 'unverified',
+            nonce: details.variant === 'nonce' ? 'foreign-nonce' : details.nonce,
+          })
+            .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
+            .setIssuer(runtime.issuer)
+            .setAudience(details.variant === 'audience' ? 'wrong-client' : 'test-client')
+            .setSubject('existing-admin-subject')
+            .setIssuedAt()
+            .setExpirationTime('5m')
+            .sign(keys.privateKey);
+          response.end(
+            JSON.stringify({
+              access_token: 'test-access-token',
+              token_type: 'Bearer',
+              expires_in: 300,
+              id_token: idToken,
+            })
+          );
+        };
+        void handle().catch(() => {
+          response.writeHead(500).end();
+        });
+      }
+    );
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Server address unavailable');
+    runtime.issuer = `https://localhost:${address.port}`;
+    await prisma.user.upsert({
+      where: { id: actor.id },
+      create: {
+        id: actor.id,
+        name: 'Staged OIDC Certifier',
+        email: 'staged-certifier@example.test',
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        roleSource: 'MANUAL',
+      },
+      update: { role: 'ADMIN', status: 'ACTIVE', tokenVersion: 0, roleSource: 'MANUAL' },
+    });
+    await prisma.oidcIdentity.deleteMany({ where: { userId: actor.id } });
+    await prisma.oidcConfig.deleteMany();
+    await prisma.authenticationPolicy.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', mode: 'PASSWORD_ONLY', version: 900, legacySnapshot: {} },
+      update: {
+        mode: 'PASSWORD_ONLY',
+        version: 900,
+        passwordSessionMinVersion: 0,
+        oidcSessionMinVersion: 0,
+        activeRevisionId: null,
+      },
+    });
+  });
+  afterAll(async () => {
+    await prisma.emergencySession.deleteMany({ where: { emergencyAccountId: { in: readyIds } } });
+    await prisma.emergencyCredential.deleteMany({
+      where: { emergencyAccountId: { in: readyIds } },
+    });
+    await prisma.emergencyAccount.deleteMany({ where: { id: { in: readyIds } } });
+    if (server) await new Promise<void>(resolve => server.close(() => resolve()));
+    if (directory) rmSync(directory, { recursive: true, force: true });
+    vi.unstubAllEnvs();
+    await prisma.$disconnect();
+  });
+  it('stages encrypted configuration without changing production or creating an ordinary session', async () => {
+    const staged = await stageOidcRevision(actor, {
+      issuer: runtime.issuer,
+      clientId: 'test-client',
+      clientSecret: 'test-secret',
+    });
+    revisionId = staged.revisionId;
+    expect(await prisma.oidcConfig.count()).toBe(0);
+    expect(
+      JSON.stringify(
+        (await prisma.oidcRevision.findUniqueOrThrow({ where: { id: revisionId } })).configuration
+      )
+    ).not.toContain('test-secret');
+    expect((await enforcementPreview(revisionId)).adminVerified).toBe(false);
+  });
+  it.each(['nonce', 'audience', 'email', 'unverified'])(
+    'rejects signed but invalid %s proof without altering production',
+    async variant => {
+      const flow = await beginOidcRevisionTest(actor, revisionId, actor.id, true);
+      const code = issueCode(flow.url, variant);
+      await expect(
+        completeOidcRevisionTest(callbackState(flow.url), code, flow.browserToken)
+      ).rejects.toThrow('test failed');
+      expect(await prisma.oidcConfig.count()).toBe(0);
+      expect(await prisma.oidcRevisionTest.count({ where: { revisionId } })).toBe(0);
+    }
+  );
+  it('rejects foreign-browser state and requires explicit first-link ownership approval', async () => {
+    const flow = await beginOidcRevisionTest(actor, revisionId, actor.id, false);
+    const code = issueCode(flow.url);
+    await expect(
+      completeOidcRevisionTest(callbackState(flow.url), code, 'foreign-browser')
+    ).rejects.toThrow('another browser');
+    await expect(
+      completeOidcRevisionTest(callbackState(flow.url), code, flow.browserToken)
+    ).rejects.toThrow('test failed');
+  });
+  it('rejects first-link takeover of an identity owned under a legacy issuer alias', async () => {
+    const other = await prisma.user.create({
+      data: { name: 'Legacy identity owner', email: 'legacy-owner@example.test', role: 'USER' },
+    });
+    try {
+      await prisma.oidcIdentity.create({
+        data: { userId: other.id, issuer: `${runtime.issuer}/`, subject: 'existing-admin-subject' },
+      });
+      const flow = await beginOidcRevisionTest(actor, revisionId, actor.id, true);
+      await expect(
+        completeOidcRevisionTest(callbackState(flow.url), issueCode(flow.url), flow.browserToken)
+      ).rejects.toThrow('test failed');
+      expect(await prisma.oidcRevisionTest.count({ where: { revisionId } })).toBe(0);
+      expect(await prisma.oidcIdentity.count({ where: { userId: actor.id } })).toBe(0);
+    } finally {
+      await prisma.user.delete({ where: { id: other.id } });
+    }
+  });
+  it('records a real code/PKCE/nonce/JWKS verified administrator proof only once', async () => {
+    const flow = await beginOidcRevisionTest(actor, revisionId, actor.id, true);
+    const code = issueCode(flow.url);
+    await completeOidcRevisionTest(callbackState(flow.url), code, flow.browserToken);
+    await expect(
+      completeOidcRevisionTest(callbackState(flow.url), code, flow.browserToken)
+    ).rejects.toThrow('replayed');
+    expect((await enforcementPreview(revisionId)).adminVerified).toBe(true);
+    vi.mocked(authenticationOrigin).mockResolvedValueOnce('https://moved.example.test');
+    expect((await enforcementPreview(revisionId)).adminVerified).toBe(false);
+    expect(await prisma.oidcIdentity.count({ where: { userId: actor.id } })).toBe(0);
+    expect(await prisma.userDevice.count({ where: { userId: actor.id } })).toBe(0);
+  });
+  it('refuses Required without independent recovery, then activates Optional preserving the original User ID', async () => {
+    await expect(
+      activateOidcRevision(actor, revisionId, 900, 'SSO_REQUIRED', 'ACTIVATE VERIFIED SSO')
+    ).rejects.toThrow('two independent');
+    expect(await prisma.oidcConfig.count()).toBe(0);
+    const activated = await activateOidcRevision(
+      actor,
+      revisionId,
+      900,
+      'SSO_OPTIONAL',
+      'ACTIVATE VERIFIED SSO'
+    );
+    expect(activated.mode).toBe('SSO_OPTIONAL');
+    expect(
+      (
+        await prisma.oidcIdentity.findUniqueOrThrow({
+          where: { issuer_subject: { issuer: runtime.issuer, subject: 'existing-admin-subject' } },
+        })
+      ).userId
+    ).toBe(actor.id);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: actor.id } })).role).toBe('ADMIN');
+    expect((await enforcementPreview(revisionId)).adminVerified).toBe(false); // proof tied to old production version
+  });
+  it('enforces the tested active revision with two current independent recovery drills', async () => {
+    for (let index = 0; index < 2; index++) {
+      const account = await prisma.emergencyAccount.create({
+        data: {
+          displayName: `Activation readiness fixture ${index}`,
+          status: 'ACTIVE',
+          verifiedAt: new Date(),
+          credentialVersion: 1,
+          verifiedCredentialVersion: 1,
+          verifiedOrigin: 'https://recovery.example.test',
+          independenceConfirmedAt: new Date(),
+          credentials: {
+            create: {
+              credentialId: secret(),
+              publicKey: Buffer.from([1]),
+              deviceType: 'singleDevice',
+              backedUp: false,
+              displayName: 'Readiness fixture',
+            },
+          },
+        },
+      });
+      readyIds.push(account.id);
+    }
+    const session = await prisma.emergencySession.create({
+      data: {
+        emergencyAccountId: readyIds[0],
+        tokenHash: digest(secret()),
+        credentialVersion: 1,
+        expiresAt: new Date(Date.now() + 3600000),
+      },
+    });
+    recoveryActor = {
+      kind: 'emergency',
+      id: readyIds[0],
+      sessionId: session.id,
+      credentialVersion: 1,
+      authenticatedAt: Date.now(),
+    };
+    const flow = await beginOidcRevisionTest(actor, revisionId, actor.id, false);
+    await completeOidcRevisionTest(callbackState(flow.url), issueCode(flow.url), flow.browserToken);
+    const preview = await enforcementPreview(revisionId);
+    expect(preview.blockers).toEqual([]);
+    await activateOidcRevision(actor, revisionId, 901, 'SSO_REQUIRED', 'ACTIVATE VERIFIED SSO');
+    expect(
+      (await prisma.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } }))
+        .passwordSessionMinVersion
+    ).toBe(902);
+    await expect(
+      stageOidcRevision(actor, {
+        issuer: runtime.issuer,
+        clientId: 'test-client',
+        clientSecret: 'test-secret',
+      })
+    ).rejects.toThrow('sign-in method was revoked');
+  });
+  it('creates a password-free SSO invitation bound to the exact Required configuration', async () => {
+    const { getControlActor } = await import('@/lib/auth-control/actor');
+    vi.mocked(getControlActor).mockReturnValueOnce(
+      Promise.resolve({ ...actor, method: 'oidc', issuedUnderPolicyVersion: 902 })
+    );
+    const email = `sso-invite-${randomBytes(8).toString('hex')}@example.test`;
+    const result = await inviteSsoUser({ name: 'SSO invited user', email, role: 'USER' });
+    expect(result.ssoOnly).toBe(true);
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+    expect(user.passwordHash).toBeNull();
+    expect(user.status).toBe('INVITED');
+    expect(await prisma.userToken.count({ where: { userId: user.id } })).toBe(0);
+    const approval = await prisma.oidcLinkingApproval.findUniqueOrThrow({
+      where: { userId: user.id },
+    });
+    expect(approval.configVersion).toBe(1);
+    expect(approval.issuerFingerprint).toBeTruthy();
+    expect(approval.expiresAt).not.toBeNull();
+    await prisma.user.delete({ where: { id: user.id } });
+  });
+  it('repairs provider configuration through emergency access without relaxing Required', async () => {
+    const staged = await stageOidcRevision(recoveryActor, {
+      issuer: runtime.issuer,
+      clientId: 'test-client',
+      clientSecret: 'test-secret',
+      providerLabel: 'Repaired connection',
+    });
+    const flow = await beginOidcRevisionTest(recoveryActor, staged.revisionId, actor.id, false);
+    await completeOidcRevisionTest(callbackState(flow.url), issueCode(flow.url), flow.browserToken);
+    await expect(
+      activateOidcRevision(
+        recoveryActor,
+        staged.revisionId,
+        902,
+        'SSO_OPTIONAL',
+        'ACTIVATE VERIFIED SSO'
+      )
+    ).rejects.toThrow('preserve SSO Required');
+    await activateOidcRevision(
+      recoveryActor,
+      staged.revisionId,
+      902,
+      'SSO_REQUIRED',
+      'ACTIVATE VERIFIED SSO'
+    );
+    expect(
+      (await prisma.authenticationPolicy.findUniqueOrThrow({ where: { id: 'default' } })).mode
+    ).toBe('SSO_REQUIRED');
+    expect(
+      (await prisma.oidcConfig.findUniqueOrThrow({ where: { id: 'default' } })).providerLabel
+    ).toBe('Repaired connection');
+  });
+  it('explicit password recovery preserves the administrator and advances both session cutoffs', async () => {
+    await expect(
+      restorePasswordAccess(
+        recoveryActor,
+        actor.id,
+        'Private recovery phrase October 2026!',
+        903,
+        'yes'
+      )
+    ).rejects.toThrow('Confirm');
+    await restorePasswordAccess(
+      recoveryActor,
+      actor.id,
+      'Private recovery phrase October 2026!',
+      903,
+      'RESTORE PASSWORD ACCESS'
+    );
+    const policy = await prisma.authenticationPolicy.findUniqueOrThrow({
+      where: { id: 'default' },
+    });
+    expect(policy.mode).toBe('PASSWORD_ONLY');
+    expect(policy.passwordSessionMinVersion).toBe(904);
+    expect(policy.oidcSessionMinVersion).toBe(904);
+    const admin = await prisma.user.findUniqueOrThrow({ where: { id: actor.id } });
+    expect(admin.id).toBe(actor.id);
+    expect(admin.passwordHash).toBeTruthy();
+    expect(admin.tokenVersion).toBe(1);
+  });
+});
