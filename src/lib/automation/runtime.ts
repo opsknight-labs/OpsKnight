@@ -350,6 +350,7 @@ export async function persistAutomation(
         inputContext: result?.inputContext ?? {},
         enrichedContext: result?.enrichedContext ?? {},
         writes: result?.writes ?? [],
+        supplementalActions: result?.supplementalActions ?? [],
         outcome: result?.outcome ?? { type: 'SERVICE_DEFAULT' },
       },
       MAX_AUTOMATION_DECISION_BYTES

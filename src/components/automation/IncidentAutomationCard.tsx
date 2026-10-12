@@ -1,3 +1,4 @@
+import IncidentAlertContextCard from './IncidentAlertContextCard';
 import { snapshotSchema } from '@/lib/automation/contract';
 import { decodeExplanation } from '@/lib/automation/explanation';
 import prisma from '@/lib/prisma';
@@ -14,6 +15,15 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
     include: { version: { select: { versionNumber: true, snapshot: true } } },
   });
   if (!decision) return null;
+  const notifications = await prisma.notification.groupBy({
+    by: ['channel', 'status'],
+    where: {
+      incidentId,
+      eventType: 'triggered',
+      channel: { in: ['SLACK', 'MICROSOFT_TEAMS'] },
+    },
+    _count: { _all: true },
+  });
   const summary = (sensitive ? decodeExplanation(decision.summary) : {}) as {
     inputContext?: Record<string, { state: string; value?: unknown; raw?: unknown }>;
     enrichedContext?: Record<string, { state: string; value?: unknown; raw?: unknown }>;
@@ -25,69 +35,87 @@ export default async function IncidentAutomationCard({ incidentId }: { incidentI
     writes?: Array<{ fieldKey: string; value: unknown }>;
     diagnosticsOmitted?: boolean;
     omittedValues?: number[];
+    supplementalActions?: Array<{ provider: string }>;
   };
   const version = snapshotSchema.safeParse(decision.version?.snapshot);
   const fields = version.success ? version.data.fields : [];
   const context = summary.enrichedContext ?? summary.inputContext ?? {};
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Alert Context</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm">
-          <p className="mb-3 text-muted-foreground">
-            Mapped context captured when this incident was created.
-          </p>
-          {sensitive && (summary.diagnosticsOmitted || !!summary.omittedValues?.length) && (
-            <p className="mb-3">Some diagnostic values were omitted from the stored explanation.</p>
-          )}
-          {!sensitive ? (
-            <p>Alert context is restricted.</p>
-          ) : fields.length ? (
-            <dl className="grid gap-3 sm:grid-cols-2">
-              {fields.map(field => {
-                const value = context[field.key];
-                return (
-                  <div key={field.key} className="min-w-0">
-                    <dt className="font-medium">{field.label}</dt>
-                    <dd className="break-words text-muted-foreground">
-                      {!value || value.state === 'MISSING'
-                        ? 'Not provided'
-                        : value.state === 'UNMAPPED'
-                          ? 'Unrecognized value'
-                          : String(value.value ?? 'Not provided')}
-                    </dd>
-                  </div>
-                );
-              })}
-            </dl>
-          ) : (
-            <p>No mapped alert context was captured.</p>
-          )}
-        </CardContent>
-      </Card>
+      <IncidentAlertContextCard
+        fields={fields}
+        context={context}
+        versionNumber={decision.version?.versionNumber}
+        sensitive={sensitive}
+        omitted={!!summary.diagnosticsOmitted || !!summary.omittedValues?.length}
+      />
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            {decision.routeType === 'NO_ESCALATION'
-              ? 'How was this incident routed?'
-              : 'Why was I paged?'}{' '}
+            Automation Decision{' '}
             <Badge variant="outline">Automation · v{decision.version?.versionNumber ?? '—'}</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <p>{decision.matchedRouteRuleName ?? 'Service default routing'}</p>
+          <p>
+            {decision.matchedRouteRuleName
+              ? `Matched rule: ${decision.matchedRouteRuleName}`
+              : decision.fallbackReason
+                ? 'Automation could not be applied; service-default routing was used.'
+                : 'No routing rule matched; service-default routing was used.'}
+          </p>
           <p>
             Priority: {decision.basePriority ?? 'Unset'} → {decision.finalPriority ?? 'Unset'}
           </p>
           <p>
             Responder route:{' '}
             {decision.routeType === 'NO_ESCALATION'
-              ? 'No responder paging'
+              ? 'Personal paging intentionally skipped'
               : (decision.escalationPolicyNameSnapshot ?? 'Service default')}
           </p>
           {decision.fallbackReason && <p>Fallback: {decision.fallbackReason}</p>}
+          {sensitive && !!summary.supplementalActions?.length && (
+            <p>
+              Selected channel actions:{' '}
+              {[
+                ...new Set(
+                  summary.supplementalActions.map(action =>
+                    action.provider === 'TEAMS' ? 'Teams' : 'Slack'
+                  )
+                ),
+              ].join(', ')}
+              .
+            </p>
+          )}
+          <section
+            aria-label="Channel notification status"
+            className="rounded-lg border p-3 space-y-1"
+          >
+            <h3 className="font-medium">Incident channel notifications</h3>
+            <p className="text-muted-foreground">
+              Current notification records are separate from the routing decision. Provider
+              acceptance does not confirm delivery.
+            </p>
+            {notifications.length ? (
+              notifications.map(row => (
+                <p key={`${row.channel}:${row.status}`}>
+                  {row.channel === 'SLACK' ? 'Slack' : 'Teams'} · {row._count._all} ·{' '}
+                  {
+                    {
+                      PENDING: 'Queued',
+                      SENT: 'Accepted by provider',
+                      DELIVERED: 'Delivery confirmed',
+                      FAILED: 'Failed',
+                      SKIPPED: 'Skipped',
+                      UNKNOWN: 'Delivery uncertain',
+                    }[row.status]
+                  }
+                </p>
+              ))
+            ) : (
+              <p>No channel notification records are available.</p>
+            )}
+          </section>
           {!sensitive && <p>Evaluation context is restricted.</p>}
           {sensitive && (
             <details>

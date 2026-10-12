@@ -1,16 +1,25 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-const mocks = vi.hoisted(() => ({ visible: vi.fn(), permissions: vi.fn(), decision: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  visible: vi.fn(),
+  permissions: vi.fn(),
+  decision: vi.fn(),
+  notifications: vi.fn(),
+}));
 vi.mock('@/lib/rbac', () => ({
   assertCanViewIncident: mocks.visible,
   getUserPermissions: mocks.permissions,
 }));
 vi.mock('@/lib/prisma', () => ({
-  default: { incidentAutomationDecision: { findUnique: mocks.decision } },
+  default: {
+    incidentAutomationDecision: { findUnique: mocks.decision },
+    notification: { groupBy: mocks.notifications },
+  },
 }));
 import IncidentAutomationCard from '@/components/automation/IncidentAutomationCard';
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.notifications.mockResolvedValue([]);
   mocks.visible.mockResolvedValue({ id: 'reader' });
   mocks.decision.mockResolvedValue({
     routeType: 'ESCALATION_POLICY',
@@ -102,4 +111,48 @@ it('shows pinned human-readable labels and enriched values outside the evaluatio
   expect(html).toContain('Alert Context');
   expect(html.indexOf('Deployment environment')).toBeLessThan(html.indexOf('View evaluation'));
   expect(html).toContain('production');
+});
+
+it('keeps selected actions separate from actual queued, accepted and delivered records', async () => {
+  mocks.permissions.mockResolvedValue({
+    capabilities: ['automation.read', 'incident.sensitive.read'],
+  });
+  const decision = await mocks.decision();
+  mocks.decision.mockResolvedValue({
+    ...decision,
+    summary: { supplementalActions: [{ provider: 'SLACK' }] },
+  });
+  mocks.notifications.mockResolvedValue([
+    { channel: 'SLACK', status: 'PENDING', _count: { _all: 2 } },
+    { channel: 'SLACK', status: 'SENT', _count: { _all: 1 } },
+    { channel: 'MICROSOFT_TEAMS', status: 'DELIVERED', _count: { _all: 1 } },
+  ]);
+  const html = renderToStaticMarkup((await IncidentAutomationCard({ incidentId: 'incident' }))!);
+  expect(html).toContain('Selected channel actions: Slack');
+  expect(html).toContain('Queued');
+  expect(html).toContain('Accepted by provider');
+  expect(html).toContain('Delivery confirmed');
+  expect(html).not.toContain('Notified Slack');
+  expect(mocks.notifications).toHaveBeenCalledWith(
+    expect.objectContaining({
+      where: expect.objectContaining({ incidentId: 'incident', eventType: 'triggered' }),
+    })
+  );
+});
+
+it('does not infer delivery from a selected action with no notification record', async () => {
+  mocks.permissions.mockResolvedValue({
+    capabilities: ['automation.read', 'incident.sensitive.read'],
+  });
+  const decision = await mocks.decision();
+  mocks.decision.mockResolvedValue({
+    ...decision,
+    routeType: 'NO_ESCALATION',
+    summary: { supplementalActions: [{ provider: 'TEAMS' }] },
+  });
+  const html = renderToStaticMarkup((await IncidentAutomationCard({ incidentId: 'incident' }))!);
+  expect(html).toContain('Personal paging intentionally skipped');
+  expect(html).toContain('Selected channel actions: Teams');
+  expect(html).toContain('No channel notification records are available');
+  expect(html).not.toContain('Delivery confirmed');
 });
