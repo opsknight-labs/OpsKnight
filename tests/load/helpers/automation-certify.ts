@@ -199,7 +199,13 @@ async function main() {
     if (!response.ok) throw new Error(`Provider telemetry reset failed (${response.status})`);
   }
   const baselineMode = process.env.AUTOMATION_BASELINE_MODE || 'single';
-  const schedule = automationComparisonSchedule(baselineMode);
+  const measurementProfile = process.env.AUTOMATION_MEASUREMENT_PROFILE;
+  const candidate = automationComparisonSchedule('single').find(
+    run => run.profile === measurementProfile
+  );
+  if (measurementProfile && (!candidate || process.env.AUTOMATION_CONTROLLED_SNAPSHOT !== 'true'))
+    throw new Error('Single measurements require a controlled snapshot and a valid profile');
+  const schedule = measurementProfile ? [candidate!] : automationComparisonSchedule(baselineMode);
   let stopReason: string | null = null;
   for (const { profile, runId } of schedule) {
     if (results.length && results.at(-1)!.pendingAfterDrain > 0) {
@@ -429,68 +435,70 @@ async function main() {
   }
   const serviceDisabled = results.find(result => result.profile === 'service-disabled');
   const incomplete = results.length !== schedule.length;
-  const comparisons = results.flatMap((result, index) => {
-    if (result.profile === 'global-off') return [];
-    const baseline = precedingAutomationBaseline(results, index);
-    return [
-      {
-        runId: result.runId,
-        baselineRunId: baseline.runId,
-        profile: result.profile,
-        acceptedRatio: result.acceptedEvents / Math.max(1, baseline.acceptedEvents),
-        p95Ratio:
-          result.summary.metrics.automation_ingestion_latency_ms['p(95)'] /
-          baseline.summary.metrics.automation_ingestion_latency_ms['p(95)'],
-        p99Ratio:
-          result.summary.metrics.automation_ingestion_latency_ms['p(99)'] /
-          baseline.summary.metrics.automation_ingestion_latency_ms['p(99)'],
-        p95RatioToServiceDisabled: serviceDisabled
-          ? result.summary.metrics.automation_ingestion_latency_ms['p(95)'] /
-            serviceDisabled.summary.metrics.automation_ingestion_latency_ms['p(95)']
-          : null,
-        p99RatioToServiceDisabled: serviceDisabled
-          ? result.summary.metrics.automation_ingestion_latency_ms['p(99)'] /
-            serviceDisabled.summary.metrics.automation_ingestion_latency_ms['p(99)']
-          : null,
-        peakCriticalQueueAgeMs: Math.max(
-          ...result.telemetrySamples.map(
-            sample => sample.postgres.oldestPendingCriticalNotificationAgeMs
-          )
-        ),
-        peakAutomationObservationQueueAgeMs: Math.max(
-          ...result.telemetrySamples.map(
-            sample => sample.postgres.oldestPendingAutomationObservationAgeMs
-          )
-        ),
-        pendingAfterDrain: result.pendingAfterDrain,
-        recoveryDrainMs: result.recoveryDrainMs,
-        transactionRetryCount: result.transactionRetryCount,
-        peakDatabaseConnections: Math.max(
-          ...result.telemetrySamples.map(
-            sample =>
-              sample.postgres.activeConnections +
-              sample.postgres.idleConnections +
-              sample.postgres.idleInTxConnections
-          )
-        ),
-        peakDatabaseLockWaits: Math.max(
-          ...result.telemetrySamples.map(sample => sample.postgres.waitingOnLockCount)
-        ),
-        peakDatabaseCpuPercent: topology.startsWith('compose-')
-          ? Math.max(
-              ...result.telemetrySamples.flatMap(sample =>
-                sample.containers
-                  .filter(container => container.name === 'opsknight-automation-cert-db-1')
-                  .map(container => Number.parseFloat(container.cpuPercent))
+  const comparisons = measurementProfile
+    ? []
+    : results.flatMap((result, index) => {
+        if (result.profile === 'global-off') return [];
+        const baseline = precedingAutomationBaseline(results, index);
+        return [
+          {
+            runId: result.runId,
+            baselineRunId: baseline.runId,
+            profile: result.profile,
+            acceptedRatio: result.acceptedEvents / Math.max(1, baseline.acceptedEvents),
+            p95Ratio:
+              result.summary.metrics.automation_ingestion_latency_ms['p(95)'] /
+              baseline.summary.metrics.automation_ingestion_latency_ms['p(95)'],
+            p99Ratio:
+              result.summary.metrics.automation_ingestion_latency_ms['p(99)'] /
+              baseline.summary.metrics.automation_ingestion_latency_ms['p(99)'],
+            p95RatioToServiceDisabled: serviceDisabled
+              ? result.summary.metrics.automation_ingestion_latency_ms['p(95)'] /
+                serviceDisabled.summary.metrics.automation_ingestion_latency_ms['p(95)']
+              : null,
+            p99RatioToServiceDisabled: serviceDisabled
+              ? result.summary.metrics.automation_ingestion_latency_ms['p(99)'] /
+                serviceDisabled.summary.metrics.automation_ingestion_latency_ms['p(99)']
+              : null,
+            peakCriticalQueueAgeMs: Math.max(
+              ...result.telemetrySamples.map(
+                sample => sample.postgres.oldestPendingCriticalNotificationAgeMs
               )
-            )
-          : null,
-        criticalNotificationLatency: result.criticalNotificationLatency,
-        deadlocksDelta: result.deadlocksDelta,
-        providerDuplicateDeliveriesDelta: result.providerDuplicateDeliveriesDelta,
-      },
-    ];
-  });
+            ),
+            peakAutomationObservationQueueAgeMs: Math.max(
+              ...result.telemetrySamples.map(
+                sample => sample.postgres.oldestPendingAutomationObservationAgeMs
+              )
+            ),
+            pendingAfterDrain: result.pendingAfterDrain,
+            recoveryDrainMs: result.recoveryDrainMs,
+            transactionRetryCount: result.transactionRetryCount,
+            peakDatabaseConnections: Math.max(
+              ...result.telemetrySamples.map(
+                sample =>
+                  sample.postgres.activeConnections +
+                  sample.postgres.idleConnections +
+                  sample.postgres.idleInTxConnections
+              )
+            ),
+            peakDatabaseLockWaits: Math.max(
+              ...result.telemetrySamples.map(sample => sample.postgres.waitingOnLockCount)
+            ),
+            peakDatabaseCpuPercent: topology.startsWith('compose-')
+              ? Math.max(
+                  ...result.telemetrySamples.flatMap(sample =>
+                    sample.containers
+                      .filter(container => container.name === 'opsknight-automation-cert-db-1')
+                      .map(container => Number.parseFloat(container.cpuPercent))
+                  )
+                )
+              : null,
+            criticalNotificationLatency: result.criticalNotificationLatency,
+            deadlocksDelta: result.deadlocksDelta,
+            providerDuplicateDeliveriesDelta: result.providerDuplicateDeliveriesDelta,
+          },
+        ];
+      });
   const limits = {
     latencyRatio: Number(process.env.AUTOMATION_MAX_LATENCY_RATIO || 1.25),
     queueAgeMs: Number(process.env.AUTOMATION_MAX_QUEUE_AGE_MS || 30000),
@@ -589,7 +597,12 @@ async function main() {
         baselineMode,
         schedule,
         durationPerProfile: process.env.AUTOMATION_DURATION || '30s',
-        comparisonGate: { passed: failures.length === 0, limits, failures },
+        comparisonGate: { passed: !measurementProfile && failures.length === 0, limits, failures },
+        certificationStatus: measurementProfile
+          ? 'MEASUREMENT_ONLY'
+          : failures.length
+            ? 'NOT_CERTIFIED'
+            : 'CERTIFIED',
         comparisons,
         results,
       },

@@ -1,5 +1,5 @@
 import { goldenResults } from '@/lib/automation/golden';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import fixtures from '../fixtures/automation/operators.json';
 import {
   conditionSchema,
@@ -246,4 +246,46 @@ it('deduplicates identical supplemental destinations within the selected route',
       evaluationAt: '2026-10-07T00:00:00Z',
     }).supplementalActions
   ).toHaveLength(1);
+});
+
+it('reports phase and numeric positions to the deadline guard without sensitive rule values', () => {
+  const snapshot: Snapshot = {
+    schemaVersion: 1,
+    fields: [],
+    rules: [
+      {
+        id: 'private-rule-id',
+        name: 'private-name',
+        phase: 'ROUTE',
+        enabled: true,
+        conditions: [{ fieldKey: 'priority', operator: 'EQ', value: 'P1' }],
+        actions: [{ type: 'NO_ESCALATION' }],
+      },
+    ],
+  };
+  const version = compileAutomation(snapshot).compiled;
+  const guard = vi.fn();
+  evaluateAutomation({
+    version,
+    initialContext: { priority: { state: 'RECOGNIZED', value: 'P1' } },
+    evaluationAt: '2026-10-12T00:00:00Z',
+    guard,
+  });
+  expect(guard).toHaveBeenCalledWith({
+    phase: 'ENRICHMENT',
+    ruleIndex: null,
+    conditionIndex: null,
+  });
+  expect(guard).toHaveBeenCalledWith({ phase: 'ROUTING', ruleIndex: 0, conditionIndex: 0 });
+  expect(JSON.stringify(guard.mock.calls)).not.toContain('private');
+  expect(() =>
+    evaluateAutomation({
+      version,
+      initialContext: {},
+      evaluationAt: '2026-10-12T00:00:00Z',
+      guard: position => {
+        if (position?.conditionIndex === 0) throw new Error('EVALUATION_TIMEOUT');
+      },
+    })
+  ).toThrow('EVALUATION_TIMEOUT');
 });

@@ -1,3 +1,4 @@
+import type { EvaluationGuard } from './guard';
 import { LIMITS, type CompiledSnapshot, type Context } from '../contract';
 import { evaluateEnrichment } from './enrich';
 import { evaluateRouting } from './route';
@@ -6,11 +7,13 @@ export function evaluateAutomation(input: {
   version: CompiledSnapshot;
   initialContext: Context;
   evaluationAt: string;
-  guard?: () => void;
+  guard?: EvaluationGuard;
 }) {
   const guard = input.guard ?? (() => {});
   if (input.version.rules.length > LIMITS.rules) throw new Error('VERSION_INVALID');
+  guard({ phase: 'ENRICHMENT', ruleIndex: null, conditionIndex: null });
   const enrichment = evaluateEnrichment(input.version, input.initialContext, guard);
+  guard({ phase: 'ROUTING', ruleIndex: null, conditionIndex: null });
   const routing = evaluateRouting(input.version, enrichment.context, guard);
   return {
     evaluationAt: input.evaluationAt,

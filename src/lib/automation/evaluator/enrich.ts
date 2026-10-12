@@ -1,3 +1,4 @@
+import type { EvaluationGuard } from './guard';
 /* eslint-disable security/detect-object-injection -- Keys are schema-validated or derived from compiled field definitions. */
 import { builtinFields, type CompiledSnapshot, type Context, type Scalar } from '../contract';
 import { normalizeValue } from '../context/normalize';
@@ -5,15 +6,18 @@ import { evaluateConditions } from './conditions';
 export function evaluateEnrichment(
   version: CompiledSnapshot,
   initialContext: Context,
-  guard: () => void
+  guard: EvaluationGuard
 ) {
   const context = { ...initialContext };
   const tags = new Set<string>();
   const writes: Array<{ ruleId: string; fieldKey: string; before: unknown; value: Scalar }> = [];
   const results: ReturnType<typeof evaluateConditions>[] = [];
-  for (const rule of version.rules.filter(r => r.enabled && r.phase === 'ENRICH')) {
-    guard();
-    const result = evaluateConditions(context, rule);
+  for (const [ruleIndex, rule] of version.rules.entries()) {
+    if (!rule.enabled || rule.phase !== 'ENRICH') continue;
+    guard({ phase: 'ENRICHMENT', ruleIndex, conditionIndex: null });
+    const result = evaluateConditions(context, rule, conditionIndex =>
+      guard({ phase: 'ENRICHMENT', ruleIndex, conditionIndex })
+    );
     results.push(result);
     if (result.result !== 'TRUE') continue;
     for (const action of rule.actions) {

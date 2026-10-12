@@ -1,3 +1,4 @@
+import type { EvaluationPosition } from './evaluator/guard';
 import {
   encodeExplanation,
   MAX_AUTOMATION_DECISION_BYTES,
@@ -104,9 +105,24 @@ export async function prepareAutomation(
     if (!cached && !stored) throw new Error('VERSION_MISSING');
     const version = cached ?? loadCompiledVersion(stored!);
     runtime.versionLoadMs = performance.now() - versionLoadStart;
-    const guard = () => {
-      if (performance.now() - evalStart > LIMITS.evaluationMs)
+    let timeoutPosition: EvaluationPosition = {
+      phase: 'EXTRACTION',
+      ruleIndex: null,
+      conditionIndex: null,
+    };
+    const guard = (position?: EvaluationPosition) => {
+      if (position) timeoutPosition = position;
+      const elapsedMs = performance.now() - evalStart;
+      if (elapsedMs > LIMITS.evaluationMs) {
+        logger.warn('automation.evaluation_timeout', {
+          ...timeoutPosition,
+          elapsedMs,
+          fieldCount: version.fields.length,
+          ruleCount: version.rules.length,
+          heapUsed: process.memoryUsage().heapUsed,
+        });
         throw new Error('EVALUATION_TIMEOUT');
+      }
     };
     const evalStart = performance.now();
     const extractStart = performance.now();

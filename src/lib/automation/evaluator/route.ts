@@ -1,13 +1,21 @@
+import type { EvaluationGuard } from './guard';
 import type { CompiledSnapshot, Context, Route, SupplementalAction } from '../contract';
 import { evaluateConditions } from './conditions';
-export function evaluateRouting(version: CompiledSnapshot, context: Context, guard: () => void) {
+export function evaluateRouting(
+  version: CompiledSnapshot,
+  context: Context,
+  guard: EvaluationGuard
+) {
   const results: ReturnType<typeof evaluateConditions>[] = [];
   let outcome: Route = { type: 'SERVICE_DEFAULT' };
   let matchedRule: { id: string; name: string } | null = null;
   const supplementalActions: SupplementalAction[] = [];
-  for (const rule of version.rules.filter(r => r.enabled && r.phase === 'ROUTE')) {
-    guard();
-    const result = evaluateConditions(context, rule);
+  for (const [ruleIndex, rule] of version.rules.entries()) {
+    if (!rule.enabled || rule.phase !== 'ROUTE') continue;
+    guard({ phase: 'ROUTING', ruleIndex, conditionIndex: null });
+    const result = evaluateConditions(context, rule, conditionIndex =>
+      guard({ phase: 'ROUTING', ruleIndex, conditionIndex })
+    );
     results.push(result);
     if (result.result !== 'TRUE') continue;
     matchedRule = { id: rule.id, name: rule.name };

@@ -304,3 +304,30 @@ Prisma-engine CPU. Earlier high worker CPU samples included cleanup work. Databa
 snapshots also observed WAL sync/write waits and slow queries; these are leads
 for diagnosis, not proof of a storage bottleneck. No latency threshold, evaluator
 time limit or provider budget was relaxed.
+
+The next controlled experiment uses `tests/load/helpers/automation-controlled.ts`
+instead of carrying one growing database through the matrix. It requires a fresh
+seed and the explicitly owned `kind-opsknight-automation` context, namespace
+`automation-cert` and database `automation_cert` on local port 55443. It stops
+only that fixture's application replicas, captures an immutable PostgreSQL
+template, and restores that template before every measurement. PostgreSQL and
+application processes restart between measurements, followed by an identical
+30-second health settling period. Cold ingestion/version-cache costs remain in
+the measured workload; this is not a claim that every ingestion path is prewarmed.
+
+Every profile has OFF–target–OFF brackets, repeated twice: 30 independent
+20-RPS/120-second measurements. OFF p95 drift above 15% or p99 drift above 20%
+makes the bracket **INCONCLUSIVE**. Stable brackets must satisfy the unchanged
+1.25× gate against **both** OFF baselines in every repetition. A geometric mean
+is reported for context but cannot hide a failed comparison. Correctness,
+fallback and recovery failures still block certification regardless of baseline
+stability. Single child measurements explicitly report `MEASUREMENT_ONLY` and
+cannot independently certify capacity. This methodology is pending real Kind
+validation and does not replace Audit 30 with a passing result.
+
+The unchanged 15ms synchronous evaluation deadline now logs bounded diagnostic
+metadata on timeout: EXTRACTION/ENRICHMENT/ROUTING, numeric rule and condition
+positions, elapsed milliseconds, field/rule counts and heap usage. It includes
+no alert values, rule names or configuration identifiers. Event-loop delay is
+not currently measured. These diagnostics identify the check that detected the
+timeout; they do not by themselves establish why the process was delayed.
