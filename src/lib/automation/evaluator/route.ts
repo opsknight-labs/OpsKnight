@@ -23,7 +23,9 @@ export function evaluateRouting(
       ['USE_SERVICE_DEFAULT', 'USE_ESCALATION_POLICY', 'NO_ESCALATION'].includes(a.type)
     );
     if (routes.length !== 1) throw new Error('VERSION_INVALID');
-    for (const action of rule.actions) {
+    for (const [actionIndex, action] of rule.actions.entries()) {
+      const position = { phase: 'ROUTING' as const, ruleIndex, conditionIndex: null, actionIndex };
+      guard(position);
       if (action.type === 'USE_ESCALATION_POLICY')
         outcome = { type: 'ESCALATION_POLICY', policyId: action.policyId };
       else if (action.type === 'NO_ESCALATION') outcome = { type: 'NO_ESCALATION' };
@@ -37,6 +39,7 @@ export function evaluateRouting(
         )
           supplementalActions.push({ ...action, ruleId: rule.id });
       } else if (action.type !== 'USE_SERVICE_DEFAULT') throw new Error('VERSION_INVALID');
+      guard(position);
     }
     break;
   }

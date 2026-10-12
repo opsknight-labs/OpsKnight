@@ -20,11 +20,19 @@ export function evaluateEnrichment(
     );
     results.push(result);
     if (result.result !== 'TRUE') continue;
-    for (const action of rule.actions) {
+    for (const [actionIndex, action] of rule.actions.entries()) {
+      const position = {
+        phase: 'ENRICHMENT' as const,
+        ruleIndex,
+        conditionIndex: null,
+        actionIndex,
+      };
+      guard(position);
       if (action.type === 'ADD_TAG') {
         if (tags.has(action.value)) continue;
         tags.add(action.value);
         writes.push({ ruleId: rule.id, fieldKey: 'tags', before: null, value: action.value });
+        guard(position);
         continue;
       }
       if (action.type !== 'SET_PRIORITY' && action.type !== 'SET_CONTEXT')
@@ -41,6 +49,7 @@ export function evaluateEnrichment(
         value: value.value,
       });
       context[key] = value;
+      guard(position);
     }
   }
   return { context, tags: [...tags], writes, results };

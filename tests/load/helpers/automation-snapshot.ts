@@ -179,6 +179,22 @@ export async function createControlledSnapshot() {
       // Fixed identifiers only. No application outside this fixture is terminated.
       await sql(`DROP DATABASE ${database} WITH (FORCE)`);
       await sql(`CREATE DATABASE ${database} TEMPLATE ${snapshot}`);
+      const { stdout: restored } = await kubectl([
+        'exec',
+        'automation-postgresql-0',
+        '--',
+        'psql',
+        '-U',
+        'automation',
+        '-d',
+        database,
+        '-At',
+        '-c',
+        `SELECT (SELECT count(*) FROM "Incident" WHERE title='Automation capacity certification'),
+          (SELECT count(*) FROM "IncidentAutomationDecision"), (SELECT count(*) FROM "AutomationTrace")`,
+      ]);
+      if (restored.trim() !== '0|0|0')
+        throw new Error('Restored database is not equivalent to the clean seed');
       await sql('CHECKPOINT');
       // Reset shared buffers and server lifetime without changing durable settings.
       await kubectl(['delete', 'pod', 'automation-postgresql-0', '--wait=true']);

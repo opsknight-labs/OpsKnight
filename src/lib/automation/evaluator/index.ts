@@ -13,6 +13,7 @@ export function evaluateAutomation(input: {
   if (input.version.rules.length > LIMITS.rules) throw new Error('VERSION_INVALID');
   guard({ phase: 'ENRICHMENT', ruleIndex: null, conditionIndex: null });
   const enrichment = evaluateEnrichment(input.version, input.initialContext, guard);
+  guard({ phase: 'ENRICHMENT', ruleIndex: null, conditionIndex: null });
   guard({ phase: 'ROUTING', ruleIndex: null, conditionIndex: null });
   const routing = evaluateRouting(input.version, enrichment.context, guard);
   return {

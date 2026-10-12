@@ -6,6 +6,10 @@ import { runResponderLifecycle } from './incident-lifecycle.js';
 export { runInteractiveUserSession, runResponderLifecycle };
 const acceptedEvents = new Counter('automation_accepted_events');
 const ingestionLatency = new Trend('automation_ingestion_latency_ms');
+const attemptLatency = new Trend('automation_http_attempt_latency_ms');
+const attempts = new Counter('automation_http_attempts');
+const retries = new Counter('automation_http_retries');
+const backoffLatency = new Trend('automation_retry_backoff_ms');
 import { loadSeedManifest, getBaseUrl, postEventApi } from './_shared.js';
 const manifest = loadSeedManifest();
 export const options = {
@@ -59,20 +63,32 @@ export default function () {
   };
   const keys = manifest.capacityIntegrationKeys;
   const integrationKey = keys[execution.scenario.iterationInTest % keys.length];
+  const operationStarted = Date.now();
+  retries.add(0);
+  let backoffMs = 0;
   let response = postEventApi(getBaseUrl(), integrationKey, event, {
     profile: __ENV.AUTOMATION_LOAD_PROFILE || 'disabled',
   });
+  attemptLatency.add(response.timings.duration);
+  attempts.add(1);
   for (
     let retry = 0;
     retry < 8 && (response.status === 0 || response.status === 429 || response.status >= 500);
     retry++
   ) {
-    sleep(Math.min(0.2 * (retry + 1), 1));
+    const delay = Math.min(0.2 * (retry + 1), 1);
+    retries.add(1);
+    const backoffStarted = Date.now();
+    sleep(delay);
+    backoffMs += Date.now() - backoffStarted;
     response = postEventApi(getBaseUrl(), integrationKey, event, {
       profile: __ENV.AUTOMATION_LOAD_PROFILE || 'disabled',
     });
+    attempts.add(1);
+    attemptLatency.add(response.timings.duration);
   }
-  ingestionLatency.add(response.timings.duration);
+  ingestionLatency.add(Date.now() - operationStarted);
+  backoffLatency.add(backoffMs);
   if (response.status === 202 || response.status === 200) acceptedEvents.add(1);
   check(response, {
     'accepted automation event': result => result.status === 202 || result.status === 200,

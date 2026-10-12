@@ -1,3 +1,7 @@
+import {
+  requireCleanProviderState,
+  type InitialProvider,
+} from './automation-certification-integrity';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
@@ -184,10 +188,16 @@ async function main() {
   if (!['defaults', 'provisioned-200'].includes(providerCapacityProfile))
     throw new Error('Unknown automation provider capacity profile');
   if (providerCapacityProfile === 'provisioned-200') await provisionAutomationProviderCapacity(db);
+  let providerInitialState: ReturnType<typeof requireCleanProviderState> | null = null;
   const resetProviderTelemetry = process.env.AUTOMATION_RESET_PROVIDER_TELEMETRY === 'true';
   if (resetProviderTelemetry) {
     if (!process.env.LOAD_EMULATOR_CONTROL_URL)
       throw new Error('An exclusively owned provider emulator is required for telemetry reset');
+    const previous = await fetch(new URL('/metrics', process.env.LOAD_EMULATOR_CONTROL_URL));
+    if (!previous.ok) throw new Error('Missing provider emulator state before reset');
+    const state = (await previous.json()) as { providers: Record<string, InitialProvider> };
+    if (Object.values(state.providers).some(provider => provider.inFlight !== 0))
+      throw new Error('Cannot reset provider state while requests are in flight');
     const response = await fetch(
       new URL('/_control/reset', process.env.LOAD_EMULATOR_CONTROL_URL),
       {
@@ -197,6 +207,8 @@ async function main() {
       }
     );
     if (!response.ok) throw new Error(`Provider telemetry reset failed (${response.status})`);
+    const restored = (await response.json()) as { providers: Record<string, InitialProvider> };
+    providerInitialState = requireCleanProviderState(restored.providers);
   }
   const baselineMode = process.env.AUTOMATION_BASELINE_MODE || 'single';
   const measurementProfile = process.env.AUTOMATION_MEASUREMENT_PROFILE;
@@ -595,14 +607,26 @@ async function main() {
           stopReason,
         },
         baselineMode,
+        providerInitialState,
         schedule,
         durationPerProfile: process.env.AUTOMATION_DURATION || '30s',
-        comparisonGate: { passed: !measurementProfile && failures.length === 0, limits, failures },
+        comparisonGate: {
+          passed:
+            !measurementProfile &&
+            process.env.AUTOMATION_RECOVERY_DRILL !== 'true' &&
+            failures.length === 0,
+          limits,
+          failures,
+        },
         certificationStatus: measurementProfile
-          ? 'MEASUREMENT_ONLY'
-          : failures.length
-            ? 'NOT_CERTIFIED'
-            : 'CERTIFIED',
+          ? process.env.AUTOMATION_RECOVERY_DRILL === 'true'
+            ? 'RECOVERY_MEASUREMENT_ONLY'
+            : 'MEASUREMENT_ONLY'
+          : process.env.AUTOMATION_RECOVERY_DRILL === 'true'
+            ? 'NOT_CAPACITY_CERTIFICATION'
+            : failures.length
+              ? 'NOT_CERTIFIED'
+              : 'CERTIFIED',
         comparisons,
         results,
       },

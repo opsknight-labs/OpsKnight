@@ -331,3 +331,41 @@ positions, elapsed milliseconds, field/rule counts and heap usage. It includes
 no alert values, rule names or configuration identifiers. Event-loop delay is
 not currently measured. These diagnostics identify the check that detected the
 timeout; they do not by themselves establish why the process was delayed.
+
+The first Audit 31 attempt stopped after five measurements. Its disabled-service
+bracket was **INCONCLUSIVE**, and SHADOW recorded an enrichment-check timeout at
+29.06ms. The retained `controlled-certification.json` reports NOT CERTIFIED.
+That experimental runner also excluded retry backoff from its latency metric
+and inherited a LIVE-small-only recovery drill; its partial results cannot
+authorize capacity. All three CI workflows for runtime `2322b9433` completed
+successfully, which does not replace the missing capacity evidence.
+
+The hardened runner freezes rate, duration, 1.25× ratio, 30-second queue/paging
+limits, 180-second drain budget and provisioned provider capacity. Conflicting
+environment overrides are rejected. Fault-free comparison forces recovery off;
+`automation-controlled-recovery.ts` runs replica replacement separately and
+reports RECOVERY_MEASUREMENT_ONLY. That test covers Web/general/critical replica
+replacement, not PostgreSQL recovery or unrestricted production reliability.
+Legacy mixed fault/performance runs cannot report a capacity certificate.
+
+Ingestion latency now measures the complete operation including every request
+attempt and actual retry sleep. Separate attempt, retry-count and backoff metrics
+remain available. Historical final-attempt metrics must not be treated as the
+same measurement. A child must exit zero and provide one complete measurement
+with complete component telemetry before the parent accepts it. Failed child
+termination is retained as incomplete evidence even if an artifact exists.
+
+Each controlled measurement records built-image provenance, ready replica image
+IDs/resources, PostgreSQL version, immutable snapshot identity and host-container
+utilization. Restoration verifies that prior capacity incidents/decisions/traces
+are absent. Provider reset is refused while requests are in flight, then checked
+for default behavior and empty delivery state. OS scheduling/cache and concurrent
+host workloads are observed, not reset; OFF stability remains mandatory.
+
+Timeout checks now bracket action execution as well as conditions. Diagnostics
+include action position, per-phase elapsed time, process CPU delta and prior
+observed event-loop delay. CPU includes all process threads; the historical delay
+sample cannot measure an ongoing synchronous stall. These are diagnostic context,
+not proof of the timeout's cause. The 15ms guard and synchronous decision/trace
+persistence remain unchanged. Fresh image, recovery and sustained validation are
+still required; capacity remains **NOT CERTIFIED**.

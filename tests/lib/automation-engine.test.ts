@@ -277,6 +277,12 @@ it('reports phase and numeric positions to the deadline guard without sensitive 
     conditionIndex: null,
   });
   expect(guard).toHaveBeenCalledWith({ phase: 'ROUTING', ruleIndex: 0, conditionIndex: 0 });
+  expect(guard).toHaveBeenCalledWith({
+    phase: 'ROUTING',
+    ruleIndex: 0,
+    conditionIndex: null,
+    actionIndex: 0,
+  });
   expect(JSON.stringify(guard.mock.calls)).not.toContain('private');
   expect(() =>
     evaluateAutomation({

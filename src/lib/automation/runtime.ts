@@ -1,3 +1,4 @@
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import type { EvaluationPosition } from './evaluator/guard';
 import {
   encodeExplanation,
@@ -21,6 +22,9 @@ import { evaluateAutomation, type Evaluation } from './evaluator';
 import { asJson } from './versioning';
 import { discoverFields } from './discovery';
 import { captureResponderSnapshot } from '@/lib/escalation/automation-snapshot';
+// Process-level historical delay context; it cannot measure an ongoing synchronous stall.
+const evaluationLoopDelay = monitorEventLoopDelay({ resolution: 20 });
+evaluationLoopDelay.enable();
 export const automationEnabled = async (client?: Prisma.TransactionClient) =>
   (await getAutomationSettings(client)).automationEnabled;
 export type IntegrationEventEnvelope = {
@@ -110,9 +114,19 @@ export async function prepareAutomation(
       ruleIndex: null,
       conditionIndex: null,
     };
+    const phaseDurations = new Map<string, number>();
+    let phaseStarted = 0;
     const guard = (position?: EvaluationPosition) => {
+      const now = performance.now();
+      if (position && position.phase !== timeoutPosition.phase) {
+        phaseDurations.set(
+          timeoutPosition.phase,
+          (phaseDurations.get(timeoutPosition.phase) ?? 0) + now - phaseStarted
+        );
+        phaseStarted = now;
+      }
       if (position) timeoutPosition = position;
-      const elapsedMs = performance.now() - evalStart;
+      const elapsedMs = now - evalStart;
       if (elapsedMs > LIMITS.evaluationMs) {
         logger.warn('automation.evaluation_timeout', {
           ...timeoutPosition,
@@ -120,11 +134,24 @@ export async function prepareAutomation(
           fieldCount: version.fields.length,
           ruleCount: version.rules.length,
           heapUsed: process.memoryUsage().heapUsed,
+          phaseDurationsMs: Object.fromEntries([
+            ...phaseDurations,
+            [timeoutPosition.phase, now - phaseStarted],
+          ]),
+          processCpuDeltaMs: (() => {
+            const cpu = process.cpuUsage(evalCpuStart);
+            return (cpu.user + cpu.system) / 1000;
+          })(),
+          priorObservedEventLoopDelayMaxMs: evaluationLoopDelay.max
+            ? evaluationLoopDelay.max / 1e6
+            : null,
         });
         throw new Error('EVALUATION_TIMEOUT');
       }
     };
+    const evalCpuStart = process.cpuUsage();
     const evalStart = performance.now();
+    phaseStarted = evalStart;
     const extractStart = performance.now();
     const extracted = extractContextWithProvenance({
       fields: version.fields,
