@@ -49,6 +49,15 @@ describe('widget data cache', () => {
     expect(getWidgetDataMock).toHaveBeenCalledTimes(1);
   });
 
+  it('separates globally scoped sensitive and restricted readers', async () => {
+    getWidgetDataMock.mockResolvedValue({ activeIncidents: [] });
+    await getCachedWidgetData('admin', 'ADMIN', {}, 1_000, 'privacy');
+    await getCachedWidgetData('auditor', 'AUDITOR', {}, 1_001, 'privacy');
+    expect(getWidgetDataMock).toHaveBeenCalledTimes(2);
+    expect(getWidgetDataMock).toHaveBeenNthCalledWith(1, {}, true);
+    expect(getWidgetDataMock).toHaveBeenNthCalledWith(2, {}, false);
+  });
+
   it('evicts rejected calculations so the next poll can retry', async () => {
     getWidgetDataMock.mockRejectedValueOnce(new Error('temporary')).mockResolvedValueOnce({});
 
