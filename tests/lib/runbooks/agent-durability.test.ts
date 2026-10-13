@@ -453,9 +453,11 @@ describe('Agent authority and durable recovery', () => {
       // 3. Stale probe files from prior crashed processes are cleaned up automatically
       const staleProbePath = join(directory, '.probe-99999-stale.tmp');
       await writeFile(staleProbePath, 'stale-data');
+      const pastTime = new Date(Date.now() - 120_000);
+      await utimes(staleProbePath, pastTime, pastTime);
       expect((await readdir(directory)).filter(f => f.startsWith('.probe-'))).toHaveLength(1);
 
-      await expect(spool.probeStorageIntegrity({ staleThresholdMs: 0 })).resolves.toBeUndefined();
+      await expect(spool.probeStorageIntegrity()).resolves.toBeUndefined();
       expect((await readdir(directory)).filter(f => f.startsWith('.probe-'))).toHaveLength(0);
     } finally {
       await rm(directory, { recursive: true, force: true });

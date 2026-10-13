@@ -249,7 +249,7 @@ export class ResultSpool {
           const filePath = join(this.directory, name);
           try {
             const s = await stat(filePath);
-            if (s.mtimeMs < cutoff) {
+            if (s.mtimeMs <= cutoff) {
               await unlink(filePath).catch(() => undefined);
             }
           } catch {
