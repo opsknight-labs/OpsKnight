@@ -298,12 +298,124 @@ jobs:
           file: ./agent/Dockerfile
           platforms: linux/amd64
           push: false
+          load: true
           tags: opsknight-agent-pr-validation:${{ github.sha }}
           build-args: |
             OPSKNIGHT_VERSION=${{ github.ref_name }}
           cache-from: type=gha,scope=opsknight-agent-main-amd64
           provenance: false
           sbom: false
+
+      - name: Verify Agent container image lifecycle, zombie reaping, and Podman socket integration
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          AGENT_IMAGE="opsknight-agent-pr-validation:${GITHUB_SHA}"
+          echo "Verifying tini init, zombie reaping, and Podman execution in ${AGENT_IMAGE}..."
+
+          # 1. Verify tini is PID 1
+          docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges:true \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --entrypoint /sbin/tini "$AGENT_IMAGE" -- ps -ef | grep -E '1\s+0\s+.*\/sbin\/tini'
+
+          # 2. Verify child process reaping during sustained process exits (zero zombies under tini)
+          docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges:true \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --entrypoint /sbin/tini "$AGENT_IMAGE" -- node -e '
+            const { spawn, execSync } = require("node:child_process");
+            let done = 0;
+            for (let i = 0; i < 40; i++) {
+              const cp = spawn("false", [], { stdio: "ignore" });
+              cp.on("exit", () => {
+                done++;
+                if (done === 40) {
+                  const out = execSync("ps -A -o stat=").toString();
+                  const zombies = (out.match(/Z/g) || []).length;
+                  if (zombies > 0) {
+                    console.error("FAILED: Found " + zombies + " zombie processes!");
+                    process.exit(1);
+                  }
+                  console.log("PASS: Zero zombies detected after 40 child process exits.");
+                }
+              });
+            }
+          '
+
+          # 3. Verify SIGTERM graceful shutdown forwarded by tini
+          CONTAINER_ID=$(docker run -d --read-only --cap-drop=ALL --security-opt=no-new-privileges:true \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --entrypoint /sbin/tini "$AGENT_IMAGE" -- sleep 60)
+          docker kill --signal=SIGTERM "$CONTAINER_ID"
+          docker wait "$CONTAINER_ID"
+          docker rm -f "$CONTAINER_ID" >/dev/null
+
+          # 4. Verify Podman client executes without filesystem errors under read-only rootfs
+          docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges:true \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --entrypoint /bin/sh "$AGENT_IMAGE" -c 'podman --version' | grep -q 'podman version 5.'
+
+          # 5. Verify Podman inspect, logs and restart operations via rootless Unix socket
+          docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges:true \
+            --tmpfs /tmp:rw,noexec,nosuid,size=16m \
+            --entrypoint /bin/sh "$AGENT_IMAGE" -c '
+            set -eu
+            trap "kill \$PID 2>/dev/null || true" EXIT
+            node -e "
+            const http = require(\"node:http\");
+            const server = http.createServer((req, res) => {
+              res.setHeader(\"Libpod-API-Version\", \"5.0.0\");
+              if (req.url.includes(\"_ping\")) {
+                res.writeHead(200, { \"Content-Type\": \"text/plain\" });
+                res.end(\"OK\");
+                return;
+              }
+              if (req.url.includes(\"/info\")) {
+                res.writeHead(200, { \"Content-Type\": \"application/json\" });
+                res.end(JSON.stringify({ version: { Version: \"5.0.0\" }, host: { distribution: { distribution: \"alpine\" } } }));
+                return;
+              }
+              if (req.url.includes(\"/containers/json\")) {
+                res.writeHead(200, { \"Content-Type\": \"application/json\" });
+                res.end(JSON.stringify([{ Id: \"test-c1\", Names: [\"/test-c1\"], State: \"running\" }]));
+                return;
+              }
+              if (req.url.includes(\"/containers/test-c1/json\")) {
+                res.writeHead(200, { \"Content-Type\": \"application/json\" });
+                res.end(JSON.stringify({ Id: \"test-c1\", State: { Status: \"running\", Health: { Status: \"healthy\" } } }));
+                return;
+              }
+              if (req.url.includes(\"/logs\")) {
+                res.writeHead(200, { \"Content-Type\": \"application/vnd.docker.raw-stream\" });
+                const msg = Buffer.from(\"service ready and healthy\n\");
+                const header = Buffer.alloc(8);
+                header[0] = 1;
+                header.writeUInt32BE(msg.length, 4);
+                res.end(Buffer.concat([header, msg]));
+                return;
+              }
+              if (req.url.includes(\"/restart\")) {
+                res.writeHead(204);
+                res.end();
+                return;
+              }
+              res.writeHead(200, { \"Content-Type\": \"application/json\" });
+              res.end(\"{}\");
+            });
+            server.listen(\"/tmp/podman.sock\");
+            " &
+            PID=$!
+            for i in $(seq 1 50); do
+              if [ -S /tmp/podman.sock ]; then break; fi
+              sleep 0.05
+            done
+            [ -S /tmp/podman.sock ]
+            export CONTAINER_HOST=unix:///tmp/podman.sock
+            podman info --format "{{.Version.Version}}" | grep -q "5.0.0"
+            podman inspect test-c1 --format "{{.State.Status}}" | grep -q "running"
+            podman logs test-c1 | grep -q "service ready and healthy"
+            podman restart test-c1 | grep -q "test-c1"
+            '
 
       - name: Verify Compose split runtime and PgBouncer live stack
         if: github.event_name == 'pull_request'

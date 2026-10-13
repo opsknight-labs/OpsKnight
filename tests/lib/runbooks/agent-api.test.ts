@@ -31,6 +31,57 @@ describe('Agent API retry contract and error mapping', () => {
     );
     expect(response.status).toBe(400);
   });
+
+  it('correctly maps cross-chunk error objects using typed error codes without prototype linkage', () => {
+    // Simulates an error thrown across webpack chunks in Next.js standalone bundling
+    const simulatedNotFoundError = {
+      name: 'RunbookAgentNotFoundError',
+      code: 'RUNBOOK_AGENT_NOT_FOUND',
+      message: 'Agent not found in database.',
+    };
+    expect(agentApiError(simulatedNotFoundError).status).toBe(404);
+
+    const simulatedRevokedError = {
+      name: 'RunbookAgentRevokedError',
+      code: 'RUNBOOK_AGENT_REVOKED',
+      message: 'Agent revoked.',
+    };
+    expect(agentApiError(simulatedRevokedError).status).toBe(403);
+
+    const simulatedFenceError = {
+      name: 'RunbookPreExecutionFenceError',
+      code: 'RUNBOOK_PRE_EXECUTION_FENCE_FAILED',
+      message: 'Fence verification failed.',
+    };
+    expect(agentApiError(simulatedFenceError).status).toBe(409);
+
+    const simulatedLeaseMismatchError = {
+      name: 'RunbookAgentLeaseTokenMismatchError',
+      code: 'RUNBOOK_AGENT_LEASE_TOKEN_MISMATCH',
+      message: 'Token mismatch.',
+    };
+    expect(agentApiError(simulatedLeaseMismatchError).status).toBe(409);
+
+    const simulatedLeaseExpiredError = {
+      name: 'RunbookAgentLeaseExpiredError',
+      code: 'RUNBOOK_AGENT_LEASE_EXPIRED',
+      message: 'Lease expired.',
+    };
+    expect(agentApiError(simulatedLeaseExpiredError).status).toBe(409);
+
+    const simulatedDefinitionError = {
+      name: 'RunbookDefinitionError',
+      code: 'RUNBOOK_DEFINITION_INVALID',
+      message: 'Invalid definition.',
+    };
+    expect(agentApiError(simulatedDefinitionError).status).toBe(400);
+  });
+
+  it('preserves HTTP 500 for genuine database, runtime, and infrastructure outages', () => {
+    expect(agentApiError(new Error('PostgreSQL connection terminated unexpectedly')).status).toBe(500);
+    expect(agentApiError(new TypeError('Cannot read property "status" of undefined')).status).toBe(500);
+    expect(agentApiError({ code: 'P2025', message: 'Record not found in prisma' }).status).toBe(500);
+  });
 });
 
 describe('readBoundedRequestBody streaming bounds', () => {

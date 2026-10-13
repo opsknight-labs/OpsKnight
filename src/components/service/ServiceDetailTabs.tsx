@@ -16,6 +16,7 @@ export type ServiceDetailTabsProps = {
   defaultTab?: string;
   activeIncidentCount: number;
   integrationCount: number;
+  runbooksCount?: number;
   notificationsCount?: number | string;
   incidentsContent: ReactNode;
   escalationContent: ReactNode;
@@ -30,6 +31,7 @@ export default function ServiceDetailTabs({
   defaultTab = 'incidents',
   activeIncidentCount,
   integrationCount,
+  runbooksCount,
   notificationsCount,
   incidentsContent,
   escalationContent,
@@ -55,6 +57,7 @@ export default function ServiceDetailTabs({
       id: 'runbooks',
       label: 'Runbooks',
       icon: <Workflow className="h-4 w-4" />,
+      count: runbooksCount,
     },
     {
       id: 'integrations',

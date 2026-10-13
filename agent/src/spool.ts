@@ -1,10 +1,12 @@
 // Paths stay inside the operator-configured spool; attempt IDs and enumerated filenames are validated.
-import { mkdir, readdir, readFile, rename, unlink, open, stat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, unlink, open, stat, type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { SpoolRecord } from './types';
 
 export class ResultSpool {
+  private activeProbe: Promise<void> | null = null;
+
   constructor(private readonly directory: string) {}
 
   async initialize() {
@@ -203,4 +205,104 @@ export class ResultSpool {
       oldestAgeMs: names.length > 0 ? Math.max(0, Date.now() - oldestMtime) : 0,
     };
   }
+
+  /**
+   * Comprehensive, safe verification of storage durability and accessibility.
+   * Proves that the spool directory can be read, listed, written, fsynced, and unlinked
+   * without mutating or clobbering existing execution records.
+   * Fails closed by throwing if any filesystem operation fails.
+   *
+   * Single-flight per Agent process to prevent race conditions between the main polling
+   * loop and asynchronous heartbeat cycles.
+   */
+  async probeStorageIntegrity(testHooks?: {
+    simulateWriteFailure?: boolean;
+    simulateSyncFailure?: boolean;
+    staleThresholdMs?: number;
+  }): Promise<void> {
+    if (this.activeProbe) {
+      return this.activeProbe;
+    }
+    const probePromise = this.executeProbe(testHooks);
+    this.activeProbe = probePromise;
+    try {
+      await probePromise;
+    } finally {
+      this.activeProbe = null;
+    }
+  }
+
+  private async executeProbe(testHooks?: {
+    simulateWriteFailure?: boolean;
+    simulateSyncFailure?: boolean;
+    staleThresholdMs?: number;
+  }): Promise<void> {
+    await this.initialize();
+    // 1. Clean up only abandoned probe files older than a safe threshold (default 60s)
+    // to prevent concurrent probes from deleting active temporary files.
+    const staleThresholdMs = testHooks?.staleThresholdMs ?? 60_000;
+    const cutoff = Date.now() - staleThresholdMs;
+    try {
+      const names = await readdir(this.directory);
+      for (const name of names) {
+        if (/^\.probe-.*\.tmp$/i.test(name)) {
+          const filePath = join(this.directory, name);
+          try {
+            const s = await stat(filePath);
+            if (s.mtimeMs <= cutoff) {
+              await unlink(filePath).catch(() => undefined);
+            }
+          } catch {
+            // File might have already been unlinked by another process
+          }
+        }
+      }
+    } catch {
+      // Directory listing errors will be caught below
+    }
+
+    // 2. Verify reading directory and listing/decoding existing records
+    await this.list();
+
+    // 3. Verify write, sync, readback and unlink capabilities inside a robust try/finally
+    const probePath = join(this.directory, `.probe-${process.pid}-${randomUUID()}.tmp`);
+    let file: FileHandle | null = null;
+    try {
+      file = await open(probePath, 'wx', 0o600);
+      if (testHooks?.simulateWriteFailure) {
+        throw new Error('Simulated ENOSPC during probe write');
+      }
+      await file.writeFile(Buffer.from('opsknight-storage-probe'));
+      if (testHooks?.simulateSyncFailure) {
+        throw new Error('Simulated EIO during probe fsync');
+      }
+      await file.sync();
+      await file.close();
+      file = null;
+
+      const readBack = await readFile(probePath, 'utf8');
+      if (readBack !== 'opsknight-storage-probe') {
+        throw new Error('Storage probe data verification failed');
+      }
+    } finally {
+      if (file) {
+        await file.close().catch(() => undefined);
+      }
+      await unlink(probePath).catch(() => undefined);
+    }
+
+    // 4. Verify directory metadata sync
+    const directory = await open(this.directory, 'r');
+    try {
+      await directory.sync();
+    } finally {
+      await directory.close();
+    }
+
+    // 5. Verify dead-letter directory accessibility
+    const deadLetterDir = join(this.directory, 'dead-letter');
+    await mkdir(deadLetterDir, { recursive: true, mode: 0o700 });
+    await readdir(deadLetterDir);
+  }
 }
+

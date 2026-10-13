@@ -67,3 +67,35 @@ it('redacts secret-reference defaults in the service summary', () => {
   expect(screen.getByText('Configured secret reference')).toBeVisible();
   expect(screen.queryByText(/sensitive-reference/)).not.toBeInTheDocument();
 });
+
+it('displays unavailable error state when database query fails rather than empty state', () => {
+  render(
+    <ServiceRunbooks
+      serviceId="service"
+      bindings={[]}
+      availableRunbooks={[]}
+      availableAgents={[]}
+      availableAgentPools={[]}
+      canManage={false}
+      loadError={true}
+    />
+  );
+  expect(screen.getByText('Service runbooks unavailable')).toBeVisible();
+  expect(screen.queryByText('No service runbooks')).not.toBeInTheDocument();
+});
+
+it('provides a View Runbook link rather than an inaccurate immediate execution trigger', () => {
+  render(
+    <ServiceRunbooks
+      serviceId="service"
+      bindings={[fixture()]}
+      availableRunbooks={[]}
+      availableAgents={[]}
+      availableAgentPools={[]}
+      canManage={false}
+    />
+  );
+  const link = screen.getByRole('link', { name: /View Runbook/i });
+  expect(link).toBeVisible();
+  expect(link).toHaveAttribute('href', '/runbooks/runbook');
+});
