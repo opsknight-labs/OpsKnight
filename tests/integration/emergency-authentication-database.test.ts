@@ -140,6 +140,11 @@ suite('independent emergency authentication with signed WebAuthn responses and P
   beforeAll(async () => {
     if (!new URL(process.env.DATABASE_URL!).pathname.endsWith('/enterprise_sso_test'))
       throw new Error('Isolated enterprise_sso_test DB required.');
+    await prisma.systemSettings.upsert({
+      where: { id: 'default' },
+      create: { id: 'default', appUrl: 'https://recovery.example.test' },
+      update: {},
+    });
     await prisma.user.upsert({
       where: { id: actor.id },
       create: {
