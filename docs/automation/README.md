@@ -496,3 +496,23 @@ with this mapping; that is connectivity validation only. Every full measurement
 retains its transport configuration. Public NodePort/edge latency remains outside
 this topology's certification scope. See the official
 [k6 hosts option](https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/#hosts).
+
+Audit 44's canonical-host in-cluster client worked: the first OFF measurement
+accepted/persisted 2,401 events with no failed gates and p95/p99 of 198/330ms.
+Service-disabled also accepted/persisted 2,401 with no failed correctness gates,
+but p95/p99 rose to 1,960/3,240ms. The following OFF measurement failed with
+183 dropped arrivals and a queue-age breach; all 2,217 accepted events persisted.
+The slow disabled run recorded roughly 1.45GiB of swap-ins and 395MiB of swap-outs;
+the later OFF failure had much less paging. These observations do not establish
+a single cause. The runner retained the failure and restored its clean fixture.
+A stable complete bracket/matrix and capacity certification remain missing.
+
+A separate one-replica CPU diagnostic is retained in
+`docs/automation/runtime-profiling-results.json`. It ran the shared workload
+with automation enabled and no service configuration rows, so no rules were
+evaluated. Its inspector overhead and different setup exclude it from capacity
+certification. The profile showed substantial idle time plus garbage collection
+and Prisma response parsing; these samples alone do not identify a database
+wait cause or prove an evaluator bottleneck. The profiling Web process was
+replaced, its private debugger forward closed, and the owned clean fixture
+restored after the diagnostic. Both CI workflows passed at `8beaf84a4`.

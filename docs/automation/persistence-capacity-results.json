@@ -10294,6 +10294,186 @@
           }
         }
       ]
+    },
+    {
+      "topology": "kind-helm-split-audit44-incluster-integrity-faultfree-bracketed-20rps-repeat-1-pair-1-service-disabled-1-global-off",
+      "generatedAt": "2026-10-13T03:51:33.495Z",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": []
+      },
+      "certificationStatus": "MEASUREMENT_ONLY",
+      "artifact": "artifacts/load-certification/automation/kind-helm-split-audit44-incluster-integrity-faultfree-bracketed-20rps-repeat-1-pair-1-service-disabled-1-global-off/certification.json",
+      "runtimeRevision": "6eae272cafa8ddc5e33a791dcb39dbc8442a49e5",
+      "harnessRevision": "8beaf84a45cd1eeb30ffe0741f0a9c1a3e2706fb",
+      "scope": "In-cluster client with canonical Host; following OFF baseline failed; no completed valid bracket or public-edge/capacity certificate",
+      "results": [
+        {
+          "profile": "global-off",
+          "runId": "01-global-off",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 155,
+          "recoveryDrainMs": 106520,
+          "criticalNotificationLatency": {
+            "p95Ms": 917,
+            "p99Ms": 1432,
+            "sent": 8461,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0,
+          "droppedIterations": 0,
+          "ingestionLatencyMs": {
+            "avg": 85.20241566014161,
+            "min": 27,
+            "med": 68,
+            "max": 472,
+            "p(50)": 68,
+            "p(95)": 198,
+            "p(99)": 330
+          },
+          "componentTelemetryComplete": true,
+          "hostPaging": {
+            "availableSamples": 26,
+            "swapInBytes": 285605888,
+            "swapOutBytes": 0
+          }
+        }
+      ]
+    },
+    {
+      "topology": "kind-helm-split-audit44-incluster-integrity-faultfree-bracketed-20rps-repeat-1-pair-1-service-disabled-2-service-disabled",
+      "generatedAt": "2026-10-13T03:57:32.452Z",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": []
+      },
+      "certificationStatus": "MEASUREMENT_ONLY",
+      "artifact": "artifacts/load-certification/automation/kind-helm-split-audit44-incluster-integrity-faultfree-bracketed-20rps-repeat-1-pair-1-service-disabled-2-service-disabled/certification.json",
+      "runtimeRevision": "6eae272cafa8ddc5e33a791dcb39dbc8442a49e5",
+      "harnessRevision": "8beaf84a45cd1eeb30ffe0741f0a9c1a3e2706fb",
+      "scope": "In-cluster client with canonical Host; following OFF baseline failed; no completed valid bracket or public-edge/capacity certificate",
+      "results": [
+        {
+          "profile": "service-disabled",
+          "runId": "02-service-disabled",
+          "k6ExitCode": 0,
+          "acceptedEvents": 2401,
+          "persistedIncidents": 2401,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 121,
+          "recoveryDrainMs": 107496,
+          "criticalNotificationLatency": {
+            "p95Ms": 1249,
+            "p99Ms": 3711.6799999999976,
+            "sent": 5929,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0,
+          "droppedIterations": 0,
+          "ingestionLatencyMs": {
+            "p(95)": 1960,
+            "p(99)": 3240,
+            "avg": 589.8725531028738,
+            "min": 30,
+            "med": 280,
+            "max": 3926,
+            "p(50)": 280
+          },
+          "componentTelemetryComplete": true,
+          "hostPaging": {
+            "availableSamples": 26,
+            "swapInBytes": 1556709376,
+            "swapOutBytes": 414171136
+          }
+        }
+      ]
+    },
+    {
+      "topology": "kind-helm-split-audit44-incluster-integrity-faultfree-bracketed-20rps-repeat-1-pair-1-service-disabled-3-global-off",
+      "generatedAt": "2026-10-13T04:03:16.246Z",
+      "rps": 20,
+      "durationPerProfile": "120s",
+      "comparisonGate": {
+        "passed": false,
+        "limits": {
+          "latencyRatio": 1.25,
+          "queueAgeMs": 30000,
+          "notificationP99Ms": 30000
+        },
+        "failures": [
+          "global-off: k6 gate failed (99)",
+          "global-off: queue age exceeds 30000ms"
+        ]
+      },
+      "certificationStatus": "MEASUREMENT_ONLY",
+      "artifact": "artifacts/load-certification/automation/kind-helm-split-audit44-incluster-integrity-faultfree-bracketed-20rps-repeat-1-pair-1-service-disabled-3-global-off/certification.json",
+      "runtimeRevision": "6eae272cafa8ddc5e33a791dcb39dbc8442a49e5",
+      "harnessRevision": "8beaf84a45cd1eeb30ffe0741f0a9c1a3e2706fb",
+      "scope": "In-cluster client with canonical Host; following OFF baseline failed; no completed valid bracket or public-edge/capacity certificate",
+      "results": [
+        {
+          "profile": "global-off",
+          "runId": "01-global-off",
+          "k6ExitCode": 99,
+          "acceptedEvents": 2217,
+          "persistedIncidents": 2217,
+          "duplicateGroups": 0,
+          "providerDuplicateDeliveriesDelta": 0,
+          "fallbackCount": 0,
+          "pendingAfterDrain": 0,
+          "transactionRetryCount": 198,
+          "recoveryDrainMs": 108343,
+          "criticalNotificationLatency": {
+            "p95Ms": 1329,
+            "p99Ms": 3279.779999999998,
+            "sent": 5443,
+            "failed": 0
+          },
+          "traceRuntimeP99Ms": null,
+          "deadlocksDelta": 0,
+          "droppedIterations": 183,
+          "ingestionLatencyMs": {
+            "p(99)": 12870.68,
+            "avg": 1984.0410464591791,
+            "min": 31,
+            "med": 308,
+            "max": 15822,
+            "p(50)": 308,
+            "p(95)": 6973.399999999999
+          },
+          "componentTelemetryComplete": true,
+          "hostPaging": {
+            "availableSamples": 26,
+            "swapInBytes": 59375616,
+            "swapOutBytes": 0
+          }
+        }
+      ]
     }
   ],
   "initialImage": "opsknight-automation:audit2",
