@@ -10,6 +10,7 @@ import {
   logV2Audit,
   IncidentNoteV2Schema,
 } from '@/lib/api-v2';
+import { addIncidentNoteDomainCommand } from '@/lib/incidents/notes';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 
@@ -105,31 +106,10 @@ export async function POST(
 
     const validated = IncidentNoteV2Schema.parse(body);
 
-    const note = await prisma.$transaction(async tx => {
-      const createdNote = await tx.incidentNote.create({
-        data: {
-          incidentId: id,
-          userId: actor.id,
-          content: validated.content,
-        },
-        select: {
-          id: true,
-          content: true,
-          userId: true,
-          createdAt: true,
-          user: { select: { id: true, name: true, email: true } },
-        },
-      });
-
-      await tx.incidentEvent.create({
-        data: {
-          incidentId: id,
-          type: 'COMMENT',
-          message: `Note added by ${actor.id}`,
-        },
-      });
-
-      return createdNote;
+    const note = await addIncidentNoteDomainCommand({
+      incidentId: id,
+      content: validated.content,
+      actor: { id: actor.id, name: apiKey.name },
     });
 
     await logV2Audit({

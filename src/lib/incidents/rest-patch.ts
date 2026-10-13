@@ -13,9 +13,13 @@ import { reconcileIncidentEngagementAfterUrgencyChange } from './engagement-reco
 
 export type RestIncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 export type RestIncidentUrgency = 'LOW' | 'MEDIUM' | 'HIGH';
+export type RestIncidentPriority = 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | string;
 
 export type RestIncidentPatchInput = {
   incidentId: string;
+  title?: string;
+  description?: string | null;
+  priority?: RestIncidentPriority | null;
   status?: RestIncidentStatus;
   urgency?: RestIncidentUrgency;
   assigneeId?: string | null;
@@ -31,6 +35,9 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
       context: input.idempotency,
       payload: {
         incidentId: input.incidentId,
+        title: input.title !== undefined ? input.title : undefined,
+        description: input.description !== undefined ? input.description : undefined,
+        priority: input.priority !== undefined ? input.priority : undefined,
         status: input.status ?? null,
         urgency: input.urgency ?? null,
         assigneeId: input.hasAssigneeUpdate ? (input.assigneeId ?? null) : undefined,
@@ -42,6 +49,9 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
           where: { id: input.incidentId },
           select: {
             id: true,
+            title: true,
+            description: true,
+            priority: true,
             status: true,
             urgency: true,
             assigneeId: true,
@@ -66,6 +76,11 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
           });
         }
 
+        const titleChanged = input.title !== undefined && input.title !== current.title;
+        const descriptionChanged =
+          input.description !== undefined && input.description !== current.description;
+        const priorityChanged =
+          input.priority !== undefined && input.priority !== current.priority;
         const urgencyChanged = input.urgency !== undefined && input.urgency !== current.urgency;
         const assigneeChanged =
           input.hasAssigneeUpdate && (input.assigneeId ?? null) !== (current.assigneeId ?? null);
@@ -85,12 +100,39 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
           assigneeName = assignee.name;
         }
 
-        if (urgencyChanged || assigneeChanged) {
+        if (
+          titleChanged ||
+          descriptionChanged ||
+          priorityChanged ||
+          urgencyChanged ||
+          assigneeChanged
+        ) {
           await tx.incident.update({
             where: { id: input.incidentId },
             data: {
+              ...(titleChanged ? { title: input.title } : {}),
+              ...(descriptionChanged ? { description: input.description } : {}),
+              ...(priorityChanged ? { priority: input.priority } : {}),
               ...(urgencyChanged ? { urgency: input.urgency } : {}),
               ...(assigneeChanged ? { assigneeId: input.assigneeId ?? null, teamId: null } : {}),
+            },
+          });
+        }
+
+        if (titleChanged) {
+          await tx.incidentEvent.create({
+            data: {
+              incidentId: input.incidentId,
+              message: `Title updated to "${input.title}"`,
+            },
+          });
+        }
+
+        if (priorityChanged) {
+          await tx.incidentEvent.create({
+            data: {
+              incidentId: input.incidentId,
+              message: `Priority updated to ${input.priority ?? 'none'}`,
             },
           });
         }
@@ -120,7 +162,8 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
           });
         }
 
-        if (!lifecycle?.changed && (urgencyChanged || assigneeChanged)) {
+        const metadataChanged = titleChanged || descriptionChanged || priorityChanged;
+        if (!lifecycle?.changed && (urgencyChanged || assigneeChanged || metadataChanged)) {
           await enqueueIncidentUpdateSideEffects(tx, input.incidentId, [
             'INCIDENT_UPDATE_SERVICE_NOTIFICATION',
             'INCIDENT_UPDATE_WEBHOOK',
@@ -141,7 +184,9 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
           lifecycle,
           urgencyChanged,
           assigneeChanged,
-          changed: Boolean(lifecycle?.changed || urgencyChanged || assigneeChanged),
+          changed: Boolean(
+            lifecycle?.changed || urgencyChanged || assigneeChanged || metadataChanged
+          ),
         };
       },
     });

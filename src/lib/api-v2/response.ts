@@ -197,6 +197,18 @@ export function apiV2Error(
   headers.set('Content-Type', 'application/problem+json; charset=utf-8');
   headers.set('x-request-id', context.requestId);
 
+  if (status === 429 || code === 'RATE_LIMIT_EXCEEDED') {
+    if (meta && typeof meta.retryAfter === 'number' && !headers.has('Retry-After')) {
+      headers.set('Retry-After', String(meta.retryAfter));
+    }
+    if (meta && typeof meta.limit === 'number' && !headers.has('X-RateLimit-Limit')) {
+      headers.set('X-RateLimit-Limit', String(meta.limit));
+    }
+    if (meta && typeof meta.remaining === 'number' && !headers.has('X-RateLimit-Remaining')) {
+      headers.set('X-RateLimit-Remaining', String(meta.remaining));
+    }
+  }
+
   return NextResponse.json(problem, {
     status,
     headers,

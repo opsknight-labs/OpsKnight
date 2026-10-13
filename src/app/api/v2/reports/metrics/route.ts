@@ -8,6 +8,9 @@ import {
   enforceV2RateLimit,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { incidentReadWhere } from '@/lib/authorization-filters';
+import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
+import type { Prisma } from '@prisma/client';
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,46 +25,26 @@ export async function GET(req: NextRequest) {
 
     const sinceDate = new Date(Date.now() - days * 86_400_000);
 
-    const where = {
-      createdAt: { gte: sinceDate },
-      ...(serviceId ? { serviceId } : {}),
-    };
-
-    const [total, resolved, open, byPriority] = await Promise.all([
-      prisma.incident.count({ where }),
-      prisma.incident.count({ where: { ...where, status: 'RESOLVED' } }),
-      prisma.incident.count({ where: { ...where, status: { in: ['OPEN', 'ACKNOWLEDGED'] } } }),
-      prisma.incident.groupBy({
-        by: ['priority'],
-        where,
-        _count: { id: true },
-      }),
-    ]);
-
-    // Average resolution time for resolved incidents in range
-    const resolvedIncidents = await prisma.incident.findMany({
-      where: { ...where, status: 'RESOLVED', resolvedAt: { not: null } },
-      select: { createdAt: true, resolvedAt: true, acknowledgedAt: true },
-      take: 200,
+    // 1. Calculate certified SLA and operational metrics with canonical actor scoping
+    const sla = await calculateActorSLAMetrics(actor, {
+      windowDays: days,
+      serviceId: serviceId || undefined,
     });
 
-    let mttrMinutes: number | null = null;
-    let mttaMinutes: number | null = null;
+    // 2. Compute priority breakdown respecting actor incident read access
+    const priorityWhere: Prisma.IncidentWhereInput = {
+      AND: [
+        incidentReadWhere(actor),
+        { createdAt: { gte: sinceDate } },
+        ...(serviceId ? [{ serviceId }] : []),
+      ],
+    };
 
-    if (resolvedIncidents.length > 0) {
-      const totalResolveMs = resolvedIncidents.reduce((sum, inc) => {
-        return sum + (inc.resolvedAt!.getTime() - inc.createdAt.getTime());
-      }, 0);
-      mttrMinutes = Math.round(totalResolveMs / resolvedIncidents.length / 60_000);
-
-      const acked = resolvedIncidents.filter(inc => inc.acknowledgedAt !== null);
-      if (acked.length > 0) {
-        const totalAckMs = acked.reduce((sum, inc) => {
-          return sum + (inc.acknowledgedAt!.getTime() - inc.createdAt.getTime());
-        }, 0);
-        mttaMinutes = Math.round(totalAckMs / acked.length / 60_000);
-      }
-    }
+    const byPriority = await prisma.incident.groupBy({
+      by: ['priority'],
+      where: priorityWhere,
+      _count: { id: true },
+    });
 
     const priorityCounts: Record<string, number> = {};
     for (const group of byPriority) {
@@ -70,16 +53,21 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const resolvedCount =
+      sla.statusMix.find(s => s.status === 'RESOLVED')?.count ??
+      sla.resolvedIncidents ??
+      0;
+
     const metrics = {
       windowDays: days,
       since: sinceDate.toISOString(),
       serviceId: serviceId ?? null,
       summary: {
-        totalIncidents: total,
-        resolvedIncidents: resolved,
-        openIncidents: open,
-        mttrMinutes,
-        mttaMinutes,
+        totalIncidents: sla.totalIncidents,
+        resolvedIncidents: resolvedCount,
+        openIncidents: sla.activeIncidents,
+        mttrMinutes: sla.mttr !== null ? Math.round(sla.mttr) : null,
+        mttaMinutes: sla.mttd !== null ? Math.round(sla.mttd) : null,
       },
       incidentsByPriority: priorityCounts,
     };

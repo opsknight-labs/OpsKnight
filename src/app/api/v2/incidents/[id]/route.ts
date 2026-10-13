@@ -120,31 +120,18 @@ export async function PATCH(
     const hasAssigneeUpdate = validated.assigneeId !== undefined;
     const patchResult = await applyRestIncidentPatch({
       incidentId: id,
+      title: validated.title,
+      description: validated.description,
+      priority: validated.priority,
       status: validated.status,
       urgency: validated.urgency,
       assigneeId: hasAssigneeUpdate ? (validated.assigneeId ?? null) : undefined,
       hasAssigneeUpdate,
-      actor: { id: actor.id },
+      actor: { id: actor.id, name: apiKey.name },
       idempotency: idempotencyKey ? { key: idempotencyKey, principalId: apiKey.id } : undefined,
     });
 
-    let finalIncident = patchResult.incident;
-
-    // Apply metadata updates if title, description, or priority are specified
-    if (
-      (validated.title !== undefined && validated.title !== finalIncident.title) ||
-      (validated.description !== undefined && validated.description !== finalIncident.description) ||
-      (validated.priority !== undefined && validated.priority !== finalIncident.priority)
-    ) {
-      finalIncident = await prisma.incident.update({
-        where: { id },
-        data: {
-          ...(validated.title !== undefined ? { title: validated.title } : {}),
-          ...(validated.description !== undefined ? { description: validated.description } : {}),
-          ...(validated.priority !== undefined ? { priority: validated.priority } : {}),
-        },
-      });
-    }
+    const finalIncident = patchResult.incident;
 
     if (!patchResult.idempotencyReplayed) {
       await logV2Audit({

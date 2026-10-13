@@ -27,6 +27,14 @@ export async function GET(
     const { id } = await params;
     const accessWhere = scheduleReadWhere(actor);
 
+    const exists = await prisma.onCallSchedule.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) {
+      throw new AppError({
+        code: 'SCHEDULE_NOT_FOUND',
+        userMessage: `Schedule with id '${id}' was not found.`,
+      });
+    }
+
     const schedule = await prisma.onCallSchedule.findFirst({
       where: {
         AND: [{ id }, accessWhere],
@@ -36,8 +44,8 @@ export async function GET(
 
     if (!schedule) {
       throw new AppError({
-        code: 'SCHEDULE_NOT_FOUND',
-        userMessage: `Schedule with id '${id}' was not found.`,
+        code: 'AUTHORIZATION_DENIED',
+        userMessage: 'You are not authorized to access this schedule.',
       });
     }
 

@@ -1,11 +1,6 @@
-import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import {
-  apiV2Error,
-  apiV2Success,
-  authenticateV2Request,
-  enforceV2Authorization,
-  enforceV2RateLimit,
+  defineV2Route,
   logV2Audit,
   RunbookExecuteV2Schema,
 } from '@/lib/api-v2';
@@ -15,18 +10,19 @@ import {
   startRunbookExecution,
 } from '@/lib/runbooks/orchestrator';
 import { AppError } from '@/lib/errors';
+import type { z } from 'zod';
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { apiKey, actor } = await authenticateV2Request(req);
-    const rlHeaders = await enforceV2RateLimit(apiKey.id, 'WRITE');
-    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE);
+export const POST = defineV2Route<{ id: string }, any, z.infer<typeof RunbookExecuteV2Schema>>({
+  action: AUTHORIZATION_ACTIONS.RUNBOOK_EXECUTE,
+  bodySchema: RunbookExecuteV2Schema,
+  idempotent: true,
+  idempotencyScope: ({ params, body }) =>
+    `runbook:execute:${params.id}:${body.incidentId ?? 'global'}`,
+  handler: async ({ params, body, actor, apiKey, tx }) => {
+    const db = tx ?? prisma;
+    const { id } = params;
 
-    const { id } = await params;
-    const runbook = await prisma.runbook.findUnique({
+    const runbook = await db.runbook.findUnique({
       where: { id },
       select: { id: true, name: true, archivedAt: true, publishedVersionId: true },
     });
@@ -38,23 +34,20 @@ export async function POST(
       });
     }
 
-    const body = await req.json().catch(() => ({}));
-    const validated = RunbookExecuteV2Schema.parse(body);
-
     // 1. Preview execution boundary and generate authorized execution plan
     const preview = await previewRunbookExecution({
       runbookId: id,
-      incidentId: validated.incidentId ?? undefined,
+      incidentId: body.incidentId ?? undefined,
       triggeredByUserId: actor.id,
-      inputValues: validated.parameters,
+      inputValues: body.parameters,
     });
 
     // 2. Start asynchronous execution with preflight digest & preview token
     const execution = await startRunbookExecution({
       runbookId: id,
-      incidentId: validated.incidentId ?? undefined,
+      incidentId: body.incidentId ?? undefined,
       triggeredByUserId: actor.id,
-      inputValues: validated.parameters,
+      inputValues: body.parameters,
       expectedPlanDigest: preview.digest,
       previewAuthorizationToken: preview.authorizationToken,
     });
@@ -67,20 +60,19 @@ export async function POST(
       apiKeyId: apiKey.id,
       details: {
         executionId: execution.id,
-        incidentId: validated.incidentId ?? null,
+        incidentId: body.incidentId ?? null,
       },
     });
 
-    const responsePayload = {
-      executionId: execution.id,
-      status: execution.status,
-      runbookId: id,
-      incidentId: validated.incidentId ?? null,
-      message: 'Runbook execution initiated. Poll /api/v2/runbooks/executions/:id for status.',
+    return {
+      status: 202,
+      data: {
+        executionId: execution.id,
+        status: execution.status,
+        runbookId: id,
+        incidentId: body.incidentId ?? null,
+        message: 'Runbook execution initiated. Poll /api/v2/runbooks/executions/:id for status.',
+      },
     };
-
-    return apiV2Success(responsePayload, { status: 202, headers: rlHeaders });
-  } catch (error) {
-    return apiV2Error(error, req);
-  }
-}
+  },
+});

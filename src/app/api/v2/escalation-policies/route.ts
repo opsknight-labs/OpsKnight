@@ -121,6 +121,9 @@ export async function POST(req: NextRequest) {
         targetTeamId: step.targetType === 'TEAM' ? step.targetId : undefined,
         targetScheduleId: step.targetType === 'SCHEDULE' ? step.targetId : undefined,
         delayMinutes: step.delayMinutes,
+        notificationChannels: step.notificationChannels,
+        notifyOnlyTeamLead: step.notifyOnlyTeamLead,
+        conditions: step.conditions,
       };
       const stepValidation = validateEscalationStep(stepInput);
       if (!stepValidation.valid) {
@@ -161,13 +164,29 @@ export async function POST(req: NextRequest) {
             delayMinutes: stepPayload.delayMinutes,
             notificationChannels: stepPayload.notificationChannels,
             notifyOnlyTeamLead: stepPayload.notifyOnlyTeamLead,
+            ...(stepPayload.conditions && stepPayload.conditions.length > 0
+              ? {
+                  conditions: {
+                    create: stepPayload.conditions.map(c => ({
+                      field: c.field,
+                      operator: c.operator,
+                      values: c.values,
+                    })),
+                  },
+                }
+              : {}),
           },
         });
       }
 
       return tx.escalationPolicy.findUnique({
         where: { id: policy.id },
-        include: { steps: { orderBy: { stepOrder: 'asc' } } },
+        include: {
+          steps: {
+            orderBy: { stepOrder: 'asc' },
+            include: { conditions: true },
+          },
+        },
       });
     });
 

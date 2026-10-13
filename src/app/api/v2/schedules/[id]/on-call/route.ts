@@ -8,6 +8,7 @@ import {
   enforceV2RateLimit,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { resolveEscalationTarget } from '@/lib/escalation';
 import { AppError } from '@/lib/errors';
 
@@ -30,6 +31,23 @@ export async function GET(
       throw new AppError({
         code: 'SCHEDULE_NOT_FOUND',
         userMessage: `Schedule with id '${id}' was not found.`,
+      });
+    }
+
+    const accessible = await prisma.onCallSchedule.findFirst({
+      where: {
+        AND: [
+          { id },
+          scheduleReadWhere(actor),
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (!accessible) {
+      throw new AppError({
+        code: 'AUTHORIZATION_DENIED',
+        userMessage: 'You are not authorized to view this schedule.',
       });
     }
 

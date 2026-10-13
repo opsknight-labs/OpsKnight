@@ -9,6 +9,7 @@ import {
   logV2Audit,
   IncidentAssignV2Schema,
 } from '@/lib/api-v2';
+import { assignIncidentDomainCommand } from '@/lib/incidents/assignment';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 
@@ -49,60 +50,25 @@ export async function POST(
     const body = await req.json().catch(() => ({}));
     const validated = IncidentAssignV2Schema.parse(body);
 
-    if (validated.assigneeId) {
-      const targetUser = await prisma.user.findUnique({
-        where: { id: validated.assigneeId },
-        select: { id: true, name: true, status: true },
-      });
-      if (!targetUser || targetUser.status !== 'ACTIVE') {
-        throw new AppError({
-          code: 'USER_NOT_FOUND',
-          userMessage: `Assignee user with id '${validated.assigneeId}' is invalid or not active.`,
-        });
-      }
-    }
+    const result = await assignIncidentDomainCommand({
+      incidentId: id,
+      assigneeId: validated.assigneeId,
+      teamId: validated.teamId,
+      actor: { id: actor.id, name: apiKey.name },
+    });
 
-    if (validated.teamId) {
-      const targetTeam = await prisma.team.findUnique({
-        where: { id: validated.teamId },
-        select: { id: true },
-      });
-      if (!targetTeam) {
-        throw new AppError({
-          code: 'TEAM_NOT_FOUND',
-          userMessage: `Target team with id '${validated.teamId}' not found.`,
-        });
-      }
-    }
-
-    const updated = await prisma.$transaction(async tx => {
-      const res = await tx.incident.update({
-        where: { id },
-        data: {
-          assigneeId: validated.assigneeId !== undefined ? validated.assigneeId : undefined,
-          teamId: validated.teamId !== undefined ? validated.teamId : undefined,
-        },
-        select: {
-          id: true,
-          title: true,
-          status: true,
-          assigneeId: true,
-          teamId: true,
-          assignee: { select: { id: true, name: true, email: true } },
-          team: { select: { id: true, name: true } },
-          updatedAt: true,
-        },
-      });
-
-      await tx.incidentEvent.create({
-        data: {
-          incidentId: id,
-          type: 'ASSIGNMENT',
-          message: validated.assigneeId ? `Assigned to user ${validated.assigneeId}` : 'Incident unassigned',
-        },
-      });
-
-      return res;
+    const updated = await prisma.incident.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        assigneeId: true,
+        teamId: true,
+        assignee: { select: { id: true, name: true, email: true } },
+        team: { select: { id: true, name: true } },
+        updatedAt: true,
+      },
     });
 
     await logV2Audit({
@@ -112,8 +78,8 @@ export async function POST(
       actorId: actor.id,
       apiKeyId: apiKey.id,
       details: {
-        assigneeId: validated.assigneeId ?? null,
-        teamId: validated.teamId ?? null,
+        assigneeId: result.assigneeId,
+        teamId: result.teamId,
       },
     });
 

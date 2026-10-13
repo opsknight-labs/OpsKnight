@@ -31,7 +31,10 @@ export async function GET(
     const policy = await prisma.escalationPolicy.findUnique({
       where: { id },
       include: {
-        steps: { orderBy: { stepOrder: 'asc' } },
+        steps: {
+          orderBy: { stepOrder: 'asc' },
+          include: { conditions: true },
+        },
         services: { select: { id: true, name: true } },
       },
     });
@@ -82,6 +85,9 @@ export async function PATCH(
           targetTeamId: step.targetType === 'TEAM' ? step.targetId : undefined,
           targetScheduleId: step.targetType === 'SCHEDULE' ? step.targetId : undefined,
           delayMinutes: step.delayMinutes,
+          notificationChannels: step.notificationChannels,
+          notifyOnlyTeamLead: step.notifyOnlyTeamLead,
+          conditions: step.conditions,
         };
         const stepValidation = validateEscalationStep(stepInput);
         if (!stepValidation.valid) {
@@ -111,6 +117,7 @@ export async function PATCH(
       });
 
       if (validated.steps) {
+        await tx.escalationRuleCondition.deleteMany({ where: { rule: { policyId: id } } });
         await tx.escalationRule.deleteMany({ where: { policyId: id } });
         for (const [index, stepPayload] of validatedStepPayloads.entries()) {
           await tx.escalationRule.create({
@@ -124,6 +131,17 @@ export async function PATCH(
               delayMinutes: stepPayload.delayMinutes,
               notificationChannels: stepPayload.notificationChannels,
               notifyOnlyTeamLead: stepPayload.notifyOnlyTeamLead,
+              ...(stepPayload.conditions && stepPayload.conditions.length > 0
+                ? {
+                    conditions: {
+                      create: stepPayload.conditions.map(c => ({
+                        field: c.field,
+                        operator: c.operator,
+                        values: c.values,
+                      })),
+                    },
+                  }
+                : {}),
             },
           });
         }
@@ -131,7 +149,12 @@ export async function PATCH(
 
       return tx.escalationPolicy.findUnique({
         where: { id },
-        include: { steps: { orderBy: { stepOrder: 'asc' } } },
+        include: {
+          steps: {
+            orderBy: { stepOrder: 'asc' },
+            include: { conditions: true },
+          },
+        },
       });
     });
 
@@ -183,6 +206,7 @@ export async function DELETE(
     }
 
     await prisma.$transaction(async tx => {
+      await tx.escalationRuleCondition.deleteMany({ where: { rule: { policyId: id } } });
       await tx.escalationRule.deleteMany({ where: { policyId: id } });
       await tx.escalationPolicy.delete({ where: { id } });
     });

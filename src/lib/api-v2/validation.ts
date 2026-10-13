@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { APP_ROLES } from '@/lib/authorization';
+import { APP_ROLES, isApiScope } from '@/lib/authorization';
 
 export const PaginationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -9,7 +9,7 @@ export const PaginationQuerySchema = z.object({
 export const IncidentListQuerySchema = PaginationQuerySchema.extend({
   status: z.enum(['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'SNOOZED', 'SUPPRESSED']).optional(),
   priority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']).optional(),
-  urgency: z.enum(['HIGH', 'LOW']).optional(),
+  urgency: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
   serviceId: z.string().trim().min(1).optional(),
   assigneeId: z.string().trim().min(1).optional(),
   teamId: z.string().trim().min(1).optional(),
@@ -20,7 +20,7 @@ export const IncidentCreateV2Schema = z.object({
   title: z.string().trim().min(1, 'Title is required').max(200),
   description: z.string().trim().max(10000).optional().nullable(),
   serviceId: z.string().trim().min(1, 'Service ID is required'),
-  urgency: z.enum(['HIGH', 'LOW']).default('HIGH'),
+  urgency: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('HIGH'),
   priority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']).optional().nullable(),
   assigneeId: z.string().trim().optional().nullable(),
   teamId: z.string().trim().optional().nullable(),
@@ -124,10 +124,32 @@ export const ScheduleOverrideV2Schema = z.object({
   replacesUserId: z.string().trim().optional().nullable(),
 });
 
+export const EscalationStepConditionSchema = z.object({
+  field: z.enum(['PRIORITY', 'URGENCY', 'SUPPORT_HOURS_STATE']),
+  operator: z.enum(['IN', 'NOT_IN', 'EQUALS', 'NOT_EQUALS']),
+  values: z.array(z.string()).min(1),
+});
+
 export const EscalationStepSchema = z.object({
   delayMinutes: z.number().int().min(0).max(1440),
   targetType: z.enum(['USER', 'SCHEDULE', 'TEAM']),
   targetId: z.string().trim().min(1),
+  notificationChannels: z
+    .array(
+      z.enum([
+        'EMAIL',
+        'SMS',
+        'VOICE',
+        'PUSH',
+        'SLACK',
+        'WEBHOOK',
+        'WHATSAPP',
+        'MICROSOFT_TEAMS',
+      ])
+    )
+    .optional(),
+  notifyOnlyTeamLead: z.boolean().optional(),
+  conditions: z.array(EscalationStepConditionSchema).optional(),
 });
 
 export const EscalationPolicyCreateV2Schema = z.object({
@@ -186,7 +208,16 @@ export const ServiceAccountCreateV2Schema = z.object({
 
 export const ServiceAccountTokenIssueV2Schema = z.object({
   name: z.string().trim().min(1).max(100),
-  scopes: z.array(z.string().trim().min(1)).min(1, 'At least one scope is required'),
+  scopes: z
+    .array(
+      z
+        .string()
+        .trim()
+        .refine(isApiScope, {
+          message: 'Invalid API scope. Scopes must belong to the API scope registry.',
+        })
+    )
+    .min(1, 'At least one scope is required'),
   expiresInDays: z.number().int().min(1).max(365).optional(),
 });
 

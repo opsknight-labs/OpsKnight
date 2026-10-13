@@ -10,6 +10,7 @@ import {
   ScheduleUpdateV2Schema,
 } from '@/lib/api-v2';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
+import { scheduleReadWhere } from '@/lib/authorization-filters';
 import { AppError } from '@/lib/errors';
 
 export async function GET(
@@ -46,11 +47,22 @@ export async function GET(
       });
     }
 
-    const participantIds = schedule.layers.flatMap(l => l.users.map(u => u.userId));
-    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.SCHEDULE_READ, {
-      type: 'schedule',
-      participantIds,
+    const accessible = await prisma.onCallSchedule.findFirst({
+      where: {
+        AND: [
+          { id },
+          scheduleReadWhere(actor),
+        ],
+      },
+      select: { id: true },
     });
+
+    if (!accessible) {
+      throw new AppError({
+        code: 'AUTHORIZATION_DENIED',
+        userMessage: 'You are not authorized to access this schedule.',
+      });
+    }
 
     return apiV2Success(schedule, { headers: rlHeaders });
   } catch (error) {

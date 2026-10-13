@@ -68,7 +68,11 @@ export async function PATCH(
     const { id } = await params;
     const existing = await prisma.integration.findUnique({
       where: { id },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        service: { select: { id: true, teamId: true } },
+      },
     });
 
     if (!existing) {
@@ -77,6 +81,11 @@ export async function PATCH(
         userMessage: `Integration with id '${id}' was not found.`,
       });
     }
+
+    enforceV2Authorization(actor, AUTHORIZATION_ACTIONS.INTEGRATION_MANAGE, {
+      type: 'service',
+      teamId: existing.service.teamId,
+    });
 
     const body = await req.json().catch(() => {
       throw new AppError({ code: 'INVALID_JSON', userMessage: 'Invalid JSON request body.' });
@@ -87,7 +96,8 @@ export async function PATCH(
     const updated = await prisma.integration.update({
       where: { id },
       data: {
-        name: validated.name,
+        ...(validated.name !== undefined ? { name: validated.name } : {}),
+        ...(validated.enabled !== undefined ? { enabled: validated.enabled } : {}),
       },
       select: {
         id: true,

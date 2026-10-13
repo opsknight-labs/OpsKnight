@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import prisma from '@/lib/prisma';
 import { hashTokenV2 } from '@/lib/api-keys';
-import { isAppRole, type AppRole } from '@/lib/authorization';
+import { isAppRole, isApiScope, type AppRole } from '@/lib/authorization';
 import { AppError } from '@/lib/errors';
 import { updateUserSecurityState } from '@/lib/users/admin-invariants';
 import { logV2Audit } from './audit';
@@ -267,6 +267,15 @@ export async function issueServiceAccountToken(input: IssueServiceAccountTokenIn
     throw new AppError({
       code: 'INVALID_TOKEN_SCOPES',
       userMessage: 'At least one valid scope must be assigned to the token.',
+    });
+  }
+
+  const invalidScopes = input.scopes.filter(s => !isApiScope(s));
+  if (invalidScopes.length > 0) {
+    throw new AppError({
+      code: 'INVALID_TOKEN_SCOPES',
+      userMessage: `Invalid scopes provided: ${invalidScopes.join(', ')}. Scopes must be recognized in the API scope registry.`,
+      details: { invalidScopes },
     });
   }
 

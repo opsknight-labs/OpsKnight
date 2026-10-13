@@ -9,6 +9,8 @@ import {
   logV2Audit,
   StatusPageUpdateV2Schema,
 } from '@/lib/api-v2';
+import { makeDefaultStatusPage, StatusPageAdminError } from '@/lib/status-pages/admin';
+import { applyStatusPageConfigurationChange } from '@/lib/status-pages/publish-configuration';
 import { AUTHORIZATION_ACTIONS } from '@/lib/authorization-policy';
 import { AppError } from '@/lib/errors';
 
@@ -81,14 +83,39 @@ export async function PATCH(
 
     const validated = StatusPageUpdateV2Schema.parse(body);
 
-    const updated = await prisma.statusPage.update({
+    try {
+      if (validated.isDefault === true && !existing.isDefault) {
+        await makeDefaultStatusPage(id);
+      }
+
+      const hasConfigChanges =
+        validated.name !== undefined ||
+        validated.slug !== undefined ||
+        validated.enabled !== undefined;
+
+      if (hasConfigChanges) {
+        await applyStatusPageConfigurationChange({
+          pageId: id,
+          actor: { id: actor.id, name: apiKey.name },
+          patch: {
+            ...(validated.name !== undefined ? { name: validated.name } : {}),
+            ...(validated.slug !== undefined ? { slug: validated.slug } : {}),
+            ...(validated.enabled !== undefined ? { enabled: validated.enabled } : {}),
+          },
+        });
+      }
+    } catch (err) {
+      if (err instanceof StatusPageAdminError) {
+        throw new AppError({
+          code: err.code,
+          userMessage: err.message,
+        });
+      }
+      throw err;
+    }
+
+    const updated = await prisma.statusPage.findUniqueOrThrow({
       where: { id },
-      data: {
-        name: validated.name,
-        slug: validated.slug,
-        isDefault: validated.isDefault,
-        enabled: validated.enabled,
-      },
       select: {
         id: true,
         name: true,

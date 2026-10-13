@@ -1,8 +1,17 @@
+import { createHmac } from 'node:crypto';
 import { AppError } from '@/lib/errors';
 import type { ApiV2CursorPayload, ApiV2Pagination } from './types';
 
 export const DEFAULT_PAGE_LIMIT = 20;
 export const MAX_PAGE_LIMIT = 100;
+
+function cursorSignature(payload: { id: string; createdAt: string }): string {
+  const secret = process.env.NEXTAUTH_SECRET || 'opsknight-v2-pagination-salt';
+  return createHmac('sha256', secret)
+    .update(`${payload.id}:${payload.createdAt}`)
+    .digest('base64url')
+    .slice(0, 16);
+}
 
 export function parsePaginationParams(searchParams: URLSearchParams): {
   limit: number;
@@ -27,7 +36,8 @@ export function parsePaginationParams(searchParams: URLSearchParams): {
 }
 
 export function encodeCursor(payload: ApiV2CursorPayload): string {
-  const json = JSON.stringify({ id: payload.id, createdAt: payload.createdAt });
+  const sig = cursorSignature({ id: payload.id, createdAt: payload.createdAt });
+  const json = JSON.stringify({ id: payload.id, createdAt: payload.createdAt, sig });
   return Buffer.from(json, 'utf8').toString('base64url');
 }
 
@@ -43,10 +53,19 @@ export function decodeCursor(cursorString: string): ApiV2CursorPayload {
       typeof parsed.createdAt === 'string' &&
       !Number.isNaN(new Date(parsed.createdAt).getTime())
     ) {
+      if (typeof parsed.sig === 'string') {
+        const expectedSig = cursorSignature({ id: parsed.id, createdAt: parsed.createdAt });
+        if (parsed.sig !== expectedSig) {
+          throw new AppError({
+            code: 'INVALID_PAGINATION_CURSOR',
+            userMessage: 'The provided pagination cursor signature is invalid or has been modified.',
+          });
+        }
+      }
       return { id: parsed.id, createdAt: parsed.createdAt };
     }
-  } catch {
-    // Handled below
+  } catch (error) {
+    if (error instanceof AppError) throw error;
   }
 
   throw new AppError({
