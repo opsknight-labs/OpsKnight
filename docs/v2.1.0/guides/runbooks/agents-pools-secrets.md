@@ -18,10 +18,12 @@ execution infrastructure from credentials. Agent/pool management requires
 
 ## Enroll an Agent
 
-Choose **Add Agent**, enter its name and expected hostname, and create enrollment.
+Choose **Add Agent**, enter its name and optional hostname hint, and create enrollment.
 Copy the one-time token immediately: it expires after 15 minutes and cannot be
 displayed again. Follow the UI setup instructions and pin the trusted execution
-public key. Review the local policy before installation.
+public key. The hostname hint is initial metadata, not a hostname restriction; enrollment records the Agent-reported hostname. Review the local policy before installation.
+
+The setup commands deploy only the Agent and connect to an existing OpsKnight installation. Set **OpsKnight URL from Agent** to an address reachable from its host or cluster; use HTTPS for secret-backed steps. Helm uses the separate `opsknight-agent` chart. The Compose policy path applies only to Compose; review the policy for each other deployment method separately.
 
 Persist the Agent identity and result spool in a dedicated volume. Do not share
 that volume across simultaneous Agent instances. Installation examples for

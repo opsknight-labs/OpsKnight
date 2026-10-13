@@ -11,6 +11,21 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
+function imageParts(image: string) {
+  const digestSeparator = image.indexOf('@');
+  if (digestSeparator > 0)
+    return {
+      repository: image.slice(0, digestSeparator),
+      digest: image.slice(digestSeparator + 1),
+    };
+  const tagSeparator = image.lastIndexOf(':');
+  const hasTag = tagSeparator > image.lastIndexOf('/');
+  return {
+    repository: hasTag ? image.slice(0, tagSeparator) : image,
+    tag: hasTag ? image.slice(tagSeparator + 1) : '2.0.0',
+  };
+}
+
 function helmImageArguments(image: string): string {
   const digestSeparator = image.indexOf('@');
   if (digestSeparator > 0) {
@@ -60,44 +75,75 @@ export default function AgentSetupInstructions({
   appUrl?: string;
 }) {
   const [image, setImage] = useState('ghcr.io/opsknight-labs/opsknight-agent:2.0.0');
-  const [url, setUrl] = useState('http://opsknight-app:3000');
+  const [url, setUrl] = useState(appUrl || 'https://opsknight.company.com');
   const nativeUrl = appUrl || 'https://opsknight.company.com';
 
   const [policyPath, setPolicyPath] = useState('../../agent/policy.container.json');
   const snippets = useMemo(() => {
     const helmImage = helmImageArguments(image);
+    const parsedImage = imageParts(image);
+    const namespace =
+      'kubectl create namespace opsknight --dry-run=client -o yaml | kubectl apply -f -';
+    const kustomization = JSON.stringify({
+      apiVersion: 'kustomize.config.k8s.io/v1beta1',
+      kind: 'Kustomization',
+      namespace: 'opsknight',
+      resources: ['deployment.yaml', 'policy.yaml', 'service-account.yaml', 'pvc.yaml'],
+      images: [
+        {
+          name: 'ghcr.io/opsknight-labs/opsknight-agent',
+          newName: parsedImage.repository,
+          ...(parsedImage.digest ? { digest: parsedImage.digest } : { newTag: parsedImage.tag }),
+        },
+      ],
+      patches: [
+        {
+          target: { kind: 'Deployment', name: 'opsknight-agent' },
+          patch: JSON.stringify([
+            { op: 'replace', path: '/spec/template/spec/containers/0/env/0/value', value: url },
+          ]),
+        },
+      ],
+    });
     const compose = `export OPSKNIGHT_AGENT_IMAGE=${shellQuote(image)}
 export OPSKNIGHT_AGENT_URL=${shellQuote(url)}
 export OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=${shellQuote(token)}
 export OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
 export OPSKNIGHT_AGENT_POLICY_PATH=${shellQuote(policyPath)}
 
-docker compose -f deploy/compose/docker-compose.yml \\
-  -f deploy/compose/docker-compose.agent.yml up -d opsknight-agent`;
+docker compose -p opsknight-agent -f deploy/compose/docker-compose.agent.yml up -d opsknight-agent`;
     const swarm = `printf '%s' ${shellQuote(token)} | docker secret create opsknight_agent_enrollment_token -
 export OPSKNIGHT_AGENT_IMAGE=${shellQuote(image)}
 export OPSKNIGHT_AGENT_URL=${shellQuote(url)}
 export OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
 
+# Use an existing overlay network reachable from this Agent.
+export SWARM_NETWORK_NAME=opsknight
 docker stack deploy --with-registry-auth \\
-  -c deploy/swarm/docker-stack.integrated.yml \\
-  -c deploy/swarm/docker-stack.agent.yml opsknight`;
-    const helm = `kubectl -n opsknight create secret generic opsknight-agent-enrollment \\
+  -c deploy/swarm/docker-stack.agent.yml opsknight-agent`;
+    const helm = `${namespace}
+kubectl -n opsknight create secret generic opsknight-agent-enrollment \\
   --from-literal=OPSKNIGHT_AGENT_ENROLLMENT_TOKEN=${shellQuote(token)} \\
   --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
 
-helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \\
+helm upgrade --install opsknight-agent deploy/kubernetes/helm/opsknight-agent \\
   --namespace opsknight --create-namespace \\
   --set agent.enabled=true \\
+  --set-string agent.url=${shellQuote(url)} \\
   ${helmImage} \\
   --set agent.enrollmentToken.existingSecret=opsknight-agent-enrollment`;
-    const kustomize = `kubectl -n opsknight create secret generic opsknight-agent-enrollment \\
+    const kustomize = `${namespace}
+kubectl -n opsknight create secret generic opsknight-agent-enrollment \\
   --from-literal=enrollment-token=${shellQuote(token)} \\
   --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY=${shellQuote(executionPublicKey)}
 
-# Choose integrated-agent or split-agent for your runtime.
-kubectl apply -k deploy/kubernetes/kustomize/profiles/integrated-agent`;
-    const effectiveNativeUrl = url !== 'http://opsknight-app:3000' ? url : nativeUrl;
+# Build an Agent-only overlay with the selected URL and image.
+agent_setup_dir=$(mktemp -d)
+cp deploy/kubernetes/kustomize/components/agent/deployment.yaml deploy/kubernetes/kustomize/components/agent/policy.yaml deploy/kubernetes/kustomize/components/agent/service-account.yaml deploy/kubernetes/kustomize/components/agent/pvc.yaml "$agent_setup_dir/"
+printf '%s' ${shellQuote(kustomization)} > "$agent_setup_dir/kustomization.yaml"
+kubectl apply -k "$agent_setup_dir"
+rm -rf "$agent_setup_dir"`;
+    const effectiveNativeUrl = url || nativeUrl;
     const linux = `# 1. Download official release installer (replace v2.0.0 with your release version tag if different)
 curl -fsSL https://github.com/opsknight-labs/OpsKnight/releases/download/v2.0.0/install.sh -o install.sh
 sudo bash install.sh \\
@@ -137,7 +183,7 @@ sudo systemctl enable --now opsknight-agent`;
           <Input id="agent-setup-url" value={url} onChange={event => setUrl(event.target.value)} />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="agent-setup-policy">Local policy path</Label>
+          <Label htmlFor="agent-setup-policy">Compose policy path</Label>
           <Input
             id="agent-setup-policy"
             value={policyPath}
@@ -170,11 +216,11 @@ sudo systemctl enable --now opsknight-agent`;
         </TabsContent>
       </Tabs>
       <p className="text-xs text-muted-foreground">
-        Split runtimes use <code>http://opsknight-web:3000</code>. Native and remote Agents should
-        use the externally reachable HTTPS URL. Secret-backed steps require HTTPS, including
-        container Agents; internal HTTP URLs only support steps without secrets. Keep the enrollment
-        Secret while the deployment references it; the consumed token cannot enroll again. Persisted
-        identity is used after enrollment.
+        These commands deploy only the Agent and require an existing OpsKnight installation. Run
+        them from the repository root. Use an Agent-reachable HTTPS URL. Secret-backed steps require
+        HTTPS, including container Agents; internal HTTP URLs only support steps without secrets.
+        Keep the enrollment Secret while the deployment references it; the consumed token cannot
+        enroll again. Persisted identity is used after enrollment.
       </p>
     </div>
   );

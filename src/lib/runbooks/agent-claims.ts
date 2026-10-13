@@ -35,6 +35,24 @@ import {
   RunbookPreExecutionFenceError,
 } from './errors';
 
+const PROXY_DIAGNOSTIC_COOLDOWN_MS = 60_000;
+const lastProxyDiagnosticWarn = new Map<string, number>();
+
+function logProxyDiagnosticWarning(agentId: string) {
+  const now = Date.now();
+  const last = lastProxyDiagnosticWarn.get(agentId) ?? 0;
+  if (now - last < PROXY_DIAGNOSTIC_COOLDOWN_MS) return;
+  lastProxyDiagnosticWarn.set(agentId, now);
+  if (lastProxyDiagnosticWarn.size > 1000) {
+    const oldest = lastProxyDiagnosticWarn.keys().next().value;
+    if (oldest) lastProxyDiagnosticWarn.delete(oldest);
+  }
+  console.warn(
+    `[RunbookAgent] Agent ${agentId} attempted to claim secret-backed steps without verified confidential transport. ` +
+      `If running behind a trusted TLS-terminating reverse proxy (e.g. Nginx, Cloudflare) that overwrites forwarding headers and blocks direct backend access, configure TRUST_PROXY_HEADERS=true on the control plane.`
+  );
+}
+
 export async function recordAgentHeartbeat(input: {
   agentId: string;
   hostname?: string;
@@ -386,10 +404,12 @@ export async function claimAgentAttempt(
               }))
             )
               blockedSecretTransport = true;
-            if (blockedSecretTransport)
+            if (blockedSecretTransport) {
+              logProxyDiagnosticWarning(agentId);
               throw new RunbookDefinitionError(
-                'HTTPS required for secret-backed steps. Configure this Agent with a trusted HTTPS control-plane URL.'
+                'HTTPS required for secret-backed steps. If behind a trusted TLS-terminating reverse proxy that sanitizes forwarding headers, configure TRUST_PROXY_HEADERS=true on the control plane.'
               );
+            }
             return null;
           }
           const lockedCandidates = await tx.$queryRaw<Array<{ id: string }>>`

@@ -427,11 +427,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const canDeleteService = currentUser.role === 'ADMIN';
 
   const [
-    serviceRunbookBindings,
-    availableRunbooks,
-    availableRunbookAgents,
-    availableRunbookAgentPools,
-  ] = await Promise.all([
+    serviceRunbookBindingsResult,
+    availableRunbooksResult,
+    availableRunbookAgentsResult,
+    availableRunbookAgentPoolsResult,
+  ] = await Promise.allSettled([
     prisma.serviceRunbookBinding.findMany({
       where: { serviceId: id },
       include: {
@@ -440,6 +440,20 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         },
         runbookVersion: { include: { inputs: { orderBy: { sequence: 'asc' } } } },
         triggers: { include: { conditions: { orderBy: { sequence: 'asc' } } } },
+        executions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            status: true,
+            startedAt: true,
+            completedAt: true,
+            createdAt: true,
+          },
+        },
+        _count: {
+          select: { executions: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -456,7 +470,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     }),
     prisma.runbookAgent.findMany({
       where: { status: { in: ['ONLINE', 'DEGRADED', 'OFFLINE'] } },
-      select: { id: true, name: true, hostname: true },
+      select: { id: true, name: true, hostname: true, status: true },
       orderBy: { name: 'asc' },
     }),
     prisma.runbookAgentPool.findMany({
@@ -464,6 +478,40 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       orderBy: { name: 'asc' },
     }),
   ]);
+
+  const serviceRunbookBindings =
+    serviceRunbookBindingsResult.status === 'fulfilled'
+      ? serviceRunbookBindingsResult.value
+      : [];
+  const availableRunbooks =
+    availableRunbooksResult.status === 'fulfilled'
+      ? availableRunbooksResult.value
+      : [];
+  const availableRunbookAgents =
+    availableRunbookAgentsResult.status === 'fulfilled'
+      ? availableRunbookAgentsResult.value
+      : [];
+  const availableRunbookAgentPools =
+    availableRunbookAgentPoolsResult.status === 'fulfilled'
+      ? availableRunbookAgentPoolsResult.value
+      : [];
+
+  const runbooksLoadError =
+    serviceRunbookBindingsResult.status === 'rejected' ||
+    availableRunbooksResult.status === 'rejected' ||
+    availableRunbookAgentsResult.status === 'rejected' ||
+    availableRunbookAgentPoolsResult.status === 'rejected';
+
+  if (serviceRunbookBindingsResult.status === 'rejected') {
+    logger.warn('[Service Detail] Failed to load service runbook bindings', {
+      error: serviceRunbookBindingsResult.reason,
+    });
+  }
+  if (availableRunbooksResult.status === 'rejected') {
+    logger.warn('[Service Detail] Failed to load available runbooks', {
+      error: availableRunbooksResult.reason,
+    });
+  }
 
   // SLA and Health Computations with truthful failure degradation
   const dynamicStatus: 'OPERATIONAL' | 'DEGRADED' | 'CRITICAL' | 'UNKNOWN' = isSlaMetricsAvailable
@@ -1248,6 +1296,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         defaultTab={activeTab}
         activeIncidentCount={activeIncidentsCount ?? 0}
         integrationCount={service.integrations?.length || 0}
+        runbooksCount={runbooksLoadError ? undefined : serviceRunbookBindings.length}
         notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}
         automationContent={
@@ -1264,6 +1313,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             availableAgents={availableRunbookAgents}
             availableAgentPools={availableRunbookAgentPools}
             canManage={canManageService}
+            loadError={runbooksLoadError}
           />
         }
         integrationsContent={integrationsContent}

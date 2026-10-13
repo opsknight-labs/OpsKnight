@@ -11,7 +11,7 @@ verification:
   evidence:
     - agent/
     - deploy/compose/docker-compose.agent.yml
-    - deploy/kubernetes/helm/opsknight/templates/agent.yaml
+    - deploy/kubernetes/helm/opsknight-agent/templates/agent.yaml
     - deploy/kubernetes/kustomize/components/agent/
     - deploy/swarm/docker-stack.agent.yml
 ---
@@ -82,10 +82,9 @@ Systemd logs and journal diagnostics use a unit allowlist and at most 500 lines.
 Docker and Podman share typed container actions but use independent
 `dockerContainers` / `podmanContainers` allowlists. The container image includes
 both CLIs; an inaccessible runtime is not advertised as effective. Host-native
-Agents need the appropriate CLI and narrowly scoped runtime access. No overlay
-automatically mounts host runtime sockets, enables privilege, or grants sudo.
-For remote Podman access, supply operator-controlled runtime connection
-configuration; do not expose unauthenticated sockets.
+Agents need the appropriate CLI and narrowly scoped runtime access. For containerized Agents, managing Docker or Podman containers on the host requires providing access to the respective engine:
+- **Docker**: Mount the Docker socket (e.g. `/var/run/docker.sock`) into the container when Docker actions are allowlisted.
+- **Podman**: Supply a Podman service socket via `CONTAINER_HOST` (e.g. `CONTAINER_HOST=unix:///run/podman/podman.sock` with the socket mounted), or run the Agent as a native host service. Nested rootless Podman execution inside unprivileged locked-down containers (`cap_drop: ALL`, `read_only: true`, `no-new-privileges: true`) is blocked by Linux kernel user namespace restrictions; using an explicit Podman socket connection is the supported deployment approach for containerized agents. Do not expose unauthenticated TCP sockets.
 
 Kubernetes policy includes `kubernetesActions` and `kubernetesMaxReplicas`.
 Default actions are read-only and the replica limit is zero. Explicitly add
@@ -120,58 +119,58 @@ control-plane database. Back up encryption keys and PostgreSQL together.
 
 ## Docker Compose
 
+Run from the repository root. This file starts only the Agent, connecting to an existing installation:
+
 ```sh
 export OPSKNIGHT_AGENT_ENROLLMENT_TOKEN='<single-use-token>'
+export OPSKNIGHT_EXECUTION_PUBLIC_KEY='<public-key-from-Agents-page>'
 export OPSKNIGHT_AGENT_IMAGE='ghcr.io/opsknight-labs/opsknight-agent:2.0.0'
-docker compose -f deploy/compose/docker-compose.yml \
-  -f deploy/compose/docker-compose.agent.yml up -d opsknight-agent
+export OPSKNIGHT_AGENT_URL='https://opsknight.example.com'
+export OPSKNIGHT_AGENT_POLICY_PATH='../../agent/policy.container.json'
+docker compose -p opsknight-agent -f deploy/compose/docker-compose.agent.yml up -d opsknight-agent
 ```
 
-For split Compose, set `OPSKNIGHT_AGENT_URL=http://opsknight-web:3000`. Mount the Docker socket only when Docker actions are required and accepted by your threat model. Host Systemd actions should use the native service instead of a container.
+The standalone project has its own network. Internal application service names require an explicitly shared network; use an externally reachable URL by default. Mount the Docker socket only for approved Docker actions. Host Systemd actions should use the native service.
 
 ## Helm
 
-Create the enrollment Secret outside Helm, then enable the single-replica Agent:
+Use the separate Agent chart to connect to an existing OpsKnight installation. It deploys only the Agent, local policy, ServiceAccount and persistent identity storage. Create the namespace before the enrollment Secret:
 
 ```sh
+kubectl create namespace opsknight --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n opsknight create secret generic opsknight-agent-enrollment \
   --from-literal=OPSKNIGHT_AGENT_ENROLLMENT_TOKEN='<single-use-token>' \
   --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY='<public-key-from-Agents-page>'
 
-helm upgrade --install opsknight deploy/kubernetes/helm/opsknight \
-  --namespace opsknight -f values.production.yaml \
-  --set agent.enabled=true \
+helm upgrade --install opsknight-agent deploy/kubernetes/helm/opsknight-agent \
+  --namespace opsknight --create-namespace \
+  --set-string agent.url='https://opsknight.example.com' \
   --set agent.enrollmentToken.existingSecret=opsknight-agent-enrollment
 ```
 
-The chart grants no Kubernetes resource privileges or global HTTPS egress by default. To enable Kubernetes actions, add narrow namespaced `agent.rbac.rules`, align `agent.policy.kubernetesNamespaces`, and allow only the cluster control-plane endpoint through `agent.networkPolicy.kubernetesApiCIDRs`. Keep the Agent PVC across upgrades because it stores identity and queued results.
+Pin `agent.image.repository` and `agent.image.digest` to an approved image. The chart requires `agent.url` and grants no Kubernetes API permissions by default. For Kubernetes actions, configure narrow namespaced `agent.rbac.rules`, `agent.kubernetes.enabled` and matching local policy. Apply an environment-specific NetworkPolicy allowing the OpsKnight endpoint and approved targets; the standalone chart does not create one. Preserve the Agent PVC and use a distinct Helm release per Agent. Existing full-stack installations may still use `agent.enabled=true` on the application chart, but that command updates the entire application release.
 
 ## Kustomize
 
-Use `profiles/integrated-agent` or `profiles/split-agent`. Create the externally managed `opsknight-agent-enrollment` Secret before applying the profile; the component deliberately does not generate or commit token material. Pin both application and Agent images by digest. The component starts diagnostics-only with empty RBAC; an overlay enabling Kubernetes actions must also add narrow Role rules and an `ipBlock` egress rule for the cluster API endpoint.
+The Agent setup UI generates an Agent-only temporary overlay with the selected URL and image. It includes the Agent Deployment, policy, ServiceAccount/RBAC and PVC; copy its commands from **Runbooks → Agents → Add Agent → Kustomize** and run from the repository root. Create the namespace and external enrollment Secret first. Kubernetes permissions and runtime policy remain diagnostics-only until explicitly configured. Apply an environment-specific egress policy when required.
 
-```sh
-kubectl -n opsknight create secret generic opsknight-agent-enrollment \
-  --from-literal=enrollment-token='<single-use-token>' \
-  --from-literal=OPSKNIGHT_EXECUTION_PUBLIC_KEY='<public-key-from-Agents-page>'
-kubectl kustomize deploy/kubernetes/kustomize/profiles/split-agent > /tmp/opsknight.yaml
-kubectl apply -f /tmp/opsknight.yaml
-```
+The existing `profiles/integrated-agent` and `profiles/split-agent` profiles deploy the application stack together with the Agent. Use those only when intentionally deploying or updating the whole stack. Neither profile generates enrollment tokens.
 
 ## Docker Swarm
 
-Create an external Raft secret and deploy the Agent overlay with the selected integrated or split stack:
+Create an external Raft secret and deploy only the Agent stack. Set `SWARM_NETWORK_NAME` to an existing overlay network:
 
 ```sh
 printf '%s' '<single-use-token>' | docker secret create opsknight_agent_enrollment_token -
 export OPSKNIGHT_EXECUTION_PUBLIC_KEY='<public-key-from-Agents-page>'
 export OPSKNIGHT_AGENT_IMAGE='ghcr.io/opsknight-labs/opsknight-agent:2.0.0'
+export OPSKNIGHT_AGENT_URL='https://opsknight.example.com'
+export SWARM_NETWORK_NAME=opsknight
 docker stack deploy --with-registry-auth \
-  -c deploy/swarm/docker-stack.yml \
-  -c deploy/swarm/docker-stack.agent.yml opsknight
+  -c deploy/swarm/docker-stack.agent.yml opsknight-agent
 ```
 
-Use `OPSKNIGHT_AGENT_URL=http://opsknight-app:3000` with the integrated stack. The overlay deliberately runs one replica with a persistent identity volume.
+This starts one Agent with persistent identity storage and does not redeploy the application. Review the policy file referenced by the stack. Keep the external enrollment Secret while the service references it.
 
 ## Native Linux service
 

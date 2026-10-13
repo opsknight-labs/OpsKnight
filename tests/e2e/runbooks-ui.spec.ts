@@ -206,7 +206,7 @@ test('Agent enrollment, pool membership, scoped secret grants and rotation', asy
   const secretName = `ui-secret-${suffix}`;
   await page.getByRole('button', { name: 'Add Agent', exact: true }).click();
   await page.getByLabel('Agent name', { exact: true }).fill(agentName);
-  await page.getByLabel('Expected hostname').fill('ui-fixture.invalid');
+  await page.getByLabel('Hostname hint (optional)').fill('ui-fixture.invalid');
   await page.getByRole('button', { name: 'Create enrollment', exact: true }).click();
   await expect(page.getByText('Copy this one-time token now', { exact: true })).toBeVisible();
   const agent = await prisma.runbookAgent.findFirstOrThrow({ where: { name: agentName } });
@@ -330,11 +330,13 @@ test('publish, attach, target, trigger, incident suggestion, exact approval and 
   ).toBeVisible();
   await page.goto(`/services/${serviceId}`);
   await page.getByRole('tab', { name: /^Runbooks/ }).click();
-  await page.getByRole('button', { name: `Attach ${name}`, exact: true }).click();
+  await page.getByRole('button', { name: 'Attach Runbook', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Choose workflow' }).click();
+  await page.getByRole('option', { name: `${name} (v1)` }).click();
   await page.getByRole('combobox', { name: 'Execution mode' }).click();
-  await page.getByRole('option', { name: 'Suggested', exact: true }).click();
+  await page.getByRole('option', { name: /^Suggested/ }).click();
   await page.getByRole('combobox', { name: 'Execution target' }).click();
-  await page.getByRole('option', { name: agent.name, exact: true }).click();
+  await page.getByRole('option', { name: agent.name }).click();
   await page
     .getByRole('dialog')
     .getByRole('button', { name: `Attach ${name}`, exact: true })
@@ -523,11 +525,13 @@ test('390px infrastructure, health and builder have no horizontal overflow', asy
         .getByRole('navigation', { name: 'Infrastructure sections' })
         .getByRole('link', { name: /^pools/i })
         .click();
+      await page.waitForURL('**/runbooks/agents?tab=pools**');
       await noOverflow(page);
       await page
         .getByRole('navigation', { name: 'Infrastructure sections' })
         .getByRole('link', { name: /^secrets/i })
         .click();
+      await page.waitForURL('**/runbooks/agents?tab=secrets**');
       await noOverflow(page);
     }
   }

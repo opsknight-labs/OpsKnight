@@ -60,6 +60,8 @@ const eslintConfig = defineConfig([
       'tests/lib/load-certification-suite.test.ts',
       'agent/**/*.{ts,js,mjs}',
       'tests/integration/runbook-agent-runtime.test.ts',
+      'tests/lib/runbooks/**/*.{ts,tsx}',
+      'tests/e2e/**/*.{ts,tsx}',
     ],
     rules: {
       'security/detect-non-literal-fs-filename': 'off',
