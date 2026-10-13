@@ -510,7 +510,7 @@ Input: `enterprise-sso-2.1-terminal-delivery-audit.md`.
   30.03 seconds with three event/audit samples. This is local database evidence,
   not a production distributed-attack capacity guarantee.
 - An optional private NGINX edge example limits only emergency API requests.
-  Its Docker fixture rejected 987 of 1,000 burst requests before the fixture
+  Its Docker fixture rejected 989 of 1,000 burst requests before the fixture
   upstream, kept ordinary login available and resumed admission after refill.
   CI runs the same fixture using the recorded pinned image. Documentation explains
   trusted client-address handling, TLS placement, independent edge replicas and
@@ -528,3 +528,7 @@ application resilience in `certification/enterprise-sso-2.1-edge.json`.
 Live tenant/key checks remain pending per the user's decision. Customer-clone,
 real notification-provider and multi-node/split-runtime acceptance remain scoped
 external checks; local fixtures do not certify those environments.
+
+Hosted certification exposed a fixture startup connection-reset race after Docker
+published its port. The bounded readiness loop now retries socket startup errors
+and fails explicitly if NGINX never becomes ready; measured load errors remain fatal.

@@ -43,9 +43,11 @@ with tempfile.TemporaryDirectory(prefix='sso-edge-') as directory:
             try:
                 if request('/health') == 204:
                     break
-            except (urllib.error.URLError, TimeoutError):
+            except (urllib.error.URLError, OSError):
                 pass
             time.sleep(0.1)
+        else:
+            raise RuntimeError('NGINX fixture did not become ready within 50 attempts')
         started = time.monotonic()
         with concurrent.futures.ThreadPoolExecutor(max_workers=30) as pool:
             results = list(pool.map(request, ['/api/auth/emergency'] * 1000))

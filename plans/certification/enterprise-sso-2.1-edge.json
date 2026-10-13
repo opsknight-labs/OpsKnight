@@ -1,12 +1,12 @@
 {
-  "measuredAt": "2026-10-13T17:12:28.217105+00:00",
+  "measuredAt": "2026-10-13T17:23:22.580652+00:00",
   "scope": "One local NGINX instance with a 204 fixture upstream, no app or database.",
   "imageId": "sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94",
   "requests": 1000,
   "concurrency": 30,
-  "acceptedByEdge": 13,
-  "rejectedBeforeUpstream": 987,
-  "durationSeconds": 1.2007197079999998,
+  "acceptedByEdge": 11,
+  "rejectedBeforeUpstream": 989,
+  "durationSeconds": 0.26787287500000007,
   "ordinaryLoginUnaffected": true,
   "admissionResumesAfterRefill": true
 }
