@@ -67,6 +67,7 @@ artifacts/load-certification/**/*.json
 !artifacts/load-certification/certification-summary.json
 artifacts/load-certification/**/*.jsonl
 artifacts/load-certification/**/*.log
+artifacts/load-certification/**/*.cpuprofile
 artifacts/load-test-25m/
 artifacts/single-image-test-10m/
 artifacts/soak-test/
