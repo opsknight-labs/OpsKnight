@@ -1,3 +1,4 @@
+import { sessionAuthenticationLabel } from '@/lib/session-authentication-label';
 import { getAuthenticationPolicy, checkAuthenticationPolicy } from '@/lib/authentication-policy';
 import prisma from '@/lib/prisma';
 import { getAuthOptions } from '@/lib/auth';
@@ -139,7 +140,7 @@ export default async function SecuritySettingsPage() {
           },
           {
             label: 'Auth Method',
-            value: session?.authenticationMethod === 'oidc' ? 'OIDC' : 'Password',
+            value: sessionAuthenticationLabel(session?.authenticationMethod),
             icon: <Fingerprint className="h-3.5 w-3.5" />,
             subtext: 'Current session method',
           },
@@ -214,7 +215,7 @@ export default async function SecuritySettingsPage() {
       >
         <p className="text-sm">
           System policy: {systemPolicy.mode.replaceAll('_', ' ')}. Current session method:{' '}
-          {session?.authenticationMethod ?? 'credentials'}.
+          {sessionAuthenticationLabel(session?.authenticationMethod)}.
         </p>
         <div className="divide-y text-sm">
           <div className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">

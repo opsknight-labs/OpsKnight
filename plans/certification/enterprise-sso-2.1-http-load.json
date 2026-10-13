@@ -1,0 +1,31 @@
+{
+  "measuredAt": "2026-10-13T05:08:35.587Z",
+  "expectedPolicyVersion": 1,
+  "scope": "Local TLS/HTTP session checks. Declared fixture routing and resource limits determine these diagnostic measurements; they are not a production capacity certificate.",
+  "results": [
+    {
+      "concurrency": 10,
+      "operations": 100,
+      "errors": 0,
+      "durationMs": 1233.795541,
+      "p95Ms": 528.2965000000002,
+      "p99Ms": 529.773
+    },
+    {
+      "concurrency": 25,
+      "operations": 100,
+      "errors": 0,
+      "durationMs": 505.86737500000027,
+      "p95Ms": 418.3297499999999,
+      "p99Ms": 504.0585000000001
+    },
+    {
+      "concurrency": 50,
+      "operations": 100,
+      "errors": 0,
+      "durationMs": 477.41200000000026,
+      "p95Ms": 436.72995800000035,
+      "p99Ms": 474.4439159999997
+    }
+  ]
+}

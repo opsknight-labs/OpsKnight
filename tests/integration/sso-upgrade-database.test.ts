@@ -268,4 +268,136 @@ suite('existing 2.0 schema and data upgraded to enterprise SSO', () => {
     expect(await prisma.user.count({ where: { email: 'new-user@example.test' } })).toBe(0);
     expect(await prisma.oidcIdentity.count({ where: { subject: 'stale-subject' } })).toBe(0);
   });
+  it('rejects a stale registration on an already-linked identity before fingerprint writes', async () => {
+    const config = await getOidcConfig();
+    const before = await prisma.oidcIdentity.findUniqueOrThrow({
+      where: { id: 'upgrade-identity' },
+    });
+    const result = await resolveOidcIdentityForSignIn({
+      issuer: config!.issuer,
+      subject: 'original-subject',
+      email: 'upgrade-admin@example.test',
+      displayName: 'Original administrator',
+      providerType: 'azure',
+      emailVerifiedClaim: true,
+      requireEmailVerifiedClaim: false,
+      autoProvision: false,
+      allowedDomains: ['example.test'],
+      claims: { tid: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
+      clientId: 'replaced-client',
+      configVersion: config!.configVersion - 1,
+      requireCurrentRegistration: true,
+    });
+    expect(result).toEqual({ ok: false, reason: 'OIDC_CONFIGURATION_CHANGED' });
+    expect(
+      await prisma.oidcIdentity.findUniqueOrThrow({ where: { id: 'upgrade-identity' } })
+    ).toEqual(before);
+  });
+  it('rejects rotation between linked-identity resolution and role/profile synchronization without persisting stale claims', async () => {
+    await prisma.user.create({
+      data: {
+        id: 'upgrade-peer-admin',
+        name: 'Independent administrator',
+        email: 'upgrade-peer@example.test',
+        role: 'ADMIN',
+        status: 'ACTIVE',
+      },
+    });
+    const previous = await prisma.oidcConfig.findUniqueOrThrow({ where: { id: 'default' } });
+    await prisma.oidcConfig.update({
+      where: { id: 'default' },
+      data: {
+        configVersion: previous.configVersion + 1,
+        roleMapping: [{ claim: 'groups', value: 'responders', role: 'RESPONDER' }],
+        profileMapping: { department: 'department' },
+      },
+    });
+    const originalUser = await prisma.user.findUniqueOrThrow({ where: { id: 'upgrade-admin' } });
+    const options = await getAuthOptions();
+    const securityMutations = await import('@/lib/users/admin-invariants');
+    const update = securityMutations.updateUserSecurityState;
+    const intercept = vi
+      .spyOn(securityMutations, 'updateUserSecurityState')
+      .mockImplementationOnce(async (...args) => {
+        await prisma.$transaction(async tx => {
+          await tx.$queryRaw`SELECT "id" FROM "AuthenticationPolicy" WHERE "id" = 'default' FOR UPDATE`;
+          await tx.oidcConfig.update({
+            where: { id: 'default' },
+            data: {
+              configVersion: { increment: 1 },
+              profileMapping: { department: 'newDepartment' },
+            },
+          });
+        });
+        return update(...args);
+      });
+    try {
+      const profile = {
+        sub: 'original-subject',
+        tid: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        email: 'upgrade-admin@example.test',
+        groups: ['responders'],
+        department: 'STALE CLAIM',
+      };
+      const result = await options.callbacks!.signIn!({
+        user: { id: 'original-subject', email: 'upgrade-admin@example.test' },
+        account: { provider: 'oidc', type: 'oauth', providerAccountId: 'original-subject' },
+        profile,
+      });
+      expect(result).toBe('/login?error=OIDC_CONFIGURATION_CHANGED');
+      expect(intercept).toHaveBeenCalledOnce();
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: 'upgrade-admin' } })).toEqual(
+        originalUser
+      );
+    } finally {
+      intercept.mockRestore();
+    }
+  });
+  it('does not undo SCIM-style deactivation between identity lookup and claim synchronization', async () => {
+    const config = await prisma.oidcConfig.findUniqueOrThrow({ where: { id: 'default' } });
+    await prisma.oidcConfig.update({
+      where: { id: 'default' },
+      data: {
+        configVersion: config.configVersion + 1,
+        roleMapping: [],
+        profileMapping: { department: 'department' },
+      },
+    });
+    const options = await getAuthOptions();
+    const securityMutations = await import('@/lib/users/admin-invariants');
+    const update = securityMutations.updateUserSecurityState;
+    const intercept = vi
+      .spyOn(securityMutations, 'updateUserSecurityState')
+      .mockImplementationOnce(async (...args) => {
+        await prisma.user.update({
+          where: { id: 'upgrade-admin' },
+          data: { status: 'DISABLED', tokenVersion: { increment: 1 } },
+        });
+        return update(...args);
+      });
+    try {
+      const profile = {
+        sub: 'original-subject',
+        tid: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        email: 'upgrade-admin@example.test',
+        department: 'STALE AFTER SCIM',
+      };
+      expect(
+        await options.callbacks!.signIn!({
+          user: { id: 'original-subject', email: 'upgrade-admin@example.test' },
+          account: { provider: 'oidc', type: 'oauth', providerAccountId: 'original-subject' },
+          profile,
+        })
+      ).toBe('/login?error=SessionExpired');
+      expect(await prisma.user.findUniqueOrThrow({ where: { id: 'upgrade-admin' } })).toMatchObject(
+        { status: 'DISABLED', role: 'ADMIN', department: null, tokenVersion: 1 }
+      );
+    } finally {
+      intercept.mockRestore();
+      await prisma.user.update({
+        where: { id: 'upgrade-admin' },
+        data: { status: 'ACTIVE', tokenVersion: { increment: 1 } },
+      });
+    }
+  });
 });

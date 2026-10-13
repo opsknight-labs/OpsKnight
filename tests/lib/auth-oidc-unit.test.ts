@@ -262,7 +262,10 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(updateUserSecurityState).toHaveBeenCalledWith(
       'u-responder',
       { role: 'USER' },
-      expect.objectContaining({ tokenVersion: { increment: 1 } })
+      expect.objectContaining({ tokenVersion: { increment: 1 } }),
+      undefined,
+      expect.any(Function),
+      undefined
     );
   });
 
@@ -330,7 +333,10 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(updateUserSecurityState).toHaveBeenCalledWith(
       'u1',
       { role: 'RESPONDER', roleSource: 'OIDC' },
-      expect.objectContaining({ tokenVersion: { increment: 1 } })
+      expect.objectContaining({ tokenVersion: { increment: 1 } }),
+      undefined,
+      expect.any(Function),
+      undefined
     );
   });
 

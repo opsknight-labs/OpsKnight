@@ -130,7 +130,7 @@ starts a new state/nonce/PKCE ceremony; never retry an old callback URL.
 `enterprise_sso_upgrade_test`. Create that disposable database and set `DATABASE_URL`
 and `DIRECT_URL` to it. The script never drops or resets a database and refuses an
 already-upgraded fixture. It extracts baseline schema/migrations from commit
-`ea38c8c5601189225e3c5edd1efeed855c034c7d` (override with a full
+`097f4916a38ddcc6d1512f71b72bde36abbeb171` (override with a full
 `SSO_UPGRADE_BASELINE` hash only for another reviewed 2.0 baseline), seeds existing
 users/provider/links/approvals/history plus a legacy encrypted session, then applies
 the branch migrations and runs the upgrade suite. Fixture encryption/JWT secrets
@@ -140,3 +140,7 @@ These tests establish the migration and application boundaries on an isolated
 fixture. They do not certify a customer's IdP tenant, physical recovery keys,
 production ingress or Kubernetes cluster. Rehearse the same acceptance cases with
 an upgraded copy of the actual deployment before production cutover.
+
+See [Local certification and failure rehearsal](./local-certification/) for exact
+released-version evidence, read/HTTP probes, the Kind cutover, database interruption
+and restored-database rollback results.

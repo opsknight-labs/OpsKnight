@@ -26,3 +26,6 @@ recovery needs PostgreSQL and never silently enables password fallback.
 
 For existing installations, follow [Upgrade existing SSO](./upgrade-existing-sso/)
 for preserved login behavior, controlled cutover and migration acceptance checks.
+
+Use [Local certification and failure rehearsal](./local-certification/) to reproduce
+upgrade, concurrency, deployment-cutover and recovery checks.

@@ -327,3 +327,62 @@ local database. This is schema/application upgrade evidence, not a substitute fo
 rehearsing an upgraded copy of a customer's actual deployment or certifying real IdP
 claims, physically independent keys, ingress, delivery and Kubernetes cutover. Those
 external acceptance requirements remain outstanding. No PR or deployment is created.
+
+## Full implementation audit follow-up — local certification (2026-10-13)
+
+The supplied audit is preserved in `enterprise-sso-2.1-full-audit.md`. All work stays
+on `feat/enterprise-sso-2.1`; no PR is created. The latest main change `4eeaea218`
+was incorporated by cherry-pick (`7f734e6ab`), without merging or rewriting history.
+
+- Existing identity resolution, fingerprint backfill and first linking now hold the
+  authoritative policy/provider registration locks. Claim synchronization reacquires
+  those locks through commit and checks the user's security epoch. Rotation rejects
+  stale callbacks; concurrent SCIM disable or role changes cannot be overwritten by
+  stale OIDC claims. Real PostgreSQL regressions exercise both interleavings.
+- Deployment CI renders upgrades with an explicit tested image, verifies rejection
+  of an unpinned upgrade, and asserts the current Recreate application strategy.
+  Every deployment workflow command step passed in a disposable local workspace.
+  This records local verification, not a claim that hosted CI has passed.
+- The authentication overview is extracted into a product-styled component, preserving
+  the console's responsive layout. Unrecognized session methods display Unknown.
+  A real staging-validation error screenshot and a reproducible certification guide
+  document the actual interface and failure behavior.
+- Upgrade certification defaults to the exact published v2.0.0 commit
+  `097f4916a38ddcc6d1512f71b72bde36abbeb171`. The isolated fixture preserves existing
+  users, credentials, provider ciphertext, immutable identities, team membership,
+  incident history and encrypted sessions through additive migrations.
+
+Verification and committed evidence:
+
+- 5,725 unit tests passed across 753 files; four intentional skips.
+- 42 existing PostgreSQL tests passed across three suites, plus 11 exact-release
+  upgrade/race tests and one bounded authentication read-load probe.
+- The database probe completed 1,600 reads at concurrency 1/10/25/50 with a shared
+  five-connection pool and zero errors. Source hashes, CPU and latency measurements
+  are in `certification/enterprise-sso-2.1-authentication-load.json`.
+- Four optimized HTTPS browser checks passed across Chromium, Firefox and WebKit;
+  two virtual-authenticator cases apply only to Chromium. These exercise virtual
+  recovery credentials in a separate browser context, not physical security keys.
+- An actual disposable Kind cluster ran the published 2.0.0 image and chart, rejected
+  migration while two old application pods remained, kept the application stopped
+  after a deliberately unreachable migration database, and recovered to two upgraded
+  replicas with 198 migrations (177 in the published baseline). The original browser
+  session and administrator identity remained usable. PostgreSQL outage denied
+  protected access; restoration recovered the original session. A separate database
+  restored from the baseline backup ran the published old image successfully with
+  the original session. Evidence is in `certification/enterprise-sso-2.1-kind-cutover.json`.
+- 300 HTTP session reads through TLS, nginx and the two-replica Kubernetes Service
+  completed at concurrency 10/25/50 with zero errors. The repeatable probe and results
+  are `scripts/certify-authentication-http.cjs` and
+  `certification/enterprise-sso-2.1-http-load.json`.
+- TypeScript, modified-file ESLint with zero warnings, the optimized standalone build,
+  four rendered cutover contracts and four upcoming documentation contracts pass.
+
+The Kind rehearsal uses one node and an integrated application topology. Its Linux
+certification image packages the optimized source bundle and Linux dependencies;
+this does not certify the production image supply chain, multi-node HA, split workers,
+customer ingress, real email delivery or production capacity. Load figures are local
+measurements, not throughput guarantees. Per the user's explicit choice, live IdP
+and physically independent security-key certification remain pending. No live tenant
+or production deployment was changed. See
+`docs/v2.1.0/guides/identity/local-certification.md` for replay steps and scope.

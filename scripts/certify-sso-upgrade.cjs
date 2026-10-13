@@ -16,7 +16,7 @@ async function main() {
     throw new Error(
       'Only enterprise_sso_upgrade_test is permitted. Create a disposable database first.'
     );
-  const baseline = process.env.SSO_UPGRADE_BASELINE || 'ea38c8c5601189225e3c5edd1efeed855c034c7d';
+  const baseline = process.env.SSO_UPGRADE_BASELINE || '097f4916a38ddcc6d1512f71b72bde36abbeb171';
   if (!/^[a-f0-9]{40}$/.test(baseline)) throw new Error('Use a full baseline commit hash.');
   const root = process.cwd();
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'opsknight-upgrade-'));
@@ -158,6 +158,7 @@ async function main() {
     await db.$executeRaw`INSERT INTO "UserDevice" ("id","userId","deviceId","token","platform","lastUsed","createdAt","updatedAt") VALUES ('upgrade-device','upgrade-admin','session:upgrade-session','{}','WEB_OIDC',NOW(),NOW(),NOW())`;
     process.env.SSO_UPGRADE_ENCRYPTED_SECRET = encrypted;
     console.log(`Existing 2.0 fixture seeded at ${baseline}; applying additive branch migrations.`);
+    await db.$disconnect();
     run(['prisma', 'migrate', 'deploy']);
     run([
       'vitest',
@@ -166,6 +167,9 @@ async function main() {
       'vitest.int.config.ts',
       '--no-file-parallelism',
       'tests/integration/sso-upgrade-database.test.ts',
+      ...(process.env.SSO_CERT_AUTH_LOAD === '1'
+        ? ['tests/integration/authentication-read-load.test.ts']
+        : []),
     ]);
   } finally {
     await db.$disconnect();

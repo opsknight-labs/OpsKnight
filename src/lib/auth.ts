@@ -1,3 +1,7 @@
+import {
+  assertCurrentOidcRegistration,
+  OidcRegistrationChangedError,
+} from '@/lib/oidc/registration';
 import { createHash } from 'node:crypto';
 import type { NextAuthOptions, User } from 'next-auth';
 import OIDCProvider from '@/lib/oidc';
@@ -1130,22 +1134,37 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           }
 
           if (Object.keys(updateData).length > 0) {
-            if (updateData.role && updateData.role !== targetUser.role) {
+            try {
               const { updateUserSecurityState } = await import('@/lib/users/admin-invariants');
-              const mappedRole = updateData.role as 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+              const mappedRole = updateData.role as
+                | 'ADMIN'
+                | 'RESPONDER'
+                | 'AUDITOR'
+                | 'USER'
+                | undefined;
               const mappedRoleSource = updateData.roleSource as 'OIDC' | undefined;
+              const mappedStatus = updateData.status as 'ACTIVE' | undefined;
               delete updateData.role;
               delete updateData.roleSource;
+              delete updateData.status;
               await updateUserSecurityState(
                 targetUser.id,
-                { role: mappedRole, ...(mappedRoleSource ? { roleSource: mappedRoleSource } : {}) },
-                updateData
+                {
+                  ...(mappedRole ? { role: mappedRole } : {}),
+                  ...(mappedRoleSource ? { roleSource: mappedRoleSource } : {}),
+                  ...(mappedStatus ? { status: mappedStatus } : {}),
+                },
+                updateData,
+                undefined,
+                tx => assertCurrentOidcRegistration(tx, activeConfig),
+                targetUser.tokenVersion
               );
-            } else {
-              await prisma.user.update({
-                where: { id: targetUser.id },
-                data: updateData,
-              });
+            } catch (error) {
+              if (error instanceof OidcRegistrationChangedError)
+                return '/login?error=OIDC_CONFIGURATION_CHANGED';
+              if (error instanceof Error && error.message === 'USER_SECURITY_CHANGED')
+                return '/login?error=SessionExpired';
+              throw error;
             }
             logger.info('[Auth] Updated user from OIDC data', {
               component: 'auth:signIn',

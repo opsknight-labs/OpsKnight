@@ -54,6 +54,7 @@ vi.mock('@/lib/prisma', () => ({
       }),
     },
     oidcConfig: {
+      findUnique: vi.fn().mockImplementation(() => prisma.oidcConfig.findFirst()),
       findFirst: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       updateMany: vi.fn(),

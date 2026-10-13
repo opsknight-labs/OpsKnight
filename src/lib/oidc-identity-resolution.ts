@@ -1,10 +1,15 @@
+import type { Prisma } from '@prisma/client';
+import {
+  assertCurrentOidcRegistration,
+  OidcRegistrationChangedError,
+} from '@/lib/oidc/registration';
 import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { hasOidcEmailLinkAssurance } from '@/lib/oidc-provider';
 import { isOidcLinkingApprovalUsable } from '@/lib/oidc-linking-approval';
 import { getOidcProviderPolicy, type OidcClaims } from '@/lib/oidc/provider-policy';
 import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
-import { normalizeOidcIssuer, getLegacyOidcIssuerVariants } from '@/lib/oidc/issuer-migration';
+import { getLegacyOidcIssuerVariants } from '@/lib/oidc/issuer-migration';
 
 export type OidcTargetUser = {
   id: string;
@@ -12,6 +17,7 @@ export type OidcTargetUser = {
   status: string;
   role: string;
   roleSource: string;
+  tokenVersion?: number;
   name: string | null;
   department: string | null;
   jobTitle: string | null;
@@ -63,6 +69,7 @@ type ResolveOidcIdentityInput = {
 
 const targetUserSelect = {
   id: true,
+  tokenVersion: true,
   email: true,
   status: true,
   role: true,
@@ -88,8 +95,22 @@ function normalizeEmail(email: string | null): string | null {
  */
 export async function resolveOidcIdentityForSignIn(
   input: ResolveOidcIdentityInput,
-  now = new Date()
+  now = new Date(),
+  transactionClient?: Prisma.TransactionClient
 ): Promise<OidcIdentityResolutionResult> {
+  if (input.requireCurrentRegistration && !transactionClient) {
+    return runSerializableTransaction(tx => resolveOidcIdentityForSignIn(input, now, tx));
+  }
+  const db = transactionClient ?? prisma;
+  if (input.requireCurrentRegistration && transactionClient) {
+    try {
+      await assertCurrentOidcRegistration(transactionClient, input);
+    } catch (error) {
+      if (error instanceof OidcRegistrationChangedError)
+        return { ok: false, reason: 'OIDC_CONFIGURATION_CHANGED' };
+      throw error;
+    }
+  }
   const email = normalizeEmail(input.email);
   const providerPolicy = getOidcProviderPolicy(input.issuer, input.providerType);
   const organizationResult = providerPolicy.validateOrganizationBoundary(
@@ -109,13 +130,13 @@ export async function resolveOidcIdentityForSignIn(
   // independently establishes whether that identity is currently permitted.
   // Re-evaluate the organization boundary on every login, including existing
   // bindings, so tenant/domain/org policy changes take effect immediately.
-  const existingIdentity = await prisma.oidcIdentity.findUnique({
+  const existingIdentity = await db.oidcIdentity.findUnique({
     where: { issuer_subject: { issuer: input.issuer, subject: input.subject } },
     select: { id: true, userId: true, issuerFingerprint: true },
   });
 
   if (existingIdentity) {
-    const linkedUser = await prisma.user.findUnique({
+    const linkedUser = await db.user.findUnique({
       where: { id: existingIdentity.userId },
       select: targetUserSelect,
     });
@@ -127,7 +148,7 @@ export async function resolveOidcIdentityForSignIn(
     // on successful login under the active client registration.
     if (!existingIdentity.issuerFingerprint && input.clientId) {
       const currentFingerprint = oidcTrustFingerprint(input.issuer, input.clientId);
-      await prisma.oidcIdentity.update({
+      await db.oidcIdentity.update({
         where: { id: existingIdentity.id },
         data: { issuerFingerprint: currentFingerprint },
       });
@@ -146,7 +167,7 @@ export async function resolveOidcIdentityForSignIn(
     const legacyVariants = getLegacyOidcIssuerVariants(input.issuer);
     let hasLegacyIdentity = false;
     if (legacyVariants.length > 0) {
-      const match = await prisma.oidcIdentity.findFirst({
+      const match = await db.oidcIdentity.findFirst({
         where: { issuer: { in: legacyVariants }, subject: input.subject },
         select: { id: true },
       });
@@ -158,27 +179,9 @@ export async function resolveOidcIdentityForSignIn(
   }
 
   try {
-    return await runSerializableTransaction(async tx => {
-      if (input.requireCurrentRegistration) {
-        // Activation locks policy first. Share that order so a first-link/JIT
-        // transaction either precedes rotation or rejects it before any write.
-        const policies = await tx.$queryRaw<
-          Array<{ mode: string }>
-        >`SELECT "mode" FROM "AuthenticationPolicy" WHERE "id" = 'default' FOR SHARE`;
-        if (!policies[0] || policies[0].mode === 'PASSWORD_ONLY')
-          throw new Error('OIDC_CONFIGURATION_CHANGED');
-        const current = await tx.oidcConfig.findUnique({
-          where: { id: input.providerConfigId ?? 'default' },
-        });
-        if (
-          !current?.enabled ||
-          current.configVersion !== input.configVersion ||
-          current.clientId !== input.clientId ||
-          normalizeOidcIssuer(current.issuer) !== normalizeOidcIssuer(input.issuer)
-        )
-          throw new Error('OIDC_CONFIGURATION_CHANGED');
-      }
-
+    const operation = async (
+      tx: Prisma.TransactionClient
+    ): Promise<OidcIdentityResolutionResult> => {
       // A concurrent callback may have created the identity after the fast
       // path. Recheck first and let the stable binding win unconditionally.
       let identityInsideTransaction = await tx.oidcIdentity.findUnique({
@@ -388,7 +391,10 @@ export async function resolveOidcIdentityForSignIn(
         userCreated: true,
         approvalConsumed: false,
       };
-    });
+    };
+    return transactionClient
+      ? await operation(transactionClient)
+      : await runSerializableTransaction(operation);
   } catch (error) {
     const reason = error instanceof Error ? error.message : '';
     const knownReasons = new Set<OidcIdentityResolutionFailure>([

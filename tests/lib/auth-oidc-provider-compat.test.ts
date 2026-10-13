@@ -67,6 +67,7 @@ import { getAuthOptions, resetAuthOptionsCache } from '@/lib/auth';
 
 const baseConfig = {
   enabled: true,
+  configVersion: 1,
   issuer: 'https://login.microsoftonline.com/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/v2.0',
   clientId: 'client-id',
   clientSecret: 'secret',
