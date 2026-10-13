@@ -131,3 +131,23 @@ the limiter still retain individual authentication-failure evidence.
 This bounds audit/notification amplification, not all database work: limiter and
 aggregate counters still require database writes. Configure ingress request and
 connection limits to keep volumetric traffic within the database's tested capacity.
+
+### Optional edge admission protection
+
+`deploy/nginx/emergency-rate-limit.conf` is an opt-in NGINX HTTP-context example
+for the exact `/api/auth/emergency` endpoint: two requests/second per source with
+a burst of ten, returning 429 before proxying excess requests. See the
+[NGINX rate-limit module](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html)
+for directive semantics. Tune these example limits against shared-NAT custodian
+traffic and rehearse completing a hardware ceremony during abuse before deployment.
+
+Place this private listener behind your trusted TLS terminator, replace the
+upstream service address and block direct public access to the application.
+If another proxy precedes NGINX, configure real-client-IP extraction only from
+explicitly trusted proxy ranges; never accept arbitrary forwarded client headers.
+Otherwise the example intentionally keys on the connecting address. The limiter
+is shared by workers in one NGINX instance, not across independent edge replicas.
+It limits all emergency actions, including verification; maintain a separately
+protected custodian network path for same-NAT abuse and distributed saturation.
+Do not exempt requests merely because an unvalidated cookie/header is present.
+Ordinary login and OIDC callback paths are outside this example's limit.

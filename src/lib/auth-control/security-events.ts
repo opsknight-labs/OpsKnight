@@ -143,6 +143,7 @@ export async function processAuthenticationAlerts() {
   const pending = await prisma.authenticationAlert.findMany({
     where: {
       deliveredAt: null,
+      cancelledAt: null,
       nextAttemptAt: { lte: new Date() },
       OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }],
     },
@@ -155,6 +156,7 @@ export async function processAuthenticationAlerts() {
       where: {
         id: alert.id,
         deliveredAt: null,
+        cancelledAt: null,
         nextAttemptAt: { lte: new Date() },
         OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }],
       },
@@ -173,7 +175,7 @@ export async function processAuthenticationAlerts() {
           data: {
             leaseToken: null,
             leaseUntil: null,
-            nextAttemptAt: new Date(Date.now() + 3600000),
+            cancelledAt: new Date(),
             lastError: 'Recipient is no longer an active administrator.',
           },
         });

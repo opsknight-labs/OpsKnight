@@ -60,11 +60,15 @@ jobs:
       - name: Signed OIDC, WebAuthn, abuse availability and notification fan-out
         run: npx vitest run -c vitest.int.config.ts --no-file-parallelism tests/integration/authentication-policy-database.test.ts tests/integration/emergency-authentication-database.test.ts tests/integration/oidc-staged-authentication-database.test.ts
 
+      - name: Emergency edge admission fixture
+        run: python3 scripts/certify-sso-edge.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: enterprise-sso-resilience
-          path: plans/certification/enterprise-sso-2.1-resilience.json
+          path: |
+            plans/certification/enterprise-sso-2.1-resilience.json
+            plans/certification/enterprise-sso-2.1-edge.json
           if-no-files-found: ignore
 
   published-release-upgrade:

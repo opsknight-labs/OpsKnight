@@ -488,3 +488,43 @@ Live tenant and independent physical-key checks remain pending as requested.
 Customer-clone upgrades, multi-node/split-runtime failures and real outbound
 provider acceptance remain release acceptance work. These changes do not claim
 universal compatibility or a numeric production-readiness certification.
+
+## Claim parity, terminal delivery and edge protection — 2026-10-13
+
+Input: `enterprise-sso-2.1-terminal-delivery-audit.md`.
+
+- Production OIDC login, staged signed-token verification and claims preview now
+  share boolean-claim normalization. Existing bindings reject explicit false,
+  including string/numeric representations already recognized by production.
+  Linked identities retain missing-email and provider-specific missing-claim
+  compatibility. Signed-token regressions cover each rejection and acceptance.
+- Ineligible recipients receive terminal `cancelledAt` metadata. Workers and the
+  dashboard pending count exclude them. Reinstating an administrator cannot revive
+  cancelled intents; a regression verifies their attempt count never advances.
+  A nullable-column migration preserves existing delivery/pending state and adds
+  indexes for selection and retention.
+- Scheduled cleanup removes delivered/cancelled intent metadata older than 90 days,
+  in batches of at most 1,000 per terminal category. Pending work, events, audits
+  and in-app notifications remain untouched; PostgreSQL regressions verify this.
+- Sustained local abuse at concurrency 30 retained all 27,090 rejection counts in
+  30.03 seconds with three event/audit samples. This is local database evidence,
+  not a production distributed-attack capacity guarantee.
+- An optional private NGINX edge example limits only emergency API requests.
+  Its Docker fixture rejected 987 of 1,000 burst requests before the fixture
+  upstream, kept ordinary login available and resumed admission after refill.
+  CI runs the same fixture using the recorded pinned image. Documentation explains
+  trusted client-address handling, TLS placement, independent edge replicas and
+  the need for a protected custodian path during shared-NAT abuse.
+- A fresh fetch and patch-equivalence comparison found no unincorporated main
+  patches. The numeric behind count reflects earlier cherry-picks; history was
+  not merged or rewritten.
+
+Verification: 58 database tests on a freshly migrated isolated schema, 281 focused
+unit/component tests, eight deployment/documentation contracts, TypeScript and
+zero-warning modified-file lint, Prisma validation and the optimized production
+build pass. Edge results are recorded separately from
+application resilience in `certification/enterprise-sso-2.1-edge.json`.
+
+Live tenant/key checks remain pending per the user's decision. Customer-clone,
+real notification-provider and multi-node/split-runtime acceptance remain scoped
+external checks; local fixtures do not certify those environments.

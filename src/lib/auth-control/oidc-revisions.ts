@@ -1,4 +1,5 @@
 import 'server-only';
+import { coerceBooleanClaim } from '@/lib/oidc/claims';
 import { Issuer, custom, generators } from 'openid-client';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
@@ -282,10 +283,10 @@ export async function completeOidcRevisionTest(state: string, code: string, brow
       throw new Error('Provider organization boundary rejected the login.');
     if (!claims.sub) throw new Error('A subject claim is required for administrator verification.');
     const email = typeof claims.email === 'string' ? claims.email.trim().toLowerCase() : '';
+    const emailVerified = coerceBooleanClaim(claims.email_verified);
+    if (emailVerified === false) throw new Error('Provider explicitly reports unverified email.');
     const emailOwnershipVerified =
-      Boolean(email) &&
-      claims.email_verified !== false &&
-      (claims.email_verified === true || provider.allowsMissingEmailVerified());
+      Boolean(email) && (emailVerified === true || provider.allowsMissingEmailVerified());
     const role = evaluateOidcRoleClaims(claims, config.roleMapping);
     if (!role.ok || role.groupsOverage)
       throw new Error('Resolve missing/group-overage role claims before activation.');

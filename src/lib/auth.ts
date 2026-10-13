@@ -1,3 +1,4 @@
+import { coerceBooleanClaim } from '@/lib/oidc/claims';
 import {
   assertCurrentOidcRegistration,
   OidcRegistrationChangedError,
@@ -105,21 +106,6 @@ const AUTH_TTL_MS = safeTtlMs(AUTH_OPTIONS_CACHE_TTL_MS, 5000);
 
 function normalizeIssuer(issuer: string) {
   return normalizeOidcIssuer(issuer);
-}
-
-function coerceBooleanClaim(value: unknown): boolean | undefined {
-  if (value === true) return true;
-  if (value === false) return false;
-  if (typeof value === 'string') {
-    const v = value.trim().toLowerCase();
-    if (v === 'true') return true;
-    if (v === 'false') return false;
-  }
-  if (typeof value === 'number') {
-    if (value === 1) return true;
-    if (value === 0) return false;
-  }
-  return undefined;
 }
 
 function clearSessionToken(token: AugmentedJWT, reason: string) {

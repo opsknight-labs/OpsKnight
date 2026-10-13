@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import bcrypt from 'bcryptjs';
+import { cleanAuthenticationAlerts } from '@/lib/auth-control/sessions';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { consumeAuthRateLimit } from '@/lib/auth-abuse';
 import { restorePasswordAccess, repairCanonicalOrigin } from '@/lib/auth-control/recovery';
@@ -601,27 +602,32 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       const eventsBefore = await prisma.emergencyAccessEvent.count();
       const auditsBefore = await prisma.auditLog.count();
       const alertsBefore = await prisma.authenticationAlert.count();
-      for (let batch = 0; batch < 100; batch++) {
+      let requests = 0;
+      const loadStarted = performance.now();
+      for (let batch = 0; batch < 100 || performance.now() - loadStarted < 30000; batch++) {
         const results = await Promise.allSettled(
           Array.from({ length: 30 }, (_, i) =>
             emergencyLoginOptions('unknown-throttled-account', networks[i % networks.length])
           )
         );
         expect(results.every(result => result.status === 'rejected')).toBe(true);
+        requests += results.length;
       }
       const windows = await prisma.authenticationFailureWindow.findMany({
         where: { id: { startsWith: 'throttled-emergency:options-network:' } },
       });
-      expect(windows.reduce((sum, window) => sum + window.count, 0)).toBe(3000);
+      expect(windows.reduce((sum, window) => sum + window.count, 0)).toBe(requests);
       const eventCount = (await prisma.emergencyAccessEvent.count()) - eventsBefore;
       const auditCount = (await prisma.auditLog.count()) - auditsBefore;
       expect(eventCount).toBeLessThanOrEqual(windows.length * 3);
       expect(auditCount).toBe(eventCount);
       expect((await prisma.authenticationAlert.count()) - alertsBefore).toBeLessThanOrEqual(200);
       measurements.throttledAbuse = {
-        requests: 3000,
+        requests,
+        concurrency: 30,
+        sustainedLoadMs: performance.now() - loadStarted,
         sources: networks.length,
-        aggregateCount: 3000,
+        aggregateCount: requests,
         durableEvents: eventCount,
         durableAuditRows: auditCount,
         durationMs: performance.now() - started,
@@ -858,6 +864,14 @@ suite('independent emergency authentication with signed WebAuthn responses and P
         where: { id: `${prefix}-removed-alert` },
       });
       expect(deferred.lastError).toContain('no longer an active administrator');
+      expect(deferred.cancelledAt).not.toBeNull();
+      const cancelledAttempts = deferred.attempts;
+      // Even eligibility restoration and a due timestamp cannot revive cancellation.
+      await prisma.user.update({ where: { id: removed.id }, data: { role: 'ADMIN' } });
+      await prisma.authenticationAlert.update({
+        where: { id: deferred.id },
+        data: { nextAttemptAt: new Date(0) },
+      });
       expect(
         vi
           .mocked(enqueueCentralNotification)
@@ -906,6 +920,10 @@ suite('independent emergency authentication with signed WebAuthn responses and P
           })
         ).deliveredAt
       ).toBeNull();
+      expect(
+        (await prisma.authenticationAlert.findUniqueOrThrow({ where: { id: deferred.id } }))
+          .attempts
+      ).toBe(cancelledAttempts);
       measurements.deliveryBacklogRecovery = {
         simulatedOutageDays: 30,
         priorAttempts: 100,
@@ -922,6 +940,45 @@ suite('independent emergency authentication with signed WebAuthn responses and P
       await prisma.authenticationAlert.deleteMany({ where: { id: { startsWith: prefix } } });
       await prisma.notification.delete({ where: { id: fixture.id } });
       await prisma.user.delete({ where: { id: removed.id } });
+    }
+  });
+  it('cleans only old terminal delivery metadata while preserving pending work and security evidence', async () => {
+    const event = await prisma.$transaction(tx =>
+      securityEvent(tx, 'auth.test.retention', actor.id)
+    );
+    const old = new Date(Date.now() - 91 * 86400000);
+    const prefix = `retention-${Date.now()}`;
+    await prisma.authenticationAlert.createMany({
+      data: [
+        { id: `${prefix}-delivered`, deliveredAt: old },
+        { id: `${prefix}-cancelled`, cancelledAt: old },
+        { id: `${prefix}-pending` },
+        { id: `${prefix}-recent`, deliveredAt: new Date() },
+      ].map(row => ({
+        ...row,
+        eventId: row.id,
+        recipientId: actor.id,
+        title: 'Retention',
+        message: 'Fixture',
+        createdAt: old,
+      })),
+    });
+    try {
+      await cleanAuthenticationAlerts();
+      const retained = await prisma.authenticationAlert.findMany({
+        where: { id: { startsWith: prefix } },
+        select: { id: true },
+      });
+      expect(retained.map(row => row.id).sort()).toEqual([`${prefix}-pending`, `${prefix}-recent`]);
+      expect(
+        await prisma.emergencyAccessEvent.findUnique({ where: { id: event.id } })
+      ).not.toBeNull();
+      expect(await prisma.auditLog.count({ where: { action: 'auth.test.retention' } })).toBe(1);
+      expect(
+        await prisma.inAppNotification.count({ where: { entityId: event.id } })
+      ).toBeGreaterThan(0);
+    } finally {
+      await prisma.authenticationAlert.deleteMany({ where: { id: { startsWith: prefix } } });
     }
   });
   it('mandatory alert failure rolls back the security event and its audit', async () => {

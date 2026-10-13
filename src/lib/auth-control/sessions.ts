@@ -26,10 +26,31 @@ export async function revokeAuthenticationSession(actor: ControlActor, id: strin
 }
 
 export async function cleanAuthenticationCeremonies() {
+  await cleanAuthenticationAlerts();
   const expiry = new Date(Date.now() - 86400000);
   await prisma.$transaction([
     prisma.authenticationFailureWindow.deleteMany({ where: { expiresAt: { lt: expiry } } }),
     prisma.emergencyChallenge.deleteMany({ where: { expiresAt: { lt: expiry } } }),
     prisma.oidcTestFlow.deleteMany({ where: { expiresAt: { lt: expiry } } }),
   ]);
+}
+
+/** Retain terminal delivery metadata for 90 days; never delete pending intents or audit evidence.
+ * Two indexed batches cap work per scheduler pass, including installations with old backlogs.
+ */
+export async function cleanAuthenticationAlerts() {
+  const cutoff = new Date(Date.now() - 90 * 86400000);
+  for (const column of ['deliveredAt', 'cancelledAt'] as const) {
+    const where = { [column]: { lt: cutoff } };
+    const batch = await prisma.authenticationAlert.findMany({
+      where,
+      orderBy: { [column]: 'asc' },
+      take: 1000,
+      select: { id: true },
+    });
+    if (batch.length)
+      await prisma.authenticationAlert.deleteMany({
+        where: { ...where, id: { in: batch.map(row => row.id) } },
+      });
+  }
 }

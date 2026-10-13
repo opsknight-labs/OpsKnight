@@ -24,3 +24,19 @@ export function boundedStringArrayClaim(
   }
   return value;
 }
+
+/** Normalize provider boolean claims identically in login and staged verification. */
+export function coerceBooleanClaim(value: unknown): boolean | undefined {
+  if (value === true) return true;
+  if (value === false) return false;
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase();
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+  }
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+  return undefined;
+}

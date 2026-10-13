@@ -1,4 +1,5 @@
 import 'server-only';
+import { coerceBooleanClaim } from '@/lib/oidc/claims';
 import prisma from '@/lib/prisma';
 import { getAuthenticationPolicy } from '@/lib/authentication-policy';
 import { providerConfigSchema } from './provider-config';
@@ -84,7 +85,7 @@ export async function authenticationDashboard(
           take: 100,
         })
       : Promise.resolve([]),
-    prisma.authenticationAlert.count({ where: { deliveredAt: null } }),
+    prisma.authenticationAlert.count({ where: { deliveredAt: null, cancelledAt: null } }),
     section === 'diagnostics'
       ? prisma.userDevice.findMany({
           where: { deviceId: { startsWith: 'session:' } },
@@ -276,18 +277,16 @@ export async function identityClaimsPreview(revisionId: string, claims: Record<s
     !provider.validateOrganizationBoundary(claims, config.allowedDomains, config.organizationId).ok
   )
     return { outcome: 'REJECT', reason: 'Organization boundary rejected these claims.', role };
+  const emailVerified = coerceBooleanClaim(claims.email_verified);
+  if (emailVerified === false)
+    return { outcome: 'REJECT', reason: 'Provider explicitly reports unverified email.', role };
   let identity;
   try {
     identity = await findRevisionIdentity(prisma, config.issuer, subject);
   } catch {
     return { outcome: 'REJECT', reason: 'Ambiguous external identity ownership.', role };
   }
-  if (
-    !identity &&
-    (!email ||
-      claims.email_verified === false ||
-      (!provider.allowsMissingEmailVerified() && claims.email_verified !== true))
-  )
+  if (!identity && (!email || (!provider.allowsMissingEmailVerified() && emailVerified !== true)))
     return {
       outcome: 'REJECT',
       reason: 'Verified email ownership is required for a new identity link.',

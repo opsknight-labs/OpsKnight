@@ -3976,10 +3976,12 @@ model AuthenticationAlert {
   leaseUntil    DateTime?
   leaseToken    String?
   deliveredAt   DateTime?
+  cancelledAt   DateTime?
   lastError     String?
 
   @@unique([eventId, recipientId])
-  @@index([deliveredAt, nextAttemptAt])
+  @@index([deliveredAt, cancelledAt, nextAttemptAt])
+  @@index([cancelledAt])
 }
 
 // Durable remainder of a security alert's bounded administrator fan-out.

@@ -188,3 +188,30 @@ application after the server rejected that request:
 Correct the draft, save and validate it, then complete real administrator sign-in
 and independent recovery drills before activating a revision. A local error screen
 or a virtual-key success does not replace those live acceptance steps.
+
+## Terminal delivery and sustained admission tests
+
+Staged verification, claims preview and production login use the same boolean-claim
+normalizer. Explicitly unverified email rejects even an existing issuer/subject
+binding. Missing email and missing verification claims still follow the existing
+provider/link ownership rules; absence is not an explicit rejection.
+
+Removed or inactive administrators' email intents receive a terminal cancellation
+timestamp. Restoring administrator access does not restart those old intents.
+The pending-delivery dashboard excludes cancelled intents. The scheduled cleanup
+retains delivered and cancelled metadata for 90 days from the terminal timestamp,
+then removes up to 1,000 of each per pass. Pending delivery and fan-out work, security
+events, audit rows and in-app alerts are unaffected by this cleanup. Existing
+notification/audit retention policies remain separate. Cancellation cannot recall
+mail already handed to a provider.
+
+The PostgreSQL abuse test runs at concurrency 30 for at least 30 seconds and at
+least 3,000 rejections. Its artifact records actual request count, duration and
+bounded audit samples. This measures local counter contention, not distributed
+production capacity.
+
+Run `python3 scripts/certify-sso-edge.py` with Docker to test the optional
+`deploy/nginx/emergency-rate-limit.conf` example against an isolated fixture
+upstream. It verifies early 429 rejection, ordinary login isolation and admission
+after refill; `plans/certification/enterprise-sso-2.1-edge.json` records results.
+No real authentication or database requests occur in that edge fixture.

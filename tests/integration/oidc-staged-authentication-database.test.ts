@@ -150,9 +150,16 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
                 : details.variant === 'email'
                   ? 'foreign@example.test'
                   : 'staged-certifier@example.test',
-            email_verified: details.variant.startsWith('entra-')
-              ? undefined
-              : details.variant !== 'unverified',
+            email_verified:
+              details.variant === 'false-string'
+                ? ' false '
+                : details.variant === 'false-number'
+                  ? 0
+                  : details.variant === 'missing-verification'
+                    ? undefined
+                    : details.variant.startsWith('entra-')
+                      ? undefined
+                      : details.variant !== 'unverified',
             nonce: details.variant === 'nonce' ? 'foreign-nonce' : details.nonce,
           })
             .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
@@ -275,6 +282,47 @@ suite('staged OIDC authentication with HTTPS and signed ID tokens', () => {
       await prisma.user.delete({ where: { id: other.id } });
     }
   });
+  it.each(['unverified', 'false-string', 'false-number', 'missing-verification'])(
+    'linked staged identity uses production claim normalization: %s',
+    async variant => {
+      await prisma.oidcIdentity.create({
+        data: {
+          issuer: runtime.issuer,
+          subject: 'existing-admin-subject',
+          userId: actor.id,
+        },
+      });
+      try {
+        const value =
+          variant === 'unverified'
+            ? false
+            : variant === 'false-string'
+              ? ' false '
+              : variant === 'false-number'
+                ? 0
+                : undefined;
+        const preview = await identityClaimsPreview(revisionId, {
+          iss: runtime.issuer,
+          sub: 'existing-admin-subject',
+          email_verified: value,
+        });
+        expect(preview.outcome).toBe(
+          variant === 'missing-verification' ? 'EXISTING_IDENTITY' : 'REJECT'
+        );
+        const flow = await beginOidcRevisionTest(actor, revisionId, actor.id, false);
+        const result = completeOidcRevisionTest(
+          callbackState(flow.url),
+          issueCode(flow.url, variant),
+          flow.browserToken
+        );
+        if (variant === 'missing-verification') await expect(result).resolves.toBe(revisionId);
+        else await expect(result).rejects.toThrow('test failed');
+      } finally {
+        await prisma.oidcIdentity.deleteMany({ where: { issuer: runtime.issuer } });
+        await prisma.oidcRevisionTest.deleteMany({ where: { revisionId } });
+      }
+    }
+  );
   it.each([
     { linked: true, email: false, approved: false, succeeds: true },
     { linked: true, email: true, approved: false, succeeds: true },
