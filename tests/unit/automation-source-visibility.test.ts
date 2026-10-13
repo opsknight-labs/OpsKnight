@@ -57,3 +57,40 @@ it('protects captured SHADOW source content even without a LIVE decision', () =>
   expect(visible.description).toBeNull();
   expect(visible).not.toHaveProperty('automationTraces');
 });
+
+it('keeps protected source restricted after SHADOW diagnostics have expired', () => {
+  const visible = visibleIncidentSource(
+    {
+      title: 'Customer ABC123 failure',
+      description: 'ABC123',
+      automationSourceRestricted: true,
+      automationDecision: null,
+      automationTraces: [],
+    },
+    false
+  );
+  expect(JSON.stringify(visible)).not.toContain('ABC123');
+});
+
+it('redacts source identifiers from source-trigger lifecycle messages without hiding state changes', () => {
+  const visible = visibleIncidentSource(
+    {
+      automationSourceRestricted: true,
+      events: [
+        { message: 'Incident triggered via API from private-customer' },
+        {
+          message:
+            'Incident created in resolved state: resolve event was received prior to trigger event from private-customer',
+        },
+        {
+          message:
+            'Incident created in SUPPRESSED state: rapid alert oscillations detected from private-customer. Notifications muted until signal stabilises.',
+        },
+      ],
+    },
+    false
+  );
+  expect(JSON.stringify(visible.events)).not.toContain('private-customer');
+  expect(visible.events?.[1].message).toContain('resolved');
+  expect(visible.events?.[2].message).toContain('suppressed');
+});

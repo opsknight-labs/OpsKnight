@@ -175,6 +175,7 @@ export const incidentListSelect = {
   ...incidentSlaSelect,
   id: true,
   title: true,
+  automationSourceRestricted: true,
   status: true,
   escalationStatus: true,
   currentEscalationStep: true,

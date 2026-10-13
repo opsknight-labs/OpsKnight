@@ -122,6 +122,30 @@ describe('service automation transaction certification', () => {
   afterAll(async () => {
     await db.$disconnect();
   });
+  it('retains source classification after SHADOW trace cleanup', async () => {
+    const { service } = await setup(snapshot, 'SHADOW');
+    const result = await ingest(service.id, {
+      ...event,
+      payload: { ...event.payload, summary: 'Customer ABC123 failure' },
+    });
+    const incidentId = result.incident!.id;
+    await db.automationTrace.deleteMany({ where: { incidentId } });
+    expect(await db.incidentAutomationDecision.count({ where: { incidentId } })).toBe(0);
+    const incident = await db.incident.findUniqueOrThrow({
+      where: { id: incidentId },
+      include: { automationTraces: true },
+    });
+    expect(incident.automationSourceRestricted).toBe(true);
+    await expect(
+      db.incident.update({ where: { id: incidentId }, data: { automationSourceRestricted: false } })
+    ).rejects.toThrow('cannot be removed');
+    const { visibleIncidentSource } =
+      await import('@/lib/automation/presentation/source-visibility');
+    const visible = visibleIncidentSource(incident, false);
+    expect(visible.title).not.toContain('ABC123');
+    expect(visible.description).toBeNull();
+  });
+
   it('falls back before incident creation when a published route becomes snapshot-invalid', async () => {
     const policy = await db.escalationPolicy.create({ data: { name: 'Later oversized route' } });
     const definition: Snapshot = {

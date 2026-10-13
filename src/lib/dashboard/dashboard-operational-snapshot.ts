@@ -26,6 +26,7 @@ const FOCUS_LIMIT = 5;
 const incidentSelect = {
   id: true,
   title: true,
+  automationSourceRestricted: true,
   automationDecision: { select: { incidentId: true } },
   automationTraces: { select: { incidentId: true }, take: 1 },
   status: true,
@@ -170,6 +171,7 @@ export async function getDashboardOperationalSnapshot(
       select: {
         id: true,
         title: true,
+        automationSourceRestricted: true,
         automationDecision: { select: { incidentId: true } },
         automationTraces: { select: { incidentId: true }, take: 1 },
         status: true,
@@ -187,6 +189,7 @@ export async function getDashboardOperationalSnapshot(
       select: {
         id: true,
         title: true,
+        automationSourceRestricted: true,
         automationDecision: { select: { incidentId: true } },
         automationTraces: { select: { incidentId: true }, take: 1 },
         status: true,

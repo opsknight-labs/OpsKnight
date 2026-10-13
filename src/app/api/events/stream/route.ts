@@ -1,3 +1,4 @@
+import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
@@ -221,7 +222,10 @@ export async function GET(req: NextRequest) {
             const result = await getCachedIncidentDetails(incidentId, lastDataHash);
 
             if (result && result.changed && result.data) {
-              const incident = result.data;
+              const incident = visibleIncidentSource(
+                result.data,
+                hasCapability(streamAuthorization.role, CAPABILITIES.INCIDENT_SENSITIVE_READ)
+              );
               const updateData = {
                 type: 'incident_update',
                 incident: {
@@ -247,7 +251,12 @@ export async function GET(req: NextRequest) {
               const updateData = {
                 type: 'service_incidents_update',
                 serviceId,
-                incidents: result.data,
+                incidents: result.data.map(incident =>
+                  visibleIncidentSource(
+                    incident,
+                    hasCapability(streamAuthorization.role, CAPABILITIES.INCIDENT_SENSITIVE_READ)
+                  )
+                ),
               };
               lastDataHash = result.hash;
               send(updateData);

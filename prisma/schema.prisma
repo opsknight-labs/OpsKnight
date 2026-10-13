@@ -1164,6 +1164,7 @@ model Alert {
 }
 
 model Incident {
+  automationSourceRestricted          Boolean @default(false)
   automationDecision                  IncidentAutomationDecision?
   automationTraces                    AutomationTrace[]
   id                                  String                          @id @default(cuid())

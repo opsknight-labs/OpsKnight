@@ -155,6 +155,7 @@ export default async function MobileIncidentsPage(props: {
         select: {
           id: true,
           title: true,
+          automationSourceRestricted: true,
           automationTraces: { select: { incidentId: true }, take: 1 },
           automationDecision: { select: { incidentId: true } },
           status: true,
@@ -187,6 +188,7 @@ export default async function MobileIncidentsPage(props: {
         select: {
           id: true,
           title: true,
+          automationSourceRestricted: true,
           automationTraces: { select: { incidentId: true }, take: 1 },
           automationDecision: { select: { incidentId: true } },
           status: true,

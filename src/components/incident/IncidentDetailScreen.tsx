@@ -119,7 +119,9 @@ export default async function IncidentDetailScreen({
   const permissions = await getUserPermissions();
   const sensitive = permissions.capabilities.includes(CAPABILITIES.INCIDENT_SENSITIVE_READ);
   const sourceRestricted =
-    (!!storedIncident.automationDecision || storedIncident.automationTraces.length > 0) &&
+    (storedIncident.automationSourceRestricted ||
+      !!storedIncident.automationDecision ||
+      storedIncident.automationTraces.length > 0) &&
     !sensitive;
   const decision = storedIncident.automationDecision;
   const incidentPolicy =

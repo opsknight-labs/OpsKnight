@@ -99,8 +99,17 @@ export async function loadOlderIncidentEvents(
     select: { incidentId: true },
     take: 1,
   });
+  const source = await prisma.incident.findUnique({
+    where: { id: parsedIncidentId },
+    select: { automationSourceRestricted: true },
+  });
   const visible = visibleIncidentSource(
-    { events, automationDecision: decision, automationTraces },
+    {
+      events,
+      automationDecision: decision,
+      automationTraces,
+      automationSourceRestricted: source?.automationSourceRestricted,
+    },
     permissions.capabilities.includes('incident.sensitive.read')
   );
   return visible.events.map(e => ({
@@ -270,8 +279,17 @@ export async function loadOlderIncidentTimelineActivity(
     select: { incidentId: true },
     take: 1,
   });
+  const source = await prisma.incident.findUnique({
+    where: { id: parsedIncidentId },
+    select: { automationSourceRestricted: true },
+  });
   const visible = visibleIncidentSource(
-    { events, automationDecision: decision, automationTraces },
+    {
+      events,
+      automationDecision: decision,
+      automationTraces,
+      automationSourceRestricted: source?.automationSourceRestricted,
+    },
     permissions.capabilities.includes('incident.sensitive.read')
   );
   return {

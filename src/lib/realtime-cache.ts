@@ -1,3 +1,4 @@
+import { visibleIncidentSource } from '@/lib/automation/presentation/source-visibility';
 /**
  * Real-time Data Cache for SSE Streams
  *
@@ -267,7 +268,8 @@ export async function getCachedRecentIncidents(
   const scopeKey = isPrivileged
     ? CacheKeys.recentIncidents('global')
     : `recent-incidents:${userId}:${teamIds.slice().sort().join(',')}`;
-  const key = `${scopeKey}:g:${generation ?? 'initial'}`;
+  const sensitive = isAppRole(role) && hasCapability(role, CAPABILITIES.INCIDENT_SENSITIVE_READ);
+  const key = `${scopeKey}:sensitive:${sensitive}:g:${generation ?? 'initial'}`;
 
   const fetcher = async () => {
     const whereClause = incidentReadWhere({
@@ -282,6 +284,9 @@ export async function getCachedRecentIncidents(
       select: {
         id: true,
         title: true,
+        automationSourceRestricted: true,
+        automationDecision: { select: { incidentId: true } },
+        automationTraces: { select: { incidentId: true }, take: 1 },
         description: true,
         status: true,
         urgency: true,
@@ -319,7 +324,7 @@ export async function getCachedRecentIncidents(
       orderBy: { updatedAt: 'desc' },
     });
     return incidents.map(incident => ({
-      ...incident,
+      ...visibleIncidentSource(incident, sensitive),
       slaPausedMs: Number(incident.slaPausedMs),
       slaAckElapsedMs: incident.slaAckElapsedMs === null ? null : Number(incident.slaAckElapsedMs),
       slaResolveElapsedMs:
@@ -349,6 +354,9 @@ export async function getCachedServiceIncidents(serviceId: string, lastHash?: st
       select: {
         id: true,
         title: true,
+        automationSourceRestricted: true,
+        automationDecision: { select: { incidentId: true } },
+        automationTraces: { select: { incidentId: true }, take: 1 },
         status: true,
         urgency: true,
         updatedAt: true,
@@ -374,6 +382,8 @@ export async function getCachedIncidentDetails(incidentId: string, lastHash?: st
     return prisma.incident.findUnique({
       where: { id: incidentId },
       include: {
+        automationDecision: { select: { incidentId: true } },
+        automationTraces: { select: { incidentId: true }, take: 1 },
         events: {
           orderBy: { createdAt: 'desc' },
           take: 1,

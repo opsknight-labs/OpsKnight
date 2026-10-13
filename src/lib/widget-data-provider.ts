@@ -111,6 +111,7 @@ export async function getWidgetRealtimeProjection(
     select: {
       id: true,
       title: true,
+      automationSourceRestricted: true,
       automationDecision: { select: { incidentId: true } },
       automationTraces: { select: { incidentId: true }, take: 1 },
       status: true,
@@ -244,7 +245,11 @@ export async function getWidgetData(
     const protectedIncidents = await prisma.incident.findMany({
       where: {
         id: { in: (slaMetricsRaw.activeIncidentSummaries ?? []).map(incident => incident.id) },
-        OR: [{ automationDecision: { isNot: null } }, { automationTraces: { some: {} } }],
+        OR: [
+          { automationSourceRestricted: true },
+          { automationDecision: { isNot: null } },
+          { automationTraces: { some: {} } },
+        ],
       },
       select: { id: true },
     });
@@ -364,6 +369,7 @@ export async function getWidgetData(
       incidentId: true,
       incident: {
         select: {
+          automationSourceRestricted: true,
           automationDecision: { select: { incidentId: true } },
           automationTraces: { select: { incidentId: true }, take: 1 },
         },

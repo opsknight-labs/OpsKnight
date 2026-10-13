@@ -1,3 +1,4 @@
+import { hashTokenV2 } from '@/lib/api-keys';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { PrismaClient } from '@prisma/client';
@@ -238,7 +239,21 @@ for (const notificationCase of ['SLACK', 'TEAMS', 'BOTH'] as const) {
     const restrictedHtml = await readerHtml.text();
     expect(restrictedHtml).not.toContain('x'.repeat(1200));
     expect(restrictedHtml).not.toContain('ABC123');
-    const apiDetail = await page.request.get(`/api/incidents/${incident.id}`);
+    const auditor = await db.user.findUniqueOrThrow({ where: { email: auditorEmail } });
+    const apiToken = randomUUID();
+    await db.apiKey.create({
+      data: {
+        name: 'Auditor privacy journey',
+        prefix: apiToken.slice(0, 8),
+        tokenHash: hashTokenV2(apiToken),
+        scopes: ['incidents:read'],
+        userId: auditor.id,
+      },
+    });
+    const apiDetail = await page.request.get(`/api/incidents/${incident.id}`, {
+      headers: { Authorization: `Bearer ${apiToken}` },
+    });
+    expect(apiDetail.status()).toBe(200);
     expect(await apiDetail.text()).not.toContain('ABC123');
   });
 }
@@ -265,6 +280,24 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
         },
       },
     },
+  });
+  const defaultPolicy = await db.escalationPolicy.create({
+    data: {
+      name: `Standard service default ${randomUUID()}`,
+      steps: {
+        create: {
+          stepOrder: 0,
+          delayMinutes: 5,
+          targetType: 'USER',
+          targetUserId: actor.id,
+          notificationChannels: ['EMAIL'],
+        },
+      },
+    },
+  });
+  await db.service.update({
+    where: { id: service.id },
+    data: { escalationPolicyId: defaultPolicy.id },
   });
   const integration = await db.integration.create({
     data: { serviceId: service.id, name: 'P1 journey', key: randomUUID(), type: 'EVENTS_API_V2' },
@@ -424,6 +457,26 @@ test('P1 ingestion pins its policy through later edits and archival', async ({
   await expect(
     page.getByText('Responder route:', { exact: false }).filter({ visible: true })
   ).toContainText(policy.name);
+  if (testInfo.project.name !== 'desktop') {
+    await page
+      .locator('summary')
+      .filter({ hasText: 'Incident details & assignment' })
+      .filter({ visible: true })
+      .click();
+    const linksDisclosure = page
+      .locator('summary')
+      .filter({ hasText: 'People, fields & links' })
+      .filter({ visible: true });
+    if (await linksDisclosure.count()) await linksDisclosure.click();
+  }
+  await expect(
+    page.locator(`a[title="Escalation Policy: ${policy.name}"]`).filter({ visible: true })
+  ).toBeVisible();
+  await expect(
+    page
+      .getByText(`Current service default: ${defaultPolicy.name}`, { exact: true })
+      .filter({ visible: true })
+  ).toBeVisible();
   expect(
     (await db.incidentAutomationDecision.findUniqueOrThrow({ where: { incidentId: incident.id } }))
       .versionId

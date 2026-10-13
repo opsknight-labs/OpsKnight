@@ -379,6 +379,7 @@ export async function processEvent(
         const resolvedIncident = await tx.incident.create({
           data: {
             title: sanitizedTitle,
+            automationSourceRestricted: !!automation,
             description: truncatedDescription,
             status: 'RESOLVED',
             createdAt: resolutionAt,
@@ -484,6 +485,7 @@ export async function processEvent(
       const newIncident = await tx.incident.create({
         data: {
           title: sanitizedTitle,
+          automationSourceRestricted: !!automation,
           description: truncatedDescription,
           status: isFlapping ? 'SUPPRESSED' : 'OPEN',
           urgency,
