@@ -8,6 +8,15 @@ export const FROZEN_CERTIFICATION = {
   AUTOMATION_PROVIDER_CAPACITY_PROFILE: 'provisioned-200',
 } as const;
 
+/** k6 omits counters that never receive a sample, including an all-rejected run. */
+export function acceptedAutomationEvents(metrics: { automation_accepted_events?: { count: number } }) {
+  const counter = metrics.automation_accepted_events;
+  if (counter === undefined) return 0;
+  if (!Number.isSafeInteger(counter.count) || counter.count < 0)
+    throw new Error('Invalid accepted-event counter');
+  return counter.count;
+}
+
 export function controlledMeasurementEnvironment(env: Partial<NodeJS.ProcessEnv>) {
   for (const [key, value] of Object.entries(FROZEN_CERTIFICATION)) {
     if (env[key] !== undefined && env[key] !== value)

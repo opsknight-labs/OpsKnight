@@ -1,6 +1,7 @@
 import {
   requireCleanProviderState,
   type InitialProvider,
+  acceptedAutomationEvents,
 } from './automation-certification-integrity';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -21,7 +22,7 @@ type CertificationSummary = {
   metrics: {
     iterations: { count: number };
     checks: { passes: number; fails: number };
-    automation_accepted_events: { count: number };
+    automation_accepted_events?: { count: number };
     automation_ingestion_latency_ms: { 'p(95)': number; 'p(99)': number };
     dropped_iterations?: { count: number };
   };
@@ -66,7 +67,14 @@ const composeArgs = [
 ];
 async function runK6(profile: string, output: string) {
   const runId = String(Date.now());
-  const launch = controlledK6Launch(process.env, profile, runId, output);
+  const target = controlledK6Target(process.env);
+  const clusterIp = target.mode === 'IN_CLUSTER'
+    ? (await exec('kubectl', [
+        '--context', 'kind-opsknight-automation', '-n', target.namespace,
+        'get', 'service', 'automation', '-o', 'jsonpath={.spec.clusterIP}',
+      ])).stdout.trim()
+    : undefined;
+  const launch = controlledK6Launch(process.env, profile, runId, output, clusterIp);
   if (launch.target.mode === 'IN_CLUSTER') {
     const base = ['--context', 'kind-opsknight-automation', '-n', launch.target.namespace];
     await exec('kubectl', [...base, 'exec', launch.target.pod, '--', 'mkdir', '-p', '/work/results']);
@@ -86,6 +94,14 @@ async function runK6(profile: string, output: string) {
       '--no-preserve',
       manifest,
       `${launch.target.pod}:/work/seed-manifest.json`,
+    ]);
+    if (!launch.transportPath || !launch.transportConfig)
+      throw new Error('Missing canonical-host transport configuration');
+    const transportArtifact = output.replace(/\.json$/, '-transport.json');
+    await fs.writeFile(transportArtifact, JSON.stringify(launch.transportConfig, null, 2) + '\n');
+    await exec('kubectl', [
+      ...base, 'cp', '--no-preserve', transportArtifact,
+      `${launch.target.pod}:${launch.transportPath}`,
     ]);
   }
   const recoveryTargets = process.env.AUTOMATION_K8S_NAMESPACE
@@ -403,6 +419,7 @@ async function main() {
       },
     });
     const summary = JSON.parse(await fs.readFile(summaryPath, 'utf8')) as CertificationSummary;
+    const acceptedEvents = acceptedAutomationEvents(summary.metrics);
     const duplicates = await db.$queryRaw<
       Array<{ count: bigint }>
     >`SELECT COUNT(*)::bigint AS count FROM (SELECT "serviceId", "dedupKey" FROM "Incident" WHERE "createdAt" >= ${started} AND title = 'Automation capacity certification' GROUP BY "serviceId", "dedupKey" HAVING COUNT(*) > 1) duplicate_groups`;
@@ -449,7 +466,7 @@ async function main() {
       profile,
       runId,
       k6ExitCode,
-      acceptedEvents: summary.metrics.automation_accepted_events.count,
+      acceptedEvents,
       persistedIncidents: incidents,
       duplicateGroups: Number(duplicates[0].count),
       providerDuplicateDeliveriesDelta: providerDuplicateDelta(
@@ -482,9 +499,9 @@ async function main() {
       JSON.stringify({ topology, results }, null, 2) + '\n'
     );
     process.stdout.write(
-      `Recorded ${topology} ${profile}: ${incidents} persisted incidents / ${summary.metrics.automation_accepted_events.count} acknowledged events; k6 exit ${k6ExitCode}\n`
+      `Recorded ${topology} ${profile}: ${incidents} persisted incidents / ${acceptedEvents} acknowledged events; k6 exit ${k6ExitCode}\n`
     );
-    if (incidents !== summary.metrics.automation_accepted_events.count) {
+    if (incidents !== acceptedEvents) {
       stopReason = `${profile}: persisted incident count differs from acknowledged event count`;
       break;
     }

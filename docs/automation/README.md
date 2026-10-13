@@ -478,3 +478,21 @@ while retaining its 500m limit. The running client was verified at
 `cpu.max=50000 100000` on shared CPUs `0,11`; both Web replicas became ready.
 The ten application/PostgreSQL CPUs remain unchanged. This is a deployment
 setup correction, not a passing measurement or a relaxed performance gate.
+
+Audit 43 did not produce a complete measurement: requests to the ClusterIP
+hostname were correctly rejected by the application host guard with HTTP 421.
+All 2,401 ingestion attempts were rejected; k6 emitted no accepted-event counter,
+and the report formatter then failed while reading that absent counter. Raw
+logs and summary are retained as incomplete evidence, not capacity results.
+The formatter now records zero for an unsampled accepted counter and rejects
+malformed counts while retaining the unchanged k6 failure gate.
+
+The in-cluster client now keeps the canonical `127.0.0.1:3439` URL and HTTP Host
+header, using a k6 `hosts` transport configuration to route that address to the
+owned application's actual ClusterIP on port 3000. The ClusterIP is read from
+the explicitly owned Kubernetes service. No application host guard or alias
+configuration is changed. A single public-health smoke request passed HTTP 200
+with this mapping; that is connectivity validation only. Every full measurement
+retains its transport configuration. Public NodePort/edge latency remains outside
+this topology's certification scope. See the official
+[k6 hosts option](https://grafana.com/docs/k6/latest/using-k6/k6-options/reference/#hosts).

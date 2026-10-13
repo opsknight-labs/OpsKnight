@@ -5,6 +5,7 @@ import {
   requireSuccessfulMeasurement,
   requireCleanProviderState,
   requireSuccessfulRecovery,
+  acceptedAutomationEvents,
 } from '../load/helpers/automation-certification-integrity';
 
 it('freezes every limit and separates fault-free comparison from recovery drills', () => {
@@ -13,6 +14,13 @@ it('freezes every limit and separates fault-free comparison from recovery drills
   expect(env).toMatchObject(FROZEN_CERTIFICATION);
   for (const [key] of Object.entries(FROZEN_CERTIFICATION))
     expect(() => controlledMeasurementEnvironment({ [key]: 'relaxed' })).toThrow('requires');
+});
+
+it('records zero accepted events for all-rejected runs without accepting malformed counts', () => {
+  expect(acceptedAutomationEvents({})).toBe(0);
+  expect(acceptedAutomationEvents({ automation_accepted_events: { count: 2400 } })).toBe(2400);
+  for (const count of [-1, 0.5, NaN, Infinity])
+    expect(() => acceptedAutomationEvents({ automation_accepted_events: { count } })).toThrow();
 });
 
 it('never certifies a failed recovery child from a seemingly passing report', () => {

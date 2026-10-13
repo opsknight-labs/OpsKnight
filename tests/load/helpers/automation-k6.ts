@@ -9,7 +9,8 @@ export function controlledK6Target(env: Partial<NodeJS.ProcessEnv>) {
     mode: 'IN_CLUSTER' as const,
     pod,
     namespace: 'automation-cert',
-    endpoint: 'http://automation.automation-cert.svc.cluster.local:3000',
+    endpoint: 'http://127.0.0.1:3439',
+    transportService: 'automation.automation-cert.svc.cluster.local:3000',
   };
 }
 
@@ -17,7 +18,8 @@ export function controlledK6Launch(
   env: Partial<NodeJS.ProcessEnv>,
   profile: string,
   runId: string,
-  output: string
+  output: string,
+  clusterIp?: string
 ) {
   const target = controlledK6Target(env);
   if (target.mode === 'HOST')
@@ -29,7 +31,16 @@ export function controlledK6Launch(
     };
   if (!/^[a-z0-9-]+$/.test(profile) || !/^\d+$/.test(runId))
     throw new Error('Invalid controlled load execution identity');
+  const octets = clusterIp?.split('.').map(Number);
+  if (
+    !clusterIp || !/^\d+\.\d+\.\d+\.\d+$/.test(clusterIp) || !octets ||
+    octets.some(value => !Number.isInteger(value) || value < 0 || value > 255) ||
+    !(octets[0] === 10 || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+      (octets[0] === 192 && octets[1] === 168))
+  )
+    throw new Error('In-cluster transport requires the owned service ClusterIP');
   const summaryPath = `/work/results/${runId}.json`;
+  const transportPath = `/work/results/${runId}-transport.json`;
   return {
     target,
     command: 'kubectl',
@@ -51,10 +62,14 @@ export function controlledK6Launch(
       `AUTOMATION_RECOVERY_DRILL=${env.AUTOMATION_RECOVERY_DRILL === 'true' ? 'true' : 'false'}`,
       'k6',
       'run',
+      '--config',
+      transportPath,
       '--summary-export',
       summaryPath,
       '/work/scenarios/automation.js',
     ],
     summaryPath,
+    transportPath,
+    transportConfig: { hosts: { '127.0.0.1:3439': `${clusterIp}:3000` } },
   };
 }
